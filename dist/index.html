@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard de Envios</title>
+  <meta charset="UTF-8">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #22c55e;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      border-left: 5px solid #22c55e;
+    }
+
+    .data {
+      font-weight: bold;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>📊 Dashboard de Envios</h1>
+
+<div id="conteudo">Carregando...</div>
+
+<script>
+async function carregar() {
+  try {
+    const res = await fetch('https://walkup-n8n.achpyp.easypanel.host/webhook-test/dashboard-envios');
+    const data = await res.json();
+
+    const texto = data.log;
+
+    const container = document.getElementById('conteudo');
+    container.innerHTML = "";
+
+    texto.split('-----------------------------').forEach(item => {
+      if(item.trim() !== '') {
+
+        const div = document.createElement('div');
+        div.className = 'card';
+
+        const linhas = item.trim().split('\n');
+
+        div.innerHTML = `
+          <div class="data">${linhas[0]}</div>
+          <div>${linhas[1]}</div>
+          <div>${linhas[2]}</div>
+        `;
+
+        container.appendChild(div);
+      }
+    });
+
+  } catch (err) {
+    document.getElementById('conteudo').innerHTML = "Erro ao carregar dados";
+  }
+}
+
+// roda ao abrir
+carregar();
+
+// atualiza a cada 5 segundos
+setInterval(carregar, 5000);
+</script>
+
+</body>
+</html>
+
