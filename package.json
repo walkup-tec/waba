@@ -1,0 +1,24 @@
+{
+  "name": "disparador-n8n",
+  "version": "0.1.0",
+  "description": "Projeto Disparador N8 - integrações e disparos automáticos com n8n.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "n8n",
+    "automation",
+    "disparador"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}
+
