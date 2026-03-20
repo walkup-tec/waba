@@ -1,83 +1,2411 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <title>Dashboard de Envios</title>
-  <meta charset="UTF-8">
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard de Envios</title>
+    <link rel="icon" href="https://draxsistemas.com.br/favicon.ico" />
+    <meta name="theme-color" content="#2ee4a0" />
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 20px;
-    }
+    <!-- Bootstrap 5 CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
 
-    h1 {
-      color: #22c55e;
-    }
+    <!-- Litepicker (range date picker sem dependências e com lang) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/css/litepicker.css"
+    />
 
-    .card {
-      background: #1e293b;
-      padding: 15px;
-      margin-bottom: 10px;
-      border-radius: 10px;
-      border-left: 5px solid #22c55e;
-    }
-
-    .data {
-      font-weight: bold;
-      color: #38bdf8;
-    }
-  </style>
-</head>
-
-<body>
-
-<h1>📊 Dashboard de Envios</h1>
-
-<div id="conteudo">Carregando...</div>
-
-<script>
-async function carregar() {
-  try {
-    const res = await fetch('https://walkup-n8n.achpyp.easypanel.host/webhook-test/dashboard-envios');
-    const data = await res.json();
-
-    const texto = data.log;
-
-    const container = document.getElementById('conteudo');
-    container.innerHTML = "";
-
-    texto.split('-----------------------------').forEach(item => {
-      if(item.trim() !== '') {
-
-        const div = document.createElement('div');
-        div.className = 'card';
-
-        const linhas = item.trim().split('\n');
-
-        div.innerHTML = `
-          <div class="data">${linhas[0]}</div>
-          <div>${linhas[1]}</div>
-          <div>${linhas[2]}</div>
-        `;
-
-        container.appendChild(div);
+    <style>
+      :root {
+        --bg-deep: #030712;
+        --bg-card: #131b2e;
+        --bg-card-alt: #0e1525;
+        --accent: #2ee4a0;
+        --accent-bright: #6effc8;
+        --accent-soft: rgba(46, 228, 160, 0.16);
+        --cyan: #22d3ee;
+        --violet: #a78bfa;
+        --amber: #fbbf24;
+        --text: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-soft: #8fa3b8;
+        --border-subtle: #334155;
+        --border-highlight: rgba(34, 211, 238, 0.22);
+        --danger: #fb7185;
+        --chip-bg: rgba(34, 211, 238, 0.1);
       }
-    });
 
-  } catch (err) {
-    document.getElementById('conteudo').innerHTML = "Erro ao carregar dados";
-  }
-}
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-// roda ao abrir
-carregar();
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background:
+          radial-gradient(ellipse 100% 70% at 50% -15%, rgba(34, 211, 238, 0.12) 0%, transparent 55%),
+          radial-gradient(ellipse 60% 40% at 100% 30%, rgba(46, 228, 160, 0.06) 0%, transparent 50%),
+          linear-gradient(165deg, var(--bg-deep) 0%, #020617 55%, #000 100%);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 16px;
+        display: flex;
+        justify-content: center;
+      }
 
-// atualiza a cada 5 segundos
-setInterval(carregar, 5000);
-</script>
+      .shell {
+        width: 100%;
+        max-width: 100%;
+      }
 
-</body>
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        gap: 16px;
+      }
+
+      .title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .title-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--accent), var(--cyan));
+        box-shadow: 0 4px 16px rgba(46, 228, 160, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+      }
+
+      .title-icon img.brand-logo {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        object-fit: contain;
+        filter: drop-shadow(0 2px 10px rgba(46, 228, 160, 0.25));
+      }
+
+      .title-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .title-text h1 {
+        font-size: 1.6rem;
+        color: var(--accent-bright);
+        letter-spacing: 0.02em;
+        text-shadow: 0 0 28px rgba(46, 228, 160, 0.25);
+      }
+
+      .title-text span {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .filters-top {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+        gap: 12px;
+        margin-bottom: 18px;
+        align-items: flex-end;
+      }
+
+      .filters-top-left {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .filters-top-right {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .field-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+
+      .filters-top select {
+        background: var(--bg-card-alt);
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        padding: 7px 11px;
+        color: var(--text);
+        font-size: 0.8rem;
+      }
+
+      .filters-top select:focus {
+        outline: 1px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      .filters-buttons-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+        width: 100%;
+        text-align: right;
+      }
+
+      .filters-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+
+      .range-picker {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .range-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-weight: 600;
+        padding-right: 4px;
+      }
+
+      .range-input {
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
+        border-radius: 999px;
+        padding: 7px 11px;
+        color: var(--text);
+        font-size: 0.8rem;
+        width: 240px;
+      }
+
+      .range-input:focus {
+        outline: 1px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      #date-range {
+        color: var(--text) !important;
+      }
+
+      /* Ajustes leves de tema no Litepicker (dark compatível) */
+      .litepicker {
+        --litepicker-bg-color: rgba(15, 23, 42, 0.96);
+        --litepicker-color: var(--text-secondary);
+        --litepicker-selected-bg-color: rgba(46, 228, 160, 0.22);
+        --litepicker-selected-color: var(--accent-bright);
+        --litepicker-border-color: var(--border-subtle);
+      }
+
+      .filter-button {
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-card-alt);
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        padding: 5px 10px;
+        cursor: pointer;
+        transition: background 0.12s ease, color 0.12s ease,
+          border-color 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+      }
+
+      .filter-button:hover {
+        transform: translateY(-0.5px);
+        border-color: var(--cyan);
+        color: var(--text);
+      }
+
+      .filter-button.active {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-bright);
+        box-shadow: 0 0 0 1px rgba(46, 228, 160, 0.35);
+      }
+
+      .stat-chip {
+        background: var(--chip-bg);
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-highlight);
+      }
+
+      .stat-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+      }
+
+      .refresh-select {
+        display: flex;
+        gap: 12px;
+        font-size: 0.8rem;
+        color: var(--text-soft);
+        flex-direction: row;
+        align-items: center;
+      }
+
+      select {
+        background: var(--bg-card-alt);
+        border: 1px solid var(--border-subtle);
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: var(--text);
+        font-size: 0.8rem;
+      }
+
+      select:focus {
+        outline: 1px solid var(--accent);
+        outline-offset: 1px;
+      }
+
+      .refresh-button {
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-card);
+        color: var(--text);
+        font-size: 0.8rem;
+        padding: 6px 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .refresh-button:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent-bright);
+      }
+
+      .refresh-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        margin-left: 4px;
+        font-size: 0.75rem;
+      }
+
+      .refresh-icon.hidden {
+        visibility: hidden;
+      }
+
+      .refresh-group {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .refresh-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+      }
+
+      main {
+        gap: 20px;
+      }
+
+      @media (max-width: 900px) {
+        body {
+          padding: 8px;
+        }
+
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .controls {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .filters-top {
+          grid-template-columns: 1fr;
+        }
+
+        .filters-top-left {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .panel {
+        background: radial-gradient(circle at top left, #152238 0%, #0a0f1a 50%, #060a12 100%);
+        border-radius: 18px;
+        padding: 16px 16px 18px;
+        border: 1px solid var(--border-subtle);
+        box-shadow:
+          0 24px 48px rgba(0, 0, 0, 0.45),
+          0 0 0 1px var(--border-highlight) inset;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .panel-title {
+        font-size: 0.9rem;
+        color: var(--cyan);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-weight: 600;
+      }
+
+      .panel-header span {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      @media (max-width: 600px) {
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      .summary-card {
+        background: linear-gradient(155deg, #1a2438 0%, #121a2b 100%);
+        padding: 10px 11px;
+        border-radius: 12px;
+        border: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .summary-card:nth-child(1) {
+        border-left: 3px solid var(--accent);
+      }
+
+      .summary-card:nth-child(2) {
+        border-left: 3px solid #f87171;
+      }
+
+      .summary-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+      }
+
+      .summary-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--accent-bright);
+        letter-spacing: -0.02em;
+      }
+
+      .summary-card:nth-child(2) .summary-value {
+        color: #fca5a5;
+      }
+
+      .summary-sub {
+        font-size: 0.75rem;
+        color: var(--text-soft);
+      }
+
+      .filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tag {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border-highlight);
+        color: var(--text-secondary);
+        background: rgba(15, 23, 42, 0.5);
+      }
+
+      .list-wrapper {
+        max-height: 420px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .card {
+        background: var(--bg-card);
+        padding: 10px 11px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        border: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        transition: background 0.15s ease, transform 0.1s ease,
+          box-shadow 0.15s ease, border-color 0.15s ease;
+      }
+
+      .card:nth-child(even) {
+        background: var(--bg-card-alt);
+      }
+
+      .card:hover {
+        transform: translateY(-1px);
+        border-color: var(--border-highlight);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .card-date {
+        font-weight: 600;
+        color: var(--text);
+        font-size: 0.9rem;
+      }
+
+      .card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 0.8rem;
+      }
+
+      .pill {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(30, 58, 138, 0.35);
+        border: 1px solid rgba(96, 165, 250, 0.55);
+        color: #dbeafe;
+      }
+
+      .pill.alt {
+        border-color: rgba(52, 211, 153, 0.6);
+        background: rgba(6, 78, 59, 0.35);
+        color: #d1fae5;
+      }
+
+      .card-footer {
+        margin-top: 2px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.75rem;
+        color: var(--text-soft);
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 6px var(--accent);
+        margin-right: 4px;
+      }
+
+      .error-state,
+      .empty-state,
+      .loading-state {
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px dashed rgba(148, 163, 184, 0.6);
+        background: rgba(15, 23, 42, 0.7);
+        font-size: 0.9rem;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .error-title {
+        color: var(--danger);
+        font-weight: 500;
+      }
+
+      .muted {
+        color: var(--text-soft);
+        font-size: 0.8rem;
+      }
+
+      .chart-placeholder {
+        height: 220px;
+        border-radius: 12px;
+        background: linear-gradient(
+          160deg,
+          #111b2e 0%,
+          #0c1424 45%,
+          #080f1a 100%
+        );
+        border: 1px solid var(--border-highlight);
+        padding: 12px 12px 20px;
+        position: relative;
+        overflow: visible;
+        display: flex;
+        align-items: flex-end;
+        gap: 6px;
+      }
+
+      .chart-bar-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        height: 100%;
+      }
+
+      /* Degradê verde suave — mesma família cromática do donut */
+      .chart-bar {
+        flex: 0 0 auto;
+        border-radius: 8px 8px 0 0;
+        background: linear-gradient(
+          180deg,
+          #9dd4b8 0%,
+          #6bbe94 14%,
+          #4a9e73 32%,
+          #35825d 50%,
+          rgba(46, 120, 88, 0.35) 68%,
+          rgba(34, 95, 68, 0.12) 82%,
+          transparent 100%
+        );
+        min-height: 4px;
+        width: 100%;
+        box-shadow: 0 -4px 18px rgba(53, 130, 93, 0.12);
+      }
+
+      .chart-bar-label {
+        font-size: 0.65rem;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+        text-align: center;
+        max-width: 100%;
+        line-height: 1.15;
+        white-space: normal;
+      }
+
+      .chart-xlabels {
+        position: absolute;
+        inset: auto 8px 6px 8px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.7rem;
+        color: var(--text-soft);
+        pointer-events: none;
+      }
+
+      .chart-caption {
+        margin-top: 6px;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+      }
+
+      .chart-section {
+        margin-bottom: 14px;
+      }
+
+      /* Área ampla para rótulos; donut compacto no centro */
+      .pie-wrapper {
+        position: relative;
+        width: 100%;
+        height: 220px;
+        margin: 0;
+        overflow: visible;
+      }
+
+      .pie-chart {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* Tabs e menu mobile (mobile-first) */
+      .tab-panel.tab-hidden {
+        display: none !important;
+      }
+
+      .tabs-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 14px;
+      }
+
+      .desktop-tabs {
+        display: none;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .tab-button {
+        appearance: none;
+        border: 1px solid var(--border-subtle);
+        background: rgba(15, 23, 42, 0.35);
+        color: var(--text-secondary);
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        transition: transform 0.12s ease, border-color 0.12s ease,
+          background 0.12s ease, color 0.12s ease;
+        user-select: none;
+        white-space: nowrap;
+      }
+
+      .tab-button:focus-visible {
+        outline: 2px solid var(--accent-soft);
+        outline-offset: 2px;
+      }
+
+      .tab-button.active {
+        border-color: var(--border-highlight);
+        background: rgba(46, 228, 160, 0.12);
+        color: var(--accent-bright);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+      }
+
+      .mobile-tabs-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--border-subtle);
+        background: rgba(15, 23, 42, 0.35);
+        color: var(--text-secondary);
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-weight: 650;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .hamburger {
+        width: 18px;
+        height: 14px;
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .hamburger span {
+        height: 2px;
+        width: 100%;
+        background: var(--text-secondary);
+        border-radius: 2px;
+      }
+
+      .mobile-tabs-drawer {
+        margin-top: 10px;
+        border: 1px solid var(--border-subtle);
+        background: rgba(3, 7, 18, 0.85);
+        backdrop-filter: blur(6px);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+
+      .mobile-tabs-drawer.tab-hidden {
+        display: none !important;
+      }
+
+      .mobile-tabs-drawer-inner {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      @media (min-width: 992px) {
+        .desktop-tabs {
+          display: flex;
+        }
+        .mobile-tabs {
+          display: none;
+        }
+        .mobile-tabs-drawer {
+          display: none;
+        }
+      }
+
+      .instances-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .instance-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: var(--bg-card);
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid var(--border-subtle);
+      }
+
+      .instance-name {
+        font-weight: 700;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .status-pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
+        background: rgba(15, 23, 42, 0.35);
+        white-space: nowrap;
+      }
+
+      .status-pill.open {
+        border-color: var(--border-highlight);
+        color: var(--accent-bright);
+        background: rgba(46, 228, 160, 0.12);
+      }
+
+      .status-pill.closed {
+        border-color: rgba(251, 113, 133, 0.45);
+        color: #fca5a5;
+        background: rgba(251, 113, 133, 0.10);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <header>
+        <div class="title">
+          <div class="title-icon">
+            <img
+              src="https://draxsistemas.com.br/favicon.ico"
+              alt="DRAX"
+              class="brand-logo"
+            />
+          </div>
+          <div class="title-text">
+            <h1>Dashboard de Envios</h1>
+            <span>Monitor em tempo real das interações de envio/recebimento</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="stat-chip">
+            <span class="stat-dot"></span>
+            <span id="last-update-label">Atualizando...</span>
+          </div>
+
+          <div class="refresh-select">
+            <div class="refresh-group">
+              <div class="refresh-row">
+                <button id="manual-refresh" class="refresh-button" type="button">
+                  Atualização manual
+                </button>
+                <div
+                  id="refresh-icon"
+                  class="refresh-icon hidden"
+                  title="Atualizar agora"
+                >
+                  ⟳
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="tabs-wrapper">
+        <div class="desktop-tabs" role="tablist" aria-label="Navegação">
+          <button
+            id="tab-btn-dashboard"
+            class="tab-button active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tab-dashboard"
+            data-tab="dashboard"
+          >
+            Dashboard
+          </button>
+          <button
+            id="tab-btn-instancias"
+            class="tab-button"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-instancias"
+            data-tab="instancias"
+          >
+            Instâncias
+          </button>
+        </div>
+
+        <div class="mobile-tabs">
+          <button
+            id="mobile-tabs-toggle"
+            class="mobile-tabs-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="mobile-tabs-drawer"
+          >
+            <span class="hamburger" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+            Menu
+          </button>
+        </div>
+
+        <div
+          id="mobile-tabs-drawer"
+          class="mobile-tabs-drawer tab-hidden"
+          aria-hidden="true"
+        >
+          <div class="mobile-tabs-drawer-inner">
+            <button
+              class="tab-button active"
+              type="button"
+              data-tab="dashboard"
+              role="menuitemradio"
+              aria-checked="true"
+            >
+              Dashboard
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="instancias"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Instâncias
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dashboard-filters" class="filters-top tab-panel">
+        <div class="filters-top-left">
+          <div class="field-group">
+            <label class="field-label" for="sender-filter"
+              >Filtrar por Instância Remetente</label
+            >
+            <select id="sender-filter">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="receiver-filter"
+              >Filtrar por Instância Destino</label
+            >
+            <select id="receiver-filter">
+              <option value="">Todas</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filters-top-right">
+          <div class="filters-buttons-label">Intervalo de tempo</div>
+          <div class="filters-buttons" id="time-filters">
+            <div class="range-picker">
+              <span class="range-label">Período</span>
+              <input
+                id="date-range"
+                class="range-input"
+                type="text"
+                placeholder="Selecionar período (dd/mm/aaaa)"
+              />
+            </div>
+            <button
+              class="filter-button active"
+              data-filter="60"
+              type="button"
+            >
+              Última 1 hora
+            </button>
+            <button class="filter-button" data-filter="10" type="button">
+              Últimos 10 envios
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <main class="container-fluid">
+        <div id="tab-dashboard" class="tab-panel">
+          <div class="row g-3">
+          <section class="panel col-12 col-lg-8">
+          <div class="panel-header">
+            <div class="panel-title">Visão Geral</div>
+            <span id="events-count-label">—</span>
+          </div>
+
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="summary-label">Instâncias ativas</div>
+              <div class="summary-value" id="instances-active">—</div>
+              <div class="summary-sub">Conectadas na Evolution API</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Instâncias desconectadas</div>
+              <div class="summary-value" id="instances-disconnected">—</div>
+              <div class="summary-sub" id="instances-total">Total: —</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Total de eventos</div>
+              <div class="summary-value" id="total-events">—</div>
+              <div class="summary-sub">Último carregamento</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Contatos únicos</div>
+              <div class="summary-value" id="unique-contacts">—</div>
+              <div class="summary-sub">Entre remetentes e destinatários</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Mais ativo</div>
+              <div class="summary-value" id="top-sender">—</div>
+              <div class="summary-sub" id="top-sender-count">—</div>
+            </div>
+          </div>
+
+          <div class="filters">
+            <span class="tag" id="visible-count">0 itens exibidos</span>
+          </div>
+
+          <div class="list-wrapper" id="conteudo">
+            <div class="loading-state">
+              <span>Carregando dados de envios...</span>
+              <span class="muted">Buscando informações do servidor</span>
+            </div>
+          </div>
+          </section>
+
+          <aside class="panel col-12 col-lg-4">
+          <div class="panel-header">
+            <div class="panel-title">Distribuição recente</div>
+          </div>
+
+          <div class="chart-section">
+            <div class="chart-placeholder" id="chart-placeholder">
+              <!-- barras preenchidas via JS -->
+            </div>
+            <p class="chart-caption" id="chart-caption">
+              Aguardando dados para montar a distribuição.
+            </p>
+          </div>
+          <div class="chart-section">
+            <div class="pie-wrapper" id="pie-wrapper">
+              <div class="pie-chart" id="pie-chart"></div>
+            </div>
+            <p class="chart-caption" id="pie-caption">
+              Aguardando dados para montar o gráfico de linha (últimas 12 horas).
+            </p>
+          </div>
+
+          <div style="margin-top: 14px" class="muted">
+            Dica: use o campo de filtro para focar em um número específico e ver
+            todos os envios/recebimentos relacionados.
+          </div>
+          </aside>
+          </div>
+        </div>
+
+        <div id="tab-instancias" class="tab-panel tab-hidden">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Instâncias</div>
+                <span id="instancias-count-label">—</span>
+              </div>
+
+              <div class="summary-grid">
+                <div class="summary-card">
+                  <div class="summary-label">Instâncias ativas</div>
+                  <div class="summary-value" id="instances-active-tab">
+                    —
+                  </div>
+                  <div class="summary-sub">Conectadas na Evolution API</div>
+                </div>
+                <div class="summary-card">
+                  <div class="summary-label">Instâncias desconectadas</div>
+                  <div class="summary-value" id="instances-disconnected-tab">
+                    —
+                  </div>
+                  <div
+                    class="summary-sub"
+                    id="instances-total-tab"
+                  >
+                    Total: —
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top: 14px" class="muted">
+                Lista (top 100) com o status atual das instâncias.
+              </div>
+
+              <div style="margin-top: 12px" class="list-wrapper">
+                <div id="instances-list" class="instances-list"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // Litepicker (range em um único input)
+      (function loadLitepicker() {
+        if (!window.Litepicker) {
+          const s = document.createElement("script");
+          s.src = "https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/litepicker.js";
+          document.head.appendChild(s);
+        }
+      })();
+
+      let rawEvents = [];
+      let allEvents = [];
+      let refreshTimer = null;
+      let isFirstLoad = true;
+      let senderFilter = "";
+      let receiverFilter = "";
+      let timeFilter = "60"; // '60', '10', 'range'
+      let instancesData = {
+        total: 0,
+        ativas: 0,
+        desconectadas: 0,
+        items: [],
+      };
+      let activeTab = "dashboard";
+
+      function setActiveTab(nextTab) {
+        activeTab = nextTab;
+
+        const dashboardPanel = document.getElementById("tab-dashboard");
+        const instanciasPanel = document.getElementById("tab-instancias");
+        const dashboardFilters = document.getElementById("dashboard-filters");
+
+        if (dashboardPanel) {
+          dashboardPanel.classList.toggle(
+            "tab-hidden",
+            nextTab !== "dashboard"
+          );
+          dashboardPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "dashboard" ? "true" : "false"
+          );
+        }
+
+        if (instanciasPanel) {
+          instanciasPanel.classList.toggle(
+            "tab-hidden",
+            nextTab !== "instancias"
+          );
+          instanciasPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "instancias" ? "true" : "false"
+          );
+        }
+
+        if (dashboardFilters) {
+          dashboardFilters.classList.toggle(
+            "tab-hidden",
+            nextTab !== "dashboard"
+          );
+        }
+
+        // Atualiza estado dos botões (desktop e mobile)
+        document
+          .querySelectorAll(".tab-button[data-tab]")
+          .forEach((btn) => {
+            const tab = btn.getAttribute("data-tab");
+            const isActive = tab === nextTab;
+            btn.classList.toggle("active", isActive);
+
+            if (btn.hasAttribute("aria-selected")) {
+              btn.setAttribute("aria-selected", isActive ? "true" : "false");
+            }
+            if (btn.hasAttribute("aria-checked")) {
+              btn.setAttribute("aria-checked", isActive ? "true" : "false");
+            }
+          });
+
+        if (nextTab === "instancias") {
+          renderInstancesList();
+        }
+      }
+
+      function closeMobileTabsDrawer() {
+        const drawer = document.getElementById("mobile-tabs-drawer");
+        const toggle = document.getElementById("mobile-tabs-toggle");
+
+        if (drawer) {
+          drawer.classList.add("tab-hidden");
+          drawer.setAttribute("aria-hidden", "true");
+        }
+        if (toggle) {
+          toggle.setAttribute("aria-expanded", "false");
+        }
+      }
+      let isManualMode = false;
+      // Litepicker range em um único input
+      let dateRangePicker = null;
+      // Armazena o range selecionado para garantir consistência
+      let rangeStart = null; // Date
+      let rangeEnd = null; // Date
+      let calendarInteractionAt = 0; // Date.now() quando o usuário mexe no calendário
+      let isCalendarMode = false; // define se o filtro ativo vem do calendário
+      let calendarFetchTimer = null;
+      let serverTotalCount = null; // total exato no range (count exato da view)
+      let serverCountsBySender = null; // distribuição exata (range) para barras
+
+      function parseBlock(block) {
+        const linhas = block
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+
+        if (linhas.length < 3) return null;
+
+        const dataHora = linhas[0].replace("Data/Hora: ", "").trim();
+        const quemEnviou = linhas[1].replace("Quem enviou: ", "").trim();
+        const quemRecebeu = linhas[2].replace("Quem recebeu: ", "").trim();
+
+        return { dataHora, quemEnviou, quemRecebeu };
+      }
+
+      function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error("timeout"));
+          }, timeoutMs);
+
+          fetch(url, options)
+            .then((res) => {
+              clearTimeout(timer);
+              resolve(res);
+            })
+            .catch((err) => {
+              clearTimeout(timer);
+              reject(err);
+            });
+        });
+      }
+
+      function formatTimeLabel(dateStr) {
+        if (!dateStr) return "—";
+        return dateStr.split(" ")[1] || dateStr;
+      }
+
+      function formatDateTimePretty(dateStr) {
+        if (!dateStr) return "—";
+        const d = new Date(dateStr);
+        if (Number.isNaN(d.getTime())) return dateStr;
+
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        const ss = String(d.getSeconds()).padStart(2, "0");
+
+        return `${dd}/${mm}/${yyyy} - ${hh}:${mi}:${ss}`;
+      }
+
+      function updateSummary(events) {
+        const total =
+          timeFilter === "range" && serverTotalCount != null
+            ? serverTotalCount
+            : events.length;
+
+        const contatos = new Set();
+        const contagemEnvios = {};
+
+        events.forEach((e) => {
+          contatos.add(e.quemEnviou);
+          contatos.add(e.quemRecebeu);
+
+          contagemEnvios[e.quemEnviou] =
+            (contagemEnvios[e.quemEnviou] || 0) + 1;
+        });
+
+        let topSender = "—";
+        let topCount = 0;
+
+        Object.entries(contagemEnvios).forEach(([numero, count]) => {
+          if (count > topCount) {
+            topCount = count;
+            topSender = numero;
+          }
+        });
+
+        document.getElementById("total-events").textContent = total || "0";
+        document.getElementById("unique-contacts").textContent =
+          contatos.size || "0";
+        document.getElementById("top-sender").textContent = topSender;
+        document.getElementById(
+          "top-sender-count"
+        ).textContent = topCount
+          ? `${topCount} envios`
+          : "Nenhum envio registrado";
+
+        document.getElementById(
+          "events-count-label"
+        ).textContent = `${total} eventos carregados`;
+
+        // resumo de instancias
+        const instAtivasEl = document.getElementById("instances-active");
+        const instDescEl = document.getElementById("instances-disconnected");
+        const instTotalEl = document.getElementById("instances-total");
+
+        if (instAtivasEl && instDescEl && instTotalEl) {
+          instAtivasEl.textContent = String(instancesData.ativas ?? 0);
+          instDescEl.textContent = String(instancesData.desconectadas ?? 0);
+          instTotalEl.textContent = `Total: ${instancesData.total ?? 0}`;
+        }
+
+        const instAtivasTabEl = document.getElementById(
+          "instances-active-tab"
+        );
+        const instDescTabEl = document.getElementById(
+          "instances-disconnected-tab"
+        );
+        const instTotalTabEl = document.getElementById("instances-total-tab");
+
+        if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
+          instAtivasTabEl.textContent = String(instancesData.ativas ?? 0);
+          instDescTabEl.textContent = String(instancesData.desconectadas ?? 0);
+          instTotalTabEl.textContent = `Total: ${instancesData.total ?? 0}`;
+        }
+      }
+
+      function updateChart(events) {
+        const chart = document.getElementById("chart-placeholder");
+        const caption = document.getElementById("chart-caption");
+        const pieWrapper = document.getElementById("pie-wrapper");
+        const pieChart = document.getElementById("pie-chart");
+        const pieCaption = document.getElementById("pie-caption");
+
+        chart.innerHTML = "";
+        if (pieWrapper) {
+          Array.from(pieWrapper.querySelectorAll(".pie-label")).forEach((el) =>
+            el.remove()
+          );
+        }
+
+        if (!events.length) {
+          caption.textContent = "Nenhum dado disponível para o período atual.";
+          if (pieCaption) {
+            pieCaption.textContent =
+              "Nenhum dado disponível para o período atual.";
+          }
+          return;
+        }
+
+        // Agrupa por instância (remetente) para comparativo entre instâncias.
+        // Para `range`, usamos a distribuição exata do backend (evita mismatch por limite de linhas).
+        const bySender = {};
+        if (timeFilter === "range" && serverCountsBySender) {
+          Object.entries(serverCountsBySender).forEach(([k, v]) => {
+            bySender[k] = Number(v) || 0;
+          });
+        } else {
+          events.forEach((e) => {
+            const key = e.quemEnviou || "—";
+            bySender[key] = (bySender[key] || 0) + 1;
+          });
+        }
+
+        const senderEntries = Object.entries(bySender).sort(
+          (a, b) => (b[1] || 0) - (a[1] || 0)
+        );
+
+        // Mostra todas as instâncias (sem limite fixo) para o total bater.
+        const topEntries = senderEntries;
+        let maxVal = Math.max(...topEntries.map(([, v]) => v || 0));
+        if (!Number.isFinite(maxVal) || maxVal <= 0) {
+          maxVal = 1;
+        }
+
+        topEntries.forEach(([instancia, value]) => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "chart-bar-wrapper";
+
+          const bar = document.createElement("div");
+          bar.className = "chart-bar";
+          // garante barras visualmente mais altas: mínimo 20%, máximo 100%
+          const ratio = maxVal ? (value || 0) / maxVal : 0;
+          const heightPct = 20 + ratio * 80;
+          bar.style.height = `${Math.max(heightPct, 20)}%`;
+          wrapper.appendChild(bar);
+
+          const labelDiv = document.createElement("div");
+          labelDiv.className = "chart-bar-label";
+          labelDiv.textContent = `${instancia} (${value || 0})`;
+          wrapper.appendChild(labelDiv);
+
+          chart.appendChild(wrapper);
+        });
+
+        caption.textContent =
+          "Distribuição de eventos por instância (quem enviou) no período filtrado.";
+
+        // Gráfico de linha: respeita o filtro de tempo selecionado
+        if (pieChart && pieCaption && pieWrapper) {
+          // "agora" do gráfico deve ser o evento mais recente carregado,
+          // para alinhar com o filtro (que também recorta pelo mais recente).
+          const validDates = events
+            .map((e) => parseDateTime(e.dataHora))
+            .filter((d) => d && !Number.isNaN(d.getTime()));
+
+          if (!validDates.length) {
+            pieCaption.textContent = "Nenhum envio registrado no período selecionado.";
+            pieChart.innerHTML = "";
+            return;
+          }
+
+          const maxT = Math.max(...validDates.map((d) => d.getTime()));
+          const minT = Math.min(...validDates.map((d) => d.getTime()));
+
+          const step15 = 15 * 60 * 1000;
+          let buckets = [];
+
+          if (timeFilter === "60") {
+            // últimos 60 minutos com eixo em 15 minutos
+            const endT = maxT;
+            const startT = endT - 60 * 60 * 1000;
+            buckets = [];
+            for (let i = 0; i <= 4; i++) {
+              buckets.push(new Date(startT + i * step15));
+            }
+          } else if (timeFilter === "range") {
+            const parsed = parseRangeFromInputValue();
+            const startD = parsed
+              ? parsed.startD
+              : rangeStart
+                ? new Date(rangeStart)
+                : null;
+            const endD = parsed
+              ? parsed.endD
+              : rangeEnd
+                ? new Date(rangeEnd)
+                : null;
+
+            if (!startD || !endD) {
+              // sem seleção válida
+              buckets = [];
+            } else {
+              // garante limites inclusivos do dia
+              startD.setHours(0, 0, 0, 0);
+              endD.setHours(23, 59, 59, 999);
+
+              const startT = startD.getTime();
+              const endT = endD.getTime();
+
+              const spanMs = Math.max(1, Math.abs(endT - startT));
+
+              // Se o período for curto (<=60min), mantemos 15 em 15
+              if (spanMs <= 60 * 60 * 1000) {
+                const endAligned =
+                  Math.ceil(Math.max(startT, endT) / step15) * step15;
+                const startAligned = endAligned - 60 * 60 * 1000;
+                buckets = [];
+                for (let i = 0; i <= 4; i++) {
+                  buckets.push(new Date(startAligned + i * step15));
+                }
+              } else {
+                // senão, divide o período em 4 intervalos iguais (5 marcas)
+                const s = Math.min(startT, endT);
+                const e = Math.max(startT, endT);
+                const step = (e - s) / 4;
+                buckets = [];
+                for (let i = 0; i <= 4; i++) {
+                  buckets.push(new Date(s + i * step));
+                }
+              }
+            }
+          } else {
+            // Últimos 10 envios: usa o intervalo de tempo existente nos eventos exibidos
+            const spanMs = Math.max(1, maxT - minT);
+            const step = spanMs / 4;
+            buckets = [];
+            for (let i = 0; i <= 4; i++) {
+              buckets.push(new Date(minT + i * step));
+            }
+          }
+
+          const byInstance = new Map();
+          events.forEach((e) => {
+            const d = parseDateTime(e.dataHora);
+            if (!d) return;
+            const key = e.quemEnviou || "—";
+            if (!byInstance.has(key)) {
+              byInstance.set(key, new Array(buckets.length - 1).fill(0));
+            }
+            const series = byInstance.get(key);
+            for (let i = 0; i < buckets.length - 1; i++) {
+              const isLast = i === buckets.length - 2;
+              const inBucket =
+                d >= buckets[i] &&
+                (isLast ? d <= buckets[i + 1] : d < buckets[i + 1]);
+              if (inBucket) {
+                series[i] += 1;
+                return;
+              }
+            }
+          });
+
+          const seriesEntries = Array.from(byInstance.entries());
+
+          // todas as instâncias entram no gráfico (sem limite fixo)
+          const ranked = seriesEntries
+            .map(([inst, arr]) => [inst, arr, arr.reduce((a, b) => a + b, 0)])
+            .sort((a, b) => b[2] - a[2])
+            ;
+
+          let globalMax = 0;
+          ranked.forEach(([, arr]) => {
+            arr.forEach((v) => {
+              if (v > globalMax) globalMax = v;
+            });
+          });
+          if (globalMax <= 0) globalMax = 1;
+
+          const width = 300;
+          const height = 180;
+          const paddingLeft = 36;
+          const paddingRight = 16;
+          const paddingTop = 10;
+          const paddingBottom = 22;
+
+          const innerW = width - paddingLeft - paddingRight;
+          const innerH = height - paddingTop - paddingBottom;
+
+          const svgNS = "http://www.w3.org/2000/svg";
+          const svg = document.createElementNS(svgNS, "svg");
+          svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+          svg.setAttribute("width", "100%");
+          svg.setAttribute("height", "100%");
+
+          // grid horizontal
+          const gridLines = 4;
+          for (let i = 0; i <= gridLines; i++) {
+            const y = paddingTop + (innerH * i) / gridLines;
+            const line = document.createElementNS(svgNS, "line");
+            line.setAttribute("x1", paddingLeft.toString());
+            line.setAttribute("x2", (width - paddingRight).toString());
+            line.setAttribute("y1", y.toString());
+            line.setAttribute("y2", y.toString());
+            line.setAttribute("stroke", "rgba(148,163,184,0.25)");
+            line.setAttribute("stroke-width", "1");
+            svg.appendChild(line);
+          }
+
+          // função para cor de linha
+          const lineColor = (index) => {
+            const hue = 136 + (index * 29) % 40;
+            const sat = 42;
+            const light = 50 - (index % 3) * 6;
+            return `hsl(${hue}, ${sat}%, ${light}%)`;
+          };
+
+          ranked.forEach(([inst, arr, total], idx) => {
+            const color = lineColor(idx);
+            const pts = [];
+            arr.forEach((v, i) => {
+              const x =
+                paddingLeft + (innerW * i) / Math.max(arr.length - 1, 1);
+              const ratio = v / globalMax;
+              const y = paddingTop + innerH * (1 - ratio);
+              pts.push(`${x},${y}`);
+            });
+            if (!pts.length) return;
+
+            const poly = document.createElementNS(svgNS, "polyline");
+            poly.setAttribute("fill", "none");
+            poly.setAttribute("stroke", color);
+            poly.setAttribute("stroke-width", "1.6");
+            poly.setAttribute("stroke-linejoin", "round");
+            poly.setAttribute("stroke-linecap", "round");
+            poly.setAttribute("points", pts.join(" "));
+            poly.setAttribute("stroke-opacity", "0.85");
+            svg.appendChild(poly);
+          });
+
+          // rótulos no eixo Y com nomes das instâncias (distribuídos verticalmente)
+          const labelCount = ranked.length;
+          ranked.forEach(([inst], idx) => {
+            if (!inst) return;
+            const t = labelCount === 1 ? 0.5 : idx / (labelCount - 1);
+            const y = paddingTop + innerH * (1 - t);
+            const text = document.createElementNS(svgNS, "text");
+            text.setAttribute("x", (paddingLeft - 6).toString());
+            text.setAttribute("y", (y + 3).toString());
+            text.setAttribute("fill", "#cbd5e1");
+            text.setAttribute("font-size", "9");
+            text.setAttribute("font-weight", "600");
+            text.setAttribute("text-anchor", "end");
+            text.setAttribute("paint-order", "stroke");
+            text.setAttribute("stroke", "rgba(15,23,42,0.9)");
+            text.setAttribute("stroke-width", "2");
+            text.textContent = inst;
+            svg.appendChild(text);
+          });
+
+          // eixo X
+          const tickTimes = buckets;
+          const hourFormat = new Intl.DateTimeFormat("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const xStep = Math.max(1, Math.floor(tickTimes.length / 4));
+          tickTimes.forEach((h, i) => {
+            if (i % xStep !== 0 && i !== tickTimes.length - 1) return;
+            const x =
+              paddingLeft + (innerW * i) / Math.max(tickTimes.length - 1, 1);
+            const y = height - paddingBottom + 10;
+            const lbl = document.createElementNS(svgNS, "text");
+            lbl.setAttribute("x", x.toString());
+            lbl.setAttribute("y", y.toString());
+            lbl.setAttribute("fill", "#9ca3af");
+            lbl.setAttribute("font-size", "9");
+            lbl.setAttribute("text-anchor", "middle");
+            lbl.textContent = hourFormat.format(h);
+            svg.appendChild(lbl);
+          });
+
+          pieChart.innerHTML = "";
+          pieChart.appendChild(svg);
+
+          if (!ranked.length) {
+            pieCaption.textContent =
+              "Nenhum evento no período filtrado.";
+          } else {
+            pieCaption.textContent =
+              "Volume de envios por instância no período filtrado (eixo X: tempo).";
+          }
+        }
+      }
+
+      function renderList(events) {
+        const container = document.getElementById("conteudo");
+        const visibleCount = document.getElementById("visible-count");
+
+        container.innerHTML = "";
+
+        if (!events.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <span>Nenhum evento encontrado para o filtro atual.</span>
+              <span class="muted">Tente limpar o filtro ou aguarde novos envios.</span>
+            </div>
+          `;
+          visibleCount.textContent = "0 itens exibidos";
+          return;
+        }
+
+        events.forEach((e) => {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          card.innerHTML = `
+            <div class="card-header">
+              <div class="card-date">${formatDateTimePretty(e.dataHora)}</div>
+              <div class="card-meta">
+                <span class="pill">Enviou: <strong>${e.quemEnviou}</strong></span>
+                <span class="pill alt">Recebeu: <strong>${e.quemRecebeu}</strong></span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div><span class="status-dot"></span> Entrega registrada</div>
+              <div>${e.quemEnviou} → ${e.quemRecebeu}</div>
+            </div>
+          `;
+
+          container.appendChild(card);
+        });
+
+        visibleCount.textContent = `${events.length} itens exibidos`;
+      }
+
+      function renderInstancesList() {
+        const container = document.getElementById("instances-list");
+        if (!container) return;
+
+        container.innerHTML = "";
+
+        const items = Array.isArray(instancesData.items)
+          ? instancesData.items
+          : [];
+
+        if (!items.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <span>Nenhuma instância disponível.</span>
+              <span class="muted">Aguarde a próxima atualização.</span>
+            </div>
+          `;
+          return;
+        }
+
+        items.forEach((inst, idx) => {
+          const statusRaw = String(inst?.connectionStatus ?? "");
+          const statusLc = statusRaw.toLowerCase();
+          const isOpen = statusLc.includes("open");
+
+          const candidateName =
+            inst?.name ??
+            inst?.instanceName ??
+            inst?.id ??
+            inst?.instanceId ??
+            null;
+
+          const displayName =
+            candidateName == null || candidateName === ""
+              ? `Instância ${idx + 1}`
+              : String(candidateName);
+
+          const row = document.createElement("div");
+          row.className = "instance-row";
+
+          const nameEl = document.createElement("div");
+          nameEl.className = "instance-name";
+          nameEl.textContent = displayName;
+
+          const pillEl = document.createElement("div");
+          pillEl.className = `status-pill ${isOpen ? "open" : "closed"}`;
+          pillEl.textContent = isOpen ? "Conectada" : "Desconectada";
+
+          row.appendChild(nameEl);
+          row.appendChild(pillEl);
+          container.appendChild(row);
+        });
+      }
+
+      function parseDateTime(str) {
+        if (!str) return null;
+
+        const s = String(str).trim();
+
+        // 1) tenta timestamp ISO/Postgres com ou sem "T" e com fração (microsegundos).
+        if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(s)) {
+          let iso = s.replace(" ", "T");
+
+          // Normaliza fração para milissegundos (JS costuma falhar com muitos dígitos).
+          const frac = iso.match(
+            /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d+)(.*)$/
+          );
+          if (frac) {
+            const ms = frac[2].slice(0, 3).padEnd(3, "0");
+            iso = `${frac[1]}.${ms}${frac[3] || ""}`;
+          }
+
+          const d = new Date(iso);
+          if (!Number.isNaN(d.getTime())) return d;
+        }
+
+        // 2) fallback: tenta parse direto (cobre ISO completo / timezone / etc)
+        const d0 = new Date(s.replace(" ", "T"));
+        if (!Number.isNaN(d0.getTime())) return d0;
+
+        // 2) tenta formato DD/MM/AAAA HH:MM:SS
+        const [datePart, timePart] = str.split(" ");
+        if (!datePart || !timePart) return null;
+        const [d, m, y] = datePart.split("/").map((n) => parseInt(n, 10));
+        const [hh, mm, ss] = timePart.split(":").map((n) => parseInt(n, 10));
+        if (!d || !m || !y) return null;
+        return new Date(y, m - 1, d, hh || 0, mm || 0, ss || 0);
+      }
+
+      function toNativeDate(value) {
+        if (!value) return null;
+        if (value instanceof Date) return value;
+        if (typeof value.toJSDate === "function") return value.toJSDate();
+        if (typeof value.toDate === "function") return value.toDate();
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+
+      function parseRangeFromInputValue() {
+        const inputEl = document.getElementById("date-range");
+        const value = (inputEl && inputEl.value ? String(inputEl.value) : "")
+          .trim()
+          .replace(/\u00A0/g, " "); // normalize nbsp
+
+        // Pega as 2 datas do input, ignorando o texto no meio ("até", "to", "-", etc)
+        const re = /(\d{2})\/(\d{2})\/(\d{4})/g;
+        const matches = [];
+        let m;
+        while ((m = re.exec(value)) !== null) {
+          matches.push({
+            d: parseInt(m[1], 10),
+            mo: parseInt(m[2], 10),
+            y: parseInt(m[3], 10),
+          });
+          if (matches.length >= 2) break;
+        }
+
+        if (matches.length < 2) return null;
+
+        const startD = new Date(matches[0].y, matches[0].mo - 1, matches[0].d, 0, 0, 0, 0);
+        const endD = new Date(matches[1].y, matches[1].mo - 1, matches[1].d, 23, 59, 59, 999);
+
+        if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) return null;
+        return { startD, endD };
+      }
+
+      function extractEventDayYMD(value) {
+        if (!value) return null;
+        const s = String(value).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return null;
+        return {
+          y: parseInt(m[1], 10),
+          mo: parseInt(m[2], 10) - 1,
+          d: parseInt(m[3], 10),
+        };
+      }
+
+      function applyFilters() {
+        let events = [...rawEvents];
+
+        // Robustez: se o usuário acabou de interagir com o calendário,
+        // garantimos que o filtro do período será aplicado mesmo que
+        // o Litepicker não tenha disparado o evento esperado.
+        if (timeFilter !== "range" && Date.now() - calendarInteractionAt < 2500) {
+          const parsed = parseRangeFromInputValue();
+          if (parsed) {
+            rangeStart = parsed.startD;
+            rangeEnd = parsed.endD;
+            timeFilter = "range";
+          }
+        }
+
+        // Se o modo ativo veio do calendário, força timeFilter=range e ressincroniza o range.
+        if (isCalendarMode) {
+          const parsed = parseRangeFromInputValue();
+          if (parsed) {
+            rangeStart = parsed.startD;
+            rangeEnd = parsed.endD;
+            timeFilter = "range";
+          }
+        }
+
+        // ordena por data (mais recentes primeiro)
+        events.sort((a, b) => {
+          const da = parseDateTime(a.dataHora);
+          const db = parseDateTime(b.dataHora);
+
+          if (!da && !db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+
+          return db.getTime() - da.getTime();
+        });
+
+        if (timeFilter === "10") {
+          // simplesmente pega os 10 eventos mais recentes
+          events = events.slice(0, 10);
+        } else if (timeFilter === "60") {
+          // usa a data mais recente da própria lista como referência de "agora"
+          const validDates = events
+            .map((e) => parseDateTime(e.dataHora))
+            .filter((d) => d && !Number.isNaN(d.getTime()));
+
+          if (!validDates.length) {
+            events = [];
+          } else {
+            const maxDate = new Date(
+              Math.max(...validDates.map((d) => d.getTime()))
+            );
+            const cutoff = new Date(maxDate.getTime() - 60 * 60 * 1000);
+
+            events = events.filter((e) => {
+              const d = parseDateTime(e.dataHora);
+              return d && d.getTime() >= cutoff.getTime();
+            });
+          }
+        } else if (timeFilter === "range") {
+          // Fonte da verdade: texto do input (DD/MM/AAAA até DD/MM/AAAA)
+          // => evita que eventos do Litepicker não sincronizem a variável na hora.
+          const parsed = parseRangeFromInputValue();
+          const startD = parsed
+            ? parsed.startD
+            : rangeStart
+              ? new Date(rangeStart)
+              : null;
+          const endD = parsed
+            ? parsed.endD
+            : rangeEnd
+              ? new Date(rangeEnd)
+              : null;
+
+          if (!startD || !endD) {
+            events = [];
+          } else {
+            startD.setHours(0, 0, 0, 0);
+            endD.setHours(23, 59, 59, 999);
+
+            const startT = Math.min(startD.getTime(), endD.getTime());
+            const endT = Math.max(startD.getTime(), endD.getTime());
+
+            events = events.filter((e) => {
+            const ymd = extractEventDayYMD(e.dataHora);
+            if (!ymd) return false;
+
+            const day = new Date(ymd.y, ymd.mo, ymd.d, 0, 0, 0, 0);
+            const t = day.getTime();
+
+            const startDayT = new Date(startT).setHours(0, 0, 0, 0);
+            const endDayT = new Date(endT).setHours(23, 59, 59, 999);
+            return t >= startDayT && t <= endDayT;
+            });
+          }
+        } // demais casos => não aplica recorte
+
+        if (senderFilter) {
+          const term = senderFilter.toLowerCase();
+          events = events.filter((e) =>
+            e.quemEnviou.toLowerCase().includes(term)
+          );
+        }
+
+        if (receiverFilter) {
+          const term = receiverFilter.toLowerCase();
+          events = events.filter((e) =>
+            e.quemRecebeu.toLowerCase().includes(term)
+          );
+        }
+
+        allEvents = events;
+
+        updateSummary(events);
+        updateChart(events);
+        renderList(events);
+      }
+
+      function updateInstanceOptions() {
+        const senderSelect = document.getElementById("sender-filter");
+        const receiverSelect = document.getElementById("receiver-filter");
+
+        if (!senderSelect || !receiverSelect) return;
+
+        const currentSender = senderSelect.value;
+        const currentReceiver = receiverSelect.value;
+
+        const senders = new Set();
+        const receivers = new Set();
+
+        rawEvents.forEach((e) => {
+          if (e.quemEnviou) senders.add(e.quemEnviou);
+          if (e.quemRecebeu) receivers.add(e.quemRecebeu);
+        });
+
+        senderSelect.innerHTML = '<option value="">Todas</option>';
+        Array.from(senders)
+          .sort()
+          .forEach((s) => {
+            const opt = document.createElement("option");
+            opt.value = s;
+            opt.textContent = s;
+            senderSelect.appendChild(opt);
+          });
+
+        receiverSelect.innerHTML = '<option value="">Todas</option>';
+        Array.from(receivers)
+          .sort()
+          .forEach((r) => {
+            const opt = document.createElement("option");
+            opt.value = r;
+            opt.textContent = r;
+            receiverSelect.appendChild(opt);
+          });
+
+        if (currentSender && Array.from(senders).includes(currentSender)) {
+          senderSelect.value = currentSender;
+          senderFilter = currentSender;
+        } else {
+          senderSelect.value = "";
+          senderFilter = "";
+        }
+
+        if (currentReceiver && Array.from(receivers).includes(currentReceiver)) {
+          receiverSelect.value = currentReceiver;
+          receiverFilter = currentReceiver;
+        } else {
+          receiverSelect.value = "";
+          receiverFilter = "";
+        }
+      }
+
+      async function carregar() {
+        const container = document.getElementById("conteudo");
+        const lastUpdateLabel = document.getElementById("last-update-label");
+
+        if (isFirstLoad) {
+          container.innerHTML = `
+            <div class="loading-state">
+              <span>Carregando dados de envios...</span>
+              <span class="muted">Conectando no servidor de dados</span>
+            </div>
+          `;
+        }
+        lastUpdateLabel.textContent = "Atualizando...";
+
+        try {
+          const shouldFetchDados = activeTab === "dashboard";
+
+          let dadosUrl = "/dados";
+          if (shouldFetchDados && timeFilter === "range") {
+            const parsed = parseRangeFromInputValue();
+            if (parsed?.startD && parsed?.endD) {
+              const fmtYMD = (dt) => {
+                const y = dt.getFullYear();
+                const m = String(dt.getMonth() + 1).padStart(2, "0");
+                const d = String(dt.getDate()).padStart(2, "0");
+                return `${y}-${m}-${d}`;
+              };
+              const startYMD = fmtYMD(parsed.startD);
+              const endYMD = fmtYMD(parsed.endD);
+              dadosUrl = `/dados?rangeStart=${encodeURIComponent(
+                startYMD
+              )}&rangeEnd=${encodeURIComponent(endYMD)}`;
+            }
+          }
+
+          const [resDados, resInstancias] = await Promise.allSettled([
+            shouldFetchDados
+              ? // dados podem demorar um pouco mais
+                fetchWithTimeout(dadosUrl, {}, 15000)
+              : Promise.resolve({ ok: false }),
+            // instancias pode falhar sem travar o dashboard
+            fetchWithTimeout("/instancias", {}, 8000),
+          ]);
+
+          if (
+            resInstancias.status === "fulfilled" &&
+            resInstancias.value.ok
+          ) {
+            try {
+              instancesData = await resInstancias.value.json();
+            } catch (e) {
+              console.error("Falha ao ler JSON de /instancias", e);
+              // mantém último cache
+            }
+          }
+
+          // Se não estamos na aba Dashboard, não carregamos o payload de /dados.
+          // Mesmo assim, mantemos o resumo/lista de instâncias atualizado.
+          if (!shouldFetchDados) {
+            const instAtivasEl = document.getElementById("instances-active");
+            const instDescEl = document.getElementById(
+              "instances-disconnected"
+            );
+            const instTotalEl = document.getElementById("instances-total");
+
+            if (instAtivasEl && instDescEl && instTotalEl) {
+              instAtivasEl.textContent = String(instancesData.ativas ?? 0);
+              instDescEl.textContent = String(
+                instancesData.desconectadas ?? 0
+              );
+              instTotalEl.textContent = `Total: ${instancesData.total ?? 0}`;
+            }
+
+            const instAtivasTabEl = document.getElementById(
+              "instances-active-tab"
+            );
+            const instDescTabEl = document.getElementById(
+              "instances-disconnected-tab"
+            );
+            const instTotalTabEl = document.getElementById(
+              "instances-total-tab"
+            );
+
+            if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
+              instAtivasTabEl.textContent = String(instancesData.ativas ?? 0);
+              instDescTabEl.textContent = String(
+                instancesData.desconectadas ?? 0
+              );
+              instTotalTabEl.textContent = `Total: ${
+                instancesData.total ?? 0
+              }`;
+            }
+
+            if (activeTab === "instancias") {
+              renderInstancesList();
+            }
+
+            const now = new Date();
+            lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
+              "pt-BR",
+              { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+            )}`;
+            return;
+          }
+
+          if (
+            resDados.status !== "fulfilled" ||
+            !resDados.value.ok
+          ) {
+            if (!rawEvents.length) {
+              throw new Error("Resposta não OK do servidor de dados");
+            }
+
+            // usa dados em cache sem limpar tela
+            const nowCache = new Date();
+            lastUpdateLabel.textContent = `Usando dados em cache (última atualização às ${nowCache.toLocaleTimeString(
+              "pt-BR",
+              { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+            )})`;
+
+            applyFilters();
+            return;
+          }
+
+          const data = await resDados.value.json();
+          const texto = data.log || "";
+          serverTotalCount =
+            typeof data.totalCount === "number" ? data.totalCount : null;
+          serverCountsBySender =
+            data && typeof data.countsBySender === "object"
+              ? data.countsBySender
+              : null;
+
+          const blocks = texto
+            .split("-----------------------------")
+            .map((b) => b.trim())
+            .filter(Boolean);
+
+          const events = [];
+          blocks.forEach((b) => {
+            const parsed = parseBlock(b);
+            if (parsed) events.push(parsed);
+          });
+
+          allEvents = events;
+          isFirstLoad = false;
+
+          const now = new Date();
+          lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
+            "pt-BR",
+            { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+          )}`;
+
+          rawEvents = events;
+          updateInstanceOptions();
+          applyFilters();
+        } catch (err) {
+          console.error(err);
+          container.innerHTML = `
+            <div class="error-state">
+              <span class="error-title">Erro ao carregar dados</span>
+              <span class="muted">
+                Verifique a conexão com o servidor ou tente novamente em alguns segundos.
+              </span>
+            </div>
+          `;
+          lastUpdateLabel.textContent = "Erro ao atualizar";
+        }
+      }
+
+      // Tabs (Dashboard / Instâncias)
+      document
+        .getElementById("mobile-tabs-toggle")
+        ?.addEventListener("click", () => {
+          const drawer = document.getElementById("mobile-tabs-drawer");
+          const toggle = document.getElementById("mobile-tabs-toggle");
+          const isHidden = drawer?.classList.contains("tab-hidden") ?? true;
+
+          if (drawer) {
+            drawer.classList.toggle("tab-hidden", !isHidden);
+            drawer.setAttribute("aria-hidden", isHidden ? "false" : "true");
+          }
+          if (toggle) {
+            toggle.setAttribute("aria-expanded", isHidden ? "true" : "false");
+          }
+        });
+
+      document.querySelectorAll(".tab-button[data-tab]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tab = btn.getAttribute("data-tab");
+          if (!tab) return;
+          setActiveTab(tab);
+          closeMobileTabsDrawer();
+        });
+      });
+
+      setActiveTab(activeTab);
+
+      document
+        .getElementById("sender-filter")
+        .addEventListener("change", (e) => {
+          senderFilter = e.target.value;
+          applyFilters();
+        });
+
+      document
+        .getElementById("receiver-filter")
+        .addEventListener("change", (e) => {
+          receiverFilter = e.target.value;
+          applyFilters();
+        });
+
+      document.getElementById("time-filters").addEventListener("click", (e) => {
+        const btn = e.target.closest(".filter-button");
+        if (!btn) return;
+        timeFilter = btn.getAttribute("data-filter") || "60";
+        isCalendarMode = false;
+
+        document
+          .querySelectorAll(".filter-button")
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        applyFilters();
+      });
+
+      // Seleção de período via Litepicker (range em um único input)
+      const dateRangeInput = document.getElementById("date-range");
+
+      function initDateRangePicker() {
+        if (!dateRangeInput) return;
+
+        // Marca interação recente com o calendário para garantir que o filtro
+        // de período seja aplicado mesmo se algum evento do Litepicker falhar.
+        dateRangeInput.addEventListener("focus", () => {
+          calendarInteractionAt = Date.now();
+          isCalendarMode = true;
+        });
+        dateRangeInput.addEventListener("mousedown", () => {
+          calendarInteractionAt = Date.now();
+          isCalendarMode = true;
+        });
+
+        if (!window.Litepicker) {
+          setTimeout(initDateRangePicker, 150);
+          return;
+        }
+
+        const pad = (n) => String(n).padStart(2, "0");
+        const toNativeDate = (d) => {
+          if (!d) return null;
+          if (d instanceof Date) return d;
+          // Litepicker pode devolver objetos DateTime.
+          if (typeof d.toJSDate === "function") return d.toJSDate();
+          if (typeof d.toDate === "function") return d.toDate();
+          const nd = new Date(d);
+          return Number.isNaN(nd.getTime()) ? null : nd;
+        };
+        const fmtDMY = (d) => {
+          const nd = toNativeDate(d);
+          if (!nd) return "—";
+          return `${pad(nd.getDate())}/${pad(nd.getMonth() + 1)}/${nd.getFullYear()}`;
+        };
+
+        const end = new Date();
+        const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+
+        try {
+          dateRangePicker = new Litepicker({
+            element: dateRangeInput,
+            singleMode: false,
+            autoApply: true,
+            format: "DD/MM/YYYY",
+            lang: "pt-BR",
+            delimiter: " até ",
+            firstDay: 1,
+            numberOfMonths: 2,
+            startDate: start,
+            endDate: end,
+          });
+        } catch (e) {
+          console.error("Litepicker init failed:", e);
+          dateRangePicker = null;
+          return;
+        }
+
+        const setRangeFromDates = (date1, date2) => {
+          if (!dateRangePicker) return;
+          const startPicked = toNativeDate(date1);
+          const endPicked = toNativeDate(date2);
+          if (!startPicked || !endPicked) return;
+
+          rangeStart = startPicked;
+          rangeEnd = endPicked;
+          timeFilter = "range";
+
+          // Força a formatação no input para garantir "até".
+          try {
+            dateRangeInput.value = `${fmtDMY(startPicked)} até ${fmtDMY(
+              endPicked
+            )}`;
+          } catch {
+            // ignore
+          }
+
+          document
+            .querySelectorAll(".filter-button")
+            .forEach((b) => b.classList.remove("active"));
+
+          applyFilters();
+        };
+
+        // Eventos do Litepicker (podem variar por versão, por isso mantemos múltiplos)
+        dateRangePicker.on("preselect", (date1, date2) =>
+          setRangeFromDates(date1, date2)
+        );
+        dateRangePicker.on("button:apply", (date1, date2) =>
+          setRangeFromDates(date1, date2)
+        );
+
+        // Fallback: sincroniza lendo o range diretamente do picker.
+        const syncRangeFromPicker = () => {
+          try {
+            const s = dateRangePicker?.getStartDate
+              ? dateRangePicker.getStartDate()
+              : null;
+            const e = dateRangePicker?.getEndDate ? dateRangePicker.getEndDate() : null;
+            const ns = toNativeDate(s);
+            const ne = toNativeDate(e);
+            if (!ns || !ne) return;
+            setRangeFromDates(ns, ne);
+            isCalendarMode = true;
+          } catch {
+            // ignore
+          }
+        };
+
+        // Fallback robusto: o texto do input é a fonte da verdade.
+        const forceRangeFromInput = () => {
+          const parsed = parseRangeFromInputValue();
+          if (!parsed) return;
+
+          rangeStart = parsed.startD;
+          rangeEnd = parsed.endD;
+          timeFilter = "range";
+          isCalendarMode = true;
+
+          document
+            .querySelectorAll(".filter-button")
+            .forEach((b) => b.classList.remove("active"));
+
+          // Busca novamente no backend com o range selecionado (imperceptível, sem reload).
+          if (calendarFetchTimer) clearTimeout(calendarFetchTimer);
+          calendarFetchTimer = setTimeout(() => carregar(), 120);
+        };
+
+        // Fallback: garante que qualquer alteração no input dispare o update.
+        dateRangeInput.addEventListener("change", forceRangeFromInput);
+        dateRangeInput.addEventListener("input", () => {
+          setTimeout(forceRangeFromInput, 50);
+        });
+        dateRangeInput.addEventListener("blur", forceRangeFromInput);
+      }
+
+      initDateRangePicker();
+
+      const manualRefreshBtn = document.getElementById("manual-refresh");
+      const refreshIconEl = document.getElementById("refresh-icon");
+
+      function setRefreshMode(manual) {
+        isManualMode = manual;
+
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+
+        if (manualRefreshBtn) {
+          manualRefreshBtn.textContent = manual
+            ? "Atualização automática"
+            : "Atualização manual";
+        }
+
+        if (refreshIconEl) {
+          if (manual) {
+            refreshIconEl.classList.remove("hidden");
+          } else {
+            refreshIconEl.classList.add("hidden");
+          }
+        }
+
+        if (!manual) {
+          // modo automático: agenda atualização a cada 15s
+          refreshTimer = setInterval(carregar, 15000);
+        }
+      }
+
+      if (manualRefreshBtn) {
+        manualRefreshBtn.addEventListener("click", () => {
+          // alterna entre manual e automático
+          setRefreshMode(!isManualMode);
+          // sempre atualiza imediatamente ao trocar o modo
+          carregar();
+        });
+      }
+
+      if (refreshIconEl) {
+        refreshIconEl.addEventListener("click", () => {
+          carregar();
+        });
+      }
+
+      // inicial: modo automático com atualização a cada 15s
+      setRefreshMode(false);
+      carregar();
+    </script>
+  </body>
 </html>
 
