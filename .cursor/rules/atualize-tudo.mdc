@@ -1,0 +1,29 @@
+---
+description: Comando padrão "atualize tudo" - build, doc, commits e push
+alwaysApply: true
+---
+
+# Comando "Atualize tudo"
+
+Quando o usuário disser **"atualize tudo"**, execute nesta ordem:
+
+1. **Build** — `npm run build` (atualiza a pasta `dist/`)
+2. **Arquivos locais** — Verificar se há alterações pendentes em código fonte
+3. **Pasta doc** — Garantir que documentação esteja coerente com o estado atual do projeto
+4. **Git** — Fazer commit das alterações (se houver) e `git push`
+
+## Sequência de execução
+
+```bash
+npm run build
+git status
+git add .
+git commit -m "mensagem descritiva"   # se houver alterações
+git push
+```
+
+## Notas
+
+- Se não houver alterações para commit, pular o commit e fazer apenas o push (caso existam commits locais não enviados)
+- A pasta `dist/` normalmente está no `.gitignore` — não comitar `dist/` a menos que o projeto exija
+- Ajustar a mensagem do commit conforme o tipo de alteração (feat, fix, chore, docs)

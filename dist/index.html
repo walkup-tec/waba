@@ -3,8 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dashboard de Envios</title>
-    <link rel="icon" href="https://draxsistemas.com.br/favicon.ico" />
+    <title>Disparador N8n</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://draxsistemas.com.br/assets/media/Drax-logo-footer.png"
+    />
     <meta name="theme-color" content="#2ee4a0" />
 
     <!-- Bootstrap 5 CSS -->
@@ -47,13 +51,77 @@
         padding: 0;
       }
 
+      /* Scrollbar unificada (página = lista de itens exibidos) */
+      :root {
+        --scrollbar-track: #030712;
+        --scrollbar-thumb: linear-gradient(
+          180deg,
+          rgba(110, 255, 200, 0.72) 0%,
+          rgba(34, 211, 238, 0.62) 100%
+        );
+        --scrollbar-thumb-hover: linear-gradient(
+          180deg,
+          rgba(110, 255, 200, 0.9) 0%,
+          rgba(34, 211, 238, 0.82) 100%
+        );
+      }
+
+      html,
+      body,
+      .list-wrapper,
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(110, 255, 200, 0.55) var(--scrollbar-track);
+      }
+
+      html::-webkit-scrollbar,
+      body::-webkit-scrollbar,
+      .list-wrapper::-webkit-scrollbar,
+      *::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+
+      html::-webkit-scrollbar-track,
+      body::-webkit-scrollbar-track,
+      .list-wrapper::-webkit-scrollbar-track,
+      *::-webkit-scrollbar-track {
+        background: var(--scrollbar-track);
+        border-radius: 999px;
+      }
+
+      html::-webkit-scrollbar-thumb,
+      body::-webkit-scrollbar-thumb,
+      .list-wrapper::-webkit-scrollbar-thumb,
+      *::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 999px;
+        border: 2px solid var(--scrollbar-track);
+      }
+
+      html::-webkit-scrollbar-thumb:hover,
+      body::-webkit-scrollbar-thumb:hover,
+      .list-wrapper::-webkit-scrollbar-thumb:hover,
+      *::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover);
+      }
+
+      /* Inputs numéricos: esconder botões de incremento para padrão visual limpo */
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
       body {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
           sans-serif;
         background:
-          radial-gradient(ellipse 100% 70% at 50% -15%, rgba(34, 211, 238, 0.12) 0%, transparent 55%),
-          radial-gradient(ellipse 60% 40% at 100% 30%, rgba(46, 228, 160, 0.06) 0%, transparent 50%),
-          linear-gradient(165deg, var(--bg-deep) 0%, #020617 55%, #000 100%);
+          radial-gradient(ellipse 70% 45% at 50% -10%, rgba(34, 211, 238, 0.06) 0%, transparent 60%),
+          linear-gradient(180deg, #020617 0%, #050b16 55%, #030712 100%);
         color: var(--text);
         min-height: 100vh;
         padding: 16px;
@@ -81,23 +149,21 @@
       }
 
       .title-icon {
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        background: linear-gradient(135deg, var(--accent), var(--cyan));
-        box-shadow: 0 4px 16px rgba(46, 228, 160, 0.35);
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
       }
 
       .title-icon img.brand-logo {
-        width: 18px;
-        height: 18px;
-        border-radius: 6px;
+        height: 34px;
+        width: auto;
+        border-radius: 0;
         object-fit: contain;
-        filter: drop-shadow(0 2px 10px rgba(46, 228, 160, 0.25));
       }
 
       .title-text {
@@ -334,6 +400,9 @@
       .refresh-icon.hidden {
         visibility: hidden;
       }
+      .hidden {
+        display: none !important;
+      }
 
       .refresh-group {
         display: flex;
@@ -374,43 +443,98 @@
         .filters-top-left {
           grid-template-columns: 1fr;
         }
+
+        .panel {
+          padding: 18px 16px 18px;
+        }
+
+        #tab-dashboard .panel-header,
+        #tab-dashboard .summary-grid,
+        #tab-dashboard .filters,
+        #tab-dashboard .list-wrapper,
+        #tab-dashboard .chart-section,
+        #tab-dashboard .muted {
+          padding-left: 9px;
+          padding-right: 9px;
+        }
       }
 
       .panel {
-        background: radial-gradient(circle at top left, #152238 0%, #0a0f1a 50%, #060a12 100%);
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(15, 23, 42, 0.88));
         border-radius: 18px;
-        padding: 16px 16px 18px;
+        padding: 53px 25px 24px;
         border: 1px solid var(--border-subtle);
-        box-shadow:
-          0 24px 48px rgba(0, 0, 0, 0.45),
-          0 0 0 1px var(--border-highlight) inset;
+        box-shadow: 0 8px 22px rgba(2, 6, 23, 0.28);
+      }
+
+      /* Espaço visível entre "Visão Geral" e painel de gráficos */
+      #tab-dashboard .row.g-3 {
+        --bs-gutter-x: 1.1rem;
+        --bs-gutter-y: 1rem;
+      }
+
+      @media (min-width: 992px) {
+        /* Layout em grid para garantir gap real entre os dois painéis */
+        #tab-dashboard .row.g-3 {
+          display: grid;
+          grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+          gap: 1.4rem;
+          --bs-gutter-x: 0;
+          --bs-gutter-y: 0;
+        }
+
+        #tab-dashboard .row.g-3 > [class*="col-"] {
+          width: auto;
+          max-width: none;
+          margin: 0;
+          padding: 0 !important;
+        }
+
+        /* Respiro interno forte para evitar conteúdo colado nas bordas */
+        #tab-dashboard .panel {
+          padding: 69px 35px 32px;
+        }
+
+        #tab-dashboard .panel-header,
+        #tab-dashboard .summary-grid,
+        #tab-dashboard .filters,
+        #tab-dashboard .list-wrapper,
+        #tab-dashboard .chart-section,
+        #tab-dashboard .muted {
+          padding-left: 14px;
+          padding-right: 14px;
+        }
       }
 
       .panel-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 12px;
+        margin-top: 11px;
+        margin-bottom: 16px;
+        padding-inline: 12px;
       }
 
       .panel-title {
         font-size: 0.9rem;
-        color: var(--cyan);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        font-weight: 600;
+        color: #dbe5f5;
+        text-transform: none;
+        letter-spacing: 0.01em;
+        font-weight: 650;
       }
 
       .panel-header span {
         font-size: 0.8rem;
         color: var(--text-secondary);
+        padding-inline: 2px;
       }
 
       .summary-grid {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding-inline: 10px;
       }
 
       @media (max-width: 600px) {
@@ -420,7 +544,7 @@
       }
 
       .summary-card {
-        background: linear-gradient(155deg, #1a2438 0%, #121a2b 100%);
+        background: rgba(15, 23, 42, 0.58);
         padding: 10px 11px;
         border-radius: 12px;
         border: 1px solid var(--border-subtle);
@@ -430,11 +554,11 @@
       }
 
       .summary-card:nth-child(1) {
-        border-left: 3px solid var(--accent);
+        border-left: 2px solid rgba(110, 255, 200, 0.5);
       }
 
       .summary-card:nth-child(2) {
-        border-left: 3px solid #f87171;
+        border-left: 2px solid rgba(248, 113, 113, 0.55);
       }
 
       .summary-label {
@@ -462,8 +586,9 @@
         display: flex;
         gap: 8px;
         align-items: center;
-        margin-bottom: 10px;
+        margin-bottom: 14px;
         flex-wrap: wrap;
+        padding-inline: 10px;
       }
 
       .tag {
@@ -478,11 +603,12 @@
       .list-wrapper {
         max-height: 420px;
         overflow: auto;
-        padding-right: 4px;
+        padding-right: 6px;
+        padding-left: 10px;
       }
 
       .card {
-        background: var(--bg-card);
+        background: rgba(17, 24, 39, 0.72);
         padding: 10px 11px;
         margin-bottom: 8px;
         border-radius: 12px;
@@ -495,13 +621,13 @@
       }
 
       .card:nth-child(even) {
-        background: var(--bg-card-alt);
+        background: rgba(15, 23, 42, 0.72);
       }
 
       .card:hover {
         transform: translateY(-1px);
-        border-color: var(--border-highlight);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+        border-color: rgba(148, 163, 184, 0.42);
+        box-shadow: 0 8px 20px rgba(2, 6, 23, 0.22);
       }
 
       .card-header {
@@ -652,7 +778,8 @@
       }
 
       .chart-section {
-        margin-bottom: 14px;
+        margin-bottom: 18px;
+        padding-inline: 10px;
       }
 
       /* Área ampla para rótulos; donut compacto no centro */
@@ -669,6 +796,17 @@
         height: 100%;
       }
 
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+
       /* Tabs e menu mobile (mobile-first) */
       .tab-panel.tab-hidden {
         display: none !important;
@@ -679,27 +817,35 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        margin: 0 0 14px;
+        margin: 0 0 16px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        padding-bottom: 6px;
       }
 
       .desktop-tabs {
         display: none;
-        gap: 10px;
+        gap: 22px;
         align-items: center;
+      }
+
+      .tabs-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
       }
 
       .tab-button {
         appearance: none;
-        border: 1px solid var(--border-subtle);
-        background: rgba(15, 23, 42, 0.35);
+        border: none;
+        border-bottom: 2px solid transparent;
+        background: transparent;
         color: var(--text-secondary);
-        padding: 10px 14px;
-        border-radius: 14px;
-        font-weight: 650;
+        padding: 10px 0;
+        border-radius: 0;
+        font-weight: 600;
         letter-spacing: 0.01em;
         cursor: pointer;
-        transition: transform 0.12s ease, border-color 0.12s ease,
-          background 0.12s ease, color 0.12s ease;
+        transition: border-color 0.15s ease, color 0.15s ease;
         user-select: none;
         white-space: nowrap;
       }
@@ -710,22 +856,26 @@
       }
 
       .tab-button.active {
-        border-color: var(--border-highlight);
-        background: rgba(46, 228, 160, 0.12);
-        color: var(--accent-bright);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+        border-color: #8b5cf6;
+        color: #e2e8f0;
+      }
+
+      .tab-button.disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        border-color: transparent !important;
       }
 
       .mobile-tabs-toggle {
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        border: 1px solid var(--border-subtle);
-        background: rgba(15, 23, 42, 0.35);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.55);
         color: var(--text-secondary);
-        padding: 10px 14px;
-        border-radius: 14px;
-        font-weight: 650;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-weight: 600;
         cursor: pointer;
         user-select: none;
       }
@@ -747,10 +897,10 @@
 
       .mobile-tabs-drawer {
         margin-top: 10px;
-        border: 1px solid var(--border-subtle);
-        background: rgba(3, 7, 18, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        background: rgba(2, 6, 23, 0.92);
         backdrop-filter: blur(6px);
-        border-radius: 16px;
+        border-radius: 12px;
         overflow: hidden;
       }
 
@@ -759,10 +909,20 @@
       }
 
       .mobile-tabs-drawer-inner {
-        padding: 10px;
+        padding: 8px 12px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 0;
+      }
+
+      .mobile-tabs-drawer .tab-button {
+        width: 100%;
+        text-align: left;
+        padding: 12px 0;
+      }
+
+      .mobile-tabs-drawer .tab-button + .tab-button {
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
       }
 
       @media (min-width: 992px) {
@@ -778,28 +938,874 @@
       }
 
       .instances-list {
+        width: 100%;
+      }
+
+      .instances-toolbar {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .instances-search {
+        flex: 1 1 260px;
+        min-width: 220px;
+      }
+
+      .instances-search input {
+        width: 100%;
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 9px 12px;
+        color: var(--text);
+        font-size: 0.84rem;
+      }
+
+      .instances-search input:focus {
+        outline: none;
+        border-color: rgba(110, 255, 200, 0.55);
+        box-shadow: 0 0 0 2px rgba(110, 255, 200, 0.12);
+      }
+
+      .instances-status-filters {
+        display: inline-flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .instances-chip {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+        color: var(--text-secondary);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .instances-chip.active {
+        border-color: rgba(110, 255, 200, 0.55);
+        color: var(--accent-bright);
+        background: rgba(46, 228, 160, 0.12);
+      }
+
+      #instances-refresh-btn {
+        margin-left: auto;
+      }
+
+      .instances-table-wrap {
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        overflow: hidden;
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .instances-primary-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: stretch;
+      }
+
+      .new-instance-btn {
+        width: 100%;
+        min-height: 100%;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px solid rgba(110, 255, 200, 0.55);
+        background: #67e8b5;
+        color: #031525;
+        border-radius: 14px;
+        padding: 12px 10px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.12s ease, filter 0.12s ease;
+      }
+
+      .new-instance-btn:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.03);
+      }
+
+      .new-instance-btn .icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(4, 15, 26, 0.18);
+        background: #042033;
+        color: #67e8b5;
+        line-height: 0;
+      }
+
+      .new-instance-btn .icon svg {
+        width: 14px;
+        height: 14px;
+        display: block;
+      }
+
+      .new-instance-btn .label {
+        display: inline-block;
+        text-align: center;
+        line-height: 1.1;
+        font-size: 1.02rem;
+        font-weight: 500;
+      }
+
+      @media (max-width: 992px) {
+        .instances-primary-actions {
+          justify-content: stretch;
+        }
+      }
+
+      .instances-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .instances-table thead th {
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: #e2e8f0;
+        background: rgba(30, 64, 102, 0.7);
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+      }
+
+      .instances-table tbody td {
+        padding: 10px 12px;
+        font-size: 0.84rem;
+        color: #cbd5e1;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      }
+
+      .instances-table tbody tr:nth-child(odd) {
+        background: rgba(30, 64, 102, 0.35);
+      }
+
+      .instances-table tbody tr:nth-child(even) {
+        background: rgba(15, 23, 42, 0.72);
+      }
+
+      .instance-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(34, 211, 238, 0.9));
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        color: #fff;
+        font-weight: 800;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+      }
+
+      .instance-avatar-img {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        object-fit: cover;
+        border: 1px solid rgba(148, 163, 184, 0.38);
+        background: rgba(15, 23, 42, 0.9);
+      }
+
+      .status-text {
+        font-weight: 700;
+        text-transform: lowercase;
+      }
+
+      .status-text.connected {
+        color: #6ee7b7;
+      }
+
+      .status-text.disconnected {
+        color: #fca5a5;
+      }
+
+      .instance-actions {
+        display: inline-flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .instance-action-btn {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.45);
+        color: #cbd5e1;
+        border-radius: 8px;
+        padding: 4px 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .instance-action-btn.enabled {
+        color: #f8fafc;
+      }
+
+      .instance-action-btn.btn-refresh.enabled {
+        background: rgba(14, 116, 144, 0.8);
+        border-color: rgba(34, 211, 238, 0.6);
+      }
+
+      .instance-action-btn.btn-qrcode.enabled {
+        background: rgba(22, 101, 52, 0.85);
+        border-color: rgba(110, 255, 200, 0.6);
+      }
+
+      .instance-action-btn.btn-delete.enabled {
+        background: rgba(153, 27, 27, 0.88);
+        border-color: rgba(251, 113, 133, 0.55);
+      }
+      .instance-action-btn.btn-safe.enabled {
+        background: rgba(14, 116, 144, 0.8);
+        border-color: rgba(250, 204, 21, 0.6);
+      }
+      .instance-action-btn.btn-safe.enabled.active {
+        background: rgba(202, 138, 4, 0.95);
+        border-color: rgba(250, 204, 21, 0.9);
+        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.3);
+      }
+
+      .instance-action-btn.disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .confirm-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.68);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1200;
+      }
+
+      .confirm-overlay.open {
+        display: flex;
+      }
+
+      .confirm-modal {
+        width: min(94vw, 460px);
+        background: rgba(15, 23, 42, 0.98);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 12px;
+        padding: 16px;
+      }
+
+      .confirm-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 8px;
+      }
+
+      .confirm-text {
+        font-size: 0.84rem;
+        color: #cbd5e1;
+        margin-bottom: 10px;
+      }
+
+      .confirm-input {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.8);
+        color: #f8fafc;
+        padding: 9px 10px;
+      }
+
+      .confirm-actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .toast-stack {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 1500;
+        max-width: min(92vw, 420px);
+      }
+
+      .toast {
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.96);
+        color: #e2e8f0;
+        box-shadow: 0 10px 24px rgba(2, 6, 23, 0.45);
+        font-size: 0.84rem;
+        line-height: 1.35;
+        animation: toastIn 140ms ease;
+      }
+
+      .toast.success {
+        border-color: rgba(110, 255, 200, 0.55);
+      }
+
+      .toast.error {
+        border-color: rgba(251, 113, 133, 0.6);
+      }
+
+      .toast.warning {
+        border-color: rgba(251, 191, 36, 0.6);
+      }
+
+      @keyframes toastIn {
+        from {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .register-modal {
+        width: min(94vw, 760px);
+      }
+
+      .register-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .register-label {
+        font-size: 0.82rem;
+        color: #e2e8f0;
+        font-weight: 600;
+      }
+
+      .register-input,
+      .register-select {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.8);
+        color: #f8fafc;
+        padding: 9px 10px;
+      }
+
+      .register-input[readonly] {
+        opacity: 0.85;
+        cursor: not-allowed;
+      }
+
+      .register-actions {
+        margin-top: 14px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .qrcode-preview {
+        margin-top: 14px;
+        border: 1px dashed rgba(148, 163, 184, 0.35);
+        border-radius: 10px;
+        padding: 12px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        min-height: 180px;
+      }
+
+      .qrcode-preview.open {
+        display: flex;
+      }
+
+      .qrcode-preview img {
+        max-width: 280px;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        background: #fff;
+        padding: 6px;
+      }
+
+      .aquecedor-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .aquecedor-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .aquecedor-field label {
+        font-size: 0.78rem;
+        color: #cbd5e1;
+        font-weight: 600;
+      }
+
+      .aquecedor-field input {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.8);
+        color: #f8fafc;
+        padding: 8px 10px;
+        outline: none;
+      }
+      .aquecedor-field input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+
+      .aquecedor-hint {
+        font-size: 0.72rem;
+        color: #94a3b8;
+      }
+
+      .aquecedor-section {
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      }
+      .aquecedor-section:last-child {
+        border-bottom: none;
+      }
+      .aquecedor-section-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #22d3ee;
+        margin-bottom: 8px;
+      }
+      .aquecedor-batches-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .aquecedor-batch-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        background: rgba(2, 6, 23, 0.5);
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        font-size: 0.8rem;
+      }
+      .aquecedor-batch-item .batch-days {
+        color: #e2e8f0;
+      }
+      .aquecedor-batch-item .batch-hours {
+        color: #94a3b8;
+        font-size: 0.76rem;
+      }
+      .aquecedor-expediente-add {
         display: flex;
         flex-direction: column;
         gap: 10px;
       }
-
-      .instance-row {
+      .aquecedor-day-checkboxes {
         display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+      }
+      .aquecedor-day-chk {
+        display: inline-flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 4px;
+        font-size: 0.78rem;
+        color: #cbd5e1;
+        cursor: pointer;
+      }
+      .aquecedor-inline-fields {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
         gap: 12px;
-        background: var(--bg-card);
-        padding: 10px 12px;
-        border-radius: 14px;
-        border: 1px solid var(--border-subtle);
+      }
+      .aquecedor-grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .aquecedor-fluxo-pausa-row {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+        margin-top: 12px;
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      }
+      .aquecedor-fluxo-pausa-row .aquecedor-section {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+      .aquecedor-fluxo-col {
+        grid-column: span 6;
+      }
+      .aquecedor-pausa-col {
+        grid-column: span 6;
+      }
+      @media (max-width: 640px) {
+        .aquecedor-fluxo-col,
+        .aquecedor-pausa-col {
+          grid-column: span 12;
+        }
       }
 
-      .instance-name {
+      .aquecedor-actions {
+        margin-top: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .aquecedor-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #cbd5e1;
+        font-size: 0.82rem;
+      }
+
+      .aquecedor-layout {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 14px;
+        margin-top: 10px;
+      }
+
+      .aquecedor-side {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.35);
+        padding: 12px;
+      }
+
+      .aquecedor-side-title {
+        font-size: 0.9rem;
         font-weight: 700;
-        color: var(--text);
+        color: #e2e8f0;
+        margin-bottom: 8px;
+      }
+
+      .aquecedor-envios-list {
+        max-height: 520px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .aquecedor-envio-item {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: rgba(2, 6, 23, 0.4);
+      }
+
+      .aquecedor-envio-main {
+        color: #e2e8f0;
+        font-size: 0.82rem;
+      }
+
+      .aquecedor-envio-time {
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: 0.74rem;
+      }
+
+      @media (max-width: 992px) {
+        .aquecedor-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .aquecedor-runtime {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .aquecedor-runtime-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .aquecedor-accordion {
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        transition: max-height 240ms ease, opacity 180ms ease, margin-top 180ms ease;
+        max-height: 1400px;
+        opacity: 1;
+        margin-top: 10px;
+      }
+
+      .aquecedor-accordion.collapsed {
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0;
+      }
+
+      .aquecedor-runtime.hidden {
+        display: none;
+      }
+      .aquecedor-start-stop-btn.hidden {
+        display: none !important;
+      }
+
+      .aquecedor-command-log {
+        margin-top: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(2, 6, 23, 0.35);
+      }
+
+      .aquecedor-command-log-list {
+        margin-top: 8px;
+        max-height: 200px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .aquecedor-command-log-item {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 8px;
+        padding: 7px 9px;
+        background: rgba(15, 23, 42, 0.45);
+        font-size: 0.78rem;
+        color: #e2e8f0;
+      }
+
+      /* Disparos */
+      .disparos-layout {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 20px;
+        margin-top: 16px;
+      }
+      .disparos-side {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 12px;
+        padding: 16px;
+        background: rgba(15, 23, 42, 0.35);
+      }
+      .disparos-side-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+      }
+      .disparos-config-area {
+        min-height: 120px;
+        padding: 12px;
+        border: 1px dashed rgba(148, 163, 184, 0.35);
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.25);
+      }
+      .disparos-config-area p {
+        margin: 0;
+        font-size: 0.85rem;
+      }
+      .disparos-grid {
+        display: grid;
+        gap: 10px;
+      }
+      .disparos-grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .disparos-grid-1 {
+        grid-template-columns: 1fr;
+      }
+      .disparos-grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .disparos-inline-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .disparos-box {
+        margin-top: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(2, 6, 23, 0.2);
+      }
+      .dis-shortener-result {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .dis-shortener-url {
+        color: #86efac;
+        font-size: 0.85rem;
+        word-break: break-all;
+      }
+      .dis-shortener-icon-btn {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.6);
+        color: #cbd5e1;
+        cursor: pointer;
+        transition: all 0.14s ease;
+      }
+      .dis-shortener-icon-btn:hover {
+        border-color: rgba(110, 255, 200, 0.55);
+        color: #86efac;
+        transform: translateY(-1px);
+      }
+      .dis-shortener-icon-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .field-error {
+        font-size: 0.74rem;
+        color: #fda4af;
+        margin-top: 4px;
+      }
+      .phone-br-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .phone-br-prefix {
+        min-width: 86px;
+        height: 40px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+        color: #e2e8f0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 600;
+        user-select: none;
+      }
+      .phone-br-prefix .flag {
+        width: 16px;
+        height: 12px;
+        margin-right: 6px;
+        border-radius: 2px;
+        object-fit: cover;
+        display: inline-block;
+      }
+      #dis-shortener-provider[disabled] {
+        opacity: 0.9;
+        cursor: not-allowed;
+        background: rgba(15, 23, 42, 0.55);
+        border-color: rgba(148, 163, 184, 0.3);
+        color: #cbd5e1;
+      }
+      #dis-shortener-provider[disabled]:focus,
+      #dis-shortener-provider[disabled]:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      .disparos-list {
+        max-height: 480px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      @media (max-width: 992px) {
+        .disparos-layout {
+          grid-template-columns: 1fr;
+        }
+        .disparos-grid-2,
+        .disparos-grid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .connect-status {
+        margin-top: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 0.84rem;
+        color: #cbd5e1;
+        display: none;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .connect-status.open {
+        display: inline-flex;
+      }
+
+      .connect-status.success {
+        border-color: rgba(110, 255, 200, 0.55);
+        color: #a7f3d0;
+        background: rgba(22, 101, 52, 0.18);
+      }
+
+      .connect-status.loading {
+        border-color: rgba(34, 211, 238, 0.45);
+        color: #bae6fd;
+        background: rgba(14, 116, 144, 0.14);
+      }
+
+      .spinner-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: currentColor;
+        animation: pulseDot 1s ease-in-out infinite;
+      }
+
+      @keyframes pulseDot {
+        0% {
+          transform: scale(0.8);
+          opacity: 0.6;
+        }
+        50% {
+          transform: scale(1.1);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(0.8);
+          opacity: 0.6;
+        }
       }
 
       .status-pill {
@@ -832,15 +1838,12 @@
         <div class="title">
           <div class="title-icon">
             <img
-              src="https://draxsistemas.com.br/favicon.ico"
+              src="https://draxsistemas.com.br/assets/media/Drax-logo-footer.png"
               alt="DRAX"
               class="brand-logo"
             />
           </div>
-          <div class="title-text">
-            <h1>Dashboard de Envios</h1>
-            <span>Monitor em tempo real das interações de envio/recebimento</span>
-          </div>
+          <span class="sr-only">DRAX</span>
         </div>
 
         <div class="controls">
@@ -849,7 +1852,7 @@
             <span id="last-update-label">Atualizando...</span>
           </div>
 
-          <div class="refresh-select">
+          <div id="header-refresh-select" class="refresh-select">
             <div class="refresh-group">
               <div class="refresh-row">
                 <button id="manual-refresh" class="refresh-button" type="button">
@@ -869,29 +1872,54 @@
       </header>
 
       <div class="tabs-wrapper">
-        <div class="desktop-tabs" role="tablist" aria-label="Navegação">
-          <button
-            id="tab-btn-dashboard"
-            class="tab-button active"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="tab-dashboard"
-            data-tab="dashboard"
-          >
-            Dashboard
-          </button>
-          <button
-            id="tab-btn-instancias"
-            class="tab-button"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="tab-instancias"
-            data-tab="instancias"
-          >
-            Instâncias
-          </button>
+        <div class="tabs-left">
+          <div class="desktop-tabs" role="tablist" aria-label="Navegação">
+            <button
+              id="tab-btn-dashboard"
+              class="tab-button active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="tab-dashboard"
+              data-tab="dashboard"
+            >
+              Dashboard
+            </button>
+            <button
+              id="tab-btn-instancias"
+              class="tab-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="tab-instancias"
+              data-tab="instancias"
+            >
+              Instâncias
+            </button>
+            <button
+              id="tab-btn-aquecedor"
+              class="tab-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="tab-aquecedor"
+              data-tab="aquecedor"
+              data-min-instances="2"
+            >
+              Aquecedor
+            </button>
+            <button
+              id="tab-btn-disparos"
+              class="tab-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="tab-disparos"
+              data-tab="disparos"
+            >
+              Disparos
+            </button>
+          </div>
         </div>
 
         <div class="mobile-tabs">
@@ -932,6 +1960,25 @@
               aria-checked="false"
             >
               Instâncias
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="aquecedor"
+              role="menuitemradio"
+              aria-checked="false"
+              data-min-instances="2"
+            >
+              Aquecedor
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="disparos"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Disparos
             </button>
           </div>
         </div>
@@ -996,7 +2043,7 @@
             <div class="summary-card">
               <div class="summary-label">Instâncias ativas</div>
               <div class="summary-value" id="instances-active">—</div>
-              <div class="summary-sub">Conectadas na Evolution API</div>
+              <div class="summary-sub">Instâncias Conectadas</div>
             </div>
             <div class="summary-card">
               <div class="summary-label">Instâncias desconectadas</div>
@@ -1076,7 +2123,7 @@
                   <div class="summary-value" id="instances-active-tab">
                     —
                   </div>
-                  <div class="summary-sub">Conectadas na Evolution API</div>
+                  <div class="summary-sub">Instâncias Conectadas</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Instâncias desconectadas</div>
@@ -1090,14 +2137,439 @@
                     Total: —
                   </div>
                 </div>
+                <div class="instances-primary-actions">
+                  <button id="new-instance-btn" class="new-instance-btn" type="button">
+                  <span class="icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path
+                        d="M12 5v14M5 12h14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </span>
+                    <span class="label">Nova<br />Instância</span>
+                  </button>
+                </div>
               </div>
 
               <div style="margin-top: 14px" class="muted">
                 Lista (top 100) com o status atual das instâncias.
               </div>
 
+              <div class="instances-toolbar">
+                <div class="instances-search">
+                  <input
+                    id="instances-search"
+                    type="text"
+                    placeholder="Buscar instância por nome..."
+                  />
+                </div>
+
+                <div class="instances-status-filters" id="instances-status-filters">
+                  <button class="instances-chip active" type="button" data-status="all">
+                    Todas
+                  </button>
+                  <button class="instances-chip" type="button" data-status="open">
+                    Conectadas
+                  </button>
+                  <button class="instances-chip" type="button" data-status="closed">
+                    Desconectadas
+                  </button>
+                </div>
+                <button id="instances-refresh-btn" class="instances-chip" type="button">
+                  Atualizar
+                </button>
+              </div>
+
               <div style="margin-top: 12px" class="list-wrapper">
-                <div id="instances-list" class="instances-list"></div>
+                <div class="instances-table-wrap">
+                  <div id="instances-list" class="instances-list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-aquecedor" class="tab-panel tab-hidden">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Aquecedor</div>
+                <span id="aquecedor-status-label">Configuração</span>
+              </div>
+              <div class="muted">
+                Defina as variáveis do aquecedor. O padrão recomendado já inicia habilitado.
+              </div>
+              <div class="aquecedor-layout">
+                <div class="aquecedor-side">
+                  <div class="aquecedor-side-title">Parâmetros</div>
+                  <div class="aquecedor-actions">
+                    <label class="aquecedor-toggle">
+                      <input id="aquecedor-use-recommended" type="checkbox" checked />
+                      Usar padrão recomendado
+                    </label>
+                    <button
+                      id="aquecedor-save-btn"
+                      class="instance-action-btn btn-qrcode enabled"
+                      type="button"
+                    >
+                      Salvar configurações
+                    </button>
+                  </div>
+                  <div id="aquecedor-config-accordion" class="aquecedor-accordion">
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">Expediente de envio</div>
+                      <p class="aquecedor-hint" style="margin-bottom: 10px;">Selecione os dias e informe horário de início e fim. Salve o lote para adicionar outro.</p>
+                      <div id="aq-expediente-batches" class="aquecedor-batches-list"></div>
+                      <div class="aquecedor-expediente-add">
+                        <div class="aquecedor-day-checkboxes">
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="seg" /> Seg</label>
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="ter" /> Ter</label>
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="qua" /> Qua</label>
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="qui" /> Qui</label>
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="sex" /> Sex</label>
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="sab" /> Sáb</label>
+                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="dom" /> Dom</label>
+                        </div>
+                        <div class="aquecedor-inline-fields">
+                          <div class="aquecedor-field">
+                            <label for="aq-exp-inicio">Início (hora)</label>
+                            <input id="aq-exp-inicio" type="number" min="0" max="23" placeholder="7" />
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="aq-exp-fim">Fim (hora)</label>
+                            <input id="aq-exp-fim" type="number" min="1" max="24" placeholder="22" />
+                          </div>
+                          <button type="button" id="aq-exp-add-btn" class="instance-action-btn enabled" style="align-self: flex-end;">Adicionar lote</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="aquecedor-fluxo-pausa-row">
+                      <div class="aquecedor-section aquecedor-fluxo-col">
+                        <div class="aquecedor-section-title">Fluxo</div>
+                        <div class="aquecedor-grid aquecedor-grid-2">
+                          <div class="aquecedor-field">
+                            <label for="aq-janela-ativa">Janela ativa (horas)</label>
+                            <input id="aq-janela-ativa" type="number" min="0.5" max="4" step="0.5" />
+                            <span class="aquecedor-hint">Padrão: 1</span>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="aq-pausa">Pausa (minutos)</label>
+                            <input id="aq-pausa" type="number" min="0" max="240" />
+                            <span class="aquecedor-hint">Padrão: 14</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="aquecedor-section aquecedor-pausa-col">
+                        <div class="aquecedor-section-title">Pausa entre envios</div>
+                        <div class="aquecedor-grid aquecedor-grid-2">
+                          <div class="aquecedor-field">
+                            <label for="aq-wait-min">Espera mínima (segundos)</label>
+                            <input id="aq-wait-min" type="number" min="10" max="3600" />
+                            <span class="aquecedor-hint">Padrão: 180</span>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="aq-wait-max">Espera máxima (segundos)</label>
+                            <input id="aq-wait-max" type="number" min="10" max="3600" />
+                            <span class="aquecedor-hint">Padrão: 480</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="aquecedor-runtime-box" class="aquecedor-runtime hidden">
+                    <div class="aquecedor-runtime-row">
+                      <span id="aquecedor-runtime-label" class="muted">Motor: carregando...</span>
+                      <div class="instance-actions">
+                        <button
+                          id="aquecedor-start-btn"
+                          class="instance-action-btn btn-qrcode enabled aquecedor-start-stop-btn hidden"
+                          type="button"
+                        >
+                          Iniciar Aquecedor
+                        </button>
+                        <button
+                          id="aquecedor-stop-btn"
+                          class="instance-action-btn btn-delete enabled aquecedor-start-stop-btn hidden"
+                          type="button"
+                        >
+                          Parar Aquecedor
+                        </button>
+                        <button
+                          id="aquecedor-run-once-btn"
+                          class="instance-action-btn btn-refresh enabled"
+                          type="button"
+                        >
+                          Envio teste
+                        </button>
+                        <button
+                          id="aquecedor-criar-teste-btn"
+                          class="instance-action-btn enabled"
+                          type="button"
+                          title="Criar mensagem de teste na fila"
+                        >
+                          Criar mensagem teste
+                        </button>
+                        <button
+                          id="aquecedor-diagnostico-btn"
+                          class="instance-action-btn enabled"
+                          type="button"
+                          title="Ver diagnóstico (EVO, fila, janela)"
+                        >
+                          Diagnóstico
+                        </button>
+                      </div>
+                    </div>
+                    <div class="aquecedor-command-log">
+                      <div class="aquecedor-side-title" style="margin-bottom: 0">Logs de comandos</div>
+                      <div id="aquecedor-command-log-list" class="aquecedor-command-log-list">
+                        <div class="muted">Nenhum comando executado ainda.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="aquecedor-side">
+                  <div class="aquecedor-side-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <span>Envios</span>
+                    <button
+                      id="aquecedor-envios-refresh-btn"
+                      type="button"
+                      class="instance-action-btn enabled"
+                      style="padding: 4px 10px; font-size: 0.8rem;"
+                      title="Atualizar lista e verificar status"
+                    >
+                      Atualizar
+                    </button>
+                  </div>
+                  <div id="aquecedor-envios-list" class="aquecedor-envios-list">
+                    <div class="muted">Carregando envios...</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-disparos" class="tab-panel tab-hidden">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Disparos</div>
+                <span id="disparos-status-label" class="muted">—</span>
+              </div>
+              <div class="muted" style="margin-bottom: 16px;">
+                Configuração e acompanhamento dos disparos em massa via WhatsApp (orquestrador + motor N8n).
+              </div>
+              <div class="disparos-layout">
+                <div class="disparos-side">
+                  <div class="disparos-side-title">Resumo</div>
+                  <div class="summary-grid">
+                    <div class="summary-card">
+                      <div class="summary-label">Enviados hoje</div>
+                      <div class="summary-value" id="disparos-enviados-hoje">—</div>
+                      <div class="summary-sub">Total do dia</div>
+                    </div>
+                    <div class="summary-card">
+                      <div class="summary-label">Na fila</div>
+                      <div class="summary-value" id="disparos-na-fila">—</div>
+                      <div class="summary-sub">Aguardando envio</div>
+                    </div>
+                    <div class="summary-card">
+                      <div class="summary-label">Instância ativa</div>
+                      <div class="summary-value" id="disparos-instancia-ativa">—</div>
+                      <div class="summary-sub">Round-robin</div>
+                    </div>
+                  </div>
+                  <div class="disparos-side-title" style="margin-top: 20px;">Variáveis e regras</div>
+                  <div id="disparos-config-area" class="disparos-config-area">
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">1) Temporizador</div>
+                      <div class="disparos-grid disparos-grid-2">
+                        <div class="aquecedor-field">
+                          <label for="dis-delay-min">Delay mínimo (segundos)</label>
+                          <input id="dis-delay-min" type="number" min="10" max="3600" />
+                        </div>
+                        <div class="aquecedor-field">
+                          <label for="dis-delay-max">Delay máximo (segundos)</label>
+                          <input id="dis-delay-max" type="number" min="10" max="3600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">2) Limite de segurança</div>
+                      <div class="disparos-grid disparos-grid-2">
+                        <div class="aquecedor-field">
+                          <label for="dis-max-hour">Máx/hora por instância</label>
+                          <input id="dis-max-hour" type="number" min="1" max="10000" />
+                        </div>
+                        <div class="aquecedor-field">
+                          <label for="dis-max-day">Máx/dia por instância</label>
+                          <input id="dis-max-day" type="number" min="1" max="200000" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">3) Expediente</div>
+                      <div class="disparos-grid disparos-grid-2" style="margin-bottom: 10px;">
+                        <div class="aquecedor-field">
+                          <label for="dis-start-hour">Início da janela (hora)</label>
+                          <input id="dis-start-hour" type="number" min="0" max="23" />
+                        </div>
+                        <div class="aquecedor-field">
+                          <label for="dis-end-hour">Fim da janela (hora)</label>
+                          <input id="dis-end-hour" type="number" min="1" max="24" />
+                        </div>
+                      </div>
+                      <div class="aquecedor-day-checkboxes" id="dis-working-days">
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="seg" /> Seg</label>
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="ter" /> Ter</label>
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="qua" /> Qua</label>
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="qui" /> Qui</label>
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="sex" /> Sex</label>
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="sab" /> Sáb</label>
+                        <label class="aquecedor-day-chk"><input type="checkbox" data-day="dom" /> Dom</label>
+                      </div>
+                    </div>
+
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">4) Encurtador URL</div>
+                      <div class="disparos-grid disparos-grid-2">
+                        <div class="aquecedor-field">
+                          <label for="dis-shortener-provider">Encurtador de URL</label>
+                          <input id="dis-shortener-provider" type="text" readonly />
+                          <span class="aquecedor-hint">Definido automaticamente pelo backend.</span>
+                        </div>
+                        <div class="aquecedor-field">
+                          <label for="dis-whatsapp-target">WhatsApp destino do link</label>
+                          <div class="phone-br-wrap">
+                            <span class="phone-br-prefix">
+                              <img
+                                class="flag"
+                                src="https://flagcdn.com/w20/br.png"
+                                alt="Bandeira do Brasil"
+                              />
+                              +55
+                            </span>
+                            <input
+                              id="dis-whatsapp-target"
+                              type="text"
+                              placeholder="(11) 99999-9999"
+                              inputmode="numeric"
+                              maxlength="16"
+                              style="flex: 1;"
+                            />
+                          </div>
+                          <span class="aquecedor-hint">Informe apenas DDD + número.</span>
+                          <span id="dis-whatsapp-target-error" class="field-error hidden">Número incompleto. Informe DDD + número (11 dígitos).</span>
+                        </div>
+                      </div>
+                      <div class="disparos-inline-actions" style="margin-top: 10px;">
+                        <button id="dis-test-shortener-btn" class="instance-action-btn btn-refresh enabled" type="button">Testar encurtador</button>
+                        <span id="dis-shortener-test-status" class="muted">Aguardando teste do encurtador.</span>
+                      </div>
+                    </div>
+
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">5) Mensageiro</div>
+                      <div class="disparos-inline-actions">
+                        <label class="aquecedor-toggle">
+                          <input id="dis-mode-ai" type="radio" name="dis-message-mode" value="ai" checked />
+                          Gerar mensagens com IA
+                        </label>
+                        <label class="aquecedor-toggle">
+                          <input id="dis-mode-db" type="radio" name="dis-message-mode" value="database" />
+                          Usar base de mensagens (planilha)
+                        </label>
+                      </div>
+
+                      <div id="dis-ai-box" class="disparos-box">
+                        <div class="disparos-grid disparos-grid-3">
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-tone">Tom da mensagem</label>
+                            <select id="dis-ai-tone">
+                              <option value="consultivo">consultivo</option>
+                              <option value="despojado">despojado</option>
+                              <option value="conservador">conservador</option>
+                            </select>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-audience">Público alvo</label>
+                            <input id="dis-ai-audience" type="text" placeholder="CORBAN" />
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-cta">CTA padrão</label>
+                            <input id="dis-ai-cta" type="text" placeholder="Responda no link abaixo 👇" />
+                          </div>
+                        </div>
+                        <div class="disparos-grid disparos-grid-2" style="margin-top: 10px;">
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-product">Produto/serviço</label>
+                            <input id="dis-ai-product" type="text" placeholder="Ex.: Empréstimo CLT com IA" />
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-objective">Objetivo da mensagem</label>
+                            <input id="dis-ai-objective" type="text" placeholder="Ex.: gerar resposta no WhatsApp" />
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-pains">Dores do público</label>
+                            <textarea id="dis-ai-pains" class="register-input" rows="3" placeholder="Quais problemas você resolve?"></textarea>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-differentials">Diferenciais</label>
+                            <textarea id="dis-ai-differentials" class="register-input" rows="3" placeholder="Ex.: prazo, qualidade, custo por lead, automação."></textarea>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-prohibitions">Regras/proibições</label>
+                            <textarea id="dis-ai-prohibitions" class="register-input" rows="3" placeholder="Ex.: não usar *, não prometer valores indevidos."></textarea>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-ai-notes">Observações adicionais</label>
+                            <textarea id="dis-ai-notes" class="register-input" rows="3" placeholder="Informações extras para o prompt."></textarea>
+                          </div>
+                        </div>
+                        <input id="dis-ai-briefing" type="hidden" />
+                      </div>
+
+                      <div id="dis-db-box" class="disparos-box hidden">
+                        <div class="aquecedor-field">
+                          <label for="dis-spreadsheet-file">Planilha de mensagens (somente Excel: .xlsx ou .xls)</label>
+                          <input id="dis-spreadsheet-file" type="file" accept=".xlsx,.xls" />
+                        </div>
+                        <div class="disparos-inline-actions" style="margin-top: 10px;">
+                          <button id="dis-download-template-btn" class="instance-action-btn enabled" type="button">Baixar modelo Excel</button>
+                          <button id="dis-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">Mapear colunas e importar</button>
+                        </div>
+                        <span id="dis-import-status" class="muted" style="display:block; margin-top:8px;">Nenhuma importação executada.</span>
+                      </div>
+                    </div>
+
+                    <div class="disparos-inline-actions" style="margin-top: 12px;">
+                      <button id="dis-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">Salvar configuração do Disparador</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="disparos-side">
+                  <div class="disparos-side-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <span>Atividade recente</span>
+                    <button
+                      id="disparos-refresh-btn"
+                      type="button"
+                      class="instance-action-btn enabled"
+                      style="padding: 4px 10px; font-size: 0.8rem;"
+                      title="Atualizar"
+                    >
+                      Atualizar
+                    </button>
+                  </div>
+                  <div id="disparos-list" class="disparos-list list-wrapper">
+                    <div class="muted">Carregando ou aguardando dados...</div>
+                  </div>
+                </div>
               </div>
             </section>
           </div>
@@ -1105,12 +2577,118 @@
       </main>
     </div>
 
+    <div id="confirm-delete-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true">
+        <div class="confirm-title">Confirmar exclusão da instância</div>
+        <div class="confirm-text">
+          Digite o nome da instância para confirmar:
+          <strong id="confirm-instance-name">—</strong>
+        </div>
+        <input
+          id="confirm-instance-input"
+          class="confirm-input"
+          type="text"
+          placeholder="Digite o nome da instância"
+        />
+        <div class="confirm-actions">
+          <button id="confirm-cancel-btn" class="instance-action-btn" type="button">
+            Cancelar
+          </button>
+          <button
+            id="confirm-delete-btn"
+            class="instance-action-btn btn-delete disabled"
+            type="button"
+          >
+            Deletar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="register-instance-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal register-modal" role="dialog" aria-modal="true">
+        <div class="confirm-title">Registrar / Atualizar instância</div>
+        <div class="register-grid">
+          <label class="register-label" for="register-name-input">Nome *</label>
+          <input id="register-name-input" class="register-input" type="text" />
+
+          <label class="register-label" for="register-token-input">Token *</label>
+          <input
+            id="register-token-input"
+            class="register-input"
+            type="text"
+            readonly
+            title="Token gerado automaticamente pelo sistema"
+          />
+
+          <label class="register-label" for="register-number-input">Número</label>
+          <input id="register-number-input" class="register-input" type="text" />
+        </div>
+
+        <div class="register-actions">
+          <button id="register-cancel-btn" class="instance-action-btn" type="button">
+            Cancelar
+          </button>
+          <button
+            id="register-refresh-qrcode-btn"
+            class="instance-action-btn btn-refresh enabled"
+            type="button"
+          >
+            Atualizar QRCode
+          </button>
+          <button
+            id="register-qrcode-btn"
+            class="instance-action-btn btn-qrcode enabled"
+            type="button"
+          >
+            Gerar QRCode
+          </button>
+        </div>
+
+        <div id="register-qrcode-preview" class="qrcode-preview"></div>
+        <div id="register-connect-status" class="connect-status"></div>
+      </div>
+    </div>
+
+    <div id="dis-mapping-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal register-modal" role="dialog" aria-modal="true">
+        <div class="confirm-title">Mapeamento da planilha de mensagens</div>
+        <div class="muted" style="margin-bottom: 10px;">
+          Selecione quais colunas da planilha correspondem aos campos da base de mensagens.
+        </div>
+        <div class="register-grid">
+          <label class="register-label" for="dis-map-text">Coluna da mensagem *</label>
+          <select id="dis-map-text" class="register-input"></select>
+
+          <label class="register-label" for="dis-map-alias">Coluna do alias (opcional)</label>
+          <select id="dis-map-alias" class="register-input"></select>
+
+          <label class="register-label" for="dis-map-segment">Coluna do segmento (opcional)</label>
+          <select id="dis-map-segment" class="register-input"></select>
+        </div>
+        <div class="register-actions">
+          <button id="dis-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="dis-map-import-btn" class="instance-action-btn btn-qrcode enabled" type="button">Importar mensagens</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
     <script>
       // Litepicker (range em um único input)
       (function loadLitepicker() {
         if (!window.Litepicker) {
           const s = document.createElement("script");
           s.src = "https://cdn.jsdelivr.net/npm/litepicker@2.0.12/dist/litepicker.js";
+          document.head.appendChild(s);
+        }
+      })();
+
+      (function loadXlsxParser() {
+        if (!window.XLSX) {
+          const s = document.createElement("script");
+          s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
           document.head.appendChild(s);
         }
       })();
@@ -1129,12 +2707,977 @@
         items: [],
       };
       let activeTab = "dashboard";
+      let instancesSearchTerm = "";
+      let instancesStatusFilter = "all";
+      let deleteConfirmInstanceName = "";
+      let registerModalDefaultName = "";
+      let registerConnectPollTimer = null;
+      let registerConnectPollStartedAt = 0;
+      let aquecedorEnviosPollTimer = null;
+      let aquecedorEditMode = true;
+      const aquecedorCommandLogs = [];
+      const AQUECEDOR_RECOMMENDED = {
+        expediente: [
+          { days: ["seg", "ter", "qua"], startHour: 7, endHour: 22 },
+          { days: ["qui", "sex", "sab", "dom"], startHour: 6, endHour: 20 },
+        ],
+        janelaAtivaMinutos: 60,
+        pausaMinutos: 14,
+        waitMinSeconds: 180,
+        waitMaxSeconds: 480,
+      };
+      let aquecedorExpedienteBatches = [];
+      let instanceUsageByName = {};
+      let disparosConfigCache = null;
+      let spreadsheetRowsCache = [];
+
+      function showToast(message, type = "success", timeoutMs = 3200) {
+        const stack = document.getElementById("toast-stack");
+        if (!stack || !message) return;
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.textContent = String(message);
+        stack.appendChild(toast);
+        window.setTimeout(() => {
+          toast.remove();
+        }, Math.max(1200, timeoutMs));
+      }
+
+      function renderAquecedorCommandLogs() {
+        const container = document.getElementById("aquecedor-command-log-list");
+        if (!container) return;
+        if (!aquecedorCommandLogs.length) {
+          container.innerHTML = '<div class="muted">Nenhum comando executado ainda.</div>';
+          return;
+        }
+        container.innerHTML = "";
+        aquecedorCommandLogs.forEach((entry) => {
+          const row = document.createElement("div");
+          row.className = "aquecedor-command-log-item";
+          row.textContent = `[${entry.time}] ${entry.message}`;
+          container.appendChild(row);
+        });
+      }
+
+      function addAquecedorCommandLog(message) {
+        const time = new Date().toLocaleTimeString("pt-BR");
+        aquecedorCommandLogs.unshift({ time, message: String(message || "") });
+        if (aquecedorCommandLogs.length > 120) aquecedorCommandLogs.length = 120;
+        renderAquecedorCommandLogs();
+      }
+
+      function setAquecedorEditMode(isEditing) {
+        aquecedorEditMode = Boolean(isEditing);
+        const accordion = document.getElementById("aquecedor-config-accordion");
+        const runtimeBox = document.getElementById("aquecedor-runtime-box");
+        const saveBtn = document.getElementById("aquecedor-save-btn");
+        if (accordion) {
+          accordion.classList.toggle("collapsed", !aquecedorEditMode);
+        }
+        if (runtimeBox) {
+          runtimeBox.classList.toggle("hidden", aquecedorEditMode);
+        }
+        if (saveBtn) {
+          saveBtn.textContent = aquecedorEditMode
+            ? "Salvar configurações"
+            : "Editar configurações";
+        }
+      }
+
+      function getAquecedorFormValues() {
+        const read = (id, fallback) => {
+          const el = document.getElementById(id);
+          const value = Number(el?.value ?? fallback);
+          return Number.isFinite(value) ? Math.floor(value) : fallback;
+        };
+        const janelaEl = document.getElementById("aq-janela-ativa");
+        const janelaHoras = Number.isFinite(Number(janelaEl?.value))
+          ? Math.max(0.5, Math.min(4, Number(janelaEl.value)))
+          : 1;
+        return {
+          expediente: [...aquecedorExpedienteBatches],
+          janelaAtivaMinutos: Math.round(janelaHoras * 60),
+          pausaMinutos: read("aq-pausa", 14),
+          waitMinSeconds: read("aq-wait-min", 180),
+          waitMaxSeconds: read("aq-wait-max", 480),
+        };
+      }
+
+      function renderExpedienteBatches() {
+        const container = document.getElementById("aq-expediente-batches");
+        if (!container) return;
+        const DAY_LABELS = { seg: "Seg", ter: "Ter", qua: "Qua", qui: "Qui", sex: "Sex", sab: "Sáb", dom: "Dom" };
+        container.innerHTML = aquecedorExpedienteBatches
+          .map(
+            (b, i) =>
+              `<div class="aquecedor-batch-item" data-idx="${i}">
+                <span><span class="batch-days">${(b.days || []).map((d) => DAY_LABELS[d] || d).join(", ")}</span>
+                <span class="batch-hours">— ${b.startHour}h às ${b.endHour}h</span></span>
+                <button type="button" class="batch-remove-btn instance-action-btn btn-delete" style="padding: 4px 8px; font-size: 0.75rem;" data-idx="${i}">Remover</button>
+              </div>`
+          )
+          .join("");
+        container.querySelectorAll(".batch-remove-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = parseInt(btn.getAttribute("data-idx"), 10);
+            if (Number.isFinite(idx) && idx >= 0) {
+              aquecedorExpedienteBatches.splice(idx, 1);
+              renderExpedienteBatches();
+            }
+          });
+        });
+        updateRemoveButtonsVisibility();
+      }
+
+      function updateRemoveButtonsVisibility() {
+        const useRecommended = Boolean(document.getElementById("aquecedor-use-recommended")?.checked);
+        document.querySelectorAll(".batch-remove-btn").forEach((btn) => {
+          btn.style.display = useRecommended ? "none" : "";
+        });
+      }
+
+      function showAquecedorStartStopButtons() {
+        updateAquecedorStartStopVisibility(false);
+      }
+      function updateAquecedorStartStopVisibility(motorRunning) {
+        const startBtn = document.getElementById("aquecedor-start-btn");
+        const stopBtn = document.getElementById("aquecedor-stop-btn");
+        if (startBtn) {
+          startBtn.classList.toggle("hidden", motorRunning);
+        }
+        if (stopBtn) {
+          stopBtn.classList.toggle("hidden", !motorRunning);
+        }
+      }
+
+      function setAquecedorFormValues(config) {
+        aquecedorExpedienteBatches = Array.isArray(config?.expediente)
+          ? config.expediente.map((b) => ({ days: [...(b.days || [])], startHour: b.startHour ?? 7, endHour: b.endHour ?? 22 }))
+          : (config?.windowMonWedStartHour != null
+            ? [
+                { days: ["seg", "ter", "qua"], startHour: config.windowMonWedStartHour ?? 7, endHour: config.windowMonWedEndHour ?? 22 },
+                { days: ["qui", "sex", "sab", "dom"], startHour: config.windowThuSunStartHour ?? 6, endHour: config.windowThuSunEndHour ?? 20 },
+              ]
+            : [...AQUECEDOR_RECOMMENDED.expediente]);
+        renderExpedienteBatches();
+        const janelaMin = config?.janelaAtivaMinutos ?? config?.activeWindowMinutes ?? 60;
+        const map = {
+          "aq-janela-ativa": Math.round((janelaMin / 60) * 10) / 10,
+          "aq-pausa": config?.pausaMinutos ?? config?.pauseMonWedMinutes ?? 14,
+          "aq-wait-min": config?.waitMinSeconds ?? 180,
+          "aq-wait-max": config?.waitMaxSeconds ?? 480,
+        };
+        Object.entries(map).forEach(([id, value]) => {
+          const el = document.getElementById(id);
+          if (el) el.value = String(value);
+        });
+      }
+
+      function setAquecedorFormDisabled(disabled) {
+        ["aq-exp-inicio", "aq-exp-fim", "aq-janela-ativa", "aq-pausa", "aq-wait-min", "aq-wait-max"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = disabled;
+        });
+        const addBtn = document.getElementById("aq-exp-add-btn");
+        if (addBtn) addBtn.disabled = disabled;
+        document.querySelectorAll(".batch-remove-btn").forEach((el) => (el.disabled = disabled));
+        document
+          .querySelectorAll("#tab-aquecedor .aquecedor-day-chk input")
+          .forEach((el) => (el.disabled = disabled));
+      }
+
+      async function loadAquecedorConfig() {
+        try {
+          const response = await fetchWithTimeout("/aquecedor/config", {}, 10000);
+          const statusLabel = document.getElementById("aquecedor-status-label");
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            showToast(errorData?.error || "Falha ao carregar Aquecedor.", "error");
+            if (statusLabel) statusLabel.textContent = "Erro ao carregar";
+            return;
+          }
+          const data = await response.json();
+          const useRecommended = data?.useRecommended !== false;
+          const config = useRecommended
+            ? data?.recommendedConfig || AQUECEDOR_RECOMMENDED
+            : data?.customConfig || AQUECEDOR_RECOMMENDED;
+          const toggle = document.getElementById("aquecedor-use-recommended");
+          if (toggle) toggle.checked = useRecommended;
+          setAquecedorFormValues(config);
+          setAquecedorFormDisabled(useRecommended);
+          updateRemoveButtonsVisibility();
+          if (statusLabel) {
+            statusLabel.textContent = useRecommended
+              ? "Usando padrão recomendado"
+              : "Usando configuração personalizada";
+          }
+        } catch {
+          showToast("Erro ao carregar configuração do Aquecedor.", "error");
+        }
+      }
+
+      async function saveAquecedorConfig() {
+        if (!aquecedorEditMode) {
+          setAquecedorEditMode(true);
+          addAquecedorCommandLog("Modo de edição de configurações habilitado.");
+          return;
+        }
+        const toggle = document.getElementById("aquecedor-use-recommended");
+        const saveBtn = document.getElementById("aquecedor-save-btn");
+        const statusLabel = document.getElementById("aquecedor-status-label");
+        const useRecommended = Boolean(toggle?.checked);
+        const customConfig = getAquecedorFormValues();
+        if (customConfig.expediente.length === 0) {
+          showToast("Adicione pelo menos um lote de dias no expediente.", "error");
+          return;
+        }
+        if (saveBtn) {
+          saveBtn.textContent = "Salvando...";
+          saveBtn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            "/aquecedor/config",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ useRecommended, customConfig }),
+            },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao salvar Aquecedor.", "error");
+            return;
+          }
+          showToast("Configuração do Aquecedor salva com sucesso.", "success");
+          addAquecedorCommandLog("Configurações salvas com sucesso.");
+          if (statusLabel) {
+            statusLabel.textContent = useRecommended
+              ? "Usando padrão recomendado"
+              : "Usando configuração personalizada";
+          }
+          setAquecedorEditMode(false);
+        } catch {
+          showToast("Erro ao salvar configuração do Aquecedor.", "error");
+          addAquecedorCommandLog("Falha ao salvar configurações.");
+        } finally {
+          if (saveBtn) {
+            saveBtn.textContent = aquecedorEditMode
+              ? "Salvar configurações"
+              : "Editar configurações";
+            saveBtn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      async function loadAquecedorRuntimeStatus() {
+        try {
+          const response = await fetchWithTimeout("/aquecedor/status", {}, 10000);
+          const label = document.getElementById("aquecedor-runtime-label");
+          if (!response.ok) {
+            if (label) label.textContent = "Motor: erro ao consultar status";
+            return;
+          }
+          const data = await response.json();
+          const running = data?.running === true;
+          const isProcessing = data?.isProcessing === true;
+          const nextAllowedAt = data?.nextAllowedAt
+            ? new Date(data.nextAllowedAt).toLocaleTimeString("pt-BR")
+            : "sem espera";
+          const lastResult = String(data?.lastResult || "sem histórico");
+          if (label) {
+            label.textContent = `Motor: ${
+              running ? "ativo" : "parado"
+            } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
+          }
+        } catch {
+          const label = document.getElementById("aquecedor-runtime-label");
+          if (label) label.textContent = "Motor: erro ao consultar status";
+        }
+      }
+
+      async function loadAquecedorEnvios() {
+        const container = document.getElementById("aquecedor-envios-list");
+        if (!container) return;
+        try {
+          const response = await fetchWithTimeout(
+            "/aquecedor/envios?limit=60&_=" + Date.now(),
+            {},
+            10000
+          );
+          if (!response.ok) {
+            container.innerHTML = '<div class="muted">Falha ao carregar envios.</div>';
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          const items = Array.isArray(data?.items) ? data.items : [];
+          if (!items.length) {
+            container.innerHTML =
+              '<div class="muted">Nenhum envio registrado ainda.</div>';
+            return;
+          }
+          container.innerHTML = "";
+          items.forEach((item) => {
+            const origem = String(item?.instanciaOrigem || "—");
+            const destino = String(item?.instanciaDestino || "—");
+            const when = item?.dataEnvioBr ?? (item?.dataEnvio ? new Date(item.dataEnvio).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "sem data");
+            const status = item?.status === "Em Fila" ? "Em Fila" : "Envio com Sucesso";
+            const row = document.createElement("div");
+            row.className = "aquecedor-envio-item";
+            row.innerHTML = `
+              <div class="aquecedor-envio-main">${origem} → ${destino}</div>
+              <div class="aquecedor-envio-time">${when} - ${status}</div>
+            `;
+            container.appendChild(row);
+          });
+        } catch {
+          container.innerHTML = '<div class="muted">Falha ao carregar envios.</div>';
+        }
+      }
+
+      function startAquecedorEnviosPolling() {
+        if (aquecedorEnviosPollTimer) clearInterval(aquecedorEnviosPollTimer);
+        loadAquecedorEnvios();
+        aquecedorEnviosPollTimer = setInterval(loadAquecedorEnvios, 8000);
+      }
+
+      function stopAquecedorEnviosPolling() {
+        if (aquecedorEnviosPollTimer) {
+          clearInterval(aquecedorEnviosPollTimer);
+          aquecedorEnviosPollTimer = null;
+        }
+      }
+
+      function toggleDisparosModeBoxes() {
+        const isAi = Boolean(document.getElementById("dis-mode-ai")?.checked);
+        const aiBox = document.getElementById("dis-ai-box");
+        const dbBox = document.getElementById("dis-db-box");
+        if (aiBox) aiBox.classList.toggle("hidden", !isAi);
+        if (dbBox) dbBox.classList.toggle("hidden", isAi);
+      }
+
+      function getDisparosWorkingDays() {
+        const days = [];
+        document.querySelectorAll("#dis-working-days input[type='checkbox']:checked").forEach((el) => {
+          const d = el.getAttribute("data-day");
+          if (d) days.push(d);
+        });
+        return days;
+      }
+
+      function setDisparosWorkingDays(days) {
+        const selected = new Set(Array.isArray(days) ? days : []);
+        document.querySelectorAll("#dis-working-days input[type='checkbox']").forEach((el) => {
+          const d = el.getAttribute("data-day");
+          el.checked = d ? selected.has(d) : false;
+        });
+      }
+
+      function buildDisparosAiBriefingStructured() {
+        const read = (id) => String(document.getElementById(id)?.value || "").trim();
+        const parts = [
+          `Produto/serviço: ${read("dis-ai-product") || "não informado"}`,
+          `Objetivo da mensagem: ${read("dis-ai-objective") || "não informado"}`,
+          `Público alvo: ${read("dis-ai-audience") || "não informado"}`,
+          `Tom: ${read("dis-ai-tone") || "consultivo"}`,
+          `CTA padrão: ${read("dis-ai-cta") || "não informado"}`,
+          `Dores do público:\n${read("dis-ai-pains") || "-"}`,
+          `Diferenciais:\n${read("dis-ai-differentials") || "-"}`,
+          `Regras/proibições:\n${read("dis-ai-prohibitions") || "-"}`,
+          `Observações adicionais:\n${read("dis-ai-notes") || "-"}`,
+        ];
+        return parts.join("\n\n");
+      }
+
+      function formatWhatsappTarget(value) {
+        const digits = String(value || "").replace(/\D/g, "").slice(0, 11); // DDD + numero
+        const ddd = digits.slice(0, 2);
+        const first = digits.slice(2, 7);
+        const last = digits.slice(7, 11);
+        let out = "";
+        if (ddd) out += `(${ddd}`;
+        if (ddd.length === 2) out += ")";
+        if (first) out += ` ${first}`;
+        if (last) out += `-${last}`;
+        return out.trim();
+      }
+
+      function getWhatsappTargetDigits() {
+        return String(document.getElementById("dis-whatsapp-target")?.value || "").replace(/\D/g, "");
+      }
+
+      function validateWhatsappTarget(showFeedback = false) {
+        const digits = getWhatsappTargetDigits();
+        const errorEl = document.getElementById("dis-whatsapp-target-error");
+        const valid = digits.length === 11 && digits[2] === "9";
+        if (showFeedback && errorEl) {
+          errorEl.classList.toggle("hidden", valid);
+        }
+        return valid;
+      }
+
+      function getDisparosFormValues() {
+        const readInt = (id, fallback) => {
+          const n = Number(document.getElementById(id)?.value);
+          return Number.isFinite(n) ? Math.floor(n) : fallback;
+        };
+        const aiBriefing = buildDisparosAiBriefingStructured();
+        const hiddenBriefing = document.getElementById("dis-ai-briefing");
+        if (hiddenBriefing) hiddenBriefing.value = aiBriefing;
+        return {
+          delayMinSeconds: readInt("dis-delay-min", 90),
+          delayMaxSeconds: readInt("dis-delay-max", 240),
+          maxPerHourPerInstance: readInt("dis-max-hour", 60),
+          maxPerDayPerInstance: readInt("dis-max-day", 130),
+          workingDays: getDisparosWorkingDays(),
+          startHour: readInt("dis-start-hour", 8),
+          endHour: readInt("dis-end-hour", 22),
+          messageMode: document.getElementById("dis-mode-db")?.checked ? "database" : "ai",
+          aiBriefing,
+          aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
+          aiCta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
+          aiAudience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
+          whatsappTargetNumber: getWhatsappTargetDigits(), // backend adiciona +55
+        };
+      }
+
+      function setDisparosFormValues(config) {
+        const map = {
+          "dis-delay-min": config?.delayMinSeconds ?? 90,
+          "dis-delay-max": config?.delayMaxSeconds ?? 240,
+          "dis-max-hour": config?.maxPerHourPerInstance ?? 60,
+          "dis-max-day": config?.maxPerDayPerInstance ?? 130,
+          "dis-start-hour": config?.startHour ?? 8,
+          "dis-end-hour": config?.endHour ?? 22,
+          "dis-ai-tone": config?.aiTone ?? "consultivo",
+          "dis-ai-cta": config?.aiCta ?? "Responda no link abaixo",
+          "dis-ai-audience": config?.aiAudience ?? "CORBAN",
+          "dis-shortener-provider": config?.shortenerProvider ?? "isgd",
+          "dis-whatsapp-target": (() => {
+            const raw = String(config?.whatsappTargetNumber ?? "").replace(/\D/g, "");
+            return raw.startsWith("55") && raw.length >= 12 ? raw.slice(2, 13) : raw;
+          })(),
+        };
+        Object.entries(map).forEach(([id, value]) => {
+          const el = document.getElementById(id);
+          if (el) el.value = String(value);
+        });
+        const hiddenBriefing = document.getElementById("dis-ai-briefing");
+        if (hiddenBriefing) hiddenBriefing.value = String(config?.aiBriefing || "");
+        const notes = document.getElementById("dis-ai-notes");
+        if (notes && config?.aiBriefing) {
+          notes.value = String(config.aiBriefing);
+        }
+        setDisparosWorkingDays(config?.workingDays || ["seg", "ter", "qua", "qui", "sex"]);
+        const modeAi = document.getElementById("dis-mode-ai");
+        const modeDb = document.getElementById("dis-mode-db");
+        if (modeAi && modeDb) {
+          const isDb = config?.messageMode === "database";
+          modeAi.checked = !isDb;
+          modeDb.checked = isDb;
+        }
+        toggleDisparosModeBoxes();
+      }
+
+      async function loadDisparosConfig() {
+        const statusLabel = document.getElementById("disparos-status-label");
+        try {
+          const response = await fetchWithTimeout("/disparos/config", {}, 10000);
+          if (!response.ok) {
+            if (statusLabel) statusLabel.textContent = "Erro ao carregar";
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          disparosConfigCache = data?.config || null;
+          setDisparosFormValues(data?.config || {});
+          const shortenerSelect = document.getElementById("dis-shortener-provider");
+          if (shortenerSelect) {
+            if (data?.currentShortenerProvider) {
+              const labels = {
+                isgd: "is.gd (gratuito)",
+                tinyurl: "TinyURL (token)",
+              };
+              const key = String(data.currentShortenerProvider || "").toLowerCase();
+              shortenerSelect.value = labels[key] || String(data.currentShortenerProvider);
+            }
+            shortenerSelect.setAttribute("disabled", "true");
+            shortenerSelect.setAttribute(
+              "title",
+              "Definido automaticamente pelo backend."
+            );
+          }
+          if (statusLabel) statusLabel.textContent = "Configuração carregada";
+        } catch {
+          if (statusLabel) statusLabel.textContent = "Erro ao carregar";
+        }
+      }
+
+      async function saveDisparosConfig() {
+        const btn = document.getElementById("dis-save-btn");
+        const statusLabel = document.getElementById("disparos-status-label");
+        const original = btn?.textContent || "Salvar";
+        if (!validateWhatsappTarget(true)) {
+          showToast("Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.", "warning");
+          return;
+        }
+        if (btn) {
+          btn.textContent = "Salvando...";
+          btn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            "/disparos/config",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ config: getDisparosFormValues() }),
+            },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao salvar configuração.", "error");
+            return;
+          }
+          disparosConfigCache = data?.config || null;
+          if (statusLabel) statusLabel.textContent = "Configuração salva";
+          showToast("Configuração do Disparador salva com sucesso.", "success");
+        } catch {
+          showToast("Erro ao salvar configuração do Disparador.", "error");
+        } finally {
+          if (btn) {
+            btn.textContent = original;
+            btn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      async function testDisparosShortener() {
+        const btn = document.getElementById("dis-test-shortener-btn");
+        const statusEl = document.getElementById("dis-shortener-test-status");
+        const original = btn?.textContent || "Testar encurtador";
+        if (!validateWhatsappTarget(true)) {
+          showToast("Número inválido. Complete no formato +55 (DDD) 9XXXX-XXXX.", "warning");
+          return;
+        }
+        if (btn) {
+          btn.textContent = "Testando...";
+          btn.setAttribute("disabled", "true");
+        }
+        if (statusEl) {
+          statusEl.textContent = "Gerando URL...";
+          statusEl.style.color = "#cbd5e1";
+        }
+        try {
+          const localDigits = String(document.getElementById("dis-whatsapp-target")?.value || "").replace(/\D/g, "");
+          const target = localDigits ? `55${localDigits}` : "5511999999999";
+          const longUrl = `https://wa.me/${target}?text=Ol%C3%A1`;
+          const response = await fetchWithTimeout(
+            "/disparos/shorten",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ longUrl }),
+            },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao testar encurtador.", "error");
+            return;
+          }
+          const shortUrl = String(data?.shortUrl || "").trim();
+          if (!shortUrl) {
+            if (statusEl) {
+              statusEl.textContent = "Falha ao gerar URL.";
+              statusEl.style.color = "#fda4af";
+            }
+            showToast("Teste concluído, mas nenhum link curto foi retornado.", "warning", 4200);
+            return;
+          }
+          if (statusEl) {
+            statusEl.style.color = "#86efac";
+            statusEl.innerHTML = `
+              <span class="dis-shortener-result">
+                <span class="dis-shortener-url">URL gerada com sucesso: ${shortUrl}</span>
+                <button
+                  id="dis-copy-short-url-btn"
+                  class="dis-shortener-icon-btn"
+                  type="button"
+                  title="Copiar URL"
+                  aria-label="Copiar URL"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+                <button
+                  id="dis-open-short-url-btn"
+                  class="dis-shortener-icon-btn"
+                  type="button"
+                  title="Abrir URL em nova aba"
+                  aria-label="Abrir URL em nova aba"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 3h7v7"></path>
+                    <path d="M10 14L21 3"></path>
+                    <path d="M21 14v7h-7"></path>
+                    <path d="M3 10V3h7"></path>
+                    <path d="M3 21h7v-7"></path>
+                  </svg>
+                </button>
+              </span>
+            `;
+            const copyBtn = document.getElementById("dis-copy-short-url-btn");
+            if (copyBtn) {
+              copyBtn.addEventListener("click", async () => {
+                try {
+                  await navigator.clipboard.writeText(shortUrl);
+                  showToast("URL copiada com sucesso.", "success", 2400);
+                } catch {
+                  showToast("Falha ao copiar URL.", "error", 2600);
+                }
+              });
+            }
+            const openBtn = document.getElementById("dis-open-short-url-btn");
+            if (openBtn) {
+              openBtn.addEventListener("click", () => {
+                window.open(shortUrl, "_blank", "noopener,noreferrer");
+              });
+            }
+          }
+          showToast(`Link gerado: ${shortUrl}`, "success", 6500);
+        } catch {
+          if (statusEl) {
+            statusEl.textContent = "Falha ao gerar URL.";
+            statusEl.style.color = "#fda4af";
+          }
+          showToast("Erro ao testar encurtador.", "error");
+        } finally {
+          if (btn) {
+            btn.textContent = original;
+            btn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      async function loadDisparosTemplates() {
+        const list = document.getElementById("disparos-list");
+        const sent = document.getElementById("disparos-enviados-hoje");
+        const fila = document.getElementById("disparos-na-fila");
+        const inst = document.getElementById("disparos-instancia-ativa");
+        if (!list) return;
+        try {
+          const response = await fetchWithTimeout("/disparos/templates", {}, 10000);
+          if (!response.ok) {
+            list.innerHTML = '<div class="muted">Falha ao carregar templates de mensagens.</div>';
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          const items = Array.isArray(data?.items) ? data.items : [];
+          if (sent) sent.textContent = "—";
+          if (fila) fila.textContent = String(items.length);
+          if (inst) inst.textContent = "—";
+          try {
+            const nextRes = await fetchWithTimeout("/disparos/next-instance", {}, 8000);
+            const nextData = await nextRes.json().catch(() => ({}));
+            if (nextRes.ok && inst) {
+              inst.textContent = String(nextData?.selected?.instancia || "—");
+            }
+          } catch {
+            // silencioso
+          }
+          if (!items.length) {
+            list.innerHTML = '<div class="muted">Nenhum template importado ainda.</div>';
+            return;
+          }
+          list.innerHTML = "";
+          items.slice(0, 80).forEach((item) => {
+            const row = document.createElement("div");
+            row.className = "aquecedor-envio-item";
+            const text = String(item?.text || "").replace(/\s+/g, " ").slice(0, 180);
+            const alias = String(item?.alias || "sem alias");
+            const segment = String(item?.segment || "geral");
+            row.innerHTML = `
+              <div class="aquecedor-envio-main">${alias} - ${segment}</div>
+              <div class="aquecedor-envio-time">${text}</div>
+            `;
+            list.appendChild(row);
+          });
+        } catch {
+          list.innerHTML = '<div class="muted">Falha ao carregar templates de mensagens.</div>';
+        }
+      }
+
+      async function parseSpreadsheetFile(file) {
+        if (!file) return [];
+        const lower = file.name.toLowerCase();
+        if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
+          throw new Error("Formato inválido. Envie arquivo Excel (.xlsx ou .xls).");
+        }
+        if (!window.XLSX) throw new Error("Parser de planilha ainda não carregado.");
+        const buffer = await file.arrayBuffer();
+        const wb = window.XLSX.read(buffer, { type: "array" });
+        const firstSheet = wb.SheetNames[0];
+        if (!firstSheet) return [];
+        return window.XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { defval: "" });
+      }
+
+      function openDisMappingModalWithColumns(columns) {
+        const overlay = document.getElementById("dis-mapping-overlay");
+        const textSel = document.getElementById("dis-map-text");
+        const aliasSel = document.getElementById("dis-map-alias");
+        const segmentSel = document.getElementById("dis-map-segment");
+        if (!overlay || !textSel || !aliasSel || !segmentSel) return;
+        const options = ['<option value="">Selecione</option>'].concat(
+          columns.map((c) => `<option value="${String(c)}">${String(c)}</option>`)
+        );
+        textSel.innerHTML = options.join("");
+        aliasSel.innerHTML = ['<option value="">(sem alias)</option>', ...columns.map((c) => `<option value="${String(c)}">${String(c)}</option>`)].join("");
+        segmentSel.innerHTML = ['<option value="">(sem segmento)</option>', ...columns.map((c) => `<option value="${String(c)}">${String(c)}</option>`)].join("");
+        const preferredText = columns.find((c) => /mensagem|message|texto/i.test(String(c)));
+        const preferredAlias = columns.find((c) => /alias|titulo|nome/i.test(String(c)));
+        const preferredSegment = columns.find((c) => /segment|categoria|grupo/i.test(String(c)));
+        if (preferredText) textSel.value = preferredText;
+        if (preferredAlias) aliasSel.value = preferredAlias;
+        if (preferredSegment) segmentSel.value = preferredSegment;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      function closeDisMappingModal() {
+        const overlay = document.getElementById("dis-mapping-overlay");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      async function openDisMappingFlow() {
+        const fileInput = document.getElementById("dis-spreadsheet-file");
+        const file = fileInput?.files?.[0];
+        if (!file) {
+          showToast("Selecione uma planilha para mapear.", "warning");
+          return;
+        }
+        try {
+          spreadsheetRowsCache = await parseSpreadsheetFile(file);
+          if (!spreadsheetRowsCache.length) {
+            showToast("Nenhuma linha encontrada na planilha.", "warning");
+            return;
+          }
+          const columns = Object.keys(spreadsheetRowsCache[0] || {});
+          if (!columns.length) {
+            showToast("Não foi possível identificar colunas na planilha.", "warning");
+            return;
+          }
+          openDisMappingModalWithColumns(columns);
+        } catch (error) {
+          showToast("Falha ao ler planilha. Verifique o formato.", "error");
+        }
+      }
+
+      async function importMappedSpreadsheet() {
+        const textCol = String(document.getElementById("dis-map-text")?.value || "");
+        const aliasCol = String(document.getElementById("dis-map-alias")?.value || "");
+        const segmentCol = String(document.getElementById("dis-map-segment")?.value || "");
+        const statusEl = document.getElementById("dis-import-status");
+        if (!textCol) {
+          showToast("Selecione a coluna da mensagem.", "warning");
+          return;
+        }
+        const rows = spreadsheetRowsCache
+          .map((row) => ({
+            text: String(row?.[textCol] || "").trim(),
+            alias: aliasCol ? String(row?.[aliasCol] || "").trim() : "",
+            segment: segmentCol ? String(row?.[segmentCol] || "").trim() : "",
+          }))
+          .filter((row) => row.text.length > 0);
+        if (!rows.length) {
+          showToast("Nenhuma mensagem válida para importar.", "warning");
+          return;
+        }
+        try {
+          const response = await fetchWithTimeout(
+            "/disparos/templates/import",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rows }),
+            },
+            20000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao importar planilha.", "error");
+            return;
+          }
+          if (statusEl) statusEl.textContent = `${data?.imported || rows.length} mensagens importadas.`;
+          showToast(data?.message || "Mensagens importadas com sucesso.", "success");
+          closeDisMappingModal();
+          loadDisparosTemplates();
+        } catch {
+          showToast("Erro ao importar planilha.", "error");
+        }
+      }
+
+      function downloadDisparosExcelTemplate() {
+        if (!window.XLSX) {
+          showToast("Aguarde: biblioteca de planilha ainda carregando.", "warning");
+          return;
+        }
+        const sampleRows = [
+          {
+            mensagem: "Olá! Somos a Agência Digital Corban e ajudamos na captação de leads CLT.",
+            alias: "campanha-clt-1",
+            segmento: "CLT",
+          },
+          {
+            mensagem: "Quer aumentar sua geração de oportunidades com IA no WhatsApp?",
+            alias: "campanha-clt-2",
+            segmento: "CORBAN",
+          },
+        ];
+        const ws = window.XLSX.utils.json_to_sheet(sampleRows);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "mensagens");
+        window.XLSX.writeFile(wb, "modelo-mensagens-disparador.xlsx");
+      }
+
+      async function callAquecedorRuntimeAction(action, actionBtn = null) {
+        const map = {
+          start: "/aquecedor/start",
+          stop: "/aquecedor/stop",
+          runOnce: "/aquecedor/run-once",
+        };
+        const url = map[action];
+        if (!url) return;
+        const labelMap = {
+          start: "Iniciando Aquecedor...",
+          stop: "Parando Aquecedor...",
+          runOnce: "Executando...",
+        };
+        const originalLabel = actionBtn ? actionBtn.textContent : "";
+        if (actionBtn) {
+          actionBtn.textContent = labelMap[action] || "Processando...";
+          actionBtn.classList.add("disabled");
+          actionBtn.setAttribute("disabled", "true");
+        }
+        showToast("Ação em andamento...", "warning", 1400);
+        const actionStartLabel =
+          action === "runOnce"
+            ? "Ação iniciada: Teste iniciado."
+            : `Ação iniciada: ${action}.`;
+        addAquecedorCommandLog(actionStartLabel);
+        try {
+          const runOnceTimeout = action === "runOnce" ? 90000 : 12000;
+          const response = await fetchWithTimeout(
+            url,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            },
+            runOnceTimeout
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao executar ação do aquecedor.", "error");
+            return;
+          }
+          showToast(data?.message || "Ação executada com sucesso.", "success");
+          addAquecedorCommandLog(data?.message || `Ação concluída: ${action}.`);
+          const lastResult = data?.status?.lastResult;
+          if (action === "runOnce" && lastResult) {
+            addAquecedorCommandLog("Resultado: " + lastResult);
+          }
+          if (lastResult && String(lastResult).toLowerCase().includes("sucesso")) {
+            showAquecedorStartStopButtons();
+          }
+          if (action === "start") {
+            updateAquecedorStartStopVisibility(true);
+          }
+          if (action === "stop") {
+            updateAquecedorStartStopVisibility(false);
+          }
+          await loadAquecedorRuntimeStatus();
+          if (action === "runOnce") loadAquecedorEnvios();
+        } catch {
+          showToast("Erro ao executar ação do aquecedor.", "error");
+          const actionLabel = { start: "Iniciar Aquecedor", stop: "Parar Aquecedor", runOnce: "Envio teste" }[action] || action;
+          addAquecedorCommandLog(`Erro ao executar ${actionLabel}.`);
+        } finally {
+          if (actionBtn) {
+            actionBtn.textContent = originalLabel || "Ação";
+            actionBtn.classList.remove("disabled");
+            actionBtn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      function getConfiguredInstancesCount() {
+        try {
+          return buildOrderedInstancesBase().filter((inst) => {
+            const usage = getInstanceUsage(inst.instanceName);
+            return usage.useAquecedor;
+          }).length;
+        } catch {
+          return 0;
+        }
+      }
+
+      function isTabLocked(tabName) {
+        if (!tabName) return false;
+        const ruleBtn = document.querySelector(
+          `.tab-button[data-tab="${tabName}"][data-min-instances]`
+        );
+        if (!ruleBtn) return false;
+        const minInstances = Number(ruleBtn.getAttribute("data-min-instances") || 0);
+        return getConfiguredInstancesCount() < minInstances;
+      }
+
+      function updateTabAccessRules() {
+        const configuredCount = getConfiguredInstancesCount();
+        document
+          .querySelectorAll(".tab-button[data-tab][data-min-instances]")
+          .forEach((btn) => {
+            const minInstances = Number(btn.getAttribute("data-min-instances") || 0);
+            const locked = configuredCount < minInstances;
+            btn.classList.toggle("disabled", locked);
+            btn.setAttribute("aria-disabled", locked ? "true" : "false");
+            if (locked) {
+              btn.setAttribute(
+                "title",
+                `Disponível com pelo menos ${minInstances} instâncias configuradas.`
+              );
+            } else {
+              btn.removeAttribute("title");
+            }
+          });
+
+        if (activeTab !== "dashboard" && activeTab !== "instancias" && isTabLocked(activeTab)) {
+          setActiveTab("instancias");
+          showToast(
+            "Esta página é habilitada com pelo menos 2 instâncias configuradas.",
+            "warning"
+          );
+        }
+      }
 
       function setActiveTab(nextTab) {
+        if (isTabLocked(nextTab)) {
+          showToast(
+            "Esta página é habilitada com pelo menos 2 instâncias configuradas.",
+            "warning"
+          );
+          return;
+        }
         activeTab = nextTab;
 
         const dashboardPanel = document.getElementById("tab-dashboard");
         const instanciasPanel = document.getElementById("tab-instancias");
+        const aquecedorPanel = document.getElementById("tab-aquecedor");
+        const disparosPanel = document.getElementById("tab-disparos");
         const dashboardFilters = document.getElementById("dashboard-filters");
 
         if (dashboardPanel) {
@@ -1156,6 +3699,22 @@
           instanciasPanel.setAttribute(
             "aria-hidden",
             nextTab !== "instancias" ? "true" : "false"
+          );
+        }
+
+        if (aquecedorPanel) {
+          aquecedorPanel.classList.toggle("tab-hidden", nextTab !== "aquecedor");
+          aquecedorPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "aquecedor" ? "true" : "false"
+          );
+        }
+
+        if (disparosPanel) {
+          disparosPanel.classList.toggle("tab-hidden", nextTab !== "disparos");
+          disparosPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "disparos" ? "true" : "false"
           );
         }
 
@@ -1182,8 +3741,24 @@
             }
           });
 
+        const headerRefresh = document.getElementById("header-refresh-select");
+        if (headerRefresh) {
+          headerRefresh.style.display = nextTab === "aquecedor" ? "none" : "";
+        }
+
         if (nextTab === "instancias") {
           renderInstancesList();
+          stopAquecedorEnviosPolling();
+        } else if (nextTab === "disparos") {
+          stopAquecedorEnviosPolling();
+          loadDisparosConfig();
+          loadDisparosTemplates();
+        } else if (nextTab === "aquecedor") {
+          loadAquecedorConfig();
+          loadAquecedorRuntimeStatus();
+          startAquecedorEnviosPolling();
+        } else {
+          stopAquecedorEnviosPolling();
         }
       }
 
@@ -1305,30 +3880,8 @@
           "events-count-label"
         ).textContent = `${total} eventos carregados`;
 
-        // resumo de instancias
-        const instAtivasEl = document.getElementById("instances-active");
-        const instDescEl = document.getElementById("instances-disconnected");
-        const instTotalEl = document.getElementById("instances-total");
-
-        if (instAtivasEl && instDescEl && instTotalEl) {
-          instAtivasEl.textContent = String(instancesData.ativas ?? 0);
-          instDescEl.textContent = String(instancesData.desconectadas ?? 0);
-          instTotalEl.textContent = `Total: ${instancesData.total ?? 0}`;
-        }
-
-        const instAtivasTabEl = document.getElementById(
-          "instances-active-tab"
-        );
-        const instDescTabEl = document.getElementById(
-          "instances-disconnected-tab"
-        );
-        const instTotalTabEl = document.getElementById("instances-total-tab");
-
-        if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
-          instAtivasTabEl.textContent = String(instancesData.ativas ?? 0);
-          instDescTabEl.textContent = String(instancesData.desconectadas ?? 0);
-          instTotalTabEl.textContent = `Total: ${instancesData.total ?? 0}`;
-        }
+        // resumo de instancias (com mesma regra da relação exibida)
+        updateInstancesIndicators();
       }
 
       function updateChart(events) {
@@ -1680,58 +4233,768 @@
         visibleCount.textContent = `${events.length} itens exibidos`;
       }
 
-      function renderInstancesList() {
-        const container = document.getElementById("instances-list");
-        if (!container) return;
+      function buildOrderedInstancesBase() {
+        const normalizePhoneKey = (raw) => {
+          const value = String(raw || "").trim().toLowerCase();
+          if (!value) return "";
+          const beforeAt = value.includes("@") ? value.split("@")[0] : value;
+          const digits = beforeAt.replace(/\D+/g, "");
+          if (!digits) return "";
+          // Padrao DDD+numero (remove codigo do pais 55 quando presente)
+          if (digits.startsWith("55") && digits.length >= 12) {
+            return digits.slice(2);
+          }
+          return digits;
+        };
 
-        container.innerHTML = "";
+        const buildPhoneAliases = (digits) => {
+          const value = String(digits || "");
+          if (!value) return [];
+          const aliases = [value];
+          if (value.length > 13) aliases.push(value.slice(-13));
+          if (value.length > 11) aliases.push(value.slice(-11));
+          if (value.length > 10) aliases.push(value.slice(-10));
+          if (value.length > 8) aliases.push(value.slice(-8));
+          return Array.from(new Set(aliases.filter(Boolean)));
+        };
 
         const items = Array.isArray(instancesData.items)
           ? instancesData.items
           : [];
-
-        if (!items.length) {
-          container.innerHTML = `
-            <div class="empty-state">
-              <span>Nenhuma instância disponível.</span>
-              <span class="muted">Aguarde a próxima atualização.</span>
-            </div>
-          `;
-          return;
-        }
-
-        items.forEach((inst, idx) => {
+        const normalizedItems = items.map((inst, idx) => {
           const statusRaw = String(inst?.connectionStatus ?? "");
           const statusLc = statusRaw.toLowerCase();
           const isOpen = statusLc.includes("open");
 
-          const candidateName =
+          const candidateInstance =
             inst?.name ??
             inst?.instanceName ??
             inst?.id ??
             inst?.instanceId ??
             null;
 
-          const displayName =
-            candidateName == null || candidateName === ""
+          const instanceName =
+            candidateInstance == null || candidateInstance === ""
               ? `Instância ${idx + 1}`
-              : String(candidateName);
+              : String(candidateInstance);
 
-          const row = document.createElement("div");
-          row.className = "instance-row";
+          const numberCandidate =
+            inst?.number ?? inst?.phone ?? inst?.owner ?? inst?.ownerNumber ?? "";
+          const normalizedNumberRaw = String(numberCandidate || "").trim();
+          const normalizedNumberKey = normalizePhoneKey(normalizedNumberRaw);
+          const displayNumber = normalizedNumberKey || normalizedNumberRaw || "—";
 
-          const nameEl = document.createElement("div");
-          nameEl.className = "instance-name";
-          nameEl.textContent = displayName;
+          const displayName =
+            String(inst?.displayName || inst?.name || instanceName).trim() ||
+            instanceName;
 
-          const pillEl = document.createElement("div");
-          pillEl.className = `status-pill ${isOpen ? "open" : "closed"}`;
-          pillEl.textContent = isOpen ? "Conectada" : "Desconectada";
+          const toInt = (value) => {
+            if (typeof value === "number" && Number.isFinite(value)) {
+              return Math.max(0, Math.floor(value));
+            }
+            if (typeof value === "string" && value.trim() !== "") {
+              const parsed = Number(value);
+              if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed));
+            }
+            return 0;
+          };
 
-          row.appendChild(nameEl);
-          row.appendChild(pillEl);
-          container.appendChild(row);
+          const contacts = toInt(
+            inst?.contacts ??
+              inst?.contactsCount ??
+              inst?.totalContacts ??
+              inst?._count?.contacts ??
+              inst?.stats?.contacts
+          );
+
+          const messages = toInt(
+            inst?.messages ??
+              inst?.messagesCount ??
+              inst?.totalMessages ??
+              inst?.chatsCount ??
+              inst?._count?.messages ??
+              inst?.stats?.messages
+          );
+
+          return {
+            idx,
+            instanceName,
+            displayNumber,
+            originalNumber: normalizedNumberRaw,
+            numberKey: normalizedNumberKey,
+            displayName,
+            contacts,
+            messages,
+            profilePicUrl: String(inst?.profilePicUrl || "").trim(),
+            avatarVersion: String(inst?.avatarVersion || "").trim(),
+            createdAt: String(inst?.createdAt || "").trim(),
+            updatedAt: String(inst?.updatedAt || inst?.avatarVersion || "").trim(),
+            isOpen,
+            statusLabel: isOpen ? "conectado" : "desconectado",
+          };
         });
+
+        // Regra de deduplicacao por numero:
+        // - se houver duas instancias com o mesmo numero, prevalece a conectada
+        // - se nenhuma estiver conectada, prevalece a mais recente da lista
+        const dedupedByNumber = [];
+        const byNumber = new Map();
+        normalizedItems.forEach((item) => {
+          const aliases = buildPhoneAliases(item.numberKey);
+          if (!aliases.length) {
+            dedupedByNumber.push(item);
+            return;
+          }
+          const matchedKey = aliases.find((alias) => byNumber.has(alias));
+          const current = matchedKey ? byNumber.get(matchedKey) : null;
+          if (!current) {
+            aliases.forEach((alias) => byNumber.set(alias, item));
+            return;
+          }
+          let winner = current;
+          if (item.isOpen && !current.isOpen) {
+            winner = item;
+          } else if (item.isOpen === current.isOpen && item.idx > current.idx) {
+            winner = item;
+          }
+          aliases.forEach((alias) => byNumber.set(alias, winner));
+          buildPhoneAliases(current.numberKey).forEach((alias) =>
+            byNumber.set(alias, winner)
+          );
+        });
+        let filtered = [
+          ...dedupedByNumber,
+          ...Array.from(new Set(byNumber.values())).sort((a, b) => a.idx - b.idx),
+        ];
+
+        const toDateMs = (value) => {
+          if (!value) return 0;
+          const t = Date.parse(String(value));
+          return Number.isFinite(t) ? t : 0;
+        };
+        filtered = filtered.sort((a, b) => {
+          const aCreated = toDateMs(a.createdAt);
+          const bCreated = toDateMs(b.createdAt);
+          if (aCreated !== bCreated) return bCreated - aCreated; // mais recente primeiro
+          const aUpdated = toDateMs(a.updatedAt);
+          const bUpdated = toDateMs(b.updatedAt);
+          if (aUpdated !== bUpdated) return bUpdated - aUpdated; // fallback por atividade recente
+          return b.idx - a.idx; // fallback
+        });
+        return filtered;
+      }
+
+      function updateInstancesIndicators() {
+        const base = buildOrderedInstancesBase();
+        const ativas = base.filter((i) => i.isOpen).length;
+        const desconectadas = base.filter((i) => !i.isOpen).length;
+        const total = base.length;
+
+        const instAtivasEl = document.getElementById("instances-active");
+        const instDescEl = document.getElementById("instances-disconnected");
+        const instTotalEl = document.getElementById("instances-total");
+        if (instAtivasEl && instDescEl && instTotalEl) {
+          instAtivasEl.textContent = String(ativas);
+          instDescEl.textContent = String(desconectadas);
+          instTotalEl.textContent = `Total: ${total}`;
+        }
+
+        const instAtivasTabEl = document.getElementById("instances-active-tab");
+        const instDescTabEl = document.getElementById("instances-disconnected-tab");
+        const instTotalTabEl = document.getElementById("instances-total-tab");
+        if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
+          instAtivasTabEl.textContent = String(ativas);
+          instDescTabEl.textContent = String(desconectadas);
+          instTotalTabEl.textContent = `Total: ${total}`;
+        }
+
+        updateTabAccessRules();
+      }
+
+      function getInstanceUsage(instanceName) {
+        const key = String(instanceName || "").trim();
+        const current = instanceUsageByName[key];
+        return {
+          useAquecedor: current ? current.useAquecedor !== false : true,
+          useDisparador: current ? current.useDisparador !== false : true,
+        };
+      }
+
+      async function loadInstanceUsageConfig() {
+        try {
+          const response = await fetchWithTimeout("/instancias/uso-config", {}, 10000);
+          if (!response.ok) return;
+          const payload = await response.json().catch(() => ({}));
+          const items = Array.isArray(payload?.items) ? payload.items : [];
+          const map = {};
+          items.forEach((row) => {
+            const key = String(row?.instanceName || "").trim();
+            if (!key) return;
+            map[key] = {
+              useAquecedor: row?.useAquecedor !== false,
+              useDisparador: row?.useDisparador !== false,
+              updatedAt: row?.updatedAt || "",
+            };
+          });
+          instanceUsageByName = map;
+        } catch {
+          // segue com defaults em memória
+        }
+      }
+
+      async function saveInstanceUsageConfig(instanceName, nextUsage) {
+        const key = String(instanceName || "").trim();
+        if (!key) return;
+        const previous = getInstanceUsage(key);
+        instanceUsageByName[key] = {
+          useAquecedor: nextUsage.useAquecedor !== false,
+          useDisparador: nextUsage.useDisparador !== false,
+          updatedAt: new Date().toISOString(),
+        };
+        try {
+          const response = await fetchWithTimeout(
+            "/instancias/uso-config",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                items: [
+                  {
+                    instanceName: key,
+                    useAquecedor: instanceUsageByName[key].useAquecedor,
+                    useDisparador: instanceUsageByName[key].useDisparador,
+                  },
+                ],
+              }),
+            },
+            10000
+          );
+          if (!response.ok) {
+            instanceUsageByName[key] = previous;
+            showToast("Falha ao salvar uso da instância.", "error");
+          }
+        } catch {
+          instanceUsageByName[key] = previous;
+          showToast("Erro ao salvar uso da instância.", "error");
+        }
+      }
+
+      async function toggleSafeNumber(instanceName) {
+        const key = String(instanceName || "").trim();
+        if (!key) return;
+        const current = getInstanceUsage(key);
+        const isSafeNow = !current.useAquecedor && !current.useDisparador;
+        const next = isSafeNow
+          ? { useAquecedor: true, useDisparador: true }
+          : { useAquecedor: false, useDisparador: false };
+        await saveInstanceUsageConfig(key, next);
+        renderInstancesList();
+        updateInstancesIndicators();
+        showToast(
+          isSafeNow
+            ? `Instância ${key} removida de Número Seguro.`
+            : `Instância ${key} marcada como Número Seguro.`,
+          "success"
+        );
+      }
+
+      function renderInstancesList() {
+        const container = document.getElementById("instances-list");
+        if (!container) return;
+        container.innerHTML = "";
+
+        const base = buildOrderedInstancesBase();
+        updateInstancesIndicators();
+        let filtered = base;
+        if (instancesStatusFilter === "open") {
+          filtered = filtered.filter((i) => i.isOpen);
+        } else if (instancesStatusFilter === "closed") {
+          filtered = filtered.filter((i) => !i.isOpen);
+        }
+
+        if (instancesSearchTerm) {
+          const term = instancesSearchTerm.toLowerCase();
+          filtered = filtered.filter((i) =>
+            i.displayName.toLowerCase().includes(term)
+          );
+        }
+
+        const countLabel = document.getElementById("instancias-count-label");
+        if (countLabel) {
+          countLabel.textContent = `${filtered.length} exibidas`;
+        }
+
+        if (!filtered.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <span>Nenhuma instância encontrada.</span>
+              <span class="muted">Ajuste os filtros ou aguarde a próxima atualização.</span>
+            </div>
+          `;
+          return;
+        }
+
+        const table = document.createElement("table");
+        table.className = "instances-table";
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th style="width:38px"></th>
+              <th>Número</th>
+              <th>Nome</th>
+              <th>Instância</th>
+              <th>Contatos</th>
+              <th>Mensagens</th>
+              <th>Aquecedor</th>
+              <th>Disparador</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        `;
+
+        const tbody = table.querySelector("tbody");
+        filtered.forEach((inst) => {
+          const usage = getInstanceUsage(inst.instanceName);
+          const isSafeNumber = !usage.useAquecedor && !usage.useDisparador;
+          const tr = document.createElement("tr");
+          const avatarSrc =
+            inst.profilePicUrl && inst.profilePicUrl.length > 0
+              ? `${inst.profilePicUrl}${
+                  inst.profilePicUrl.includes("?") ? "&" : "?"
+                }v=${encodeURIComponent(inst.avatarVersion || "1")}`
+              : "";
+
+          const avatarCell = avatarSrc
+            ? `<img class="instance-avatar-img" src="${avatarSrc}" alt="Foto de perfil" loading="lazy" referrerpolicy="no-referrer" />`
+            : `<span class="instance-avatar">◎</span>`;
+
+          const isDisconnected = !inst.isOpen;
+          const refreshClass = isDisconnected
+            ? "instance-action-btn btn-refresh enabled"
+            : "instance-action-btn btn-refresh disabled";
+          const qrcodeClass = isDisconnected
+            ? "instance-action-btn btn-qrcode enabled"
+            : "instance-action-btn btn-qrcode disabled";
+          const deleteClass = "instance-action-btn btn-delete enabled";
+          const safeClass = `instance-action-btn btn-safe enabled${isSafeNumber ? " active" : ""}`;
+
+          tr.innerHTML = `
+            <td>${avatarCell}</td>
+            <td>${inst.displayNumber}</td>
+            <td>${inst.displayName}</td>
+            <td>${inst.instanceName}</td>
+            <td>${inst.contacts.toLocaleString("pt-BR")}</td>
+            <td>${inst.messages.toLocaleString("pt-BR")}</td>
+            <td>
+              <label class="aquecedor-toggle" style="margin:0;">
+                <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} />
+              </label>
+            </td>
+            <td>
+              <label class="aquecedor-toggle" style="margin:0;">
+                <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} />
+              </label>
+            </td>
+            <td><span class="status-text ${
+              inst.isOpen ? "connected" : "disconnected"
+            }">${inst.statusLabel}</span></td>
+            <td>
+              <div class="instance-actions">
+                <button class="${refreshClass}" type="button" data-action="refresh" data-instance="${inst.instanceName}" data-enabled="${
+                  isDisconnected ? "1" : "0"
+                }" data-number="${inst.originalNumber || ""}">
+                  Atualizar</button>
+                <button class="${qrcodeClass}" type="button" data-action="qrcode" data-instance="${inst.instanceName}" data-enabled="${
+                  isDisconnected ? "1" : "0"
+                }" data-number="${inst.originalNumber || ""}">QRCode</button>
+                <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="1">
+                  Número Seguro
+                </button>
+                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-enabled="1">Deletar</button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        container.appendChild(table);
+      }
+
+      function openDeleteConfirm(instanceName) {
+        deleteConfirmInstanceName = instanceName;
+        const overlay = document.getElementById("confirm-delete-overlay");
+        const nameEl = document.getElementById("confirm-instance-name");
+        const inputEl = document.getElementById("confirm-instance-input");
+        const confirmBtn = document.getElementById("confirm-delete-btn");
+        if (!overlay || !nameEl || !inputEl || !confirmBtn) return;
+        nameEl.textContent = instanceName;
+        inputEl.value = "";
+        confirmBtn.classList.add("disabled");
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        inputEl.focus();
+      }
+
+      function closeDeleteConfirm() {
+        const overlay = document.getElementById("confirm-delete-overlay");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+        deleteConfirmInstanceName = "";
+      }
+
+      function generateTokenLike() {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const chunk = () =>
+          Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join(
+            ""
+          );
+        return `${chunk().slice(0, 4)}${chunk().slice(4, 8)}-${chunk().slice(
+          8,
+          12
+        )}-${chunk().slice(0, 4)}-${chunk().slice(4, 8)}-${chunk().slice(8, 12)}`;
+      }
+
+      function openRegisterModal(instanceName, number, options = {}) {
+        registerModalDefaultName = instanceName || "";
+        const overlay = document.getElementById("register-instance-overlay");
+        const nameInput = document.getElementById("register-name-input");
+        const tokenInput = document.getElementById("register-token-input");
+        const numberInput = document.getElementById("register-number-input");
+        const qrPreview = document.getElementById("register-qrcode-preview");
+        const refreshQrBtn = document.getElementById("register-refresh-qrcode-btn");
+        if (!overlay || !nameInput || !tokenInput || !numberInput || !qrPreview) return;
+        const safeNumber = String(number || "").trim();
+        const showRefreshQr = options?.showRefreshQr !== false;
+        nameInput.value = instanceName || "";
+        tokenInput.value = generateTokenLike();
+        numberInput.value = safeNumber === "—" ? "" : safeNumber;
+        qrPreview.classList.remove("open");
+        qrPreview.innerHTML = "";
+        if (refreshQrBtn) {
+          refreshQrBtn.style.display = showRefreshQr ? "inline-flex" : "none";
+        }
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        nameInput.focus();
+      }
+
+      function closeRegisterModal() {
+        const overlay = document.getElementById("register-instance-overlay");
+        const qrPreview = document.getElementById("register-qrcode-preview");
+        const statusEl = document.getElementById("register-connect-status");
+        if (!overlay || !qrPreview || !statusEl) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+        qrPreview.classList.remove("open");
+        qrPreview.innerHTML = "";
+        statusEl.className = "connect-status";
+        statusEl.innerHTML = "";
+        if (registerConnectPollTimer) {
+          clearInterval(registerConnectPollTimer);
+          registerConnectPollTimer = null;
+        }
+        registerConnectPollStartedAt = 0;
+      }
+
+      function setRegisterConnectStatus(mode, text) {
+        const statusEl = document.getElementById("register-connect-status");
+        if (!statusEl) return;
+        statusEl.className = `connect-status open ${mode}`;
+        if (mode === "loading") {
+          statusEl.innerHTML = `<span class="spinner-dot"></span><span>${text}</span>`;
+        } else {
+          statusEl.innerHTML = `<span>${text}</span>`;
+        }
+      }
+
+      function startRegisterConnectPolling(instanceName) {
+        if (registerConnectPollTimer) {
+          clearInterval(registerConnectPollTimer);
+          registerConnectPollTimer = null;
+        }
+        registerConnectPollStartedAt = Date.now();
+        setRegisterConnectStatus("loading", "Dispositivo sendo conectado...");
+
+        registerConnectPollTimer = setInterval(async () => {
+          try {
+            const elapsed = Date.now() - registerConnectPollStartedAt;
+            if (elapsed > 120000) {
+              clearInterval(registerConnectPollTimer);
+              registerConnectPollTimer = null;
+              setRegisterConnectStatus(
+                "loading",
+                "Conexão em andamento. Aguarde mais alguns segundos."
+              );
+              return;
+            }
+
+            const response = await fetchWithTimeout("/instancias", {}, 10000);
+            if (!response.ok) return;
+            const payload = await response.json().catch(() => null);
+            const items = Array.isArray(payload?.items) ? payload.items : [];
+            const match = items.find((item) => {
+              const itemName = String(item?.name || item?.instanceName || "").trim();
+              return itemName === instanceName;
+            });
+            if (!match) return;
+            const status = String(match?.connectionStatus || "").toLowerCase();
+            if (status.includes("open")) {
+              clearInterval(registerConnectPollTimer);
+              registerConnectPollTimer = null;
+              setRegisterConnectStatus(
+                "success",
+                "Dispositivo integrado com sucesso."
+              );
+              await carregar();
+              setTimeout(() => closeRegisterModal(), 1500);
+            }
+          } catch {
+            // silencioso para não poluir UX durante polling
+          }
+        }, 3000);
+      }
+
+      function resolveQrImageSrcFromPayload(data) {
+        const normalizeCandidate = (value) => {
+          if (typeof value !== "string") return "";
+          const raw = value.trim();
+          if (!raw) return "";
+          if (raw.startsWith("data:image")) return raw;
+          if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+          if (/^[A-Za-z0-9+/=\r\n]+$/.test(raw) && raw.length >= 100) {
+            return `data:image/png;base64,${raw.replace(/\s+/g, "")}`;
+          }
+          return "";
+        };
+
+        const visit = (node, depth = 0) => {
+          if (depth > 6 || node == null) return "";
+          const direct = normalizeCandidate(node);
+          if (direct) return direct;
+
+          if (Array.isArray(node)) {
+            for (const item of node) {
+              const found = visit(item, depth + 1);
+              if (found) return found;
+            }
+            return "";
+          }
+          if (typeof node !== "object") return "";
+
+          const priorityKeys = [
+            "qrCode",
+            "qrcode",
+            "qr",
+            "base64",
+            "code",
+            "pairingCode",
+            "pairingcode",
+            "providerResponse",
+            "data",
+          ];
+          for (const key of priorityKeys) {
+            if (Object.prototype.hasOwnProperty.call(node, key)) {
+              const found = visit(node[key], depth + 1);
+              if (found) return found;
+            }
+          }
+          for (const [key, value] of Object.entries(node)) {
+            if (!/(qr|qrcode|base64|code|pairing)/i.test(key)) continue;
+            const found = visit(value, depth + 1);
+            if (found) return found;
+          }
+          return "";
+        };
+
+        return visit(data);
+      }
+
+      async function refreshQrCodeInRegisterModal() {
+        const nameInput = document.getElementById("register-name-input");
+        const numberInput = document.getElementById("register-number-input");
+        const qrPreview = document.getElementById("register-qrcode-preview");
+        const refreshBtn = document.getElementById("register-refresh-qrcode-btn");
+        if (!nameInput || !numberInput || !qrPreview || !refreshBtn) return;
+
+        const name = String(nameInput.value || "").trim();
+        const number = String(numberInput.value || "").trim();
+        if (!name) {
+          showToast("Informe o Nome da instância.", "warning");
+          nameInput.focus();
+          return;
+        }
+
+        const originalLabel = refreshBtn.textContent;
+        refreshBtn.textContent = "Atualizando...";
+        refreshBtn.classList.add("disabled");
+        refreshBtn.setAttribute("disabled", "true");
+        try {
+          qrPreview.classList.add("open");
+          qrPreview.innerHTML =
+            '<span class="muted">Gerando novo QRCode de conexão...</span>';
+
+          const url = `/instancias/${encodeURIComponent(
+            name
+          )}/qrcode${number ? `?number=${encodeURIComponent(number)}` : ""}`;
+          const response = await fetchWithTimeout(
+            url,
+            { method: "POST", headers: { "Content-Type": "application/json" } },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao atualizar QRCode.", "error");
+            return;
+          }
+
+          const imgSrc = resolveQrImageSrcFromPayload(data);
+          if (!imgSrc) {
+            qrPreview.innerHTML =
+              '<span class="muted">QRCode solicitado, mas a EVO não retornou imagem nesta resposta.</span>';
+          } else {
+            qrPreview.innerHTML = `<img src="${imgSrc}" alt="QRCode de conexão" />`;
+          }
+
+          setRegisterConnectStatus("loading", "Dispositivo sendo conectado...");
+          startRegisterConnectPolling(name);
+          await carregar();
+        } catch (error) {
+          showToast("Erro ao atualizar QRCode da instância.", "error");
+        } finally {
+          refreshBtn.textContent = originalLabel || "Atualizar QRCode";
+          refreshBtn.classList.remove("disabled");
+          refreshBtn.removeAttribute("disabled");
+        }
+      }
+
+      async function callInstanceAction(action, instanceName, number = "") {
+        try {
+          if (!instanceName) return;
+
+          if (action === "qrcode") {
+            openRegisterModal(instanceName, number);
+            await refreshQrCodeInRegisterModal();
+            return;
+          }
+
+          let url = "";
+          let method = "POST";
+          if (action === "refresh") {
+            url = `/instancias/${encodeURIComponent(instanceName)}/atualizar`;
+          } else if (action === "delete") {
+            url = `/instancias/${encodeURIComponent(instanceName)}`;
+            method = "DELETE";
+          } else {
+            return;
+          }
+
+          const response = await fetchWithTimeout(
+            url,
+            { method, headers: { "Content-Type": "application/json" } },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao executar ação.", "error");
+            return;
+          }
+
+          showToast(data?.message || "Ação executada com sucesso.", "success");
+          await carregar();
+        } catch (error) {
+          showToast("Erro ao executar ação da instância.", "error");
+        }
+      }
+
+      async function registerAndGenerateQrCode() {
+        const nameInput = document.getElementById("register-name-input");
+        const tokenInput = document.getElementById("register-token-input");
+        const numberInput = document.getElementById("register-number-input");
+        const qrPreview = document.getElementById("register-qrcode-preview");
+        const actionBtn = document.getElementById("register-qrcode-btn");
+
+        if (
+          !nameInput ||
+          !tokenInput ||
+          !numberInput ||
+          !qrPreview ||
+          !actionBtn
+        ) {
+          return;
+        }
+
+        const name = String(nameInput.value || "").trim();
+        const token = String(tokenInput.value || "").trim();
+        const number = String(numberInput.value || "").trim();
+
+        if (!name) {
+          showToast("Informe o Nome da instância.", "warning");
+          nameInput.focus();
+          return;
+        }
+
+        // Regra: impedir nome duplicado entre instâncias ativas/conectadas.
+        const duplicatedActive = (Array.isArray(instancesData?.items) ? instancesData.items : []).some(
+          (item) => {
+            const existingName = String(item?.name || item?.instanceName || "").trim();
+            const status = String(item?.connectionStatus || "").toLowerCase();
+            return existingName.toLowerCase() === name.toLowerCase() && status.includes("open");
+          }
+        );
+        if (duplicatedActive) {
+          showToast(
+            "Já existe uma instância ativa/conectada com este nome. Use outro nome.",
+            "warning"
+          );
+          nameInput.focus();
+          return;
+        }
+        if (!token) {
+          showToast("Informe o Token da instância.", "warning");
+          tokenInput.focus();
+          return;
+        }
+
+        actionBtn.textContent = "Gerando...";
+        actionBtn.classList.add("disabled");
+
+        try {
+          const response = await fetchWithTimeout(
+            "/instancias/registrar-qrcode",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name, token, number }),
+            },
+            20000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao gerar QRCode.", "error");
+            return;
+          }
+
+          const imgSrc = resolveQrImageSrcFromPayload(data);
+          if (!imgSrc) {
+            qrPreview.classList.add("open");
+            qrPreview.innerHTML =
+              '<span class="muted">Dados salvos, mas não foi retornado QRCode nesta resposta.</span>';
+          } else {
+            qrPreview.classList.add("open");
+            qrPreview.innerHTML = `<img src="${imgSrc}" alt="QRCode de conexão" />`;
+          }
+
+          startRegisterConnectPolling(name);
+          await carregar();
+        } catch (error) {
+          showToast("Erro ao registrar e gerar QRCode.", "error");
+        } finally {
+          actionBtn.textContent = "Gerar QRCode";
+          actionBtn.classList.remove("disabled");
+        }
       }
 
       function parseDateTime(str) {
@@ -2045,43 +5308,12 @@
               // mantém último cache
             }
           }
+          await loadInstanceUsageConfig();
 
           // Se não estamos na aba Dashboard, não carregamos o payload de /dados.
           // Mesmo assim, mantemos o resumo/lista de instâncias atualizado.
           if (!shouldFetchDados) {
-            const instAtivasEl = document.getElementById("instances-active");
-            const instDescEl = document.getElementById(
-              "instances-disconnected"
-            );
-            const instTotalEl = document.getElementById("instances-total");
-
-            if (instAtivasEl && instDescEl && instTotalEl) {
-              instAtivasEl.textContent = String(instancesData.ativas ?? 0);
-              instDescEl.textContent = String(
-                instancesData.desconectadas ?? 0
-              );
-              instTotalEl.textContent = `Total: ${instancesData.total ?? 0}`;
-            }
-
-            const instAtivasTabEl = document.getElementById(
-              "instances-active-tab"
-            );
-            const instDescTabEl = document.getElementById(
-              "instances-disconnected-tab"
-            );
-            const instTotalTabEl = document.getElementById(
-              "instances-total-tab"
-            );
-
-            if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
-              instAtivasTabEl.textContent = String(instancesData.ativas ?? 0);
-              instDescTabEl.textContent = String(
-                instancesData.desconectadas ?? 0
-              );
-              instTotalTabEl.textContent = `Total: ${
-                instancesData.total ?? 0
-              }`;
-            }
+            updateInstancesIndicators();
 
             if (activeTab === "instancias") {
               renderInstancesList();
@@ -2179,6 +5411,13 @@
 
       document.querySelectorAll(".tab-button[data-tab]").forEach((btn) => {
         btn.addEventListener("click", () => {
+          if (btn.classList.contains("disabled")) {
+            showToast(
+              "Esta página é habilitada com pelo menos 2 instâncias configuradas.",
+              "warning"
+            );
+            return;
+          }
           const tab = btn.getAttribute("data-tab");
           if (!tab) return;
           setActiveTab(tab);
@@ -2186,7 +5425,409 @@
         });
       });
 
+      document.addEventListener("change", async (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        if (!target.classList.contains("instance-role-toggle")) return;
+        const instanceName = target.getAttribute("data-instance") || "";
+        const role = target.getAttribute("data-role") || "";
+        const current = getInstanceUsage(instanceName);
+        const next = {
+          useAquecedor: current.useAquecedor,
+          useDisparador: current.useDisparador,
+        };
+        if (role === "aquecedor") next.useAquecedor = target.checked;
+        if (role === "disparador") next.useDisparador = target.checked;
+        await saveInstanceUsageConfig(instanceName, next);
+        updateInstancesIndicators();
+      });
+
+      const instancesSearchInput = document.getElementById("instances-search");
+      if (instancesSearchInput) {
+        instancesSearchInput.addEventListener("input", (e) => {
+          instancesSearchTerm = String(e.target.value || "").trim();
+          renderInstancesList();
+        });
+      }
+
+      const instancesStatusFilters = document.getElementById(
+        "instances-status-filters"
+      );
+      if (instancesStatusFilters) {
+        instancesStatusFilters.addEventListener("click", (e) => {
+          const btn = e.target.closest(".instances-chip");
+          if (!btn) return;
+          instancesStatusFilter = btn.getAttribute("data-status") || "all";
+
+          instancesStatusFilters
+            .querySelectorAll(".instances-chip")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+
+          renderInstancesList();
+        });
+      }
+
+      const instancesRefreshBtn = document.getElementById("instances-refresh-btn");
+      if (instancesRefreshBtn) {
+        instancesRefreshBtn.addEventListener("click", async () => {
+          const original = instancesRefreshBtn.textContent;
+          instancesRefreshBtn.textContent = "Atualizando...";
+          instancesRefreshBtn.setAttribute("disabled", "true");
+          try {
+            await carregar();
+          } finally {
+            instancesRefreshBtn.textContent = original || "Atualizar";
+            instancesRefreshBtn.removeAttribute("disabled");
+          }
+        });
+      }
+
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest(".instance-action-btn[data-action]");
+        if (!btn) return;
+        const enabled = btn.getAttribute("data-enabled") === "1";
+        if (!enabled) return;
+        const action = btn.getAttribute("data-action");
+        const instanceName = btn.getAttribute("data-instance") || "";
+        const number = btn.getAttribute("data-number") || "";
+        if (action === "refresh") {
+          openRegisterModal(instanceName, number);
+          return;
+        }
+        if (action === "safe-number") {
+          toggleSafeNumber(instanceName);
+          return;
+        }
+        if (action === "delete") {
+          openDeleteConfirm(instanceName);
+          return;
+        }
+        callInstanceAction(action, instanceName, number);
+      });
+
+      const confirmInput = document.getElementById("confirm-instance-input");
+      const confirmDeleteBtn = document.getElementById("confirm-delete-btn");
+      const confirmCancelBtn = document.getElementById("confirm-cancel-btn");
+      const confirmOverlay = document.getElementById("confirm-delete-overlay");
+
+      if (confirmInput && confirmDeleteBtn) {
+        confirmInput.addEventListener("input", () => {
+          const ok =
+            String(confirmInput.value || "").trim() === deleteConfirmInstanceName;
+          confirmDeleteBtn.classList.toggle("disabled", !ok);
+        });
+      }
+
+      if (confirmCancelBtn) {
+        confirmCancelBtn.addEventListener("click", () => closeDeleteConfirm());
+      }
+
+      if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener("click", async () => {
+          if (confirmDeleteBtn.classList.contains("disabled")) return;
+          const instanceName = deleteConfirmInstanceName;
+          closeDeleteConfirm();
+          await callInstanceAction("delete", instanceName);
+        });
+      }
+
+      if (confirmOverlay) {
+        confirmOverlay.addEventListener("click", (e) => {
+          if (e.target === confirmOverlay) closeDeleteConfirm();
+        });
+      }
+
+      const registerOverlay = document.getElementById("register-instance-overlay");
+      const registerCancelBtn = document.getElementById("register-cancel-btn");
+      const registerQrBtn = document.getElementById("register-qrcode-btn");
+      const registerRefreshQrBtn = document.getElementById(
+        "register-refresh-qrcode-btn"
+      );
+      const newInstanceBtn = document.getElementById("new-instance-btn");
+      const aquecedorToggle = document.getElementById("aquecedor-use-recommended");
+      const aquecedorSaveBtn = document.getElementById("aquecedor-save-btn");
+      const aquecedorStartBtn = document.getElementById("aquecedor-start-btn");
+      const aquecedorStopBtn = document.getElementById("aquecedor-stop-btn");
+      const aquecedorRunOnceBtn = document.getElementById("aquecedor-run-once-btn");
+
+      if (registerCancelBtn) {
+        registerCancelBtn.addEventListener("click", () => closeRegisterModal());
+      }
+
+      if (registerQrBtn) {
+        registerQrBtn.addEventListener("click", () => registerAndGenerateQrCode());
+      }
+
+      if (registerRefreshQrBtn) {
+        registerRefreshQrBtn.addEventListener("click", () =>
+          refreshQrCodeInRegisterModal()
+        );
+      }
+
+      if (newInstanceBtn) {
+        newInstanceBtn.addEventListener("click", () =>
+          openRegisterModal("", "", { showRefreshQr: false })
+        );
+      }
+
+      if (aquecedorToggle) {
+        aquecedorToggle.addEventListener("change", () => {
+          const useRecommended = Boolean(aquecedorToggle.checked);
+          if (useRecommended) {
+            setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
+          }
+          setAquecedorFormDisabled(useRecommended);
+          updateRemoveButtonsVisibility();
+        });
+      }
+
+      const aqExpAddBtn = document.getElementById("aq-exp-add-btn");
+      if (aqExpAddBtn) {
+        aqExpAddBtn.addEventListener("click", () => {
+          const days = [];
+          document
+            .querySelectorAll("#tab-aquecedor .aquecedor-day-chk input:checked")
+            .forEach((cb) => {
+            const d = cb.getAttribute("data-day");
+            if (d) days.push(d);
+          });
+          const startHour = Math.floor(Number(document.getElementById("aq-exp-inicio")?.value || 7));
+          const endHour = Math.floor(Number(document.getElementById("aq-exp-fim")?.value || 22));
+          if (days.length === 0) {
+            showToast("Selecione pelo menos um dia.", "error");
+            return;
+          }
+          if (endHour <= startHour) {
+            showToast("Hora fim deve ser maior que início.", "error");
+            return;
+          }
+          aquecedorExpedienteBatches.push({
+            days,
+            startHour: Math.max(0, Math.min(23, startHour)),
+            endHour: Math.max(1, Math.min(24, endHour)),
+          });
+          document
+            .querySelectorAll("#tab-aquecedor .aquecedor-day-chk input")
+            .forEach((cb) => (cb.checked = false));
+          const expInicio = document.getElementById("aq-exp-inicio");
+          const expFim = document.getElementById("aq-exp-fim");
+          if (expInicio) expInicio.value = "";
+          if (expFim) expFim.value = "";
+          renderExpedienteBatches();
+        });
+      }
+
+      if (aquecedorSaveBtn) {
+        aquecedorSaveBtn.addEventListener("click", () => saveAquecedorConfig());
+      }
+      if (aquecedorStartBtn) {
+        aquecedorStartBtn.addEventListener("click", () =>
+          callAquecedorRuntimeAction("start", aquecedorStartBtn)
+        );
+      }
+      if (aquecedorStopBtn) {
+        aquecedorStopBtn.addEventListener("click", () =>
+          callAquecedorRuntimeAction("stop", aquecedorStopBtn)
+        );
+      }
+      if (aquecedorRunOnceBtn) {
+        aquecedorRunOnceBtn.addEventListener("click", () =>
+          callAquecedorRuntimeAction("runOnce", aquecedorRunOnceBtn)
+        );
+      }
+      const aquecedorDiagnosticoBtn = document.getElementById("aquecedor-diagnostico-btn");
+      if (aquecedorDiagnosticoBtn) {
+        aquecedorDiagnosticoBtn.addEventListener("click", async () => {
+          aquecedorDiagnosticoBtn.textContent = "Consultando...";
+          aquecedorDiagnosticoBtn.classList.add("disabled");
+          aquecedorDiagnosticoBtn.setAttribute("disabled", "true");
+          try {
+            const response = await fetchWithTimeout("/aquecedor/diagnostico", {}, 10000);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              const errMsg = data?.error || `HTTP ${response.status}`;
+              addAquecedorCommandLog("Diagnóstico: erro ao obter dados — " + errMsg);
+              return;
+            }
+            const evo = data?.evo || {};
+            const evoOk = evo.ok && (evo.connectedCount || 0) >= 2;
+            const sup = data?.supabase || {};
+            const supOk = sup.ok;
+            const janela = data?.janela || {};
+            const janelaOk = janela.aberta === true;
+            const proxOk = !!data?.proximaCombinacao;
+            const parts = [
+              "EVO: " + (evoOk ? "Ok" : "Erro"),
+              "Fila: " + (supOk ? "Ok" : "Erro"),
+              "Janela: " + (janelaOk ? "Ok" : "Erro"),
+              "Próxima combinação: " + (proxOk ? "Ok" : "Erro"),
+            ];
+            addAquecedorCommandLog("Diagnóstico: " + parts.join(" | "));
+            try {
+              const flRes = await fetchWithTimeout("/aquecedor/fila-localizar", {}, 8000);
+              const fl = await flRes.json().catch(() => ({}));
+              if (flRes.ok && fl) {
+                const proc = fl.processando || [];
+                const pend = fl.pendenteCount ?? 0;
+                let loc = `Fila: ${pend} PENDENTE, ${proc.length} PROCESSANDO`;
+                if (proc.length) {
+                  proc.forEach((p) => {
+                    loc += ` | id ${p.id} (${p.instancia || "—"}) há ${p.minutosEmProcessando ?? "?"} min`;
+                  });
+                }
+                loc += fl.motorRodando ? " | Motor: ativo" : " | Motor: parado";
+                if (fl.proximoPermitido) loc += " | Próximo envio após intervalo";
+                if (fl.ultimoResultado) loc += ` | Último: ${fl.ultimoResultado}`;
+                addAquecedorCommandLog("Localização: " + loc);
+                if (fl.lastEvoError) {
+                  addAquecedorCommandLog(`Detalhe EVO: HTTP ${fl.lastEvoError.status} | instance: ${fl.lastEvoError.instance} | numeroLen: ${fl.lastEvoError.numeroLen} | body: ${(fl.lastEvoError.body || "").slice(0, 200)}`);
+                }
+              }
+            } catch (_) {}
+          } catch {
+            addAquecedorCommandLog("Diagnóstico: erro ao consultar.");
+          } finally {
+            aquecedorDiagnosticoBtn.textContent = "Diagnóstico";
+            aquecedorDiagnosticoBtn.classList.remove("disabled");
+            aquecedorDiagnosticoBtn.removeAttribute("disabled");
+          }
+        });
+      }
+      const aquecedorCriarTesteBtn = document.getElementById("aquecedor-criar-teste-btn");
+      if (aquecedorCriarTesteBtn) {
+        aquecedorCriarTesteBtn.addEventListener("click", async () => {
+          aquecedorCriarTesteBtn.textContent = "Criando...";
+          aquecedorCriarTesteBtn.classList.add("disabled");
+          aquecedorCriarTesteBtn.setAttribute("disabled", "true");
+          try {
+            const response = await fetchWithTimeout(
+              "/aquecedor/criar-mensagem-teste",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+              },
+              90000
+            );
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              addAquecedorCommandLog("Criar mensagem teste: falha.");
+              return;
+            }
+            addAquecedorCommandLog("Mensagem de teste criada na fila (id: " + (data?.id ?? "—") + "). Ciclo executado.");
+            showToast(data?.message || "Mensagem de teste criada.", "success");
+            const lastResult = data?.status?.lastResult;
+            if (lastResult && String(lastResult).toLowerCase().includes("sucesso")) {
+              showAquecedorStartStopButtons();
+            }
+            await loadAquecedorRuntimeStatus();
+            if (data?.item) {
+              const container = document.getElementById("aquecedor-envios-list");
+              if (container) {
+                const placeholder = container.querySelector(".muted");
+                if (placeholder) placeholder.remove();
+                const row = document.createElement("div");
+                row.className = "aquecedor-envio-item";
+                const origem = String(data.item.instanciaOrigem || "—");
+                const destino = String(data.item.instanciaDestino || "—");
+                const when = data.item.dataEnvioBr ?? (data.item.dataEnvio ? new Date(data.item.dataEnvio).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "sem data");
+                row.innerHTML = `
+                  <div class="aquecedor-envio-main">${origem} → ${destino}</div>
+                  <div class="aquecedor-envio-time">${when} - Em Fila</div>
+                `;
+                container.insertBefore(row, container.firstChild);
+              }
+            }
+            setTimeout(() => loadAquecedorEnvios(), 500);
+          } catch {
+            addAquecedorCommandLog("Criar mensagem teste: erro.");
+          } finally {
+            aquecedorCriarTesteBtn.textContent = "Criar mensagem teste";
+            aquecedorCriarTesteBtn.classList.remove("disabled");
+            aquecedorCriarTesteBtn.removeAttribute("disabled");
+          }
+        });
+      }
+      const aquecedorEnviosRefreshBtn = document.getElementById("aquecedor-envios-refresh-btn");
+      if (aquecedorEnviosRefreshBtn) {
+        aquecedorEnviosRefreshBtn.addEventListener("click", () => {
+          aquecedorEnviosRefreshBtn.textContent = "Atualizando...";
+          aquecedorEnviosRefreshBtn.setAttribute("disabled", "true");
+          loadAquecedorEnvios().finally(() => {
+            aquecedorEnviosRefreshBtn.textContent = "Atualizar";
+            aquecedorEnviosRefreshBtn.removeAttribute("disabled");
+          });
+        });
+      }
+      const disparosRefreshBtn = document.getElementById("disparos-refresh-btn");
+      if (disparosRefreshBtn) {
+        disparosRefreshBtn.addEventListener("click", () => {
+          disparosRefreshBtn.textContent = "Atualizando...";
+          disparosRefreshBtn.setAttribute("disabled", "true");
+          Promise.all([loadDisparosConfig(), loadDisparosTemplates()]).finally(() => {
+            disparosRefreshBtn.textContent = "Atualizar";
+            disparosRefreshBtn.removeAttribute("disabled");
+          });
+        });
+      }
+      const disModeAi = document.getElementById("dis-mode-ai");
+      const disModeDb = document.getElementById("dis-mode-db");
+      if (disModeAi) disModeAi.addEventListener("change", () => toggleDisparosModeBoxes());
+      if (disModeDb) disModeDb.addEventListener("change", () => toggleDisparosModeBoxes());
+
+      const disSaveBtn = document.getElementById("dis-save-btn");
+      if (disSaveBtn) disSaveBtn.addEventListener("click", () => saveDisparosConfig());
+
+      const disTestShortenerBtn = document.getElementById("dis-test-shortener-btn");
+      if (disTestShortenerBtn) {
+        disTestShortenerBtn.addEventListener("click", () => testDisparosShortener());
+      }
+
+      const disOpenMappingBtn = document.getElementById("dis-open-mapping-btn");
+      if (disOpenMappingBtn) disOpenMappingBtn.addEventListener("click", () => openDisMappingFlow());
+
+      const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");
+      if (disDownloadTemplateBtn) {
+        disDownloadTemplateBtn.addEventListener("click", () => downloadDisparosExcelTemplate());
+      }
+
+      const disMapCancelBtn = document.getElementById("dis-map-cancel-btn");
+      if (disMapCancelBtn) disMapCancelBtn.addEventListener("click", () => closeDisMappingModal());
+
+      const disMapImportBtn = document.getElementById("dis-map-import-btn");
+      if (disMapImportBtn) disMapImportBtn.addEventListener("click", () => importMappedSpreadsheet());
+
+      const disWhatsappTargetInput = document.getElementById("dis-whatsapp-target");
+      if (disWhatsappTargetInput) {
+        disWhatsappTargetInput.addEventListener("input", (e) => {
+          const el = e.target;
+          const formatted = formatWhatsappTarget(el.value);
+          el.value = formatted;
+          validateWhatsappTarget(false);
+        });
+        disWhatsappTargetInput.addEventListener("blur", () => {
+          validateWhatsappTarget(true);
+        });
+      }
+
+      const disMappingOverlay = document.getElementById("dis-mapping-overlay");
+      if (disMappingOverlay) {
+        disMappingOverlay.addEventListener("click", (e) => {
+          if (e.target === disMappingOverlay) closeDisMappingModal();
+        });
+      }
+      if (registerOverlay) {
+        registerOverlay.addEventListener("click", (e) => {
+          if (e.target === registerOverlay) closeRegisterModal();
+        });
+      }
+
       setActiveTab(activeTab);
+      setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
+      setAquecedorFormDisabled(true);
+      setAquecedorEditMode(true);
+      renderAquecedorCommandLogs();
 
       document
         .getElementById("sender-filter")
