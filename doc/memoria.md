@@ -9,16 +9,134 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
-2026-03-21
+2026-03-24
 
 Resumo desta retomada:
-- Fluxo "Atualize tudo" executado: build, revisão de mudanças, documentação, commit e push.
-- `dist/` sincronizado com estado atual de `index.html`/`src`.
+- Painel direito `Campanhas`: cada card tem botao que alterna entre **Ativar campanha** e **Pausar** conforme `status` (`running` vs pausada).
+- Clique chama `POST /disparos/campanhas/:id/estado` com `{ ativa: true|false }`; lista recarrega apos sucesso.
+- Polling a cada 10s na aba Disparos para atualizar progresso sem depender so do botao Atualizar.
+- Backend: `POST .../estado` exige campanha existente (apos hydrate); correcao TypeScript em `mapRowToItem` (`??` com `||` entre parenteses).
 
 Palavras-chave para busca:
-- atualize-tudo
-- build-dist
-- commit-push
+- campanha-ativar-pausar
+- disparos-campanhas-estado
+- btn-campaign-toggle
+- disparosCampaignsPollTimer
+
+---
+
+2026-03-23
+
+Resumo desta retomada:
+- UI Instâncias: ajustado visual dos checkboxes de `Aquecedor` e `Disparador` para verde da paleta.
+- Aplicada regra de `accent-color` para reduzir variação visual na tabela.
+- Build realizado e `dist` sincronizado.
+
+Palavras-chave para busca:
+- ui-instancias
+- toggle-verde
+- aquecedor-disparador-paleta
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Integrada OpenAI (Responses API) no backend para geracao de mensagens do Disparador.
+- Novo endpoint `POST /disparos/gerar-mensagem-ai` com prompt estruturado por briefing/tom/publico/CTA.
+- Novo endpoint `POST /disparos/teste-mensagem-ai` para gerar e enviar mensagem teste via EVO.
+- Adicionados timeout e retry com backoff+jitter para falhas transitivas da API externa.
+
+Palavras-chave para busca:
+- openai-responses-api
+- disparos-gerar-mensagem-ai
+- disparos-teste-mensagem-ai
+- retry-timeout-jitter
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- UI da secao `Mensageiro` atualizada com botao para teste de geracao IA.
+- Adicionado status de retorno e textarea para exibir a mensagem gerada na tela.
+- Frontend conectado ao endpoint `POST /disparos/gerar-mensagem-ai`.
+
+Palavras-chave para busca:
+- mensageiro-gerar-mensagem-teste
+- dis-test-ai-generate-btn
+- dis-ai-test-output
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Geracao de mensagem IA no Mensageiro passou a aceitar URL de acesso e encurtar automaticamente.
+- Mensagem final agora e garantida com link curto (fallback no backend se a IA nao incluir).
+- UI ganhou campo de URL de acesso para teste e exibicao do link curto retornado.
+
+Palavras-chave para busca:
+- mensageiro-link-curto
+- gerar-mensagem-ai-accessurl
+- ensure-message-contains-link
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Criado fluxo de campanhas no Disparador com nome da campanha e importacao de numeros via Excel.
+- Campanha salva com snapshot das configuracoes atuais (selecao de numeros, temporizador, limites, expediente, encurtador e mensageiro).
+- Novo painel lateral de campanhas com data de inicio, nome e barra de progresso.
+
+Palavras-chave para busca:
+- campanhas-disparos
+- disparos-campaigns
+- importacao-excel-numeros
+- progresso-campanha
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Removido input manual de URL na secao Mensageiro.
+- Geracao de mensagem teste passou a usar somente a configuracao do Encurtador de URL.
+- Backend agora gera `wa.me` com numero alvo configurado, encurta e injeta o link na mensagem.
+
+Palavras-chave para busca:
+- remover-input-url-mensageiro
+- encurtador-config-link-automatico
+- gerar-mensagem-ia-com-wa-me
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Corrigido fluxo do teste IA para nunca retornar mensagem sem link.
+- Backend passou a exigir numero alvo e encurtamento obrigatorio antes de montar resposta.
+- Frontend passou a enviar numero alvo atual da tela para evitar dependencia de config desatualizada.
+
+Palavras-chave para busca:
+- mensagem-teste-com-link
+- encurtador-obrigatorio
+- whatsapp-target-number-request
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- UI da seção Campanha com dropzone estilizado (arrastar/soltar + clique).
+- Overlay de processamento durante importação da planilha e criação da campanha.
+- Prévia automática das 10 primeiras linhas após importar.
+
+Palavras-chave para busca:
+- ui-campanha-dropzone
+- preview-planilha-10-linhas
+- dis-campaign-work-overlay
 
 ---
 

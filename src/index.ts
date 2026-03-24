@@ -2,6 +2,7 @@ process.env.TZ = process.env.TZ || "America/Sao_Paulo";
 import express from "express";
 import path from "path";
 import crypto from "crypto";
+import { promises as fs } from "fs";
 import { createClient } from "@supabase/supabase-js";
 import "dotenv/config";
 
@@ -108,6 +109,15 @@ function parseDisparosConfig(input: any): DisparosConfig {
       : "isgd";
   const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
   const safeMode: DisparosConfig["messageMode"] = mode === "database" ? "database" : "ai";
+  const selectedDisparadorInstances: string[] = Array.isArray(input?.selectedDisparadorInstances)
+    ? Array.from(
+        new Set(
+          input.selectedDisparadorInstances
+            .map((n: any) => String(n || "").trim())
+            .filter((n: string) => n.length > 0)
+        )
+      )
+    : [];
   const delayMin = readInt(input?.delayMinSeconds, 10, 3600, DISPAROS_DEFAULTS.delayMinSeconds);
   const delayMax = readInt(input?.delayMaxSeconds, 10, 3600, DISPAROS_DEFAULTS.delayMaxSeconds);
   const safeDelayMin = Math.min(delayMin, delayMax);
@@ -146,6 +156,7 @@ function parseDisparosConfig(input: any): DisparosConfig {
     shortenerProvider: safeProvider,
     shortenerDomain: String(input?.shortenerDomain || "").slice(0, 120),
     whatsappTargetNumber: normalizeWhatsAppNumber(String(input?.whatsappTargetNumber || "")),
+    selectedDisparadorInstances,
   };
 }
 
@@ -198,11 +209,86 @@ const EVO_QRCODE_URL_TEMPLATE =
 const EVO_DELETE_URL_TEMPLATE =
   process.env.EVO_DELETE_URL_TEMPLATE ||
   `${EVO_API_BASE}/instance/delete/{instance}`;
+const EVO_RENAME_URL_TEMPLATE =
+  process.env.EVO_RENAME_URL_TEMPLATE || `${EVO_API_BASE}/instance/rename/{instance}`;
 const EVO_CREATE_INSTANCE_URL =
   process.env.EVO_CREATE_INSTANCE_URL || `${EVO_API_BASE}/instance/create`;
 const EVO_SEND_TEXT_URL_TEMPLATE =
   process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
+const OPENAI_API_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/responses";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const EVO_LIVE_PROFILE_SYNC =
+  process.env.EVO_LIVE_PROFILE_SYNC === "0" || process.env.EVO_LIVE_PROFILE_SYNC === "false"
+    ? false
+    : true;
+const INSTANCE_ALIASES_FILE = path.join(process.cwd(), "data", "instance-aliases.json");
+const WHATSAPP_PROFILE_NAMES_FILE = path.join(process.cwd(), "data", "whatsapp-profile-names.json");
+let instanceAliasesCache: Map<string, string> | null = null;
+let whatsappProfileNamesCache: Map<string, string> | null = null;
+
+async function loadInstanceAliasesMap(): Promise<Map<string, string>> {
+  if (instanceAliasesCache) return new Map(instanceAliasesCache);
+  try {
+    const raw = await fs.readFile(INSTANCE_ALIASES_FILE, "utf-8");
+    const parsed = JSON.parse(raw || "{}");
+    const map = new Map<string, string>();
+    if (parsed && typeof parsed === "object") {
+      Object.entries(parsed).forEach(([k, v]) => {
+        const key = String(k || "").trim();
+        const val = String(v || "").trim();
+        if (key && val) map.set(key, val);
+      });
+    }
+    instanceAliasesCache = map;
+    return new Map(map);
+  } catch {
+    instanceAliasesCache = new Map<string, string>();
+    return new Map(instanceAliasesCache);
+  }
+}
+
+async function persistInstanceAliasesMap(nextMap: Map<string, string>) {
+  instanceAliasesCache = new Map(nextMap);
+  const obj: Record<string, string> = {};
+  nextMap.forEach((v, k) => {
+    if (k && v) obj[k] = v;
+  });
+  await fs.mkdir(path.dirname(INSTANCE_ALIASES_FILE), { recursive: true });
+  await fs.writeFile(INSTANCE_ALIASES_FILE, JSON.stringify(obj, null, 2), "utf-8");
+}
+
+async function loadWhatsappProfileNamesMap(): Promise<Map<string, string>> {
+  if (whatsappProfileNamesCache) return new Map(whatsappProfileNamesCache);
+  try {
+    const raw = await fs.readFile(WHATSAPP_PROFILE_NAMES_FILE, "utf-8");
+    const parsed = JSON.parse(raw || "{}");
+    const map = new Map<string, string>();
+    if (parsed && typeof parsed === "object") {
+      Object.entries(parsed).forEach(([k, v]) => {
+        const key = String(k || "").trim();
+        const val = String(v || "").trim();
+        if (key && val) map.set(key, val);
+      });
+    }
+    whatsappProfileNamesCache = map;
+    return new Map(map);
+  } catch {
+    whatsappProfileNamesCache = new Map<string, string>();
+    return new Map(whatsappProfileNamesCache);
+  }
+}
+
+async function persistWhatsappProfileNamesMap(nextMap: Map<string, string>) {
+  whatsappProfileNamesCache = new Map(nextMap);
+  const obj: Record<string, string> = {};
+  nextMap.forEach((v, k) => {
+    if (k && v) obj[k] = v;
+  });
+  await fs.mkdir(path.dirname(WHATSAPP_PROFILE_NAMES_FILE), { recursive: true });
+  await fs.writeFile(WHATSAPP_PROFILE_NAMES_FILE, JSON.stringify(obj, null, 2), "utf-8");
+}
 
 const DAY_CODES = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const;
 const DAY_TO_NUM: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
@@ -243,6 +329,7 @@ type DisparosConfig = {
   shortenerProvider: "isgd" | "tinyurl";
   shortenerDomain: string;
   whatsappTargetNumber: string;
+  selectedDisparadorInstances: string[];
 };
 
 type MessageTemplate = {
@@ -253,6 +340,25 @@ type MessageTemplate = {
   source: "manual" | "spreadsheet";
   createdAt: string;
   active: boolean;
+};
+
+type DisparosCampaign = {
+  id: string;
+  name: string;
+  createdAt: string;
+  status: "draft" | "running" | "paused" | "finished";
+  totalNumbers: number;
+  sentCount: number;
+  configSnapshot: DisparosConfig;
+};
+
+type DisparosCampaignLead = {
+  id: string;
+  campaignId: string;
+  phone: string;
+  status: "pending" | "sent" | "failed";
+  createdAt: string;
+  sentAt: string | null;
 };
 
 const DISPAROS_DEFAULTS: DisparosConfig = {
@@ -272,10 +378,15 @@ const DISPAROS_DEFAULTS: DisparosConfig = {
   shortenerProvider: "isgd",
   shortenerDomain: "",
   whatsappTargetNumber: "",
+  selectedDisparadorInstances: [],
 };
 
 const instanceUsageMemory = new Map<string, InstanceUsageConfig>();
 const disparosTemplatesMemory: MessageTemplate[] = [];
+const disparosCampaignsMemory: DisparosCampaign[] = [];
+const disparosCampaignLeadsMemory: DisparosCampaignLead[] = [];
+const campaignNextAllowedSendAt = new Map<string, number>();
+const campaignDisparadorRoundRobin = new Map<string, number>();
 let disparosRoundRobinCounter = 0;
 let lastShortUrlIssued = "";
 
@@ -863,6 +974,8 @@ app.get("/dados", async (req, res) => {
 // Status das instancias (Evolution API)
 app.get("/instancias", async (req, res) => {
   try {
+    const aliasesMap = await loadInstanceAliasesMap();
+    const whatsappNamesMap = await loadWhatsappProfileNamesMap();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     let response: Response;
@@ -913,7 +1026,7 @@ app.get("/instancias", async (req, res) => {
     };
 
     // Retorna apenas campos úteis para a UI (evita expor payload sensível)
-    const items = instances.slice(0, 100).map((inst: any, idx: number) => {
+    const baseItems = instances.slice(0, 100).map((inst: any, idx: number) => {
       const candidateName =
         inst.instanceName ??
         inst.name ??
@@ -922,10 +1035,11 @@ app.get("/instancias", async (req, res) => {
         inst.instance ??
         null;
 
-      const displayName =
+      const instanceKey =
         candidateName == null || candidateName === ""
           ? `Instância ${idx + 1}`
           : String(candidateName);
+      const displayName = instanceKey;
 
       const connectionStatus =
         typeof inst.connectionStatus === "string"
@@ -953,12 +1067,7 @@ app.get("/instancias", async (req, res) => {
         inst.stats?.messages
       );
 
-      const number =
-        inst.number ??
-        inst.phone ??
-        inst.owner ??
-        inst.ownerNumber ??
-        "";
+      const number = extractInstanceNumber(inst);
 
       const profilePicUrl =
         typeof inst.profilePicUrl === "string" ? inst.profilePicUrl : "";
@@ -973,9 +1082,14 @@ app.get("/instancias", async (req, res) => {
             ? inst.created_at
             : "";
 
+      const instanceAlias = aliasesMap.get(instanceKey) || "";
+      const whatsappNameOverride = whatsappNamesMap.get(instanceKey) || "";
       return {
-        name: displayName,
-        displayName: String(inst.profileName || displayName),
+        name: instanceKey,
+        // "Nome" da UI = nome de perfil do WhatsApp (não alias técnico da instância).
+        displayName: whatsappNameOverride || String(inst.profileName || displayName),
+        whatsappNameOverride,
+        instanceAlias,
         connectionStatus,
         number: String(number || ""),
         contacts,
@@ -986,12 +1100,133 @@ app.get("/instancias", async (req, res) => {
       };
     });
 
+    let items = baseItems;
+    if (EVO_LIVE_PROFILE_SYNC) {
+      items = await Promise.all(
+        baseItems.map(async (row: any) => {
+          const status = String(row?.connectionStatus || "").toLowerCase();
+          if (!status.includes("open")) return row;
+          const live = await fetchLiveWhatsappProfile(
+            String(row?.name || row?.displayName || ""),
+            String(row?.number || "")
+          );
+          return {
+            ...row,
+            // Prioriza nome vindo da sessão WhatsApp em tempo real.
+            displayName: row.whatsappNameOverride || live.profileName || row.displayName,
+            profilePicUrl: live.profilePicUrl || row.profilePicUrl,
+            avatarVersion: new Date().toISOString(),
+          };
+        })
+      );
+    }
+
     return res.json({ total, ativas, desconectadas, items });
   } catch (error) {
     console.error("Erro ao consultar Evolution API:", error);
     return res
       .status(500)
       .json({ error: "Erro ao consultar Evolution API" });
+  }
+});
+
+app.get("/instancias/avatar", async (req, res) => {
+  try {
+    const rawUrl = String(req.query.url || "").trim();
+    if (!rawUrl) {
+      return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ error: "URL de avatar inválida." });
+    }
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return res.status(400).json({ error: "Protocolo de URL não suportado." });
+    }
+    const host = String(parsed.hostname || "").toLowerCase();
+    const allowedHosts = ["whatsapp.net", "fbcdn.net"];
+    const isAllowed = allowedHosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+    if (!isAllowed) {
+      return res.status(400).json({ error: "Host de avatar não permitido." });
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(parsed.toString(), {
+        method: "GET",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        return res.status(502).json({ error: "Falha ao buscar avatar remoto." });
+      }
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      return res.send(buffer);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (error) {
+    console.error("Erro ao buscar avatar proxy:", error);
+    return res.status(500).json({ error: "Erro ao carregar avatar." });
+  }
+});
+
+app.post("/instancias/:name/alias", async (req, res) => {
+  try {
+    const instanceName = String(req.params.name || "").trim();
+    const alias = String(req.body?.alias || "").trim();
+    if (!instanceName) {
+      return res.status(400).json({ error: "Nome da instância é obrigatório." });
+    }
+    if (!alias) {
+      return res.status(400).json({ error: "Alias é obrigatório." });
+    }
+
+    const map = await loadInstanceAliasesMap();
+    map.set(instanceName, alias);
+    await persistInstanceAliasesMap(map);
+    return res.json({
+      ok: true,
+      message: "Nome da instância salvo com sucesso.",
+      instanceName,
+      alias,
+    });
+  } catch (error) {
+    console.error("Erro ao salvar alias da instância:", error);
+    return res.status(500).json({ error: "Erro ao salvar nome da instância." });
+  }
+});
+
+app.post("/instancias/:name/whatsapp-name", async (req, res) => {
+  try {
+    const instanceName = String(req.params.name || "").trim();
+    const whatsappName = String(req.body?.whatsappName || "").trim();
+    if (!instanceName) {
+      return res.status(400).json({ error: "Nome da instância é obrigatório." });
+    }
+    if (!whatsappName) {
+      return res.status(400).json({ error: "Nome (WhatsApp) é obrigatório." });
+    }
+    const map = await loadWhatsappProfileNamesMap();
+    map.set(instanceName, whatsappName);
+    await persistWhatsappProfileNamesMap(map);
+    return res.json({
+      ok: true,
+      message: "Nome (WhatsApp) salvo com sucesso.",
+      instanceName,
+      whatsappName,
+    });
+  } catch (error) {
+    console.error("Erro ao salvar nome WhatsApp da instância:", error);
+    return res.status(500).json({ error: "Erro ao salvar nome (WhatsApp)." });
   }
 });
 
@@ -1046,6 +1281,11 @@ function normalizeWhatsAppNumber(num: string): string {
   return digits;
 }
 
+function normalizeCampaignPhone(input: string): string {
+  const normalized = normalizeWhatsAppNumber(String(input || ""));
+  return String(normalized || "").replace(/\D/g, "");
+}
+
 function extractInstanceNumber(inst: any): string {
   const raw =
     inst?.owner ??
@@ -1058,6 +1298,226 @@ function extractInstanceNumber(inst: any): string {
   if (!s) return "";
   if (s.includes("@")) return s.split("@")[0] || s;
   return s;
+}
+
+function normalizeOwnerNumberForWhatsapp(numberLike: string): string {
+  const raw = String(numberLike || "").trim().toLowerCase();
+  if (raw.includes("@s.whatsapp.net")) return raw;
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length >= 12 && digits.startsWith("55")) return `${digits}@s.whatsapp.net`;
+  if (digits.length >= 10) return `55${digits}@s.whatsapp.net`;
+  return `${digits}@s.whatsapp.net`;
+}
+
+function normalizeDigits(value: string): string {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function buildComparableOwnerDigits(ownerDigitsRaw: string): Set<string> {
+  const digits = normalizeDigits(ownerDigitsRaw);
+  const out = new Set<string>();
+  if (!digits) return out;
+  out.add(digits);
+  if (digits.startsWith("55") && digits.length > 11) out.add(digits.slice(2));
+  if (digits.length > 11) out.add(digits.slice(-11));
+  if (digits.length > 10) out.add(digits.slice(-10));
+  return out;
+}
+
+function extractOwnerMatchedName(payload: any, ownerJid: string, ownerDigitsRaw: string): string {
+  const ownerDigitsSet = buildComparableOwnerDigits(ownerDigitsRaw);
+  const ownerJidLc = String(ownerJid || "").toLowerCase().trim();
+  const seen = new Set<any>();
+  const queue: any[] = [payload];
+  while (queue.length) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object" || seen.has(node)) continue;
+    seen.add(node);
+    const idCandidate =
+      node?.id ??
+      node?.jid ??
+      node?.wuid ??
+      node?.owner ??
+      node?.number ??
+      node?.phone ??
+      node?.remoteJid ??
+      "";
+    const idText = String(idCandidate || "").toLowerCase().trim();
+    const idDigits = normalizeDigits(idText.includes("@") ? idText.split("@")[0] : idText);
+    const idMatchesOwner =
+      (ownerJidLc && idText === ownerJidLc) ||
+      (idDigits && ownerDigitsSet.has(idDigits));
+    if (idMatchesOwner) {
+      const maybeName =
+        node?.profileName ??
+        node?.pushName ??
+        node?.pushname ??
+        node?.name ??
+        node?.notify ??
+        node?.verifiedName ??
+        node?.businessName ??
+        "";
+      if (typeof maybeName === "string" && maybeName.trim()) return maybeName.trim();
+    }
+    Object.values(node).forEach((value) => {
+      if (value && typeof value === "object") queue.push(value);
+    });
+  }
+  return "";
+}
+
+function pickProfileNameFromPayload(payload: any): string {
+  const candidates = [
+    payload?.profileName,
+    payload?.pushName,
+    payload?.businessName,
+    payload?.verifiedName,
+    payload?.profile?.name,
+    payload?.profile?.pushName,
+    payload?.profile?.businessName,
+    payload?.profile?.verifiedName,
+    payload?.response?.profileName,
+    payload?.response?.pushName,
+    payload?.response?.businessName,
+    payload?.response?.verifiedName,
+    payload?.response?.profile?.name,
+    payload?.response?.profile?.pushName,
+    payload?.data?.profileName,
+    payload?.data?.pushName,
+    payload?.data?.businessName,
+    payload?.data?.verifiedName,
+    payload?.data?.profile?.name,
+    payload?.data?.profile?.pushName,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  // Fallback flexível, sem usar caminhos de contatos para evitar nome de terceiros.
+  const seen = new Set<any>();
+  const queue: any[] = [payload];
+  while (queue.length) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object" || seen.has(node)) continue;
+    seen.add(node);
+    for (const [key, value] of Object.entries(node)) {
+      if (/contact|contacts/i.test(key)) continue;
+      if (
+        typeof value === "string" &&
+        value.trim() &&
+        /(profile.?name|push.?name|business.?name|verified.?name)/i.test(key)
+      ) {
+        return value.trim();
+      }
+      if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  return "";
+}
+
+function pickProfilePictureFromPayload(payload: any): string {
+  const candidates = [
+    payload?.profilePictureUrl,
+    payload?.profilePicUrl,
+    payload?.pictureUrl,
+    payload?.imageUrl,
+    payload?.picUrl,
+    payload?.response?.profilePictureUrl,
+    payload?.response?.profilePicUrl,
+    payload?.data?.profilePictureUrl,
+    payload?.data?.profilePicUrl,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) return value.trim();
+  }
+  // Fallback flexível para variações de schema entre versões da EVO
+  const seen = new Set<any>();
+  const queue: any[] = [payload];
+  while (queue.length) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object" || seen.has(node)) continue;
+    seen.add(node);
+    for (const [key, value] of Object.entries(node)) {
+      if (
+        typeof value === "string" &&
+        /^https?:\/\//i.test(value.trim()) &&
+        /(profile.?picture|profile.?pic|picture.?url|image.?url|pic.?url|avatar)/i.test(key)
+      ) {
+        return value.trim();
+      }
+      if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  return "";
+}
+
+async function fetchLiveWhatsappProfile(instanceName: string, numberLike: string) {
+  const safeInstance = String(instanceName || "").trim();
+  if (!safeInstance) return { profileName: "", profilePicUrl: "" };
+
+  const digits = String(numberLike || "").replace(/\D/g, "");
+  const jid = normalizeOwnerNumberForWhatsapp(numberLike);
+
+  const profileCalls: Array<{ url: string; method: "GET" | "POST"; body?: Record<string, any> }> = [
+    { url: `${EVO_API_BASE}/profile/fetchProfile/${encodeURIComponent(safeInstance)}`, method: "GET" },
+    { url: `${EVO_API_BASE}/instance/fetchProfile/${encodeURIComponent(safeInstance)}`, method: "GET" },
+    { url: `${EVO_API_BASE}/chat/fetchProfile/${encodeURIComponent(safeInstance)}`, method: "GET" },
+  ];
+  const pictureCalls: Array<{ url: string; method: "GET" | "POST"; body?: Record<string, any> }> = [
+    {
+      url: `${EVO_API_BASE}/chat/fetchProfilePictureUrl/${encodeURIComponent(safeInstance)}`,
+      method: "POST",
+      body: digits ? { number: digits } : undefined,
+    },
+    {
+      url: `${EVO_API_BASE}/chat/fetchProfilePictureUrl/${encodeURIComponent(safeInstance)}`,
+      method: "POST",
+      body: jid ? { number: jid } : undefined,
+    },
+    {
+      url: `${EVO_API_BASE}/chat/fetchProfile/${encodeURIComponent(safeInstance)}`,
+      method: "POST",
+      body: jid ? { number: jid } : undefined,
+    },
+    {
+      url: `${EVO_API_BASE}/chat/fetchProfile/${encodeURIComponent(safeInstance)}`,
+      method: "POST",
+      body: digits ? { number: digits } : undefined,
+    },
+  ];
+
+  let profileName = "";
+  let profilePicUrl = "";
+
+  for (const call of profileCalls) {
+    if (call.method === "POST" && !call.body) continue;
+    try {
+      const result = await callEvoAction(call.url, call.method, call.body);
+      if (!result.ok) continue;
+      const payload = result.json ?? {};
+      profileName =
+        profileName ||
+        extractOwnerMatchedName(payload, jid, digits) ||
+        pickProfileNameFromPayload(payload);
+      if (profileName) break;
+    } catch {
+      // fallback silencioso
+    }
+  }
+  for (const call of pictureCalls) {
+    if (call.method === "POST" && !call.body) continue;
+    try {
+      const result = await callEvoAction(call.url, call.method, call.body);
+      if (!result.ok) continue;
+      const payload = result.json ?? {};
+      profilePicUrl = profilePicUrl || pickProfilePictureFromPayload(payload);
+      if (profilePicUrl) break;
+    } catch {
+      // fallback silencioso
+    }
+  }
+
+  return { profileName, profilePicUrl };
 }
 
 function buildConnectedFromEvoResponse(instances: any[]): Array<{ instancia: string; numero: string }> {
@@ -1077,7 +1537,7 @@ function buildConnectedFromEvoResponse(instances: any[]): Array<{ instancia: str
 
 async function callEvoAction(
   url: string,
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   body?: Record<string, any>
 ) {
   const controller = new AbortController();
@@ -1108,6 +1568,173 @@ async function callEvoAction(
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+function buildDisparosAiPrompt(input: {
+  briefing?: string;
+  tone?: string;
+  audience?: string;
+  cta?: string;
+  objective?: string;
+  accessLink?: string;
+}) {
+  const briefing = String(input.briefing || "").trim();
+  const tone = String(input.tone || "consultivo").trim();
+  const audience = String(input.audience || "CORBAN").trim();
+  const cta = String(input.cta || "Responda no link abaixo").trim();
+  const objective = String(input.objective || "gerar mensagem de prospeccao via WhatsApp").trim();
+  const accessLink = String(input.accessLink || "").trim();
+  return [
+    "Voce e um copywriter especialista em vendas consultivas via WhatsApp.",
+    `Objetivo: ${objective}.`,
+    `Publico alvo: ${audience}.`,
+    `Tom: ${tone}.`,
+    `CTA obrigatoria: ${cta}.`,
+    "Regras:",
+    "- Retorne apenas uma mensagem final pronta para envio.",
+    "- Mensagem curta (maximo 400 caracteres).",
+    "- Nao use markdown, aspas ou explicacoes extras.",
+    accessLink ? `- Inclua obrigatoriamente este link na mensagem: ${accessLink}` : "- Quando houver link de acesso, inclua-o na mensagem.",
+    briefing ? `Contexto adicional:\n${briefing}` : "Contexto adicional: sem observacoes.",
+  ].join("\n");
+}
+
+function ensureMessageContainsLink(message: string, link: string, cta: string) {
+  const text = String(message || "").trim();
+  const safeLink = String(link || "").trim();
+  if (!safeLink) return text;
+  if (text.includes(safeLink)) return text;
+  const safeCta = String(cta || "Acesse aqui").trim();
+  const joiner = text ? "\n\n" : "";
+  return `${text}${joiner}${safeCta}: ${safeLink}`.trim();
+}
+
+async function generateShortUrlForDisparos(longUrl: string) {
+  const baseUrl = String(longUrl || "").trim();
+  if (!/^https?:\/\//i.test(baseUrl)) {
+    throw new Error("accessUrl deve ser uma URL válida (http/https).");
+  }
+  const providers = getAutoShortenerProviderOrder();
+  const maxAttempts = 5;
+  let shortUrl = "";
+  let sourceUrlUsed = baseUrl;
+  let providerUsed: DisparosConfig["shortenerProvider"] | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const candidateUrl = attempt === 1 ? baseUrl : appendAntiRepeatParam(baseUrl, attempt);
+    for (const provider of providers) {
+      try {
+        const candidateShort = await shortenUrlWithProvider(candidateUrl, provider, "");
+        if (candidateShort !== lastShortUrlIssued) {
+          shortUrl = candidateShort;
+          sourceUrlUsed = candidateUrl;
+          providerUsed = provider;
+          break;
+        }
+      } catch {
+        // tenta proximo provider
+      }
+    }
+    if (shortUrl) break;
+  }
+
+  if (!shortUrl) {
+    throw new Error("Nao foi possivel gerar link curto para a mensagem teste.");
+  }
+  lastShortUrlIssued = shortUrl;
+  return {
+    shortUrl,
+    sourceUrlUsed,
+    provider: providerUsed || providers[0],
+  };
+}
+
+function extractOpenAiText(payload: any): string {
+  const direct = String(payload?.output_text || "").trim();
+  if (direct) return direct;
+  const out = Array.isArray(payload?.output) ? payload.output : [];
+  const chunks: string[] = [];
+  for (const item of out) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const part of content) {
+      const text = String(part?.text || part?.output_text || "").trim();
+      if (text) chunks.push(text);
+    }
+  }
+  return chunks.join("\n").trim();
+}
+
+async function callOpenAiGenerateMessage(input: {
+  prompt: string;
+  model?: string;
+  maxOutputTokens?: number;
+}) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY não configurada no servidor.");
+  }
+  const safePrompt = String(input.prompt || "").trim();
+  if (!safePrompt) {
+    throw new Error("Prompt vazio para geração de mensagem.");
+  }
+
+  let lastError = "Falha ao gerar mensagem com OpenAI.";
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(OPENAI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: String(input.model || OPENAI_MODEL || "gpt-5-nano"),
+          input: safePrompt,
+          store: false,
+          max_output_tokens: Number(input.maxOutputTokens || 220),
+        }),
+      });
+      const bodyText = await response.text();
+      let json: any = null;
+      try {
+        json = bodyText ? JSON.parse(bodyText) : null;
+      } catch {
+        json = null;
+      }
+
+      if (response.ok) {
+        const text = extractOpenAiText(json);
+        if (!text) throw new Error("OpenAI retornou resposta sem texto.");
+        return {
+          ok: true,
+          text,
+          model: String(json?.model || input.model || OPENAI_MODEL),
+          latencyMs: Date.now() - startedAt,
+        };
+      }
+
+      const isTransient = response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504;
+      const safeErr = String(json?.error?.message || "").slice(0, 240);
+      lastError = `OpenAI HTTP ${response.status}${safeErr ? `: ${safeErr}` : ""}`;
+      if (!isTransient || attempt >= maxAttempts) break;
+      const sleepMs = Math.floor(300 * Math.pow(2, attempt - 1) + Math.random() * 150);
+      await new Promise((r) => setTimeout(r, sleepMs));
+    } catch (error: any) {
+      const message = String(error?.message || "Erro de rede/timeout ao chamar OpenAI.");
+      lastError = message;
+      if (attempt >= maxAttempts) break;
+      const sleepMs = Math.floor(300 * Math.pow(2, attempt - 1) + Math.random() * 150);
+      await new Promise((r) => setTimeout(r, sleepMs));
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw new Error(lastError);
 }
 
 async function shortenUrlWithProvider(
@@ -1462,6 +2089,101 @@ app.delete("/instancias/:name", async (req, res) => {
   }
 });
 
+app.post("/instancias/:name/renomear", async (req, res) => {
+  try {
+    const oldName = String(req.params.name || "").trim();
+    const newName = String(req.body?.newName || "").trim();
+    if (!oldName || !newName) {
+      return res.status(400).json({ error: "Nome atual e novo nome são obrigatórios." });
+    }
+    if (oldName === newName) {
+      return res.status(400).json({ error: "O novo nome deve ser diferente do nome atual." });
+    }
+
+    // Regra operacional: não permitir colisão com instância ativa/conectada.
+    try {
+      const checkController = new AbortController();
+      const checkTimeout = setTimeout(() => checkController.abort(), 8000);
+      const checkResponse = await fetch(EVO_INSTANCES_URL, {
+        headers: {
+          apikey: EVO_API_KEY,
+          "Content-Type": "application/json",
+        },
+        signal: checkController.signal,
+      }).finally(() => clearTimeout(checkTimeout));
+      if (checkResponse.ok) {
+        const rawInstances: any = await checkResponse.json().catch(() => []);
+        const list = Array.isArray(rawInstances)
+          ? rawInstances
+          : Array.isArray(rawInstances?.response)
+            ? rawInstances.response
+            : Array.isArray(rawInstances?.data)
+              ? rawInstances.data
+              : [];
+        const conflict = list.some((item: any) => {
+          const inst = item?.instance ?? item;
+          const existingName = String(
+            inst?.name ?? inst?.instanceName ?? inst?.instance ?? ""
+          ).trim();
+          const status = String(inst?.connectionStatus ?? inst?.status ?? "")
+            .toLowerCase()
+            .trim();
+          return (
+            existingName &&
+            existingName.toLowerCase() === newName.toLowerCase() &&
+            status.includes("open") &&
+            existingName.toLowerCase() !== oldName.toLowerCase()
+          );
+        });
+        if (conflict) {
+          return res.status(409).json({
+            error:
+              "Já existe uma instância ativa/conectada com este nome. Informe outro nome.",
+          });
+        }
+      }
+    } catch {
+      // Se a verificação externa falhar, não bloqueamos a ação.
+    }
+
+    const candidateCalls: Array<{ url: string; method: "POST" | "PUT"; body: Record<string, any> }> =
+      [
+        {
+          url: buildTemplateUrl(EVO_RENAME_URL_TEMPLATE, oldName),
+          method: "POST" as const,
+          body: { newName, name: newName, instanceName: newName },
+        },
+        {
+          url: `${EVO_API_BASE}/instance/rename`,
+          method: "POST" as const,
+          body: { instanceName: oldName, newName },
+        },
+        {
+          url: `${EVO_API_BASE}/instance/update/${encodeURIComponent(oldName)}`,
+          method: "PUT" as const,
+          body: { name: newName, instanceName: newName, newName },
+        },
+      ].filter((c) => Boolean(c.url));
+
+    let lastStatus = 0;
+    for (const candidate of candidateCalls) {
+      const result = await callEvoAction(candidate.url, candidate.method, candidate.body);
+      lastStatus = result.status;
+      if (result.ok) {
+        return res.json({ ok: true, message: "Nome da instância alterado com sucesso." });
+      }
+    }
+
+    return res.status(502).json({
+      error: "Não foi possível renomear a instância na EVO.",
+      status: lastStatus,
+    });
+  } catch (error) {
+    console.error("Erro ao renomear instância:", error);
+    return res.status(500).json({ error: "Erro ao renomear instância." });
+  }
+});
+
 app.get("/aquecedor/config", async (_req, res) => {
   try {
     const supabase = getSupabaseClient();
@@ -1591,6 +2313,12 @@ app.get("/aquecedor/envios", async (req, res) => {
       dataEnvioBr: string;
       status: "Em Fila" | "Envio com Sucesso";
     }> = [];
+    const aliasesMap = await loadInstanceAliasesMap();
+    const withAlias = (instanceName: string) => {
+      const key = String(instanceName || "").trim();
+      if (!key) return "—";
+      return aliasesMap.get(key) || key;
+    };
 
     const { data: processandoData } = await (supabase
       .from("aquecedor" as any)
@@ -1614,8 +2342,8 @@ app.get("/aquecedor/envios", async (req, res) => {
         const destino = numToInst.get(numDest) || numDest || "—";
         const dataEnvio = String(row?.scheduled_at || row?.processing_at || "").trim() || null;
         items.push({
-          instanciaOrigem: origem,
-          instanciaDestino: destino,
+          instanciaOrigem: withAlias(origem),
+          instanciaDestino: withAlias(destino),
           dataEnvio,
           dataEnvioBr: formatDateBr(dataEnvio),
           status: "Em Fila",
@@ -1680,8 +2408,8 @@ app.get("/aquecedor/envios", async (req, res) => {
       }
       const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
       items.unshift({
-        instanciaOrigem: origem,
-        instanciaDestino: destino,
+        instanciaOrigem: withAlias(origem),
+        instanciaDestino: withAlias(destino),
         dataEnvio,
         dataEnvioBr: formatDateBr(dataEnvio),
         status: "Em Fila",
@@ -1698,8 +2426,8 @@ app.get("/aquecedor/envios", async (req, res) => {
       for (const row of logsData) {
         const dataEnvio = String(row?.data_envio || "").trim() || null;
         items.push({
-          instanciaOrigem: String(row?.instancia_origem || "").trim() || "—",
-          instanciaDestino: String(row?.instancia_destino || "").trim() || "—",
+          instanciaOrigem: withAlias(String(row?.instancia_origem || "").trim() || "—"),
+          instanciaDestino: withAlias(String(row?.instancia_destino || "").trim() || "—"),
           dataEnvio,
           dataEnvioBr: formatDateBr(dataEnvio),
           status: "Envio com Sucesso",
@@ -2020,6 +2748,113 @@ app.post("/disparos/shorten", async (req, res) => {
   }
 });
 
+app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
+  try {
+    const config = await loadDisparosConfigFromDb();
+    const customBriefing = String(req.body?.briefing || "").trim();
+    const briefing = customBriefing || String(config.aiBriefing || "").trim();
+    const tone = String(req.body?.tone || config.aiTone || "consultivo").trim();
+    const audience = String(req.body?.audience || config.aiAudience || "CORBAN").trim();
+    const cta = String(req.body?.cta || config.aiCta || "Responda no link abaixo").trim();
+    const objective = String(req.body?.objective || "gerar mensagem de prospeccao").trim();
+    const targetNumber = normalizeWhatsAppNumber(
+      String(req.body?.whatsappTargetNumber || config.whatsappTargetNumber || "")
+    );
+    if (!targetNumber) {
+      return res.status(400).json({
+        error: "Número alvo não configurado na seção Encurtador de URL.",
+      });
+    }
+    const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1`;
+    let shortUrl = "";
+    let shortenerProvider = "";
+    const shortened = await generateShortUrlForDisparos(accessUrlRaw);
+    shortUrl = shortened.shortUrl;
+    shortenerProvider = String(shortened.provider || "");
+    const prompt = buildDisparosAiPrompt({
+      briefing,
+      tone,
+      audience,
+      cta,
+      objective,
+      accessLink: shortUrl,
+    });
+    const generated = await callOpenAiGenerateMessage({
+      prompt,
+      model: String(req.body?.model || OPENAI_MODEL),
+      maxOutputTokens: Number(req.body?.maxOutputTokens || 220),
+    });
+    const finalMessage = ensureMessageContainsLink(generated.text, shortUrl, cta);
+    return res.json({
+      ok: true,
+      message: finalMessage,
+      model: generated.model,
+      latencyMs: generated.latencyMs,
+      shortUrl,
+      shortenerProvider,
+    });
+  } catch (error: any) {
+    return res.status(502).json({
+      error: error?.message || "Erro ao gerar mensagem com OpenAI.",
+    });
+  }
+});
+
+app.post("/disparos/teste-mensagem-ai", async (req, res) => {
+  try {
+    const config = await loadDisparosConfigFromDb();
+    const instanceName = String(req.body?.instanceName || "").trim();
+    const targetNumber = normalizeWhatsAppNumber(String(req.body?.targetNumber || config.whatsappTargetNumber || ""));
+    if (!instanceName) {
+      return res.status(400).json({ error: "Campo 'instanceName' é obrigatório." });
+    }
+    if (!targetNumber) {
+      return res.status(400).json({ error: "Campo 'targetNumber' é obrigatório." });
+    }
+
+    const prompt = buildDisparosAiPrompt({
+      briefing: String(req.body?.briefing || config.aiBriefing || "").trim(),
+      tone: String(req.body?.tone || config.aiTone || "consultivo").trim(),
+      audience: String(req.body?.audience || config.aiAudience || "CORBAN").trim(),
+      cta: String(req.body?.cta || config.aiCta || "Responda no link abaixo").trim(),
+      objective: String(req.body?.objective || "gerar mensagem de teste para WhatsApp").trim(),
+    });
+    const generated = await callOpenAiGenerateMessage({
+      prompt,
+      model: String(req.body?.model || OPENAI_MODEL),
+      maxOutputTokens: Number(req.body?.maxOutputTokens || 220),
+    });
+
+    const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instanceName);
+    const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
+      ? { number: targetNumber, textMessage: { text: generated.text } }
+      : { number: targetNumber, text: generated.text, textMessage: { text: generated.text } };
+    const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+    if (!sendResult.ok) {
+      const detail =
+        sendResult.json?.message ||
+        sendResult.json?.error ||
+        (typeof sendResult.body === "string" ? sendResult.body.slice(0, 180) : "");
+      return res.status(502).json({
+        error: "Falha ao enviar mensagem teste via EVO.",
+        status: sendResult.status,
+        detail: String(detail || "").slice(0, 180),
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: "Mensagem teste gerada com OpenAI e enviada com sucesso.",
+      generatedMessage: generated.text,
+      model: generated.model,
+      instanceName,
+      targetNumber,
+    });
+  } catch (error: any) {
+    return res.status(502).json({ error: error?.message || "Erro ao executar teste de mensagem AI." });
+  }
+});
+
 app.get("/disparos/next-instance", async (_req, res) => {
   try {
     const controller = new AbortController();
@@ -2041,9 +2876,18 @@ app.get("/disparos/next-instance", async (_req, res) => {
           : [];
     const connected = buildConnectedFromEvoResponse(list);
     const usageMap = await loadInstanceUsageMap();
+    const disparosConfig = await loadDisparosConfigFromDb();
+    const selectedSet = new Set(
+      Array.isArray(disparosConfig.selectedDisparadorInstances)
+        ? disparosConfig.selectedDisparadorInstances.map((n) => String(n || "").trim())
+        : []
+    );
+    const hasSelection = selectedSet.size > 0;
     const eligible = connected.filter((item) => {
       const usage = usageMap.get(item.instancia);
-      return usage ? usage.useDisparador !== false : true;
+      const byUsage = usage ? usage.useDisparador !== false : true;
+      const bySelection = hasSelection ? selectedSet.has(item.instancia) : true;
+      return byUsage && bySelection;
     });
     if (!eligible.length) {
       return res.status(409).json({
@@ -2145,7 +2989,464 @@ app.post("/disparos/templates/import", async (req, res) => {
   }
 });
 
+async function hydrateCampaignFromDbIfNeeded(campaignId: string): Promise<DisparosCampaign | null> {
+  const existing = disparosCampaignsMemory.find((c) => c.id === campaignId);
+  if (existing) return existing;
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  try {
+    const { data: row } = await (supabase
+      .from("disparos_campaigns" as any)
+      .select("id, campaign_name, status, total_numbers, sent_count, config_snapshot, created_at")
+      .eq("id", campaignId)
+      .maybeSingle()) as any;
+    if (!row?.id) return null;
+    const campaign: DisparosCampaign = {
+      id: String(row.id),
+      name: String(row.campaign_name || ""),
+      createdAt: String(row.created_at || new Date().toISOString()),
+      status: (String(row.status || "paused") as DisparosCampaign["status"]) || "paused",
+      totalNumbers: Number(row.total_numbers || 0),
+      sentCount: Number(row.sent_count || 0),
+      configSnapshot: parseDisparosConfig(row.config_snapshot || {}),
+    };
+    disparosCampaignsMemory.push(campaign);
+    const hasLeads = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId);
+    if (!hasLeads) {
+      const { data: leadRows } = await (supabase
+        .from("disparos_campaign_leads" as any)
+        .select("id, campaign_id, phone, status, created_at, sent_at")
+        .eq("campaign_id", campaignId)
+        .limit(100000)) as any;
+      if (Array.isArray(leadRows)) {
+        for (const lr of leadRows) {
+          const st = String(lr?.status || "pending").toLowerCase();
+          disparosCampaignLeadsMemory.push({
+            id: String(lr?.id || crypto.randomUUID()),
+            campaignId: String(lr?.campaign_id || campaignId),
+            phone: String(lr?.phone || ""),
+            status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
+            createdAt: String(lr?.created_at || new Date().toISOString()),
+            sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+          });
+        }
+      }
+    }
+    return campaign;
+  } catch {
+    return null;
+  }
+}
+
+async function pickDisparadorInstanceForConfig(
+  config: DisparosConfig
+): Promise<{ instancia: string; numero: string } | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(EVO_INSTANCES_URL, {
+      headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const raw = await response.json();
+    const list = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.response)
+        ? raw.response
+        : Array.isArray(raw?.data)
+          ? raw.data
+          : [];
+    const connected = buildConnectedFromEvoResponse(list);
+    const usageMap = await loadInstanceUsageMap();
+    const selectedSet = new Set(
+      Array.isArray(config.selectedDisparadorInstances)
+        ? config.selectedDisparadorInstances.map((n) => String(n || "").trim())
+        : []
+    );
+    const hasSelection = selectedSet.size > 0;
+    const eligible = connected.filter((item) => {
+      const usage = usageMap.get(item.instancia);
+      const byUsage = usage ? usage.useDisparador !== false : true;
+      const bySelection = hasSelection ? selectedSet.has(item.instancia) : true;
+      return byUsage && bySelection;
+    });
+    if (!eligible.length) return null;
+    const key = "__global_rr__";
+    const cur = campaignDisparadorRoundRobin.get(key) ?? disparosRoundRobinCounter;
+    const idx = cur % eligible.length;
+    campaignDisparadorRoundRobin.set(key, cur + 1);
+    disparosRoundRobinCounter = cur + 1;
+    return eligible[idx];
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function composeOutboundMessageForConfig(config: DisparosConfig): Promise<string> {
+  if (config.messageMode === "database") {
+    let templates: MessageTemplate[] = [];
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data } = await (supabase
+          .from("disparos_message_templates" as any)
+          .select("id, message_text, alias, segment, source, created_at, active")
+          .eq("active", true)
+          .order("created_at", { ascending: false })
+          .limit(200)) as any;
+        if (Array.isArray(data)) {
+          templates = data.map((row: any) => ({
+            id: String(row?.id || ""),
+            text: String(row?.message_text || ""),
+            alias: String(row?.alias || ""),
+            segment: String(row?.segment || ""),
+            source: row?.source === "manual" ? "manual" : "spreadsheet",
+            createdAt: String(row?.created_at || ""),
+            active: row?.active !== false,
+          }));
+        }
+      } catch {
+        /* */
+      }
+    }
+    if (!templates.length) {
+      templates = disparosTemplatesMemory.filter((t) => t.active !== false);
+    }
+    const pick = templates[Math.floor(Math.random() * templates.length)];
+    if (!pick?.text?.trim()) {
+      return "Olá! Temos uma informação importante para você. Responda quando puder.";
+    }
+    return pick.text.trim();
+  }
+
+  const targetNumber = normalizeWhatsAppNumber(String(config.whatsappTargetNumber || ""));
+  if (!targetNumber) {
+    throw new Error("Snapshot da campanha sem número alvo (Encurtador).");
+  }
+  const shortened = await generateShortUrlForDisparos(`https://wa.me/${targetNumber}?text=Ol%C3%A1`);
+  const shortUrl = shortened.shortUrl;
+  const briefing = String(config.aiBriefing || "");
+  const prompt = buildDisparosAiPrompt({
+    briefing,
+    tone: String(config.aiTone || "consultivo"),
+    audience: String(config.aiAudience || "CORBAN"),
+    cta: String(config.aiCta || "Responda no link abaixo"),
+    objective: "gerar mensagem de prospeccao via WhatsApp",
+    accessLink: shortUrl,
+  });
+  const generated = await callOpenAiGenerateMessage({
+    prompt,
+    model: OPENAI_MODEL,
+    maxOutputTokens: 220,
+  });
+  return ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Responda no link abaixo"));
+}
+
+async function persistLeadSentAndCampaignCount(
+  campaignId: string,
+  leadId: string,
+  nextSentCount: number
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const sentAt = new Date().toISOString();
+    await (supabase.from("disparos_campaign_leads" as any) as any)
+      .update({ status: "sent", sent_at: sentAt })
+      .eq("id", leadId);
+    await (supabase.from("disparos_campaigns" as any) as any)
+      .update({ sent_count: nextSentCount })
+      .eq("id", campaignId);
+  } catch {
+    /* */
+  }
+}
+
+async function processOneCampaignDispatch(campaignId: string): Promise<void> {
+  const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
+  if (!campaign || campaign.status !== "running") return;
+
+  const nextAt = campaignNextAllowedSendAt.get(campaignId) || 0;
+  if (Date.now() < nextAt) return;
+
+  const lead = disparosCampaignLeadsMemory.find(
+    (l) => l.campaignId === campaignId && l.status === "pending"
+  );
+  if (!lead) {
+    campaign.status = "finished";
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any)
+          .update({ status: "finished" })
+          .eq("id", campaignId);
+      } catch {
+        /* */
+      }
+    }
+    return;
+  }
+
+  let text: string;
+  try {
+    text = await composeOutboundMessageForConfig(campaign.configSnapshot);
+  } catch (err) {
+    console.error("[Campanha] Falha ao montar mensagem:", err);
+    return;
+  }
+
+  const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot);
+  if (!instancePick) {
+    console.error("[Campanha] Nenhuma instância elegível para envio.");
+    return;
+  }
+
+  const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
+  const numero = normalizeWhatsAppNumber(lead.phone);
+  const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
+    ? { number: numero, textMessage: { text: text } }
+    : { number: numero, text: text, textMessage: { text: text } };
+  const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+  if (!sendResult.ok) {
+    console.error(
+      "[Campanha] EVO send falhou:",
+      sendResult.status,
+      String(sendResult.body || "").slice(0, 200)
+    );
+    return;
+  }
+
+  const sentIso = new Date().toISOString();
+  lead.status = "sent";
+  lead.sentAt = sentIso;
+  campaign.sentCount += 1;
+  await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount);
+
+  const minS = Math.max(10, Number(campaign.configSnapshot.delayMinSeconds) || 90);
+  const maxS = Math.max(minS, Number(campaign.configSnapshot.delayMaxSeconds) || 240);
+  const waitSec = minS + Math.random() * (maxS - minS);
+  campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
+}
+
+async function runCampaignDispatchTick(): Promise<void> {
+  const running = disparosCampaignsMemory.filter((c) => c.status === "running");
+  for (const c of running) {
+    await processOneCampaignDispatch(c.id);
+  }
+}
+
+app.post("/disparos/campanhas", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const numbersRaw = Array.isArray(req.body?.numbers) ? req.body.numbers : [];
+    const configSnapshot = parseDisparosConfig(req.body?.configSnapshot || {});
+    if (!name) {
+      return res.status(400).json({ error: "Nome da campanha é obrigatório." });
+    }
+    const numbers: string[] = Array.from(
+      new Set(
+        numbersRaw
+          .map((n: any) => normalizeCampaignPhone(String(n || "")))
+          .filter((n: string) => n.length >= 12)
+      )
+    );
+    if (!numbers.length) {
+      return res.status(400).json({ error: "Nenhum número válido foi encontrado na planilha." });
+    }
+
+    const now = new Date().toISOString();
+    const campaignId = crypto.randomUUID();
+    const campaign: DisparosCampaign = {
+      id: campaignId,
+      name,
+      createdAt: now,
+      status: "paused",
+      totalNumbers: numbers.length,
+      sentCount: 0,
+      configSnapshot,
+    };
+    const leads: DisparosCampaignLead[] = numbers.map((phone) => ({
+      id: crypto.randomUUID(),
+      campaignId,
+      phone,
+      status: "pending",
+      createdAt: now,
+      sentAt: null,
+    }));
+
+    disparosCampaignsMemory.unshift(campaign);
+    disparosCampaignLeadsMemory.unshift(...leads);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any).insert({
+          id: campaign.id,
+          campaign_name: campaign.name,
+          status: campaign.status,
+          total_numbers: campaign.totalNumbers,
+          sent_count: campaign.sentCount,
+          config_snapshot: campaign.configSnapshot,
+          created_at: campaign.createdAt,
+        });
+        await (supabase.from("disparos_campaign_leads" as any) as any).insert(
+          leads.map((lead) => ({
+            id: lead.id,
+            campaign_id: lead.campaignId,
+            phone: lead.phone,
+            status: lead.status,
+            created_at: lead.createdAt,
+            sent_at: lead.sentAt,
+          }))
+        );
+      } catch {
+        /* já persistido em memória */
+      }
+    }
+
+    return res.json({
+      ok: true,
+      message: "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos.",
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        createdAt: campaign.createdAt,
+        status: campaign.status,
+        totalNumbers: campaign.totalNumbers,
+        sentCount: campaign.sentCount,
+        progressPercent: 0,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Erro ao criar campanha." });
+  }
+});
+
+app.get("/disparos/campanhas", async (_req, res) => {
+  try {
+    const mapRowToItem = (row: any) => {
+      const total = Number(row?.total_numbers ?? row?.totalNumbers ?? 0);
+      const sent = Number(row?.sent_count ?? row?.sentCount ?? 0);
+      const progressPercent =
+        total > 0 ? Math.max(0, Math.min(100, Math.round((sent / total) * 100))) : 0;
+      return {
+        id: String(row?.id || ""),
+        name: String(row?.campaign_name ?? (row?.name || "")),
+        status: String(row?.status || "paused"),
+        createdAt: String(row?.created_at ?? (row?.createdAt || "")),
+        totalNumbers: total,
+        sentCount: sent,
+        progressPercent,
+      };
+    };
+
+    const byId = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        status: string;
+        createdAt: string;
+        totalNumbers: number;
+        sentCount: number;
+        progressPercent: number;
+      }
+    >();
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data: campaigns } = await (supabase
+          .from("disparos_campaigns" as any)
+          .select("id, campaign_name, status, total_numbers, sent_count, created_at")
+          .order("created_at", { ascending: false })
+          .limit(200)) as any;
+        if (Array.isArray(campaigns)) {
+          for (const row of campaigns) {
+            const item = mapRowToItem(row);
+            if (item.id) byId.set(item.id, item);
+          }
+        }
+      } catch {
+        /* */
+      }
+    }
+
+    for (const c of disparosCampaignsMemory) {
+      const total = Number(c.totalNumbers || 0);
+      const sent = Number(c.sentCount || 0);
+      const progressPercent = total > 0 ? Math.max(0, Math.min(100, Math.round((sent / total) * 100))) : 0;
+      byId.set(c.id, {
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        createdAt: c.createdAt,
+        totalNumbers: total,
+        sentCount: sent,
+        progressPercent,
+      });
+    }
+
+    const items = Array.from(byId.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    return res.json({ items });
+  } catch {
+    return res.status(500).json({ error: "Erro ao listar campanhas do Disparador." });
+  }
+});
+
+app.post("/disparos/campanhas/:id/estado", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+    }
+    const ativa = req.body?.ativa === true;
+    const nextStatus: DisparosCampaign["status"] = ativa ? "running" : "paused";
+
+    let campaign = disparosCampaignsMemory.find((c) => c.id === id);
+    if (!campaign) {
+      campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
+    }
+    if (!campaign) {
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    campaign.status = nextStatus;
+    if (ativa) {
+      campaignNextAllowedSendAt.set(id, 0);
+    }
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any)
+          .update({ status: nextStatus })
+          .eq("id", id);
+      } catch {
+        /* */
+      }
+    }
+
+    return res.json({
+      ok: true,
+      id,
+      status: nextStatus,
+      ativa,
+      message: ativa ? "Campanha ativada. Os disparos serão processados em sequência." : "Campanha pausada.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Erro ao atualizar estado da campanha." });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
+  setInterval(() => {
+    runCampaignDispatchTick().catch((e) => console.error("[Campanhas] tick:", e));
+  }, 7000);
 });
 

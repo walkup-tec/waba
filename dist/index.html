@@ -953,6 +953,7 @@
       .instances-search {
         flex: 1 1 260px;
         min-width: 220px;
+        position: relative;
       }
 
       .instances-search input {
@@ -960,7 +961,7 @@
         background: rgba(15, 23, 42, 0.7);
         border: 1px solid var(--border-subtle);
         border-radius: 12px;
-        padding: 9px 12px;
+        padding: 9px 34px 9px 12px;
         color: var(--text);
         font-size: 0.84rem;
       }
@@ -969,6 +970,25 @@
         outline: none;
         border-color: rgba(110, 255, 200, 0.55);
         box-shadow: 0 0 0 2px rgba(110, 255, 200, 0.12);
+      }
+      .instances-search-clear {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 0;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 0.9rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 2px 4px;
+      }
+      .instances-search-clear:hover {
+        color: #e2e8f0;
+      }
+      .instances-search-clear.hidden {
+        display: none;
       }
 
       .instances-status-filters {
@@ -1127,7 +1147,7 @@
       }
 
       .status-text.connected {
-        color: #6ee7b7;
+        color: #33cccc;
       }
 
       .status-text.disconnected {
@@ -1138,6 +1158,81 @@
         display: inline-flex;
         gap: 6px;
         flex-wrap: wrap;
+      }
+      .instance-name-link {
+        background: transparent;
+        border: 0;
+        color: #93c5fd;
+        cursor: pointer;
+        font: inherit;
+        padding: 0;
+        text-align: left;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .instance-name-link:hover {
+        color: #bfdbfe;
+      }
+      .instance-inline-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        width: 100%;
+      }
+      .instance-inline-input {
+        width: 100%;
+        min-width: 120px;
+        max-width: 220px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 8px;
+        background: rgba(2, 6, 23, 0.72);
+        color: #f8fafc;
+        padding: 6px 8px;
+        font-size: 0.78rem;
+      }
+      .instance-inline-icon {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 6px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.5);
+        color: #f8fafc;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        line-height: 1;
+      }
+      .instance-inline-edit-btn,
+      .whatsapp-name-inline-edit-btn {
+        width: auto;
+        height: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #33cccc;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .instance-inline-edit-btn:hover,
+      .whatsapp-name-inline-edit-btn:hover {
+        color: #67e8f9;
+      }
+      .instance-inline-icon.save {
+        width: auto;
+        height: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #33cccc;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .instance-inline-icon.save:hover {
+        color: #67e8f9;
       }
 
       .instance-action-btn {
@@ -1166,17 +1261,21 @@
       }
 
       .instance-action-btn.btn-delete.enabled {
-        background: rgba(153, 27, 27, 0.88);
-        border-color: rgba(251, 113, 133, 0.55);
+        background: rgba(153, 27, 27, 0.65);
+        border-color: rgba(251, 113, 133, 0.45);
       }
       .instance-action-btn.btn-safe.enabled {
-        background: rgba(14, 116, 144, 0.8);
-        border-color: rgba(250, 204, 21, 0.6);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+        color: var(--text-secondary);
+        border-radius: 999px;
+        transition: all 0.15s ease;
       }
       .instance-action-btn.btn-safe.enabled.active {
-        background: rgba(202, 138, 4, 0.95);
-        border-color: rgba(250, 204, 21, 0.9);
-        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.3);
+        border-color: rgba(110, 255, 200, 0.55);
+        color: var(--accent-bright);
+        background: rgba(46, 228, 160, 0.12);
+        box-shadow: none;
       }
 
       .instance-action-btn.disabled {
@@ -1365,6 +1464,7 @@
       .aquecedor-field input {
         width: 100%;
         box-sizing: border-box;
+        height: 38px;
         border-radius: 10px;
         border: 1px solid rgba(148, 163, 184, 0.35);
         background: rgba(2, 6, 23, 0.8);
@@ -1372,7 +1472,23 @@
         padding: 8px 10px;
         outline: none;
       }
+      .aquecedor-field select {
+        width: 100%;
+        box-sizing: border-box;
+        height: 38px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.8);
+        color: #f8fafc;
+        padding: 8px 10px;
+        line-height: 1.2;
+        outline: none;
+      }
       .aquecedor-field input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .aquecedor-field select:focus {
         border-color: var(--accent);
         box-shadow: 0 0 0 1px var(--accent);
       }
@@ -1489,6 +1605,42 @@
         gap: 8px;
         color: #cbd5e1;
         font-size: 0.82rem;
+      }
+      .instance-role-toggle {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 32px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(15, 23, 42, 0.85);
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        outline: none;
+      }
+      .instance-role-toggle::before {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #cbd5e1;
+        transition: transform 0.2s ease, background 0.2s ease;
+      }
+      .instance-role-toggle:checked {
+        border-color: rgba(51, 204, 204, 0.75);
+        background: rgba(51, 204, 204, 0.82);
+        box-shadow: 0 0 0 1px rgba(51, 204, 204, 0.2);
+      }
+      .instance-role-toggle:checked::before {
+        transform: translateX(14px);
+        background: #ffffff;
+      }
+      .instance-role-toggle:focus-visible {
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
       }
 
       .aquecedor-layout {
@@ -1637,6 +1789,92 @@
         margin: 0;
         font-size: 0.85rem;
       }
+      .dis-section-head {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .dis-section-title-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .dis-section-check {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid #22d3ee;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #22d3ee;
+        font-size: 10px;
+        font-weight: 700;
+        flex: 0 0 auto;
+      }
+      .dis-section-head-title {
+        color: #22d3ee;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .dis-section-edit-btn {
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(15, 23, 42, 0.55);
+        color: #e2e8f0;
+        border-radius: 14px;
+        padding: 8px 18px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #disparos-config-area .aquecedor-section .dis-section-edit-btn.hidden {
+        display: none;
+      }
+      #disparos-config-area .aquecedor-section .dis-section-check.hidden {
+        display: none;
+      }
+      #disparos-config-area .aquecedor-section.dis-section-collapsed .dis-section-head {
+        display: flex;
+      }
+      .dis-section-save-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+      .dis-section-save-btn {
+        border: 1px solid rgba(34, 197, 94, 0.7);
+        background: rgba(22, 163, 74, 0.82);
+        color: #f8fafc;
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      #disparos-config-area .aquecedor-section.dis-section-collapsed .aquecedor-section-title,
+      #disparos-config-area .aquecedor-section.dis-section-collapsed .dis-section-save-row {
+        display: none;
+      }
+      #disparos-config-area .aquecedor-section.dis-section-collapsed .dis-section-body {
+        display: none;
+      }
+      #disparos-config-area .aquecedor-section .aquecedor-section-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      #disparos-config-area .aquecedor-section .aquecedor-section-title::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid #22d3ee;
+        box-sizing: border-box;
+        flex: 0 0 auto;
+      }
       .disparos-grid {
         display: grid;
         gap: 10px;
@@ -1696,6 +1934,31 @@
         width: 15px;
         height: 15px;
       }
+      .dis-number-picker {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 10px;
+        align-items: center;
+      }
+      .dis-number-picker-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+      }
+      #dis-available-instances,
+      #dis-selected-instances {
+        min-height: 172px;
+      }
+      @media (max-width: 992px) {
+        .dis-number-picker {
+          grid-template-columns: 1fr;
+        }
+        .dis-number-picker-actions {
+          flex-direction: row;
+        }
+      }
       .field-error {
         font-size: 0.74rem;
         color: #fda4af;
@@ -1740,12 +2003,252 @@
         outline: none !important;
         box-shadow: none !important;
       }
+
+      /* Campanha: importação Excel */
+      .dis-campaign-panel {
+        position: relative;
+      }
+      .dis-campaign-import-wrap {
+        margin-top: 12px;
+      }
+      .dis-campaign-import-label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+      }
+      .dis-campaign-dropzone {
+        position: relative;
+        min-height: 118px;
+        border: 2px dashed rgba(34, 211, 238, 0.35);
+        border-radius: 14px;
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.55), rgba(2, 6, 23, 0.45));
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        overflow: hidden;
+      }
+      .dis-campaign-dropzone:hover,
+      .dis-campaign-dropzone:focus-within {
+        border-color: rgba(34, 211, 238, 0.65);
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.2), 0 8px 28px rgba(0, 0, 0, 0.25);
+      }
+      .dis-campaign-dropzone.dragover {
+        border-color: #22d3ee;
+        background: rgba(34, 211, 238, 0.08);
+        box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
+      }
+      .dis-campaign-file-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 2;
+      }
+      .dis-campaign-dropzone-visual {
+        position: relative;
+        z-index: 1;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 20px;
+      }
+      .dis-campaign-dropzone-icon {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: rgba(34, 211, 238, 0.12);
+        border: 1px solid rgba(34, 211, 238, 0.28);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #22d3ee;
+      }
+      .dis-campaign-dropzone-icon svg {
+        width: 24px;
+        height: 24px;
+      }
+      .dis-campaign-dropzone-text {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .dis-campaign-dropzone-text strong {
+        color: #f1f5f9;
+        font-size: 0.92rem;
+      }
+      .dis-campaign-dropzone-text span {
+        font-size: 0.8rem;
+        color: #94a3b8;
+      }
+      .dis-campaign-file-meta {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin-top: 2px;
+        word-break: break-all;
+      }
+      .dis-campaign-dropzone.is-busy .dis-campaign-file-input {
+        pointer-events: none;
+      }
+      @keyframes dis-campaign-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes dis-campaign-pulse {
+        0%,
+        100% {
+          opacity: 0.55;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      .dis-campaign-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(148, 163, 184, 0.25);
+        border-top-color: #22d3ee;
+        border-radius: 50%;
+        animation: dis-campaign-spin 0.75s linear infinite;
+      }
+      .dis-campaign-spinner.sm {
+        width: 24px;
+        height: 24px;
+        border-width: 2px;
+      }
+      .dis-campaign-work-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1300;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(2, 6, 23, 0.78);
+        backdrop-filter: blur(6px);
+      }
+      .dis-campaign-work-overlay.open {
+        display: flex;
+      }
+      .dis-campaign-work-card {
+        text-align: center;
+        padding: 28px 32px;
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.96);
+        border: 1px solid rgba(34, 211, 238, 0.28);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        max-width: min(92vw, 360px);
+      }
+      .dis-campaign-work-title {
+        margin-top: 16px;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f8fafc;
+        animation: dis-campaign-pulse 1.4s ease-in-out infinite;
+      }
+      .dis-campaign-work-sub {
+        margin-top: 8px;
+        font-size: 0.82rem;
+        color: #94a3b8;
+      }
+      .dis-campaign-preview {
+        margin-top: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.35);
+        overflow: hidden;
+      }
+      .dis-campaign-preview.hidden {
+        display: none;
+      }
+      .dis-campaign-preview-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.55);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      }
+      .dis-campaign-preview-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+      .dis-campaign-preview-badge {
+        font-size: 0.72rem;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(34, 211, 238, 0.15);
+        color: #67e8f9;
+        border: 1px solid rgba(34, 211, 238, 0.25);
+      }
+      .dis-campaign-preview-scroll {
+        max-height: 220px;
+        overflow: auto;
+      }
+      .dis-campaign-preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.72rem;
+      }
+      .dis-campaign-preview-table th,
+      .dis-campaign-preview-table td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        white-space: nowrap;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .dis-campaign-preview-table th {
+        position: sticky;
+        top: 0;
+        background: rgba(30, 41, 59, 0.95);
+        color: #cbd5e1;
+        font-weight: 600;
+        z-index: 1;
+      }
+      .dis-campaign-preview-table td {
+        color: #e2e8f0;
+      }
+      .dis-campaign-preview-table tr:hover td {
+        background: rgba(34, 211, 238, 0.06);
+      }
+
       .disparos-list {
         max-height: 480px;
         overflow: auto;
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      .disparos-campaign-item {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .disparos-campaign-item-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .disparos-campaign-item-actions {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+      }
+      .btn-campaign-toggle {
+        padding: 5px 10px;
+        font-size: 0.74rem;
+        white-space: nowrap;
       }
       @media (max-width: 992px) {
         .disparos-layout {
@@ -2166,6 +2669,15 @@
                     type="text"
                     placeholder="Buscar instância por nome..."
                   />
+                  <button
+                    id="instances-search-clear"
+                    class="instances-search-clear hidden"
+                    type="button"
+                    aria-label="Limpar pesquisa"
+                    title="Limpar pesquisa"
+                  >
+                    ✕
+                  </button>
                 </div>
 
                 <div class="instances-status-filters" id="instances-status-filters">
@@ -2360,9 +2872,6 @@
                 <div class="panel-title">Disparos</div>
                 <span id="disparos-status-label" class="muted">—</span>
               </div>
-              <div class="muted" style="margin-bottom: 16px;">
-                Configuração e acompanhamento dos disparos em massa via WhatsApp (orquestrador + motor N8n).
-              </div>
               <div class="disparos-layout">
                 <div class="disparos-side">
                   <div class="disparos-side-title">Resumo</div>
@@ -2386,7 +2895,26 @@
                   <div class="disparos-side-title" style="margin-top: 20px;">Variáveis e regras</div>
                   <div id="disparos-config-area" class="disparos-config-area">
                     <div class="aquecedor-section">
-                      <div class="aquecedor-section-title">1) Temporizador</div>
+                      <div class="aquecedor-section-title">1) Seleção de números</div>
+                      <div class="dis-number-picker">
+                        <div class="aquecedor-field">
+                          <label for="dis-available-instances">Números disponíveis</label>
+                          <select id="dis-available-instances" size="8"></select>
+                        </div>
+                        <div class="dis-number-picker-actions">
+                          <button id="dis-add-instance-btn" type="button" class="instance-action-btn enabled">→</button>
+                          <button id="dis-remove-instance-btn" type="button" class="instance-action-btn enabled">←</button>
+                        </div>
+                        <div class="aquecedor-field">
+                          <label for="dis-selected-instances">Números selecionados para disparo</label>
+                          <select id="dis-selected-instances" size="8"></select>
+                        </div>
+                      </div>
+                      <span class="aquecedor-hint">Clique no número para mover entre disponíveis e selecionados.</span>
+                    </div>
+
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">2) Temporizador</div>
                       <div class="disparos-grid disparos-grid-2">
                         <div class="aquecedor-field">
                           <label for="dis-delay-min">Delay mínimo (segundos)</label>
@@ -2400,7 +2928,7 @@
                     </div>
 
                     <div class="aquecedor-section">
-                      <div class="aquecedor-section-title">2) Limite de segurança</div>
+                      <div class="aquecedor-section-title">3) Limite de segurança</div>
                       <div class="disparos-grid disparos-grid-2">
                         <div class="aquecedor-field">
                           <label for="dis-max-hour">Máx/hora por instância</label>
@@ -2414,7 +2942,7 @@
                     </div>
 
                     <div class="aquecedor-section">
-                      <div class="aquecedor-section-title">3) Expediente</div>
+                      <div class="aquecedor-section-title">4) Expediente</div>
                       <div class="disparos-grid disparos-grid-2" style="margin-bottom: 10px;">
                         <div class="aquecedor-field">
                           <label for="dis-start-hour">Início da janela (hora)</label>
@@ -2437,7 +2965,7 @@
                     </div>
 
                     <div class="aquecedor-section">
-                      <div class="aquecedor-section-title">4) Encurtador URL</div>
+                      <div class="aquecedor-section-title">5) Encurtador URL</div>
                       <div class="disparos-grid disparos-grid-2">
                         <div class="aquecedor-field">
                           <label for="dis-shortener-provider">Encurtador de URL</label>
@@ -2475,7 +3003,7 @@
                     </div>
 
                     <div class="aquecedor-section">
-                      <div class="aquecedor-section-title">5) Mensageiro</div>
+                      <div class="aquecedor-section-title">6) Mensageiro</div>
                       <div class="disparos-inline-actions">
                         <label class="aquecedor-toggle">
                           <input id="dis-mode-ai" type="radio" name="dis-message-mode" value="ai" checked />
@@ -2533,6 +3061,22 @@
                           </div>
                         </div>
                         <input id="dis-ai-briefing" type="hidden" />
+                        <div class="disparos-inline-actions" style="margin-top: 10px;">
+                          <button id="dis-test-ai-generate-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                            Gerar mensagem teste (IA)
+                          </button>
+                          <span id="dis-ai-test-status" class="muted">Aguardando geração de mensagem.</span>
+                        </div>
+                        <div class="aquecedor-field" style="margin-top: 10px;">
+                          <label for="dis-ai-test-output">Mensagem gerada</label>
+                          <textarea
+                            id="dis-ai-test-output"
+                            class="register-input"
+                            rows="4"
+                            placeholder="A mensagem gerada pela IA aparecerá aqui."
+                            readonly
+                          ></textarea>
+                        </div>
                       </div>
 
                       <div id="dis-db-box" class="disparos-box hidden">
@@ -2548,14 +3092,70 @@
                       </div>
                     </div>
 
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">7) Campanha</div>
+                      <div class="disparos-box dis-campaign-panel" id="dis-campaign-panel">
+                        <div class="aquecedor-field">
+                          <label for="dis-campaign-name">Nome da campanha</label>
+                          <input id="dis-campaign-name" type="text" placeholder="Ex.: Campanha CLT Maio 2026" />
+                        </div>
+                        <div class="dis-campaign-import-wrap">
+                          <span class="dis-campaign-import-label">Planilha de números (Excel)</span>
+                          <div class="dis-campaign-dropzone" id="dis-campaign-dropzone">
+                            <input
+                              type="file"
+                              id="dis-campaign-file"
+                              class="dis-campaign-file-input"
+                              accept=".xlsx,.xls"
+                              aria-label="Selecionar planilha Excel da campanha"
+                            />
+                            <div class="dis-campaign-dropzone-visual">
+                              <div class="dis-campaign-dropzone-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                  <line x1="12" y1="18" x2="12" y2="12" />
+                                  <line x1="9" y1="15" x2="15" y2="15" />
+                                </svg>
+                              </div>
+                              <div class="dis-campaign-dropzone-text">
+                                <strong>Arraste a planilha até aqui</strong>
+                                <span>ou clique para escolher · .xlsx ou .xls</span>
+                                <div class="dis-campaign-file-meta" id="dis-campaign-file-label">Nenhum arquivo carregado.</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="dis-campaign-preview hidden" id="dis-campaign-preview">
+                          <div class="dis-campaign-preview-head">
+                            <span class="dis-campaign-preview-title">Prévia da planilha</span>
+                            <span class="dis-campaign-preview-badge" id="dis-campaign-preview-badge">10 primeiras linhas</span>
+                          </div>
+                          <div class="dis-campaign-preview-scroll">
+                            <table class="dis-campaign-preview-table" id="dis-campaign-preview-table" aria-describedby="dis-campaign-preview-caption">
+                              <caption id="dis-campaign-preview-caption" class="sr-only">
+                                Amostra das primeiras linhas importadas da planilha da campanha
+                              </caption>
+                            </table>
+                          </div>
+                        </div>
+                        <div class="disparos-inline-actions" style="margin-top: 12px;">
+                          <button id="dis-campaign-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                            Mapear coluna e criar campanha
+                          </button>
+                          <span id="dis-campaign-create-status" class="muted">Aguardando importação da planilha.</span>
+                        </div>
+                      </div>
+                    </div>
+
                     <div class="disparos-inline-actions" style="margin-top: 12px;">
-                      <button id="dis-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">Salvar configuração do Disparador</button>
+                      <button id="dis-save-btn" class="instance-action-btn btn-qrcode enabled hidden" type="button">Salvar configuração do Disparador</button>
                     </div>
                   </div>
                 </div>
                 <div class="disparos-side">
                   <div class="disparos-side-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                    <span>Atividade recente</span>
+                    <span>Campanhas</span>
                     <button
                       id="disparos-refresh-btn"
                       type="button"
@@ -2567,7 +3167,7 @@
                     </button>
                   </div>
                   <div id="disparos-list" class="disparos-list list-wrapper">
-                    <div class="muted">Carregando ou aguardando dados...</div>
+                    <div class="muted">Carregando campanhas...</div>
                   </div>
                 </div>
               </div>
@@ -2650,6 +3250,23 @@
       </div>
     </div>
 
+    <div id="rename-instance-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal register-modal" role="dialog" aria-modal="true">
+        <div class="confirm-title">Alterar nome da instância</div>
+        <div class="register-grid">
+          <label class="register-label" for="rename-old-name-input">Nome atual</label>
+          <input id="rename-old-name-input" class="register-input" type="text" readonly />
+
+          <label class="register-label" for="rename-new-name-input">Novo nome *</label>
+          <input id="rename-new-name-input" class="register-input" type="text" placeholder="Ex.: instancia-comercial-01" />
+        </div>
+        <div class="register-actions">
+          <button id="rename-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="rename-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">Salvar nome</button>
+        </div>
+      </div>
+    </div>
+
     <div id="dis-mapping-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal register-modal" role="dialog" aria-modal="true">
         <div class="confirm-title">Mapeamento da planilha de mensagens</div>
@@ -2669,6 +3286,31 @@
         <div class="register-actions">
           <button id="dis-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
           <button id="dis-map-import-btn" class="instance-action-btn btn-qrcode enabled" type="button">Importar mensagens</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dis-campaign-work-overlay" class="dis-campaign-work-overlay" aria-hidden="true">
+      <div class="dis-campaign-work-card" role="status">
+        <div class="dis-campaign-spinner" aria-hidden="true"></div>
+        <div class="dis-campaign-work-title" id="dis-campaign-work-title">Processando...</div>
+        <div class="dis-campaign-work-sub" id="dis-campaign-work-sub"></div>
+      </div>
+    </div>
+
+    <div id="dis-campaign-mapping-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" style="max-width: 680px;">
+        <div class="confirm-title">Mapeamento da planilha de campanha</div>
+        <div class="confirm-text">
+          Selecione qual coluna representa o número de WhatsApp para esta campanha.
+        </div>
+        <div style="display: grid; gap: 10px; margin-top: 12px;">
+          <label class="register-label" for="dis-campaign-map-number">Coluna do número *</label>
+          <select id="dis-campaign-map-number" class="register-input"></select>
+        </div>
+        <div class="confirm-actions">
+          <button id="dis-campaign-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="dis-campaign-map-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">Criar campanha</button>
         </div>
       </div>
     </div>
@@ -2714,6 +3356,7 @@
       let registerConnectPollTimer = null;
       let registerConnectPollStartedAt = 0;
       let aquecedorEnviosPollTimer = null;
+      let disparosCampaignsPollTimer = null;
       let aquecedorEditMode = true;
       const aquecedorCommandLogs = [];
       const AQUECEDOR_RECOMMENDED = {
@@ -2730,6 +3373,137 @@
       let instanceUsageByName = {};
       let disparosConfigCache = null;
       let spreadsheetRowsCache = [];
+      let campaignSpreadsheetRowsCache = [];
+
+      function escapeHtmlCampaign(str) {
+        const div = document.createElement("div");
+        div.textContent = str == null ? "" : String(str);
+        return div.innerHTML;
+      }
+
+      function escapeHtmlAttr(str) {
+        return String(str == null ? "" : str)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function setDisCampaignWorkBusy(show, title, sub) {
+        const el = document.getElementById("dis-campaign-work-overlay");
+        if (!el) return;
+        const titleEl = document.getElementById("dis-campaign-work-title");
+        const subEl = document.getElementById("dis-campaign-work-sub");
+        if (show) {
+          if (titleEl && title) titleEl.textContent = title;
+          if (subEl) subEl.textContent = sub || "";
+          el.classList.add("open");
+          el.setAttribute("aria-hidden", "false");
+        } else {
+          el.classList.remove("open");
+          el.setAttribute("aria-hidden", "true");
+        }
+      }
+
+      async function ensureXlsxParserReady() {
+        if (window.XLSX) return;
+        for (let i = 0; i < 80; i += 1) {
+          await new Promise((r) => setTimeout(r, 100));
+          if (window.XLSX) return;
+        }
+        throw new Error("Biblioteca de planilha ainda não carregou. Atualize a página e tente de novo.");
+      }
+
+      function renderDisCampaignPreviewTable(rows) {
+        const preview = document.getElementById("dis-campaign-preview");
+        const table = document.getElementById("dis-campaign-preview-table");
+        const badge = document.getElementById("dis-campaign-preview-badge");
+        if (!preview || !table) return;
+        if (!Array.isArray(rows) || !rows.length) {
+          preview.classList.add("hidden");
+          table.innerHTML = "";
+          return;
+        }
+        const cols = Object.keys(rows[0] || {});
+        const sample = rows.slice(0, 10);
+        if (badge) {
+          badge.textContent =
+            sample.length < rows.length
+              ? `${sample.length} de ${rows.length} linhas · amostra`
+              : `${sample.length} linha(s) · amostra completa`;
+        }
+        const thead = `<thead><tr>${cols
+          .map((c) => `<th title="${escapeHtmlAttr(c)}">${escapeHtmlCampaign(c)}</th>`)
+          .join("")}</tr></thead>`;
+        const tbody = `<tbody>${sample
+          .map((row) => {
+            const cells = cols
+              .map((c) => {
+                const raw = row?.[c];
+                const text = raw == null ? "" : String(raw);
+                return `<td title="${escapeHtmlAttr(text)}">${escapeHtmlCampaign(text)}</td>`;
+              })
+              .join("");
+            return `<tr>${cells}</tr>`;
+          })
+          .join("")}</tbody>`;
+        table.innerHTML = `${thead}${tbody}`;
+        preview.classList.remove("hidden");
+      }
+
+      async function processDisCampaignFile(file) {
+        if (!file) return;
+        const label = document.getElementById("dis-campaign-file-label");
+        const dz = document.getElementById("dis-campaign-dropzone");
+        setDisCampaignWorkBusy(true, "Importando planilha…", "Lendo linhas e colunas do Excel.");
+        dz?.classList.add("is-busy");
+        try {
+          await ensureXlsxParserReady();
+          campaignSpreadsheetRowsCache = await parseSpreadsheetFile(file);
+          if (!campaignSpreadsheetRowsCache.length) {
+            showToast("Nenhuma linha encontrada na planilha.", "warning");
+            if (label) label.textContent = "Planilha vazia — envie outro arquivo.";
+            renderDisCampaignPreviewTable([]);
+            return;
+          }
+          const colCount = Object.keys(campaignSpreadsheetRowsCache[0] || {}).length;
+          if (label) {
+            label.textContent = `${file.name} · ${campaignSpreadsheetRowsCache.length} linha(s) · ${colCount} coluna(s)`;
+          }
+          renderDisCampaignPreviewTable(campaignSpreadsheetRowsCache);
+          const statusEl = document.getElementById("dis-campaign-create-status");
+          if (statusEl) {
+            statusEl.textContent =
+              "Planilha importada. Clique em «Mapear coluna e criar campanha» para continuar.";
+            statusEl.style.color = "#a5f3fc";
+          }
+          showToast(
+            `Planilha importada: ${campaignSpreadsheetRowsCache.length} linha(s). Prévia abaixo.`,
+            "success",
+            4000
+          );
+        } catch (err) {
+          campaignSpreadsheetRowsCache = [];
+          renderDisCampaignPreviewTable([]);
+          showToast(err?.message || "Falha ao ler planilha.", "error");
+          if (label) label.textContent = "Erro ao importar — tente outro arquivo.";
+        } finally {
+          dz?.classList.remove("is-busy");
+          setDisCampaignWorkBusy(false);
+        }
+      }
+      let pendingSelectedDisparadorInstances = [];
+      let renameInstanceCurrentName = "";
+      let avatarRefreshNonce = Date.now();
+      let inlineRenameEditingInstance = "";
+      let inlineRenameDraftValue = "";
+      let inlineWhatsappNameEditingInstance = "";
+      let inlineWhatsappNameDraftValue = "";
+      let disparosSectionLayoutInitialized = false;
+      const disparosSectionCollapsedState = {};
+      const disparosSectionSavedState = {};
+      let disparosActiveSectionIndex = 0;
 
       function showToast(message, type = "success", timeoutMs = 3200) {
         const stack = document.getElementById("toast-stack");
@@ -3049,6 +3823,21 @@
         }
       }
 
+      function startDisparosCampaignsPolling() {
+        if (disparosCampaignsPollTimer) clearInterval(disparosCampaignsPollTimer);
+        disparosCampaignsPollTimer = setInterval(() => {
+          if (activeTab !== "disparos") return;
+          loadDisparosTemplates();
+        }, 10000);
+      }
+
+      function stopDisparosCampaignsPolling() {
+        if (disparosCampaignsPollTimer) {
+          clearInterval(disparosCampaignsPollTimer);
+          disparosCampaignsPollTimer = null;
+        }
+      }
+
       function toggleDisparosModeBoxes() {
         const isAi = Boolean(document.getElementById("dis-mode-ai")?.checked);
         const aiBox = document.getElementById("dis-ai-box");
@@ -3125,6 +3914,11 @@
         const aiBriefing = buildDisparosAiBriefingStructured();
         const hiddenBriefing = document.getElementById("dis-ai-briefing");
         if (hiddenBriefing) hiddenBriefing.value = aiBriefing;
+        const selectedInstances = Array.from(
+          document.getElementById("dis-selected-instances")?.options || []
+        )
+          .map((opt) => String(opt.value || "").trim())
+          .filter(Boolean);
         return {
           delayMinSeconds: readInt("dis-delay-min", 90),
           delayMaxSeconds: readInt("dis-delay-max", 240),
@@ -3139,6 +3933,7 @@
           aiCta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
           aiAudience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
           whatsappTargetNumber: getWhatsappTargetDigits(), // backend adiciona +55
+          selectedDisparadorInstances: selectedInstances,
         };
       }
 
@@ -3169,6 +3964,10 @@
         if (notes && config?.aiBriefing) {
           notes.value = String(config.aiBriefing);
         }
+        pendingSelectedDisparadorInstances = Array.isArray(config?.selectedDisparadorInstances)
+          ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+          : [];
+        syncDisparadorNumberPicker();
         setDisparosWorkingDays(config?.workingDays || ["seg", "ter", "qua", "qui", "sex"]);
         const modeAi = document.getElementById("dis-mode-ai");
         const modeDb = document.getElementById("dis-mode-db");
@@ -3180,9 +3979,273 @@
         toggleDisparosModeBoxes();
       }
 
+      function getSelectOptionValues(selectEl) {
+        if (!selectEl) return [];
+        return Array.from(selectEl.options)
+          .map((opt) => String(opt.value || "").trim())
+          .filter(Boolean);
+      }
+
+      function fillSelectWithValues(selectEl, values) {
+        if (!selectEl) return;
+        selectEl.innerHTML = "";
+        values.forEach((value) => {
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = value;
+          selectEl.appendChild(opt);
+        });
+      }
+
+      function getDisparadorInstanceLabelByValue(value) {
+        const key = String(value || "").trim();
+        if (!key) return "";
+        const items = Array.isArray(instancesData?.items) ? instancesData.items : [];
+        const match = items.find((inst) => String(inst?.name || inst?.instanceName || "").trim() === key);
+        return String(
+          match?.instanceAlias ||
+          match?.instanceLabel ||
+          match?.name ||
+          match?.instanceName ||
+          key
+        ).trim();
+      }
+
+      function syncDisparadorNumberPicker() {
+        const availableEl = document.getElementById("dis-available-instances");
+        const selectedEl = document.getElementById("dis-selected-instances");
+        if (!availableEl || !selectedEl) return;
+
+        const candidates = (Array.isArray(instancesData?.items) ? instancesData.items : [])
+          .map((inst) => ({
+            name: String(inst?.name || inst?.instanceName || "").trim(),
+            label: String(
+              inst?.instanceAlias ||
+              inst?.instanceLabel ||
+              inst?.name ||
+              inst?.instanceName ||
+              ""
+            ).trim(),
+            status: String(inst?.connectionStatus || "").toLowerCase(),
+          }))
+          .filter((row) => row.name && row.status.includes("open"));
+
+        const currentSelected = new Set([
+          ...pendingSelectedDisparadorInstances,
+          ...getSelectOptionValues(selectedEl),
+        ]);
+
+        const selected = candidates.filter((row) => currentSelected.has(row.name));
+        const available = candidates.filter((row) => !currentSelected.has(row.name));
+
+        const fillSelectWithRows = (selectEl, rows) => {
+          if (!selectEl) return;
+          selectEl.innerHTML = "";
+          rows.forEach((row) => {
+            const opt = document.createElement("option");
+            opt.value = row.name; // valor técnico permanece igual
+            opt.textContent = row.label || row.name; // texto exibido usa alias
+            selectEl.appendChild(opt);
+          });
+        };
+
+        fillSelectWithRows(availableEl, available);
+        fillSelectWithRows(selectedEl, selected);
+        pendingSelectedDisparadorInstances = selected.map((row) => row.name);
+      }
+
+      function moveDisparadorNumbers(fromId, toId) {
+        const fromEl = document.getElementById(fromId);
+        const toEl = document.getElementById(toId);
+        if (!fromEl || !toEl) return;
+        const fromValues = getSelectOptionValues(fromEl);
+        const toValues = getSelectOptionValues(toEl);
+        const selectedToMove = Array.from(fromEl.selectedOptions).map((opt) => String(opt.value || "").trim()).filter(Boolean);
+        if (!selectedToMove.length) return;
+        const newFrom = fromValues.filter((v) => !selectedToMove.includes(v));
+        const newTo = Array.from(new Set([...toValues, ...selectedToMove]));
+        fillSelectWithValues(fromEl, newFrom);
+        fillSelectWithValues(toEl, newTo);
+        pendingSelectedDisparadorInstances = getSelectOptionValues(
+          document.getElementById("dis-selected-instances")
+        );
+      }
+
+      function moveSingleDisparadorNumberByClick(fromId, toId) {
+        const fromEl = document.getElementById(fromId);
+        const toEl = document.getElementById(toId);
+        if (!fromEl || !toEl) return;
+        const selected = fromEl.selectedOptions?.[0];
+        if (!selected) return;
+        const value = String(selected.value || "").trim();
+        if (!value) return;
+
+        const fromValues = getSelectOptionValues(fromEl).filter((v) => v !== value);
+        const toValues = getSelectOptionValues(toEl);
+        if (!toValues.includes(value)) toValues.push(value);
+
+        const rebuildWithLabels = (selectEl, values) => {
+          const labelsByValue = new Map(
+            Array.from(selectEl.options || []).map((opt) => [
+              String(opt.value || "").trim(),
+              String(opt.textContent || opt.value || "").trim(),
+            ])
+          );
+          selectEl.innerHTML = "";
+          values.forEach((v) => {
+            const opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = labelsByValue.get(v) || getDisparadorInstanceLabelByValue(v) || v;
+            selectEl.appendChild(opt);
+          });
+        };
+
+        rebuildWithLabels(fromEl, fromValues);
+        rebuildWithLabels(toEl, toValues);
+
+        pendingSelectedDisparadorInstances = getSelectOptionValues(
+          document.getElementById("dis-selected-instances")
+        );
+      }
+
+      function initDisparosSectionLayout() {
+        if (disparosSectionLayoutInitialized) {
+          applyDisparosSectionLayout();
+          return;
+        }
+        const sections = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        );
+        sections.forEach((section, idx) => {
+          if (section.dataset.sectionReady === "1") return;
+          const titleEl = section.querySelector(".aquecedor-section-title");
+          if (!titleEl) return;
+          const rawTitle = String(titleEl.textContent || `Seção ${idx + 1}`).trim();
+          const title = rawTitle.replace(/^\d+\)\s*/, "").trim();
+          titleEl.textContent = title;
+          const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
+          section.dataset.sectionKey = sectionKey;
+          section.dataset.sectionIndex = String(idx);
+
+          const header = document.createElement("div");
+          header.className = "dis-section-head";
+          header.innerHTML = `
+            <div class="dis-section-title-wrap">
+              <span class="dis-section-check hidden">✓</span>
+              <span class="dis-section-head-title">${title}</span>
+            </div>
+            <button type="button" class="dis-section-edit-btn hidden">Editar</button>
+          `;
+
+          const body = document.createElement("div");
+          body.className = "dis-section-body";
+          let node = titleEl.nextSibling;
+          while (node) {
+            const next = node.nextSibling;
+            body.appendChild(node);
+            node = next;
+          }
+          section.appendChild(header);
+          section.appendChild(body);
+
+          disparosSectionCollapsedState[sectionKey] = idx !== 0;
+          disparosSectionSavedState[sectionKey] = false;
+
+          const editBtn = header.querySelector(".dis-section-edit-btn");
+          if (editBtn) {
+            editBtn.addEventListener("click", () => {
+              sections.forEach((sec, secIdx) => {
+                const key = String(sec.dataset.sectionKey || `section-${secIdx + 1}`);
+                disparosSectionCollapsedState[key] = key !== sectionKey;
+              });
+              disparosActiveSectionIndex = idx;
+              applyDisparosSectionLayout();
+            });
+          }
+
+          const saveRow = document.createElement("div");
+          saveRow.className = "dis-section-save-row";
+          saveRow.innerHTML = `<button type="button" class="dis-section-save-btn" data-section-key="${sectionKey}">Salvar configurações</button>`;
+          body.appendChild(saveRow);
+          const saveBtn = saveRow.querySelector(".dis-section-save-btn");
+          if (saveBtn) {
+            saveBtn.addEventListener("click", async () => {
+              const original = saveBtn.textContent;
+              saveBtn.textContent = "Salvando...";
+              saveBtn.setAttribute("disabled", "true");
+              const ok = await saveDisparosConfig({
+                collapseAll: false,
+                useMainButtonLoading: false,
+                skipWhatsappValidation: idx < 4,
+              });
+              saveBtn.textContent = original || "Salvar configurações";
+              saveBtn.removeAttribute("disabled");
+              if (!ok) return;
+              disparosSectionSavedState[sectionKey] = true;
+              disparosSectionCollapsedState[sectionKey] = true;
+              const nextIdx = idx + 1;
+              if (nextIdx < sections.length) {
+                const nextSection = sections[nextIdx];
+                const nextKey = String(nextSection.dataset.sectionKey || `section-${nextIdx + 1}`);
+                disparosSectionCollapsedState[nextKey] = false;
+                disparosActiveSectionIndex = nextIdx;
+              }
+              applyDisparosSectionLayout();
+            });
+          }
+
+          section.dataset.sectionReady = "1";
+        });
+        disparosSectionLayoutInitialized = true;
+        applyDisparosSectionLayout();
+      }
+
+      function applyDisparosSectionLayout() {
+        const sections = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        );
+        sections.forEach((section, idx) => {
+          const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
+          const collapsed = Boolean(disparosSectionCollapsedState[sectionKey]);
+          section.classList.toggle("dis-section-collapsed", collapsed);
+          const saved = Boolean(disparosSectionSavedState[sectionKey]);
+          const check = section.querySelector(".dis-section-check");
+          const editBtn = section.querySelector(".dis-section-edit-btn");
+          if (check) check.classList.toggle("hidden", !saved);
+          if (editBtn) editBtn.classList.toggle("hidden", !saved);
+        });
+      }
+
+      function resetDisparosSectionFlow() {
+        const sections = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        );
+        sections.forEach((section, idx) => {
+          const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
+          disparosSectionSavedState[sectionKey] = false;
+          disparosSectionCollapsedState[sectionKey] = idx !== 0;
+        });
+        disparosActiveSectionIndex = 0;
+        applyDisparosSectionLayout();
+      }
+
+      function markDisparosSectionsSavedAndCollapse() {
+        const sections = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        );
+        sections.forEach((section, idx) => {
+          const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
+          disparosSectionSavedState[sectionKey] = true;
+          disparosSectionCollapsedState[sectionKey] = true;
+        });
+        applyDisparosSectionLayout();
+      }
+
       async function loadDisparosConfig() {
         const statusLabel = document.getElementById("disparos-status-label");
         try {
+          initDisparosSectionLayout();
+          resetDisparosSectionFlow();
           const response = await fetchWithTimeout("/disparos/config", {}, 10000);
           if (!response.ok) {
             if (statusLabel) statusLabel.textContent = "Erro ao carregar";
@@ -3208,20 +4271,24 @@
             );
           }
           if (statusLabel) statusLabel.textContent = "Configuração carregada";
+          applyDisparosSectionLayout();
         } catch {
           if (statusLabel) statusLabel.textContent = "Erro ao carregar";
         }
       }
 
-      async function saveDisparosConfig() {
+      async function saveDisparosConfig(options = {}) {
         const btn = document.getElementById("dis-save-btn");
         const statusLabel = document.getElementById("disparos-status-label");
         const original = btn?.textContent || "Salvar";
-        if (!validateWhatsappTarget(true)) {
+        const useMainButtonLoading = options?.useMainButtonLoading !== false;
+        const collapseAllOnSuccess = options?.collapseAll !== false;
+        const skipWhatsappValidation = options?.skipWhatsappValidation === true;
+        if (!skipWhatsappValidation && !validateWhatsappTarget(true)) {
           showToast("Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.", "warning");
-          return;
+          return false;
         }
-        if (btn) {
+        if (useMainButtonLoading && btn) {
           btn.textContent = "Salvando...";
           btn.setAttribute("disabled", "true");
         }
@@ -3238,15 +4305,20 @@
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
             showToast(data?.error || "Falha ao salvar configuração.", "error");
-            return;
+            return false;
           }
           disparosConfigCache = data?.config || null;
+          if (collapseAllOnSuccess) {
+            markDisparosSectionsSavedAndCollapse();
+          }
           if (statusLabel) statusLabel.textContent = "Configuração salva";
           showToast("Configuração do Disparador salva com sucesso.", "success");
+          return true;
         } catch {
           showToast("Erro ao salvar configuração do Disparador.", "error");
+          return false;
         } finally {
-          if (btn) {
+          if (useMainButtonLoading && btn) {
             btn.textContent = original;
             btn.removeAttribute("disabled");
           }
@@ -3363,6 +4435,86 @@
         }
       }
 
+      async function testDisparosAiGeneration() {
+        const btn = document.getElementById("dis-test-ai-generate-btn");
+        const statusEl = document.getElementById("dis-ai-test-status");
+        const outputEl = document.getElementById("dis-ai-test-output");
+        const original = btn?.textContent || "Gerar mensagem teste (IA)";
+        const isAiMode = Boolean(document.getElementById("dis-mode-ai")?.checked);
+        if (!isAiMode) {
+          showToast("Ative o modo 'Gerar mensagens com IA' para testar.", "warning");
+          return;
+        }
+
+        if (btn) {
+          btn.textContent = "Gerando...";
+          btn.setAttribute("disabled", "true");
+        }
+        if (statusEl) {
+          statusEl.textContent = "Gerando mensagem com IA...";
+          statusEl.style.color = "#cbd5e1";
+        }
+        try {
+          const briefing = buildDisparosAiBriefingStructured();
+          const hiddenBriefing = document.getElementById("dis-ai-briefing");
+          if (hiddenBriefing) hiddenBriefing.value = briefing;
+          const response = await fetchWithTimeout(
+            "/disparos/gerar-mensagem-ai",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                briefing,
+                tone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
+                audience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
+                cta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
+                objective: String(document.getElementById("dis-ai-objective")?.value || "gerar mensagem de prospeccao"),
+                whatsappTargetNumber: getWhatsappTargetDigits(),
+              }),
+            },
+            20000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const err = String(data?.error || "Falha ao gerar mensagem com IA.");
+            if (statusEl) {
+              statusEl.textContent = err;
+              statusEl.style.color = "#fda4af";
+            }
+            showToast(err, "error");
+            return;
+          }
+          const generatedMessage = String(data?.message || "").trim();
+          if (outputEl) outputEl.value = generatedMessage || "";
+          if (statusEl) {
+            const model = String(data?.model || "").trim();
+            const latencyMs = Number(data?.latencyMs || 0);
+            const shortUrl = String(data?.shortUrl || "").trim();
+            const suffix = model
+              ? ` (${model}${latencyMs > 0 ? `, ${latencyMs}ms` : ""})`
+              : latencyMs > 0
+                ? ` (${latencyMs}ms)`
+                : "";
+            statusEl.textContent = shortUrl
+              ? `Mensagem gerada com sucesso${suffix}. Link curto: ${shortUrl}`
+              : `Mensagem gerada com sucesso${suffix}.`;
+            statusEl.style.color = "#86efac";
+          }
+          showToast("Mensagem teste gerada com IA.", "success");
+        } catch {
+          if (statusEl) {
+            statusEl.textContent = "Erro ao gerar mensagem com IA.";
+            statusEl.style.color = "#fda4af";
+          }
+          showToast("Erro ao gerar mensagem com IA.", "error");
+        } finally {
+          if (btn) {
+            btn.textContent = original;
+            btn.removeAttribute("disabled");
+          }
+        }
+      }
+
       async function loadDisparosTemplates() {
         const list = document.getElementById("disparos-list");
         const sent = document.getElementById("disparos-enviados-hoje");
@@ -3370,15 +4522,17 @@
         const inst = document.getElementById("disparos-instancia-ativa");
         if (!list) return;
         try {
-          const response = await fetchWithTimeout("/disparos/templates", {}, 10000);
+          const response = await fetchWithTimeout("/disparos/campanhas", {}, 10000);
           if (!response.ok) {
-            list.innerHTML = '<div class="muted">Falha ao carregar templates de mensagens.</div>';
+            list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
             return;
           }
           const data = await response.json().catch(() => ({}));
           const items = Array.isArray(data?.items) ? data.items : [];
-          if (sent) sent.textContent = "—";
-          if (fila) fila.textContent = String(items.length);
+          const totalSent = items.reduce((acc, item) => acc + Number(item?.sentCount || 0), 0);
+          const runningCount = items.filter((item) => String(item?.status || "").toLowerCase() === "running").length;
+          if (sent) sent.textContent = String(totalSent);
+          if (fila) fila.textContent = String(runningCount);
           if (inst) inst.textContent = "—";
           try {
             const nextRes = await fetchWithTimeout("/disparos/next-instance", {}, 8000);
@@ -3390,25 +4544,71 @@
             // silencioso
           }
           if (!items.length) {
-            list.innerHTML = '<div class="muted">Nenhum template importado ainda.</div>';
+            list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
             return;
           }
           list.innerHTML = "";
           items.slice(0, 80).forEach((item) => {
             const row = document.createElement("div");
-            row.className = "aquecedor-envio-item";
-            const text = String(item?.text || "").replace(/\s+/g, " ").slice(0, 180);
-            const alias = String(item?.alias || "sem alias");
-            const segment = String(item?.segment || "geral");
+            row.className = "aquecedor-envio-item disparos-campaign-item";
+            const createdAt = String(item?.createdAt || "").trim();
+            const dateText = createdAt
+              ? new Date(createdAt).toLocaleDateString("pt-BR")
+              : "sem data";
+            const campaignName = String(item?.name || "Campanha sem nome").trim();
+            const sentCount = Number(item?.sentCount || 0);
+            const totalNumbers = Number(item?.totalNumbers || 0);
+            const progress = Number(item?.progressPercent || 0);
+            const campaignId = String(item?.id || "").trim();
+            const statusRaw = String(item?.status || "paused").toLowerCase();
+            const isRunning = statusRaw === "running";
+            const btnLabel = isRunning ? "Pausar" : "Ativar campanha";
+            const safeName = campaignName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             row.innerHTML = `
-              <div class="aquecedor-envio-main">${alias} - ${segment}</div>
-              <div class="aquecedor-envio-time">${text}</div>
+              <div class="disparos-campaign-item-body">
+                <div class="aquecedor-envio-main">${safeName}</div>
+                <div class="aquecedor-envio-time">Inicio: ${dateText}</div>
+                <div class="aquecedor-envio-time">${sentCount} de ${totalNumbers} disparos</div>
+                <div style="margin-top:6px; height:8px; border-radius:999px; background: rgba(255,255,255,.12); overflow:hidden;">
+                  <div style="width:${Math.max(0, Math.min(100, progress))}%; height:100%; background: linear-gradient(90deg, #22c55e, #16a34a);"></div>
+                </div>
+              </div>
+              <div class="disparos-campaign-item-actions">
+                <button
+                  type="button"
+                  class="instance-action-btn btn-qrcode enabled btn-campaign-toggle${isRunning ? " running" : ""}"
+                  data-campaign-id="${campaignId.replace(/"/g, "&quot;")}"
+                  data-campaign-running="${isRunning ? "1" : "0"}"
+                >${btnLabel}</button>
+              </div>
             `;
             list.appendChild(row);
           });
         } catch {
-          list.innerHTML = '<div class="muted">Falha ao carregar templates de mensagens.</div>';
+          list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
         }
+      }
+
+      async function setDisparosCampaignActive(campaignId, ativa) {
+        const id = String(campaignId || "").trim();
+        if (!id) return false;
+        const response = await fetchWithTimeout(
+          `/disparos/campanhas/${encodeURIComponent(id)}/estado`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ativa }),
+          },
+          15000
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showToast(String(data?.error || "Não foi possível alterar o estado da campanha."), "error");
+          return false;
+        }
+        showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
+        await loadDisparosTemplates();
+        return true;
       }
 
       async function parseSpreadsheetFile(file) {
@@ -3519,6 +4719,100 @@
           loadDisparosTemplates();
         } catch {
           showToast("Erro ao importar planilha.", "error");
+        }
+      }
+
+      function openDisCampaignMappingModalWithColumns(columns) {
+        const overlay = document.getElementById("dis-campaign-mapping-overlay");
+        const numberSel = document.getElementById("dis-campaign-map-number");
+        if (!overlay || !numberSel) return;
+        numberSel.innerHTML = ['<option value="">Selecione</option>', ...columns.map((c) => `<option value="${String(c)}">${String(c)}</option>`)].join("");
+        const preferred = columns.find((c) => /numero|phone|telefone|celular|whatsapp|contato/i.test(String(c)));
+        if (preferred) numberSel.value = String(preferred);
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      function closeDisCampaignMappingModal() {
+        const overlay = document.getElementById("dis-campaign-mapping-overlay");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      async function openDisCampaignMappingFlow() {
+        const fileInput = document.getElementById("dis-campaign-file");
+        const file = fileInput?.files?.[0];
+        if (!campaignSpreadsheetRowsCache.length && file) {
+          await processDisCampaignFile(file);
+        }
+        if (!campaignSpreadsheetRowsCache.length) {
+          showToast("Importe primeiro uma planilha Excel (arraste ou clique na área acima).", "warning");
+          return;
+        }
+        const columns = Object.keys(campaignSpreadsheetRowsCache[0] || {});
+        if (!columns.length) {
+          showToast("Não foi possível identificar colunas na planilha.", "warning");
+          return;
+        }
+        openDisCampaignMappingModalWithColumns(columns);
+      }
+
+      async function createCampaignFromMappedSpreadsheet() {
+        const campaignName = String(document.getElementById("dis-campaign-name")?.value || "").trim();
+        const numberCol = String(document.getElementById("dis-campaign-map-number")?.value || "").trim();
+        const statusEl = document.getElementById("dis-campaign-create-status");
+        if (!campaignName) {
+          showToast("Informe o nome da campanha antes de criar.", "warning");
+          return;
+        }
+        if (!numberCol) {
+          showToast("Selecione a coluna do número.", "warning");
+          return;
+        }
+        const numbers = campaignSpreadsheetRowsCache
+          .map((row) => String(row?.[numberCol] || "").trim())
+          .filter(Boolean);
+        if (!numbers.length) {
+          showToast("Nenhum número válido encontrado na coluna selecionada.", "warning");
+          return;
+        }
+        setDisCampaignWorkBusy(
+          true,
+          "Registrando campanha…",
+          `Gravando ${numbers.length} número(s) e snapshot da configuração.`
+        );
+        try {
+          const response = await fetchWithTimeout(
+            "/disparos/campanhas",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: campaignName,
+                numbers,
+                configSnapshot: getDisparosFormValues(),
+              }),
+            },
+            25000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao criar campanha.", "error");
+            return;
+          }
+          if (statusEl) {
+            const total = Number(data?.campaign?.totalNumbers || 0);
+            statusEl.textContent = `Campanha criada com ${total} números. Prévia da planilha mantida abaixo.`;
+            statusEl.style.color = "#86efac";
+          }
+          showToast(data?.message || "Campanha criada com sucesso.", "success");
+          closeDisCampaignMappingModal();
+          loadDisparosTemplates();
+        } catch {
+          showToast("Erro ao criar campanha.", "error");
+        } finally {
+          setDisCampaignWorkBusy(false);
         }
       }
 
@@ -3749,16 +5043,20 @@
         if (nextTab === "instancias") {
           renderInstancesList();
           stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
         } else if (nextTab === "disparos") {
           stopAquecedorEnviosPolling();
           loadDisparosConfig();
           loadDisparosTemplates();
+          startDisparosCampaignsPolling();
         } else if (nextTab === "aquecedor") {
           loadAquecedorConfig();
           loadAquecedorRuntimeStatus();
           startAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
         } else {
           stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
         }
       }
 
@@ -4287,6 +5585,9 @@
           const displayName =
             String(inst?.displayName || inst?.name || instanceName).trim() ||
             instanceName;
+          const whatsappNameOverride = String(inst?.whatsappNameOverride || "").trim();
+          const instanceAlias = String(inst?.instanceAlias || "").trim();
+          const instanceLabel = instanceAlias || instanceName;
 
           const toInt = (value) => {
             if (typeof value === "number" && Number.isFinite(value)) {
@@ -4323,6 +5624,9 @@
             originalNumber: normalizedNumberRaw,
             numberKey: normalizedNumberKey,
             displayName,
+            whatsappNameOverride,
+            instanceAlias,
+            instanceLabel,
             contacts,
             messages,
             profilePicUrl: String(inst?.profilePicUrl || "").trim(),
@@ -4498,6 +5802,16 @@
         );
       }
 
+      function buildAvatarProxyUrl(rawUrl, version = "", refreshNonce = "") {
+        const safeUrl = String(rawUrl || "").trim();
+        if (!safeUrl) return "";
+        const qs = new URLSearchParams();
+        qs.set("url", safeUrl);
+        if (version) qs.set("v", String(version));
+        if (refreshNonce) qs.set("r", String(refreshNonce));
+        return `/instancias/avatar?${qs.toString()}`;
+      }
+
       function renderInstancesList() {
         const container = document.getElementById("instances-list");
         if (!container) return;
@@ -4514,9 +5828,22 @@
 
         if (instancesSearchTerm) {
           const term = instancesSearchTerm.toLowerCase();
-          filtered = filtered.filter((i) =>
-            i.displayName.toLowerCase().includes(term)
-          );
+          filtered = filtered.filter((i) => {
+            const name = String(i.displayName || "").toLowerCase();
+            const instanceName = String(i.instanceName || "").toLowerCase();
+            const instanceAlias = String(i.instanceAlias || "").toLowerCase();
+            const instanceLabel = String(i.instanceLabel || "").toLowerCase();
+            const numberDisplay = String(i.displayNumber || "").toLowerCase();
+            const numberRaw = String(i.originalNumber || "").toLowerCase();
+            return (
+              name.includes(term) ||
+              instanceName.includes(term) ||
+              instanceAlias.includes(term) ||
+              instanceLabel.includes(term) ||
+              numberDisplay.includes(term) ||
+              numberRaw.includes(term)
+            );
+          });
         }
 
         const countLabel = document.getElementById("instancias-count-label");
@@ -4541,8 +5868,8 @@
             <tr>
               <th style="width:38px"></th>
               <th>Número</th>
-              <th>Nome</th>
-              <th>Instância</th>
+              <th>Nome (WhatsApp)</th>
+              <th>Nome da Instância</th>
               <th>Contatos</th>
               <th>Mensagens</th>
               <th>Aquecedor</th>
@@ -4561,9 +5888,11 @@
           const tr = document.createElement("tr");
           const avatarSrc =
             inst.profilePicUrl && inst.profilePicUrl.length > 0
-              ? `${inst.profilePicUrl}${
-                  inst.profilePicUrl.includes("?") ? "&" : "?"
-                }v=${encodeURIComponent(inst.avatarVersion || "1")}`
+              ? buildAvatarProxyUrl(
+                  inst.profilePicUrl,
+                  inst.avatarVersion || "1",
+                  avatarRefreshNonce
+                )
               : "";
 
           const avatarCell = avatarSrc
@@ -4579,12 +5908,33 @@
             : "instance-action-btn btn-qrcode disabled";
           const deleteClass = "instance-action-btn btn-delete enabled";
           const safeClass = `instance-action-btn btn-safe enabled${isSafeNumber ? " active" : ""}`;
+          const isInlineWhatsappNameEditing =
+            inlineWhatsappNameEditingInstance === inst.instanceName;
+          const whatsappNameCell = isInlineWhatsappNameEditing
+            ? `<div class="instance-inline-wrap">
+                <input class="instance-inline-input whatsapp-name-inline-input" data-instance="${inst.instanceName}" type="text" value="${inlineWhatsappNameDraftValue || inst.displayName || ""}" />
+                <button type="button" class="instance-inline-icon save whatsapp-name-inline-save-btn" data-instance="${inst.instanceName}" title="Salvar Nome (WhatsApp)">✓</button>
+              </div>`
+            : `<div class="instance-inline-wrap">
+                <button type="button" class="instance-inline-icon whatsapp-name-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar Nome (WhatsApp)">✎</button>
+                <span>${inst.displayName || "—"}</span>
+              </div>`;
+          const isInlineEditing = inlineRenameEditingInstance === inst.instanceName;
+          const instanceNameCell = isInlineEditing
+            ? `<div class="instance-inline-wrap">
+                <input class="instance-inline-input" data-instance="${inst.instanceName}" type="text" value="${inlineRenameDraftValue || inst.instanceLabel || inst.instanceName}" />
+                <button type="button" class="instance-inline-icon save instance-inline-save-btn" data-instance="${inst.instanceName}" title="Salvar">✓</button>
+              </div>`
+            : `<div class="instance-inline-wrap">
+                <button type="button" class="instance-inline-icon instance-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar nome">✎</button>
+                <span>${inst.instanceLabel || inst.instanceName}</span>
+              </div>`;
 
           tr.innerHTML = `
             <td>${avatarCell}</td>
             <td>${inst.displayNumber}</td>
-            <td>${inst.displayName}</td>
-            <td>${inst.instanceName}</td>
+            <td>${whatsappNameCell}</td>
+            <td>${instanceNameCell}</td>
             <td>${inst.contacts.toLocaleString("pt-BR")}</td>
             <td>${inst.messages.toLocaleString("pt-BR")}</td>
             <td>
@@ -4616,6 +5966,70 @@
               </div>
             </td>
           `;
+          const inlineEditBtn = tr.querySelector(".instance-inline-edit-btn");
+          if (inlineEditBtn) {
+            inlineEditBtn.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              startInlineRename(inst.instanceName, inst.instanceLabel || inst.instanceName);
+            });
+          }
+          const whatsappNameEditBtn = tr.querySelector(".whatsapp-name-inline-edit-btn");
+          if (whatsappNameEditBtn) {
+            whatsappNameEditBtn.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              startInlineWhatsappName(inst.instanceName, inst.displayName || "");
+            });
+          }
+          const whatsappNameSaveBtn = tr.querySelector(".whatsapp-name-inline-save-btn");
+          if (whatsappNameSaveBtn) {
+            whatsappNameSaveBtn.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              confirmInlineWhatsappName(inst.instanceName, whatsappNameSaveBtn);
+            });
+          }
+          const inlineSaveBtn = tr.querySelector(".instance-inline-save-btn");
+          if (inlineSaveBtn) {
+            inlineSaveBtn.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              confirmInlineRename(inst.instanceName, inlineSaveBtn);
+            });
+          }
+          const inlineInput = tr.querySelector(
+            ".instance-inline-input:not(.whatsapp-name-inline-input)"
+          );
+          if (inlineInput) {
+            inlineInput.addEventListener("input", () => {
+              inlineRenameDraftValue = String(inlineInput.value || "");
+            });
+            inlineInput.addEventListener("keydown", (ev) => {
+              if (ev.key === "Enter") {
+                ev.preventDefault();
+                confirmInlineRename(inst.instanceName, inlineInput);
+              } else if (ev.key === "Escape") {
+                ev.preventDefault();
+                cancelInlineRename();
+              }
+            });
+          }
+          const whatsappNameInput = tr.querySelector(".whatsapp-name-inline-input");
+          if (whatsappNameInput) {
+            whatsappNameInput.addEventListener("input", () => {
+              inlineWhatsappNameDraftValue = String(whatsappNameInput.value || "");
+            });
+            whatsappNameInput.addEventListener("keydown", (ev) => {
+              if (ev.key === "Enter") {
+                ev.preventDefault();
+                confirmInlineWhatsappName(inst.instanceName, whatsappNameInput);
+              } else if (ev.key === "Escape") {
+                ev.preventDefault();
+                cancelInlineWhatsappName();
+              }
+            });
+          }
           tbody.appendChild(tr);
         });
 
@@ -4697,6 +6111,274 @@
           registerConnectPollTimer = null;
         }
         registerConnectPollStartedAt = 0;
+      }
+
+      function openRenameInstanceModal(instanceName) {
+        const overlay = document.getElementById("rename-instance-overlay");
+        const oldNameInput = document.getElementById("rename-old-name-input");
+        const newNameInput = document.getElementById("rename-new-name-input");
+        if (!overlay || !oldNameInput || !newNameInput) return;
+        renameInstanceCurrentName = String(instanceName || "").trim();
+        oldNameInput.value = renameInstanceCurrentName;
+        newNameInput.value = renameInstanceCurrentName;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        newNameInput.focus();
+        newNameInput.select();
+      }
+
+      function closeRenameInstanceModal() {
+        const overlay = document.getElementById("rename-instance-overlay");
+        const oldNameInput = document.getElementById("rename-old-name-input");
+        const newNameInput = document.getElementById("rename-new-name-input");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+        renameInstanceCurrentName = "";
+        if (oldNameInput) oldNameInput.value = "";
+        if (newNameInput) newNameInput.value = "";
+      }
+
+      async function saveInstanceRename() {
+        const oldName = String(renameInstanceCurrentName || "").trim();
+        const newNameInput = document.getElementById("rename-new-name-input");
+        const saveBtn = document.getElementById("rename-save-btn");
+        if (!oldName || !newNameInput || !saveBtn) return;
+        const newName = String(newNameInput.value || "").trim();
+        await saveInstanceRenameByValues(oldName, newName, {
+          onSuccess: async () => {
+            closeRenameInstanceModal();
+            await carregar();
+          },
+          onErrorFocus: () => newNameInput.focus(),
+          toggleLoading: (loading) => {
+            if (loading) {
+              saveBtn.textContent = "Salvando...";
+              saveBtn.classList.add("disabled");
+              saveBtn.setAttribute("disabled", "true");
+            } else {
+              saveBtn.textContent = "Salvar nome";
+              saveBtn.classList.remove("disabled");
+              saveBtn.removeAttribute("disabled");
+            }
+          },
+        });
+      }
+
+      async function saveInstanceRenameByValues(oldName, newName, options = {}) {
+        if (!newName) {
+          showToast("Informe o novo nome da instância.", "warning");
+          if (typeof options.onErrorFocus === "function") options.onErrorFocus();
+          return;
+        }
+        if (newName === oldName) {
+          showToast("Informe um nome diferente do atual.", "warning");
+          if (typeof options.onErrorFocus === "function") options.onErrorFocus();
+          return;
+        }
+        if (typeof options.toggleLoading === "function") options.toggleLoading(true);
+        try {
+          const response = await fetchWithTimeout(
+            `/instancias/${encodeURIComponent(oldName)}/alias`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ alias: newName }),
+            },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao renomear instância.", "error");
+            return;
+          }
+          showToast(data?.message || "Nome da instância alterado com sucesso.", "success");
+          if (typeof options.onSuccess === "function") await options.onSuccess();
+        } catch {
+          showToast("Erro ao renomear instância.", "error");
+        } finally {
+          if (typeof options.toggleLoading === "function") options.toggleLoading(false);
+        }
+      }
+
+      function startInlineRename(instanceName, currentLabel = "") {
+        inlineWhatsappNameEditingInstance = "";
+        inlineWhatsappNameDraftValue = "";
+        inlineRenameEditingInstance = String(instanceName || "").trim();
+        inlineRenameDraftValue = String(currentLabel || inlineRenameEditingInstance);
+        renderInstancesList();
+        setTimeout(() => {
+          const input = document.querySelector(
+            `.instance-inline-input[data-instance="${inlineRenameEditingInstance}"]`
+          );
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }, 0);
+      }
+
+      function cancelInlineRename() {
+        inlineRenameEditingInstance = "";
+        inlineRenameDraftValue = "";
+        renderInstancesList();
+      }
+
+      async function saveWhatsappNameByValues(instanceName, whatsappName, options = {}) {
+        const safeInstance = String(instanceName || "").trim();
+        const safeName = String(whatsappName || "").trim();
+        if (!safeInstance) return;
+        if (!safeName) {
+          showToast("Informe o Nome (WhatsApp).", "warning");
+          if (typeof options.onErrorFocus === "function") options.onErrorFocus();
+          return;
+        }
+        if (typeof options.toggleLoading === "function") options.toggleLoading(true);
+        try {
+          const response = await fetchWithTimeout(
+            `/instancias/${encodeURIComponent(safeInstance)}/whatsapp-name`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ whatsappName: safeName }),
+            },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || "Falha ao salvar Nome (WhatsApp).", "error");
+            return;
+          }
+          showToast(data?.message || "Nome (WhatsApp) salvo com sucesso.", "success");
+          if (typeof options.onSuccess === "function") await options.onSuccess();
+        } catch {
+          showToast("Erro ao salvar Nome (WhatsApp).", "error");
+        } finally {
+          if (typeof options.toggleLoading === "function") options.toggleLoading(false);
+        }
+      }
+
+      function startInlineWhatsappName(instanceName, currentName = "") {
+        inlineRenameEditingInstance = "";
+        inlineRenameDraftValue = "";
+        inlineWhatsappNameEditingInstance = String(instanceName || "").trim();
+        inlineWhatsappNameDraftValue = String(currentName || "");
+        renderInstancesList();
+        setTimeout(() => {
+          const input = document.querySelector(
+            `.whatsapp-name-inline-input[data-instance="${inlineWhatsappNameEditingInstance}"]`
+          );
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }, 0);
+      }
+
+      function cancelInlineWhatsappName() {
+        inlineWhatsappNameEditingInstance = "";
+        inlineWhatsappNameDraftValue = "";
+        renderInstancesList();
+      }
+
+      function updateLocalInstanceLabels(instanceName, updates = {}) {
+        const key = String(instanceName || "").trim();
+        if (!key || !Array.isArray(instancesData?.items)) return;
+        instancesData.items = instancesData.items.map((item) => {
+          const itemKey = String(item?.name || item?.instanceName || "").trim();
+          if (itemKey !== key) return item;
+          return {
+            ...item,
+            displayName:
+              typeof updates.displayName === "string"
+                ? updates.displayName
+                : item?.displayName,
+            whatsappNameOverride:
+              typeof updates.whatsappNameOverride === "string"
+                ? updates.whatsappNameOverride
+                : item?.whatsappNameOverride,
+            instanceAlias:
+              typeof updates.instanceAlias === "string"
+                ? updates.instanceAlias
+                : item?.instanceAlias,
+          };
+        });
+      }
+
+      async function confirmInlineWhatsappName(instanceName, sourceElement = null) {
+        const safeInstance = String(instanceName || "").trim();
+        if (!safeInstance) return;
+        const wrap = sourceElement?.closest?.(".instance-inline-wrap") || null;
+        const input =
+          wrap?.querySelector?.(".whatsapp-name-inline-input") ||
+          document.querySelector(`.whatsapp-name-inline-input[data-instance="${safeInstance}"]`);
+        const nextName = String(input?.value || inlineWhatsappNameDraftValue || "").trim();
+        await saveWhatsappNameByValues(safeInstance, nextName, {
+          onSuccess: async () => {
+            updateLocalInstanceLabels(safeInstance, {
+              displayName: nextName,
+              whatsappNameOverride: nextName,
+            });
+            inlineWhatsappNameEditingInstance = "";
+            inlineWhatsappNameDraftValue = "";
+            renderInstancesList();
+            carregar();
+          },
+          onErrorFocus: () => input?.focus?.(),
+          toggleLoading: (loading) => {
+            const btn =
+              wrap?.querySelector?.(".whatsapp-name-inline-save-btn") ||
+              document.querySelector(
+                `.whatsapp-name-inline-save-btn[data-instance="${safeInstance}"]`
+              );
+            if (!btn) return;
+            if (loading) {
+              btn.setAttribute("disabled", "true");
+              btn.textContent = "...";
+            } else {
+              btn.removeAttribute("disabled");
+              btn.textContent = "✓";
+            }
+          },
+        });
+      }
+
+      async function confirmInlineRename(instanceName, sourceElement = null) {
+        const oldName = String(instanceName || "").trim();
+        if (!oldName) return;
+        const wrap = sourceElement?.closest?.(".instance-inline-wrap") || null;
+        const input =
+          wrap?.querySelector?.(".instance-inline-input") ||
+          document.querySelector(`.instance-inline-input[data-instance="${oldName}"]`);
+        const newName = String(input?.value || inlineRenameDraftValue || "").trim();
+        if (newName === oldName) {
+          // Sem mudança: apenas volta ao estado inicial da linha.
+          cancelInlineRename();
+          return;
+        }
+        await saveInstanceRenameByValues(oldName, newName, {
+          onSuccess: async () => {
+            updateLocalInstanceLabels(oldName, { instanceAlias: newName });
+            inlineRenameEditingInstance = "";
+            inlineRenameDraftValue = "";
+            renderInstancesList();
+            carregar();
+          },
+          onErrorFocus: () => input?.focus?.(),
+          toggleLoading: (loading) => {
+            const btn =
+              wrap?.querySelector?.(".instance-inline-icon.save") ||
+              document.querySelector(`.instance-inline-icon.save[data-instance="${oldName}"]`);
+            if (!btn) return;
+            if (loading) {
+              btn.setAttribute("disabled", "true");
+              btn.textContent = "...";
+            } else {
+              btn.removeAttribute("disabled");
+              btn.textContent = "✓";
+            }
+          },
+        });
       }
 
       function setRegisterConnectStatus(mode, text) {
@@ -5256,6 +6938,7 @@
       async function carregar() {
         const container = document.getElementById("conteudo");
         const lastUpdateLabel = document.getElementById("last-update-label");
+        avatarRefreshNonce = Date.now();
 
         if (isFirstLoad) {
           container.innerHTML = `
@@ -5309,6 +6992,7 @@
             }
           }
           await loadInstanceUsageConfig();
+          syncDisparadorNumberPicker();
 
           // Se não estamos na aba Dashboard, não carregamos o payload de /dados.
           // Mesmo assim, mantemos o resumo/lista de instâncias atualizado.
@@ -5443,10 +7127,26 @@
       });
 
       const instancesSearchInput = document.getElementById("instances-search");
+      const instancesSearchClearBtn = document.getElementById("instances-search-clear");
+      function toggleInstancesSearchClearBtn() {
+        if (!instancesSearchInput || !instancesSearchClearBtn) return;
+        const hasValue = String(instancesSearchInput.value || "").trim().length > 0;
+        instancesSearchClearBtn.classList.toggle("hidden", !hasValue);
+      }
       if (instancesSearchInput) {
         instancesSearchInput.addEventListener("input", (e) => {
           instancesSearchTerm = String(e.target.value || "").trim();
+          toggleInstancesSearchClearBtn();
           renderInstancesList();
+        });
+      }
+      if (instancesSearchClearBtn && instancesSearchInput) {
+        instancesSearchClearBtn.addEventListener("click", () => {
+          instancesSearchInput.value = "";
+          instancesSearchTerm = "";
+          toggleInstancesSearchClearBtn();
+          renderInstancesList();
+          instancesSearchInput.focus();
         });
       }
 
@@ -5483,8 +7183,18 @@
         });
       }
 
+      function getEventElementTarget(eventTarget) {
+        if (eventTarget instanceof Element) return eventTarget;
+        if (eventTarget && eventTarget.parentElement instanceof Element) {
+          return eventTarget.parentElement;
+        }
+        return null;
+      }
+
       document.addEventListener("click", (e) => {
-        const btn = e.target.closest(".instance-action-btn[data-action]");
+        const target = getEventElementTarget(e.target);
+        if (!target) return;
+        const btn = target.closest(".instance-action-btn[data-action]");
         if (!btn) return;
         const enabled = btn.getAttribute("data-enabled") === "1";
         if (!enabled) return;
@@ -5544,6 +7254,10 @@
       const registerRefreshQrBtn = document.getElementById(
         "register-refresh-qrcode-btn"
       );
+      const renameOverlay = document.getElementById("rename-instance-overlay");
+      const renameCancelBtn = document.getElementById("rename-cancel-btn");
+      const renameSaveBtn = document.getElementById("rename-save-btn");
+      const renameNewNameInput = document.getElementById("rename-new-name-input");
       const newInstanceBtn = document.getElementById("new-instance-btn");
       const aquecedorToggle = document.getElementById("aquecedor-use-recommended");
       const aquecedorSaveBtn = document.getElementById("aquecedor-save-btn");
@@ -5564,6 +7278,28 @@
           refreshQrCodeInRegisterModal()
         );
       }
+
+      if (renameCancelBtn) {
+        renameCancelBtn.addEventListener("click", () => closeRenameInstanceModal());
+      }
+      if (renameSaveBtn) {
+        renameSaveBtn.addEventListener("click", () => saveInstanceRename());
+      }
+      if (renameOverlay) {
+        renameOverlay.addEventListener("click", (e) => {
+          if (e.target === renameOverlay) closeRenameInstanceModal();
+        });
+      }
+      if (renameNewNameInput) {
+        renameNewNameInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            saveInstanceRename();
+          }
+        });
+      }
+
+      
 
       if (newInstanceBtn) {
         newInstanceBtn.addEventListener("click", () =>
@@ -5771,6 +7507,23 @@
           });
         });
       }
+      const disparosListEl = document.getElementById("disparos-list");
+      if (disparosListEl) {
+        disparosListEl.addEventListener("click", async (e) => {
+          const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
+          if (!btn || !disparosListEl.contains(btn)) return;
+          const id = btn.getAttribute("data-campaign-id");
+          if (!id) return;
+          const running = btn.getAttribute("data-campaign-running") === "1";
+          const nextActive = !running;
+          btn.setAttribute("disabled", "true");
+          try {
+            await setDisparosCampaignActive(id, nextActive);
+          } finally {
+            btn.removeAttribute("disabled");
+          }
+        });
+      }
       const disModeAi = document.getElementById("dis-mode-ai");
       const disModeDb = document.getElementById("dis-mode-db");
       if (disModeAi) disModeAi.addEventListener("change", () => toggleDisparosModeBoxes());
@@ -5783,9 +7536,91 @@
       if (disTestShortenerBtn) {
         disTestShortenerBtn.addEventListener("click", () => testDisparosShortener());
       }
+      const disTestAiGenerateBtn = document.getElementById("dis-test-ai-generate-btn");
+      if (disTestAiGenerateBtn) {
+        disTestAiGenerateBtn.addEventListener("click", () => testDisparosAiGeneration());
+      }
 
       const disOpenMappingBtn = document.getElementById("dis-open-mapping-btn");
       if (disOpenMappingBtn) disOpenMappingBtn.addEventListener("click", () => openDisMappingFlow());
+      const disCampaignFileInput = document.getElementById("dis-campaign-file");
+      const disCampaignDropzone = document.getElementById("dis-campaign-dropzone");
+      if (disCampaignFileInput) {
+        disCampaignFileInput.addEventListener("change", async () => {
+          const f = disCampaignFileInput.files?.[0];
+          if (f) await processDisCampaignFile(f);
+        });
+      }
+      if (disCampaignDropzone && disCampaignFileInput) {
+        ["dragenter", "dragover"].forEach((evt) => {
+          disCampaignDropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            disCampaignDropzone.classList.add("dragover");
+          });
+        });
+        disCampaignDropzone.addEventListener("dragleave", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          disCampaignDropzone.classList.remove("dragover");
+        });
+        disCampaignDropzone.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          disCampaignDropzone.classList.remove("dragover");
+          const f = e.dataTransfer?.files?.[0];
+          if (!f) return;
+          const lower = f.name.toLowerCase();
+          if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
+            showToast("Envie apenas arquivo Excel (.xlsx ou .xls).", "warning");
+            return;
+          }
+          try {
+            const dt = new DataTransfer();
+            dt.items.add(f);
+            disCampaignFileInput.files = dt.files;
+          } catch {
+            /* alguns browsers podem bloquear atribuir files */
+          }
+          await processDisCampaignFile(f);
+        });
+      }
+
+      const disCampaignOpenMappingBtn = document.getElementById("dis-campaign-open-mapping-btn");
+      if (disCampaignOpenMappingBtn) {
+        disCampaignOpenMappingBtn.addEventListener("click", () => openDisCampaignMappingFlow());
+      }
+
+      const disAddInstanceBtn = document.getElementById("dis-add-instance-btn");
+      if (disAddInstanceBtn) {
+        disAddInstanceBtn.addEventListener("click", () =>
+          moveDisparadorNumbers("dis-available-instances", "dis-selected-instances")
+        );
+      }
+      const disRemoveInstanceBtn = document.getElementById("dis-remove-instance-btn");
+      if (disRemoveInstanceBtn) {
+        disRemoveInstanceBtn.addEventListener("click", () =>
+          moveDisparadorNumbers("dis-selected-instances", "dis-available-instances")
+        );
+      }
+      const disAvailableInstances = document.getElementById("dis-available-instances");
+      if (disAvailableInstances) {
+        disAvailableInstances.addEventListener("click", () => {
+          moveSingleDisparadorNumberByClick(
+            "dis-available-instances",
+            "dis-selected-instances"
+          );
+        });
+      }
+      const disSelectedInstances = document.getElementById("dis-selected-instances");
+      if (disSelectedInstances) {
+        disSelectedInstances.addEventListener("click", () => {
+          moveSingleDisparadorNumberByClick(
+            "dis-selected-instances",
+            "dis-available-instances"
+          );
+        });
+      }
 
       const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");
       if (disDownloadTemplateBtn) {
@@ -5797,6 +7632,14 @@
 
       const disMapImportBtn = document.getElementById("dis-map-import-btn");
       if (disMapImportBtn) disMapImportBtn.addEventListener("click", () => importMappedSpreadsheet());
+      const disCampaignMapCancelBtn = document.getElementById("dis-campaign-map-cancel-btn");
+      if (disCampaignMapCancelBtn) {
+        disCampaignMapCancelBtn.addEventListener("click", () => closeDisCampaignMappingModal());
+      }
+      const disCampaignMapCreateBtn = document.getElementById("dis-campaign-map-create-btn");
+      if (disCampaignMapCreateBtn) {
+        disCampaignMapCreateBtn.addEventListener("click", () => createCampaignFromMappedSpreadsheet());
+      }
 
       const disWhatsappTargetInput = document.getElementById("dis-whatsapp-target");
       if (disWhatsappTargetInput) {
@@ -5815,6 +7658,12 @@
       if (disMappingOverlay) {
         disMappingOverlay.addEventListener("click", (e) => {
           if (e.target === disMappingOverlay) closeDisMappingModal();
+        });
+      }
+      const disCampaignMappingOverlay = document.getElementById("dis-campaign-mapping-overlay");
+      if (disCampaignMappingOverlay) {
+        disCampaignMappingOverlay.addEventListener("click", (e) => {
+          if (e.target === disCampaignMappingOverlay) closeDisCampaignMappingModal();
         });
       }
       if (registerOverlay) {
