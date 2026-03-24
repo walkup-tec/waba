@@ -12,6 +12,18 @@ Como usar:
 2026-03-24
 
 Resumo desta retomada:
+- **Atualize tudo**: `npm run build` ok; commit `b4026f0` na `master`; `git push` sem remote configurado (configurar `origin` antes do push).
+- `.gitignore` passou a ignorar `data/` (aliases / nomes de perfil locais).
+
+Palavras-chave para busca:
+- atualize-tudo
+- gitignore-data
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
 - Painel direito `Campanhas`: cada card tem botao que alterna entre **Ativar campanha** e **Pausar** conforme `status` (`running` vs pausada).
 - Clique chama `POST /disparos/campanhas/:id/estado` com `{ ativa: true|false }`; lista recarrega apos sucesso.
 - Polling a cada 10s na aba Disparos para atualizar progresso sem depender so do botao Atualizar.
