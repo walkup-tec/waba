@@ -1293,6 +1293,97 @@
         z-index: 1200;
       }
 
+      /* Acima do overlay de “processando planilha” (1300) e demais modais */
+      #dis-campaign-rename-overlay,
+      #dis-campaign-delete-overlay,
+      #dis-campaign-report-overlay {
+        z-index: 2200;
+      }
+
+      .dis-report-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .dis-report-stat {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .dis-report-stat--ok {
+        border-color: rgba(34, 197, 94, 0.45);
+      }
+      .dis-report-stat--warn {
+        border-color: rgba(251, 191, 36, 0.42);
+      }
+      .dis-report-stat-label {
+        font-size: 0.68rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      .dis-report-stat-value {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .dis-report-funnel-title {
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 10px;
+        margin-top: 4px;
+      }
+      .dis-funnel-row {
+        margin-bottom: 14px;
+      }
+      .dis-funnel-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+        font-size: 0.84rem;
+      }
+      .dis-funnel-title {
+        font-weight: 600;
+        color: #f1f5f9;
+        flex: 1;
+        min-width: 140px;
+      }
+      .dis-funnel-badge {
+        background: rgba(51, 65, 85, 0.95);
+        color: #e2e8f0;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 600;
+      }
+      .dis-funnel-pct {
+        color: #94a3b8;
+        font-size: 0.76rem;
+        margin-left: auto;
+      }
+      .dis-funnel-bar {
+        height: 9px;
+        border-radius: 999px;
+        background: rgba(30, 41, 59, 0.95);
+        overflow: hidden;
+      }
+      .dis-funnel-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2563eb, #60a5fa);
+        min-width: 0;
+        transition: width 0.35s ease;
+      }
+
       .confirm-overlay.open {
         display: flex;
       }
@@ -1367,6 +1458,10 @@
 
       .toast.warning {
         border-color: rgba(251, 191, 36, 0.6);
+      }
+
+      .toast.info {
+        border-color: rgba(56, 189, 248, 0.55);
       }
 
       @keyframes toastIn {
@@ -2094,6 +2189,21 @@
       .dis-campaign-dropzone.is-busy .dis-campaign-file-input {
         pointer-events: none;
       }
+      .dis-campaign-dedupe-caption {
+        display: block;
+        margin-top: 10px;
+        font-size: 0.85rem;
+        font-weight: 400;
+        color: #f87171;
+        line-height: 1.4;
+      }
+      .dis-campaign-dedupe-caption.hidden {
+        display: none;
+      }
+      .dis-campaign-dedupe-caption.dis-campaign-dedupe-ok {
+        color: #86efac;
+        font-weight: 400;
+      }
       @keyframes dis-campaign-spin {
         to {
           transform: rotate(360deg);
@@ -2248,6 +2358,18 @@
       .btn-campaign-toggle {
         padding: 5px 10px;
         font-size: 0.74rem;
+        white-space: nowrap;
+      }
+      .disparos-campaign-secondary-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      .btn-campaign-secondary {
+        padding: 4px 8px;
+        font-size: 0.7rem;
         white-space: nowrap;
       }
       @media (max-width: 992px) {
@@ -2887,9 +3009,16 @@
                       <div class="summary-sub">Aguardando envio</div>
                     </div>
                     <div class="summary-card">
+                      <div class="summary-label">Instâncias selecionadas</div>
+                      <div class="summary-value" id="disparos-selecionadas-count">0</div>
+                      <div class="summary-sub" id="disparos-selecionadas-sub">
+                        Nenhuma selecionada · API usa todas elegíveis
+                      </div>
+                    </div>
+                    <div class="summary-card">
                       <div class="summary-label">Instância ativa</div>
                       <div class="summary-value" id="disparos-instancia-ativa">—</div>
-                      <div class="summary-sub">Round-robin</div>
+                      <div class="summary-sub" id="disparos-instancia-ativa-sub"></div>
                     </div>
                   </div>
                   <div class="disparos-side-title" style="margin-top: 20px;">Variáveis e regras</div>
@@ -3016,6 +3145,15 @@
                       </div>
 
                       <div id="dis-ai-box" class="disparos-box">
+                        <div id="dis-messenger-product-field-wrap" class="aquecedor-field" style="margin-bottom: 12px;">
+                          <label for="dis-messenger-product-select">Biblioteca de produtos</label>
+                          <select id="dis-messenger-product-select" class="register-input">
+                            <option value="">Novo produto</option>
+                          </select>
+                          <span class="aquecedor-hint" style="display: block; margin-top: 4px;">
+                            Escolha um produto salvo para preencher os critérios automaticamente ou &quot;Novo produto&quot; para começar do zero.
+                          </span>
+                        </div>
                         <div class="disparos-grid disparos-grid-3">
                           <div class="aquecedor-field">
                             <label for="dis-ai-tone">Tom da mensagem</label>
@@ -3076,6 +3214,52 @@
                             placeholder="A mensagem gerada pela IA aparecerá aqui."
                             readonly
                           ></textarea>
+                        </div>
+                        <div class="disparos-inline-actions" style="margin-top: 12px; flex-wrap: wrap; gap: 8px;">
+                          <button
+                            type="button"
+                            id="dis-messenger-open-library-panel-btn"
+                            class="instance-action-btn enabled"
+                          >
+                            Adicionar produto à biblioteca
+                          </button>
+                          <span class="muted" style="flex: 1; min-width: 200px;">
+                            Opcional: grave um nome para estes critérios aparecerem no menu &quot;Biblioteca de produtos&quot;.
+                          </span>
+                        </div>
+                        <div
+                          id="dis-messenger-library-save-wrap"
+                          class="hidden"
+                          style="margin-top: 14px; padding: 12px; border-radius: 10px; border: 1px solid rgba(110, 255, 200, 0.25); background: rgba(15, 23, 42, 0.5);"
+                        >
+                          <div class="aquecedor-field">
+                            <label for="dis-messenger-library-name">Nome do produto na biblioteca</label>
+                            <input
+                              id="dis-messenger-library-name"
+                              type="text"
+                              class="register-input"
+                              placeholder="Ex.: Empréstimo CLT — abordagem consultiva"
+                              autocomplete="off"
+                            />
+                            <span class="aquecedor-hint" style="display: block; margin-top: 4px;">
+                              Grava os critérios atuais do Mensageiro; depois você poderá escolhê-los no select acima.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="dis-messenger-save-to-library-btn"
+                            class="instance-action-btn btn-qrcode enabled"
+                            style="margin-top: 8px;"
+                          >
+                            Salvar na biblioteca
+                          </button>
+                          <p
+                            id="dis-messenger-library-feedback"
+                            class="hidden"
+                            style="margin: 10px 0 0; color: #86efac; font-size: 0.9rem; font-weight: 600;"
+                            role="status"
+                            aria-live="polite"
+                          ></p>
                         </div>
                       </div>
 
@@ -3145,6 +3329,11 @@
                           </button>
                           <span id="dis-campaign-create-status" class="muted">Aguardando importação da planilha.</span>
                         </div>
+                        <div
+                          id="dis-campaign-dedupe-caption"
+                          class="dis-campaign-dedupe-caption hidden"
+                          aria-live="polite"
+                        ></div>
                       </div>
                     </div>
 
@@ -3156,18 +3345,35 @@
                 <div class="disparos-side">
                   <div class="disparos-side-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                     <span>Campanhas</span>
-                    <button
-                      id="disparos-refresh-btn"
-                      type="button"
-                      class="instance-action-btn enabled"
-                      style="padding: 4px 10px; font-size: 0.8rem;"
-                      title="Atualizar"
-                    >
-                      Atualizar
-                    </button>
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                      <button
+                        id="disparos-diagnostico-btn"
+                        type="button"
+                        class="instance-action-btn enabled"
+                        style="padding: 4px 10px; font-size: 0.8rem;"
+                        title="Diagnóstico de envio (janela, EVO, campanhas em execução)"
+                      >
+                        Diagnóstico
+                      </button>
+                      <button
+                        id="disparos-refresh-btn"
+                        type="button"
+                        class="instance-action-btn enabled"
+                        style="padding: 4px 10px; font-size: 0.8rem;"
+                        title="Atualizar"
+                      >
+                        Atualizar
+                      </button>
+                    </div>
                   </div>
                   <div id="disparos-list" class="disparos-list list-wrapper">
                     <div class="muted">Carregando campanhas...</div>
+                  </div>
+                  <div class="aquecedor-command-log" style="margin-top: 14px;">
+                    <div class="disparos-side-title" style="margin-bottom: 6px;">Log de diagnóstico</div>
+                    <div id="disparos-diagnostico-log-list" class="aquecedor-command-log-list">
+                      <div class="muted">Clique em Diagnóstico para ver o estado do envio e das campanhas.</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3300,17 +3506,72 @@
 
     <div id="dis-campaign-mapping-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal" role="dialog" aria-modal="true" style="max-width: 680px;">
-        <div class="confirm-title">Mapeamento da planilha de campanha</div>
+        <div class="confirm-title">Mapear Arquivo</div>
         <div class="confirm-text">
-          Selecione qual coluna representa o número de WhatsApp para esta campanha.
+          Informe o nome da campanha e a coluna da planilha que contém o número do WhatsApp.
         </div>
         <div style="display: grid; gap: 10px; margin-top: 12px;">
+          <label class="register-label" for="dis-campaign-modal-name">Nome da campanha *</label>
+          <input
+            id="dis-campaign-modal-name"
+            type="text"
+            class="register-input"
+            placeholder="Ex.: Campanha Maio 2026"
+            autocomplete="off"
+          />
           <label class="register-label" for="dis-campaign-map-number">Coluna do número *</label>
           <select id="dis-campaign-map-number" class="register-input"></select>
         </div>
         <div class="confirm-actions">
           <button id="dis-campaign-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
-          <button id="dis-campaign-map-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">Criar campanha</button>
+          <button id="dis-campaign-map-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">Confirmar e criar campanha</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dis-campaign-rename-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" style="max-width: 520px">
+        <div class="confirm-title">Editar nome da campanha</div>
+        <div class="confirm-text">Somente o nome é alterado. Lista de números e progresso permanecem os mesmos.</div>
+        <div style="margin-top: 12px">
+          <label class="register-label" for="dis-campaign-rename-input">Nome *</label>
+          <input id="dis-campaign-rename-input" class="register-input" type="text" autocomplete="off" />
+        </div>
+        <div class="confirm-actions">
+          <button id="dis-campaign-rename-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="dis-campaign-rename-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dis-campaign-delete-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" style="max-width: 520px">
+        <div class="confirm-title">Excluir campanha</div>
+        <div class="confirm-text">
+          Confirma a exclusão da campanha
+          <strong id="dis-campaign-delete-name-display"></strong>? Os contatos desta campanha deixam de aparecer aqui. Esta ação não pode ser desfeita.
+        </div>
+        <div class="confirm-actions">
+          <button id="dis-campaign-delete-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="dis-campaign-delete-confirm-btn" class="instance-action-btn btn-delete enabled" type="button">Sim, excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dis-campaign-report-overlay" class="confirm-overlay" aria-hidden="true">
+      <div
+        class="confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dis-campaign-report-title"
+        style="max-width: 640px; width: min(96vw, 640px); max-height: 90vh; overflow: auto"
+      >
+        <div class="confirm-title" id="dis-campaign-report-title">Relatório da campanha</div>
+        <div id="dis-campaign-report-body"></div>
+        <div class="confirm-actions" style="margin-top: 16px">
+          <button id="dis-campaign-report-close-btn" type="button" class="instance-action-btn btn-qrcode enabled">
+            Fechar
+          </button>
         </div>
       </div>
     </div>
@@ -3357,8 +3618,11 @@
       let registerConnectPollStartedAt = 0;
       let aquecedorEnviosPollTimer = null;
       let disparosCampaignsPollTimer = null;
+      let disparosNextInstanceTechnicalCache = null;
+      let disparosHasRunningCampaign = false;
       let aquecedorEditMode = true;
       const aquecedorCommandLogs = [];
+      const disparosDiagnosticoLogs = [];
       const AQUECEDOR_RECOMMENDED = {
         expediente: [
           { days: ["seg", "ter", "qua"], startHour: 7, endHour: 22 },
@@ -3452,16 +3716,67 @@
         preview.classList.remove("hidden");
       }
 
+      function clearDisCampaignDedupeCaption() {
+        const el = document.getElementById("dis-campaign-dedupe-caption");
+        if (!el) return;
+        el.textContent = "";
+        el.classList.remove("dis-campaign-dedupe-ok");
+        el.classList.add("hidden");
+      }
+
+      /** Mesma regra de normalização do backend (campanha / planilha). */
+      function normalizeCampaignPhoneForDisparo(raw) {
+        const s = String(raw == null ? "" : raw).trim();
+        if (!s) return "";
+        const digits = s.replace(/\D/g, "");
+        if (!digits) return "";
+        if (digits.length >= 12 && digits.startsWith("55")) return digits;
+        if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) return "55" + digits;
+        return digits;
+      }
+
+      function countCampaignPhoneDuplicatesInRows(rows, numberColumn) {
+        const col = String(numberColumn || "").trim();
+        if (!col || !Array.isArray(rows) || !rows.length) return 0;
+        const seen = new Set();
+        let removed = 0;
+        for (const row of rows) {
+          const digits = normalizeCampaignPhoneForDisparo(row?.[col] ?? "");
+          if (digits.length < 12) continue;
+          if (seen.has(digits)) removed += 1;
+          else seen.add(digits);
+        }
+        return removed;
+      }
+
+      function setDisCampaignDedupeCaption(removedDuplicates) {
+        const el = document.getElementById("dis-campaign-dedupe-caption");
+        if (!el) return;
+        const n = Math.max(0, Math.floor(Number(removedDuplicates) || 0));
+        el.classList.remove("dis-campaign-dedupe-ok");
+        if (n > 0) {
+          el.textContent = `${n} telefone(s) duplicado(s) excluído(s) da lista de disparo (permanece 1 envio por número).`;
+          el.classList.remove("hidden");
+        } else {
+          el.textContent =
+            "Nenhum telefone duplicado na coluna mapeada — cada número válido entra uma vez na campanha.";
+          el.classList.add("dis-campaign-dedupe-ok");
+          el.classList.remove("hidden");
+        }
+      }
+
       async function processDisCampaignFile(file) {
         if (!file) return;
         const label = document.getElementById("dis-campaign-file-label");
         const dz = document.getElementById("dis-campaign-dropzone");
+        clearDisCampaignDedupeCaption();
         setDisCampaignWorkBusy(true, "Importando planilha…", "Lendo linhas e colunas do Excel.");
         dz?.classList.add("is-busy");
         try {
           await ensureXlsxParserReady();
           campaignSpreadsheetRowsCache = await parseSpreadsheetFile(file);
           if (!campaignSpreadsheetRowsCache.length) {
+            clearDisCampaignDedupeCaption();
             showToast("Nenhuma linha encontrada na planilha.", "warning");
             if (label) label.textContent = "Planilha vazia — envie outro arquivo.";
             renderDisCampaignPreviewTable([]);
@@ -3485,6 +3800,7 @@
           );
         } catch (err) {
           campaignSpreadsheetRowsCache = [];
+          clearDisCampaignDedupeCaption();
           renderDisCampaignPreviewTable([]);
           showToast(err?.message || "Falha ao ler planilha.", "error");
           if (label) label.textContent = "Erro ao importar — tente outro arquivo.";
@@ -3504,6 +3820,7 @@
       const disparosSectionCollapsedState = {};
       const disparosSectionSavedState = {};
       let disparosActiveSectionIndex = 0;
+      let messengerProductsCache = [];
 
       function showToast(message, type = "success", timeoutMs = 3200) {
         const stack = document.getElementById("toast-stack");
@@ -3538,6 +3855,30 @@
         aquecedorCommandLogs.unshift({ time, message: String(message || "") });
         if (aquecedorCommandLogs.length > 120) aquecedorCommandLogs.length = 120;
         renderAquecedorCommandLogs();
+      }
+
+      function renderDisparosDiagnosticoLogs() {
+        const container = document.getElementById("disparos-diagnostico-log-list");
+        if (!container) return;
+        if (!disparosDiagnosticoLogs.length) {
+          container.innerHTML =
+            '<div class="muted">Clique em Diagnóstico para ver o estado do envio e das campanhas.</div>';
+          return;
+        }
+        container.innerHTML = "";
+        disparosDiagnosticoLogs.forEach((entry) => {
+          const row = document.createElement("div");
+          row.className = "aquecedor-command-log-item";
+          row.textContent = `[${entry.time}] ${entry.message}`;
+          container.appendChild(row);
+        });
+      }
+
+      function addDisparosDiagnosticoLog(message) {
+        const time = new Date().toLocaleTimeString("pt-BR");
+        disparosDiagnosticoLogs.unshift({ time, message: String(message || "") });
+        if (disparosDiagnosticoLogs.length > 120) disparosDiagnosticoLogs.length = 120;
+        renderDisparosDiagnosticoLogs();
       }
 
       function setAquecedorEditMode(isEditing) {
@@ -3842,8 +4183,155 @@
         const isAi = Boolean(document.getElementById("dis-mode-ai")?.checked);
         const aiBox = document.getElementById("dis-ai-box");
         const dbBox = document.getElementById("dis-db-box");
+        const productWrap = document.getElementById("dis-messenger-product-field-wrap");
         if (aiBox) aiBox.classList.toggle("hidden", !isAi);
         if (dbBox) dbBox.classList.toggle("hidden", isAi);
+        if (productWrap) productWrap.classList.toggle("hidden", !isAi);
+        if (!isAi) hideMessengerLibrarySavePanel();
+      }
+
+      function syncDisparosAiBriefingHiddenFromForm() {
+        const hiddenBriefing = document.getElementById("dis-ai-briefing");
+        if (hiddenBriefing) hiddenBriefing.value = buildDisparosAiBriefingStructured();
+      }
+
+      function applyMessengerStructuredFieldsToForm(fields) {
+        const f = fields || {};
+        const setVal = (id, v) => {
+          const el = document.getElementById(id);
+          if (el) el.value = String(v ?? "");
+        };
+        setVal("dis-ai-tone", f.aiTone ?? "consultivo");
+        setVal("dis-ai-cta", f.aiCta ?? "Responda no link abaixo");
+        setVal("dis-ai-audience", f.aiAudience ?? "CORBAN");
+        setVal("dis-ai-product", f.aiProduct ?? "");
+        setVal("dis-ai-objective", f.aiObjective ?? "");
+        setVal("dis-ai-pains", f.aiPains ?? "");
+        setVal("dis-ai-differentials", f.aiDifferentials ?? "");
+        setVal("dis-ai-prohibitions", f.aiProhibitions ?? "");
+        setVal("dis-ai-notes", f.aiNotes ?? "");
+        syncDisparosAiBriefingHiddenFromForm();
+      }
+
+      function applyMessengerProductRowToForm(row) {
+        if (!row) return;
+        applyMessengerStructuredFieldsToForm({
+          aiTone: row.aiTone,
+          aiCta: row.aiCta,
+          aiAudience: row.aiAudience,
+          aiProduct: row.aiProduct,
+          aiObjective: row.aiObjective,
+          aiPains: row.aiPains,
+          aiDifferentials: row.aiDifferentials,
+          aiProhibitions: row.aiProhibitions,
+          aiNotes: row.aiNotes,
+        });
+      }
+
+      function clearMessengerFormForNovoProduto() {
+        applyMessengerStructuredFieldsToForm({
+          aiTone: "consultivo",
+          aiCta: "Responda no link abaixo",
+          aiAudience: "CORBAN",
+          aiProduct: "",
+          aiObjective: "",
+          aiPains: "",
+          aiDifferentials: "",
+          aiProhibitions: "",
+          aiNotes: "",
+        });
+      }
+
+      function hideMessengerLibrarySavePanel() {
+        const wrap = document.getElementById("dis-messenger-library-save-wrap");
+        const nameIn = document.getElementById("dis-messenger-library-name");
+        const feedback = document.getElementById("dis-messenger-library-feedback");
+        if (wrap) wrap.classList.add("hidden");
+        if (nameIn) nameIn.value = "";
+        if (feedback) {
+          feedback.textContent = "";
+          feedback.classList.add("hidden");
+        }
+      }
+
+      function fillMessengerProductSelectFromCache() {
+        const sel = document.getElementById("dis-messenger-product-select");
+        if (!sel) return;
+        const prev = String(sel.value || "");
+        sel.innerHTML = "";
+        const opt0 = document.createElement("option");
+        opt0.value = "";
+        opt0.textContent = "Novo produto";
+        sel.appendChild(opt0);
+        (Array.isArray(messengerProductsCache) ? messengerProductsCache : []).forEach((p) => {
+          const id = String(p?.id || "").trim();
+          const label = String(p?.displayName || "").trim();
+          if (!id || !label) return;
+          const o = document.createElement("option");
+          o.value = id;
+          o.textContent = label;
+          sel.appendChild(o);
+        });
+        if (prev && messengerProductsCache.some((p) => String(p?.id) === prev)) {
+          sel.value = prev;
+        }
+      }
+
+      async function loadMessengerProductsList() {
+        try {
+          const response = await fetchWithTimeout("/disparos/messenger-products", {}, 10000);
+          const data = await response.json().catch(() => ({}));
+          messengerProductsCache = Array.isArray(data?.items) ? data.items : [];
+        } catch {
+          messengerProductsCache = [];
+        }
+        fillMessengerProductSelectFromCache();
+      }
+
+      async function resetDisparosPanelToOriginalAfterCampaignCreate() {
+        initDisparosSectionLayout();
+        const cached = disparosConfigCache && typeof disparosConfigCache === "object" ? disparosConfigCache : {};
+        const baseConfig = {
+          ...cached,
+          delayMinSeconds: 90,
+          delayMaxSeconds: 240,
+          maxPerHourPerInstance: 60,
+          maxPerDayPerInstance: 130,
+          workingDays: ["seg", "ter", "qua", "qui", "sex"],
+          startHour: 8,
+          endHour: 22,
+          messageMode: "ai",
+          aiBriefing: "",
+          aiTone: "consultivo",
+          aiCta: "Responda no link abaixo",
+          aiAudience: "CORBAN",
+          whatsappTargetNumber: "",
+          selectedDisparadorInstances: [],
+        };
+        setDisparosFormValues(baseConfig);
+        clearMessengerFormForNovoProduto();
+        const testOut = document.getElementById("dis-ai-test-output");
+        if (testOut) testOut.value = "";
+        const sel = document.getElementById("dis-messenger-product-select");
+        if (sel) sel.value = "";
+        hideMessengerLibrarySavePanel();
+        resetDisparosSectionFlow();
+        toggleDisparosModeBoxes();
+        try {
+          const response = await fetchWithTimeout(
+            "/disparos/config",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ config: getDisparosFormValues() }),
+            },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) disparosConfigCache = data?.config || null;
+        } catch {
+          /* mantém UI resetada mesmo se persistência falhar */
+        }
       }
 
       function getDisparosWorkingDays() {
@@ -4002,13 +4490,78 @@
         if (!key) return "";
         const items = Array.isArray(instancesData?.items) ? instancesData.items : [];
         const match = items.find((inst) => String(inst?.name || inst?.instanceName || "").trim() === key);
-        return String(
+        if (!match) return key;
+        const technical = String(match?.name || match?.instanceName || key).trim();
+        const label = String(
           match?.instanceAlias ||
           match?.instanceLabel ||
-          match?.name ||
-          match?.instanceName ||
-          key
+          technical
         ).trim();
+        return label || key;
+      }
+
+      function applyDisparosActiveInstanceCardDisplay(technicalName) {
+        const inst = document.getElementById("disparos-instancia-ativa");
+        const sub = document.getElementById("disparos-instancia-ativa-sub");
+        if (!inst) return;
+        if (!disparosHasRunningCampaign) {
+          disparosNextInstanceTechnicalCache = null;
+          inst.textContent = "—";
+          if (sub) sub.textContent = "";
+          return;
+        }
+        const t = String(technicalName || "").trim();
+        if (sub) sub.textContent = "Instância da vez";
+        if (!t) {
+          inst.textContent = "—";
+          return;
+        }
+        const friendly = getDisparadorInstanceLabelByValue(t);
+        inst.textContent = friendly && friendly.trim() ? friendly.trim() : t;
+      }
+
+      function refreshDisparosActiveInstanceCardLabelOnly() {
+        if (!disparosHasRunningCampaign) {
+          applyDisparosActiveInstanceCardDisplay("");
+          return;
+        }
+        if (disparosNextInstanceTechnicalCache == null) return;
+        applyDisparosActiveInstanceCardDisplay(disparosNextInstanceTechnicalCache);
+      }
+
+      function disparosNextInstanceQueryFromUiSelection() {
+        const sel = getSelectOptionValues(document.getElementById("dis-selected-instances"));
+        const parts = [
+          "preview=1",
+          sel.length ? `instances=${encodeURIComponent(sel.join(","))}` : "",
+        ].filter(Boolean);
+        return parts.length ? `?${parts.join("&")}` : "?preview=1";
+      }
+
+      async function refreshDisparosActiveInstanceFromServer() {
+        const inst = document.getElementById("disparos-instancia-ativa");
+        if (!inst) return;
+        if (!disparosHasRunningCampaign) {
+          applyDisparosActiveInstanceCardDisplay("");
+          return;
+        }
+        try {
+          const q = disparosNextInstanceQueryFromUiSelection();
+          const res = await fetchWithTimeout(`/disparos/next-instance${q}`, {}, 8000);
+          if (!res.ok) {
+            disparosNextInstanceTechnicalCache = null;
+            applyDisparosActiveInstanceCardDisplay("");
+            return;
+          }
+          const nextData = await res.json().catch(() => ({}));
+          const technical = String(nextData?.selected?.instancia || "").trim();
+          disparosNextInstanceTechnicalCache = technical || null;
+          applyDisparosActiveInstanceCardDisplay(technical);
+        } catch (e) {
+          console.error(e);
+          disparosNextInstanceTechnicalCache = null;
+          applyDisparosActiveInstanceCardDisplay("");
+        }
       }
 
       function syncDisparadorNumberPicker() {
@@ -4052,6 +4605,27 @@
         fillSelectWithRows(availableEl, available);
         fillSelectWithRows(selectedEl, selected);
         pendingSelectedDisparadorInstances = selected.map((row) => row.name);
+        updateDisparosSelectedInstancesSummaryCard();
+        if (activeTab === "disparos") {
+          void refreshDisparosActiveInstanceFromServer();
+        } else {
+          refreshDisparosActiveInstanceCardLabelOnly();
+        }
+      }
+
+      function updateDisparosSelectedInstancesSummaryCard() {
+        const valueEl = document.getElementById("disparos-selecionadas-count");
+        const subEl = document.getElementById("disparos-selecionadas-sub");
+        if (!valueEl) return;
+        const sel = document.getElementById("dis-selected-instances");
+        const n = getSelectOptionValues(sel).length;
+        valueEl.textContent = String(n);
+        if (subEl) {
+          subEl.textContent =
+            n === 0
+              ? "Nenhuma selecionada · API usa todas elegíveis"
+              : "Total sendo utilizadas";
+        }
       }
 
       function moveDisparadorNumbers(fromId, toId) {
@@ -4069,6 +4643,8 @@
         pendingSelectedDisparadorInstances = getSelectOptionValues(
           document.getElementById("dis-selected-instances")
         );
+        updateDisparosSelectedInstancesSummaryCard();
+        void refreshDisparosActiveInstanceFromServer();
       }
 
       function moveSingleDisparadorNumberByClick(fromId, toId) {
@@ -4106,6 +4682,8 @@
         pendingSelectedDisparadorInstances = getSelectOptionValues(
           document.getElementById("dis-selected-instances")
         );
+        updateDisparosSelectedInstancesSummaryCard();
+        void refreshDisparosActiveInstanceFromServer();
       }
 
       function initDisparosSectionLayout() {
@@ -4181,12 +4759,15 @@
               saveBtn.textContent = original || "Salvar configurações";
               saveBtn.removeAttribute("disabled");
               if (!ok) return;
+              if (idx === 5) hideMessengerLibrarySavePanel();
               disparosSectionSavedState[sectionKey] = true;
               disparosSectionCollapsedState[sectionKey] = true;
               const nextIdx = idx + 1;
               if (nextIdx < sections.length) {
                 const nextSection = sections[nextIdx];
-                const nextKey = String(nextSection.dataset.sectionKey || `section-${nextIdx + 1}`);
+                const nextKey = String(
+                  nextSection.dataset.sectionKey || `section-${nextIdx + 1}`
+                );
                 disparosSectionCollapsedState[nextKey] = false;
                 disparosActiveSectionIndex = nextIdx;
               }
@@ -4272,6 +4853,7 @@
           }
           if (statusLabel) statusLabel.textContent = "Configuração carregada";
           applyDisparosSectionLayout();
+          await loadMessengerProductsList();
         } catch {
           if (statusLabel) statusLabel.textContent = "Erro ao carregar";
         }
@@ -4487,17 +5069,7 @@
           const generatedMessage = String(data?.message || "").trim();
           if (outputEl) outputEl.value = generatedMessage || "";
           if (statusEl) {
-            const model = String(data?.model || "").trim();
-            const latencyMs = Number(data?.latencyMs || 0);
-            const shortUrl = String(data?.shortUrl || "").trim();
-            const suffix = model
-              ? ` (${model}${latencyMs > 0 ? `, ${latencyMs}ms` : ""})`
-              : latencyMs > 0
-                ? ` (${latencyMs}ms)`
-                : "";
-            statusEl.textContent = shortUrl
-              ? `Mensagem gerada com sucesso${suffix}. Link curto: ${shortUrl}`
-              : `Mensagem gerada com sucesso${suffix}.`;
+            statusEl.textContent = "Mensagem gerada com sucesso";
             statusEl.style.color = "#86efac";
           }
           showToast("Mensagem teste gerada com IA.", "success");
@@ -4519,11 +5091,12 @@
         const list = document.getElementById("disparos-list");
         const sent = document.getElementById("disparos-enviados-hoje");
         const fila = document.getElementById("disparos-na-fila");
-        const inst = document.getElementById("disparos-instancia-ativa");
         if (!list) return;
         try {
           const response = await fetchWithTimeout("/disparos/campanhas", {}, 10000);
           if (!response.ok) {
+            disparosHasRunningCampaign = false;
+            applyDisparosActiveInstanceCardDisplay("");
             list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
             return;
           }
@@ -4531,18 +5104,11 @@
           const items = Array.isArray(data?.items) ? data.items : [];
           const totalSent = items.reduce((acc, item) => acc + Number(item?.sentCount || 0), 0);
           const runningCount = items.filter((item) => String(item?.status || "").toLowerCase() === "running").length;
+          disparosHasRunningCampaign = runningCount > 0;
           if (sent) sent.textContent = String(totalSent);
           if (fila) fila.textContent = String(runningCount);
-          if (inst) inst.textContent = "—";
-          try {
-            const nextRes = await fetchWithTimeout("/disparos/next-instance", {}, 8000);
-            const nextData = await nextRes.json().catch(() => ({}));
-            if (nextRes.ok && inst) {
-              inst.textContent = String(nextData?.selected?.instancia || "—");
-            }
-          } catch {
-            // silencioso
-          }
+          updateDisparosSelectedInstancesSummaryCard();
+          await refreshDisparosActiveInstanceFromServer();
           if (!items.length) {
             list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
             return;
@@ -4558,33 +5124,79 @@
             const campaignName = String(item?.name || "Campanha sem nome").trim();
             const sentCount = Number(item?.sentCount || 0);
             const totalNumbers = Number(item?.totalNumbers || 0);
+            const processedCount = Number(
+              item?.processedCount != null ? item.processedCount : sentCount
+            );
             const progress = Number(item?.progressPercent || 0);
             const campaignId = String(item?.id || "").trim();
             const statusRaw = String(item?.status || "paused").toLowerCase();
             const isRunning = statusRaw === "running";
-            const btnLabel = isRunning ? "Pausar" : "Ativar campanha";
+            const isFinished = statusRaw === "finished";
+            const btnLabel = isFinished ? "Campanha finalizada" : isRunning ? "Pausar" : "Ativar campanha";
             const safeName = campaignName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            row.innerHTML = `
-              <div class="disparos-campaign-item-body">
+
+            const body = document.createElement("div");
+            body.className = "disparos-campaign-item-body";
+            body.innerHTML = `
                 <div class="aquecedor-envio-main">${safeName}</div>
                 <div class="aquecedor-envio-time">Inicio: ${dateText}</div>
-                <div class="aquecedor-envio-time">${sentCount} de ${totalNumbers} disparos</div>
+                <div class="aquecedor-envio-time">${processedCount} de ${totalNumbers} destinos processados · ${sentCount} enviados</div>
                 <div style="margin-top:6px; height:8px; border-radius:999px; background: rgba(255,255,255,.12); overflow:hidden;">
                   <div style="width:${Math.max(0, Math.min(100, progress))}%; height:100%; background: linear-gradient(90deg, #22c55e, #16a34a);"></div>
                 </div>
-              </div>
-              <div class="disparos-campaign-item-actions">
-                <button
-                  type="button"
-                  class="instance-action-btn btn-qrcode enabled btn-campaign-toggle${isRunning ? " running" : ""}"
-                  data-campaign-id="${campaignId.replace(/"/g, "&quot;")}"
-                  data-campaign-running="${isRunning ? "1" : "0"}"
-                >${btnLabel}</button>
-              </div>
-            `;
+              `;
+
+            row.appendChild(body);
+            if (campaignId) {
+              const actions = document.createElement("div");
+              actions.className = "disparos-campaign-item-actions";
+
+              const toggleBtn = document.createElement("button");
+              toggleBtn.type = "button";
+              toggleBtn.className = `instance-action-btn btn-qrcode ${isFinished ? "disabled" : "enabled"} btn-campaign-toggle${isRunning ? " running" : ""}`;
+              toggleBtn.dataset.campaignId = campaignId;
+              toggleBtn.dataset.campaignRunning = isRunning ? "1" : "0";
+              toggleBtn.dataset.campaignFinished = isFinished ? "1" : "0";
+              toggleBtn.textContent = btnLabel;
+              if (isFinished) toggleBtn.disabled = true;
+
+              const secondary = document.createElement("div");
+              secondary.className = "disparos-campaign-secondary-actions";
+
+              const reportBtn = document.createElement("button");
+              reportBtn.type = "button";
+              reportBtn.className =
+                "instance-action-btn enabled btn-campaign-secondary btn-campaign-report";
+              reportBtn.dataset.campaignId = campaignId;
+              reportBtn.dataset.campaignName = campaignName;
+              reportBtn.textContent = "Relatório";
+
+              const editBtn = document.createElement("button");
+              editBtn.type = "button";
+              editBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-edit";
+              editBtn.dataset.campaignId = campaignId;
+              editBtn.dataset.campaignName = campaignName;
+              editBtn.textContent = "Editar nome";
+
+              const delBtn = document.createElement("button");
+              delBtn.type = "button";
+              delBtn.className = "instance-action-btn btn-delete enabled btn-campaign-secondary btn-campaign-delete";
+              delBtn.dataset.campaignId = campaignId;
+              delBtn.dataset.campaignName = campaignName;
+              delBtn.textContent = "Excluir";
+
+              if (isFinished) secondary.appendChild(reportBtn);
+              secondary.appendChild(editBtn);
+              secondary.appendChild(delBtn);
+              actions.appendChild(toggleBtn);
+              actions.appendChild(secondary);
+              row.appendChild(actions);
+            }
             list.appendChild(row);
           });
         } catch {
+          disparosHasRunningCampaign = false;
+          applyDisparosActiveInstanceCardDisplay("");
           list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
         }
       }
@@ -4609,6 +5221,242 @@
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
         await loadDisparosTemplates();
         return true;
+      }
+
+      function blurFocusInsideOverlay(overlayEl) {
+        if (!overlayEl) return;
+        const t = document.activeElement;
+        if (t && overlayEl.contains(t) && typeof t.blur === "function") {
+          t.blur();
+        }
+      }
+
+      function blurFocusTrappedInClosedOverlays() {
+        const ae = document.activeElement;
+        if (!ae || ae === document.body || !ae.closest) return;
+        const closedHost = ae.closest(".confirm-overlay:not(.open)");
+        if (closedHost && typeof ae.blur === "function") {
+          ae.blur();
+        }
+      }
+
+      let pendingDisCampaignRenameId = "";
+      function openDisCampaignRenameModal(campaignId, currentName) {
+        blurFocusTrappedInClosedOverlays();
+        pendingDisCampaignRenameId = String(campaignId || "").trim();
+        const input = document.getElementById("dis-campaign-rename-input");
+        const overlay = document.getElementById("dis-campaign-rename-overlay");
+        if (input) input.value = String(currentName || "").trim();
+        if (overlay) {
+          overlay.classList.add("open");
+          overlay.setAttribute("aria-hidden", "false");
+        }
+        window.setTimeout(() => {
+          try {
+            input?.focus();
+            input?.select();
+          } catch {
+            //
+          }
+        }, 80);
+      }
+      function closeDisCampaignRenameModal() {
+        pendingDisCampaignRenameId = "";
+        const overlay = document.getElementById("dis-campaign-rename-overlay");
+        if (overlay) {
+          blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+      }
+      async function saveDisCampaignRename() {
+        const id = pendingDisCampaignRenameId;
+        const input = document.getElementById("dis-campaign-rename-input");
+        const name = String(input?.value || "").trim();
+        if (!id) return;
+        if (!name) {
+          showToast("Informe o nome da campanha.", "warning");
+          return;
+        }
+        const saveBtn = document.getElementById("dis-campaign-rename-save-btn");
+        const original = saveBtn ? saveBtn.textContent : "";
+        if (saveBtn) {
+          saveBtn.textContent = "Salvando…";
+          saveBtn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            `/disparos/campanhas/${encodeURIComponent(id)}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name }),
+            },
+            15000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(String(data?.error || "Não foi possível salvar o nome."), "error");
+            return;
+          }
+          showToast(String(data?.message || "Nome atualizado."), "success");
+          closeDisCampaignRenameModal();
+          await loadDisparosTemplates();
+        } catch {
+          showToast("Erro ao salvar o nome da campanha.", "error");
+        } finally {
+          if (saveBtn) {
+            saveBtn.textContent = original || "Salvar";
+            saveBtn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      let pendingDisCampaignDeleteId = "";
+      function openDisCampaignDeleteModal(campaignId, displayName) {
+        blurFocusTrappedInClosedOverlays();
+        pendingDisCampaignDeleteId = String(campaignId || "").trim();
+        const label = document.getElementById("dis-campaign-delete-name-display");
+        if (label) label.textContent = String(displayName || "").trim() || "—";
+        const overlay = document.getElementById("dis-campaign-delete-overlay");
+        if (overlay) {
+          overlay.classList.add("open");
+          overlay.setAttribute("aria-hidden", "false");
+        }
+      }
+      function closeDisCampaignDeleteModal() {
+        pendingDisCampaignDeleteId = "";
+        const overlay = document.getElementById("dis-campaign-delete-overlay");
+        if (overlay) {
+          blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+      }
+      async function confirmDisCampaignDelete() {
+        const id = pendingDisCampaignDeleteId;
+        if (!id) return;
+        const confirmBtn = document.getElementById("dis-campaign-delete-confirm-btn");
+        const original = confirmBtn ? confirmBtn.textContent : "";
+        if (confirmBtn) {
+          confirmBtn.textContent = "Excluindo…";
+          confirmBtn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            `/disparos/campanhas/${encodeURIComponent(id)}`,
+            { method: "DELETE" },
+            60000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(String(data?.error || "Não foi possível excluir a campanha."), "error");
+            return;
+          }
+          showToast(String(data?.message || "Campanha excluída."), "success");
+          closeDisCampaignDeleteModal();
+          await loadDisparosTemplates();
+        } catch {
+          showToast("Erro ao excluir a campanha.", "error");
+        } finally {
+          if (confirmBtn) {
+            confirmBtn.textContent = original || "Sim, excluir";
+            confirmBtn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      function closeDisCampaignReportModal() {
+        const overlay = document.getElementById("dis-campaign-report-overlay");
+        if (overlay) {
+          blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+      }
+
+      function renderDisCampaignReportBody(data) {
+        const body = document.getElementById("dis-campaign-report-body");
+        if (!body) return;
+        const f = Array.isArray(data.funnel) ? data.funnel : [];
+        let html = `
+          <div class="dis-report-summary">
+            <div class="dis-report-stat">
+              <span class="dis-report-stat-label">Total na campanha</span>
+              <span class="dis-report-stat-value">${data.totalNumeros ?? "—"}</span>
+            </div>
+            <div class="dis-report-stat">
+              <span class="dis-report-stat-label">Processados</span>
+              <span class="dis-report-stat-value">${data.totalProcessados ?? "—"}</span>
+            </div>
+            <div class="dis-report-stat dis-report-stat--ok">
+              <span class="dis-report-stat-label">Sucesso</span>
+              <span class="dis-report-stat-value">${data.enviadosComSucesso ?? 0}</span>
+            </div>
+            <div class="dis-report-stat dis-report-stat--warn">
+              <span class="dis-report-stat-label">Números errados</span>
+              <span class="dis-report-stat-value">${data.numerosErrados ?? 0}</span>
+            </div>
+          </div>
+          <p class="dis-report-hint muted" style="margin:12px 0 16px;font-size:0.82rem;line-height:1.45">${escapeHtmlCampaign(
+            data.textoNumerosErrados || ""
+          )}</p>
+          <div class="dis-report-funnel-title">Indicadores (largura da barra = % do total da campanha)</div>
+        `;
+        f.forEach((row) => {
+          const pct = Math.max(0, Math.min(100, Number(row.pctOfTop) || 0));
+          const cnt = Number(row.count) || 0;
+          html += `
+            <div class="dis-funnel-row">
+              <div class="dis-funnel-head">
+                <span class="dis-funnel-title">${escapeHtmlCampaign(String(row.label || ""))}</span>
+                <span class="dis-funnel-badge">${cnt}</span>
+                <span class="dis-funnel-pct">${pct}% do topo</span>
+              </div>
+              <div class="dis-funnel-bar"><div class="dis-funnel-bar-fill" style="width:${pct}%"></div></div>
+            </div>`;
+        });
+        const det = data.detalheErros || {};
+        html += `<div class="dis-report-detail muted" style="margin-top:14px;font-size:0.8rem;line-height:1.45">
+          Detalhe:<br />
+          · Formato / número inválido: <strong>${det.formatoOuNumeroInvalido ?? 0}</strong><br />
+          · Destino indisponível no WhatsApp: <strong>${det.destinoWhatsAppIndisponivel ?? 0}</strong><br />
+          · Falha técnica (API / rede): <strong>${det.falhaTecnica ?? 0}</strong>
+          ${(data.pendentes || 0) > 0 ? `<br />· Ainda não processados: <strong>${data.pendentes}</strong>` : ""}
+        </div>`;
+        body.innerHTML = html;
+      }
+
+      async function openDisCampaignReportModal(campaignId, campaignName) {
+        const overlay = document.getElementById("dis-campaign-report-overlay");
+        const title = document.getElementById("dis-campaign-report-title");
+        const body = document.getElementById("dis-campaign-report-body");
+        if (!overlay || !body) return;
+        blurFocusTrappedInClosedOverlays();
+        if (title) {
+          title.textContent =
+            "Relatório — " + (String(campaignName || "").trim() || "Campanha");
+        }
+        body.innerHTML = '<div class="muted">Carregando…</div>';
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        try {
+          const response = await fetchWithTimeout(
+            `/disparos/campanhas/${encodeURIComponent(String(campaignId || "").trim())}/relatorio`,
+            {},
+            15000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            body.innerHTML = `<div class="muted">${escapeHtmlCampaign(
+              data?.error || "Erro ao carregar relatório."
+            )}</div>`;
+            return;
+          }
+          renderDisCampaignReportBody(data);
+        } catch {
+          body.innerHTML = '<div class="muted">Erro de rede ao carregar relatório.</div>';
+        }
       }
 
       async function parseSpreadsheetFile(file) {
@@ -4725,19 +5573,55 @@
       function openDisCampaignMappingModalWithColumns(columns) {
         const overlay = document.getElementById("dis-campaign-mapping-overlay");
         const numberSel = document.getElementById("dis-campaign-map-number");
+        const modalNameInput = document.getElementById("dis-campaign-modal-name");
+        const mainNameInput = document.getElementById("dis-campaign-name");
         if (!overlay || !numberSel) return;
-        numberSel.innerHTML = ['<option value="">Selecione</option>', ...columns.map((c) => `<option value="${String(c)}">${String(c)}</option>`)].join("");
+        numberSel.innerHTML = "";
+        const optPlaceholder = document.createElement("option");
+        optPlaceholder.value = "";
+        optPlaceholder.textContent = "Selecione";
+        numberSel.appendChild(optPlaceholder);
+        columns.forEach((c) => {
+          const col = String(c);
+          const opt = document.createElement("option");
+          opt.value = col;
+          opt.textContent = col;
+          numberSel.appendChild(opt);
+        });
         const preferred = columns.find((c) => /numero|phone|telefone|celular|whatsapp|contato/i.test(String(c)));
-        if (preferred) numberSel.value = String(preferred);
+        if (preferred != null) numberSel.value = String(preferred);
+        if (modalNameInput) {
+          modalNameInput.value = String(mainNameInput?.value || "").trim();
+          window.setTimeout(() => {
+            try {
+              modalNameInput.focus();
+            } catch {
+              //
+            }
+          }, 50);
+        }
+        const applyDedupeFromColumn = () => {
+          const col = String(numberSel.value || "").trim();
+          if (!col || !campaignSpreadsheetRowsCache.length) {
+            clearDisCampaignDedupeCaption();
+            return;
+          }
+          setDisCampaignDedupeCaption(
+            countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, col)
+          );
+        };
+        numberSel.onchange = applyDedupeFromColumn;
+        applyDedupeFromColumn();
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
       }
 
-      function closeDisCampaignMappingModal() {
+      function closeDisCampaignMappingModal(clearDedupeCaption = true) {
         const overlay = document.getElementById("dis-campaign-mapping-overlay");
         if (!overlay) return;
         overlay.classList.remove("open");
         overlay.setAttribute("aria-hidden", "true");
+        if (clearDedupeCaption) clearDisCampaignDedupeCaption();
       }
 
       async function openDisCampaignMappingFlow() {
@@ -4759,55 +5643,86 @@
       }
 
       async function createCampaignFromMappedSpreadsheet() {
-        const campaignName = String(document.getElementById("dis-campaign-name")?.value || "").trim();
+        const campaignName = String(
+          document.getElementById("dis-campaign-modal-name")?.value ||
+            document.getElementById("dis-campaign-name")?.value ||
+            ""
+        ).trim();
         const numberCol = String(document.getElementById("dis-campaign-map-number")?.value || "").trim();
         const statusEl = document.getElementById("dis-campaign-create-status");
         if (!campaignName) {
-          showToast("Informe o nome da campanha antes de criar.", "warning");
+          showToast("Informe o nome da campanha no modal antes de criar.", "warning");
+          document.getElementById("dis-campaign-modal-name")?.focus();
           return;
         }
         if (!numberCol) {
           showToast("Selecione a coluna do número.", "warning");
           return;
         }
-        const numbers = campaignSpreadsheetRowsCache
-          .map((row) => String(row?.[numberCol] || "").trim())
-          .filter(Boolean);
-        if (!numbers.length) {
-          showToast("Nenhum número válido encontrado na coluna selecionada.", "warning");
+        const fileInput = document.getElementById("dis-campaign-file");
+        const spreadsheetFile = fileInput?.files?.[0];
+        if (!spreadsheetFile) {
+          showToast("Selecione a planilha novamente (arquivo ausente).", "warning");
           return;
         }
+        const disForm = getDisparosFormValues();
+        const selectedForCampaign = Array.isArray(disForm.selectedDisparadorInstances)
+          ? disForm.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+          : [];
+        if (!selectedForCampaign.length) {
+          showToast(
+            "Selecione ao menos uma instância na Seção 1 (Números utilizados no disparador). Só essas instâncias poderão enviar esta campanha.",
+            "warning"
+          );
+          return;
+        }
+        const localDup = countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, numberCol);
+        const configSnapshotJson = JSON.stringify(getDisparosFormValues());
+        closeDisCampaignMappingModal(false);
+        setDisCampaignDedupeCaption(localDup);
+        const dedupeHost = document.getElementById("dis-campaign-dedupe-caption");
+        if (dedupeHost) {
+          try {
+            dedupeHost.scrollIntoView({ behavior: "smooth", block: "center" });
+          } catch {
+            //
+          }
+        }
+        showToast("Criando campanha… Aguarde alguns segundos.", "info", 8000);
+        await new Promise((resolve) => window.setTimeout(resolve, 8000));
+
         setDisCampaignWorkBusy(
           true,
           "Registrando campanha…",
-          `Gravando ${numbers.length} número(s) e snapshot da configuração.`
+          "Enviando o arquivo Excel ao servidor (sem lista gigante no JSON)."
         );
         try {
+          const formData = new FormData();
+          formData.append("name", campaignName);
+          formData.append("numberColumn", numberCol);
+          formData.append("configSnapshot", configSnapshotJson);
+          formData.append("spreadsheet", spreadsheetFile, spreadsheetFile.name);
           const response = await fetchWithTimeout(
             "/disparos/campanhas",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name: campaignName,
-                numbers,
-                configSnapshot: getDisparosFormValues(),
-              }),
-            },
-            25000
+            { method: "POST", body: formData },
+            180000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
             showToast(data?.error || "Falha ao criar campanha.", "error");
             return;
           }
+          const serverDup = Number(data?.duplicatesRemoved || 0);
+          setDisCampaignDedupeCaption(serverDup);
           if (statusEl) {
             const total = Number(data?.campaign?.totalNumbers || 0);
-            statusEl.textContent = `Campanha criada com ${total} números. Prévia da planilha mantida abaixo.`;
+            statusEl.textContent = `Campanha criada com ${total} número(s) único(s) (1 mensagem por destino). Prévia da planilha mantida abaixo.`;
             statusEl.style.color = "#86efac";
           }
+          const mainNameAfter = document.getElementById("dis-campaign-name");
+          if (mainNameAfter) mainNameAfter.value = campaignName;
           showToast(data?.message || "Campanha criada com sucesso.", "success");
-          closeDisCampaignMappingModal();
+          await resetDisparosPanelToOriginalAfterCampaignCreate();
           loadDisparosTemplates();
         } catch {
           showToast("Erro ao criar campanha.", "error");
@@ -6100,6 +7015,7 @@
         const qrPreview = document.getElementById("register-qrcode-preview");
         const statusEl = document.getElementById("register-connect-status");
         if (!overlay || !qrPreview || !statusEl) return;
+        blurFocusInsideOverlay(overlay);
         overlay.classList.remove("open");
         overlay.setAttribute("aria-hidden", "true");
         qrPreview.classList.remove("open");
@@ -6303,6 +7219,7 @@
                 : item?.instanceAlias,
           };
         });
+        refreshDisparosActiveInstanceCardLabelOnly();
       }
 
       async function confirmInlineWhatsappName(instanceName, sourceElement = null) {
@@ -7194,6 +8111,13 @@
       document.addEventListener("click", (e) => {
         const target = getEventElementTarget(e.target);
         if (!target) return;
+        if (
+          target.closest(
+            "#disparos-list .btn-campaign-edit, #disparos-list .btn-campaign-delete, #disparos-list .btn-campaign-toggle, #disparos-list .btn-campaign-report"
+          )
+        ) {
+          return;
+        }
         const btn = target.closest(".instance-action-btn[data-action]");
         if (!btn) return;
         const enabled = btn.getAttribute("data-enabled") === "1";
@@ -7507,14 +8431,129 @@
           });
         });
       }
+      const disparosDiagnosticoBtn = document.getElementById("disparos-diagnostico-btn");
+      if (disparosDiagnosticoBtn) {
+        disparosDiagnosticoBtn.addEventListener("click", async () => {
+          disparosDiagnosticoBtn.textContent = "Consultando...";
+          disparosDiagnosticoBtn.setAttribute("disabled", "true");
+          try {
+            const response = await fetchWithTimeout("/disparos/diagnostico", {}, 12000);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              addDisparosDiagnosticoLog(
+                "Diagnóstico: erro — " + (data?.error || `HTTP ${response.status}`)
+              );
+              return;
+            }
+            addDisparosDiagnosticoLog("Horário (ref.): " + (data.horarioReferenciaBr || "—"));
+            const j = data.janela || {};
+            addDisparosDiagnosticoLog(
+              "Janela Disparador: " +
+                (j.aberta ? "aberta" : "fechada") +
+                " — " +
+                (j.motivo || "")
+            );
+            const cr = data.configResumo || {};
+            addDisparosDiagnosticoLog(
+              `Delays ${cr.delayMinSeconds ?? "—"}–${cr.delayMaxSeconds ?? "—"}s · máx/h ${cr.maxPerHourPerInstance ?? "—"} · máx/dia ${cr.maxPerDayPerInstance ?? "—"} · modo ${cr.messageMode ?? "—"} · instâncias (UI): ${cr.instanciasSelecionadasCount ?? 0} · WhatsApp link: ${cr.whatsappAlvoMascarado ?? "—"}`
+            );
+            const evo = data.evo || {};
+            if (evo.ok === true) {
+              let evoLine =
+                "EVO: Ok · " +
+                (evo.eligibleCount ?? 0) +
+                " instância(s) elegível(is)";
+              if (evo.semSelecaoNaUi) {
+                evoLine += " (sem seleção na UI — todas habilitadas no uso)";
+              }
+              addDisparosDiagnosticoLog(evoLine);
+              if (Array.isArray(evo.instances) && evo.instances.length) {
+                addDisparosDiagnosticoLog("Instâncias: " + evo.instances.join(", "));
+              }
+            } else {
+              addDisparosDiagnosticoLog("EVO: " + (evo.mensagem || "indisponível"));
+            }
+            const camp = data.campanhas || {};
+            const exec = Array.isArray(camp.emExecucao) ? camp.emExecucao : [];
+            addDisparosDiagnosticoLog(
+              "Campanhas na memória: " +
+                (camp.totalNaMemoria ?? 0) +
+                " · em execução: " +
+                exec.length +
+                " · ciclo envio ~" +
+                (data.tickCampanhasMs != null ? Math.round(data.tickCampanhasMs / 1000) : "?") +
+                "s"
+            );
+            exec.forEach((r) => {
+              addDisparosDiagnosticoLog(
+                "· " +
+                  (r.nome || r.id || "—") +
+                  ": " +
+                  (r.enviados ?? 0) +
+                  "/" +
+                  (r.total ?? 0) +
+                  " · pendentes " +
+                  (r.pendentesNaMemoria ?? 0) +
+                  " · falhas " +
+                  (r.falhasNaMemoria ?? 0) +
+                  " · " +
+                  (r.proximoEnvio || "—") +
+                  " · modo " +
+                  (r.modoMensagem || "—")
+              );
+            });
+            if (String(cr.messageMode || "") === "database") {
+              addDisparosDiagnosticoLog(
+                "Templates ativos (memória): " + (data.templatesAtivosNaMemoria ?? 0)
+              );
+            }
+          } catch {
+            addDisparosDiagnosticoLog("Diagnóstico: erro de rede ao consultar.");
+          } finally {
+            disparosDiagnosticoBtn.textContent = "Diagnóstico";
+            disparosDiagnosticoBtn.removeAttribute("disabled");
+          }
+        });
+      }
       const disparosListEl = document.getElementById("disparos-list");
       if (disparosListEl) {
         disparosListEl.addEventListener("click", async (e) => {
+          const reportBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-report") : null;
+          if (reportBtn && disparosListEl.contains(reportBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = reportBtn.dataset.campaignId || reportBtn.getAttribute("data-campaign-id");
+            const nm =
+              reportBtn.dataset.campaignName ?? reportBtn.getAttribute("data-campaign-name") ?? "";
+            if (id) void openDisCampaignReportModal(id, nm);
+            return;
+          }
+          const editBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-edit") : null;
+          if (editBtn && disparosListEl.contains(editBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = editBtn.dataset.campaignId || editBtn.getAttribute("data-campaign-id");
+            const nm = editBtn.dataset.campaignName ?? editBtn.getAttribute("data-campaign-name") ?? "";
+            if (id) openDisCampaignRenameModal(id, nm);
+            return;
+          }
+          const delBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-delete") : null;
+          if (delBtn && disparosListEl.contains(delBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = delBtn.dataset.campaignId || delBtn.getAttribute("data-campaign-id");
+            const nm = delBtn.dataset.campaignName ?? delBtn.getAttribute("data-campaign-name") ?? "";
+            if (id) openDisCampaignDeleteModal(id, nm);
+            return;
+          }
           const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
           if (!btn || !disparosListEl.contains(btn)) return;
-          const id = btn.getAttribute("data-campaign-id");
+          if (btn.disabled || (btn.dataset.campaignFinished || "") === "1") return;
+          e.preventDefault();
+          e.stopPropagation();
+          const id = btn.dataset.campaignId || btn.getAttribute("data-campaign-id");
           if (!id) return;
-          const running = btn.getAttribute("data-campaign-running") === "1";
+          const running = (btn.dataset.campaignRunning || btn.getAttribute("data-campaign-running")) === "1";
           const nextActive = !running;
           btn.setAttribute("disabled", "true");
           try {
@@ -7524,10 +8563,160 @@
           }
         });
       }
+
+      const disCampaignRenameOverlay = document.getElementById("dis-campaign-rename-overlay");
+      if (disCampaignRenameOverlay) {
+        disCampaignRenameOverlay.addEventListener("click", (e) => {
+          if (e.target === disCampaignRenameOverlay) closeDisCampaignRenameModal();
+        });
+      }
+      document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
+      document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
+
+      const disCampaignDeleteOverlay = document.getElementById("dis-campaign-delete-overlay");
+      if (disCampaignDeleteOverlay) {
+        disCampaignDeleteOverlay.addEventListener("click", (e) => {
+          if (e.target === disCampaignDeleteOverlay) closeDisCampaignDeleteModal();
+        });
+      }
+      document.getElementById("dis-campaign-delete-cancel-btn")?.addEventListener("click", () => closeDisCampaignDeleteModal());
+      document.getElementById("dis-campaign-delete-confirm-btn")?.addEventListener("click", () => void confirmDisCampaignDelete());
+
+      const disCampaignReportOverlay = document.getElementById("dis-campaign-report-overlay");
+      if (disCampaignReportOverlay) {
+        disCampaignReportOverlay.addEventListener("click", (e) => {
+          if (e.target === disCampaignReportOverlay) closeDisCampaignReportModal();
+        });
+      }
+      document
+        .getElementById("dis-campaign-report-close-btn")
+        ?.addEventListener("click", () => closeDisCampaignReportModal());
+
       const disModeAi = document.getElementById("dis-mode-ai");
       const disModeDb = document.getElementById("dis-mode-db");
       if (disModeAi) disModeAi.addEventListener("change", () => toggleDisparosModeBoxes());
       if (disModeDb) disModeDb.addEventListener("change", () => toggleDisparosModeBoxes());
+
+      const disMessengerOpenLibraryBtn = document.getElementById("dis-messenger-open-library-panel-btn");
+      if (disMessengerOpenLibraryBtn) {
+        disMessengerOpenLibraryBtn.addEventListener("click", () => {
+          if (!document.getElementById("dis-mode-ai")?.checked) {
+            showToast("Ative o modo 'Gerar mensagens com IA' para usar a biblioteca.", "warning");
+            return;
+          }
+          const feedbackOpen = document.getElementById("dis-messenger-library-feedback");
+          if (feedbackOpen) {
+            feedbackOpen.textContent = "";
+            feedbackOpen.classList.add("hidden");
+          }
+          const libWrap = document.getElementById("dis-messenger-library-save-wrap");
+          const nameIn = document.getElementById("dis-messenger-library-name");
+          if (libWrap) {
+            libWrap.classList.remove("hidden");
+            window.requestAnimationFrame(() => {
+              libWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
+          }
+          nameIn?.focus();
+        });
+      }
+
+      const disMessengerProductSelect = document.getElementById("dis-messenger-product-select");
+      if (disMessengerProductSelect) {
+        disMessengerProductSelect.addEventListener("change", () => {
+          const id = String(disMessengerProductSelect.value || "").trim();
+          if (!id) {
+            clearMessengerFormForNovoProduto();
+            return;
+          }
+          const row = messengerProductsCache.find((p) => String(p?.id) === id);
+          if (row) applyMessengerProductRowToForm(row);
+        });
+      }
+      const disMessengerSaveLibBtn = document.getElementById("dis-messenger-save-to-library-btn");
+      if (disMessengerSaveLibBtn) {
+        disMessengerSaveLibBtn.addEventListener("click", async () => {
+          const nameIn = document.getElementById("dis-messenger-library-name");
+          const displayName = String(nameIn?.value || "").trim();
+          if (!displayName) {
+            showToast("Informe o nome do produto na biblioteca.", "warning");
+            nameIn?.focus();
+            return;
+          }
+          syncDisparosAiBriefingHiddenFromForm();
+          const payload = {
+            displayName,
+            aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
+            aiCta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
+            aiAudience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
+            aiProduct: String(document.getElementById("dis-ai-product")?.value || ""),
+            aiObjective: String(document.getElementById("dis-ai-objective")?.value || ""),
+            aiPains: String(document.getElementById("dis-ai-pains")?.value || ""),
+            aiDifferentials: String(document.getElementById("dis-ai-differentials")?.value || ""),
+            aiProhibitions: String(document.getElementById("dis-ai-prohibitions")?.value || ""),
+            aiNotes: String(document.getElementById("dis-ai-notes")?.value || ""),
+            aiBriefing: String(
+              document.getElementById("dis-ai-briefing")?.value || buildDisparosAiBriefingStructured()
+            ),
+          };
+          const prevLabel = disMessengerSaveLibBtn.textContent;
+          disMessengerSaveLibBtn.textContent = "Salvando...";
+          disMessengerSaveLibBtn.setAttribute("disabled", "true");
+          try {
+            const response = await fetchWithTimeout(
+              "/disparos/messenger-products",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              },
+              15000
+            );
+            let data = {};
+            try {
+              data = await response.json();
+            } catch {
+              data = {};
+            }
+            if (!response.ok) {
+              showToast(data?.error || "Falha ao salvar na biblioteca.", "error");
+              return;
+            }
+            const savedName = String(data?.product?.displayName || displayName).trim();
+            const pid = String(data?.product?.id || "").trim();
+            const feedbackEl = document.getElementById("dis-messenger-library-feedback");
+            if (feedbackEl) {
+              feedbackEl.textContent = `✓ “${savedName}” gravado na biblioteca.`;
+              feedbackEl.classList.remove("hidden");
+            }
+            showToast(
+              `“${savedName}” foi salvo na biblioteca. Você já pode escolhê-lo no menu acima.`,
+              "success",
+              6500
+            );
+            /* Sucesso do POST: fechar painel já; se o GET da lista falhar, não pode parecer que não gravou. */
+            window.setTimeout(() => {
+              hideMessengerLibrarySavePanel();
+            }, 900);
+            try {
+              await loadMessengerProductsList();
+              const sel = document.getElementById("dis-messenger-product-select");
+              if (pid && sel) sel.value = pid;
+            } catch {
+              showToast(
+                "Gravação confirmada. Recarregue a página se o produto não aparecer na lista.",
+                "warning",
+                5500
+              );
+            }
+          } catch {
+            showToast("Erro de rede ao salvar na biblioteca.", "error");
+          } finally {
+            disMessengerSaveLibBtn.textContent = prevLabel || "Salvar na biblioteca";
+            disMessengerSaveLibBtn.removeAttribute("disabled");
+          }
+        });
+      }
 
       const disSaveBtn = document.getElementById("dis-save-btn");
       if (disSaveBtn) disSaveBtn.addEventListener("click", () => saveDisparosConfig());
@@ -7632,15 +8821,6 @@
 
       const disMapImportBtn = document.getElementById("dis-map-import-btn");
       if (disMapImportBtn) disMapImportBtn.addEventListener("click", () => importMappedSpreadsheet());
-      const disCampaignMapCancelBtn = document.getElementById("dis-campaign-map-cancel-btn");
-      if (disCampaignMapCancelBtn) {
-        disCampaignMapCancelBtn.addEventListener("click", () => closeDisCampaignMappingModal());
-      }
-      const disCampaignMapCreateBtn = document.getElementById("dis-campaign-map-create-btn");
-      if (disCampaignMapCreateBtn) {
-        disCampaignMapCreateBtn.addEventListener("click", () => createCampaignFromMappedSpreadsheet());
-      }
-
       const disWhatsappTargetInput = document.getElementById("dis-whatsapp-target");
       if (disWhatsappTargetInput) {
         disWhatsappTargetInput.addEventListener("input", (e) => {
@@ -7663,7 +8843,18 @@
       const disCampaignMappingOverlay = document.getElementById("dis-campaign-mapping-overlay");
       if (disCampaignMappingOverlay) {
         disCampaignMappingOverlay.addEventListener("click", (e) => {
-          if (e.target === disCampaignMappingOverlay) closeDisCampaignMappingModal();
+          if (e.target === disCampaignMappingOverlay) {
+            closeDisCampaignMappingModal();
+            return;
+          }
+          if (e.target.closest("#dis-campaign-map-cancel-btn")) {
+            closeDisCampaignMappingModal();
+            return;
+          }
+          if (e.target.closest("#dis-campaign-map-create-btn")) {
+            e.preventDefault();
+            void createCampaignFromMappedSpreadsheet();
+          }
         });
       }
       if (registerOverlay) {

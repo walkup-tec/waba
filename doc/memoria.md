@@ -9,6 +9,248 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
+2026-03-25
+
+Resumo desta retomada:
+- **Atualize tudo**: `npm run build` executado; `dist/` sincronizado; documentação atualizada (log + memória); pronto para `git add/commit/push`.
+
+Palavras-chave:
+- atualize-tudo, build, dist, git commit, git push
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Campanha / UX**: legenda duplicatas com `font-weight: 400` (sem negrito); toast info “Criando campanha…” e espera antes do POST = **8s**.
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Campanha / criar após mapear**: modal fecha primeiro; legenda duplicados (ou “nenhum duplicado” em verde); toast info 4s “Criando campanha…”; depois POST e `resetDisparosPanelToOriginalAfterCampaignCreate` + lista campanhas.
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Card Instância ativa**: exibe instância só se existir campanha `running` (`disparosHasRunningCampaign`); senão `—` e subtítulo vazio, sem request a `next-instance`.
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Card Instância ativa / Disparos**: `GET /disparos/next-instance` aceita `instances=` (lista da UI) e `preview=1` (não incrementa contador). Cliente envia seleção de `#dis-selected-instances` para o card bater com a lista exibida.
+
+Palavras-chave:
+- next-instance, preview, instances query
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Campanha / importação**: legenda vermelha `#dis-campaign-dedupe-caption` com total de **duplicados excluídos** (coluna no modal + confirmação com `duplicatesRemoved`).
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Campanhas / instâncias**: disparos usam **somente** `configSnapshot.selectedDisparadorInstances` (interseção com conectadas + uso Disparador). Lista vazia no snapshot não cai mais em “todas elegíveis”. Criação de campanha exige **≥1** instância selecionada (API + UI).
+
+Palavras-chave:
+- pickDisparadorInstanceForConfig, selectedDisparadorInstances
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Disparos / card Instâncias selecionadas**: subtítulo com instâncias na lista → **Total sendo utilizadas**; sem seleção → **Nenhuma selecionada · API usa todas elegíveis** (`disparos-selecionadas-sub`).
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Campanhas / Relatório**: botão **Relatório** na lista só aparece com status **`finished`** (`loadDisparosTemplates`, `isFinished`).
+
+Palavras-chave:
+- btn-campaign-report, campanha finalizada
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Campanhas Disparador**: lista importada com **deduplicação** por telefone normalizado (`deduplicateCampaignDestinationPhones`); **1 mensagem por destino** (1 lead por número); campanha **finalizada** quando não há pendentes; não reativa campanha `finished` (409); API lista com **`processedCount`** e progresso por processados (sucesso + falha).
+
+Palavras-chave:
+- deduplicateCampaignDestinationPhones, processedCount, duplicatesRemoved
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Disparos / Instância da vez**: `#disparos-instancia-ativa` mostra rótulo alinhado ao seletor (`instanceAlias` → `instanceLabel` → técnico). Cache `disparosNextInstanceTechnicalCache`; `refreshDisparosActiveInstanceFromServer` chama `/disparos/next-instance`; `refreshDisparosActiveInstanceCardLabelOnly` reaplica após `carregar` / `updateLocalInstanceLabels` sem novo GET.
+
+Palavras-chave:
+- disparos-instancia-ativa, disparosNextInstanceTechnicalCache, refreshDisparosActiveInstanceCardLabelOnly
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Disparos / resumo**: card **Instâncias selecionadas** (antes do Round-robin), `#disparos-selecionadas-count`, atualizado por `updateDisparosSelectedInstancesSummaryCard` (sync lista, mover números, polling campanhas).
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Relatório de campanha**: botão **Relatório** por campanha → modal com totais, texto sobre números errados, funil em barras; **GET `/disparos/campanhas/:id/relatorio`**. Falhas de envio marcam lead como `failed` com `failureKind` (inválido / destino / técnico) e avançam fila.
+
+Palavras-chave:
+- relatorio, persistLeadFailed, failureKind, dis-campaign-report-overlay
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Disparador — Diagnóstico**: botão ao lado de **Campanhas**; **GET `/disparos/diagnostico`** (janela expediente, resumo da config, EVO elegíveis, campanhas em execução na memória, tick ~7s); log `#disparos-diagnostico-log-list`. **`isDisparosWindowOpen`** em `src/index.ts`.
+
+Palavras-chave:
+- disparos/diagnostico, disparos-diagnostico-btn, isDisparosWindowOpen
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Mensageiro**: **Salvar configurações** volta a igualar às outras seções (recolhe, Editar, próxima); painel da biblioteca **não** abre mais nesse momento. Biblioteca via botão **Adicionar produto à biblioteca** (`#dis-messenger-open-library-panel-btn`).
+
+Palavras-chave:
+- dis-messenger-open-library-panel-btn, hideMessengerLibrarySavePanel no save da seção 6
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Mensageiro / teste IA**: legenda `#dis-ai-test-status` após sucesso só mostra **“Mensagem gerada com sucesso”** (sem modelo, ms nem link curto).
+
+Palavras-chave:
+- dis-ai-test-status, testDisparosAiGeneration
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Fix biblioteca Mensageiro (pós-gravar)**: sucesso do `POST` não depende mais do `GET` da lista; falha no refresh não deixa o painel aberto nem mostra “erro ao salvar”. Toast com nome, linha verde de confirmação e fechamento do painel após ~0,9s.
+
+Palavras-chave:
+- dis-messenger-library-feedback, messenger-products POST vs GET lista
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Fix Mensageiro**: após salvar seção 6 (IA), o painel de nome na biblioteca ficava **dentro do body recolhido** do accordion — invisível. Agora a seção 6 **permanece aberta**, não pula para Campanha, scroll + toast orientando “Salvar na biblioteca”.
+
+Palavras-chave:
+- dis-messenger-library-save-wrap, dis-section-collapsed
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- **Mensageiro**: biblioteca de produtos (`GET`/`POST /disparos/messenger-products`), arquivo `data/disparos-messenger-products.json`; após salvar a seção 6 (IA), painel para nome + salvar na biblioteca; select **Novo produto** / produtos gravados preenche critérios.
+- **Criar campanha** com sucesso: `resetDisparosPanelToOriginalAfterCampaignCreate()` — painel esquerdo (números, temporizador, limites, expediente, encurtador, mensageiro, modo IA) no estado inicial + `POST /disparos/config`.
+
+Palavras-chave:
+- messenger-products, disparos-messenger-products.json, dis-messenger-product-select, resetDisparosPanelToOriginalAfterCampaignCreate
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- 404 em PATCH/DELETE: **hydrate** da campanha alinhado ao GET (sem exigir `config_snapshot` na query principal); snapshot buscado em query opcional.
+
+Palavras-chave:
+- hydrateCampaignFromDbIfNeeded
+- config_snapshot
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Lista de campanhas (painel direito): botoes **Editar nome** (modal) e **Excluir** (modal de confirmacao). API `PATCH` e `DELETE` em `/disparos/campanhas/:id`. Mantidos Ativar/Pausar.
+
+Palavras-chave para busca:
+- campanha-editar-excluir
+- PATCH disparos campanhas
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Criar campanha na UI: **upload do Excel em multipart** (`FormData` + campo `spreadsheet`); servidor le com `multer` + `xlsx`. Nao envia mais array `numbers` gigante no JSON (acaba a classe de erro `PayloadTooLarge` nesse fluxo). JSON com `numbers` mantido opcional para integracoes pequenas.
+
+Palavras-chave para busca:
+- campanha-multipart
+- CAMPAIGN_UPLOAD_MAX_MB
+- extractNumbersFromXlsxBuffer
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- `PayloadTooLargeError`: parser JSON **dedicado** para `POST /disparos/campanhas` ate **512mb** (`CAMPAIGN_CREATE_JSON_LIMIT`); demais rotas usam `JSON_BODY_LIMIT` (padrao 10mb). Log na subida do servidor.
+
+Palavras-chave para busca:
+- CAMPAIGN_CREATE_JSON_LIMIT
+- PayloadTooLargeError
+- parseJsonCampaignCreate
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Express: `express.json` com limite **32mb** (env `JSON_BODY_LIMIT`) para evitar `PayloadTooLargeError` em campanhas com muitos numeros.
+
+Palavras-chave para busca:
+- JSON_BODY_LIMIT
+- PayloadTooLargeError
+
+---
+
+2026-03-24
+
+Resumo desta retomada:
+- Modal da campanha: titulo **Mapear Arquivo**, campo de nome no modal, select de colunas sem `innerHTML` fragil, botao **Confirmar e criar campanha** com acao via delegacao no overlay.
+
+Palavras-chave para busca:
+- mapear-arquivo
+- dis-campaign-modal-name
+- fix-modal-campanha-select
+
+---
+
 2026-03-24
 
 Resumo desta retomada:

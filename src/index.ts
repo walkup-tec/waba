@@ -1,5 +1,7 @@
 process.env.TZ = process.env.TZ || "America/Sao_Paulo";
 import express from "express";
+import multer from "multer";
+import * as XLSX from "xlsx";
 import path from "path";
 import crypto from "crypto";
 import { promises as fs } from "fs";
@@ -8,7 +10,52 @@ import "dotenv/config";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.use(express.json());
+
+/** Demais rotas (padrão Express ~100kb). */
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "10mb";
+/**
+ * Só o POST que envia o array `numbers` + `configSnapshot` pode passar de dezenas de MB.
+ * Limite separado para não depender só do global (e para planilhas muito grandes).
+ */
+const CAMPAIGN_CREATE_JSON_LIMIT =
+  process.env.CAMPAIGN_CREATE_JSON_LIMIT || "512mb";
+
+const parseJsonDefault = express.json({ limit: JSON_BODY_LIMIT });
+const parseJsonCampaignCreate = express.json({ limit: CAMPAIGN_CREATE_JSON_LIMIT });
+
+const CAMPAIGN_UPLOAD_MAX_BYTES =
+  Math.max(5, Number(process.env.CAMPAIGN_UPLOAD_MAX_MB || 100)) * 1024 * 1024;
+
+/** Planilha enviada como arquivo — não carrega centenas de MB em JSON. */
+const uploadCampaignSpreadsheet = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: CAMPAIGN_UPLOAD_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const n = file.originalname.toLowerCase();
+    if (n.endsWith(".xlsx") || n.endsWith(".xls")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Envie arquivo Excel (.xlsx ou .xls)."));
+  },
+});
+
+function isDisparosCampaignCreatePost(req: express.Request) {
+  if (req.method !== "POST") return false;
+  const p = String(req.path || "").replace(/\/+$/, "") || "/";
+  return p === "/disparos/campanhas";
+}
+
+app.use((req, res, next) => {
+  if (isDisparosCampaignCreatePost(req)) {
+    const ct = String(req.headers["content-type"] || "");
+    if (ct.includes("multipart/form-data")) {
+      return next();
+    }
+    return parseJsonCampaignCreate(req, res, next);
+  }
+  return parseJsonDefault(req, res, next);
+});
 
 // Supabase (criado sob demanda para evitar travamentos quando faltar config)
 let supabaseClient: ReturnType<typeof createClient> | null = null;
@@ -225,6 +272,156 @@ const EVO_LIVE_PROFILE_SYNC =
     : true;
 const INSTANCE_ALIASES_FILE = path.join(process.cwd(), "data", "instance-aliases.json");
 const WHATSAPP_PROFILE_NAMES_FILE = path.join(process.cwd(), "data", "whatsapp-profile-names.json");
+const MESSENGER_PRODUCTS_FILE = path.join(
+  process.cwd(),
+  "data",
+  "disparos-messenger-products.json"
+);
+
+type MessengerProductRow = {
+  id: string;
+  displayName: string;
+  aiTone: string;
+  aiCta: string;
+  aiAudience: string;
+  aiProduct: string;
+  aiObjective: string;
+  aiPains: string;
+  aiDifferentials: string;
+  aiProhibitions: string;
+  aiNotes: string;
+  aiBriefing: string;
+  updatedAt: string;
+};
+
+let messengerProductsWriteChain: Promise<void> = Promise.resolve();
+
+function runMessengerProductsLocked<T>(fn: () => Promise<T>): Promise<T> {
+  const next = messengerProductsWriteChain.then(fn, fn);
+  messengerProductsWriteChain = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+function buildMessengerAiBriefingFromFields(row: {
+  aiProduct: string;
+  aiObjective: string;
+  aiAudience: string;
+  aiTone: string;
+  aiCta: string;
+  aiPains: string;
+  aiDifferentials: string;
+  aiProhibitions: string;
+  aiNotes: string;
+}): string {
+  const read = (v: string, fallback: string) =>
+    String(v || "").trim() || fallback;
+  const parts = [
+    `Produto/serviço: ${read(row.aiProduct, "não informado")}`,
+    `Objetivo da mensagem: ${read(row.aiObjective, "não informado")}`,
+    `Público alvo: ${read(row.aiAudience, "não informado")}`,
+    `Tom: ${read(row.aiTone, "consultivo")}`,
+    `CTA padrão: ${read(row.aiCta, "não informado")}`,
+    `Dores do público:\n${read(row.aiPains, "-")}`,
+    `Diferenciais:\n${read(row.aiDifferentials, "-")}`,
+    `Regras/proibições:\n${read(row.aiProhibitions, "-")}`,
+    `Observações adicionais:\n${read(row.aiNotes, "-")}`,
+  ];
+  return parts.join("\n\n");
+}
+
+function parseMessengerProductFromBody(body: any): MessengerProductRow | null {
+  const displayName = String(body?.displayName || "").trim();
+  if (!displayName || displayName.length > 200) return null;
+  const slice = (v: any, max: number) => String(v ?? "").slice(0, max);
+  const aiTone = slice(body?.aiTone, 120) || DISPAROS_DEFAULTS.aiTone;
+  const aiCta = slice(body?.aiCta, 240) || DISPAROS_DEFAULTS.aiCta;
+  const aiAudience = slice(body?.aiAudience, 240) || DISPAROS_DEFAULTS.aiAudience;
+  const aiProduct = slice(body?.aiProduct, 500);
+  const aiObjective = slice(body?.aiObjective, 500);
+  const aiPains = slice(body?.aiPains, 4000);
+  const aiDifferentials = slice(body?.aiDifferentials, 4000);
+  const aiProhibitions = slice(body?.aiProhibitions, 4000);
+  const aiNotes = slice(body?.aiNotes, 4000);
+  let aiBriefing = String(body?.aiBriefing || "").trim().slice(0, 8000);
+  if (!aiBriefing) {
+    aiBriefing = buildMessengerAiBriefingFromFields({
+      aiProduct,
+      aiObjective,
+      aiAudience,
+      aiTone,
+      aiCta,
+      aiPains,
+      aiDifferentials,
+      aiProhibitions,
+      aiNotes,
+    });
+  }
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    displayName,
+    aiTone,
+    aiCta,
+    aiAudience,
+    aiProduct,
+    aiObjective,
+    aiPains,
+    aiDifferentials,
+    aiProhibitions,
+    aiNotes,
+    aiBriefing,
+    updatedAt: now,
+  };
+}
+
+async function loadMessengerProductsFromFile(): Promise<MessengerProductRow[]> {
+  try {
+    const raw = await fs.readFile(MESSENGER_PRODUCTS_FILE, "utf-8");
+    const parsed = JSON.parse(raw || "{}");
+    const items = parsed?.items;
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter(
+        (row: any) =>
+          row &&
+          typeof row.id === "string" &&
+          typeof row.displayName === "string" &&
+          row.displayName.trim().length > 0
+      )
+      .map((row: any) => ({
+        id: String(row.id),
+        displayName: String(row.displayName).trim(),
+        aiTone: String(row.aiTone || DISPAROS_DEFAULTS.aiTone).slice(0, 120),
+        aiCta: String(row.aiCta || DISPAROS_DEFAULTS.aiCta).slice(0, 240),
+        aiAudience: String(row.aiAudience || DISPAROS_DEFAULTS.aiAudience).slice(
+          0,
+          240
+        ),
+        aiProduct: String(row.aiProduct || "").slice(0, 500),
+        aiObjective: String(row.aiObjective || "").slice(0, 500),
+        aiPains: String(row.aiPains || "").slice(0, 4000),
+        aiDifferentials: String(row.aiDifferentials || "").slice(0, 4000),
+        aiProhibitions: String(row.aiProhibitions || "").slice(0, 4000),
+        aiNotes: String(row.aiNotes || "").slice(0, 4000),
+        aiBriefing: String(row.aiBriefing || "").slice(0, 8000),
+        updatedAt: String(row.updatedAt || new Date().toISOString()),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function saveMessengerProductsToFile(items: MessengerProductRow[]) {
+  await fs.mkdir(path.dirname(MESSENGER_PRODUCTS_FILE), { recursive: true });
+  await fs.writeFile(
+    MESSENGER_PRODUCTS_FILE,
+    JSON.stringify({ items }, null, 2),
+    "utf-8"
+  );
+}
 let instanceAliasesCache: Map<string, string> | null = null;
 let whatsappProfileNamesCache: Map<string, string> | null = null;
 
@@ -352,11 +549,15 @@ type DisparosCampaign = {
   configSnapshot: DisparosConfig;
 };
 
+type LeadFailureKind = "invalid_phone" | "destination_error" | "send_error";
+
 type DisparosCampaignLead = {
   id: string;
   campaignId: string;
   phone: string;
   status: "pending" | "sent" | "failed";
+  /** Preenchido quando status === "failed" (envio na mesma execução); leads antigos sem valor caem em send_error no relatório. */
+  failureKind?: LeadFailureKind;
   createdAt: string;
   sentAt: string | null;
 };
@@ -380,6 +581,40 @@ const DISPAROS_DEFAULTS: DisparosConfig = {
   whatsappTargetNumber: "",
   selectedDisparadorInstances: [],
 };
+
+function isDisparosWindowOpen(
+  config: DisparosConfig,
+  now: Date
+): { aberta: boolean; motivo: string } {
+  const day = now.getDay();
+  const dayCode = DAY_CODES[day];
+  const days =
+    Array.isArray(config.workingDays) && config.workingDays.length > 0
+      ? config.workingDays
+      : DISPAROS_DEFAULTS.workingDays;
+  if (!days.includes(dayCode)) {
+    return {
+      aberta: false,
+      motivo: `Hoje (${dayCode}) não está nos dias de expediente do Disparador.`,
+    };
+  }
+  const shRaw = Number(config.startHour);
+  const ehRaw = Number(config.endHour);
+  const sh = Number.isFinite(shRaw)
+    ? Math.max(0, Math.min(23, Math.floor(shRaw)))
+    : DISPAROS_DEFAULTS.startHour;
+  const eh = Number.isFinite(ehRaw)
+    ? Math.max(1, Math.min(24, Math.floor(ehRaw)))
+    : DISPAROS_DEFAULTS.endHour;
+  const hour = now.getHours();
+  if (hour < sh) {
+    return { aberta: false, motivo: `Antes da janela (${sh}h–${eh}h).` };
+  }
+  if (hour >= eh) {
+    return { aberta: false, motivo: `Após a janela (${sh}h–${eh}h).` };
+  }
+  return { aberta: true, motivo: "Dentro da janela de expediente do Disparador." };
+}
 
 const instanceUsageMemory = new Map<string, InstanceUsageConfig>();
 const disparosTemplatesMemory: MessageTemplate[] = [];
@@ -1284,6 +1519,71 @@ function normalizeWhatsAppNumber(num: string): string {
 function normalizeCampaignPhone(input: string): string {
   const normalized = normalizeWhatsAppNumber(String(input || ""));
   return String(normalized || "").replace(/\D/g, "");
+}
+
+/** Uma linha de contato → um destino: remove duplicatas pelo telefone normalizado (55…). */
+function deduplicateCampaignDestinationPhones(
+  digitCandidates: string[]
+): { phones: string[]; removedDuplicates: number } {
+  const seen = new Set<string>();
+  const phones: string[] = [];
+  let removedDuplicates = 0;
+  for (const cand of digitCandidates) {
+    const digits = normalizeCampaignPhone(String(cand || ""));
+    if (digits.length < 12) continue;
+    if (seen.has(digits)) {
+      removedDuplicates += 1;
+      continue;
+    }
+    seen.add(digits);
+    phones.push(digits);
+  }
+  return { phones, removedDuplicates };
+}
+
+function isPlausibleBrWhatsappDestinationDigits(digits: string): boolean {
+  const d = String(digits || "").replace(/\D/g, "");
+  if (!d.startsWith("55")) return false;
+  if (d.length < 12 || d.length > 13) return false;
+  if (d.length === 13) return d[4] === "9";
+  return true;
+}
+
+function classifyEvoSendFailure(status: number, body: string): LeadFailureKind {
+  const b = String(body || "").toLowerCase();
+  if (
+    b.includes("not registered") ||
+    b.includes("not exist") ||
+    b.includes("not found") ||
+    (b.includes("invalid") &&
+      (b.includes("number") || b.includes("phone") || b.includes("jid") || b.includes("recipient"))) ||
+    b.includes("is not on whatsapp") ||
+    b.includes("no whatsapp") ||
+    (status === 400 && (b.includes("number") || b.includes("jid")))
+  ) {
+    return "destination_error";
+  }
+  return "send_error";
+}
+
+function extractNumbersFromXlsxBuffer(
+  buffer: Buffer,
+  numberColumn: string
+): { phones: string[]; removedDuplicates: number } {
+  const col = String(numberColumn || "").trim();
+  if (!col) return { phones: [], removedDuplicates: 0 };
+  const wb = XLSX.read(buffer, { type: "buffer" });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) return { phones: [], removedDuplicates: 0 };
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  const bucket: string[] = [];
+  for (const row of rows) {
+    const raw = row[col];
+    const digits = normalizeCampaignPhone(String(raw ?? ""));
+    if (digits.length >= 12) bucket.push(digits);
+  }
+  return deduplicateCampaignDestinationPhones(bucket);
 }
 
 function extractInstanceNumber(inst: any): string {
@@ -2690,6 +2990,178 @@ app.post("/disparos/config", async (req, res) => {
   }
 });
 
+app.get("/disparos/messenger-products", async (_req, res) => {
+  try {
+    const items = await runMessengerProductsLocked(() =>
+      loadMessengerProductsFromFile()
+    );
+    const sorted = [...items].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, "pt-BR", { sensitivity: "base" })
+    );
+    return res.json({ items: sorted });
+  } catch {
+    return res
+      .status(500)
+      .json({ error: "Erro ao carregar biblioteca de produtos do Mensageiro." });
+  }
+});
+
+app.post("/disparos/messenger-products", async (req, res) => {
+  try {
+    const incoming = parseMessengerProductFromBody(req.body || {});
+    if (!incoming) {
+      return res
+        .status(400)
+        .json({ error: "Informe um nome de produto (até 200 caracteres)." });
+    }
+    const saved = await runMessengerProductsLocked(async () => {
+      const items = await loadMessengerProductsFromFile();
+      const key = incoming.displayName.toLowerCase();
+      const idx = items.findIndex(
+        (row) => row.displayName.toLowerCase() === key
+      );
+      const next: MessengerProductRow =
+        idx >= 0
+          ? { ...incoming, id: items[idx].id, updatedAt: incoming.updatedAt }
+          : incoming;
+      const merged =
+        idx >= 0
+          ? items.map((row, i) => (i === idx ? next : row))
+          : [...items, next];
+      await saveMessengerProductsToFile(merged);
+      return next;
+    });
+    return res.json({
+      ok: true,
+      message: "Produto salvo na biblioteca do Mensageiro.",
+      product: saved,
+    });
+  } catch {
+    return res
+      .status(500)
+      .json({ error: "Erro ao gravar produto na biblioteca." });
+  }
+});
+
+app.get("/disparos/diagnostico", async (_req, res) => {
+  try {
+    const nowSp = nowInSaoPaulo();
+    const fullConfig = await loadDisparosConfigFromDb();
+    const janela = isDisparosWindowOpen(fullConfig, nowSp);
+    const wapp = normalizeWhatsAppNumber(String(fullConfig.whatsappTargetNumber || ""));
+    const whatsappAlvoMascarado =
+      wapp.length >= 4 ? `…${wapp.slice(-4)}` : wapp.length > 0 ? "definido" : "não definido";
+
+    const diag: Record<string, any> = {
+      tickCampanhasMs: 7000,
+      horarioReferenciaBr: formatDateBr(nowSp.toISOString()),
+      janela,
+      configResumo: {
+        delayMinSeconds: fullConfig.delayMinSeconds,
+        delayMaxSeconds: fullConfig.delayMaxSeconds,
+        maxPerHourPerInstance: fullConfig.maxPerHourPerInstance,
+        maxPerDayPerInstance: fullConfig.maxPerDayPerInstance,
+        workingDays: fullConfig.workingDays,
+        startHour: fullConfig.startHour,
+        endHour: fullConfig.endHour,
+        messageMode: fullConfig.messageMode,
+        instanciasSelecionadasCount: fullConfig.selectedDisparadorInstances.length,
+        shortenerProvider: fullConfig.shortenerProvider,
+        whatsappAlvoMascarado,
+      },
+      evo: {
+        ok: false,
+        eligibleCount: 0,
+        instances: [] as string[],
+        semSelecaoNaUi: false,
+        mensagem: "" as string,
+      },
+      campanhas: {
+        totalNaMemoria: disparosCampaignsMemory.length,
+        emExecucao: [] as Array<Record<string, unknown>>,
+      },
+      templatesAtivosNaMemoria: disparosTemplatesMemory.filter((t) => t.active !== false)
+        .length,
+    };
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(EVO_INSTANCES_URL, {
+        headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = null;
+      if (response.ok) {
+        const raw = await response.json();
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.response)
+            ? raw.response
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : [];
+        const connected = buildConnectedFromEvoResponse(list);
+        const usageMap = await loadInstanceUsageMap();
+        const selectedSet = new Set(
+          Array.isArray(fullConfig.selectedDisparadorInstances)
+            ? fullConfig.selectedDisparadorInstances
+                .map((n) => String(n || "").trim())
+                .filter(Boolean)
+            : []
+        );
+        const hasSelection = selectedSet.size > 0;
+        const eligible = connected.filter((item) => {
+          const usage = usageMap.get(item.instancia);
+          const byUsage = usage ? usage.useDisparador !== false : true;
+          const bySelection = hasSelection ? selectedSet.has(item.instancia) : true;
+          return byUsage && bySelection;
+        });
+        diag.evo.ok = true;
+        diag.evo.eligibleCount = eligible.length;
+        diag.evo.instances = eligible.map((e) => e.instancia).slice(0, 40);
+        diag.evo.semSelecaoNaUi = !hasSelection;
+      } else {
+        diag.evo.mensagem = `EVO HTTP ${response.status}`;
+      }
+    } catch (e) {
+      if (timeoutId) clearTimeout(timeoutId);
+      diag.evo.mensagem =
+        (e as Error)?.message || "Falha ao consultar instâncias na EVO.";
+    }
+
+    for (const c of disparosCampaignsMemory) {
+      if (c.status !== "running") continue;
+      const leads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === c.id);
+      const pending = leads.filter((l) => l.status === "pending").length;
+      const failed = leads.filter((l) => l.status === "failed").length;
+      const nextMs = campaignNextAllowedSendAt.get(c.id) || 0;
+      const nowMs = Date.now();
+      let proximoEnvio = "elegível no próximo ciclo (~7s)";
+      if (nextMs > nowMs) {
+        proximoEnvio = `aguardando até ${formatDateBr(new Date(nextMs).toISOString())}`;
+      }
+      diag.campanhas.emExecucao.push({
+        id: c.id,
+        nome: c.name,
+        enviados: c.sentCount,
+        total: c.totalNumbers,
+        pendentesNaMemoria: pending,
+        falhasNaMemoria: failed,
+        proximoEnvio,
+        modoMensagem: c.configSnapshot?.messageMode ?? "—",
+      });
+    }
+
+    return res.json(diag);
+  } catch (error) {
+    console.error("Erro em /disparos/diagnostico:", error);
+    return res.status(500).json({ error: "Erro ao montar diagnóstico do Disparador." });
+  }
+});
+
 app.post("/disparos/shorten", async (req, res) => {
   try {
     const longUrl = String(req.body?.longUrl || "").trim();
@@ -2855,8 +3327,28 @@ app.post("/disparos/teste-mensagem-ai", async (req, res) => {
   }
 });
 
-app.get("/disparos/next-instance", async (_req, res) => {
+app.get("/disparos/next-instance", async (req, res) => {
   try {
+    const previewOnly =
+      String(req.query.preview || "").toLowerCase() === "1" ||
+      String(req.query.preview || "").toLowerCase() === "true";
+
+    const parseInstancesQueryParam = (): string[] | null => {
+      const raw = req.query.instances;
+      if (raw === undefined) return null;
+      if (typeof raw === "string") {
+        const parts = raw.split(",").map((s) => String(s || "").trim()).filter(Boolean);
+        return parts;
+      }
+      if (Array.isArray(raw)) {
+        return raw
+          .flatMap((r) => String(r || "").split(","))
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return null;
+    };
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     const response = await fetch(EVO_INSTANCES_URL, {
@@ -2876,13 +3368,22 @@ app.get("/disparos/next-instance", async (_req, res) => {
           : [];
     const connected = buildConnectedFromEvoResponse(list);
     const usageMap = await loadInstanceUsageMap();
+    const fromQuery = parseInstancesQueryParam();
     const disparosConfig = await loadDisparosConfigFromDb();
-    const selectedSet = new Set(
-      Array.isArray(disparosConfig.selectedDisparadorInstances)
-        ? disparosConfig.selectedDisparadorInstances.map((n) => String(n || "").trim())
-        : []
-    );
-    const hasSelection = selectedSet.size > 0;
+    const dbSelected = Array.isArray(disparosConfig.selectedDisparadorInstances)
+      ? disparosConfig.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+      : [];
+
+    let selectedSet: Set<string>;
+    let hasSelection: boolean;
+    if (fromQuery !== null) {
+      selectedSet = new Set(fromQuery);
+      hasSelection = selectedSet.size > 0;
+    } else {
+      selectedSet = new Set(dbSelected);
+      hasSelection = selectedSet.size > 0;
+    }
+
     const eligible = connected.filter((item) => {
       const usage = usageMap.get(item.instancia);
       const byUsage = usage ? usage.useDisparador !== false : true;
@@ -2896,12 +3397,15 @@ app.get("/disparos/next-instance", async (_req, res) => {
     }
     const idx = disparosRoundRobinCounter % eligible.length;
     const selected = eligible[idx];
-    disparosRoundRobinCounter += 1;
+    if (!previewOnly) {
+      disparosRoundRobinCounter += 1;
+    }
     return res.json({
       ok: true,
       selected,
       totalEligible: eligible.length,
       fallbackEnabled: true,
+      preview: previewOnly,
       note:
         "Quando a instância atual desconectar/bloquear, o próximo ciclo deve usar a próxima conectada.",
     });
@@ -2995,12 +3499,36 @@ async function hydrateCampaignFromDbIfNeeded(campaignId: string): Promise<Dispar
   const supabase = getSupabaseClient();
   if (!supabase) return null;
   try {
-    const { data: row } = await (supabase
+    /** Mesmas colunas base do GET /disparos/campanhas — sem config_snapshot para não falhar se a coluna não existir no schema. */
+    const { data: row, error: rowErr } = await (supabase
       .from("disparos_campaigns" as any)
-      .select("id, campaign_name, status, total_numbers, sent_count, config_snapshot, created_at")
+      .select("id, campaign_name, status, total_numbers, sent_count, created_at")
       .eq("id", campaignId)
       .maybeSingle()) as any;
+    if (rowErr) {
+      console.error("[Campanha] hydrate linha:", campaignId, rowErr.message || rowErr);
+      return null;
+    }
     if (!row?.id) return null;
+
+    let configSnapshot: DisparosConfig = { ...DISPAROS_DEFAULTS };
+    try {
+      const { data: cfgRow, error: cfgErr } = await (supabase
+        .from("disparos_campaigns" as any)
+        .select("config_snapshot")
+        .eq("id", campaignId)
+        .maybeSingle()) as any;
+      if (!cfgErr && cfgRow?.config_snapshot != null) {
+        try {
+          configSnapshot = parseDisparosConfig(cfgRow.config_snapshot);
+        } catch {
+          configSnapshot = { ...DISPAROS_DEFAULTS };
+        }
+      }
+    } catch {
+      /* coluna ausente ou indisponível */
+    }
+
     const campaign: DisparosCampaign = {
       id: String(row.id),
       name: String(row.campaign_name || ""),
@@ -3008,32 +3536,37 @@ async function hydrateCampaignFromDbIfNeeded(campaignId: string): Promise<Dispar
       status: (String(row.status || "paused") as DisparosCampaign["status"]) || "paused",
       totalNumbers: Number(row.total_numbers || 0),
       sentCount: Number(row.sent_count || 0),
-      configSnapshot: parseDisparosConfig(row.config_snapshot || {}),
+      configSnapshot,
     };
     disparosCampaignsMemory.push(campaign);
     const hasLeads = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId);
     if (!hasLeads) {
-      const { data: leadRows } = await (supabase
-        .from("disparos_campaign_leads" as any)
-        .select("id, campaign_id, phone, status, created_at, sent_at")
-        .eq("campaign_id", campaignId)
-        .limit(100000)) as any;
-      if (Array.isArray(leadRows)) {
-        for (const lr of leadRows) {
-          const st = String(lr?.status || "pending").toLowerCase();
-          disparosCampaignLeadsMemory.push({
-            id: String(lr?.id || crypto.randomUUID()),
-            campaignId: String(lr?.campaign_id || campaignId),
-            phone: String(lr?.phone || ""),
-            status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
-            createdAt: String(lr?.created_at || new Date().toISOString()),
-            sentAt: lr?.sent_at ? String(lr.sent_at) : null,
-          });
+      try {
+        const { data: leadRows } = await (supabase
+          .from("disparos_campaign_leads" as any)
+          .select("id, campaign_id, phone, status, created_at, sent_at")
+          .eq("campaign_id", campaignId)
+          .limit(100000)) as any;
+        if (Array.isArray(leadRows)) {
+          for (const lr of leadRows) {
+            const st = String(lr?.status || "pending").toLowerCase();
+            disparosCampaignLeadsMemory.push({
+              id: String(lr?.id || crypto.randomUUID()),
+              campaignId: String(lr?.campaign_id || campaignId),
+              phone: String(lr?.phone || ""),
+              status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
+              createdAt: String(lr?.created_at || new Date().toISOString()),
+              sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+            });
+          }
         }
+      } catch (e) {
+        console.error("[Campanha] Falha ao hidratar leads (campanha já em memória):", e);
       }
     }
     return campaign;
-  } catch {
+  } catch (e) {
+    console.error("[Campanha] Falha ao hidratar campanha do banco:", campaignId, e);
     return null;
   }
 }
@@ -3059,17 +3592,16 @@ async function pickDisparadorInstanceForConfig(
           : [];
     const connected = buildConnectedFromEvoResponse(list);
     const usageMap = await loadInstanceUsageMap();
-    const selectedSet = new Set(
+    const selectedList =
       Array.isArray(config.selectedDisparadorInstances)
-        ? config.selectedDisparadorInstances.map((n) => String(n || "").trim())
-        : []
-    );
-    const hasSelection = selectedSet.size > 0;
+        ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+        : [];
+    if (!selectedList.length) return null;
+    const selectedSet = new Set(selectedList);
     const eligible = connected.filter((item) => {
       const usage = usageMap.get(item.instancia);
       const byUsage = usage ? usage.useDisparador !== false : true;
-      const bySelection = hasSelection ? selectedSet.has(item.instancia) : true;
-      return byUsage && bySelection;
+      return byUsage && selectedSet.has(item.instancia);
     });
     if (!eligible.length) return null;
     const key = "__global_rr__";
@@ -3165,6 +3697,28 @@ async function persistLeadSentAndCampaignCount(
   }
 }
 
+async function persistLeadFailed(lead: DisparosCampaignLead, kind: LeadFailureKind): Promise<void> {
+  lead.status = "failed";
+  lead.failureKind = kind;
+  lead.sentAt = null;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    await (supabase.from("disparos_campaign_leads" as any) as any)
+      .update({ status: "failed" })
+      .eq("id", lead.id);
+  } catch {
+    /* */
+  }
+}
+
+function scheduleNextCampaignDispatchDelay(campaignId: string, config: DisparosConfig) {
+  const minS = Math.max(10, Number(config.delayMinSeconds) || 90);
+  const maxS = Math.max(minS, Number(config.delayMaxSeconds) || 240);
+  const waitSec = minS + Math.random() * (maxS - minS);
+  campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
+}
+
 async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
   if (!campaign || campaign.status !== "running") return;
@@ -3200,12 +3754,20 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
   const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot);
   if (!instancePick) {
-    console.error("[Campanha] Nenhuma instância elegível para envio.");
+    console.error(
+      "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
+    );
     return;
   }
 
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
   const numero = normalizeWhatsAppNumber(lead.phone);
+  const digitsCheck = String(numero || "").replace(/\D/g, "");
+  if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
+    await persistLeadFailed(lead, "invalid_phone");
+    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+    return;
+  }
   const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
     ? { number: numero, textMessage: { text: text } }
     : { number: numero, text: text, textMessage: { text: text } };
@@ -3216,6 +3778,9 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       sendResult.status,
       String(sendResult.body || "").slice(0, 200)
     );
+    const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
+    await persistLeadFailed(lead, failKind);
+    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
     return;
   }
 
@@ -3225,10 +3790,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   campaign.sentCount += 1;
   await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount);
 
-  const minS = Math.max(10, Number(campaign.configSnapshot.delayMinSeconds) || 90);
-  const maxS = Math.max(minS, Number(campaign.configSnapshot.delayMaxSeconds) || 240);
-  const waitSec = minS + Math.random() * (maxS - minS);
-  campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
+  scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
 }
 
 async function runCampaignDispatchTick(): Promise<void> {
@@ -3238,23 +3800,140 @@ async function runCampaignDispatchTick(): Promise<void> {
   }
 }
 
-app.post("/disparos/campanhas", async (req, res) => {
+/** Para aquecedor + todas as campanhas com disparo em andamento (memória e Postgres). */
+async function stopAllDispatchActivityOnServer(): Promise<{ pausedCampaignIds: string[] }> {
+  stopAquecedorRuntime();
+  const pausedSet = new Set<string>();
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: rows } = await (supabase
+        .from("disparos_campaigns" as any)
+        .select("id")
+        .eq("status", "running")) as any;
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          const id = String(r?.id || "").trim();
+          if (id) pausedSet.add(id);
+        }
+      }
+      await (supabase.from("disparos_campaigns" as any) as any)
+        .update({ status: "paused" })
+        .eq("status", "running");
+    } catch (e) {
+      console.error("[parar-envios] atualização Supabase:", e);
+    }
+  }
+
+  for (const c of disparosCampaignsMemory) {
+    if (c.status === "running") {
+      c.status = "paused";
+      pausedSet.add(c.id);
+    }
+  }
+
+  return { pausedCampaignIds: Array.from(pausedSet) };
+}
+
+function countCampaignLeadsProcessed(campaignId: string, sentFallback: number, totalNumbers: number): number {
+  const memLeads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId);
+  if (memLeads.length > 0) {
+    return memLeads.filter((l) => l.status !== "pending").length;
+  }
+  const sent = Number(sentFallback || 0);
+  const cap = Number(totalNumbers || 0);
+  if (cap > 0) return Math.min(cap, sent);
+  return sent;
+}
+
+/** Progresso = destinos já processados (enviado ou falha), sem reenvio; pendências não entram. */
+function progressPercentForCampaignListItem(
+  campaignId: string,
+  totalNumbers: number,
+  sentCount: number
+): number {
+  const total = Number(totalNumbers || 0);
+  if (total <= 0) return 0;
+  const processed = countCampaignLeadsProcessed(campaignId, sentCount, totalNumbers);
+  return Math.max(0, Math.min(100, Math.round((processed / total) * 100)));
+}
+
+app.post(
+  "/disparos/campanhas",
+  (req, res, next) => {
+    const ct = String(req.headers["content-type"] || "");
+    if (isDisparosCampaignCreatePost(req) && ct.includes("multipart/form-data")) {
+      return uploadCampaignSpreadsheet.single("spreadsheet")(req, res, (err) => {
+        if (err) {
+          const limitErr = err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE";
+          const msg = limitErr
+            ? "Arquivo acima do limite. Ajuste CAMPAIGN_UPLOAD_MAX_MB ou use planilha menor."
+            : (err as Error).message || "Falha no upload da planilha.";
+          return res.status(400).json({ error: msg });
+        }
+        next();
+      });
+    }
+    next();
+  },
+  async (req, res) => {
   try {
-    const name = String(req.body?.name || "").trim();
-    const numbersRaw = Array.isArray(req.body?.numbers) ? req.body.numbers : [];
-    const configSnapshot = parseDisparosConfig(req.body?.configSnapshot || {});
+    let name: string;
+    let numbers: string[];
+    let configSnapshot: DisparosConfig;
+    let duplicatesRemoved = 0;
+
+    const ct = String(req.headers["content-type"] || "");
+    if (ct.includes("multipart/form-data") && req.file) {
+      name = String(req.body?.name || "").trim();
+      const numberColumn = String(req.body?.numberColumn || "").trim();
+      let rawConfig: any = {};
+      try {
+        rawConfig = JSON.parse(String(req.body?.configSnapshot || "{}"));
+      } catch {
+        rawConfig = {};
+      }
+      configSnapshot = parseDisparosConfig(rawConfig);
+      if (!numberColumn) {
+        return res.status(400).json({ error: "Coluna do número é obrigatória." });
+      }
+      try {
+        const extracted = extractNumbersFromXlsxBuffer(req.file.buffer, numberColumn);
+        numbers = extracted.phones;
+        duplicatesRemoved = extracted.removedDuplicates;
+      } catch (e: any) {
+        return res.status(400).json({
+          error: e?.message || "Não foi possível ler a planilha enviada.",
+        });
+      }
+    } else {
+      name = String(req.body?.name || "").trim();
+      const numbersRaw = Array.isArray(req.body?.numbers) ? req.body.numbers : [];
+      configSnapshot = parseDisparosConfig(req.body?.configSnapshot || {});
+      const bucket = numbersRaw
+        .map((n: any) => normalizeCampaignPhone(String(n || "")))
+        .filter((n: string) => n.length >= 12);
+      const extracted = deduplicateCampaignDestinationPhones(bucket);
+      numbers = extracted.phones;
+      duplicatesRemoved = extracted.removedDuplicates;
+    }
+
     if (!name) {
       return res.status(400).json({ error: "Nome da campanha é obrigatório." });
     }
-    const numbers: string[] = Array.from(
-      new Set(
-        numbersRaw
-          .map((n: any) => normalizeCampaignPhone(String(n || "")))
-          .filter((n: string) => n.length >= 12)
-      )
-    );
     if (!numbers.length) {
       return res.status(400).json({ error: "Nenhum número válido foi encontrado na planilha." });
+    }
+    const campaignInstances =
+      Array.isArray(configSnapshot.selectedDisparadorInstances)
+        ? configSnapshot.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+        : [];
+    if (!campaignInstances.length) {
+      return res.status(400).json({
+        error:
+          "Selecione ao menos uma instância na lista «Números utilizados no disparador» (Seção 1) antes de criar a campanha. Só essas instâncias poderão enviar as mensagens.",
+      });
     }
 
     const now = new Date().toISOString();
@@ -3307,9 +3986,15 @@ app.post("/disparos/campanhas", async (req, res) => {
       }
     }
 
+    const msgExtra =
+      duplicatesRemoved > 0
+        ? ` Foram ignoradas ${duplicatesRemoved} linha(s) com número duplicado (cada destino recebe no máximo uma mensagem).`
+        : "";
     return res.json({
       ok: true,
-      message: "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos.",
+      message:
+        "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos." + msgExtra,
+      duplicatesRemoved,
       campaign: {
         id: campaign.id,
         name: campaign.name,
@@ -3328,17 +4013,19 @@ app.post("/disparos/campanhas", async (req, res) => {
 app.get("/disparos/campanhas", async (_req, res) => {
   try {
     const mapRowToItem = (row: any) => {
+      const id = String(row?.id || "");
       const total = Number(row?.total_numbers ?? row?.totalNumbers ?? 0);
       const sent = Number(row?.sent_count ?? row?.sentCount ?? 0);
-      const progressPercent =
-        total > 0 ? Math.max(0, Math.min(100, Math.round((sent / total) * 100))) : 0;
+      const progressPercent = progressPercentForCampaignListItem(id, total, sent);
+      const processedCount = countCampaignLeadsProcessed(id, sent, total);
       return {
-        id: String(row?.id || ""),
+        id,
         name: String(row?.campaign_name ?? (row?.name || "")),
         status: String(row?.status || "paused"),
         createdAt: String(row?.created_at ?? (row?.createdAt || "")),
         totalNumbers: total,
         sentCount: sent,
+        processedCount,
         progressPercent,
       };
     };
@@ -3352,6 +4039,7 @@ app.get("/disparos/campanhas", async (_req, res) => {
         createdAt: string;
         totalNumbers: number;
         sentCount: number;
+        processedCount: number;
         progressPercent: number;
       }
     >();
@@ -3378,7 +4066,8 @@ app.get("/disparos/campanhas", async (_req, res) => {
     for (const c of disparosCampaignsMemory) {
       const total = Number(c.totalNumbers || 0);
       const sent = Number(c.sentCount || 0);
-      const progressPercent = total > 0 ? Math.max(0, Math.min(100, Math.round((sent / total) * 100))) : 0;
+      const progressPercent = progressPercentForCampaignListItem(c.id, total, sent);
+      const processedCount = countCampaignLeadsProcessed(c.id, sent, total);
       byId.set(c.id, {
         id: c.id,
         name: c.name,
@@ -3386,6 +4075,7 @@ app.get("/disparos/campanhas", async (_req, res) => {
         createdAt: c.createdAt,
         totalNumbers: total,
         sentCount: sent,
+        processedCount,
         progressPercent,
       });
     }
@@ -3396,6 +4086,181 @@ app.get("/disparos/campanhas", async (_req, res) => {
     return res.json({ items });
   } catch {
     return res.status(500).json({ error: "Erro ao listar campanhas do Disparador." });
+  }
+});
+
+async function fetchLeadsFromDbForCampaignReport(
+  campaignId: string
+): Promise<DisparosCampaignLead[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+  try {
+    const { data, error } = await (supabase
+      .from("disparos_campaign_leads" as any)
+      .select("id, campaign_id, phone, status, created_at, sent_at")
+      .eq("campaign_id", campaignId)) as any;
+    if (error || !Array.isArray(data)) return [];
+    return data.map((lr: any) => {
+      const st = String(lr?.status || "pending").toLowerCase();
+      const status: DisparosCampaignLead["status"] =
+        st === "sent" ? "sent" : st === "failed" ? "failed" : "pending";
+      return {
+        id: String(lr?.id || crypto.randomUUID()),
+        campaignId: String(lr?.campaign_id || campaignId),
+        phone: String(lr?.phone || ""),
+        status,
+        failureKind: status === "failed" ? ("send_error" as LeadFailureKind) : undefined,
+        createdAt: String(lr?.created_at || new Date().toISOString()),
+        sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function fetchCampaignHeaderFromDb(campaignId: string): Promise<DisparosCampaign | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  try {
+    const { data: row } = await (supabase
+      .from("disparos_campaigns" as any)
+      .select("id, campaign_name, status, total_numbers, sent_count, created_at")
+      .eq("id", campaignId)
+      .maybeSingle()) as any;
+    if (!row?.id) return null;
+    return {
+      id: String(row.id),
+      name: String(row.campaign_name || ""),
+      createdAt: String(row.created_at || new Date().toISOString()),
+      status: (String(row.status || "paused") as DisparosCampaign["status"]) || "paused",
+      totalNumbers: Number(row.total_numbers || 0),
+      sentCount: Number(row.sent_count || 0),
+      configSnapshot: { ...DISPAROS_DEFAULTS },
+    };
+  } catch {
+    return null;
+  }
+}
+
+app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+    }
+
+    let leads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === id);
+    if (!leads.length) {
+      leads = await fetchLeadsFromDbForCampaignReport(id);
+    }
+
+    let campaign = disparosCampaignsMemory.find((c) => c.id === id) || null;
+    if (!campaign) {
+      campaign = await fetchCampaignHeaderFromDb(id);
+    }
+
+    if (!campaign && !leads.length) {
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+
+    const totalNumeros =
+      campaign?.totalNumbers && campaign.totalNumbers > 0
+        ? campaign.totalNumbers
+        : Math.max(leads.length, 1);
+
+    let enviadosComSucesso = 0;
+    let invalidPhone = 0;
+    let destinationError = 0;
+    let falhaTecnica = 0;
+    let pendentes = 0;
+    for (const l of leads) {
+      if (l.status === "sent") enviadosComSucesso += 1;
+      else if (l.status === "failed") {
+        const k = l.failureKind;
+        if (k === "invalid_phone") invalidPhone += 1;
+        else if (k === "destination_error") destinationError += 1;
+        else falhaTecnica += 1;
+      } else pendentes += 1;
+    }
+
+    const numerosErrados = invalidPhone + destinationError;
+    const totalProcessados = enviadosComSucesso + numerosErrados + falhaTecnica;
+    const top = Math.max(totalNumeros, leads.length, 1);
+    const pct = (n: number) => Math.round((n / top) * 1000) / 10;
+
+    const funnel = [
+      {
+        key: "total",
+        label: "Total na campanha",
+        count: top,
+        pctOfTop: 100,
+      },
+      {
+        key: "success",
+        label: "Enviados com sucesso",
+        count: enviadosComSucesso,
+        pctOfTop: pct(enviadosComSucesso),
+      },
+      {
+        key: "wrong",
+        label: "Número / destino inválido",
+        count: numerosErrados,
+        pctOfTop: pct(numerosErrados),
+      },
+      {
+        key: "tech",
+        label: "Falha técnica (API / rede)",
+        count: falhaTecnica,
+        pctOfTop: pct(falhaTecnica),
+      },
+    ];
+    if (pendentes > 0) {
+      funnel.push({
+        key: "pending",
+        label: "Ainda não processados",
+        count: pendentes,
+        pctOfTop: pct(pendentes),
+      });
+    }
+
+    return res.json({
+      campaignId: id,
+      name: campaign?.name ?? "—",
+      status: campaign?.status ?? "—",
+      totalNumeros: top,
+      totalProcessados,
+      enviadosComSucesso,
+      numerosErrados,
+      textoNumerosErrados: `Foram processados ${totalProcessados} contatos; destes, ${numerosErrados} com telefone/destino inválido ou indisponível no WhatsApp.`,
+      detalheErros: {
+        formatoOuNumeroInvalido: invalidPhone,
+        destinoWhatsAppIndisponivel: destinationError,
+        falhaTecnica,
+      },
+      pendentes,
+      funnel,
+    });
+  } catch (error) {
+    console.error("GET /disparos/campanhas/:id/relatorio", error);
+    return res.status(500).json({ error: "Erro ao montar relatório da campanha." });
+  }
+});
+
+app.post("/disparos/parar-envios", async (_req, res) => {
+  try {
+    const { pausedCampaignIds } = await stopAllDispatchActivityOnServer();
+    return res.json({
+      ok: true,
+      message:
+        "Envios interrompidos: aquecedor parado e campanhas em execução foram pausadas (se houver).",
+      aquecedorRodando: aquecedorRuntime.running,
+      campanhasPausadas: pausedCampaignIds.length,
+      idsCampanhasPausadas: pausedCampaignIds,
+    });
+  } catch (error: any) {
+    console.error("POST /disparos/parar-envios", error);
+    return res.status(500).json({ error: error?.message || "Erro ao parar envios." });
   }
 });
 
@@ -3414,6 +4279,12 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
     }
     if (!campaign) {
       return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    if (ativa && campaign.status === "finished") {
+      return res.status(409).json({
+        error:
+          "Campanha já finalizada: cada número da lista foi processado uma vez (envio ou falha). Crie uma nova campanha para novo disparo.",
+      });
     }
     campaign.status = nextStatus;
     if (ativa) {
@@ -3443,8 +4314,143 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
   }
 });
 
+app.patch("/disparos/campanhas/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const name = String(req.body?.name || "").trim();
+    if (!id) {
+      return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+    }
+    if (!name) {
+      return res.status(400).json({ error: "Nome da campanha é obrigatório." });
+    }
+    let campaign = disparosCampaignsMemory.find((c) => c.id === id);
+    if (!campaign) {
+      campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
+    }
+    const supabase = getSupabaseClient();
+    if (!campaign && supabase) {
+      try {
+        const { data: rows, error } = await (supabase.from("disparos_campaigns" as any) as any)
+          .update({ campaign_name: name })
+          .eq("id", id)
+          .select("id, campaign_name, status, total_numbers, sent_count, created_at");
+        const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+        if (!error && row?.id) {
+          await hydrateCampaignFromDbIfNeeded(id);
+          const c2 = disparosCampaignsMemory.find((c) => c.id === id);
+          if (c2) c2.name = name;
+          const total = Number(row.total_numbers || 0);
+          const sent = Number(row.sent_count || 0);
+          return res.json({
+            ok: true,
+            message: "Nome da campanha atualizado.",
+            campaign: {
+              id: String(row.id),
+              name,
+              createdAt: String(row.created_at || ""),
+              status: String(row.status || "paused"),
+              totalNumbers: total,
+              sentCount: sent,
+              progressPercent:
+                total > 0 ? Math.max(0, Math.min(100, Math.round((sent / total) * 100))) : 0,
+            },
+          });
+        }
+      } catch {
+        /* */
+      }
+    }
+    if (!campaign) {
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    campaign.name = name;
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any)
+          .update({ campaign_name: name })
+          .eq("id", id);
+      } catch {
+        /* */
+      }
+    }
+    return res.json({
+      ok: true,
+      message: "Nome da campanha atualizado.",
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        createdAt: campaign.createdAt,
+        status: campaign.status,
+        totalNumbers: campaign.totalNumbers,
+        sentCount: campaign.sentCount,
+        progressPercent:
+          campaign.totalNumbers > 0
+            ? Math.max(0, Math.min(100, Math.round((campaign.sentCount / campaign.totalNumbers) * 100)))
+            : 0,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Erro ao renomear campanha." });
+  }
+});
+
+app.delete("/disparos/campanhas/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+    }
+    if (!disparosCampaignsMemory.find((c) => c.id === id)) {
+      await hydrateCampaignFromDbIfNeeded(id);
+    }
+    let campaign = disparosCampaignsMemory.find((c) => c.id === id);
+    const supabase = getSupabaseClient();
+    if (!campaign && supabase) {
+      try {
+        await (supabase.from("disparos_campaign_leads" as any) as any).delete().eq("campaign_id", id);
+        const { error: delCampErr, data: delData } = await (supabase.from("disparos_campaigns" as any) as any)
+          .delete()
+          .eq("id", id)
+          .select("id");
+        if (!delCampErr && Array.isArray(delData) && delData.length > 0) {
+          return res.json({ ok: true, message: "Campanha excluída." });
+        }
+      } catch {
+        /* */
+      }
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    if (!campaign) {
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    const idx = disparosCampaignsMemory.findIndex((c) => c.id === id);
+    if (idx !== -1) disparosCampaignsMemory.splice(idx, 1);
+    for (let k = disparosCampaignLeadsMemory.length - 1; k >= 0; k--) {
+      if (disparosCampaignLeadsMemory[k].campaignId === id) disparosCampaignLeadsMemory.splice(k, 1);
+    }
+    campaignNextAllowedSendAt.delete(id);
+
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaign_leads" as any) as any).delete().eq("campaign_id", id);
+        await (supabase.from("disparos_campaigns" as any) as any).delete().eq("id", id);
+      } catch {
+        /* memória já limpa */
+      }
+    }
+
+    return res.json({ ok: true, message: "Campanha excluída." });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Erro ao excluir campanha." });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
+  console.log(
+    `[campanhas] upload planilha até ${Math.round(CAMPAIGN_UPLOAD_MAX_BYTES / 1024 / 1024)}MB (multipart) | JSON legado=${CAMPAIGN_CREATE_JSON_LIMIT}`
+  );
   setInterval(() => {
     runCampaignDispatchTick().catch((e) => console.error("[Campanhas] tick:", e));
   }, 7000);
