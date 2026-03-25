@@ -1,5 +1,5 @@
 ---
-description: Comando padrão "atualize tudo" - build, doc, commits e push
+description: Comando padrão "atualize tudo" - backup, build, doc, commits e push
 alwaysApply: true
 ---
 
@@ -7,19 +7,65 @@ alwaysApply: true
 
 Quando o usuário disser **"atualize tudo"**, execute nesta ordem:
 
-1. **Build** — `npm run build` (atualiza a pasta `dist/`)
-2. **Arquivos locais** — Verificar se há alterações pendentes em código fonte
-3. **Pasta doc** — Garantir que documentação esteja coerente com o estado atual do projeto
-4. **Git** — Fazer commit das alterações (se houver) e `git push`
+1. **Backup (espelho fiel)** — garantir rotina E:\ → D:\ (agendada **diariamente 12:00**) e executar o backup agora
+2. **Build** — `npm run build` (atualiza a pasta `dist/`)
+3. **Arquivos locais** — Verificar se há alterações pendentes em código fonte
+4. **Pasta doc** — Garantir que documentação esteja coerente com o estado atual do projeto
+5. **Git** — Fazer commit das alterações (se houver) e `git push`
 
 ## Sequência de execução
 
 ```bash
+# 0) Backup (PowerShell)
+# - Script: C:\Scripts\backup-e-para-d.ps1
+# - Destino: D:\Backup-E
+# - Log: D:\Backup-Logs
+# - Agendado: tarefa "Backup E para D (12h)" (diário 12:00)
+
 npm run build
 git status
 git add .
 git commit -m "mensagem descritiva"   # se houver alterações
 git push
+```
+
+## Rotina de Backup (D:\ → E:\) — espelho fiel
+
+### Script (criar/atualizar)
+
+Salvar em `C:\Scripts\backup-e-para-d.ps1`:
+
+```powershell
+$source = "E:\"
+$destRoot = "D:\Backup-E"
+$logDir = "D:\Backup-Logs"
+
+New-Item -ItemType Directory -Force -Path $destRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+$stamp = Get-Date -Format "yyyy-MM-dd__HHmmss"
+$log = Join-Path $logDir "backup_E_para_D_$stamp.log"
+
+# Espelho fiel:
+# /MIR espelha e remove do destino o que foi removido na origem
+robocopy $source $destRoot /MIR /R:2 /W:5 /XJ /FFT /Z /NP /TEE /LOG:$log
+
+exit $LASTEXITCODE
+```
+
+### Agendar diariamente às 12:00 (criar/atualizar)
+
+Rodar em PowerShell **como Administrador**:
+
+```powershell
+schtasks /Create /TN "Backup E para D (12h)" /SC DAILY /ST 12:00 /RL HIGHEST /F `
+  /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Scripts\backup-e-para-d.ps1"
+```
+
+### Executar backup imediatamente (quando pedir “Atualize tudo”)
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Scripts\backup-e-para-d.ps1
 ```
 
 ## Notas

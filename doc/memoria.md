@@ -13,9 +13,10 @@ Como usar:
 
 Resumo desta retomada:
 - **Atualize tudo**: `npm run build` executado; `dist/` sincronizado; documentação atualizada (log + memória); pronto para `git add/commit/push`.
+- **Rule “Atualize tudo”**: agora inclui rotina de **backup espelho fiel** **E:\ → D:\Backup-E** (script `C:\Scripts\backup-e-para-d.ps1`, logs em `D:\Backup-Logs`, tarefa “Backup E para D (12h)”).
 
 Palavras-chave:
-- atualize-tudo, build, dist, git commit, git push
+- atualize-tudo, build, dist, git commit, git push, backup, robocopy, schtasks, E para D
 
 ---
 
