@@ -9,6 +9,17 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
+2026-03-26
+
+Resumo desta retomada:
+- **Shortener (Waba)**: backup espelho executado para `E:\Backup-Waba\shortener-waba` com log em `E:\Backup-Logs`.
+- **Atualize tudo (encurtador)**: projeto nao possui script `build`; `npm install` falhou em `better-sqlite3` no Node 24 por falta de toolchain C++/Visual Studio.
+
+Palavras-chave:
+- shortener-waba, backup-para-e, robocopy, better-sqlite3, node24, build-tools
+
+---
+
 2026-03-25
 
 Resumo desta retomada:
