@@ -12,6 +12,17 @@ Como usar:
 2026-03-26
 
 Resumo desta retomada:
+- **Shortener (Windows/Node 24)**: removida dependencia nativa `better-sqlite3`; persistencia migrada para arquivo JSON (`DATA_PATH`, padrao `/data/shortener.json`) com indice em memoria por `slug`.
+- **Validacao**: `npm install` concluido com sucesso e smoke test OK (`GET /health` e `GET /ready`).
+
+Palavras-chave:
+- shortener-json-store, remove-better-sqlite3, node24-windows-fix, data-path
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
 - **Shortener (Waba)**: backup espelho executado para `E:\Backup-Waba\shortener-waba` com log em `E:\Backup-Logs`.
 - **Atualize tudo (encurtador)**: projeto nao possui script `build`; `npm install` falhou em `better-sqlite3` no Node 24 por falta de toolchain C++/Visual Studio.
 

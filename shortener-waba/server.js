@@ -1,7 +1,7 @@
 import express from "express";
-import Database from "better-sqlite3";
 import crypto from "crypto";
 import fs from "fs";
+import path from "path";
 
 const app = express();
 const PORT = Number.parseInt(String(process.env.PORT || "3000"), 10) || 3000;
@@ -9,7 +9,7 @@ const BASE_SHORT_DOMAIN = (
   process.env.BASE_SHORT_DOMAIN || "https://wabaurl.waba.info"
 ).replace(/\/+$/, "");
 const SHORTENER_API_KEY = String(process.env.SHORTENER_API_KEY || "");
-const DB_PATH = process.env.DB_PATH || "/data/shortener.db";
+const DATA_PATH = process.env.DATA_PATH || "/data/shortener.json";
 
 // Atrás do proxy do EasyPanel / Traefik
 app.set("trust proxy", 1);
@@ -52,31 +52,61 @@ if (!SHORTENER_API_KEY) {
   process.exit(1);
 }
 
-const dbDir = DB_PATH.includes("/")
-  ? DB_PATH.substring(0, DB_PATH.lastIndexOf("/"))
-  : ".";
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+const dataDir = path.dirname(DATA_PATH);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const db = new Database(DB_PATH);
-db.exec(`
-CREATE TABLE IF NOT EXISTS short_links (
-  id TEXT PRIMARY KEY,
-  slug TEXT UNIQUE NOT NULL,
-  long_url TEXT NOT NULL,
-  tenant_id TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_short_links_tenant ON short_links(tenant_id);
-`);
+/**
+ * Estrutura persistida em JSON para evitar dependencias nativas (compativel com Windows + Node atual).
+ * linksBySlug garante lookup rapido no redirect.
+ */
+const dataStore = {
+  links: [],
+  linksBySlug: new Map(),
+};
+
+function loadDataStore() {
+  if (!fs.existsSync(DATA_PATH)) {
+    persistDataStore();
+    return;
+  }
+  const raw = fs.readFileSync(DATA_PATH, "utf8").trim();
+  if (!raw) return;
+  const parsed = JSON.parse(raw);
+  const links = Array.isArray(parsed?.links) ? parsed.links : [];
+  dataStore.links = links;
+  dataStore.linksBySlug = new Map(
+    links
+      .filter((row) => typeof row?.slug === "string")
+      .map((row) => [row.slug, row]),
+  );
+}
+
+function persistDataStore() {
+  const payload = JSON.stringify({ links: dataStore.links }, null, 2);
+  const tmpPath = `${DATA_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, payload, "utf8");
+  fs.renameSync(tmpPath, DATA_PATH);
+}
+
+function isDataStoreReady() {
+  try {
+    const stat = fs.statSync(DATA_PATH);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+loadDataStore();
 
 app.use(express.json({ limit: "1mb" }));
 
 /** Readiness: DB acessível */
 app.get("/ready", (_req, res) => {
   try {
-    db.prepare("SELECT 1 AS n").get();
+    if (!isDataStoreReady()) throw new Error("data_not_ready");
     res.status(200).json({ ok: true, ready: true });
   } catch {
     res.status(503).json({ ok: false, ready: false });
@@ -84,7 +114,7 @@ app.get("/ready", (_req, res) => {
 });
 app.head("/ready", (_req, res) => {
   try {
-    db.prepare("SELECT 1 AS n").get();
+    if (!isDataStoreReady()) throw new Error("data_not_ready");
     res.status(200).end();
   } catch {
     res.status(503).end();
@@ -117,7 +147,7 @@ function randomSlug(size = 7) {
 }
 
 app.get("/status", (_req, res) => {
-  res.json({ ok: true, db: DB_PATH });
+  res.json({ ok: true, dataPath: DATA_PATH, totalLinks: dataStore.links.length });
 });
 
 app.post("/api/shortlinks", auth, (req, res) => {
@@ -135,10 +165,20 @@ app.post("/api/shortlinks", auth, (req, res) => {
   const id = crypto.randomUUID();
 
   try {
-    const stmt = db.prepare(
-      "INSERT INTO short_links (id, slug, long_url, tenant_id, created_at) VALUES (?, ?, ?, ?, ?)",
-    );
-    stmt.run(id, slug, longUrl, tenantId, now);
+    if (dataStore.linksBySlug.has(slug)) {
+      return res.status(409).json({ error: "slug já existe" });
+    }
+
+    const record = {
+      id,
+      slug,
+      long_url: longUrl,
+      tenant_id: tenantId,
+      created_at: now,
+    };
+    dataStore.links.push(record);
+    dataStore.linksBySlug.set(slug, record);
+    persistDataStore();
 
     return res.status(201).json({
       id,
@@ -149,13 +189,6 @@ app.post("/api/shortlinks", auth, (req, res) => {
       createdAt: now,
     });
   } catch (e) {
-    if (
-      String(e.message || "")
-        .toLowerCase()
-        .includes("unique")
-    ) {
-      return res.status(409).json({ error: "slug já existe" });
-    }
     return res.status(500).json({ error: "erro interno ao criar shortlink" });
   }
 });
@@ -164,9 +197,7 @@ app.get("/s/:slug", (req, res) => {
   const slug = normalizeSlug(req.params.slug);
   if (!slug) return res.status(404).send("Not Found");
 
-  const row = db
-    .prepare("SELECT long_url FROM short_links WHERE slug = ?")
-    .get(slug);
+  const row = dataStore.linksBySlug.get(slug);
 
   if (!row?.long_url) return res.status(404).send("Not Found");
 
@@ -184,7 +215,7 @@ app.use((_req, res) => {
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(
-    `[waba-shortener] listening 0.0.0.0:${PORT} pid=${process.pid} db=${DB_PATH}`,
+    `[waba-shortener] listening 0.0.0.0:${PORT} pid=${process.pid} data=${DATA_PATH}`,
   );
 });
 
