@@ -6,9 +6,118 @@ Como usar:
 - Antes de iniciar mudanças, procure aqui palavras-chave do pedido.
 - Se necessário, leia os `doc/LOG-*.md` correspondentes para detalhes.
 
+## Caminhos (repositórios próximos)
+- **SOMA Credit Sales**: `D:\SOMA Promotora\soma-credit-sales`
+
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
+2026-03-27
+
+Resumo desta retomada:
+- **Embedded Signup**: botão «Conectar com Meta»; rotas `GET /meta-oficial/embedded-signup/config`, `POST .../exchange-code`, `POST .../subscribe-webhooks`; env `META_APP_ID`, `META_APP_SECRET`, `META_ES_CONFIG_ID`; SDK + `FB.login` com `config_id`; listener `WA_EMBEDDED_SIGNUP`.
+- **Tokens Meta via API**: rotas `POST /meta-oficial/tokens/app-access` (client_credentials) e `POST /meta-oficial/tokens/system-user-access` (HMAC `appsecret_proof` + `/{systemUserId}/access_tokens`). UI Ativos com passos **1.a** e **1.b**; token System User preenche etapa 2.
+- **API Meta – Ativos**: título do painel alterado para **API Meta - Ativos**.
+- **Layout duplex (tipo Visão Geral)**: aba Ativos com **três linhas** esquerda/direita: (1) criação de app × **Apps criados** + `Atualizar lista` → `/subscribed_apps`; (2) integração × **Chave API integrada** (WABA + token mascarado + status); (3) integrar números × **Números integrados** (`meta-phone-list`). **Padding** do painel reduzido (`.meta-ativos-main-panel`).
+- **Checklist onboarding**: removido o bloco largo no painel; checklist em **dock flutuante** (`#meta-guide-dock`), recolhido por padrão, chip **x/6**, visível nas três abas Meta; em telas estreitas ocupa a largura útil com **safe-area**; recolhimento persistido em `waba.meta.guide.dockCollapsed`; tecla **Escape** recolhe quando expandido.
+- **Caminho SOMA Credit Sales** (memo): `D:\SOMA Promotora\soma-credit-sales` — ver seção **Caminhos (repositórios próximos)** no início deste arquivo.
+
+Palavras-chave:
+- embedded-signup, META_ES_CONFIG_ID, meta-oficial-tokens-app-access, meta-oficial-tokens-system-user-access, meta-ativos-duplex, meta-apps-list, meta-integration-key-list, meta-guide-dock, api-meta-ativos, soma-credit-sales
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **EncurtadorPro**: para evitar shortUrl repetido e contaminação do relatório, quando `ENCURTADORPRO_CUSTOM_ALIAS` não está definido, o backend agora deriva `payload.custom` a partir do `_n8n_link_nonce` presente no `longUrl`.
+
+Palavras-chave:
+- encurtadorpro custom alias, anti-dedup, nonce
+
+---
+
+2026-03-27
+
+Resumo desta retomada:
+- **Backup seletivo para `E:\`**: rotina alterada para espelhar somente `H:\Meu Drive\Drive Profissional`, `D:\Projeto Bruno LV`, `D:\Site Credilix`, `D:\SOMA Promotora` e `D:\Waba`.
+- **Automação Windows**: tarefa `Backup D para E (12h)` atualizada para executar `C:\Scripts\backup-d-para-e.ps1`.
+- **Limpeza de raiz `E:\`**: removidos diretórios extras (`Backup-E`, `data`, `found.000` e arquivo de log avulso), com duas pendências por bloqueio/permissão (`Backup-Logs` e `Meu drive Profissional`).
+
+Palavras-chave:
+- backup-seletivo-e, backup-d-para-e, limpeza-raiz-e, schtasks, robocopy-mir
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **UI header**: adicionada estratégia de fallback local (SVG inline) para o logo Drax quando a URL externa falhar.
+
+Palavras-chave:
+- logo-drax, fallback-svg, onerror
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **Conversão (cliques) / Relatório**: corrigido parser do EncurtadorPro para `?short=` (cliques ficam em `data.clicks`, não em `payload.clicks`).
+- **Conversão**: agora soma `clicks` por `shortUrl` único e calcula `totalCliques / enviadosComSucesso`.
+- **UI**: a conversão passou a aparecer também no **gráfico de barras** via item `funnel` com `isConversion=true`.
+
+Palavras-chave:
+- conversao-cliques, encurtadorpro-data-clicks, funnel-conversao
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **Relatório de campanha**: adicionado indicador de **Conversão (cliques)** no Disparador, calculado por `clicaramNoLink / enviadosComSucesso`.
+- **Backend**: relatório agora retorna `clicaramNoLink`, `conversaoPercent`, `conversaoTexto` e cobertura de checagem de cliques.
+- **UI**: modal de relatório mostra card de conversão e aviso quando a checagem de cliques foi parcial por limite de rate.
+
+Palavras-chave:
+- conversao-cliques, relatorio-campanha, encurtadorpro, enviados-vs-cliques
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **Conversão/Relatório**: evitar reuso do mesmo shortUrl pelo EncurtadorPro adicionando `_n8n_link_nonce` ao `longUrl` por lead/teste.
+- Objetivo: cliques do relatório refletirem melhor o teste recente (evitar acúmulo de cliques históricos).
+
+Palavras-chave:
+- encurtadorpro, shortUrl-reuse, anti-reuse-nonce, longUrl-nonce
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **Disparador / Encurtador**: integrado provider `encurtadorpro` no backend (`/disparos/shorten` e geração de mensagem IA), com timeout e retry para chamadas externas.
+- **Fallback de resiliência**: ordem automática `encurtadorpro -> is.gd -> tinyurl` quando `ENCURTADORPRO_API_KEY` está configurada.
+- **UI/config**: rótulo do provider atualizado para EncurtadorPro e lista de providers expandida em `GET /disparos/config`.
+
+Palavras-chave:
+- encurtadorpro, shortener-provider, disparos-shorten, retry-backoff
+
+---
+
+2026-03-26
+
+Resumo desta retomada:
+- **Backup operacional**: rotina corrigida para espelho da raiz `D:\` em `E:\` (objetivo de operar projetos pela `E:\` quando `D:\` estiver offline).
+- **Agendamento**: tarefa `Backup D para E (12h)` criada e tarefa antiga invertida removida.
+- **Script**: `C:\Scripts\backup-d-para-e.ps1` com exclusao de lixo/sistema (`$RECYCLE.BIN` e `System Volume Information`) e logs em `E:\Backup-Logs`.
+
+Palavras-chave:
+- backup-disco, espelho-d-para-e, schtasks, robocopy
+
+---
+
 2026-03-26
 
 Resumo desta retomada:
@@ -578,4 +687,200 @@ Palavras-chave para buscar:
 - usar-padrao-recomendado
 - aquecedor-custom-config
 - create-aquecedor-config-table
+
+## Atualização recente (logo Drax local no git)
+- Logo oficial baixada e versionada em `media/Drax-logo-footer.png`.
+- Referências no `index.html` atualizadas para caminho local (`/media/Drax-logo-footer.png`) no favicon e na logo do header.
+- Build executado com cópia confirmada em `dist/media/Drax-logo-footer.png`.
+
+Palavras-chave para buscar:
+- logo-drax-local
+- media-drax-logo-footer
+- favicon-local
+- dist-media
+
+## Atualização recente (inscrição abaixo da logo)
+- Header atualizado para exibir a inscrição abaixo da logo: `WABA - Sistema completo para whatsapp`.
+- Estrutura visual do branding ajustada com `brand-block` e `brand-caption`, mantendo alinhamento central.
+- Build executado para refletir em `dist/index.html`.
+
+Palavras-chave para buscar:
+- brand-caption
+- inscricao-abaixo-logo
+- waba-sistema-completo
+
+## Atualização recente (logo à esquerda + 15%)
+- Logo do header ajustada para alinhamento à esquerda.
+- Tamanho da logo aumentado em ~15% (`34px` -> `39px`).
+- Inscrição abaixo da logo ajustada para alinhamento à esquerda.
+
+Palavras-chave para buscar:
+- logo-left-align
+- logo-size-39px
+- brand-caption-left
+
+## Atualização recente (troca de asset da logo)
+- Asset da logo Drax substituído por nova versão ajustada enviada via Google Drive.
+- Arquivo local atualizado em `media/Drax-logo-footer.png`.
+- Build executado e sincronizado em `dist/media/Drax-logo-footer.png`.
+
+Palavras-chave para buscar:
+- logo-drax-ajustada
+- update-logo-asset
+- media-dist-sync
+
+## Atualização recente (produção estável + dev isolado)
+- Isolamento de runtime implementado para permitir desenvolvimento sem interromper envios.
+- Novo controle por env:
+  - `ENABLE_BACKGROUND_PROCESSING=true/false`
+  - `RUNTIME_MODE=production/development`
+- Em modo isolado (`false`), processo não executa tick automático de campanhas e bloqueia início do aquecedor.
+- Scripts adicionados:
+  - `npm run start:prod` (porta 3000, processamento habilitado)
+  - `npm run dev:isolado` (porta 3010, processamento desabilitado)
+
+Palavras-chave para buscar:
+- runtime-isolado
+- dev-isolado
+- start-prod
+- evitar-disparo-duplicado
+
+## Atualização recente (UI de ambientes + sidebar recolhível)
+- Faixa visual de ambiente adicionada com alternância: `Não oficial` e `API oficial`.
+- Estado visual do ambiente persistido em `localStorage` (`waba.integration.env`).
+- Navegação desktop convertida para menu lateral recolhível.
+- Estado do menu persistido em `localStorage` (`waba.sidebar.collapsed`) com padrão inicial recolhido.
+- Navegação mobile existente mantida.
+
+Palavras-chave para buscar:
+- integration-env-strip
+- api-oficial
+- menu-lateral-recolhivel
+- sidebar-collapsed
+- localstorage-ui
+
+## Atualização recente (ícones do menu lateral)
+- Ícones da navegação lateral atualizados por contexto:
+  - Dashboard `📈`
+  - Instâncias `📱`
+  - Aquecedor `🔥`
+  - Disparos `🚀`
+- Comportamento do menu recolhido/expandido preservado.
+
+Palavras-chave para buscar:
+- icons-sidebar
+- dashboard-icon
+- aquecedor-icon
+- disparos-icon
+
+## Atualização recente (dashboard com gráficos mais estreitos)
+- Ajustada proporção da grid desktop do Dashboard para reduzir largura da coluna de gráficos.
+- Nova proporção: `2fr / 0.82fr` (antes `1.75fr / 1fr`).
+- Melhor distribuição visual dos cards e conteúdo na coluna esquerda.
+
+Palavras-chave para buscar:
+- dashboard-grid
+- graficos-coluna-direita
+- cards-coluna-esquerda
+
+## Atualização recente (ícone WhatsApp no API Meta)
+- Botão `API Meta` no seletor de ambiente recebeu ícone do WhatsApp em verde.
+- Layout do botão ajustado para exibir ícone + texto com espaçamento consistente.
+- Comportamento de alternância de ambiente mantido.
+
+Palavras-chave para buscar:
+- api-meta-whatsapp-icon
+- integration-env-with-icon
+- ambiente-integracao-ui
+
+## Atualização recente (dropdown no menu lateral por ambiente)
+- Menu lateral desktop reorganizado em dropdowns por ambiente:
+  - `API Meta`: Dashboard, Instâncias
+  - `API não oficial`: Aquecedor, Disparos
+- Grupos com expansão/retração via botão de seção.
+- Integração com seletor de ambiente: abre automaticamente o grupo correspondente.
+
+Palavras-chave para buscar:
+- sidebar-dropdown
+- menu-grupo-api-meta
+- menu-grupo-api-nao-oficial
+- tabs-por-ambiente
+
+## Atualização recente (menu lateral consolidado em API Meta)
+- Estrutura do menu lateral ajustada para um único grupo: `API Meta`.
+- Todos os menus atuais foram centralizados em `API Meta`:
+  - Dashboard
+  - Instâncias
+  - Aquecedor
+  - Disparos
+- Grupo `API não oficial` removido do menu lateral por enquanto.
+
+Palavras-chave para buscar:
+- sidebar-api-meta-unico
+- menus-em-api-meta
+- dropdown-unico-lateral
+
+## Atualização recente (API Meta oficial - fases 1/2/3)
+- Trilha da API oficial estruturada em 3 menus:
+  - `1) Ativos API`
+  - `2) Templates`
+  - `3) Disparo API`
+- Fase 1 implementada com integração backend + UI:
+  - listar números (`/{wabaId}/phone_numbers`)
+  - registrar número (`/{phoneNumberId}/register`)
+  - listar apps inscritos (`/{wabaId}/subscribed_apps`)
+  - garantir inscrição do app em `subscribed_apps`
+- Fase 2 e Fase 3 deixadas estruturadas como próximas etapas.
+
+Palavras-chave para buscar:
+- meta-oficial-fases
+- fase1-ativos-api
+- message-templates-utility
+- disparo-api-oficial
+
+## Atualização recente (fases 2 e 3 funcionais)
+- Fase 2 implementada com criação/listagem de template utilidade:
+  - `POST /meta-oficial/templates/create-utility`
+  - `POST /meta-oficial/templates/list`
+- Fase 3 implementada com disparo de template:
+  - `POST /meta-oficial/disparo/send-template`
+- Frontend das fases 2 e 3 conectado ao backend, com status e logs operacionais.
+
+Palavras-chave para buscar:
+- meta-templates-create
+- meta-templates-list
+- meta-send-template
+- fases-api-oficial-prontas
+
+## Atualização recente (validação guiada API Meta)
+- Checklist visual de onboarding implementado na trilha API Meta.
+- Passos acompanham automaticamente ações das fases 1, 2 e 3.
+- Estado `Pendente/Concluído` persistido em `localStorage` para continuar após refresh.
+
+Palavras-chave para buscar:
+- checklist-meta
+- validacao-guiada
+- onboarding-api-oficial
+- progresso-localstorage
+
+## Atualização recente (toggle de ambiente alinhado à aba)
+- Corrigida dessincronia na carga: o seletor API Meta / API não oficial passa a refletir a aba realmente exibida (ex.: Dashboard → API não oficial).
+- `waba.integration.env` no `localStorage` é atualizado junto com a aba ativa via `syncIntegrationEnvWithTab`.
+
+Palavras-chave para buscar:
+- integration-env-sync
+- toggle-ambiente-aba
+
+## Atualização recente (fluxo intuitivo sem manual externo)
+- Etapa de API Meta simplificada para usuário final não técnico (sem depender de leitura de documentação).
+- Novos botões de execução automática:
+  - `Executar etapa 2 automaticamente`
+  - `Finalizar ativação automaticamente`
+- Fluxo agora orienta o usuário por ação direta e status claro de próximo passo.
+
+Palavras-chave para buscar:
+- fluxo-intuitivo
+- onboarding-sem-manual
+- etapa2-automatica
+- etapa3-automatica
 

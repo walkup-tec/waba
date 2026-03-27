@@ -7,7 +7,7 @@
     <link
       rel="icon"
       type="image/png"
-      href="https://draxsistemas.com.br/assets/media/Drax-logo-footer.png"
+      href="/media/Drax-logo-footer.png"
     />
     <meta name="theme-color" content="#2ee4a0" />
 
@@ -160,10 +160,24 @@
       }
 
       .title-icon img.brand-logo {
-        height: 34px;
+        height: 39px;
         width: auto;
         border-radius: 0;
         object-fit: contain;
+      }
+
+      .brand-block {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+
+      .brand-caption {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        letter-spacing: 0.01em;
+        text-align: left;
       }
 
       .title-text {
@@ -448,6 +462,10 @@
           padding: 18px 16px 18px;
         }
 
+        #tab-meta-ativos .panel.meta-ativos-main-panel {
+          padding: 16px 14px 14px;
+        }
+
         #tab-dashboard .panel-header,
         #tab-dashboard .summary-grid,
         #tab-dashboard .filters,
@@ -477,7 +495,7 @@
         /* Layout em grid para garantir gap real entre os dois painéis */
         #tab-dashboard .row.g-3 {
           display: grid;
-          grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+          grid-template-columns: minmax(0, 2fr) minmax(0, 0.82fr);
           gap: 1.4rem;
           --bs-gutter-x: 0;
           --bs-gutter-y: 0;
@@ -834,6 +852,47 @@
         gap: 16px;
       }
 
+      .sidebar-toggle {
+        display: none;
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        background: rgba(15, 23, 42, 0.65);
+        color: #cbd5e1;
+        border-radius: 10px;
+        width: 34px;
+        height: 34px;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sidebar-toggle:focus-visible {
+        outline: 2px solid var(--accent-soft);
+        outline-offset: 2px;
+      }
+
+      .tab-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+      }
+
+      .tab-icon svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .tab-label {
+        display: inline;
+      }
+
       .tab-button {
         appearance: none;
         border: none;
@@ -925,6 +984,309 @@
         border-top: 1px solid rgba(148, 163, 184, 0.18);
       }
 
+      .integration-env-strip {
+        margin: 0 0 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.6), rgba(2, 6, 23, 0.55));
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+
+      .integration-env-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .integration-env-title {
+        font-size: 0.76rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .integration-env-current {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #f8fafc;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .integration-env-toggle {
+        display: inline-flex;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(2, 6, 23, 0.55);
+      }
+
+      .integration-env-btn {
+        border: 0;
+        background: transparent;
+        color: #cbd5e1;
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 7px 10px;
+        cursor: pointer;
+      }
+
+      .integration-env-btn.with-icon {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .integration-env-btn .wa-icon {
+        width: 16px;
+        height: 16px;
+        color: #22c55e;
+        flex: 0 0 auto;
+      }
+
+      .integration-env-current .wa-icon {
+        width: 16px;
+        height: 16px;
+        color: #22c55e;
+        flex: 0 0 auto;
+      }
+
+      .integration-env-current .wa-icon.hidden {
+        display: none;
+      }
+
+      .meta-guide-dock {
+        position: fixed;
+        right: max(12px, env(safe-area-inset-right, 0px));
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        left: auto;
+        z-index: 1150;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        max-width: min(380px, calc(100vw - 24px));
+        pointer-events: none;
+      }
+
+      .meta-guide-dock > * {
+        pointer-events: auto;
+      }
+
+      .meta-guide-dock--hidden {
+        display: none !important;
+      }
+
+      .meta-guide-dock-panel {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.96);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+        padding: 10px 10px 8px;
+        max-height: min(52vh, 400px);
+        overflow-y: auto;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .meta-guide-dock.collapsed .meta-guide-dock-panel {
+        display: none;
+      }
+
+      .meta-guide-dock-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .meta-guide-dock-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #7dd3fc;
+        letter-spacing: 0.02em;
+      }
+
+      .meta-guide-dock-icon-btn {
+        flex: 0 0 auto;
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 1.25rem;
+        line-height: 1;
+        padding: 2px 6px;
+        cursor: pointer;
+        border-radius: 6px;
+      }
+
+      .meta-guide-dock-icon-btn:hover {
+        color: #e2e8f0;
+        background: rgba(148, 163, 184, 0.12);
+      }
+
+      .meta-guide-dock-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        border-radius: 999px;
+        padding: 10px 14px;
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        background: rgba(6, 24, 16, 0.94);
+        color: #e2e8f0;
+        font-size: 0.78rem;
+        cursor: pointer;
+        box-sizing: border-box;
+      }
+
+      .meta-guide-dock-toggle:hover {
+        border-color: rgba(34, 197, 94, 0.55);
+      }
+
+      .meta-guide-dock-toggle-label {
+        text-align: left;
+        font-weight: 500;
+      }
+
+      .meta-guide-dock-toggle-count {
+        flex: 0 0 auto;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #86efac;
+        border: 1px solid rgba(34, 197, 94, 0.45);
+        border-radius: 999px;
+        padding: 2px 9px;
+      }
+
+      .meta-guide-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+      }
+
+      .meta-guide-item {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.45);
+        padding: 7px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .meta-guide-item.is-done {
+        border-color: rgba(34, 197, 94, 0.45);
+        background: rgba(34, 197, 94, 0.12);
+      }
+
+      .meta-guide-label {
+        font-size: 0.72rem;
+        color: #e2e8f0;
+        line-height: 1.25;
+      }
+
+      .meta-guide-pill {
+        font-size: 0.65rem;
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        border-radius: 999px;
+        padding: 2px 7px;
+        color: #94a3b8;
+        white-space: nowrap;
+      }
+
+      .meta-guide-item.is-done .meta-guide-pill {
+        border-color: rgba(34, 197, 94, 0.55);
+        color: #86efac;
+      }
+
+      @media (max-width: 640px) {
+        .meta-guide-dock {
+          left: max(12px, env(safe-area-inset-left, 0px));
+          right: max(12px, env(safe-area-inset-right, 0px));
+          max-width: none;
+          align-items: stretch;
+        }
+      }
+
+      #tab-meta-ativos .panel.meta-ativos-main-panel {
+        padding: 24px 20px 20px;
+      }
+
+      @media (min-width: 992px) {
+        #tab-meta-ativos .panel.meta-ativos-main-panel {
+          padding: 28px 26px 22px;
+        }
+      }
+
+      #tab-meta-ativos .panel.meta-ativos-main-panel > .panel-header {
+        margin-top: 0;
+        margin-bottom: 12px;
+      }
+
+      #tab-meta-ativos .meta-ativos-side {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.35);
+        padding: 12px 12px 10px;
+        min-height: 108px;
+      }
+
+      #tab-meta-ativos .meta-ativos-side-title {
+        font-size: 0.78rem;
+        font-weight: 650;
+        color: #7dd3fc;
+        margin: 0 0 8px;
+      }
+
+      @media (min-width: 992px) {
+        #tab-meta-ativos .meta-ativos-duplex.row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 1rem;
+          --bs-gutter-x: 0;
+          --bs-gutter-y: 0;
+        }
+
+        #tab-meta-ativos .meta-ativos-duplex.row > [class*="col-"] {
+          width: auto;
+          max-width: none;
+          margin: 0;
+          padding: 0 !important;
+        }
+      }
+
+      #tab-meta-ativos .meta-ativos-duplex + .meta-ativos-duplex {
+        margin-top: 1.15rem;
+      }
+
+      #tab-meta-ativos .meta-ativos-duplex .aquecedor-section:last-child {
+        margin-bottom: 0;
+      }
+
+      .integration-env-btn.active {
+        background: rgba(139, 92, 246, 0.3);
+        color: #f8fafc;
+      }
+
+      body.integration-env-official .integration-env-strip {
+        border-color: rgba(34, 197, 94, 0.34);
+        background: linear-gradient(145deg, rgba(4, 46, 26, 0.7), rgba(6, 24, 16, 0.65));
+      }
+
+      body.integration-env-official .integration-env-btn.active {
+        background: rgba(34, 197, 94, 0.3);
+      }
+
       @media (min-width: 992px) {
         .desktop-tabs {
           display: flex;
@@ -934,6 +1296,154 @@
         }
         .mobile-tabs-drawer {
           display: none;
+        }
+
+        body.has-sidebar .shell {
+          padding-left: 92px;
+          transition: padding-left 0.2s ease;
+        }
+
+        body.has-sidebar.sidebar-expanded .shell {
+          padding-left: 242px;
+        }
+
+        .tabs-wrapper {
+          position: fixed;
+          left: 14px;
+          top: 130px;
+          bottom: 14px;
+          width: 70px;
+          margin: 0;
+          padding: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.24);
+          border-radius: 12px;
+          background: rgba(2, 6, 23, 0.9);
+          backdrop-filter: blur(6px);
+          flex-direction: column;
+          justify-content: flex-start;
+          align-items: stretch;
+          gap: 10px;
+          z-index: 30;
+          transition: width 0.2s ease;
+        }
+
+        body.sidebar-expanded .tabs-wrapper {
+          width: 220px;
+        }
+
+        .tabs-left {
+          width: 100%;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
+        }
+
+        .sidebar-toggle {
+          display: inline-flex;
+          align-self: flex-end;
+        }
+
+        body.sidebar-collapsed .sidebar-toggle {
+          align-self: center;
+        }
+
+        .desktop-tabs {
+          width: 100%;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
+        }
+
+        .menu-group {
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.4);
+          overflow: hidden;
+        }
+
+        .menu-group-toggle {
+          width: 100%;
+          border: 0;
+          background: rgba(15, 23, 42, 0.75);
+          color: #cbd5e1;
+          padding: 9px 10px;
+          font-size: 0.74rem;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          display: inline-flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: pointer;
+        }
+
+        .menu-group-title {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .menu-group-caret {
+          font-size: 0.85rem;
+          color: #94a3b8;
+          transition: transform 0.15s ease;
+        }
+
+        .menu-group.menu-group-open .menu-group-caret {
+          transform: rotate(180deg);
+        }
+
+        .menu-group-items {
+          padding: 7px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .menu-group:not(.menu-group-open) .menu-group-items {
+          display: none;
+        }
+
+        .desktop-tabs .tab-button {
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.65);
+          padding: 10px 12px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          text-align: left;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        }
+
+        .desktop-tabs .tab-button.active {
+          border-color: rgba(139, 92, 246, 0.7);
+          background: rgba(139, 92, 246, 0.18);
+          color: #f8fafc;
+        }
+
+        body.integration-env-official .desktop-tabs .tab-button.active {
+          border-color: rgba(34, 197, 94, 0.66);
+          background: rgba(34, 197, 94, 0.16);
+        }
+
+        body.sidebar-collapsed .desktop-tabs .tab-label {
+          display: none;
+        }
+
+        body.sidebar-collapsed .menu-group-title,
+        body.sidebar-collapsed .menu-group-caret {
+          display: none;
+        }
+
+        body.sidebar-collapsed .menu-group-toggle {
+          justify-content: center;
+          padding: 8px 6px;
+        }
+
+        body.sidebar-collapsed .desktop-tabs .tab-button {
+          justify-content: center;
+          padding: 10px 6px;
         }
       }
 
@@ -1302,11 +1812,12 @@
 
       .dis-report-summary {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+        grid-template-columns: repeat(12, minmax(0, 1fr));
         gap: 10px;
         margin-bottom: 4px;
       }
       .dis-report-stat {
+        grid-column: span 2;
         background: rgba(15, 23, 42, 0.75);
         border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 10px;
@@ -1332,6 +1843,18 @@
         font-size: 1.2rem;
         font-weight: 700;
         color: #f8fafc;
+      }
+
+      @media (max-width: 640px) {
+        .dis-report-stat {
+          grid-column: span 6;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .dis-report-stat {
+          grid-column: span 12;
+        }
       }
       .dis-report-funnel-title {
         font-size: 0.86rem;
@@ -2458,15 +2981,20 @@
   </head>
 
   <body>
+    <div id="fb-root"></div>
     <div class="shell">
       <header>
         <div class="title">
-          <div class="title-icon">
-            <img
-              src="https://draxsistemas.com.br/assets/media/Drax-logo-footer.png"
-              alt="DRAX"
-              class="brand-logo"
-            />
+          <div class="brand-block">
+            <div class="title-icon">
+              <img
+                src="/media/Drax-logo-footer.png"
+                alt="DRAX"
+                class="brand-logo"
+                loading="eager"
+              />
+            </div>
+            <div class="brand-caption">WABA - Sistema completo para whatsapp</div>
           </div>
           <span class="sr-only">DRAX</span>
         </div>
@@ -2496,54 +3024,208 @@
         </div>
       </header>
 
+      <div class="integration-env-strip">
+        <div class="integration-env-text">
+          <span class="integration-env-title">Ambiente de integração</span>
+          <span id="integration-env-current" class="integration-env-current">
+            <svg class="wa-icon hidden" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
+              />
+            </svg>
+            <span class="env-text">API não oficial</span>
+          </span>
+        </div>
+        <div class="integration-env-toggle" role="group" aria-label="Seleção de ambiente de integração">
+          <button
+            type="button"
+            class="integration-env-btn active"
+            data-integration-env="nao-oficial"
+          >
+            API não oficial
+          </button>
+          <button
+            type="button"
+            class="integration-env-btn with-icon"
+            data-integration-env="oficial"
+          >
+            <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
+              />
+            </svg>
+            <span>API Meta</span>
+          </button>
+        </div>
+      </div>
+
       <div class="tabs-wrapper">
         <div class="tabs-left">
+          <button
+            id="sidebar-toggle"
+            class="sidebar-toggle"
+            type="button"
+            aria-label="Expandir ou recolher menu lateral"
+            title="Expandir ou recolher menu lateral"
+          >
+            ☰
+          </button>
           <div class="desktop-tabs" role="tablist" aria-label="Navegação">
-            <button
-              id="tab-btn-dashboard"
-              class="tab-button active"
-              type="button"
-              role="tab"
-              aria-selected="true"
-              aria-controls="tab-dashboard"
-              data-tab="dashboard"
-            >
-              Dashboard
-            </button>
-            <button
-              id="tab-btn-instancias"
-              class="tab-button"
-              type="button"
-              role="tab"
-              aria-selected="false"
-              aria-controls="tab-instancias"
-              data-tab="instancias"
-            >
-              Instâncias
-            </button>
-            <button
-              id="tab-btn-aquecedor"
-              class="tab-button"
-              type="button"
-              role="tab"
-              aria-selected="false"
-              aria-controls="tab-aquecedor"
-              data-tab="aquecedor"
-              data-min-instances="2"
-            >
-              Aquecedor
-            </button>
-            <button
-              id="tab-btn-disparos"
-              class="tab-button"
-              type="button"
-              role="tab"
-              aria-selected="false"
-              aria-controls="tab-disparos"
-              data-tab="disparos"
-            >
-              Disparos
-            </button>
+            <div class="menu-group menu-group-open" data-menu-group="nao-oficial">
+              <button
+                type="button"
+                class="menu-group-toggle"
+                data-menu-group-toggle="nao-oficial"
+                aria-expanded="true"
+              >
+                <span class="menu-group-title">API não oficial</span>
+                <span class="menu-group-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="menu-group-items">
+                <button
+                  id="tab-btn-dashboard"
+                  class="tab-button active"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="tab-dashboard"
+                  data-tab="dashboard"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M3 3v18h18"></path>
+                      <path d="M7 15l4-4 3 3 5-6"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Dashboard</span>
+                </button>
+                <button
+                  id="tab-btn-instancias"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-instancias"
+                  data-tab="instancias"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="7" y="2.8" width="10" height="18.4" rx="2"></rect>
+                      <path d="M10 6h4"></path>
+                      <circle cx="12" cy="18" r="0.8"></circle>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Instâncias</span>
+                </button>
+                <button
+                  id="tab-btn-aquecedor"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-aquecedor"
+                  data-tab="aquecedor"
+                  data-min-instances="2"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Aquecedor</span>
+                </button>
+                <button
+                  id="tab-btn-disparos"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-disparos"
+                  data-tab="disparos"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+                      <circle cx="12" cy="9" r="1.2"></circle>
+                      <path d="M9 12l-3 3h3"></path>
+                      <path d="M15 12l3 3h-3"></path>
+                      <path d="M12 15v4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Disparos</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="menu-group menu-group-open" data-menu-group="oficial">
+              <button
+                type="button"
+                class="menu-group-toggle"
+                data-menu-group-toggle="oficial"
+                aria-expanded="true"
+              >
+                <span class="menu-group-title">API Meta</span>
+                <span class="menu-group-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="menu-group-items">
+                <button
+                  id="tab-btn-meta-ativos"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-meta-ativos"
+                  data-tab="meta-ativos"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="3.5" y="6" width="17" height="12" rx="2"></rect>
+                      <path d="M8 10h8"></path>
+                      <path d="M8 14h5"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">1) Ativos API</span>
+                </button>
+                <button
+                  id="tab-btn-meta-templates"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-meta-templates"
+                  data-tab="meta-templates"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="5" y="3.5" width="14" height="17" rx="2"></rect>
+                      <path d="M8 8h8"></path>
+                      <path d="M8 12h8"></path>
+                      <path d="M8 16h5"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">2) Templates</span>
+                </button>
+                <button
+                  id="tab-btn-meta-disparo"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-meta-disparo"
+                  data-tab="meta-disparo"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M3 11l18-8-7 18-2-7-7-3z"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">3) Disparo API</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2604,6 +3286,33 @@
               aria-checked="false"
             >
               Disparos
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="meta-ativos"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              1) Ativos API
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="meta-templates"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              2) Templates
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              data-tab="meta-disparo"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              3) Disparo API
             </button>
           </div>
         </div>
@@ -3380,7 +4089,361 @@
             </section>
           </div>
         </div>
+
+        <div id="tab-meta-ativos" class="tab-panel tab-hidden">
+          <div class="row g-3">
+            <section class="panel col-12 meta-ativos-main-panel">
+              <div class="panel-header">
+                <div class="panel-title">API Meta - Ativos</div>
+                <span class="muted">Onboarding oficial (app, integração e número)</span>
+              </div>
+
+              <div class="row g-3 meta-ativos-duplex align-items-start">
+                <div class="col-12 col-lg-6">
+                  <div class="aquecedor-section">
+                    <div class="aquecedor-section-title">1) Tokens via API (Meta)</div>
+                    <div class="disparos-inline-actions" style="margin-bottom: 10px; flex-wrap: wrap;">
+                      <button
+                        id="meta-embedded-signup-btn"
+                        type="button"
+                        class="instance-action-btn btn-qrcode enabled"
+                        onclick="return window.wabaLaunchEmbeddedMetaSignup(event);"
+                      >
+                        Conectar com Meta (Embedded Signup)
+                      </button>
+                      <span id="meta-embedded-signup-hint" class="muted" style="flex: 1 1 220px;"></span>
+                    </div>
+                    <div class="muted" style="font-size: 0.78rem; margin-bottom: 12px;">
+                      Abre o fluxo oficial (login, termos, WABA/número). Requer no servidor:
+                      <code style="font-size: 0.72rem">META_APP_ID</code>,
+                      <code style="font-size: 0.72rem">META_APP_SECRET</code> e
+                      <code style="font-size: 0.72rem">META_ES_CONFIG_ID</code>
+                      (Facebook Login for Business → Configurations). Domínio com HTTPS na lista do app Meta.
+                    </div>
+                    <div class="muted" style="margin-bottom: 10px;">
+                      <strong>1.a</strong> gera o token de <strong>aplicativo</strong> (OAuth
+                      <code style="font-size: 0.75rem">client_credentials</code>). <strong>1.b</strong> gera o token
+                      do <strong>System User</strong> (permanente ou 60 dias) e preenche o campo da etapa 2. O passo
+                      1.b exige System User com app instalado na BM e um token de
+                      <strong>administrador da Business Manager</strong> — não utilize o token do 1.a como
+                      administrativo.
+                    </div>
+
+                    <div class="aquecedor-section-title" style="font-size: 0.82rem; opacity: 0.95">1.a) Token de aplicativo</div>
+                    <div class="disparos-grid disparos-grid-2">
+                      <div class="aquecedor-field">
+                        <label for="meta-dev-app-id">App ID</label>
+                        <input
+                          id="meta-dev-app-id"
+                          type="text"
+                          inputmode="numeric"
+                          autocomplete="off"
+                          placeholder="App em developers.facebook.com"
+                        />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="meta-dev-app-secret">App Secret</label>
+                        <input id="meta-dev-app-secret" type="password" autocomplete="off" placeholder="Chave secreta do app" />
+                      </div>
+                    </div>
+                    <div class="disparos-inline-actions" style="margin-top: 8px;">
+                      <button id="meta-generate-app-token-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                        Gerar token de aplicativo
+                      </button>
+                      <span id="meta-app-token-hint" class="muted"></span>
+                    </div>
+
+                    <div class="aquecedor-section-title" style="font-size: 0.82rem; margin-top: 14px; opacity: 0.95">
+                      1.b) Token permanente (System User)
+                    </div>
+                    <div class="muted" style="margin-bottom: 8px; font-size: 0.8rem">
+                      O app deve estar instalado para o System User na BM. Token administrativo: admin humano da BM,
+                      System User admin ou token temporário com permissões adequadas (não o token do 1.a).
+                    </div>
+                    <div class="disparos-grid disparos-grid-2">
+                      <div class="aquecedor-field">
+                        <label for="meta-system-user-id">System User ID</label>
+                        <input
+                          id="meta-system-user-id"
+                          type="text"
+                          inputmode="numeric"
+                          autocomplete="off"
+                          placeholder="ID numérico do system user"
+                        />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="meta-bm-admin-token">Token administrativo (BM)</label>
+                        <input
+                          id="meta-bm-admin-token"
+                          type="password"
+                          autocomplete="off"
+                          placeholder="Token com permissão na Business Manager"
+                        />
+                      </div>
+                    </div>
+                    <label
+                      class="muted"
+                      style="display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.8rem; cursor: pointer"
+                    >
+                      <input id="meta-system-user-token-60d" type="checkbox" />
+                      Token com expiração em 60 dias (recomendado pela Meta para rotação)
+                    </label>
+                    <div class="disparos-inline-actions" style="margin-top: 8px;">
+                      <button id="meta-generate-system-user-token-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                        Gerar token System User e preencher etapa 2
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <aside class="col-12 col-lg-6">
+                  <div class="meta-ativos-side">
+                    <div class="meta-ativos-side-title">Apps criados</div>
+                    <div class="disparos-inline-actions" style="margin-bottom: 8px;">
+                      <button id="meta-refresh-apps-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                        Atualizar lista
+                      </button>
+                    </div>
+                    <div class="aquecedor-command-log" style="margin-top: 0;">
+                      <div id="meta-apps-list" class="aquecedor-command-log-list">
+                        <div class="muted">Apps vinculados ao WABA aparecem aqui após Atualizar lista.</div>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+
+              <div class="row g-3 meta-ativos-duplex align-items-start">
+                <div class="col-12 col-lg-6">
+                  <div class="aquecedor-section">
+                    <div class="aquecedor-section-title">2) Integração API oficial (Meta)</div>
+                    <div class="disparos-grid disparos-grid-2">
+                      <div class="aquecedor-field">
+                        <label for="meta-token-input">Token de acesso à API (WABA / Cloud API)</label>
+                        <input id="meta-token-input" type="password" placeholder="Use o obtido no passo 1.b ou cole manualmente" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="meta-waba-id-input">WABA ID (id_bm no fluxo n8n)</label>
+                        <input id="meta-waba-id-input" type="text" placeholder="Ex.: 102290129340398" />
+                      </div>
+                    </div>
+                    <div class="disparos-inline-actions" style="margin-top: 10px;">
+                      <button id="meta-step2-auto-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                        Executar etapa 2 automaticamente
+                      </button>
+                      <button id="meta-list-phone-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                        Listar números do WABA
+                      </button>
+                      <span id="meta-ativos-status" class="muted">Preencha token + WABA ID para iniciar.</span>
+                    </div>
+                  </div>
+                </div>
+                <aside class="col-12 col-lg-6">
+                  <div class="meta-ativos-side">
+                    <div class="meta-ativos-side-title">Chave API integrada</div>
+                    <div id="meta-integration-key-list" class="aquecedor-command-log-list">
+                      <div class="muted">Resumo das credenciais informadas à esquerda.</div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+
+              <div class="row g-3 meta-ativos-duplex align-items-start">
+                <div class="col-12 col-lg-6">
+                  <div class="aquecedor-section">
+                    <div class="aquecedor-section-title">3) Integrar números WhatsApp</div>
+                    <div class="disparos-grid disparos-grid-2">
+                      <div class="aquecedor-field">
+                        <label for="meta-phone-id-input">Phone Number ID</label>
+                        <input id="meta-phone-id-input" type="text" placeholder="ID do número na Meta" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="meta-pin-input">PIN (6 dígitos)</label>
+                        <input id="meta-pin-input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+                      </div>
+                    </div>
+                    <div class="disparos-inline-actions" style="margin-top: 10px;">
+                      <button id="meta-step3-auto-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                        Finalizar ativação automaticamente
+                      </button>
+                      <button id="meta-register-number-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                        Registrar número
+                      </button>
+                      <button id="meta-ensure-subscribe-btn" class="instance-action-btn enabled" type="button">
+                        Inscrever app (subscribed_apps)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <aside class="col-12 col-lg-6">
+                  <div class="meta-ativos-side">
+                    <div class="meta-ativos-side-title">Números integrados</div>
+                    <div class="aquecedor-command-log" style="margin-top: 0;">
+                      <div id="meta-phone-list" class="aquecedor-command-log-list">
+                        <div class="muted">Nenhum número carregado.</div>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-meta-templates" class="tab-panel tab-hidden">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">API Meta · Fase 2 · Modelo de mensagem (utilidade)</div>
+                <span id="meta-templates-status" class="muted">Pronto para criar templates utilidade.</span>
+              </div>
+              <div class="aquecedor-section">
+                <div class="aquecedor-section-title">Criar template (categoria utilidade)</div>
+                <div class="disparos-grid disparos-grid-2">
+                  <div class="aquecedor-field">
+                    <label for="meta-template-name-input">Nome do template</label>
+                    <input id="meta-template-name-input" type="text" placeholder="lembrete_pagamento" />
+                    <span class="aquecedor-hint">Use letras minúsculas, números e underscore.</span>
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-template-language-input">Idioma</label>
+                    <input id="meta-template-language-input" type="text" value="pt_BR" />
+                  </div>
+                </div>
+                <div class="aquecedor-field" style="margin-top: 10px;">
+                  <label for="meta-template-body-input">Texto do BODY (com variáveis, se desejar)</label>
+                  <textarea
+                    id="meta-template-body-input"
+                    rows="4"
+                    placeholder="Olá {{1}}, seu contrato {{2}} foi atualizado."
+                  ></textarea>
+                </div>
+                <div class="disparos-inline-actions" style="margin-top: 10px;">
+                  <button id="meta-template-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                    Criar template utilidade
+                  </button>
+                  <button id="meta-template-list-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                    Listar templates
+                  </button>
+                </div>
+                <div class="aquecedor-command-log" style="margin-top: 10px;">
+                  <div id="meta-template-list" class="aquecedor-command-log-list">
+                    <div class="muted">Nenhum template carregado.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-meta-disparo" class="tab-panel tab-hidden">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">API Meta · Fase 3 · Disparo via API oficial</div>
+                <span id="meta-disparo-status" class="muted">Pronto para enviar template via API oficial.</span>
+              </div>
+              <div class="aquecedor-section">
+                <div class="aquecedor-section-title">Disparo de template (Cloud API)</div>
+                <div class="disparos-grid disparos-grid-2">
+                  <div class="aquecedor-field">
+                    <label for="meta-send-phone-id-input">Phone Number ID (origem)</label>
+                    <input id="meta-send-phone-id-input" type="text" placeholder="ID do número habilitado na Meta" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-send-to-input">Número destino (com DDI)</label>
+                    <input id="meta-send-to-input" type="text" placeholder="5511999999999" />
+                  </div>
+                </div>
+                <div class="disparos-grid disparos-grid-2" style="margin-top: 10px;">
+                  <div class="aquecedor-field">
+                    <label for="meta-send-template-name-input">Template name</label>
+                    <input id="meta-send-template-name-input" type="text" placeholder="lembrete_pagamento" />
+                  </div>
+                  <div class="aquecedor-field">
+                    <label for="meta-send-language-input">Idioma</label>
+                    <input id="meta-send-language-input" type="text" value="pt_BR" />
+                  </div>
+                </div>
+                <div class="aquecedor-field" style="margin-top: 10px;">
+                  <label for="meta-send-body-params-input">Parâmetros BODY (separados por ;)</label>
+                  <input
+                    id="meta-send-body-params-input"
+                    type="text"
+                    placeholder="João;CON-7781"
+                  />
+                </div>
+                <div class="disparos-inline-actions" style="margin-top: 10px;">
+                  <button id="meta-send-template-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                    Enviar template via API Meta
+                  </button>
+                </div>
+                <div class="aquecedor-command-log" style="margin-top: 10px;">
+                  <div id="meta-send-log" class="aquecedor-command-log-list">
+                    <div class="muted">Nenhum envio executado ainda.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </main>
+
+      <div
+        id="meta-guide-dock"
+        class="meta-guide-dock meta-guide-dock--hidden collapsed"
+        role="region"
+        aria-label="Checklist onboarding API Meta"
+      >
+        <div class="meta-guide-dock-panel" id="meta-guide-dock-panel">
+          <div class="meta-guide-dock-header">
+            <span class="meta-guide-dock-title">Validação guiada (checklist)</span>
+            <button
+              type="button"
+              id="meta-guide-dock-close"
+              class="meta-guide-dock-icon-btn"
+              aria-label="Recolher checklist"
+            >
+              ×
+            </button>
+          </div>
+          <div class="meta-guide-list">
+            <div class="meta-guide-item" data-guide-key="credentials">
+              <span class="meta-guide-label">Credenciais preenchidas (Token + WABA ID)</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
+            <div class="meta-guide-item" data-guide-key="phoneListed">
+              <span class="meta-guide-label">Números do WABA carregados</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
+            <div class="meta-guide-item" data-guide-key="numberRegistered">
+              <span class="meta-guide-label">Número registrado na Cloud API</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
+            <div class="meta-guide-item" data-guide-key="appSubscribed">
+              <span class="meta-guide-label">App inscrito no subscribed_apps</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
+            <div class="meta-guide-item" data-guide-key="templateCreated">
+              <span class="meta-guide-label">Template utilidade criado</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
+            <div class="meta-guide-item" data-guide-key="testSent">
+              <span class="meta-guide-label">Disparo de teste executado</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          id="meta-guide-dock-toggle"
+          class="meta-guide-dock-toggle"
+          aria-expanded="false"
+          aria-controls="meta-guide-dock-panel"
+        >
+          <span class="meta-guide-dock-toggle-label">Checklist API Meta</span>
+          <span class="meta-guide-dock-toggle-count" id="meta-guide-dock-count">0/6</span>
+        </button>
+      </div>
     </div>
 
     <div id="confirm-delete-overlay" class="confirm-overlay" aria-hidden="true">
@@ -3564,7 +4627,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="dis-campaign-report-title"
-        style="max-width: 640px; width: min(96vw, 640px); max-height: 90vh; overflow: auto"
+        style="max-width: 1040px; width: min(96vw, 1040px); max-height: 90vh; overflow: auto"
       >
         <div class="confirm-title" id="dis-campaign-report-title">Relatório da campanha</div>
         <div id="dis-campaign-report-body"></div>
@@ -3579,6 +4642,41 @@
     <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <script>
+      (function initMetaEmbeddedSignupSdk() {
+        fetch("/meta-oficial/embedded-signup/config")
+          .then((r) => {
+            if (!r.ok) throw new Error(String(r.status));
+            return r.json();
+          })
+          .then((cfg) => {
+            window.__META_ES_CONFIG = cfg;
+            window.fbAsyncInit = function () {
+              if (typeof FB !== "undefined" && cfg.appId) {
+                FB.init({
+                  appId: cfg.appId,
+                  cookie: true,
+                  xfbml: true,
+                  version: cfg.graphVersion || "v22.0",
+                });
+              }
+            };
+            if (!document.getElementById("facebook-jssdk")) {
+              const s = document.createElement("script");
+              s.id = "facebook-jssdk";
+              s.async = true;
+              s.defer = true;
+              s.crossOrigin = "anonymous";
+              s.src = "https://connect.facebook.net/pt_BR/sdk.js";
+              document.body.appendChild(s);
+            } else if (typeof window.fbAsyncInit === "function") {
+              window.fbAsyncInit();
+            }
+          })
+          .catch(() => {
+            window.__META_ES_CONFIG = { ok: false, loadError: true };
+          });
+      })();
+
       // Litepicker (range em um único input)
       (function loadLitepicker() {
         if (!window.Litepicker) {
@@ -4290,9 +5388,7 @@
 
       async function resetDisparosPanelToOriginalAfterCampaignCreate() {
         initDisparosSectionLayout();
-        const cached = disparosConfigCache && typeof disparosConfigCache === "object" ? disparosConfigCache : {};
         const baseConfig = {
-          ...cached,
           delayMinSeconds: 90,
           delayMaxSeconds: 240,
           maxPerHourPerInstance: 60,
@@ -4309,9 +5405,30 @@
           selectedDisparadorInstances: [],
         };
         setDisparosFormValues(baseConfig);
+        [
+          "dis-ai-product",
+          "dis-ai-objective",
+          "dis-ai-pains",
+          "dis-ai-differentials",
+          "dis-ai-prohibitions",
+          "dis-ai-notes",
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
         clearMessengerFormForNovoProduto();
         const testOut = document.getElementById("dis-ai-test-output");
         if (testOut) testOut.value = "";
+        const shortStatus = document.getElementById("dis-shortener-test-status");
+        if (shortStatus) {
+          shortStatus.textContent = "Aguardando teste do encurtador.";
+          shortStatus.style.color = "";
+        }
+        const aiStatus = document.getElementById("dis-ai-test-status");
+        if (aiStatus) {
+          aiStatus.textContent = "Aguardando teste da IA.";
+          aiStatus.style.color = "";
+        }
         const sel = document.getElementById("dis-messenger-product-select");
         if (sel) sel.value = "";
         hideMessengerLibrarySavePanel();
@@ -4449,9 +5566,7 @@
         const hiddenBriefing = document.getElementById("dis-ai-briefing");
         if (hiddenBriefing) hiddenBriefing.value = String(config?.aiBriefing || "");
         const notes = document.getElementById("dis-ai-notes");
-        if (notes && config?.aiBriefing) {
-          notes.value = String(config.aiBriefing);
-        }
+        if (notes) notes.value = "";
         pendingSelectedDisparadorInstances = Array.isArray(config?.selectedDisparadorInstances)
           ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
           : [];
@@ -4839,6 +5954,7 @@
           if (shortenerSelect) {
             if (data?.currentShortenerProvider) {
               const labels = {
+                encurtadorpro: "EncurtadorPro (API + rastreio)",
                 isgd: "is.gd (gratuito)",
                 tinyurl: "TinyURL (token)",
               };
@@ -4926,7 +6042,8 @@
         try {
           const localDigits = String(document.getElementById("dis-whatsapp-target")?.value || "").replace(/\D/g, "");
           const target = localDigits ? `55${localDigits}` : "5511999999999";
-          const longUrl = `https://wa.me/${target}?text=Ol%C3%A1`;
+          const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          const longUrl = `https://wa.me/${target}?text=Ol%C3%A1&_n8n_test_nonce=${nonce}`;
           const response = await fetchWithTimeout(
             "/disparos/shorten",
             {
@@ -4938,7 +6055,12 @@
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showToast(data?.error || "Falha ao testar encurtador.", "error");
+            const errorMsg = String(data?.error || "Falha ao testar encurtador.");
+            if (statusEl) {
+              statusEl.textContent = `Falha ao gerar URL: ${errorMsg}`;
+              statusEl.style.color = "#fda4af";
+            }
+            showToast(errorMsg, "error");
             return;
           }
           const shortUrl = String(data?.shortUrl || "").trim();
@@ -5393,6 +6515,10 @@
               <span class="dis-report-stat-label">Sucesso</span>
               <span class="dis-report-stat-value">${data.enviadosComSucesso ?? 0}</span>
             </div>
+            <div class="dis-report-stat">
+              <span class="dis-report-stat-label">Conversão (cliques)</span>
+              <span class="dis-report-stat-value">${escapeHtmlCampaign(String(data.conversaoTexto || "0.0% (0/0)"))}</span>
+            </div>
             <div class="dis-report-stat dis-report-stat--warn">
               <span class="dis-report-stat-label">Números errados</span>
               <span class="dis-report-stat-value">${data.numerosErrados ?? 0}</span>
@@ -5406,12 +6532,14 @@
         f.forEach((row) => {
           const pct = Math.max(0, Math.min(100, Number(row.pctOfTop) || 0));
           const cnt = Number(row.count) || 0;
+          const labelMode = String(row.pctLabelMode || "");
+          const pctText = row.isConversion ? `${pct}% de conversão (cliques)` : `${pct}% do topo`;
           html += `
             <div class="dis-funnel-row">
               <div class="dis-funnel-head">
                 <span class="dis-funnel-title">${escapeHtmlCampaign(String(row.label || ""))}</span>
                 <span class="dis-funnel-badge">${cnt}</span>
-                <span class="dis-funnel-pct">${pct}% do topo</span>
+                <span class="dis-funnel-pct">${escapeHtmlCampaign(pctText)}</span>
               </div>
               <div class="dis-funnel-bar"><div class="dis-funnel-bar-fill" style="width:${pct}%"></div></div>
             </div>`;
@@ -5423,6 +6551,9 @@
           · Destino indisponível no WhatsApp: <strong>${det.destinoWhatsAppIndisponivel ?? 0}</strong><br />
           · Falha técnica (API / rede): <strong>${det.falhaTecnica ?? 0}</strong>
           ${(data.pendentes || 0) > 0 ? `<br />· Ainda não processados: <strong>${data.pendentes}</strong>` : ""}
+          ${Number(data.cliqueChecksDisponiveis || 0) > Number(data.cliqueChecksExecutados || 0)
+            ? `<br />· Links checados: <strong>${data.cliqueChecksExecutados || 0}/${data.cliqueChecksDisponiveis || 0}</strong> (limite por relatório para respeitar rate limit da API)`
+            : ""}
         </div>`;
         body.innerHTML = html;
       }
@@ -5887,6 +7018,9 @@
         const instanciasPanel = document.getElementById("tab-instancias");
         const aquecedorPanel = document.getElementById("tab-aquecedor");
         const disparosPanel = document.getElementById("tab-disparos");
+        const metaAtivosPanel = document.getElementById("tab-meta-ativos");
+        const metaTemplatesPanel = document.getElementById("tab-meta-templates");
+        const metaDisparoPanel = document.getElementById("tab-meta-disparo");
         const dashboardFilters = document.getElementById("dashboard-filters");
 
         if (dashboardPanel) {
@@ -5927,11 +7061,40 @@
           );
         }
 
+        if (metaAtivosPanel) {
+          metaAtivosPanel.classList.toggle("tab-hidden", nextTab !== "meta-ativos");
+          metaAtivosPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "meta-ativos" ? "true" : "false"
+          );
+        }
+
+        if (metaTemplatesPanel) {
+          metaTemplatesPanel.classList.toggle("tab-hidden", nextTab !== "meta-templates");
+          metaTemplatesPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "meta-templates" ? "true" : "false"
+          );
+        }
+
+        if (metaDisparoPanel) {
+          metaDisparoPanel.classList.toggle("tab-hidden", nextTab !== "meta-disparo");
+          metaDisparoPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "meta-disparo" ? "true" : "false"
+          );
+        }
+
         if (dashboardFilters) {
           dashboardFilters.classList.toggle(
             "tab-hidden",
             nextTab !== "dashboard"
           );
+        }
+
+        const metaGuideDock = document.getElementById("meta-guide-dock");
+        if (metaGuideDock) {
+          metaGuideDock.classList.toggle("meta-guide-dock--hidden", !isOfficialTab(nextTab));
         }
 
         // Atualiza estado dos botões (desktop e mobile)
@@ -5969,10 +7132,19 @@
           loadAquecedorRuntimeStatus();
           startAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
+        } else if (
+          nextTab === "meta-ativos" ||
+          nextTab === "meta-templates" ||
+          nextTab === "meta-disparo"
+        ) {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
         } else {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
         }
+
+        syncIntegrationEnvWithTab(nextTab);
       }
 
       function closeMobileTabsDrawer() {
@@ -7994,6 +9166,1001 @@
       }
 
       // Tabs (Dashboard / Instâncias)
+      function setSidebarCollapsed(collapsed) {
+        document.body.classList.add("has-sidebar");
+        document.body.classList.toggle("sidebar-collapsed", collapsed);
+        document.body.classList.toggle("sidebar-expanded", !collapsed);
+        const toggleBtn = document.getElementById("sidebar-toggle");
+        if (toggleBtn) {
+          toggleBtn.textContent = collapsed ? "☰" : "←";
+          toggleBtn.setAttribute(
+            "aria-label",
+            collapsed ? "Expandir menu lateral" : "Recolher menu lateral"
+          );
+        }
+        if (!collapsed) {
+          // Ao expandir a sidebar, mostrar todos os grupos do menu.
+          setDesktopMenuGroupOpen("oficial", true);
+          setDesktopMenuGroupOpen("nao-oficial", true);
+        }
+      }
+
+      function setDesktopMenuGroupOpen(groupName, isOpen) {
+        document
+          .querySelectorAll(`.menu-group[data-menu-group="${groupName}"]`)
+          .forEach((groupEl) => {
+            groupEl.classList.toggle("menu-group-open", isOpen);
+          });
+        document
+          .querySelectorAll(`.menu-group-toggle[data-menu-group-toggle="${groupName}"]`)
+          .forEach((toggleBtn) => {
+            toggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+          });
+      }
+
+      function applyIntegrationEnvironment(env) {
+        const normalized = env === "oficial" ? "oficial" : "nao-oficial";
+        const currentLabel = document.getElementById("integration-env-current");
+        if (currentLabel) {
+          const currentText = currentLabel.querySelector(".env-text");
+          const currentWaIcon = currentLabel.querySelector(".wa-icon");
+          if (currentText) {
+            currentText.textContent =
+              normalized === "oficial" ? "API Meta" : "API não oficial";
+          } else {
+            currentLabel.textContent =
+              normalized === "oficial" ? "API Meta" : "API não oficial";
+          }
+          if (currentWaIcon) {
+            currentWaIcon.classList.toggle("hidden", normalized !== "oficial");
+          }
+        }
+        document.body.classList.toggle(
+          "integration-env-official",
+          normalized === "oficial"
+        );
+        document
+          .querySelectorAll(".integration-env-btn[data-integration-env]")
+          .forEach((btn) => {
+            const active = btn.getAttribute("data-integration-env") === normalized;
+            btn.classList.toggle("active", active);
+            btn.setAttribute("aria-pressed", active ? "true" : "false");
+          });
+
+        // Ambiente define contexto visual/topo, mas não recolhe grupos do menu lateral.
+      }
+
+      function isOfficialTab(tabName) {
+        return tabName === "meta-ativos" || tabName === "meta-templates" || tabName === "meta-disparo";
+      }
+
+      function syncIntegrationEnvWithTab(tabName) {
+        const env = isOfficialTab(tabName) ? "oficial" : "nao-oficial";
+        applyIntegrationEnvironment(env);
+        try {
+          localStorage.setItem("waba.integration.env", env);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const savedSidebarState = localStorage.getItem("waba.sidebar.collapsed");
+      setSidebarCollapsed(savedSidebarState !== "0");
+
+      document.getElementById("sidebar-toggle")?.addEventListener("click", () => {
+        const collapsedNow = document.body.classList.contains("sidebar-collapsed");
+        const nextCollapsed = !collapsedNow;
+        setSidebarCollapsed(nextCollapsed);
+        localStorage.setItem("waba.sidebar.collapsed", nextCollapsed ? "1" : "0");
+      });
+
+      document
+        .querySelectorAll(".menu-group-toggle[data-menu-group-toggle]")
+        .forEach((toggleBtn) => {
+          toggleBtn.addEventListener("click", () => {
+            const groupName = toggleBtn.getAttribute("data-menu-group-toggle");
+            if (!groupName) return;
+            const groupEl = document.querySelector(
+              `.menu-group[data-menu-group="${groupName}"]`
+            );
+            const isOpen = groupEl?.classList.contains("menu-group-open") ?? false;
+            setDesktopMenuGroupOpen(groupName, !isOpen);
+          });
+        });
+
+      document
+        .querySelectorAll(".integration-env-btn[data-integration-env]")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const env = btn.getAttribute("data-integration-env") || "nao-oficial";
+            applyIntegrationEnvironment(env);
+            const wantsOfficial = env === "oficial";
+            const currentlyOfficial = isOfficialTab(activeTab);
+            if (wantsOfficial && !currentlyOfficial) {
+              setActiveTab("meta-ativos");
+            } else if (!wantsOfficial && currentlyOfficial) {
+              setActiveTab("dashboard");
+            }
+            localStorage.setItem(
+              "waba.integration.env",
+              env === "oficial" ? "oficial" : "nao-oficial"
+            );
+          });
+        });
+
+      function getMetaAtivosPayloadBase() {
+        const token = String(
+          (document.getElementById("meta-token-input")?.value || "")
+        ).trim();
+        const wabaId = String(
+          (document.getElementById("meta-waba-id-input")?.value || "")
+        ).trim();
+        return { token, wabaId };
+      }
+
+      const metaGuideState = {
+        credentials: false,
+        phoneListed: false,
+        numberRegistered: false,
+        appSubscribed: false,
+        templateCreated: false,
+        testSent: false,
+      };
+
+      function persistMetaGuideState() {
+        try {
+          localStorage.setItem("waba.meta.guide", JSON.stringify(metaGuideState));
+        } catch {
+          // ignore persist errors
+        }
+      }
+
+      function loadMetaGuideState() {
+        try {
+          const raw = localStorage.getItem("waba.meta.guide");
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          Object.keys(metaGuideState).forEach((k) => {
+            metaGuideState[k] = parsed?.[k] === true;
+          });
+        } catch {
+          // ignore parse errors
+        }
+      }
+
+      const META_GUIDE_DOCK_COLLAPSED_KEY = "waba.meta.guide.dockCollapsed";
+
+      function getMetaGuideProgress() {
+        const keys = Object.keys(metaGuideState);
+        const done = keys.filter((k) => metaGuideState[k] === true).length;
+        return { done, total: keys.length };
+      }
+
+      function loadMetaGuideDockCollapsed() {
+        try {
+          const v = localStorage.getItem(META_GUIDE_DOCK_COLLAPSED_KEY);
+          if (v === null) return true;
+          return v !== "0";
+        } catch {
+          return true;
+        }
+      }
+
+      function persistMetaGuideDockCollapsed(collapsed) {
+        try {
+          localStorage.setItem(META_GUIDE_DOCK_COLLAPSED_KEY, collapsed ? "1" : "0");
+        } catch {
+          /* ignore */
+        }
+      }
+
+      function applyMetaGuideDockCollapsed(collapsed) {
+        const dock = document.getElementById("meta-guide-dock");
+        const toggle = document.getElementById("meta-guide-dock-toggle");
+        if (dock) dock.classList.toggle("collapsed", collapsed);
+        if (toggle) toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      }
+
+      function setMetaGuideDockCollapsed(collapsed) {
+        applyMetaGuideDockCollapsed(collapsed);
+        persistMetaGuideDockCollapsed(collapsed);
+      }
+
+      function renderMetaGuideChecklist() {
+        document.querySelectorAll(".meta-guide-item[data-guide-key]").forEach((item) => {
+          const key = item.getAttribute("data-guide-key");
+          if (!key) return;
+          const done = metaGuideState[key] === true;
+          item.classList.toggle("is-done", done);
+          const pill = item.querySelector(".meta-guide-pill");
+          if (pill) pill.textContent = done ? "Concluído" : "Pendente";
+        });
+        const { done, total } = getMetaGuideProgress();
+        const countEl = document.getElementById("meta-guide-dock-count");
+        if (countEl) countEl.textContent = `${done}/${total}`;
+      }
+
+      function setMetaGuideStep(key, value = true) {
+        if (!(key in metaGuideState)) return;
+        metaGuideState[key] = value === true;
+        persistMetaGuideState();
+        renderMetaGuideChecklist();
+      }
+
+      function setMetaAtivosStatus(message, kind = "muted") {
+        const el = document.getElementById("meta-ativos-status");
+        if (!el) return;
+        el.textContent = String(message || "");
+        el.classList.remove("field-error");
+        if (kind === "error") el.classList.add("field-error");
+      }
+
+      function setMetaTemplatesStatus(message, kind = "muted") {
+        const el = document.getElementById("meta-templates-status");
+        if (!el) return;
+        el.textContent = String(message || "");
+        el.classList.remove("field-error");
+        if (kind === "error") el.classList.add("field-error");
+      }
+
+      function setMetaDisparoStatus(message, kind = "muted") {
+        const el = document.getElementById("meta-disparo-status");
+        if (!el) return;
+        el.textContent = String(message || "");
+        el.classList.remove("field-error");
+        if (kind === "error") el.classList.add("field-error");
+      }
+
+      function renderMetaPhoneList(items) {
+        const listEl = document.getElementById("meta-phone-list");
+        if (!listEl) return;
+        if (!Array.isArray(items) || items.length === 0) {
+          listEl.innerHTML = `<div class="muted">Nenhum número retornado.</div>`;
+          return;
+        }
+        const rows = items
+          .map((item) => {
+            const id = escapeHtmlAttr(item?.id || "");
+            const number = escapeHtmlCampaign(item?.display_phone_number || item?.phone_number || "—");
+            const verified = String(item?.verified_name || "").trim();
+            const verifiedHtml = verified
+              ? `<span class="muted" style="margin-left: 6px;">${escapeHtmlCampaign(verified)}</span>`
+              : "";
+            return `<div class="aquecedor-command-entry">
+              <strong>${number}</strong>${verifiedHtml}
+              <div class="muted">phone_number_id: ${id || "—"}</div>
+            </div>`;
+          })
+          .join("");
+        listEl.innerHTML = rows;
+      }
+
+      function renderMetaSubscribedAppsList(items) {
+        const listEl = document.getElementById("meta-apps-list");
+        if (!listEl) return;
+        if (!Array.isArray(items) || items.length === 0) {
+          listEl.innerHTML = `<div class="muted">Nenhum app retornado para este WABA.</div>`;
+          return;
+        }
+        const rows = items
+          .map((item) => {
+            const appId = escapeHtmlAttr(
+              String(item?.id || item?.whatsapp_business_api_data?.id || "—")
+            );
+            const name = String(
+              item?.name ||
+                item?.whatsapp_business_api_data?.name ||
+                item?.whatsapp_business_api_data?.business_name ||
+                ""
+            ).trim();
+            const nameHtml = name ? escapeHtmlCampaign(name) : "—";
+            return `<div class="aquecedor-command-entry">
+              <strong>${nameHtml}</strong>
+              <div class="muted">App ID: ${appId || "—"}</div>
+            </div>`;
+          })
+          .join("");
+        listEl.innerHTML = rows;
+      }
+
+      function renderMetaIntegrationKeySummary() {
+        const el = document.getElementById("meta-integration-key-list");
+        if (!el) return;
+        const { token, wabaId } = getMetaAtivosPayloadBase();
+        const wabaOk = Boolean(wabaId);
+        const tokenOk = Boolean(token);
+        const tokenPreview =
+          !tokenOk ? "—" : token.length <= 4 ? "••••" : `••••••••${escapeHtmlCampaign(token.slice(-4))}`;
+        el.innerHTML = `<div class="aquecedor-command-entry">
+            <strong>WABA ID</strong>
+            <div class="muted">${wabaOk ? escapeHtmlCampaign(wabaId) : "Pendente"}</div>
+          </div>
+          <div class="aquecedor-command-entry">
+            <strong>Token (System User)</strong>
+            <div class="muted">${tokenPreview}</div>
+          </div>
+          <div class="aquecedor-command-entry">
+            <strong>Pronto para validar na Meta</strong>
+            <div class="muted">${
+              wabaOk && tokenOk
+                ? "Sim — use os botões da etapa 2."
+                : "Preencha token e WABA ID."
+            }</div>
+          </div>`;
+      }
+
+      function renderMetaTemplateList(items) {
+        const listEl = document.getElementById("meta-template-list");
+        if (!listEl) return;
+        if (!Array.isArray(items) || items.length === 0) {
+          listEl.innerHTML = `<div class="muted">Nenhum template encontrado.</div>`;
+          return;
+        }
+        const rows = items
+          .map((item) => {
+            const name = escapeHtmlCampaign(String(item?.name || "—"));
+            const status = escapeHtmlCampaign(String(item?.status || "—"));
+            const language = escapeHtmlCampaign(String(item?.language || "—"));
+            const category = escapeHtmlCampaign(String(item?.category || "—"));
+            return `<div class="aquecedor-command-entry">
+              <strong>${name}</strong>
+              <div class="muted">status: ${status} · idioma: ${language} · categoria: ${category}</div>
+            </div>`;
+          })
+          .join("");
+        listEl.innerHTML = rows;
+      }
+
+      function appendMetaSendLog(message, isError = false) {
+        const el = document.getElementById("meta-send-log");
+        if (!el) return;
+        const now = new Date();
+        const time = now.toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        const css = isError ? "field-error" : "muted";
+        const row = `<div class="aquecedor-command-entry"><strong>[${time}]</strong> <span class="${css}">${escapeHtmlCampaign(
+          String(message || "")
+        )}</span></div>`;
+        if (el.querySelector(".aquecedor-command-entry")) {
+          el.insertAdjacentHTML("afterbegin", row);
+        } else {
+          el.innerHTML = row;
+        }
+      }
+
+      async function metaPost(path, payload) {
+        const response = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload || {}),
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail = String(json?.detail || json?.error || "Falha na operação.");
+          throw new Error(detail);
+        }
+        return json;
+      }
+
+      async function fetchAndRenderMetaSubscribedApps(options = {}) {
+        const silent = options.silent === true;
+        const updateStatus = options.updateStatus !== false;
+        const { token, wabaId } = getMetaAtivosPayloadBase();
+        if (!token || !wabaId) {
+          if (!silent && updateStatus) {
+            setMetaAtivosStatus("Informe token e WABA ID.", "error");
+          }
+          renderMetaSubscribedAppsList([]);
+          return [];
+        }
+        if (!silent && updateStatus) {
+          setMetaAtivosStatus("Consultando apps inscritos...");
+        }
+        const result = await metaPost("/meta-oficial/ativos/subscribed-apps/list", {
+          token,
+          wabaId,
+        });
+        const items = Array.isArray(result?.items) ? result.items : [];
+        renderMetaSubscribedAppsList(items);
+        if (!silent && updateStatus) {
+          setMetaAtivosStatus(`Apps inscritos encontrados: ${items.length}.`);
+        }
+        return items;
+      }
+
+      document.getElementById("meta-generate-app-token-btn")?.addEventListener("click", async () => {
+        try {
+          const appId = String(document.getElementById("meta-dev-app-id")?.value || "").trim();
+          const appSecret = String(document.getElementById("meta-dev-app-secret")?.value || "").trim();
+          if (!appId || !appSecret) {
+            setMetaAtivosStatus("Informe App ID e App Secret para o passo 1.a.", "error");
+            return;
+          }
+          setMetaAtivosStatus("Gerando token de aplicativo (client_credentials)...");
+          const result = await metaPost("/meta-oficial/tokens/app-access", { appId, appSecret });
+          const tok = String(result?.accessToken || "");
+          const hint = document.getElementById("meta-app-token-hint");
+          if (hint) {
+            hint.textContent = tok
+              ? `Token de app obtido (${tok.length} caracteres). Não use como token principal do WABA.`
+              : "";
+          }
+          setMetaAtivosStatus("Token de aplicativo gerado. Prossiga ao 1.b para o System User.");
+        } catch (error) {
+          const hint = document.getElementById("meta-app-token-hint");
+          if (hint) hint.textContent = "";
+          setMetaAtivosStatus(error?.message || "Erro ao gerar token de aplicativo.", "error");
+        }
+      });
+
+      document.getElementById("meta-generate-system-user-token-btn")?.addEventListener("click", async () => {
+        try {
+          const appId = String(document.getElementById("meta-dev-app-id")?.value || "").trim();
+          const appSecret = String(document.getElementById("meta-dev-app-secret")?.value || "").trim();
+          const systemUserId = String(document.getElementById("meta-system-user-id")?.value || "").trim();
+          const adminAccessToken = String(document.getElementById("meta-bm-admin-token")?.value || "").trim();
+          const setTokenExpiresIn60Days =
+            document.getElementById("meta-system-user-token-60d")?.checked === true;
+          if (!appId || !appSecret || !systemUserId || !adminAccessToken) {
+            setMetaAtivosStatus("Preencha App ID, App Secret, System User ID e token administrativo.", "error");
+            return;
+          }
+          setMetaAtivosStatus("Gerando token do System User via API da Meta...");
+          const result = await metaPost("/meta-oficial/tokens/system-user-access", {
+            appId,
+            appSecret,
+            systemUserId,
+            adminAccessToken,
+            setTokenExpiresIn60Days,
+          });
+          const accessToken = String(result?.accessToken || "");
+          const tokenInput = document.getElementById("meta-token-input");
+          if (tokenInput && accessToken) {
+            tokenInput.value = accessToken;
+          }
+          syncMetaCredentialsChecklist();
+          setMetaAtivosStatus(
+            setTokenExpiresIn60Days
+              ? "Token do System User (60 dias) gerado e aplicado na etapa 2."
+              : "Token do System User gerado e aplicado na etapa 2."
+          );
+        } catch (error) {
+          setMetaAtivosStatus(error?.message || "Erro ao gerar token do System User.", "error");
+        }
+      });
+
+      document.getElementById("meta-list-phone-btn")?.addEventListener("click", async () => {
+        try {
+          const { token, wabaId } = getMetaAtivosPayloadBase();
+          if (!token || !wabaId) {
+            setMetaAtivosStatus("Informe token e WABA ID.", "error");
+            return;
+          }
+          setMetaAtivosStatus("Consultando números...");
+          const result = await metaPost("/meta-oficial/ativos/phone-numbers/list", {
+            token,
+            wabaId,
+          });
+          const items = Array.isArray(result?.items) ? result.items : [];
+          renderMetaPhoneList(items);
+          setMetaAtivosStatus(`Números carregados: ${items.length}.`);
+          setMetaGuideStep("phoneListed", items.length > 0);
+          if (items[0]?.id) {
+            const phoneIdInput = document.getElementById("meta-phone-id-input");
+            if (phoneIdInput && !String(phoneIdInput.value || "").trim()) {
+              phoneIdInput.value = String(items[0].id);
+            }
+            const sendPhoneIdInput = document.getElementById("meta-send-phone-id-input");
+            if (sendPhoneIdInput && !String(sendPhoneIdInput.value || "").trim()) {
+              sendPhoneIdInput.value = String(items[0].id);
+            }
+          }
+        } catch (error) {
+          setMetaAtivosStatus(error?.message || "Erro ao listar números.", "error");
+        }
+      });
+
+      document
+        .getElementById("meta-refresh-apps-btn")
+        ?.addEventListener("click", async () => {
+          try {
+            await fetchAndRenderMetaSubscribedApps();
+          } catch (error) {
+            setMetaAtivosStatus(error?.message || "Erro ao consultar apps inscritos.", "error");
+          }
+        });
+
+      document.getElementById("meta-register-number-btn")?.addEventListener("click", async () => {
+        try {
+          const { token } = getMetaAtivosPayloadBase();
+          const phoneNumberId = String(
+            (document.getElementById("meta-phone-id-input")?.value || "")
+          ).trim();
+          const pin = String((document.getElementById("meta-pin-input")?.value || "")).trim();
+          if (!token || !phoneNumberId || !pin) {
+            setMetaAtivosStatus("Informe token, phone_number_id e PIN.", "error");
+            return;
+          }
+          setMetaAtivosStatus("Registrando número...");
+          await metaPost("/meta-oficial/ativos/phone-numbers/register", {
+            token,
+            phoneNumberId,
+            pin,
+          });
+          setMetaAtivosStatus("Número registrado com sucesso.");
+          setMetaGuideStep("numberRegistered", true);
+        } catch (error) {
+          setMetaAtivosStatus(error?.message || "Erro ao registrar número.", "error");
+        }
+      });
+
+      document.getElementById("meta-ensure-subscribe-btn")?.addEventListener("click", async () => {
+        try {
+          const { token, wabaId } = getMetaAtivosPayloadBase();
+          if (!token || !wabaId) {
+            setMetaAtivosStatus("Informe token e WABA ID.", "error");
+            return;
+          }
+          setMetaAtivosStatus("Garantindo inscrição do app...");
+          const result = await metaPost("/meta-oficial/ativos/subscribed-apps/ensure", {
+            token,
+            wabaId,
+            subscribedFields: "messages,message_status,messaging_postbacks",
+          });
+          if (result?.alreadySubscribed) {
+            setMetaAtivosStatus("App já estava inscrito no WABA.");
+          } else {
+            setMetaAtivosStatus("Inscrição do app realizada com sucesso.");
+          }
+          setMetaGuideStep("appSubscribed", true);
+          fetchAndRenderMetaSubscribedApps({ silent: true, updateStatus: false }).catch(() => {});
+        } catch (error) {
+          setMetaAtivosStatus(error?.message || "Erro ao inscrever app.", "error");
+        }
+      });
+
+      document.getElementById("meta-step2-auto-btn")?.addEventListener("click", async () => {
+        try {
+          const { token, wabaId } = getMetaAtivosPayloadBase();
+          if (!token || !wabaId) {
+            setMetaAtivosStatus("Primeiro preencha Token e WABA ID.", "error");
+            return;
+          }
+          setMetaAtivosStatus("Etapa 2: validando conexão e buscando dados...");
+
+          const listPhones = await metaPost("/meta-oficial/ativos/phone-numbers/list", {
+            token,
+            wabaId,
+          });
+          const phoneItems = Array.isArray(listPhones?.items) ? listPhones.items : [];
+          renderMetaPhoneList(phoneItems);
+          setMetaGuideStep("phoneListed", phoneItems.length > 0);
+
+          const listApps = await metaPost("/meta-oficial/ativos/subscribed-apps/list", {
+            token,
+            wabaId,
+          });
+          const appItems = Array.isArray(listApps?.items) ? listApps.items : [];
+          renderMetaSubscribedAppsList(appItems);
+          const appsCount = appItems.length;
+
+          if (phoneItems[0]?.id) {
+            const phoneIdInput = document.getElementById("meta-phone-id-input");
+            if (phoneIdInput && !String(phoneIdInput.value || "").trim()) {
+              phoneIdInput.value = String(phoneItems[0].id);
+            }
+            const sendPhoneIdInput = document.getElementById("meta-send-phone-id-input");
+            if (sendPhoneIdInput && !String(sendPhoneIdInput.value || "").trim()) {
+              sendPhoneIdInput.value = String(phoneItems[0].id);
+            }
+          }
+
+          setMetaAtivosStatus(
+            `Etapa 2 concluída. Números: ${phoneItems.length}. Apps inscritos: ${appsCount}.`
+          );
+        } catch (error) {
+          setMetaAtivosStatus(
+            error?.message || "Falha na etapa 2 automática. Tente novamente.",
+            "error"
+          );
+        }
+      });
+
+      document.getElementById("meta-step3-auto-btn")?.addEventListener("click", async () => {
+        try {
+          const { token, wabaId } = getMetaAtivosPayloadBase();
+          const phoneNumberId = String(
+            (document.getElementById("meta-phone-id-input")?.value || "")
+          ).trim();
+          const pin = String((document.getElementById("meta-pin-input")?.value || "")).trim();
+          if (!token || !wabaId || !phoneNumberId || !pin) {
+            setMetaAtivosStatus(
+              "Preencha Token, WABA ID, Phone Number ID e PIN para finalizar.",
+              "error"
+            );
+            return;
+          }
+          setMetaAtivosStatus("Etapa 3: registrando número e finalizando inscrição...");
+
+          await metaPost("/meta-oficial/ativos/phone-numbers/register", {
+            token,
+            phoneNumberId,
+            pin,
+          });
+          setMetaGuideStep("numberRegistered", true);
+
+          await metaPost("/meta-oficial/ativos/subscribed-apps/ensure", {
+            token,
+            wabaId,
+            subscribedFields: "messages,message_status,messaging_postbacks",
+          });
+          setMetaGuideStep("appSubscribed", true);
+
+          setMetaAtivosStatus("Etapa 3 concluída. Número ativo e app inscrito com sucesso.");
+        } catch (error) {
+          setMetaAtivosStatus(
+            error?.message || "Falha na etapa 3 automática. Revise os dados e tente novamente.",
+            "error"
+          );
+        }
+      });
+
+      document.getElementById("meta-template-list-btn")?.addEventListener("click", async () => {
+        try {
+          const { token, wabaId } = getMetaAtivosPayloadBase();
+          if (!token || !wabaId) {
+            setMetaTemplatesStatus("Informe token e WABA ID na Fase 1.", "error");
+            return;
+          }
+          setMetaTemplatesStatus("Consultando templates...");
+          const result = await metaPost("/meta-oficial/templates/list", { token, wabaId, limit: 50 });
+          const items = Array.isArray(result?.items) ? result.items : [];
+          renderMetaTemplateList(items);
+          setMetaTemplatesStatus(`Templates carregados: ${items.length}.`);
+        } catch (error) {
+          setMetaTemplatesStatus(error?.message || "Erro ao listar templates.", "error");
+        }
+      });
+
+      document.getElementById("meta-template-create-btn")?.addEventListener("click", async () => {
+        try {
+          const { token, wabaId } = getMetaAtivosPayloadBase();
+          const name = String(
+            (document.getElementById("meta-template-name-input")?.value || "")
+          ).trim();
+          const language = String(
+            (document.getElementById("meta-template-language-input")?.value || "pt_BR")
+          ).trim();
+          const bodyText = String(
+            (document.getElementById("meta-template-body-input")?.value || "")
+          ).trim();
+          if (!token || !wabaId) {
+            setMetaTemplatesStatus("Informe token e WABA ID na Fase 1.", "error");
+            return;
+          }
+          if (!name || !bodyText) {
+            setMetaTemplatesStatus("Informe nome e texto BODY do template.", "error");
+            return;
+          }
+          setMetaTemplatesStatus("Criando template utilidade...");
+          await metaPost("/meta-oficial/templates/create-utility", {
+            token,
+            wabaId,
+            name,
+            language,
+            bodyText,
+          });
+          setMetaTemplatesStatus("Template criado com sucesso. Atualize a listagem para ver status.");
+          setMetaGuideStep("templateCreated", true);
+        } catch (error) {
+          setMetaTemplatesStatus(error?.message || "Erro ao criar template.", "error");
+        }
+      });
+
+      document.getElementById("meta-send-template-btn")?.addEventListener("click", async () => {
+        try {
+          const { token } = getMetaAtivosPayloadBase();
+          const phoneNumberId = String(
+            (document.getElementById("meta-send-phone-id-input")?.value || "")
+          ).trim();
+          const to = String((document.getElementById("meta-send-to-input")?.value || "")).trim();
+          const templateName = String(
+            (document.getElementById("meta-send-template-name-input")?.value || "")
+          ).trim();
+          const languageCode = String(
+            (document.getElementById("meta-send-language-input")?.value || "pt_BR")
+          ).trim();
+          const rawParams = String(
+            (document.getElementById("meta-send-body-params-input")?.value || "")
+          ).trim();
+          const bodyParams = rawParams
+            ? rawParams
+                .split(";")
+                .map((v) => String(v || "").trim())
+                .filter(Boolean)
+            : [];
+
+          if (!token || !phoneNumberId || !to || !templateName) {
+            setMetaDisparoStatus(
+              "Informe token, phone_number_id, número destino e template name.",
+              "error"
+            );
+            return;
+          }
+          setMetaDisparoStatus("Enviando template...");
+          const result = await metaPost("/meta-oficial/disparo/send-template", {
+            token,
+            phoneNumberId,
+            to,
+            templateName,
+            languageCode,
+            bodyParams,
+          });
+          setMetaDisparoStatus("Template enviado com sucesso.");
+          const messageId =
+            result?.data?.messages?.[0]?.id || result?.data?.message_id || "sem id retornado";
+          appendMetaSendLog(`Envio OK para ${to}. message_id=${messageId}`);
+          setMetaGuideStep("testSent", true);
+        } catch (error) {
+          const message = error?.message || "Erro ao enviar template.";
+          setMetaDisparoStatus(message, "error");
+          appendMetaSendLog(message, true);
+        }
+      });
+
+      const metaTokenInput = document.getElementById("meta-token-input");
+      const metaWabaInput = document.getElementById("meta-waba-id-input");
+      const syncMetaCredentialsChecklist = () => {
+        const { token, wabaId } = getMetaAtivosPayloadBase();
+        setMetaGuideStep("credentials", Boolean(token && wabaId));
+        renderMetaIntegrationKeySummary();
+      };
+      if (metaTokenInput) metaTokenInput.addEventListener("input", syncMetaCredentialsChecklist);
+      if (metaWabaInput) metaWabaInput.addEventListener("input", syncMetaCredentialsChecklist);
+
+      const metaEsFinishEvents = new Set([
+        "FINISH",
+        "FINISH_ONLY_WABA",
+        "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+        "FINISH_GRANT_ONLY_API_ACCESS",
+        "FINISH_OBO_MIGRATION",
+      ]);
+      const metaEsSession = {
+        code: null,
+        wabaId: null,
+        phoneNumberId: null,
+        event: null,
+      };
+      function resetMetaEsSession() {
+        metaEsSession.code = null;
+        metaEsSession.wabaId = null;
+        metaEsSession.phoneNumberId = null;
+        metaEsSession.event = null;
+      }
+      function refreshMetaEmbeddedSignupHint() {
+        const hint = document.getElementById("meta-embedded-signup-hint");
+        const cfg = window.__META_ES_CONFIG || {};
+        if (!hint) return;
+        hint.style.color = "";
+        if (cfg.loadError) {
+          hint.textContent =
+            "Não foi possível obter /meta-oficial/embedded-signup/config — verifique se o servidor está no ar.";
+          hint.style.color = "#fca5a5";
+        } else if (!cfg.ok) {
+          hint.textContent =
+            "Defina META_APP_ID, META_APP_SECRET e META_ES_CONFIG_ID no servidor e reinicie o Node.";
+        } else {
+          hint.textContent = "";
+        }
+      }
+      function setMetaEmbeddedSignupActionMessage(text, isError) {
+        const hint = document.getElementById("meta-embedded-signup-hint");
+        if (!hint || !text) return;
+        hint.textContent = text;
+        hint.style.color = isError ? "#fca5a5" : "";
+      }
+      refreshMetaEmbeddedSignupHint();
+      setTimeout(refreshMetaEmbeddedSignupHint, 1200);
+
+      let metaEsExchangeInFlight = false;
+      async function tryFinalizeMetaEmbeddedSignup() {
+        const code = metaEsSession.code;
+        const wabaId = metaEsSession.wabaId;
+        if (!code || !wabaId || metaEsExchangeInFlight) return;
+        metaEsExchangeInFlight = true;
+        try {
+          setMetaAtivosStatus("Trocando código por token (Embedded Signup)...");
+          const result = await metaPost("/meta-oficial/embedded-signup/exchange-code", { code });
+          const accessToken = String(result?.accessToken || "");
+          if (!accessToken) {
+            throw new Error("Token não retornado pela Meta.");
+          }
+          const tokenInput = document.getElementById("meta-token-input");
+          const wabaInput = document.getElementById("meta-waba-id-input");
+          const phoneInput = document.getElementById("meta-phone-id-input");
+          const sendPhoneInput = document.getElementById("meta-send-phone-id-input");
+          if (tokenInput) tokenInput.value = accessToken;
+          if (wabaInput) wabaInput.value = wabaId;
+          if (metaEsSession.phoneNumberId) {
+            const pid = metaEsSession.phoneNumberId;
+            if (phoneInput) phoneInput.value = pid;
+            if (sendPhoneInput) sendPhoneInput.value = pid;
+          }
+          syncMetaCredentialsChecklist();
+          if (metaEsSession.phoneNumberId) {
+            setMetaGuideStep("phoneListed", true);
+          }
+          try {
+            await metaPost("/meta-oficial/embedded-signup/subscribe-webhooks", {
+              token: accessToken,
+              wabaId,
+            });
+            setMetaGuideStep("appSubscribed", true);
+          } catch {
+            /* inscrição em webhooks pode ser concluída depois na etapa 3 */
+          }
+          setMetaAtivosStatus("Conexão Meta concluída. Token e WABA aplicados.");
+          showToast("Embedded Signup concluído.", "success");
+          resetMetaEsSession();
+          refreshMetaEmbeddedSignupHint();
+        } catch (error) {
+          resetMetaEsSession();
+          setMetaAtivosStatus(error?.message || "Falha na troca do código.", "error");
+        } finally {
+          metaEsExchangeInFlight = false;
+        }
+      }
+
+      function metaEsFbLoginCallback(response) {
+        if (response.authResponse?.code) {
+          metaEsSession.code = String(response.authResponse.code);
+          tryFinalizeMetaEmbeddedSignup();
+        } else {
+          resetMetaEsSession();
+          setMetaAtivosStatus("Embedded Signup fechado sem código.", "muted");
+          refreshMetaEmbeddedSignupHint();
+        }
+      }
+
+      function launchMetaEmbeddedSignup() {
+        console.info("[Waba] Embedded Signup: clique processado.");
+        refreshMetaEmbeddedSignupHint();
+        const cfg = window.__META_ES_CONFIG || {};
+        if (!cfg.configId || !cfg.ok) {
+          const msg =
+            "Configure META_APP_ID, META_APP_SECRET e META_ES_CONFIG_ID no .env (ou variáveis do sistema), reinicie o servidor e recarregue a página.";
+          setMetaEmbeddedSignupActionMessage(msg, true);
+          showToast(msg, "warning");
+          setMetaAtivosStatus(msg, "error");
+          return;
+        }
+        const runLogin = () => {
+          try {
+            if (typeof FB === "undefined" || typeof FB.login !== "function") {
+              const err =
+                "SDK da Meta não carregou. Verifique bloqueador de anúncios, rede ou se connect.facebook.net está acessível.";
+              setMetaEmbeddedSignupActionMessage(err, true);
+              showToast("SDK da Meta indisponível.", "error");
+              setMetaAtivosStatus(err, "error");
+              return;
+            }
+            setMetaEmbeddedSignupActionMessage("Abrindo janela de login da Meta…", false);
+            showToast("Abrindo fluxo Embedded Signup…", "info");
+            FB.login(metaEsFbLoginCallback, {
+              config_id: String(cfg.configId),
+              response_type: "code",
+              override_default_response_type: true,
+              extras: { setup: {} },
+            });
+          } catch (e) {
+            const m = e?.message || "Erro ao iniciar login Meta.";
+            setMetaEmbeddedSignupActionMessage(m, true);
+            showToast("Falha ao abrir Embedded Signup.", "error");
+            setMetaAtivosStatus(m, "error");
+          }
+        };
+        if (typeof FB !== "undefined" && typeof FB.login === "function") {
+          runLogin();
+          return;
+        }
+        setMetaEmbeddedSignupActionMessage("Aguardando SDK da Meta…", false);
+        let n = 0;
+        const timer = window.setInterval(() => {
+          n += 1;
+          if (typeof FB !== "undefined" && typeof FB.login === "function") {
+            window.clearInterval(timer);
+            refreshMetaEmbeddedSignupHint();
+            runLogin();
+          } else if (n >= 80) {
+            window.clearInterval(timer);
+            const err =
+              "Tempo esgotado aguardando o SDK Meta. Recarregue a página ou desative extensões que bloqueiam Facebook.";
+            setMetaEmbeddedSignupActionMessage(err, true);
+            showToast("Timeout do SDK Meta.", "error");
+            setMetaAtivosStatus(err, "error");
+          }
+        }, 100);
+      }
+
+      window.wabaLaunchEmbeddedMetaSignup = function (ev) {
+        try {
+          if (ev && typeof ev.preventDefault === "function") {
+            ev.preventDefault();
+          }
+          console.info("[Waba] Embedded Signup: handler global.");
+          launchMetaEmbeddedSignup();
+        } catch (err) {
+          console.error("[Waba] Embedded Signup:", err);
+          const msg = err && err.message ? String(err.message) : "Erro ao iniciar Embedded Signup.";
+          if (typeof showToast === "function") {
+            showToast(msg, "error");
+          }
+        }
+        return false;
+      };
+
+      window.addEventListener("message", (event) => {
+        const origin = String(event.origin || "");
+        if (!origin.endsWith("facebook.com")) return;
+        let payload;
+        try {
+          payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        } catch {
+          return;
+        }
+        if (!payload || payload.type !== "WA_EMBEDDED_SIGNUP") return;
+        const inner = payload.data || {};
+        if (payload.event === "CANCEL") {
+          if (inner.error_message) {
+            setMetaAtivosStatus(inner.error_message, "error");
+          } else if (inner.current_step) {
+            setMetaAtivosStatus(`Fluxo interrompido: ${inner.current_step}.`, "warning");
+          }
+          resetMetaEsSession();
+          return;
+        }
+        if (payload.event === "ERROR") {
+          setMetaAtivosStatus(inner.error_message || "Erro no Embedded Signup.", "error");
+          resetMetaEsSession();
+          return;
+        }
+        if (payload.event && !metaEsFinishEvents.has(payload.event)) {
+          return;
+        }
+        if (inner.waba_id) metaEsSession.wabaId = String(inner.waba_id);
+        if (inner.phone_number_id) metaEsSession.phoneNumberId = String(inner.phone_number_id);
+        metaEsSession.event = payload.event ? String(payload.event) : "FINISH";
+        tryFinalizeMetaEmbeddedSignup();
+      });
+
+      if (!document.getElementById("meta-embedded-signup-btn")) {
+        console.warn("[Waba] Botão meta-embedded-signup-btn não existe no DOM.");
+      }
+
+      loadMetaGuideState();
+      syncMetaCredentialsChecklist();
+      applyMetaGuideDockCollapsed(loadMetaGuideDockCollapsed());
+      renderMetaGuideChecklist();
+
+      document.getElementById("meta-guide-dock-toggle")?.addEventListener("click", () => {
+        const dock = document.getElementById("meta-guide-dock");
+        const collapsed = dock?.classList.contains("collapsed") ?? true;
+        setMetaGuideDockCollapsed(!collapsed);
+      });
+      document.getElementById("meta-guide-dock-close")?.addEventListener("click", () => {
+        setMetaGuideDockCollapsed(true);
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape") return;
+        const dock = document.getElementById("meta-guide-dock");
+        if (!dock || dock.classList.contains("meta-guide-dock--hidden")) return;
+        if (dock.classList.contains("collapsed")) return;
+        setMetaGuideDockCollapsed(true);
+      });
+
       document
         .getElementById("mobile-tabs-toggle")
         ?.addEventListener("click", () => {

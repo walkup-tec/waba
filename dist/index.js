@@ -47,6 +47,8 @@ const supabase_js_1 = require("@supabase/supabase-js");
 require("dotenv/config");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
+const RUNTIME_MODE = String(process.env.RUNTIME_MODE || "production").toLowerCase();
+const ENABLE_BACKGROUND_PROCESSING = ["1", "true", "yes", "on"].includes(String(process.env.ENABLE_BACKGROUND_PROCESSING || "true").toLowerCase());
 /** Demais rotas (padrão Express ~100kb). */
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "10mb";
 /**
@@ -183,9 +185,9 @@ function parseDisparosConfig(input) {
             .filter((d) => DAY_CODES.includes(d))
         : DISPAROS_DEFAULTS.workingDays;
     const provider = String(input?.shortenerProvider || DISPAROS_DEFAULTS.shortenerProvider).toLowerCase();
-    const safeProvider = provider === "isgd" || provider === "tinyurl"
+    const safeProvider = provider === "encurtadorpro" || provider === "isgd" || provider === "tinyurl"
         ? provider
-        : "isgd";
+        : "encurtadorpro";
     const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
     const safeMode = mode === "database" ? "database" : "ai";
     const selectedDisparadorInstances = Array.isArray(input?.selectedDisparadorInstances)
@@ -475,7 +477,7 @@ const DISPAROS_DEFAULTS = {
     aiTone: "consultivo",
     aiCta: "Responda no link abaixo",
     aiAudience: "CORBAN",
-    shortenerProvider: "isgd",
+    shortenerProvider: "encurtadorpro",
     shortenerDomain: "",
     whatsappTargetNumber: "",
     selectedDisparadorInstances: [],
@@ -517,20 +519,16 @@ const campaignNextAllowedSendAt = new Map();
 const campaignDisparadorRoundRobin = new Map();
 let disparosRoundRobinCounter = 0;
 let lastShortUrlIssued = "";
+const shortUrlClicksCache = new Map();
 function normalizeShortenerProvider(value) {
     const raw = String(value || "").trim().toLowerCase();
-    if (raw === "isgd")
-        return "isgd";
-    if (raw === "tinyurl")
-        return "tinyurl";
-    return "isgd";
+    if (raw === "encurtadorpro")
+        return "encurtadorpro";
+    return "encurtadorpro";
 }
 function getAutoShortenerProviderOrder() {
-    const forced = normalizeShortenerProvider(process.env.SHORTENER_PROVIDER);
-    // ordem padrão segura/custo: isgd -> tinyurl
-    if (process.env.SHORTENER_PROVIDER)
-        return [forced];
-    return ["isgd", "tinyurl"];
+    // Regra operacional: usar apenas EncurtadorPro.
+    return ["encurtadorpro"];
 }
 const aquecedorRuntime = {
     running: false,
@@ -674,7 +672,7 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
         const sendBody = EVO_SEND_TEXT_V1
             ? { number: numero, textMessage: { text: texto } }
             : { number: numero, text: texto, textMessage: { text: texto } };
-        const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+        const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
         if (sendResult.ok) {
             ok += 1;
             await supabase.from("logs_envios").insert({
@@ -702,7 +700,7 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
     aquecedorRuntime.lastResult =
         ok > 0
             ? `Ciclo teste concluído com sucesso: ${origem.instancia} enviou para ${destinos.length} destino(s). ${ok} ok, ${fail} falha(s).`
-            : `Ciclo teste falhou: ${origem.instancia} → ${destinos.length} destino(s). ${fail} falha(s).`;
+            : `Ciclo teste falhou: ${origem.instancia} → ${destinos.length} destino(s). ${fail} falha(s). Motivo: ${String(aquecedorRuntime.lastEvoError?.body || "sem detalhe").slice(0, 120)}`;
 }
 async function runAquecedorCycle(forceTest = false) {
     if (aquecedorRuntime.isProcessing)
@@ -834,7 +832,7 @@ async function runAquecedorCycle(forceTest = false) {
         const sendBody = EVO_SEND_TEXT_V1
             ? { number: numero, textMessage: { text: texto } }
             : { number: numero, text: texto, textMessage: { text: texto } };
-        const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+        const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
         if (!sendResult.ok) {
             await supabase.from("aquecedor")
                 .update({ status: "PENDENTE" })
@@ -883,6 +881,12 @@ async function runAquecedorCycle(forceTest = false) {
     }
 }
 function startAquecedorRuntime() {
+    if (!ENABLE_BACKGROUND_PROCESSING) {
+        aquecedorRuntime.running = false;
+        aquecedorRuntime.lastResult =
+            "Aquecedor desativado neste processo (ENABLE_BACKGROUND_PROCESSING=false).";
+        return;
+    }
     if (aquecedorInterval)
         return;
     aquecedorRuntime.running = true;
@@ -1644,6 +1648,95 @@ async function callEvoAction(url, method, body) {
         clearTimeout(timeoutId);
     }
 }
+async function callEvoSendTextWithRetry(url, body, maxAttempts = 3) {
+    let last = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const result = await callEvoAction(url, "POST", body);
+        last = result;
+        if (result.ok)
+            return result;
+        const bodyLc = String(result.body || "").toLowerCase();
+        const isTransient = result.status === 429 ||
+            result.status === 500 ||
+            result.status === 502 ||
+            result.status === 503 ||
+            result.status === 504 ||
+            bodyLc.includes("connection closed") ||
+            bodyLc.includes("timeout");
+        if (!isTransient || attempt >= maxAttempts)
+            break;
+        const waitMs = Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180);
+        await new Promise((r) => setTimeout(r, waitMs));
+    }
+    return (last || {
+        ok: false,
+        status: 0,
+        body: "Falha sem retorno da EVO.",
+        json: null,
+    });
+}
+const META_GRAPH_BASE = String(process.env.META_GRAPH_BASE || "https://graph.facebook.com").replace(/\/+$/, "");
+const META_GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v22.0").trim();
+function sanitizeMetaId(value) {
+    return String(value || "").trim();
+}
+async function callMetaGraphApi(input) {
+    const token = String(input.token || "").trim();
+    if (!token)
+        throw new Error("Token da Meta não informado.");
+    const path = String(input.path || "").trim().replace(/^\/+/, "");
+    if (!path)
+        throw new Error("Path da API da Meta não informado.");
+    const endpoint = `${META_GRAPH_BASE}/${META_GRAPH_VERSION}/${path}`;
+    const maxAttempts = Math.max(1, Number(input.maxAttempts || 3));
+    let lastStatus = 0;
+    let lastBody = "";
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        try {
+            const response = await fetch(endpoint, {
+                method: input.method,
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: input.body ? JSON.stringify(input.body) : undefined,
+                signal: controller.signal,
+            });
+            const text = await response.text();
+            let json = null;
+            try {
+                json = text ? JSON.parse(text) : null;
+            }
+            catch {
+                json = null;
+            }
+            if (response.ok) {
+                return { ok: true, status: response.status, json, body: text, endpoint };
+            }
+            lastStatus = response.status;
+            lastBody = text;
+            const transient = response.status === 429 ||
+                response.status === 500 ||
+                response.status === 502 ||
+                response.status === 503 ||
+                response.status === 504;
+            if (!transient || attempt >= maxAttempts) {
+                return { ok: false, status: response.status, json, body: text, endpoint };
+            }
+            const waitMs = Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180);
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+        finally {
+            clearTimeout(timeoutId);
+        }
+    }
+    return { ok: false, status: lastStatus, json: null, body: lastBody, endpoint };
+}
+function metaAppSecretProof(accessToken, appSecret) {
+    return crypto_1.default.createHmac("sha256", String(appSecret || "")).update(String(accessToken || "")).digest("hex");
+}
 function buildDisparosAiPrompt(input) {
     const briefing = String(input.briefing || "").trim();
     const tone = String(input.tone || "consultivo").trim();
@@ -1670,11 +1763,15 @@ function ensureMessageContainsLink(message, link, cta) {
     const safeLink = String(link || "").trim();
     if (!safeLink)
         return text;
-    if (text.includes(safeLink))
-        return text;
+    // Se a IA incluir o link longo do WhatsApp (wa.me), substituímos por shortUrl
+    // para que o usuário receba sempre a URL curta e para manter o relatório consistente.
+    const waMeRegex = /https?:\/\/wa\.me\/[0-9]+[^\s)"]*/gi;
+    const replaced = text.replace(waMeRegex, safeLink);
+    if (replaced.includes(safeLink))
+        return replaced;
     const safeCta = String(cta || "Acesse aqui").trim();
     const joiner = text ? "\n\n" : "";
-    return `${text}${joiner}${safeCta}: ${safeLink}`.trim();
+    return `${replaced}${joiner}${safeCta}: ${safeLink}`.trim();
 }
 async function generateShortUrlForDisparos(longUrl) {
     const baseUrl = String(longUrl || "").trim();
@@ -1691,12 +1788,10 @@ async function generateShortUrlForDisparos(longUrl) {
         for (const provider of providers) {
             try {
                 const candidateShort = await shortenUrlWithProvider(candidateUrl, provider, "");
-                if (candidateShort !== lastShortUrlIssued) {
-                    shortUrl = candidateShort;
-                    sourceUrlUsed = candidateUrl;
-                    providerUsed = provider;
-                    break;
-                }
+                shortUrl = candidateShort;
+                sourceUrlUsed = candidateUrl;
+                providerUsed = provider;
+                break;
             }
             catch {
                 // tenta proximo provider
@@ -1708,12 +1803,76 @@ async function generateShortUrlForDisparos(longUrl) {
     if (!shortUrl) {
         throw new Error("Nao foi possivel gerar link curto para a mensagem teste.");
     }
-    lastShortUrlIssued = shortUrl;
     return {
         shortUrl,
         sourceUrlUsed,
         provider: providerUsed || providers[0],
     };
+}
+function extractFirstHttpUrl(text) {
+    const raw = String(text || "");
+    const match = raw.match(/https?:\/\/[^\s)]+/i);
+    if (!match?.[0])
+        return null;
+    return match[0].trim();
+}
+function parseEncurtadorProClicks(payload) {
+    const asNumber = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    const direct = asNumber(payload?.clicks);
+    if (direct != null)
+        return direct;
+    const dataClicks = asNumber(payload?.data?.clicks);
+    if (dataClicks != null)
+        return dataClicks;
+    const urls = Array.isArray(payload?.data?.urls) ? payload.data.urls : [];
+    if (urls.length > 0) {
+        const fromList = asNumber(urls[0]?.clicks);
+        if (fromList != null)
+            return fromList;
+    }
+    return 0;
+}
+async function fetchClicksForShortUrlFromEncurtadorPro(shortUrl) {
+    const safeShort = String(shortUrl || "").trim();
+    if (!/^https?:\/\//i.test(safeShort))
+        return 0;
+    const cached = shortUrlClicksCache.get(safeShort);
+    const nowMs = Date.now();
+    if (cached && nowMs - cached.checkedAtMs < 120000) {
+        return cached.clicks;
+    }
+    const apiKey = String(process.env.ENCURTADORPRO_API_KEY || "").trim();
+    if (!apiKey)
+        return 0;
+    const endpoint = `https://app.encurtadorpro.com.br/api/urls?short=${encodeURIComponent(safeShort)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+        const response = await fetch(endpoint, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || Number(data?.error || 0) !== 0) {
+            return 0;
+        }
+        const clicks = parseEncurtadorProClicks(data);
+        shortUrlClicksCache.set(safeShort, { clicks, checkedAtMs: nowMs });
+        return clicks;
+    }
+    catch {
+        return 0;
+    }
+    finally {
+        clearTimeout(timeoutId);
+    }
 }
 function extractOpenAiText(payload) {
     const direct = String(payload?.output_text || "").trim();
@@ -1806,37 +1965,79 @@ async function shortenUrlWithProvider(longUrl, provider, customDomain = "") {
     if (!safeLongUrl) {
         throw new Error("URL original é obrigatória.");
     }
-    if (provider === "isgd") {
-        const endpoint = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(safeLongUrl)}`;
-        const response = await fetch(endpoint, { method: "GET" });
-        const body = await response.text();
-        if (!response.ok || !/^https?:\/\//i.test(body.trim())) {
-            throw new Error("Falha no encurtador is.gd.");
+    if (provider === "encurtadorpro") {
+        const apiKey = String(process.env.ENCURTADORPRO_API_KEY || "").trim();
+        if (!apiKey) {
+            throw new Error("ENCURTADORPRO_API_KEY não configurada.");
         }
-        return body.trim();
+        const payload = {
+            url: safeLongUrl,
+            status: "private",
+        };
+        const customAliasEnv = String(process.env.ENCURTADORPRO_CUSTOM_ALIAS || "").trim();
+        if (customAliasEnv) {
+            payload.custom = customAliasEnv;
+        }
+        else {
+            // EncurtadorPro pode deduplicar pelo "longUrl" ignorando query/tracking.
+            // Para isolar cliques, usamos um alias derivado do nonce inserido no longUrl.
+            const nonceMatch = safeLongUrl.match(/_n8n_link_nonce=([^&]+)/i);
+            const rawNonce = String(nonceMatch?.[1] || "").trim();
+            const clean = rawNonce.replace(/[^a-z0-9]/gi, "").toLowerCase();
+            if (clean) {
+                // Alias curto para melhor UX no texto final, mantendo chance baixa de colisão.
+                payload.custom = `n${clean.slice(-7)}`;
+            }
+        }
+        const preferredDomain = String(customDomain || process.env.ENCURTADORPRO_DOMAIN || "").trim();
+        if (preferredDomain)
+            payload.domain = preferredDomain;
+        const maxAttempts = 3;
+        let lastErrorMessage = "Falha no encurtador EncurtadorPro.";
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+                const response = await fetch("https://app.encurtadorpro.com.br/api/url/add", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal,
+                });
+                const data = await response.json().catch(() => ({}));
+                const short = String(data?.shorturl || data?.short || "").trim();
+                const responseError = Number(data?.error || 0);
+                if (response.ok && responseError === 0 && /^https?:\/\//i.test(short)) {
+                    return short;
+                }
+                const message = String(data?.message || "").slice(0, 200);
+                lastErrorMessage = `EncurtadorPro HTTP ${response.status}${message ? `: ${message}` : ""}`;
+                const isTransient = response.status === 429 ||
+                    response.status === 500 ||
+                    response.status === 502 ||
+                    response.status === 503 ||
+                    response.status === 504;
+                if (!isTransient || attempt >= maxAttempts)
+                    break;
+            }
+            catch (error) {
+                const message = String(error?.message || "Erro de rede ao chamar EncurtadorPro.");
+                lastErrorMessage = message;
+                if (attempt >= maxAttempts)
+                    break;
+            }
+            finally {
+                clearTimeout(timeoutId);
+            }
+            const sleepMs = Math.floor(300 * Math.pow(2, attempt - 1) + Math.random() * 150);
+            await new Promise((r) => setTimeout(r, sleepMs));
+        }
+        throw new Error(lastErrorMessage);
     }
-    if (provider === "tinyurl") {
-        const token = process.env.TINYURL_API_TOKEN || "";
-        if (!token)
-            throw new Error("TINYURL_API_TOKEN não configurado.");
-        const response = await fetch("https://api.tinyurl.com/create", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                url: safeLongUrl,
-                domain: customDomain || undefined,
-            }),
-        });
-        const data = await response.json().catch(() => ({}));
-        const short = data?.data?.tiny_url || data?.data?.url || "";
-        if (!response.ok || !short)
-            throw new Error("Falha no encurtador TinyURL.");
-        return String(short);
-    }
-    throw new Error("Provedor de encurtador não suportado.");
+    throw new Error("Provedor de encurtador não suportado. Use apenas EncurtadorPro.");
 }
 function appendAntiRepeatParam(rawUrl, attempt) {
     try {
@@ -2441,6 +2642,14 @@ app.get("/aquecedor/envios", async (req, res) => {
     }
 });
 app.post("/aquecedor/start", (_req, res) => {
+    if (!ENABLE_BACKGROUND_PROCESSING) {
+        return res.status(409).json({
+            ok: false,
+            message: "Aquecedor desativado neste processo. Use o runtime de produção para processar envios.",
+            status: aquecedorRuntime,
+            runtime: { mode: RUNTIME_MODE, backgroundProcessing: ENABLE_BACKGROUND_PROCESSING },
+        });
+    }
     startAquecedorRuntime();
     return res.json({ ok: true, message: "Aquecedor iniciado.", status: aquecedorRuntime });
 });
@@ -2655,6 +2864,512 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
     }
     return res.status(200).json(diag);
 });
+/**
+ * Token de aplicativo (grant client_credentials). Uso típico: etapa inicial / chamadas limitadas;
+ * não substitui token de System User com escopos no WABA.
+ */
+app.post("/meta-oficial/tokens/app-access", parseJsonDefault, async (req, res) => {
+    try {
+        const appId = String(req.body?.appId || "").trim();
+        const appSecret = String(req.body?.appSecret || "").trim();
+        if (!appId || !/^\d+$/.test(appId)) {
+            return res.status(400).json({ error: "Campo 'appId' (numérico, App Dashboard) é obrigatório." });
+        }
+        if (!appSecret) {
+            return res.status(400).json({ error: "Campo 'appSecret' é obrigatório." });
+        }
+        const url = new URL(`${META_GRAPH_BASE}/${META_GRAPH_VERSION}/oauth/access_token`);
+        url.searchParams.set("client_id", appId);
+        url.searchParams.set("client_secret", appSecret);
+        url.searchParams.set("grant_type", "client_credentials");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        let response;
+        try {
+            response = await fetch(url.toString(), { method: "GET", signal: controller.signal });
+        }
+        finally {
+            clearTimeout(timeoutId);
+        }
+        const text = await response.text();
+        let json = null;
+        try {
+            json = text ? JSON.parse(text) : null;
+        }
+        catch {
+            json = null;
+        }
+        if (!response.ok) {
+            const detail = String(json?.error?.message || json?.error_description || text || "").slice(0, 280);
+            return res.status(502).json({
+                error: "Falha ao gerar token de aplicativo na Meta.",
+                status: response.status,
+                detail: detail || undefined,
+            });
+        }
+        const accessToken = String(json?.access_token || "").trim();
+        if (!accessToken) {
+            return res.status(502).json({ error: "Resposta da Meta sem access_token." });
+        }
+        return res.json({
+            ok: true,
+            tokenType: json?.token_type || "bearer",
+            accessToken,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao gerar token de aplicativo." });
+    }
+});
+/**
+ * Gera access token para System User (permanente ou 60 dias), conforme Business Management APIs.
+ * Exige token de admin da BM / system user com permissão (não use o token client_credentials do passo anterior).
+ */
+app.post("/meta-oficial/tokens/system-user-access", parseJsonDefault, async (req, res) => {
+    try {
+        const businessAppId = String(req.body?.appId || req.body?.businessAppId || "").trim();
+        const appSecret = String(req.body?.appSecret || "").trim();
+        const systemUserId = sanitizeMetaId(req.body?.systemUserId);
+        const adminAccessToken = String(req.body?.adminAccessToken || "").trim();
+        const setTokenExpiresIn60Days = req.body?.setTokenExpiresIn60Days === true;
+        const scopes = String(req.body?.scopes ||
+            "business_management,whatsapp_business_management,whatsapp_business_messaging").trim();
+        if (!businessAppId || !/^\d+$/.test(businessAppId)) {
+            return res.status(400).json({ error: "Campo 'appId' do aplicativo Meta é obrigatório." });
+        }
+        if (!appSecret) {
+            return res.status(400).json({ error: "Campo 'appSecret' é obrigatório." });
+        }
+        if (!systemUserId || !/^\d+$/.test(systemUserId)) {
+            return res.status(400).json({ error: "Campo 'systemUserId' numérico é obrigatório." });
+        }
+        if (!adminAccessToken) {
+            return res.status(400).json({
+                error: "Campo 'adminAccessToken' é obrigatório (token de admin BM ou token temporário com permissão na BM).",
+            });
+        }
+        const proof = metaAppSecretProof(adminAccessToken, appSecret);
+        const endpoint = `${META_GRAPH_BASE}/${META_GRAPH_VERSION}/${systemUserId}/access_tokens`;
+        const form = new URLSearchParams();
+        form.set("business_app", businessAppId);
+        form.set("scope", scopes);
+        form.set("appsecret_proof", proof);
+        form.set("access_token", adminAccessToken);
+        if (setTokenExpiresIn60Days) {
+            form.set("set_token_expires_in_60_days", "true");
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        let response;
+        try {
+            response = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: form.toString(),
+                signal: controller.signal,
+            });
+        }
+        finally {
+            clearTimeout(timeoutId);
+        }
+        const text = await response.text();
+        let json = null;
+        try {
+            json = text ? JSON.parse(text) : null;
+        }
+        catch {
+            json = null;
+        }
+        if (!response.ok) {
+            const detail = String(json?.error?.message || text || "").slice(0, 280);
+            return res.status(502).json({
+                error: "Falha ao gerar token do system user na Meta.",
+                status: response.status,
+                detail: detail || undefined,
+            });
+        }
+        const accessToken = String(json?.access_token || "").trim();
+        if (!accessToken) {
+            return res.status(502).json({ error: "Resposta da Meta sem access_token." });
+        }
+        return res.json({ ok: true, accessToken });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao gerar token do system user." });
+    }
+});
+/** Configuração pública para Embedded Signup (Facebook Login for Business). */
+app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
+    const appId = String(process.env.META_APP_ID || "").trim();
+    const configId = String(process.env.META_ES_CONFIG_ID || "").trim();
+    res.json({
+        ok: Boolean(appId && configId),
+        appId: appId || undefined,
+        configId: configId || undefined,
+        graphVersion: META_GRAPH_VERSION,
+    });
+});
+/**
+ * Troca o código do Embedded Signup por business token (Tech Provider / doc Meta nov/2025).
+ * Usa META_APP_ID e META_APP_SECRET do ambiente — não envie app secret do cliente.
+ */
+app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, async (req, res) => {
+    try {
+        const code = String(req.body?.code || "").trim();
+        const appId = String(process.env.META_APP_ID || "").trim();
+        const appSecret = String(process.env.META_APP_SECRET || "").trim();
+        if (!code) {
+            return res.status(400).json({ error: "Campo 'code' é obrigatório (código de ~30s do Embedded Signup)." });
+        }
+        if (!appId || !appSecret) {
+            return res.status(503).json({
+                error: "Servidor sem META_APP_ID / META_APP_SECRET configurados para Embedded Signup.",
+            });
+        }
+        const url = new URL(`${META_GRAPH_BASE}/${META_GRAPH_VERSION}/oauth/access_token`);
+        url.searchParams.set("client_id", appId);
+        url.searchParams.set("client_secret", appSecret);
+        url.searchParams.set("code", code);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        let response;
+        try {
+            response = await fetch(url.toString(), { method: "GET", signal: controller.signal });
+        }
+        finally {
+            clearTimeout(timeoutId);
+        }
+        const text = await response.text();
+        let json = null;
+        try {
+            json = text ? JSON.parse(text) : null;
+        }
+        catch {
+            json = null;
+        }
+        if (!response.ok) {
+            const detail = String(json?.error?.message || json?.error_description || text || "").slice(0, 280);
+            return res.status(502).json({
+                error: "Falha ao trocar código por token na Meta.",
+                status: response.status,
+                detail: detail || undefined,
+            });
+        }
+        const accessToken = String(json?.access_token || text || "").trim();
+        if (!accessToken) {
+            return res.status(502).json({ error: "Resposta da Meta sem access_token." });
+        }
+        return res.json({ ok: true, accessToken });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao trocar código Embedded Signup." });
+    }
+});
+/** Inscreve o app nos webhooks do WABA do cliente (pós-Embedded Signup). */
+app.post("/meta-oficial/embedded-signup/subscribe-webhooks", parseJsonDefault, async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
+        const subscribedFields = String(req.body?.subscribedFields || "messages,message_status,messaging_postbacks").trim();
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!wabaId)
+            return res.status(400).json({ error: "Campo 'wabaId' é obrigatório." });
+        const existing = await callMetaGraphApi({
+            token,
+            method: "GET",
+            path: `${wabaId}/subscribed_apps`,
+        });
+        if (!existing.ok) {
+            return res.status(502).json({
+                error: "Falha ao consultar subscribed_apps.",
+                status: existing.status,
+                detail: String(existing.json?.error?.message || existing.body || "").slice(0, 260),
+            });
+        }
+        const currentItems = Array.isArray(existing.json?.data) ? existing.json.data : [];
+        if (currentItems.length > 0) {
+            return res.json({ ok: true, alreadySubscribed: true, items: currentItems });
+        }
+        const subscribe = await callMetaGraphApi({
+            token,
+            method: "POST",
+            path: `${wabaId}/subscribed_apps`,
+            body: { subscribed_fields: subscribedFields },
+        });
+        if (!subscribe.ok) {
+            return res.status(502).json({
+                error: "Falha ao inscrever app nos webhooks do WABA.",
+                status: subscribe.status,
+                detail: String(subscribe.json?.error?.message || subscribe.body || "").slice(0, 260),
+            });
+        }
+        return res.json({ ok: true, alreadySubscribed: false, data: subscribe.json || null });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao inscrever webhooks." });
+    }
+});
+app.post("/meta-oficial/ativos/phone-numbers/list", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!wabaId)
+            return res.status(400).json({ error: "Campo 'wabaId' (ou 'id_bm') é obrigatório." });
+        const result = await callMetaGraphApi({
+            token,
+            method: "GET",
+            path: `${wabaId}/phone_numbers`,
+        });
+        if (!result.ok) {
+            return res.status(502).json({
+                error: "Falha ao listar números da API Meta.",
+                status: result.status,
+                detail: String(result.json?.error?.message || result.body || "").slice(0, 260),
+            });
+        }
+        return res.json({
+            ok: true,
+            items: Array.isArray(result.json?.data) ? result.json.data : [],
+            paging: result.json?.paging || null,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao listar números da API Meta." });
+    }
+});
+app.post("/meta-oficial/ativos/phone-numbers/register", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const phoneNumberId = sanitizeMetaId(req.body?.phoneNumberId);
+        const pin = String(req.body?.pin || "").trim();
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!phoneNumberId)
+            return res.status(400).json({ error: "Campo 'phoneNumberId' é obrigatório." });
+        if (!/^\d{6}$/.test(pin)) {
+            return res.status(400).json({ error: "Campo 'pin' deve ter 6 dígitos numéricos." });
+        }
+        const result = await callMetaGraphApi({
+            token,
+            method: "POST",
+            path: `${phoneNumberId}/register`,
+            body: { messaging_product: "whatsapp", pin },
+        });
+        if (!result.ok) {
+            return res.status(502).json({
+                error: "Falha ao registrar número na API Meta.",
+                status: result.status,
+                detail: String(result.json?.error?.message || result.body || "").slice(0, 260),
+            });
+        }
+        return res.json({ ok: true, data: result.json || null });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao registrar número na API Meta." });
+    }
+});
+app.post("/meta-oficial/ativos/subscribed-apps/list", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!wabaId)
+            return res.status(400).json({ error: "Campo 'wabaId' (ou 'id_bm') é obrigatório." });
+        const result = await callMetaGraphApi({
+            token,
+            method: "GET",
+            path: `${wabaId}/subscribed_apps`,
+        });
+        if (!result.ok) {
+            return res.status(502).json({
+                error: "Falha ao consultar apps inscritos na API Meta.",
+                status: result.status,
+                detail: String(result.json?.error?.message || result.body || "").slice(0, 260),
+            });
+        }
+        return res.json({ ok: true, items: Array.isArray(result.json?.data) ? result.json.data : [] });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao consultar apps inscritos." });
+    }
+});
+app.post("/meta-oficial/ativos/subscribed-apps/ensure", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
+        const subscribedFields = String(req.body?.subscribedFields || "messages,message_status,messaging_postbacks").trim();
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!wabaId)
+            return res.status(400).json({ error: "Campo 'wabaId' (ou 'id_bm') é obrigatório." });
+        const existing = await callMetaGraphApi({
+            token,
+            method: "GET",
+            path: `${wabaId}/subscribed_apps`,
+        });
+        if (!existing.ok) {
+            return res.status(502).json({
+                error: "Falha ao consultar inscrição atual do app.",
+                status: existing.status,
+                detail: String(existing.json?.error?.message || existing.body || "").slice(0, 260),
+            });
+        }
+        const currentItems = Array.isArray(existing.json?.data) ? existing.json.data : [];
+        if (currentItems.length > 0) {
+            return res.json({ ok: true, alreadySubscribed: true, items: currentItems });
+        }
+        const subscribe = await callMetaGraphApi({
+            token,
+            method: "POST",
+            path: `${wabaId}/subscribed_apps`,
+            body: { subscribed_fields: subscribedFields },
+        });
+        if (!subscribe.ok) {
+            return res.status(502).json({
+                error: "Falha ao inscrever app na API Meta.",
+                status: subscribe.status,
+                detail: String(subscribe.json?.error?.message || subscribe.body || "").slice(0, 260),
+            });
+        }
+        return res.json({ ok: true, alreadySubscribed: false, data: subscribe.json || null });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao inscrever app na API Meta." });
+    }
+});
+app.post("/meta-oficial/templates/list", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
+        const limit = Math.max(1, Math.min(200, Number(req.body?.limit || 30)));
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!wabaId)
+            return res.status(400).json({ error: "Campo 'wabaId' (ou 'id_bm') é obrigatório." });
+        const result = await callMetaGraphApi({
+            token,
+            method: "GET",
+            path: `${wabaId}/message_templates?limit=${limit}`,
+        });
+        if (!result.ok) {
+            return res.status(502).json({
+                error: "Falha ao listar templates da API Meta.",
+                status: result.status,
+                detail: String(result.json?.error?.message || result.body || "").slice(0, 260),
+            });
+        }
+        return res.json({
+            ok: true,
+            items: Array.isArray(result.json?.data) ? result.json.data : [],
+            paging: result.json?.paging || null,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao listar templates." });
+    }
+});
+app.post("/meta-oficial/templates/create-utility", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
+        const rawName = String(req.body?.name || "").trim().toLowerCase();
+        const name = rawName.replace(/[^a-z0-9_]/g, "_").slice(0, 512);
+        const language = String(req.body?.language || "pt_BR").trim();
+        const bodyText = String(req.body?.bodyText || "").trim();
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!wabaId)
+            return res.status(400).json({ error: "Campo 'wabaId' (ou 'id_bm') é obrigatório." });
+        if (!name)
+            return res.status(400).json({ error: "Campo 'name' é obrigatório." });
+        if (!bodyText)
+            return res.status(400).json({ error: "Campo 'bodyText' é obrigatório." });
+        const payload = {
+            name,
+            category: "UTILITY",
+            language,
+            components: [{ type: "BODY", text: bodyText }],
+        };
+        const result = await callMetaGraphApi({
+            token,
+            method: "POST",
+            path: `${wabaId}/message_templates`,
+            body: payload,
+        });
+        if (!result.ok) {
+            return res.status(502).json({
+                error: "Falha ao criar template utilidade na API Meta.",
+                status: result.status,
+                detail: String(result.json?.error?.message || result.body || "").slice(0, 260),
+            });
+        }
+        return res.json({ ok: true, data: result.json || null });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao criar template utilidade." });
+    }
+});
+app.post("/meta-oficial/disparo/send-template", async (req, res) => {
+    try {
+        const token = String(req.body?.token || "").trim();
+        const phoneNumberId = sanitizeMetaId(req.body?.phoneNumberId);
+        const toRaw = String(req.body?.to || "").trim();
+        const to = toRaw.replace(/\D+/g, "");
+        const templateName = String(req.body?.templateName || "").trim().toLowerCase();
+        const languageCode = String(req.body?.languageCode || "pt_BR").trim();
+        const bodyParamsInput = Array.isArray(req.body?.bodyParams) ? req.body.bodyParams : [];
+        const bodyParams = bodyParamsInput
+            .map((v) => String(v ?? "").trim())
+            .filter((v) => v.length > 0)
+            .slice(0, 20);
+        if (!token)
+            return res.status(400).json({ error: "Campo 'token' é obrigatório." });
+        if (!phoneNumberId)
+            return res.status(400).json({ error: "Campo 'phoneNumberId' é obrigatório." });
+        if (!to)
+            return res.status(400).json({ error: "Campo 'to' é obrigatório." });
+        if (!templateName)
+            return res.status(400).json({ error: "Campo 'templateName' é obrigatório." });
+        const payload = {
+            messaging_product: "whatsapp",
+            to,
+            type: "template",
+            template: {
+                name: templateName,
+                language: { code: languageCode },
+            },
+        };
+        if (bodyParams.length) {
+            payload.template.components = [
+                {
+                    type: "body",
+                    parameters: bodyParams.map((text) => ({ type: "text", text })),
+                },
+            ];
+        }
+        const result = await callMetaGraphApi({
+            token,
+            method: "POST",
+            path: `${phoneNumberId}/messages`,
+            body: payload,
+        });
+        if (!result.ok) {
+            return res.status(502).json({
+                error: "Falha ao disparar template via API Meta.",
+                status: result.status,
+                detail: String(result.json?.error?.message || result.body || "").slice(0, 260),
+            });
+        }
+        return res.json({ ok: true, data: result.json || null });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao disparar template." });
+    }
+});
 app.get("/disparos/config", async (_req, res) => {
     try {
         const config = await loadDisparosConfigFromDb();
@@ -2665,8 +3380,7 @@ app.get("/disparos/config", async (_req, res) => {
             shortenerAuto: true,
             currentShortenerProvider,
             shortenerProviders: [
-                { id: "isgd", label: "is.gd (gratuito)", auth: "não requer token" },
-                { id: "tinyurl", label: "TinyURL", auth: "requer token (plano gratuito disponível)" },
+                { id: "encurtadorpro", label: "EncurtadorPro", auth: "requer API key (Bearer)" },
             ],
         });
     }
@@ -2863,12 +3577,10 @@ app.post("/disparos/shorten", async (req, res) => {
             for (const provider of providers) {
                 try {
                     const candidateShort = await shortenUrlWithProvider(candidateUrl, provider, domain);
-                    if (candidateShort !== lastShortUrlIssued) {
-                        shortUrl = candidateShort;
-                        finalLongUrl = candidateUrl;
-                        providerUsed = provider;
-                        break;
-                    }
+                    shortUrl = candidateShort;
+                    finalLongUrl = candidateUrl;
+                    providerUsed = provider;
+                    break;
                 }
                 catch {
                     // tenta próximo provedor
@@ -2878,11 +3590,10 @@ app.post("/disparos/shorten", async (req, res) => {
                 break;
         }
         if (!shortUrl) {
-            return res.status(409).json({
-                error: "Não foi possível gerar um link diferente do último link usado. Tente novamente.",
+            return res.status(502).json({
+                error: "Não foi possível gerar link curto no EncurtadorPro.",
             });
         }
-        lastShortUrlIssued = shortUrl;
         return res.json({
             ok: true,
             shortUrl,
@@ -2911,7 +3622,9 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
                 error: "Número alvo não configurado na seção Encurtador de URL.",
             });
         }
-        const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1`;
+        // longUrl único para o teste de geração (evita acúmulo de cliques em shortUrl reaproveitado)
+        const nonce = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1&_n8n_link_nonce=${nonce}`;
         let shortUrl = "";
         let shortenerProvider = "";
         const shortened = await generateShortUrlForDisparos(accessUrlRaw);
@@ -3324,15 +4037,23 @@ async function composeOutboundMessageForConfig(config) {
         }
         const pick = templates[Math.floor(Math.random() * templates.length)];
         if (!pick?.text?.trim()) {
-            return "Olá! Temos uma informação importante para você. Responda quando puder.";
+            return {
+                text: "Olá! Temos uma informação importante para você. Responda quando puder.",
+                shortUrl: null,
+            };
         }
-        return pick.text.trim();
+        const text = pick.text.trim();
+        return { text, shortUrl: extractFirstHttpUrl(text) };
     }
     const targetNumber = normalizeWhatsAppNumber(String(config.whatsappTargetNumber || ""));
     if (!targetNumber) {
         throw new Error("Snapshot da campanha sem número alvo (Encurtador).");
     }
-    const shortened = await generateShortUrlForDisparos(`https://wa.me/${targetNumber}?text=Ol%C3%A1`);
+    // Importante: gerar um longUrl "único" por lead (via nonce) para evitar reuso do mesmo shortUrl
+    // e acúmulo de cliques históricos entre execuções/campanhas.
+    const nonce = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1&_n8n_link_nonce=${nonce}`;
+    const shortened = await generateShortUrlForDisparos(accessUrlRaw);
     const shortUrl = shortened.shortUrl;
     const briefing = String(config.aiBriefing || "");
     const prompt = buildDisparosAiPrompt({
@@ -3348,7 +4069,10 @@ async function composeOutboundMessageForConfig(config) {
         model: OPENAI_MODEL,
         maxOutputTokens: 220,
     });
-    return ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Responda no link abaixo"));
+    return {
+        text: ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Responda no link abaixo")),
+        shortUrl,
+    };
 }
 async function persistLeadSentAndCampaignCount(campaignId, leadId, nextSentCount) {
     const supabase = getSupabaseClient();
@@ -3412,9 +4136,9 @@ async function processOneCampaignDispatch(campaignId) {
         }
         return;
     }
-    let text;
+    let outbound;
     try {
-        text = await composeOutboundMessageForConfig(campaign.configSnapshot);
+        outbound = await composeOutboundMessageForConfig(campaign.configSnapshot);
     }
     catch (err) {
         console.error("[Campanha] Falha ao montar mensagem:", err);
@@ -3434,8 +4158,8 @@ async function processOneCampaignDispatch(campaignId) {
         return;
     }
     const sendBody = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text: text } }
-        : { number: numero, text: text, textMessage: { text: text } };
+        ? { number: numero, textMessage: { text: outbound.text } }
+        : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
     const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
     if (!sendResult.ok) {
         console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
@@ -3447,6 +4171,7 @@ async function processOneCampaignDispatch(campaignId) {
     const sentIso = new Date().toISOString();
     lead.status = "sent";
     lead.sentAt = sentIso;
+    lead.shortUrl = outbound.shortUrl || undefined;
     campaign.sentCount += 1;
     await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount);
     scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
@@ -3789,6 +4514,7 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
             ? campaign.totalNumbers
             : Math.max(leads.length, 1);
         let enviadosComSucesso = 0;
+        let totalCliques = 0;
         let invalidPhone = 0;
         let destinationError = 0;
         let falhaTecnica = 0;
@@ -3808,10 +4534,19 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
             else
                 pendentes += 1;
         }
+        const sentLeadsWithShortUrl = leads.filter((l) => l.status === "sent" && !!l.shortUrl);
+        const uniqueShortUrls = Array.from(new Set(sentLeadsWithShortUrl.map((l) => String(l.shortUrl)))).slice(0, 25);
+        const cliqueChecksDisponiveis = uniqueShortUrls.length;
+        for (const shortUrl of uniqueShortUrls) {
+            const clicks = await fetchClicksForShortUrlFromEncurtadorPro(String(shortUrl));
+            totalCliques += clicks;
+        }
+        const cliqueChecksExecutados = uniqueShortUrls.length;
         const numerosErrados = invalidPhone + destinationError;
         const totalProcessados = enviadosComSucesso + numerosErrados + falhaTecnica;
         const top = Math.max(totalNumeros, leads.length, 1);
         const pct = (n) => Math.round((n / top) * 1000) / 10;
+        const conversaoPercent = enviadosComSucesso > 0 ? Math.round((totalCliques / enviadosComSucesso) * 1000) / 10 : 0;
         const funnel = [
             {
                 key: "total",
@@ -3824,6 +4559,14 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
                 label: "Enviados com sucesso",
                 count: enviadosComSucesso,
                 pctOfTop: pct(enviadosComSucesso),
+            },
+            {
+                key: "conversion",
+                label: "Conversão (cliques)",
+                count: totalCliques,
+                pctOfTop: Math.max(0, Math.min(100, Number(conversaoPercent) || 0)),
+                isConversion: true,
+                pctLabelMode: "success",
             },
             {
                 key: "wrong",
@@ -3853,6 +4596,11 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
             totalNumeros: top,
             totalProcessados,
             enviadosComSucesso,
+            clicaramNoLink: totalCliques,
+            conversaoPercent,
+            conversaoTexto: `${conversaoPercent.toFixed(1)}% (${totalCliques}/${enviadosComSucesso})`,
+            cliqueChecksExecutados,
+            cliqueChecksDisponiveis,
             numerosErrados,
             textoNumerosErrados: `Foram processados ${totalProcessados} contatos; destes, ${numerosErrados} com telefone/destino inválido ou indisponível no WhatsApp.`,
             detalheErros: {
@@ -4069,8 +4817,14 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 });
 app.listen(PORT, () => {
     console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
+    console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING}`);
     console.log(`[campanhas] upload planilha até ${Math.round(CAMPAIGN_UPLOAD_MAX_BYTES / 1024 / 1024)}MB (multipart) | JSON legado=${CAMPAIGN_CREATE_JSON_LIMIT}`);
-    setInterval(() => {
-        runCampaignDispatchTick().catch((e) => console.error("[Campanhas] tick:", e));
-    }, 7000);
+    if (ENABLE_BACKGROUND_PROCESSING) {
+        setInterval(() => {
+            runCampaignDispatchTick().catch((e) => console.error("[Campanhas] tick:", e));
+        }, 7000);
+    }
+    else {
+        console.log("[campanhas] processamento automático desativado neste processo (dev isolado).");
+    }
 });
