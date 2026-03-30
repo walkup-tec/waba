@@ -1803,6 +1803,11 @@
         z-index: 1200;
       }
 
+      /* Acima de work overlay (1300), toasts (1500) e modais de campanha (2200) — evita clique “morto” no Registrar instância */
+      #register-instance-overlay.confirm-overlay {
+        z-index: 2600;
+      }
+
       /* Acima do overlay de “processando planilha” (1300) e demais modais */
       #dis-campaign-rename-overlay,
       #dis-campaign-delete-overlay,
@@ -2280,6 +2285,18 @@
         font-weight: 700;
         color: #e2e8f0;
         margin-bottom: 8px;
+      }
+
+      .aquecedor-envios-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .aquecedor-envios-actions .instance-action-btn {
+        padding: 4px 10px;
+        font-size: 0.8rem;
       }
 
       .aquecedor-envios-list {
@@ -2889,6 +2906,36 @@
         gap: 6px;
         justify-content: flex-end;
         margin-top: 8px;
+      }
+      .dis-campaign-instance-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+        align-items: center;
+      }
+      .dis-campaign-instance-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        max-width: min(100%, 220px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .dis-campaign-instance-tag--connected {
+        color: #ecfdf5;
+        background: rgba(22, 163, 74, 0.45);
+        border: 1px solid rgba(74, 222, 128, 0.55);
+      }
+      .dis-campaign-instance-tag--disconnected {
+        color: #fecaca;
+        background: rgba(153, 27, 27, 0.35);
+        border: 1px solid rgba(248, 113, 113, 0.45);
       }
       .btn-campaign-secondary {
         padding: 4px 8px;
@@ -3677,15 +3724,24 @@
                 <div class="aquecedor-side">
                   <div class="aquecedor-side-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                     <span>Envios</span>
-                    <button
-                      id="aquecedor-envios-refresh-btn"
-                      type="button"
-                      class="instance-action-btn enabled"
-                      style="padding: 4px 10px; font-size: 0.8rem;"
-                      title="Atualizar lista e verificar status"
-                    >
-                      Atualizar
-                    </button>
+                    <div class="aquecedor-envios-actions">
+                      <button
+                        id="aquecedor-envios-diagnostico-btn"
+                        type="button"
+                        class="instance-action-btn enabled"
+                        title="Ver o que está sendo aquecido: EVO, fila, janela, próxima combinação"
+                      >
+                        Diagnóstico
+                      </button>
+                      <button
+                        id="aquecedor-envios-refresh-btn"
+                        type="button"
+                        class="instance-action-btn enabled"
+                        title="Atualizar lista e verificar status"
+                      >
+                        Atualizar
+                      </button>
+                    </div>
                   </div>
                   <div id="aquecedor-envios-list" class="aquecedor-envios-list">
                     <div class="muted">Carregando envios...</div>
@@ -5249,6 +5305,69 @@
         }
       }
 
+      /** Mesma lógica do botão Diagnóstico do painel do motor — grava linhas em «Logs de comandos». */
+      async function aquecedorRunDiagnosticoAndLog() {
+        const response = await fetchWithTimeout("/aquecedor/diagnostico", {}, 10000);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const errMsg = data?.error || `HTTP ${response.status}`;
+          addAquecedorCommandLog("Diagnóstico: erro ao obter dados — " + errMsg);
+          return;
+        }
+        const evo = data?.evo || {};
+        const evoOk = evo.ok && (evo.connectedCount || 0) >= 2;
+        const sup = data?.supabase || {};
+        const supOk = sup.ok;
+        const janela = data?.janela || {};
+        const janelaOk = janela.aberta === true;
+        const proxOk = !!data?.proximaCombinacao;
+        const parts = [
+          "EVO: " + (evoOk ? "Ok" : "Erro"),
+          "Fila: " + (supOk ? "Ok" : "Erro"),
+          "Janela: " + (janelaOk ? "Ok" : "Erro"),
+          "Próxima combinação: " + (proxOk ? "Ok" : "Erro"),
+        ];
+        addAquecedorCommandLog("Diagnóstico: " + parts.join(" | "));
+        const pc = data?.proximaCombinacao;
+        if (pc && (pc.origem || pc.destino)) {
+          addAquecedorCommandLog(
+            "Próximo aquecimento (previsto): " +
+              String(pc.origem || "—") +
+              " → " +
+              String(pc.destino || "—") +
+              (data?.cicloGlobal != null ? ` (ciclo global ${data.cicloGlobal})` : "")
+          );
+        }
+        if (evo.instances && Array.isArray(evo.instances) && evo.instances.length) {
+          addAquecedorCommandLog(
+            "Instâncias conectadas com Aquecedor ativo: " + evo.instances.join(", ")
+          );
+        }
+        try {
+          const flRes = await fetchWithTimeout("/aquecedor/fila-localizar", {}, 8000);
+          const fl = await flRes.json().catch(() => ({}));
+          if (flRes.ok && fl) {
+            const proc = fl.processando || [];
+            const pend = fl.pendenteCount ?? 0;
+            let loc = `Fila: ${pend} PENDENTE, ${proc.length} PROCESSANDO`;
+            if (proc.length) {
+              proc.forEach((p) => {
+                loc += ` | id ${p.id} (${p.instancia || "—"}) há ${p.minutosEmProcessando ?? "?"} min`;
+              });
+            }
+            loc += fl.motorRodando ? " | Motor: ativo" : " | Motor: parado";
+            if (fl.proximoPermitido) loc += " | Próximo envio após intervalo";
+            if (fl.ultimoResultado) loc += ` | Último: ${fl.ultimoResultado}`;
+            addAquecedorCommandLog("Localização: " + loc);
+            if (fl.lastEvoError) {
+              addAquecedorCommandLog(
+                `Detalhe EVO: HTTP ${fl.lastEvoError.status} | instance: ${fl.lastEvoError.instance} | numeroLen: ${fl.lastEvoError.numeroLen} | body: ${(fl.lastEvoError.body || "").slice(0, 200)}`
+              );
+            }
+          }
+        } catch (_) {}
+      }
+
       function startAquecedorEnviosPolling() {
         if (aquecedorEnviosPollTimer) clearInterval(aquecedorEnviosPollTimer);
         loadAquecedorEnvios();
@@ -5389,9 +5508,9 @@
       async function resetDisparosPanelToOriginalAfterCampaignCreate() {
         initDisparosSectionLayout();
         const baseConfig = {
-          delayMinSeconds: 90,
-          delayMaxSeconds: 240,
-          maxPerHourPerInstance: 60,
+          delayMinSeconds: 120,
+          delayMaxSeconds: 320,
+          maxPerHourPerInstance: 40,
           maxPerDayPerInstance: 130,
           workingDays: ["seg", "ter", "qua", "qui", "sex"],
           startHour: 8,
@@ -5525,9 +5644,9 @@
           .map((opt) => String(opt.value || "").trim())
           .filter(Boolean);
         return {
-          delayMinSeconds: readInt("dis-delay-min", 90),
-          delayMaxSeconds: readInt("dis-delay-max", 240),
-          maxPerHourPerInstance: readInt("dis-max-hour", 60),
+          delayMinSeconds: readInt("dis-delay-min", 120),
+          delayMaxSeconds: readInt("dis-delay-max", 320),
+          maxPerHourPerInstance: readInt("dis-max-hour", 40),
           maxPerDayPerInstance: readInt("dis-max-day", 130),
           workingDays: getDisparosWorkingDays(),
           startHour: readInt("dis-start-hour", 8),
@@ -5544,9 +5663,9 @@
 
       function setDisparosFormValues(config) {
         const map = {
-          "dis-delay-min": config?.delayMinSeconds ?? 90,
-          "dis-delay-max": config?.delayMaxSeconds ?? 240,
-          "dis-max-hour": config?.maxPerHourPerInstance ?? 60,
+          "dis-delay-min": config?.delayMinSeconds ?? 120,
+          "dis-delay-max": config?.delayMaxSeconds ?? 320,
+          "dis-max-hour": config?.maxPerHourPerInstance ?? 40,
           "dis-max-day": config?.maxPerDayPerInstance ?? 130,
           "dis-start-hour": config?.startHour ?? 8,
           "dis-end-hour": config?.endHour ?? 22,
@@ -5696,7 +5815,12 @@
             ).trim(),
             status: String(inst?.connectionStatus || "").toLowerCase(),
           }))
-          .filter((row) => row.name && row.status.includes("open"));
+          .filter(
+            (row) =>
+              row.name &&
+              row.status.includes("open") &&
+              getInstanceUsage(row.name).useDisparador
+          );
 
         const currentSelected = new Set([
           ...pendingSelectedDisparadorInstances,
@@ -6257,12 +6381,42 @@
             const btnLabel = isFinished ? "Campanha finalizada" : isRunning ? "Pausar" : "Ativar campanha";
             const safeName = campaignName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+            const disInst = Array.isArray(item?.disparadorInstances) ? item.disparadorInstances : [];
+            let tagsBlock = "";
+            if (disInst.length) {
+              const parts = disInst.map((t) => {
+                const nm = String(t?.instanceName || "").trim();
+                const safe = nm
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;");
+                const ok = t?.connected === true;
+                const cls = ok
+                  ? "dis-campaign-instance-tag dis-campaign-instance-tag--connected"
+                  : "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected";
+                const title = ok
+                  ? "Instância conectada na EVO"
+                  : "Desconectada ou indisponível na EVO neste momento";
+                return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
+              });
+              tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Instâncias desta campanha">${parts.join("")}</div>`;
+              if (item?.disparadorInstancesFromGlobalFallback) {
+                tagsBlock +=
+                  '<div class="aquecedor-envio-time muted" style="margin-top:4px;font-size:0.7rem;">Etiquetas pela seleção atual (Seção 1): o snapshot desta campanha não guardou a lista de instâncias.</div>';
+              }
+            } else if (isRunning) {
+              tagsBlock =
+                '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
+            }
+
             const body = document.createElement("div");
             body.className = "disparos-campaign-item-body";
             body.innerHTML = `
                 <div class="aquecedor-envio-main">${safeName}</div>
                 <div class="aquecedor-envio-time">Inicio: ${dateText}</div>
                 <div class="aquecedor-envio-time">${processedCount} de ${totalNumbers} destinos processados · ${sentCount} enviados</div>
+                ${tagsBlock}
                 <div style="margin-top:6px; height:8px; border-radius:999px; background: rgba(255,255,255,.12); overflow:hidden;">
                   <div style="width:${Math.max(0, Math.min(100, progress))}%; height:100%; background: linear-gradient(90deg, #22c55e, #16a34a);"></div>
                 </div>
@@ -7863,6 +8017,8 @@
           if (!response.ok) {
             instanceUsageByName[key] = previous;
             showToast("Falha ao salvar uso da instância.", "error");
+          } else {
+            syncDisparadorNumberPicker();
           }
         } catch {
           instanceUsageByName[key] = previous;
@@ -8588,7 +8744,13 @@
         const numberInput = document.getElementById("register-number-input");
         const qrPreview = document.getElementById("register-qrcode-preview");
         const refreshBtn = document.getElementById("register-refresh-qrcode-btn");
-        if (!nameInput || !numberInput || !qrPreview || !refreshBtn) return;
+        if (!nameInput || !numberInput || !qrPreview || !refreshBtn) {
+          const msg =
+            "Modal de registro incompleto no DOM. Recarregue a página (Ctrl+F5).";
+          console.warn("[Waba] refreshQrCodeInRegisterModal:", msg);
+          showToast(msg, "error");
+          return;
+        }
 
         const name = String(nameInput.value || "").trim();
         const number = String(numberInput.value || "").trim();
@@ -8694,6 +8856,16 @@
           !qrPreview ||
           !actionBtn
         ) {
+          const msg =
+            "Modal de registro incompleto no DOM. Recarregue a página (Ctrl+F5).";
+          console.warn("[Waba] registerAndGenerateQrCode:", msg, {
+            nameInput: !!nameInput,
+            tokenInput: !!tokenInput,
+            numberInput: !!numberInput,
+            qrPreview: !!qrPreview,
+            actionBtn: !!actionBtn,
+          });
+          showToast(msg, "error");
           return;
         }
 
@@ -10341,10 +10513,6 @@
 
       const registerOverlay = document.getElementById("register-instance-overlay");
       const registerCancelBtn = document.getElementById("register-cancel-btn");
-      const registerQrBtn = document.getElementById("register-qrcode-btn");
-      const registerRefreshQrBtn = document.getElementById(
-        "register-refresh-qrcode-btn"
-      );
       const renameOverlay = document.getElementById("rename-instance-overlay");
       const renameCancelBtn = document.getElementById("rename-cancel-btn");
       const renameSaveBtn = document.getElementById("rename-save-btn");
@@ -10358,16 +10526,6 @@
 
       if (registerCancelBtn) {
         registerCancelBtn.addEventListener("click", () => closeRegisterModal());
-      }
-
-      if (registerQrBtn) {
-        registerQrBtn.addEventListener("click", () => registerAndGenerateQrCode());
-      }
-
-      if (registerRefreshQrBtn) {
-        registerRefreshQrBtn.addEventListener("click", () =>
-          refreshQrCodeInRegisterModal()
-        );
       }
 
       if (renameCancelBtn) {
@@ -10470,48 +10628,7 @@
           aquecedorDiagnosticoBtn.classList.add("disabled");
           aquecedorDiagnosticoBtn.setAttribute("disabled", "true");
           try {
-            const response = await fetchWithTimeout("/aquecedor/diagnostico", {}, 10000);
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              const errMsg = data?.error || `HTTP ${response.status}`;
-              addAquecedorCommandLog("Diagnóstico: erro ao obter dados — " + errMsg);
-              return;
-            }
-            const evo = data?.evo || {};
-            const evoOk = evo.ok && (evo.connectedCount || 0) >= 2;
-            const sup = data?.supabase || {};
-            const supOk = sup.ok;
-            const janela = data?.janela || {};
-            const janelaOk = janela.aberta === true;
-            const proxOk = !!data?.proximaCombinacao;
-            const parts = [
-              "EVO: " + (evoOk ? "Ok" : "Erro"),
-              "Fila: " + (supOk ? "Ok" : "Erro"),
-              "Janela: " + (janelaOk ? "Ok" : "Erro"),
-              "Próxima combinação: " + (proxOk ? "Ok" : "Erro"),
-            ];
-            addAquecedorCommandLog("Diagnóstico: " + parts.join(" | "));
-            try {
-              const flRes = await fetchWithTimeout("/aquecedor/fila-localizar", {}, 8000);
-              const fl = await flRes.json().catch(() => ({}));
-              if (flRes.ok && fl) {
-                const proc = fl.processando || [];
-                const pend = fl.pendenteCount ?? 0;
-                let loc = `Fila: ${pend} PENDENTE, ${proc.length} PROCESSANDO`;
-                if (proc.length) {
-                  proc.forEach((p) => {
-                    loc += ` | id ${p.id} (${p.instancia || "—"}) há ${p.minutosEmProcessando ?? "?"} min`;
-                  });
-                }
-                loc += fl.motorRodando ? " | Motor: ativo" : " | Motor: parado";
-                if (fl.proximoPermitido) loc += " | Próximo envio após intervalo";
-                if (fl.ultimoResultado) loc += ` | Último: ${fl.ultimoResultado}`;
-                addAquecedorCommandLog("Localização: " + loc);
-                if (fl.lastEvoError) {
-                  addAquecedorCommandLog(`Detalhe EVO: HTTP ${fl.lastEvoError.status} | instance: ${fl.lastEvoError.instance} | numeroLen: ${fl.lastEvoError.numeroLen} | body: ${(fl.lastEvoError.body || "").slice(0, 200)}`);
-                }
-              }
-            } catch (_) {}
+            await aquecedorRunDiagnosticoAndLog();
           } catch {
             addAquecedorCommandLog("Diagnóstico: erro ao consultar.");
           } finally {
@@ -10587,6 +10704,23 @@
           });
         });
       }
+      const aquecedorEnviosDiagnosticoBtn = document.getElementById("aquecedor-envios-diagnostico-btn");
+      if (aquecedorEnviosDiagnosticoBtn) {
+        aquecedorEnviosDiagnosticoBtn.addEventListener("click", async () => {
+          aquecedorEnviosDiagnosticoBtn.textContent = "Consultando...";
+          aquecedorEnviosDiagnosticoBtn.setAttribute("disabled", "true");
+          try {
+            await aquecedorRunDiagnosticoAndLog();
+            showToast("Diagnóstico registrado em «Logs de comandos» (painel à esquerda).", "info");
+          } catch {
+            addAquecedorCommandLog("Diagnóstico: erro ao consultar.");
+            showToast("Falha ao obter diagnóstico.", "warning");
+          } finally {
+            aquecedorEnviosDiagnosticoBtn.textContent = "Diagnóstico";
+            aquecedorEnviosDiagnosticoBtn.removeAttribute("disabled");
+          }
+        });
+      }
       const disparosRefreshBtn = document.getElementById("disparos-refresh-btn");
       if (disparosRefreshBtn) {
         disparosRefreshBtn.addEventListener("click", () => {
@@ -10618,11 +10752,14 @@
               "Janela Disparador: " +
                 (j.aberta ? "aberta" : "fechada") +
                 " — " +
-                (j.motivo || "")
+                (j.motivo || "") +
+                (j.previsaoRetornoBr
+                  ? " · retorno previsto (ref. BR) ~ " + j.previsaoRetornoBr
+                  : "")
             );
             const cr = data.configResumo || {};
             addDisparosDiagnosticoLog(
-              `Delays ${cr.delayMinSeconds ?? "—"}–${cr.delayMaxSeconds ?? "—"}s · máx/h ${cr.maxPerHourPerInstance ?? "—"} · máx/dia ${cr.maxPerDayPerInstance ?? "—"} · modo ${cr.messageMode ?? "—"} · instâncias (UI): ${cr.instanciasSelecionadasCount ?? 0} · WhatsApp link: ${cr.whatsappAlvoMascarado ?? "—"}`
+              `Delays ${cr.delayMinSeconds ?? "—"}–${cr.delayMaxSeconds ?? "—"}s · máx/h ${cr.maxPerHourPerInstance ?? "—"} · máx/dia ${cr.maxPerDayPerInstance ?? "—"} · instâncias (UI): ${cr.instanciasSelecionadasCount ?? 0} · WhatsApp link: ${cr.whatsappAlvoMascarado ?? "—"}`
             );
             const evo = data.evo || {};
             if (evo.ok === true) {
@@ -10664,16 +10801,12 @@
                   " · falhas " +
                   (r.falhasNaMemoria ?? 0) +
                   " · " +
-                  (r.proximoEnvio || "—") +
-                  " · modo " +
-                  (r.modoMensagem || "—")
+                  (r.proximoEnvio || "—")
               );
             });
-            if (String(cr.messageMode || "") === "database") {
-              addDisparosDiagnosticoLog(
-                "Templates ativos (memória): " + (data.templatesAtivosNaMemoria ?? 0)
-              );
-            }
+            addDisparosDiagnosticoLog(
+              "Templates ativos (memória): " + (data.templatesAtivosNaMemoria ?? 0)
+            );
           } catch {
             addDisparosDiagnosticoLog("Diagnóstico: erro de rede ao consultar.");
           } finally {
@@ -11026,6 +11159,26 @@
       }
       if (registerOverlay) {
         registerOverlay.addEventListener("click", (e) => {
+          const genBtn =
+            e.target && e.target.closest
+              ? e.target.closest("#register-qrcode-btn")
+              : null;
+          if (genBtn && registerOverlay.contains(genBtn)) {
+            e.preventDefault();
+            console.info("[Waba] Gerar QRCode: clique (delegado).");
+            void registerAndGenerateQrCode();
+            return;
+          }
+          const refBtn =
+            e.target && e.target.closest
+              ? e.target.closest("#register-refresh-qrcode-btn")
+              : null;
+          if (refBtn && registerOverlay.contains(refBtn)) {
+            e.preventDefault();
+            console.info("[Waba] Atualizar QRCode: clique (delegado).");
+            void refreshQrCodeInRegisterModal();
+            return;
+          }
           if (e.target === registerOverlay) closeRegisterModal();
         });
       }

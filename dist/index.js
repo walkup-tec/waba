@@ -49,6 +49,11 @@ const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 const RUNTIME_MODE = String(process.env.RUNTIME_MODE || "production").toLowerCase();
 const ENABLE_BACKGROUND_PROCESSING = ["1", "true", "yes", "on"].includes(String(process.env.ENABLE_BACKGROUND_PROCESSING || "true").toLowerCase());
+/** Quando true, o processo responde só a probes e página de manutenção (útil no ambiente prod / porta 3000). */
+const MAINTENANCE_MODE = ["1", "true", "yes", "on"].includes(String(process.env.MAINTENANCE_MODE || "").toLowerCase());
+const MAINTENANCE_RETRY_AFTER_SEC = Math.max(30, Math.min(86400, Number(process.env.MAINTENANCE_RETRY_AFTER_SEC || 120) || 120));
+const MAINTENANCE_MESSAGE = String(process.env.MAINTENANCE_MESSAGE ||
+    "Serviço em manutenção. Tente novamente em alguns minutos.").trim() || "Serviço em manutenção. Tente novamente em alguns minutos.";
 /** Demais rotas (padrão Express ~100kb). */
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "10mb";
 /**
@@ -87,6 +92,93 @@ app.use((req, res, next) => {
         return parseJsonCampaignCreate(req, res, next);
     }
     return parseJsonDefault(req, res, next);
+});
+function isMaintenanceBypassPath(method, reqPath) {
+    const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
+    if (method !== "GET" && method !== "HEAD")
+        return false;
+    return (p === "/health" ||
+        p === "/ready" ||
+        p === "/service/maintenance" ||
+        p === "/maintenance");
+}
+function isDistStaticAssetPath(reqPath) {
+    return /\.(js|mjs|css|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|map)$/i.test(String(reqPath || ""));
+}
+const maintenanceHtmlPage = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manutenção</title><style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#0f1419;color:#e6edf3;}
+.box{max-width:28rem;padding:2rem;text-align:center;}h1{font-size:1.25rem;margin:0 0 .75rem}p{margin:0;opacity:.85;line-height:1.5}</style></head>
+<body><div class="box"><h1>Manutenção em andamento</h1><p>__MSG__</p></div></body></html>`;
+app.use((req, res, next) => {
+    if (!MAINTENANCE_MODE) {
+        return next();
+    }
+    if (isMaintenanceBypassPath(req.method, req.path)) {
+        return next();
+    }
+    res.set("Retry-After", String(MAINTENANCE_RETRY_AFTER_SEC));
+    const norm = String(req.path || "/").replace(/\/+$/, "") || "/";
+    if ((req.method === "GET" || req.method === "HEAD") &&
+        isDistStaticAssetPath(req.path)) {
+        return next();
+    }
+    if ((req.method === "GET" || req.method === "HEAD") &&
+        (norm === "/" || norm === "/index.html")) {
+        const safe = MAINTENANCE_MESSAGE.replace(/</g, "&lt;");
+        return res
+            .status(503)
+            .type("html")
+            .send(maintenanceHtmlPage.replace("__MSG__", safe));
+    }
+    return res.status(503).json({
+        maintenance: true,
+        message: MAINTENANCE_MESSAGE,
+        retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
+    });
+});
+app.get("/health", (_req, res) => {
+    res.json({
+        ok: true,
+        port: PORT,
+        maintenanceMode: MAINTENANCE_MODE,
+        runtimeMode: RUNTIME_MODE,
+        backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+    });
+});
+app.get("/ready", (_req, res) => {
+    if (MAINTENANCE_MODE) {
+        return res.status(503).json({
+            ok: false,
+            ready: false,
+            maintenanceMode: true,
+            message: MAINTENANCE_MESSAGE,
+            retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
+        });
+    }
+    res.json({
+        ok: true,
+        ready: true,
+        maintenanceMode: false,
+        port: PORT,
+        runtimeMode: RUNTIME_MODE,
+        backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+    });
+});
+app.get("/service/maintenance", (_req, res) => {
+    res.json({
+        maintenance: MAINTENANCE_MODE,
+        message: MAINTENANCE_MODE ? MAINTENANCE_MESSAGE : null,
+        retryAfterSec: MAINTENANCE_MODE ? MAINTENANCE_RETRY_AFTER_SEC : null,
+        port: PORT,
+    });
+});
+app.get("/maintenance", (_req, res) => {
+    if (!MAINTENANCE_MODE) {
+        return res.redirect(302, "/");
+    }
+    const safe = MAINTENANCE_MESSAGE.replace(/</g, "&lt;");
+    res.status(503).type("html").send(maintenanceHtmlPage.replace("__MSG__", safe));
 });
 // Supabase (criado sob demanda para evitar travamentos quando faltar config)
 let supabaseClient = null;
@@ -190,8 +282,9 @@ function parseDisparosConfig(input) {
         : "encurtadorpro";
     const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
     const safeMode = mode === "database" ? "database" : "ai";
-    const selectedDisparadorInstances = Array.isArray(input?.selectedDisparadorInstances)
-        ? Array.from(new Set(input.selectedDisparadorInstances
+    const selectedRaw = input?.selectedDisparadorInstances ?? input?.selected_disparador_instances;
+    const selectedDisparadorInstances = Array.isArray(selectedRaw)
+        ? Array.from(new Set(selectedRaw
             .map((n) => String(n || "").trim())
             .filter((n) => n.length > 0)))
         : [];
@@ -280,6 +373,14 @@ const EVO_LIVE_PROFILE_SYNC = process.env.EVO_LIVE_PROFILE_SYNC === "0" || proce
     : true;
 const INSTANCE_ALIASES_FILE = path_1.default.join(process.cwd(), "data", "instance-aliases.json");
 const WHATSAPP_PROFILE_NAMES_FILE = path_1.default.join(process.cwd(), "data", "whatsapp-profile-names.json");
+/** Backup local de campanhas + leads (sobrevive a restart; não substitui Supabase quando ambos existem). */
+const DISPAROS_LOCAL_STATE_FILE = path_1.default.join(process.cwd(), "data", "disparos-local-state.json");
+/** Última intenção explícita: aquecedor ligado/desligado (retoma após restart do processo na porta 3000). */
+const RUNTIME_INTENT_FILE = path_1.default.join(process.cwd(), "data", "runtime-intent.json");
+/** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
+const DISPAROS_CHECKPOINT_MS = Math.max(30000, Number.isFinite(Number(process.env.DISPAROS_CHECKPOINT_MS))
+    ? Number(process.env.DISPAROS_CHECKPOINT_MS)
+    : 120000);
 const MESSENGER_PRODUCTS_FILE = path_1.default.join(process.cwd(), "data", "disparos-messenger-products.json");
 let messengerProductsWriteChain = Promise.resolve();
 function runMessengerProductsLocked(fn) {
@@ -465,9 +566,9 @@ const AQUECEDOR_DEFAULTS = {
 };
 const DISPAROS_DEFAULTS = {
     lockTtlSeconds: 600,
-    delayMinSeconds: 90,
-    delayMaxSeconds: 240,
-    maxPerHourPerInstance: 60,
+    delayMinSeconds: 120,
+    delayMaxSeconds: 320,
+    maxPerHourPerInstance: 40,
     maxPerDayPerInstance: 130,
     workingDays: ["seg", "ter", "qua", "qui", "sex"],
     startHour: 8,
@@ -511,10 +612,187 @@ function isDisparosWindowOpen(config, now) {
     }
     return { aberta: true, motivo: "Dentro da janela de expediente do Disparador." };
 }
+function startOfNextCalendarDayLocal(d) {
+    const x = new Date(d.getTime());
+    x.setDate(x.getDate() + 1);
+    x.setHours(0, 0, 0, 0);
+    return x;
+}
+function atStartHourOnSameLocalDay(dayRef, startHour) {
+    const x = new Date(dayRef.getTime());
+    x.setHours(startHour, 0, 0, 0);
+    return x;
+}
+/**
+ * Próximo instante em que o expediente do Disparador **abre** (mesmo relógio local que `fromSp`).
+ * Retorna `null` se já estiver dentro da janela ou após esgotar o limite de busca.
+ */
+function findNextDisparosWindowStart(config, fromSp) {
+    const dayCodes = Array.isArray(config.workingDays) && config.workingDays.length > 0
+        ? config.workingDays
+        : DISPAROS_DEFAULTS.workingDays;
+    const shRaw = Number(config.startHour);
+    const ehRaw = Number(config.endHour);
+    const sh = Number.isFinite(shRaw)
+        ? Math.max(0, Math.min(23, Math.floor(shRaw)))
+        : DISPAROS_DEFAULTS.startHour;
+    const eh = Number.isFinite(ehRaw)
+        ? Math.max(1, Math.min(24, Math.floor(ehRaw)))
+        : DISPAROS_DEFAULTS.endHour;
+    const startMinutes = sh * 60;
+    const endMinutes = eh * 60;
+    let cursor = new Date(fromSp.getTime());
+    for (let guard = 0; guard < 400; guard++) {
+        const dayCode = DAY_CODES[cursor.getDay()];
+        const minutesNow = cursor.getHours() * 60 + cursor.getMinutes();
+        if (!dayCodes.includes(dayCode)) {
+            cursor = startOfNextCalendarDayLocal(cursor);
+            continue;
+        }
+        if (minutesNow < startMinutes) {
+            return atStartHourOnSameLocalDay(cursor, sh);
+        }
+        if (minutesNow >= endMinutes) {
+            cursor = startOfNextCalendarDayLocal(cursor);
+            continue;
+        }
+        return null;
+    }
+    return null;
+}
 const instanceUsageMemory = new Map();
 const disparosTemplatesMemory = [];
 const disparosCampaignsMemory = [];
 const disparosCampaignLeadsMemory = [];
+let disparosLocalPersistChain = Promise.resolve();
+function removeLeadsForCampaignFromMemory(campaignId) {
+    const id = String(campaignId || "").trim();
+    if (!id)
+        return;
+    for (let k = disparosCampaignLeadsMemory.length - 1; k >= 0; k--) {
+        if (disparosCampaignLeadsMemory[k].campaignId === id)
+            disparosCampaignLeadsMemory.splice(k, 1);
+    }
+}
+function queuePersistDisparosLocalState() {
+    disparosLocalPersistChain = disparosLocalPersistChain.then(async () => {
+        try {
+            await fs_1.promises.mkdir(path_1.default.dirname(DISPAROS_LOCAL_STATE_FILE), { recursive: true });
+            const payload = {
+                version: 1,
+                savedAt: new Date().toISOString(),
+                campaigns: disparosCampaignsMemory.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    createdAt: c.createdAt,
+                    status: c.status,
+                    totalNumbers: c.totalNumbers,
+                    sentCount: c.sentCount,
+                    configSnapshot: c.configSnapshot,
+                })),
+                leads: disparosCampaignLeadsMemory.map((l) => ({
+                    id: l.id,
+                    campaignId: l.campaignId,
+                    phone: l.phone,
+                    status: l.status,
+                    shortUrl: l.shortUrl,
+                    failureKind: l.failureKind,
+                    createdAt: l.createdAt,
+                    sentAt: l.sentAt,
+                })),
+            };
+            const tmp = `${DISPAROS_LOCAL_STATE_FILE}.tmp`;
+            await fs_1.promises.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
+            await fs_1.promises.rename(tmp, DISPAROS_LOCAL_STATE_FILE);
+        }
+        catch (e) {
+            console.error("[Campanhas] falha ao gravar estado local:", e);
+        }
+    });
+}
+async function persistAquecedorRuntimeDesired(desired) {
+    try {
+        await fs_1.promises.mkdir(path_1.default.dirname(RUNTIME_INTENT_FILE), { recursive: true });
+        const payload = {
+            version: 1,
+            savedAt: new Date().toISOString(),
+            aquecedorRuntimeDesired: desired,
+        };
+        const tmp = `${RUNTIME_INTENT_FILE}.tmp`;
+        await fs_1.promises.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
+        await fs_1.promises.rename(tmp, RUNTIME_INTENT_FILE);
+        console.log(`[Runtime] runtime-intent: aquecedor desejado = ${desired ? "ligado" : "desligado"}.`);
+    }
+    catch (e) {
+        console.error("[Runtime] falha ao gravar runtime-intent.json:", e);
+    }
+}
+async function loadAquecedorRuntimeDesired() {
+    try {
+        const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
+        const p = JSON.parse(raw);
+        if (p?.version !== 1 || typeof p.aquecedorRuntimeDesired !== "boolean")
+            return null;
+        return p.aquecedorRuntimeDesired;
+    }
+    catch {
+        return null;
+    }
+}
+async function loadDisparosLocalState() {
+    try {
+        const raw = await fs_1.promises.readFile(DISPAROS_LOCAL_STATE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed?.version !== 1 || !Array.isArray(parsed.campaigns) || !Array.isArray(parsed.leads)) {
+            return;
+        }
+        const seenC = new Set(disparosCampaignsMemory.map((c) => c.id));
+        for (const c of parsed.campaigns) {
+            const id = String(c?.id || "").trim();
+            if (!id || seenC.has(id))
+                continue;
+            seenC.add(id);
+            const st = String(c?.status || "paused").toLowerCase();
+            const status = st === "running" || st === "paused" || st === "finished" || st === "draft" ? st : "paused";
+            disparosCampaignsMemory.push({
+                id,
+                name: String(c?.name || ""),
+                createdAt: String(c?.createdAt || new Date().toISOString()),
+                status,
+                totalNumbers: Number(c?.totalNumbers || 0),
+                sentCount: Number(c?.sentCount || 0),
+                configSnapshot: parseDisparosConfig(c?.configSnapshot || {}),
+            });
+        }
+        const seenL = new Set(disparosCampaignLeadsMemory.map((l) => l.id));
+        for (const l of parsed.leads) {
+            const id = String(l?.id || "").trim();
+            if (!id || seenL.has(id))
+                continue;
+            seenL.add(id);
+            const st = String(l?.status || "pending").toLowerCase();
+            const status = st === "sent" ? "sent" : st === "failed" ? "failed" : "pending";
+            const fk = l?.failureKind;
+            const failureKind = fk === "invalid_phone" || fk === "destination_error" || fk === "send_error" ? fk : undefined;
+            disparosCampaignLeadsMemory.push({
+                id,
+                campaignId: String(l?.campaignId || ""),
+                phone: String(l?.phone || ""),
+                status,
+                shortUrl: typeof l?.shortUrl === "string" ? l.shortUrl : undefined,
+                failureKind,
+                createdAt: String(l?.createdAt || new Date().toISOString()),
+                sentAt: l?.sentAt ? String(l.sentAt) : null,
+            });
+        }
+        console.log(`[Campanhas] estado local carregado de ${DISPAROS_LOCAL_STATE_FILE} (${parsed.campaigns.length} campanha(s) no arquivo).`);
+    }
+    catch (e) {
+        if (e?.code !== "ENOENT") {
+            console.error("[Campanhas] falha ao ler estado local:", e);
+        }
+    }
+}
 const campaignNextAllowedSendAt = new Map();
 const campaignDisparadorRoundRobin = new Map();
 let disparosRoundRobinCounter = 0;
@@ -1616,6 +1894,217 @@ function buildConnectedFromEvoResponse(instances) {
     })
         .filter((x) => x != null);
 }
+function mapGetInsensitive(m, k) {
+    const key = String(k || "").trim();
+    if (!key)
+        return "";
+    return (m.get(key)?.trim() ||
+        m.get(key.toLowerCase())?.trim() ||
+        "");
+}
+function addComparableNameKey(set, value) {
+    const s = String(value || "").trim().toLowerCase();
+    if (s)
+        set.add(s);
+}
+/** Coluna «Nome da Instância» na UI = `instanceAlias || instanceName` (ver index.html). */
+function instanceNomeInstanciaForDisparadorTag(instanceKey, aliasesMap) {
+    const key = String(instanceKey || "").trim();
+    if (!key)
+        return "";
+    const alias = mapGetInsensitive(aliasesMap, key);
+    return (alias || key).trim();
+}
+function buildEvoInstanceTagRowsFromList(instances, whatsappMap, aliasesMap) {
+    const list = Array.isArray(instances) ? instances : [instances];
+    const rows = [];
+    for (const item of list) {
+        const inst = item?.instance ?? item;
+        const candidateName = inst?.instanceName ??
+            inst?.name ??
+            inst?.id ??
+            inst?.instanceId ??
+            inst?.instance ??
+            null;
+        const instanceKey = candidateName == null || candidateName === ""
+            ? ""
+            : String(candidateName).trim();
+        if (!instanceKey)
+            continue;
+        const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
+        const connected = status.includes("open");
+        const numRaw = extractInstanceNumber(inst);
+        const digitKeys = buildComparableOwnerDigits(normalizeDigits(numRaw));
+        const nameKeys = new Set();
+        for (const v of [
+            instanceKey,
+            inst?.name,
+            inst?.instanceName,
+            inst?.instance,
+            inst?.id,
+            inst?.instanceId,
+        ]) {
+            addComparableNameKey(nameKeys, v);
+        }
+        addComparableNameKey(nameKeys, inst?.profileName);
+        const whatsappOverride = mapGetInsensitive(whatsappMap, instanceKey);
+        const alias = mapGetInsensitive(aliasesMap, instanceKey);
+        if (whatsappOverride)
+            addComparableNameKey(nameKeys, whatsappOverride);
+        if (alias)
+            addComparableNameKey(nameKeys, alias);
+        const displayName = instanceNomeInstanciaForDisparadorTag(instanceKey, aliasesMap);
+        rows.push({ instanceKey, displayName, connected, nameKeys, digitKeys });
+    }
+    return rows;
+}
+async function fetchEvoInstanceTagRows() {
+    const [whatsappMap, aliasesMap] = await Promise.all([
+        loadWhatsappProfileNamesMap(),
+        loadInstanceAliasesMap(),
+    ]);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(EVO_INSTANCES_URL, {
+            headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
+            signal: controller.signal,
+        });
+        if (!response.ok)
+            return [];
+        const raw = await response.json();
+        const list = Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw?.response)
+                ? raw.response
+                : Array.isArray(raw?.data)
+                    ? raw.data
+                    : [];
+        return buildEvoInstanceTagRowsFromList(list, whatsappMap, aliasesMap);
+    }
+    catch {
+        return [];
+    }
+    finally {
+        clearTimeout(timeoutId);
+    }
+}
+function digitKeysFromStoredLabel(storedName) {
+    const out = new Set();
+    const raw = String(storedName || "").trim();
+    if (!raw)
+        return out;
+    for (const run of raw.match(/\d+/g) || []) {
+        for (const d of buildComparableOwnerDigits(run))
+            out.add(d);
+    }
+    for (const d of buildComparableOwnerDigits(normalizeDigits(raw)))
+        out.add(d);
+    return out;
+}
+function resolveStoredNameToEvoTag(storedName, rows) {
+    const raw = String(storedName || "").trim();
+    const rawLc = raw.toLowerCase();
+    if (!raw)
+        return { displayName: "", connected: false };
+    if (!rows.length)
+        return { displayName: raw, connected: false };
+    for (const r of rows) {
+        if (r.nameKeys.has(rawLc)) {
+            return { displayName: r.displayName, connected: r.connected };
+        }
+    }
+    const storedDigitKeys = digitKeysFromStoredLabel(raw);
+    const digitHits = [];
+    if (storedDigitKeys.size > 0) {
+        for (const r of rows) {
+            let hit = false;
+            for (const d of storedDigitKeys) {
+                if (r.digitKeys.has(d)) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (hit)
+                digitHits.push(r);
+        }
+    }
+    if (digitHits.length === 1) {
+        const r = digitHits[0];
+        return { displayName: r.displayName, connected: r.connected };
+    }
+    if (digitHits.length > 1) {
+        const pick = pickBestDigitHitRow(raw, rawLc, digitHits);
+        return { displayName: pick.displayName, connected: pick.connected };
+    }
+    return { displayName: raw, connected: false };
+}
+/** Quando várias instâncias compartilham dígitos com o snapshot, prioriza quem «casa» melhor com o texto (ex.: «SOMA - 8927»). */
+function pickBestDigitHitRow(raw, rawLc, digitHits) {
+    if (digitHits.length <= 1)
+        return digitHits[0];
+    const runs = (raw.match(/\d+/g) || []).slice().sort((a, b) => b.length - a.length);
+    const longestDigits = runs[0] || "";
+    const scored = digitHits.map((r) => {
+        let score = 0;
+        const disp = r.displayName.toLowerCase();
+        const ik = r.instanceKey.toLowerCase();
+        if (longestDigits.length >= 4) {
+            if (disp.includes(longestDigits))
+                score += 100;
+            if (ik.includes(longestDigits))
+                score += 70;
+        }
+        else if (longestDigits.length > 0) {
+            if (disp === longestDigits || ik === longestDigits)
+                score += 40;
+        }
+        if (rawLc.length >= 3) {
+            if (disp.includes(rawLc))
+                score += 90;
+            if (ik.includes(rawLc))
+                score += 50;
+        }
+        if (r.connected)
+            score += 3;
+        return { r, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored[0]?.score ?? 0;
+    const tier = scored.filter((x) => x.score === top);
+    const open = tier.find((x) => x.r.connected);
+    return (open ?? tier[0] ?? scored[0]).r;
+}
+function disparadorInstanceTagsForCampaign(config, evoRows) {
+    const snap = config || DISPAROS_DEFAULTS;
+    const raw = Array.isArray(snap.selectedDisparadorInstances)
+        ? snap.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+        : [];
+    if (!raw.length)
+        return [];
+    const accum = new Map();
+    for (const name of raw) {
+        const r = resolveStoredNameToEvoTag(name, evoRows);
+        const display = r.displayName || name;
+        const key = display.toLowerCase();
+        const prev = accum.get(key);
+        if (prev) {
+            accum.set(key, {
+                displayName: prev.displayName,
+                connected: prev.connected || r.connected,
+            });
+        }
+        else {
+            accum.set(key, { displayName: display, connected: r.connected });
+        }
+    }
+    return Array.from(accum.values())
+        .map((v) => ({
+        instanceName: v.displayName,
+        connected: v.connected,
+    }))
+        .sort((a, b) => a.instanceName.localeCompare(b.instanceName, "pt-BR", { sensitivity: "base" }));
+}
 async function callEvoAction(url, method, body) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -2651,10 +3140,12 @@ app.post("/aquecedor/start", (_req, res) => {
         });
     }
     startAquecedorRuntime();
+    void persistAquecedorRuntimeDesired(true);
     return res.json({ ok: true, message: "Aquecedor iniciado.", status: aquecedorRuntime });
 });
 app.post("/aquecedor/stop", (_req, res) => {
     stopAquecedorRuntime();
+    void persistAquecedorRuntimeDesired(false);
     return res.json({ ok: true, message: "Aquecedor parado.", status: aquecedorRuntime });
 });
 app.post("/aquecedor/run-once", async (_req, res) => {
@@ -3447,7 +3938,17 @@ app.get("/disparos/diagnostico", async (_req, res) => {
     try {
         const nowSp = nowInSaoPaulo();
         const fullConfig = await loadDisparosConfigFromDb();
-        const janela = isDisparosWindowOpen(fullConfig, nowSp);
+        const janelaBase = isDisparosWindowOpen(fullConfig, nowSp);
+        const janelaPrevisaoGlobal = !janelaBase.aberta
+            ? (() => {
+                const n = findNextDisparosWindowStart(fullConfig, nowSp);
+                return n ? formatDateBr(n.toISOString()) : null;
+            })()
+            : null;
+        const janela = {
+            ...janelaBase,
+            previsaoRetornoBr: janelaPrevisaoGlobal,
+        };
         const wapp = normalizeWhatsAppNumber(String(fullConfig.whatsappTargetNumber || ""));
         const whatsappAlvoMascarado = wapp.length >= 4 ? `…${wapp.slice(-4)}` : wapp.length > 0 ? "definido" : "não definido";
         const diag = {
@@ -3462,7 +3963,6 @@ app.get("/disparos/diagnostico", async (_req, res) => {
                 workingDays: fullConfig.workingDays,
                 startHour: fullConfig.startHour,
                 endHour: fullConfig.endHour,
-                messageMode: fullConfig.messageMode,
                 instanciasSelecionadasCount: fullConfig.selectedDisparadorInstances.length,
                 shortenerProvider: fullConfig.shortenerProvider,
                 whatsappAlvoMascarado,
@@ -3538,9 +4038,25 @@ app.get("/disparos/diagnostico", async (_req, res) => {
             const failed = leads.filter((l) => l.status === "failed").length;
             const nextMs = campaignNextAllowedSendAt.get(c.id) || 0;
             const nowMs = Date.now();
-            let proximoEnvio = "elegível no próximo ciclo (~7s)";
-            if (nextMs > nowMs) {
-                proximoEnvio = `aguardando até ${formatDateBr(new Date(nextMs).toISOString())}`;
+            const snap = c.configSnapshot || DISPAROS_DEFAULTS;
+            const janelaCampanha = isDisparosWindowOpen(snap, nowSp);
+            const previsaoCampanhaBr = !janelaCampanha.aberta
+                ? (() => {
+                    const n = findNextDisparosWindowStart(snap, nowSp);
+                    return n ? formatDateBr(n.toISOString()) : null;
+                })()
+                : null;
+            let proximoEnvio;
+            if (!janelaCampanha.aberta) {
+                proximoEnvio = previsaoCampanhaBr
+                    ? `fora do expediente — retorno previsto ~ ${previsaoCampanhaBr} · ${janelaCampanha.motivo}`
+                    : `fora do expediente · ${janelaCampanha.motivo}`;
+            }
+            else if (nextMs > nowMs) {
+                proximoEnvio = `dentro do expediente · aguardando intervalo até ${formatDateBr(new Date(nextMs).toISOString())}`;
+            }
+            else {
+                proximoEnvio = "dentro do expediente · elegível no próximo ciclo (~7s)";
             }
             diag.campanhas.emExecucao.push({
                 id: c.id,
@@ -3550,7 +4066,9 @@ app.get("/disparos/diagnostico", async (_req, res) => {
                 pendentesNaMemoria: pending,
                 falhasNaMemoria: failed,
                 proximoEnvio,
-                modoMensagem: c.configSnapshot?.messageMode ?? "—",
+                janelaExpedienteAberta: janelaCampanha.aberta,
+                janelaExpedienteMotivo: janelaCampanha.motivo,
+                previsaoRetornoExpedienteBr: previsaoCampanhaBr,
             });
         }
         return res.json(diag);
@@ -3875,15 +4393,12 @@ app.post("/disparos/templates/import", async (req, res) => {
         return res.status(500).json({ error: "Erro ao importar templates de mensagem." });
     }
 });
-async function hydrateCampaignFromDbIfNeeded(campaignId) {
+async function hydrateCampaignFromDbIfNeeded(campaignId, options = {}) {
     const existing = disparosCampaignsMemory.find((c) => c.id === campaignId);
-    if (existing)
-        return existing;
     const supabase = getSupabaseClient();
     if (!supabase)
-        return null;
+        return existing || null;
     try {
-        /** Mesmas colunas base do GET /disparos/campanhas — sem config_snapshot para não falhar se a coluna não existir no schema. */
         const { data: row, error: rowErr } = await (supabase
             .from("disparos_campaigns")
             .select("id, campaign_name, status, total_numbers, sent_count, created_at")
@@ -3891,11 +4406,9 @@ async function hydrateCampaignFromDbIfNeeded(campaignId) {
             .maybeSingle());
         if (rowErr) {
             console.error("[Campanha] hydrate linha:", campaignId, rowErr.message || rowErr);
-            return null;
+            return existing || null;
         }
-        if (!row?.id)
-            return null;
-        let configSnapshot = { ...DISPAROS_DEFAULTS };
+        let configSnapshot = existing?.configSnapshot ?? { ...DISPAROS_DEFAULTS };
         try {
             const { data: cfgRow, error: cfgErr } = await (supabase
                 .from("disparos_campaigns")
@@ -3904,57 +4417,125 @@ async function hydrateCampaignFromDbIfNeeded(campaignId) {
                 .maybeSingle());
             if (!cfgErr && cfgRow?.config_snapshot != null) {
                 try {
-                    configSnapshot = parseDisparosConfig(cfgRow.config_snapshot);
+                    const rawCfg = typeof cfgRow.config_snapshot === "string"
+                        ? JSON.parse(cfgRow.config_snapshot)
+                        : cfgRow.config_snapshot;
+                    configSnapshot = parseDisparosConfig(rawCfg);
                 }
                 catch {
-                    configSnapshot = { ...DISPAROS_DEFAULTS };
+                    /* mantém configSnapshot acima */
                 }
             }
         }
         catch {
-            /* coluna ausente ou indisponível */
+            /* coluna ausente */
+        }
+        let leadRows = [];
+        try {
+            const { data: lr } = await (supabase
+                .from("disparos_campaign_leads")
+                .select("id, campaign_id, phone, status, created_at, sent_at")
+                .eq("campaign_id", campaignId)
+                .limit(100000));
+            if (Array.isArray(lr))
+                leadRows = lr;
+        }
+        catch (e) {
+            console.error("[Campanha] Falha ao ler leads no hydrate:", campaignId, e);
+        }
+        if (!row?.id) {
+            return existing || null;
+        }
+        const stRow = String(row.status || "paused").toLowerCase();
+        const status = stRow === "running" || stRow === "paused" || stRow === "finished" || stRow === "draft"
+            ? stRow
+            : "paused";
+        if (existing) {
+            existing.name = String(row.campaign_name || existing.name);
+            existing.status = status;
+            existing.totalNumbers = Number(row.total_numbers ?? existing.totalNumbers);
+            existing.sentCount = Number(row.sent_count ?? existing.sentCount);
+            existing.configSnapshot = configSnapshot;
+            if (leadRows.length > 0) {
+                removeLeadsForCampaignFromMemory(campaignId);
+                for (const lr of leadRows) {
+                    const st = String(lr?.status || "pending").toLowerCase();
+                    disparosCampaignLeadsMemory.push({
+                        id: String(lr?.id || crypto_1.default.randomUUID()),
+                        campaignId: String(lr?.campaign_id || campaignId),
+                        phone: String(lr?.phone || ""),
+                        status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
+                        createdAt: String(lr?.created_at || new Date().toISOString()),
+                        sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+                    });
+                }
+            }
+            if (!options.skipQueueLocalPersist)
+                queuePersistDisparosLocalState();
+            return existing;
         }
         const campaign = {
             id: String(row.id),
             name: String(row.campaign_name || ""),
             createdAt: String(row.created_at || new Date().toISOString()),
-            status: String(row.status || "paused") || "paused",
+            status,
             totalNumbers: Number(row.total_numbers || 0),
             sentCount: Number(row.sent_count || 0),
             configSnapshot,
         };
         disparosCampaignsMemory.push(campaign);
-        const hasLeads = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId);
-        if (!hasLeads) {
-            try {
-                const { data: leadRows } = await (supabase
-                    .from("disparos_campaign_leads")
-                    .select("id, campaign_id, phone, status, created_at, sent_at")
-                    .eq("campaign_id", campaignId)
-                    .limit(100000));
-                if (Array.isArray(leadRows)) {
-                    for (const lr of leadRows) {
-                        const st = String(lr?.status || "pending").toLowerCase();
-                        disparosCampaignLeadsMemory.push({
-                            id: String(lr?.id || crypto_1.default.randomUUID()),
-                            campaignId: String(lr?.campaign_id || campaignId),
-                            phone: String(lr?.phone || ""),
-                            status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
-                            createdAt: String(lr?.created_at || new Date().toISOString()),
-                            sentAt: lr?.sent_at ? String(lr.sent_at) : null,
-                        });
-                    }
-                }
-            }
-            catch (e) {
-                console.error("[Campanha] Falha ao hidratar leads (campanha já em memória):", e);
+        if (leadRows.length > 0) {
+            for (const lr of leadRows) {
+                const st = String(lr?.status || "pending").toLowerCase();
+                disparosCampaignLeadsMemory.push({
+                    id: String(lr?.id || crypto_1.default.randomUUID()),
+                    campaignId: String(lr?.campaign_id || campaignId),
+                    phone: String(lr?.phone || ""),
+                    status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
+                    createdAt: String(lr?.created_at || new Date().toISOString()),
+                    sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+                });
             }
         }
+        if (!options.skipQueueLocalPersist)
+            queuePersistDisparosLocalState();
         return campaign;
     }
     catch (e) {
         console.error("[Campanha] Falha ao hidratar campanha do banco:", campaignId, e);
-        return null;
+        return existing || null;
+    }
+}
+/** Sobe todas as campanhas do Postgres para memória (lista + disparos após restart). */
+async function syncDisparosCampaignsFromDbOnStartup() {
+    const supabase = getSupabaseClient();
+    if (!supabase)
+        return;
+    try {
+        const { data: rows, error } = await (supabase
+            .from("disparos_campaigns")
+            .select("id")
+            .order("created_at", { ascending: false })
+            .limit(200));
+        if (error) {
+            console.error("[Campanhas] startup sync (lista):", error.message || error);
+            return;
+        }
+        if (!Array.isArray(rows) || !rows.length) {
+            console.log("[Campanhas] nenhuma campanha no Supabase para sincronizar.");
+            return;
+        }
+        for (const r of rows) {
+            const id = String(r?.id || "").trim();
+            if (!id)
+                continue;
+            await hydrateCampaignFromDbIfNeeded(id, { skipQueueLocalPersist: true });
+        }
+        console.log(`[Campanhas] sincronizadas do Supabase na subida: ${rows.length} campanha(s).`);
+        queuePersistDisparosLocalState();
+    }
+    catch (e) {
+        console.error("[Campanhas] startup sync:", e);
     }
 }
 async function pickDisparadorInstanceForConfig(config) {
@@ -4090,6 +4671,7 @@ async function persistLeadSentAndCampaignCount(campaignId, leadId, nextSentCount
     catch {
         /* */
     }
+    queuePersistDisparosLocalState();
 }
 async function persistLeadFailed(lead, kind) {
     lead.status = "failed";
@@ -4106,10 +4688,11 @@ async function persistLeadFailed(lead, kind) {
     catch {
         /* */
     }
+    queuePersistDisparosLocalState();
 }
 function scheduleNextCampaignDispatchDelay(campaignId, config) {
-    const minS = Math.max(10, Number(config.delayMinSeconds) || 90);
-    const maxS = Math.max(minS, Number(config.delayMaxSeconds) || 240);
+    const minS = Math.max(10, Number(config.delayMinSeconds) || DISPAROS_DEFAULTS.delayMinSeconds);
+    const maxS = Math.max(minS, Number(config.delayMaxSeconds) || DISPAROS_DEFAULTS.delayMaxSeconds);
     const waitSec = minS + Math.random() * (maxS - minS);
     campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
 }
@@ -4134,6 +4717,7 @@ async function processOneCampaignDispatch(campaignId) {
                 /* */
             }
         }
+        queuePersistDisparosLocalState();
         return;
     }
     let outbound;
@@ -4177,8 +4761,14 @@ async function processOneCampaignDispatch(campaignId) {
     scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
 }
 async function runCampaignDispatchTick() {
+    const nowSp = nowInSaoPaulo();
     const running = disparosCampaignsMemory.filter((c) => c.status === "running");
     for (const c of running) {
+        const snap = c.configSnapshot || DISPAROS_DEFAULTS;
+        const janela = isDisparosWindowOpen(snap, nowSp);
+        if (!janela.aberta) {
+            continue;
+        }
         await processOneCampaignDispatch(c.id);
     }
 }
@@ -4214,6 +4804,8 @@ async function stopAllDispatchActivityOnServer() {
             pausedSet.add(c.id);
         }
     }
+    queuePersistDisparosLocalState();
+    void persistAquecedorRuntimeDesired(false);
     return { pausedCampaignIds: Array.from(pausedSet) };
 }
 function countCampaignLeadsProcessed(campaignId, sentFallback, totalNumbers) {
@@ -4329,6 +4921,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
         disparosCampaignsMemory.unshift(campaign);
         disparosCampaignLeadsMemory.unshift(...leads);
         const supabase = getSupabaseClient();
+        let persistedCampaignToSupabase = !supabase;
         if (supabase) {
             try {
                 await supabase.from("disparos_campaigns").insert({
@@ -4348,11 +4941,13 @@ app.post("/disparos/campanhas", (req, res, next) => {
                     created_at: lead.createdAt,
                     sent_at: lead.sentAt,
                 })));
+                persistedCampaignToSupabase = true;
             }
-            catch {
-                /* já persistido em memória */
+            catch (dbErr) {
+                console.error("[Campanha] Falha ao gravar campanha/leads no Supabase (dados ficam na memória e em data/disparos-local-state.json):", dbErr);
             }
         }
+        queuePersistDisparosLocalState();
         const msgExtra = duplicatesRemoved > 0
             ? ` Foram ignoradas ${duplicatesRemoved} linha(s) com número duplicado (cada destino recebe no máximo uma mensagem).`
             : "";
@@ -4360,6 +4955,12 @@ app.post("/disparos/campanhas", (req, res, next) => {
             ok: true,
             message: "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos." + msgExtra,
             duplicatesRemoved,
+            durability: {
+                /** Sempre que `queuePersistDisparosLocalState` rodou após criar. */
+                localStateFile: true,
+                /** Só true se insert no Postgres concluiu (ou Supabase não configurado). */
+                supabase: persistedCampaignToSupabase,
+            },
             campaign: {
                 id: campaign.id,
                 name: campaign.name,
@@ -4395,19 +4996,45 @@ app.get("/disparos/campanhas", async (_req, res) => {
             };
         };
         const byId = new Map();
+        const configByCampaignId = new Map();
         const supabase = getSupabaseClient();
         if (supabase) {
             try {
-                const { data: campaigns } = await (supabase
+                let rows = null;
+                const withSnap = await (supabase
                     .from("disparos_campaigns")
-                    .select("id, campaign_name, status, total_numbers, sent_count, created_at")
+                    .select("id, campaign_name, status, total_numbers, sent_count, created_at, config_snapshot")
                     .order("created_at", { ascending: false })
                     .limit(200));
-                if (Array.isArray(campaigns)) {
-                    for (const row of campaigns) {
+                if (withSnap.error) {
+                    const noSnap = await (supabase
+                        .from("disparos_campaigns")
+                        .select("id, campaign_name, status, total_numbers, sent_count, created_at")
+                        .order("created_at", { ascending: false })
+                        .limit(200));
+                    if (!noSnap.error && Array.isArray(noSnap.data)) {
+                        rows = noSnap.data;
+                    }
+                }
+                else if (Array.isArray(withSnap.data)) {
+                    rows = withSnap.data;
+                }
+                if (Array.isArray(rows)) {
+                    for (const row of rows) {
                         const item = mapRowToItem(row);
-                        if (item.id)
+                        if (item.id) {
                             byId.set(item.id, item);
+                            try {
+                                const snap = row?.config_snapshot;
+                                if (snap != null) {
+                                    const raw = typeof snap === "string" ? JSON.parse(snap) : snap;
+                                    configByCampaignId.set(item.id, parseDisparosConfig(raw));
+                                }
+                            }
+                            catch {
+                                /* */
+                            }
+                        }
                     }
                 }
             }
@@ -4430,8 +5057,28 @@ app.get("/disparos/campanhas", async (_req, res) => {
                 processedCount,
                 progressPercent,
             });
+            configByCampaignId.set(c.id, c.configSnapshot);
         }
-        const items = Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const evoRows = await fetchEvoInstanceTagRows();
+        const globalDisparos = await loadDisparosConfigFromDb();
+        const globalSelected = Array.isArray(globalDisparos.selectedDisparadorInstances)
+            ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+            : [];
+        const items = Array.from(byId.values())
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .map((item) => {
+            const snapshotTags = disparadorInstanceTagsForCampaign(configByCampaignId.get(item.id), evoRows);
+            const st = String(item.status || "").toLowerCase();
+            const useGlobal = !snapshotTags.length && st === "running" && globalSelected.length > 0;
+            const tags = useGlobal
+                ? disparadorInstanceTagsForCampaign({ ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }, evoRows)
+                : snapshotTags;
+            return {
+                ...item,
+                disparadorInstances: tags,
+                disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
+            };
+        });
         return res.json({ items });
     }
     catch {
@@ -4668,6 +5315,7 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                 /* */
             }
         }
+        queuePersistDisparosLocalState();
         return res.json({
             ok: true,
             id,
@@ -4678,6 +5326,56 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
     }
     catch (error) {
         return res.status(500).json({ error: error?.message || "Erro ao atualizar estado da campanha." });
+    }
+});
+/**
+ * Atualiza trechos do `config_snapshot` (expediente, delays, etc.) sem recriar a campanha.
+ * Corpo parcial é mesclado ao snapshot atual e revalidado com `parseDisparosConfig`.
+ */
+app.patch("/disparos/campanhas/:id/config", async (req, res) => {
+    try {
+        const id = String(req.params.id || "").trim();
+        if (!id) {
+            return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+        }
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        let campaign = disparosCampaignsMemory.find((c) => c.id === id);
+        if (!campaign) {
+            campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
+        }
+        if (!campaign) {
+            return res.status(404).json({ error: "Campanha não encontrada." });
+        }
+        const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
+        const merged = {
+            ...prev,
+            ...body,
+        };
+        if (body.selected_disparador_instances != null && body.selectedDisparadorInstances == null) {
+            merged.selectedDisparadorInstances = body.selected_disparador_instances;
+        }
+        campaign.configSnapshot = parseDisparosConfig(merged);
+        const supabase = getSupabaseClient();
+        if (supabase) {
+            try {
+                await supabase.from("disparos_campaigns")
+                    .update({ config_snapshot: campaign.configSnapshot })
+                    .eq("id", id);
+            }
+            catch {
+                /* */
+            }
+        }
+        queuePersistDisparosLocalState();
+        return res.json({
+            ok: true,
+            id,
+            configSnapshot: campaign.configSnapshot,
+            message: "Configuração da campanha atualizada.",
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao atualizar config da campanha." });
     }
 });
 app.patch("/disparos/campanhas/:id", async (req, res) => {
@@ -4709,6 +5407,7 @@ app.patch("/disparos/campanhas/:id", async (req, res) => {
                         c2.name = name;
                     const total = Number(row.total_numbers || 0);
                     const sent = Number(row.sent_count || 0);
+                    queuePersistDisparosLocalState();
                     return res.json({
                         ok: true,
                         message: "Nome da campanha atualizado.",
@@ -4742,6 +5441,7 @@ app.patch("/disparos/campanhas/:id", async (req, res) => {
                 /* */
             }
         }
+        queuePersistDisparosLocalState();
         return res.json({
             ok: true,
             message: "Nome da campanha atualizado.",
@@ -4781,6 +5481,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
                     .eq("id", id)
                     .select("id");
                 if (!delCampErr && Array.isArray(delData) && delData.length > 0) {
+                    queuePersistDisparosLocalState();
                     return res.json({ ok: true, message: "Campanha excluída." });
                 }
             }
@@ -4809,6 +5510,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
                 /* memória já limpa */
             }
         }
+        queuePersistDisparosLocalState();
         return res.json({ ok: true, message: "Campanha excluída." });
     }
     catch (error) {
@@ -4819,12 +5521,35 @@ app.listen(PORT, () => {
     console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
     console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING}`);
     console.log(`[campanhas] upload planilha até ${Math.round(CAMPAIGN_UPLOAD_MAX_BYTES / 1024 / 1024)}MB (multipart) | JSON legado=${CAMPAIGN_CREATE_JSON_LIMIT}`);
-    if (ENABLE_BACKGROUND_PROCESSING) {
+    if (MAINTENANCE_MODE) {
+        console.log(`[maintenance] ativo — tráfego de API bloqueado; probes em /health, /ready, /service/maintenance (porta ${PORT})`);
+    }
+    void (async () => {
+        try {
+            await loadDisparosLocalState();
+            await syncDisparosCampaignsFromDbOnStartup();
+        }
+        catch (e) {
+            console.error("[Campanhas] bootstrap (estado local + Supabase):", e);
+        }
         setInterval(() => {
-            runCampaignDispatchTick().catch((e) => console.error("[Campanhas] tick:", e));
-        }, 7000);
-    }
-    else {
-        console.log("[campanhas] processamento automático desativado neste processo (dev isolado).");
-    }
+            queuePersistDisparosLocalState();
+        }, DISPAROS_CHECKPOINT_MS);
+        console.log(`[durabilidade] checkpoint campanhas a cada ${Math.round(DISPAROS_CHECKPOINT_MS / 1000)}s → data/disparos-local-state.json`);
+        const desiredHeater = await loadAquecedorRuntimeDesired();
+        if (desiredHeater === true &&
+            ENABLE_BACKGROUND_PROCESSING &&
+            !MAINTENANCE_MODE) {
+            startAquecedorRuntime();
+            console.log("[Aquecedor] retomado após restart (data/runtime-intent.json — último «Iniciar» explícito).");
+        }
+        if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
+            setInterval(() => {
+                runCampaignDispatchTick().catch((err) => console.error("[Campanhas] tick:", err));
+            }, 7000);
+        }
+        else if (!ENABLE_BACKGROUND_PROCESSING) {
+            console.log("[campanhas] processamento automático desativado neste processo (dev isolado).");
+        }
+    })();
 });

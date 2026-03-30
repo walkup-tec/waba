@@ -7,12 +7,67 @@ Como usar:
 - Se necessário, leia os `doc/LOG-*.md` correspondentes para detalhes.
 
 ## Caminhos (repositórios próximos)
-- **SOMA Credit Sales**: `D:\SOMA Promotora\soma-credit-sales`
+- **Página vendas SOMA (remoto)**: [github.com/walkup-tec/Pagina-vendas-soma](https://github.com/walkup-tec/Pagina-vendas-soma) — pasta local `D:\SOMA Promotora\Pagina-Vendas`
+- **SOMA Credit Sales** (cópia de trabalho anterior, mesmo stack): `D:\SOMA Promotora\soma-credit-sales`
 
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
+2026-03-30
+
+**Disparador — padrões de temporizador e limites:** `DISPAROS_DEFAULTS` em `src/index.ts`: delay **120–320** s, máx/hora **40**, máx/dia **130**; mesmos fallbacks no formulário em `index.html`; `scheduleNextCampaignDispatchDelay` usa `DISPAROS_DEFAULTS` nos fallbacks numéricos; seed em `doc/SQL-2026-03-21__create-disparos-tables.sql` alinhado. Ver `doc/LOG-2026-03-30__180306__disparador-parametros-padrao-delays-limites.md`.
+
+Palavras-chave: `DISPAROS_DEFAULTS`, disparador-delay-min-max, max-per-hour-instance
+
+---
+
+2026-03-29
+
+**Landing vendas SOMA:** GitHub [Pagina-vendas-soma](https://github.com/walkup-tec/Pagina-vendas-soma); working copy em `D:\SOMA Promotora\Pagina-Vendas`. Primeiro commit na `main` e `git push` concluídos; conteúdo copiado de `soma-credit-sales` com ajustes (`package.json` nome `pagina-vendas-soma`, README com link remoto, `.gitignore` com `!.env.example`). Build validado (`npm run build`). Ver `doc/LOG-2026-03-29__223000__pagina-vendas-soma-repo-local-github.md`.
+
+Palavras-chave: pagina-vendas-soma, Pagina-Vendas, walkup-tec, landing-soma
+
+---
+
+2026-03-28
+
+**Durabilidade (porta 3000):** campanhas → `data/disparos-local-state.json` + checkpoint periódico (`DISPAROS_CHECKPOINT_MS`, default 120s) + Supabase. Aquecedor → fila/config no Postgres + `data/runtime-intent.json` (retoma motor após restart se último comando foi «Iniciar»; `parar-envios` grava desligado). Ver `doc/garantias-durabilidade-disparador-aquecedor.md`.
+
+**Disparador — persistência:** `data/disparos-local-state.json` (backup após mutações); na subida: `loadDisparosLocalState` + `syncDisparosCampaignsFromDbOnStartup` (até 200 campanhas do Postgres). `hydrateCampaignFromDbIfNeeded` atualiza memória existente com dados do banco. Insert Supabase com falha agora loga erro. Ver `doc/LOG-2026-03-28__140000__disparos-backup-local-sync-supabase-startup.md`.
+
+**Supabase `disparos_campaigns` inexistente (42P01):** DDL em `doc/SQL-2026-03-28__create-disparos-campaigns-only.sql` ou final de `doc/SQL-2026-03-21__create-disparos-tables.sql`. Ver `doc/LOG-2026-03-28__103000__supabase-disparos-campaigns-ddl.md`.
+
+**Disparador — campanha após restart:** no `app.listen`, `hydrateRunningCampaignsFromDbOnStartup` reidrata campanhas `running` do Supabase para memória (leads + tick). **Ajuste de snapshot sem recriar campanha:** `PATCH /disparos/campanhas/:id/config` (corpo parcial, merge + `parseDisparosConfig`). Recuperação se «sumiu» só na UI: ver linha em `disparos_campaigns`; se não existir no banco, não há reconstruct automático. Ver `doc/LOG-2026-03-28__102150__disparador-recuperar-campanha-supabase-hydrate-config.md`.
+
+**Disparador Seção 1:** lista **Números disponíveis** (`syncDisparadorNumberPicker`) filtra por `getInstanceUsage(name).useDisparador`; após salvar uso em `saveInstanceUsageConfig`, o picker é atualizado. Ver `doc/LOG-2026-03-28__101200__disparador-picker-filtra-uso-disparador.md`.
+
+**Lista campanhas Disparador:** `disparadorInstances` — **rótulo** = coluna **Nome da Instância** no front: `instanceAlias || instanceName` (`data/instance-aliases.json` → chave), **não** Nome (WhatsApp). **nameKeys** continua rico para casar snapshot. Ver `doc/LOG-2026-03-28__100500__disparador-tags-nome-instancia-coluna-alias.md`.
+
+---
+
+**Diagnóstico Disparador:** `/disparos/diagnostico` informa **fora do expediente** com **previsão de retorno** (global e por campanha). **Removido** o rótulo «modo ai» do log (evita confusão com o **aquecedor**, que usa mensagens do banco). Ver `doc/LOG-2026-03-28__093000__diagnostico-remove-modo-ai-label.md`.
+
+---
+
 2026-03-27
+
+**Disparador — expediente no tick:** Antes, só o diagnóstico (`/disparos/diagnostico`) usava `isDisparosWindowOpen`; o tick (`runCampaignDispatchTick`) enviava sem checar janela. Agora cada campanha `running` só dispara dentro de `workingDays` + `startHour`/`endHour` do **`configSnapshot`**, com relógio `nowInSaoPaulo()`. Ver `doc/LOG-2026-03-27__193000__disparo-respeitar-expediente-config-snapshot.md`.
+
+Palavras-chave: `isDisparosWindowOpen`, `runCampaignDispatchTick`, expediente-disparador
+
+---
+
+**Modal Registrar instância — Gerar QRCode «morto»:** `#register-instance-overlay` com `z-index: 2600` para ficar acima de outros overlays; cliques em **Gerar QRCode** / **Atualizar QRCode** tratados por **delegação** no overlay + `console.info` diagnóstico; fim de retorno silencioso quando o DOM do modal está incompleto. Ver `doc/LOG-2026-03-27__190000__fix-modal-gerar-qrcode-clique-morto.md`.
+
+Palavras-chave: `register-qrcode-btn`, `register-instance-overlay`, delegação-clique
+
+---
+
+**Ambiente 3000 — manutenção:** `MAINTENANCE_MODE=true` bloqueia uso normal da API e da home (HTML 503); probes `GET /health` (200), `GET /ready` (503 em manutenção), `GET /service/maintenance` (JSON). Script `npm run start:prod:maintenance` (porta 3000, sem processamento em background). Ver `doc/LOG-2026-03-27__181500__ambiente-3000-modo-manutencao.md`.
+
+Palavras-chave: `MAINTENANCE_MODE`, `start:prod:maintenance`, `/ready`, `/health`
+
+---
 
 **Fechamento (Atualize tudo):** commit `bb96f1c` enviado para `origin/master`; `npm run build` executado; backup seletivo via `C:\Scripts\backup-d-para-e.ps1` (robocopy longo; logs em `D:\Backup-Logs`). Working tree limpo exceto `shortener-waba.zip` não rastreado.
 
