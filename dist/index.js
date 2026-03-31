@@ -4157,14 +4157,15 @@ app.get("/disparos/diagnostico", async (_req, res) => {
             let proximoEnvio;
             if (!janelaCampanha.aberta) {
                 proximoEnvio = previsaoCampanhaBr
-                    ? `fora do expediente — retorno previsto ~ ${previsaoCampanhaBr} · ${janelaCampanha.motivo}`
+                    ? `ciclo em execução · fora do expediente (normal) · retorno previsto ~ ${previsaoCampanhaBr} · ${janelaCampanha.motivo}`
                     : `fora do expediente · ${janelaCampanha.motivo}`;
             }
             else if (nextMs > nowMs) {
-                proximoEnvio = `dentro do expediente · aguardando intervalo até ${formatDateBr(new Date(nextMs).toISOString())}`;
+                const remainingSeconds = Math.max(1, Math.ceil((nextMs - nowMs) / 1000));
+                proximoEnvio = `ciclo em execução · dentro do expediente · intervalo operacional (normal) · próximo envio em ~${remainingSeconds}s (${formatDateBr(new Date(nextMs).toISOString())})`;
             }
             else {
-                proximoEnvio = "dentro do expediente · elegível no próximo ciclo (~7s)";
+                proximoEnvio = "ciclo em execução · dentro do expediente · pronto para envio no próximo ciclo (~7s)";
             }
             diag.campanhas.emExecucao.push({
                 id: c.id,
