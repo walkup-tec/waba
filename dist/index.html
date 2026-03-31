@@ -7061,6 +7061,18 @@
               0,
               Math.min(100, Number(runtimeRaw?.fillPercent ?? (isRunning ? 90 : isFinished ? 100 : 24)))
             );
+            const runtimeFillGradient =
+              runtimeFillClass === "waiting_interval"
+                ? "linear-gradient(90deg, #facc15, #eab308)"
+                : runtimeFillClass === "outside_window"
+                ? "linear-gradient(90deg, #f59e0b, #d97706)"
+                : runtimeFillClass === "paused"
+                ? "linear-gradient(90deg, #fde047, #facc15)"
+                : runtimeFillClass === "finished"
+                ? "linear-gradient(90deg, #60a5fa, #2563eb)"
+                : runtimeFillClass === "draft"
+                ? "linear-gradient(90deg, #64748b, #94a3b8)"
+                : "linear-gradient(90deg, #22c55e, #16a34a)";
             const runtimeLabel = String(
               runtimeRaw?.label ||
                 (inferredWaiting
@@ -7133,7 +7145,7 @@
                 </div>
                 <div class="disparos-runtime-stage-wrap" aria-label="Etapa atual da campanha">
                   <div class="disparos-runtime-stage-track">
-                    <div class="disparos-runtime-stage-fill disparos-runtime-stage-fill--${runtimeFillClass}" style="width:${runtimeFillPercent}%;"></div>
+                    <div class="disparos-runtime-stage-fill disparos-runtime-stage-fill--${runtimeFillClass}" style="width:${runtimeFillPercent}%; background:${runtimeFillGradient};"></div>
                   </div>
                   <div class="disparos-runtime-stage-text">${runtimeLabel}${runtimeDetail ? ` · ${runtimeDetail}` : ""}</div>
                 </div>
