@@ -318,6 +318,58 @@ function parseDisparosConfig(input) {
         selectedDisparadorInstances,
     };
 }
+function validateRequiredDisparosConfigPayload(input) {
+    if (!input || typeof input !== "object")
+        return "Objeto 'config' é obrigatório.";
+    const hasValue = (key) => {
+        const raw = input?.[key];
+        if (raw == null)
+            return false;
+        if (typeof raw === "string")
+            return raw.trim().length > 0;
+        if (Array.isArray(raw))
+            return raw.length > 0;
+        return true;
+    };
+    const requiredKeys = [
+        "delayMinSeconds",
+        "delayMaxSeconds",
+        "maxPerHourPerInstance",
+        "maxPerDayPerInstance",
+        "startHour",
+        "endHour",
+        "workingDays",
+        "selectedDisparadorInstances",
+        "whatsappTargetNumber",
+        "messageMode",
+    ];
+    for (const key of requiredKeys) {
+        if (!hasValue(key))
+            return `Campo obrigatório ausente no Disparador: ${key}.`;
+    }
+    const mode = String(input?.messageMode || "").toLowerCase();
+    if (mode === "ai") {
+        const aiRequired = ["aiTone", "aiCta", "aiAudience", "aiBriefing"];
+        for (const key of aiRequired) {
+            if (!hasValue(key))
+                return `Campo obrigatório ausente no modo IA: ${key}.`;
+        }
+    }
+    return null;
+}
+function isLegacyDisparosDefaultConfig(input) {
+    if (!input || typeof input !== "object")
+        return false;
+    const toInt = (v) => Math.floor(Number(v));
+    const delayMin = toInt(input.delayMinSeconds);
+    const delayMax = toInt(input.delayMaxSeconds);
+    const maxPerHour = toInt(input.maxPerHourPerInstance);
+    const maxPerDay = toInt(input.maxPerDayPerInstance);
+    return (delayMin === 90 &&
+        delayMax === 240 &&
+        maxPerHour === 60 &&
+        maxPerDay === 130);
+}
 async function loadDisparosConfigFromDb() {
     const supabase = getSupabaseClient();
     if (!supabase)
@@ -330,7 +382,19 @@ async function loadDisparosConfigFromDb() {
             .maybeSingle());
         if (error)
             return { ...DISPAROS_DEFAULTS };
-        return parseDisparosConfig(data?.custom_config || DISPAROS_DEFAULTS);
+        const raw = data?.custom_config || null;
+        if (isLegacyDisparosDefaultConfig(raw)) {
+            const migrated = parseDisparosConfig({
+                ...raw,
+                delayMinSeconds: DISPAROS_DEFAULTS.delayMinSeconds,
+                delayMaxSeconds: DISPAROS_DEFAULTS.delayMaxSeconds,
+                maxPerHourPerInstance: DISPAROS_DEFAULTS.maxPerHourPerInstance,
+                maxPerDayPerInstance: DISPAROS_DEFAULTS.maxPerDayPerInstance,
+            });
+            await saveDisparosConfigToDb(migrated);
+            return migrated;
+        }
+        return parseDisparosConfig(raw || DISPAROS_DEFAULTS);
     }
     catch {
         return { ...DISPAROS_DEFAULTS };
@@ -912,6 +976,22 @@ function isAquecedorWindowOpen(config, now) {
     }
     return false;
 }
+function nextAquecedorWindowOpenAt(config, fromSp) {
+    const batches = Array.isArray(config.expediente) ? config.expediente : [];
+    if (!batches.length)
+        return null;
+    const probe = new Date(fromSp.getTime());
+    probe.setSeconds(0, 0);
+    // busca até 8 dias à frente, minuto a minuto (janela humanizada depende de minuto do dia)
+    const maxMinutes = 8 * 24 * 60;
+    for (let i = 0; i < maxMinutes; i += 1) {
+        probe.setMinutes(probe.getMinutes() + 1);
+        if (isAquecedorWindowOpen(config, probe)) {
+            return new Date(probe.getTime());
+        }
+    }
+    return null;
+}
 async function loadAquecedorConfigFromDb() {
     const supabase = getSupabaseClient();
     if (!supabase)
@@ -997,7 +1077,11 @@ async function runAquecedorCycle(forceTest = false) {
         const config = await loadAquecedorConfigFromDb();
         const nowSp = nowInSaoPaulo();
         if (!forceTest && !isAquecedorWindowOpen(config, nowSp)) {
-            aquecedorRuntime.lastResult = "Fora da janela humanizada.";
+            const nextOpen = nextAquecedorWindowOpenAt(config, nowSp);
+            aquecedorRuntime.nextAllowedAt = nextOpen ? nextOpen.toISOString() : null;
+            aquecedorRuntime.lastResult = nextOpen
+                ? `Fora da janela humanizada. Próximo retorno previsto: ${formatDateBr(nextOpen.toISOString())}.`
+                : "Fora da janela humanizada.";
             return;
         }
         const controller = new AbortController();
@@ -2104,6 +2188,21 @@ function disparadorInstanceTagsForCampaign(config, evoRows) {
         connected: v.connected,
     }))
         .sort((a, b) => a.instanceName.localeCompare(b.instanceName, "pt-BR", { sensitivity: "base" }));
+}
+function getCampaignInstanceHealth(config, evoRows) {
+    const tags = disparadorInstanceTagsForCampaign(config, evoRows);
+    const selectedCount = tags.length;
+    const connectedCount = tags.filter((t) => t.connected === true).length;
+    const disconnectedCount = Math.max(0, selectedCount - connectedCount);
+    const disconnectedPercent = selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
+    const shouldPauseByDisconnectedRatio = selectedCount > 0 && disconnectedCount / selectedCount > 0.5;
+    return {
+        selectedCount,
+        connectedCount,
+        disconnectedCount,
+        disconnectedPercent,
+        shouldPauseByDisconnectedRatio,
+    };
 }
 async function callEvoAction(url, method, body) {
     const controller = new AbortController();
@@ -3881,7 +3980,16 @@ app.get("/disparos/config", async (_req, res) => {
 });
 app.post("/disparos/config", async (req, res) => {
     try {
-        const config = parseDisparosConfig(req.body?.config || {});
+        const rawConfig = req.body?.config || {};
+        const allowPartialSave = req.body?.allowPartialSave === true;
+        const currentConfig = await loadDisparosConfigFromDb();
+        const mergedConfig = { ...currentConfig, ...rawConfig };
+        if (!allowPartialSave) {
+            const validationError = validateRequiredDisparosConfigPayload(mergedConfig);
+            if (validationError)
+                return res.status(400).json({ error: validationError });
+        }
+        const config = parseDisparosConfig(mergedConfig);
         await saveDisparosConfigToDb(config);
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
     }
@@ -4762,8 +4870,32 @@ async function processOneCampaignDispatch(campaignId) {
 }
 async function runCampaignDispatchTick() {
     const nowSp = nowInSaoPaulo();
+    let evoRows = [];
+    try {
+        evoRows = await fetchEvoInstanceTagRows();
+    }
+    catch {
+        evoRows = [];
+    }
     const running = disparosCampaignsMemory.filter((c) => c.status === "running");
     for (const c of running) {
+        const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
+        if (health.shouldPauseByDisconnectedRatio) {
+            c.status = "paused";
+            const supabase = getSupabaseClient();
+            if (supabase) {
+                try {
+                    await supabase.from("disparos_campaigns")
+                        .update({ status: "paused" })
+                        .eq("id", c.id);
+                }
+                catch {
+                    /* */
+                }
+            }
+            queuePersistDisparosLocalState();
+            continue;
+        }
         const snap = c.configSnapshot || DISPAROS_DEFAULTS;
         const janela = isDisparosWindowOpen(snap, nowSp);
         if (!janela.aberta) {
@@ -4978,12 +5110,66 @@ app.post("/disparos/campanhas", (req, res, next) => {
 });
 app.get("/disparos/campanhas", async (_req, res) => {
     try {
+        const buildCampaignRuntimeStage = (item, configSnapshot, nowSp) => {
+            const st = String(item.status || "").toLowerCase();
+            if (st === "finished") {
+                return {
+                    phase: "finished",
+                    label: "Finalizada",
+                    detail: "Todos os destinos foram processados.",
+                    fillPercent: 100,
+                };
+            }
+            if (st === "paused") {
+                return {
+                    phase: "paused",
+                    label: "Pausada",
+                    detail: "Pausa manual ou automática por regra de saúde.",
+                    fillPercent: 100,
+                };
+            }
+            if (st === "draft") {
+                return {
+                    phase: "draft",
+                    label: "Rascunho",
+                    detail: "Campanha criada e aguardando ativação.",
+                    fillPercent: 14,
+                };
+            }
+            const snap = configSnapshot || DISPAROS_DEFAULTS;
+            const janela = isDisparosWindowOpen(snap, nowSp);
+            if (!janela.aberta) {
+                return {
+                    phase: "outside_window",
+                    label: "Fora do expediente",
+                    detail: `Fora do expediente · ${janela.motivo}`,
+                    fillPercent: 24,
+                };
+            }
+            const nextAt = campaignNextAllowedSendAt.get(item.id) || 0;
+            if (nextAt > Date.now()) {
+                const secs = Math.max(1, Math.ceil((nextAt - Date.now()) / 1000));
+                return {
+                    phase: "waiting_interval",
+                    label: "Aguardando intervalo",
+                    detail: `Pausa operacional entre envios (${secs}s restantes).`,
+                    fillPercent: 56,
+                };
+            }
+            return {
+                phase: "sending",
+                label: "Enviando agora",
+                detail: "Elegível para envio neste ciclo.",
+                fillPercent: 90,
+            };
+        };
         const mapRowToItem = (row) => {
             const id = String(row?.id || "");
             const total = Number(row?.total_numbers ?? row?.totalNumbers ?? 0);
             const sent = Number(row?.sent_count ?? row?.sentCount ?? 0);
             const progressPercent = progressPercentForCampaignListItem(id, total, sent);
             const processedCount = countCampaignLeadsProcessed(id, sent, total);
+            const nextAllowedAtMs = campaignNextAllowedSendAt.get(id) || 0;
             return {
                 id,
                 name: String(row?.campaign_name ?? (row?.name || "")),
@@ -4993,6 +5179,7 @@ app.get("/disparos/campanhas", async (_req, res) => {
                 sentCount: sent,
                 processedCount,
                 progressPercent,
+                nextAllowedAt: nextAllowedAtMs > 0 ? new Date(nextAllowedAtMs).toISOString() : null,
             };
         };
         const byId = new Map();
@@ -5056,6 +5243,9 @@ app.get("/disparos/campanhas", async (_req, res) => {
                 sentCount: sent,
                 processedCount,
                 progressPercent,
+                nextAllowedAt: (campaignNextAllowedSendAt.get(c.id) || 0) > 0
+                    ? new Date(campaignNextAllowedSendAt.get(c.id) || 0).toISOString()
+                    : null,
             });
             configByCampaignId.set(c.id, c.configSnapshot);
         }
@@ -5064,6 +5254,7 @@ app.get("/disparos/campanhas", async (_req, res) => {
         const globalSelected = Array.isArray(globalDisparos.selectedDisparadorInstances)
             ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
+        const nowSp = nowInSaoPaulo();
         const items = Array.from(byId.values())
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((item) => {
@@ -5073,10 +5264,24 @@ app.get("/disparos/campanhas", async (_req, res) => {
             const tags = useGlobal
                 ? disparadorInstanceTagsForCampaign({ ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }, evoRows)
                 : snapshotTags;
+            const selectedCount = tags.length;
+            const connectedCount = tags.filter((t) => t.connected === true).length;
+            const disconnectedCount = Math.max(0, selectedCount - connectedCount);
+            const disconnectedPercent = selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
+            const shouldPauseByDisconnectedRatio = selectedCount > 0 && disconnectedCount / selectedCount > 0.5;
+            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp);
             return {
                 ...item,
                 disparadorInstances: tags,
                 disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
+                instanceHealth: {
+                    selectedCount,
+                    connectedCount,
+                    disconnectedCount,
+                    disconnectedPercent,
+                    shouldPauseByDisconnectedRatio,
+                },
+                runtimeStage,
             };
         });
         return res.json({ items });
@@ -5300,6 +5505,22 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                 error: "Campanha já finalizada: cada número da lista foi processado uma vez (envio ou falha). Crie uma nova campanha para novo disparo.",
             });
         }
+        if (ativa) {
+            let evoRows = [];
+            try {
+                evoRows = await fetchEvoInstanceTagRows();
+            }
+            catch {
+                evoRows = [];
+            }
+            const health = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+            if (health.shouldPauseByDisconnectedRatio) {
+                return res.status(409).json({
+                    error: "Campanha bloqueada para ativação: mais de 50% das instâncias selecionadas estão desconectadas. Use o botão '+ Instâncias' para ampliar a base conectada.",
+                    instanceHealth: health,
+                });
+            }
+        }
         campaign.status = nextStatus;
         if (ativa) {
             campaignNextAllowedSendAt.set(id, 0);
@@ -5376,6 +5597,68 @@ app.patch("/disparos/campanhas/:id/config", async (req, res) => {
     }
     catch (error) {
         return res.status(500).json({ error: error?.message || "Erro ao atualizar config da campanha." });
+    }
+});
+app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
+    try {
+        const id = String(req.params.id || "").trim();
+        if (!id) {
+            return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+        }
+        const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
+        const incoming = raw
+            .map((n) => String(n || "").trim())
+            .filter(Boolean);
+        if (!incoming.length) {
+            return res.status(400).json({ error: "Informe ao menos uma instância para adicionar." });
+        }
+        let campaign = disparosCampaignsMemory.find((c) => c.id === id);
+        if (!campaign) {
+            campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
+        }
+        if (!campaign) {
+            return res.status(404).json({ error: "Campanha não encontrada." });
+        }
+        const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
+        const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
+            ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+            : [];
+        const mergedSelected = Array.from(new Set([...prevSelected, ...incoming]));
+        campaign.configSnapshot = parseDisparosConfig({
+            ...prev,
+            selectedDisparadorInstances: mergedSelected,
+        });
+        const supabase = getSupabaseClient();
+        if (supabase) {
+            try {
+                await supabase.from("disparos_campaigns")
+                    .update({ config_snapshot: campaign.configSnapshot })
+                    .eq("id", id);
+            }
+            catch {
+                /* */
+            }
+        }
+        queuePersistDisparosLocalState();
+        let evoRows = [];
+        try {
+            evoRows = await fetchEvoInstanceTagRows();
+        }
+        catch {
+            evoRows = [];
+        }
+        const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+        return res.json({
+            ok: true,
+            id,
+            selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
+            addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
+            instanceHealth,
+            message: "Instâncias adicionadas à campanha.",
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: error?.message || "Erro ao adicionar instâncias na campanha." });
     }
 });
 app.patch("/disparos/campanhas/:id", async (req, res) => {

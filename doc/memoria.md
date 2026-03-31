@@ -13,7 +13,67 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
-2026-03-30
+2026-03-31
+
+**Disparos — correção da barra de etapa no cooldown:** quando a campanha está `running` mas em pausa entre envios (`nextAllowedAt` futuro), a barra de etapa agora fica em `waiting_interval` (amarela) com legenda de segundos restantes. Endpoint `GET /disparos/campanhas` passou a incluir `nextAllowedAt`; fallback de UI atualizado. Ver `doc/LOG-2026-03-31__174500__fix-barra-etapa-amarela-em-aguardando-intervalo.md`.
+
+Palavras-chave: `waiting_interval-amarelo`, `nextAllowedAt-campanhas`, `runtimeStage-fallback-cooldown`
+
+---
+
+**Disparos — status visual unificado pela barra de etapa:** removidos ponto/check ao lado do nome da campanha para evitar redundancia visual. A leitura de etapa operacional fica centralizada na barra runtime (`runtimeStage`) abaixo do progresso. Ver `doc/LOG-2026-03-31__123300__update-ui-remover-sinais-titulo-manter-barra-etapa.md`.
+
+Palavras-chave: `remover-sinais-titulo-campanha`, `status-via-barra-etapa`, `runtimeStage-ui-principal`
+
+---
+
+**Disparos — barra de etapa runtime por campanha:** adicionada barra operacional abaixo da barra de progresso para mostrar o momento real do envio por campanha: `sending`, `waiting_interval`, `outside_window`, `paused`, `finished` e `draft`. Backend da listagem (`GET /disparos/campanhas`) agora retorna `runtimeStage` com `phase`, `label`, `detail` e `fillPercent`. Ver `doc/LOG-2026-03-31__122800__update-disparos-barra-etapa-runtime-campanhas.md`.
+
+Palavras-chave: `runtimeStage-campanhas`, `barra-etapa-disparos`, `waiting_interval-outside_window`
+
+---
+
+**Campanhas Disparador — refino visual do indicador de status:** substituído badge pesado por indicador minimalista ao lado do nome (ponto para `draft/running/paused` e `check` para `finished`), mantendo as mesmas cores de estado já definidas. Ver `doc/LOG-2026-03-31__121800__refactor-ui-status-campanha-indicador-minimalista.md`.
+
+Palavras-chave: `ui-minimalista-status-campanha`, `disparos-campaign-status-dot`, `check-azul-finalizada-refino`
+
+---
+
+**Campanhas Disparador — sinal de status ao lado do nome:** adicionado indicador visual ao lado do título da campanha com mapeamento fixo: `draft` cinza, `running` verde, `paused` amarelo e `finished` com `check` azul (paleta atual). Implementado via classes `.disparos-campaign-status*` no frontend da lista de campanhas. Ver `doc/LOG-2026-03-31__121000__update-campanhas-indicador-status-cores-e-check-finalizada.md`.
+
+Palavras-chave: `status-campanha-indicador`, `disparos-campaign-status`, `check-azul-finalizada`
+
+---
+
+**Aquecedor — botões mínimos no runtime:** após iniciar, o bloco de ações do Aquecedor mantém somente `Pausar Aquecedor` e `Diagnóstico` (removidos `Envio teste` e `Criar mensagem teste` desse bloco). Ver `doc/LOG-2026-03-31__085951__aquecedor-runtime-botoes-minimos-pausar-diagnostico.md`.
+
+Palavras-chave: `aquecedor-runtime-botoes`, `pausar-aquecedor`, `diagnostico`
+
+---
+
+**Aquecedor — indicador visual de andamento (runtime):** adicionado bloco com barra de progresso e legenda dinâmica no painel do Aquecedor. Estados cobertos: parado, processando, aguardando próximo ciclo (com contagem regressiva) e pronto para próximo ciclo. Polling de `/aquecedor/status` e renderização contínua enquanto a aba Aquecedor está ativa. Ver `doc/LOG-2026-03-31__075236__aquecedor-indicador-visual-andamento-runtime.md`.
+
+Palavras-chave: `aquecedor-runtime-progress`, andamento-aquecedor, `renderAquecedorRuntimeProgress`
+
+---
+
+**Campanhas Disparador — proteção por saúde de instâncias:** campanha `running` entra em pausa automática quando mais de 50% das instâncias do snapshot estão desconectadas. UI passa a mostrar alerta e botão `+ Instâncias`; ativação fica bloqueada enquanto a regra estiver violada. Novo endpoint `POST /disparos/campanhas/:id/instancias` faz merge de instâncias na campanha. Ver `doc/LOG-2026-03-30__184837__campanhas-pausa-automatica-mais-instancias.md`.
+
+Palavras-chave: `instanceHealth`, pausa-automatica-campanha, `POST /disparos/campanhas/:id/instancias`, `btn-campaign-add-instances`
+
+---
+
+**Validação obrigatória ao salvar painéis:** bloqueio de `saveAquecedorConfig` e `saveDisparosConfig` quando houver campo obrigatório vazio; no Disparador inclui também validação de instâncias selecionadas e dias de expediente. Backend reforçado em `POST /disparos/config` com `validateRequiredDisparosConfigPayload` para rejeitar payload incompleto (400). Ver `doc/LOG-2026-03-30__182653__validacao-campos-obrigatorios-paineis-save-config.md`.
+
+Palavras-chave: `campos-obrigatorios`, `saveDisparosConfig`, `saveAquecedorConfig`, `POST /disparos/config`
+
+---
+
+**Disparador — migração de config legada no load:** quando `disparos_config.custom_config` vem com assinatura antiga (`90/240/60/130`), o backend agora migra automaticamente para `120/320/40/130` em `loadDisparosConfigFromDb` e persiste no Supabase. Objetivo: evitar tela com delays antigos mesmo após atualização de defaults. Ver `doc/LOG-2026-03-30__182240__migracao-config-legada-disparador-defaults.md`.
+
+Palavras-chave: `custom_config-legada`, migracao-automatica-disparador, `loadDisparosConfigFromDb`
+
+---
 
 **Disparador — padrões de temporizador e limites:** `DISPAROS_DEFAULTS` em `src/index.ts`: delay **120–320** s, máx/hora **40**, máx/dia **130**; mesmos fallbacks no formulário em `index.html`; `scheduleNextCampaignDispatchDelay` usa `DISPAROS_DEFAULTS` nos fallbacks numéricos; seed em `doc/SQL-2026-03-21__create-disparos-tables.sql` alinhado. Ver `doc/LOG-2026-03-30__180306__disparador-parametros-padrao-delays-limites.md`.
 

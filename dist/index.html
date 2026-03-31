@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Disparador N8n</title>
+    <title>DRAX - WABA</title>
     <link
       rel="icon"
       type="image/png"
@@ -2324,6 +2324,189 @@
         color: #94a3b8;
         font-size: 0.74rem;
       }
+      .aquecedor-chat-fab {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 2100;
+        border: 1px solid rgba(59, 130, 246, 0.45);
+        background: rgba(2, 6, 23, 0.92);
+        color: #dbeafe;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .aquecedor-chat-fab:hover {
+        border-color: rgba(96, 165, 250, 0.7);
+      }
+      .aquecedor-chat-fab-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ef4444;
+      }
+      .aquecedor-chat-fab-indicator.green {
+        background: #22c55e;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.16);
+      }
+      .aquecedor-chat-fab-indicator.yellow {
+        background: #f59e0b;
+        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.16);
+      }
+      .aquecedor-chat-fab-indicator.red {
+        background: #ef4444;
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16);
+      }
+      .aquecedor-chat-modal {
+        position: fixed;
+        right: 16px;
+        bottom: 58px;
+        width: min(640px, calc(100vw - 28px));
+        height: min(480px, calc(100vh - 92px));
+        z-index: 2100;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 14px;
+        background: #0b141a;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .aquecedor-chat-modal.open {
+        display: flex;
+      }
+      .aquecedor-chat-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: #202c33;
+      }
+      .aquecedor-chat-head-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .aquecedor-chat-head-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #0ea5e9, #22c55e);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #e2e8f0;
+        font-weight: 700;
+        font-size: 0.72rem;
+      }
+      .aquecedor-chat-title {
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: #e9edef;
+      }
+      .aquecedor-chat-subtitle {
+        margin-top: 2px;
+        font-size: 0.72rem;
+        color: #8696a0;
+      }
+      .aquecedor-chat-close {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: transparent;
+        color: #cbd5e1;
+        border-radius: 8px;
+        font-size: 0.72rem;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .aquecedor-chat-body {
+        flex: 1;
+        overflow: auto;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background:
+          linear-gradient(rgba(11, 20, 26, 0.88), rgba(11, 20, 26, 0.88)),
+          radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px),
+          radial-gradient(circle at 70% 35%, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px);
+        background-size: auto, 18px 18px, 22px 22px;
+      }
+      .aquecedor-chat-empty {
+        color: #8696a0;
+        font-size: 0.78rem;
+        border: 1px dashed rgba(134, 150, 160, 0.4);
+        border-radius: 10px;
+        padding: 10px;
+      }
+      .aquecedor-chat-bubble {
+        max-width: 82%;
+        border-radius: 8px;
+        padding: 7px 9px 5px;
+        font-size: 0.76rem;
+        line-height: 1.35;
+        border: none;
+        animation: aqChatPop 180ms ease-out;
+        position: relative;
+      }
+      .aquecedor-chat-bubble.outgoing {
+        margin-left: auto;
+        background: #005c4b;
+        color: #e9edef;
+      }
+      .aquecedor-chat-bubble.incoming {
+        margin-right: auto;
+        background: #202c33;
+        color: #e9edef;
+      }
+      .aquecedor-chat-bubble.outgoing::after {
+        content: "";
+        position: absolute;
+        right: -5px;
+        top: 0;
+        border-left: 6px solid #005c4b;
+        border-top: 6px solid #005c4b;
+        border-right: 6px solid transparent;
+        border-bottom: 6px solid transparent;
+      }
+      .aquecedor-chat-bubble.incoming::after {
+        content: "";
+        position: absolute;
+        left: -5px;
+        top: 0;
+        border-right: 6px solid #202c33;
+        border-top: 6px solid #202c33;
+        border-left: 6px solid transparent;
+        border-bottom: 6px solid transparent;
+      }
+      .aquecedor-chat-bubble-meta {
+        margin-top: 3px;
+        display: block;
+        font-size: 0.66rem;
+        color: #aebac1;
+        text-align: right;
+      }
+      .aquecedor-chat-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: #202c33;
+        padding: 8px 10px;
+      }
+      .aquecedor-chat-compose {
+        background: #2a3942;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #8696a0;
+        border-radius: 8px;
+        font-size: 0.74rem;
+        padding: 8px 10px;
+      }
+      @keyframes aqChatPop {
+        from { transform: translateY(5px); opacity: 0.2; }
+        to { transform: translateY(0); opacity: 1; }
+      }
 
       @media (max-width: 992px) {
         .aquecedor-layout {
@@ -2345,6 +2528,84 @@
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
+      }
+      .aquecedor-runtime-hero {
+        margin-top: 10px;
+        border-radius: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: rgba(15, 23, 42, 0.35);
+      }
+      .aquecedor-runtime-hero-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .aquecedor-runtime-hero-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+      }
+      .aquecedor-runtime-hero.active .aquecedor-runtime-hero-dot {
+        background: #22c55e;
+        animation: aqHeroPulse 1.2s infinite;
+      }
+      .aquecedor-runtime-hero.processing .aquecedor-runtime-hero-dot {
+        background: #0ea5e9;
+        animation: aqHeroPulseBlue 1s infinite;
+      }
+      .aquecedor-runtime-hero-title {
+        font-weight: 700;
+        font-size: 0.92rem;
+      }
+      .aquecedor-runtime-hero-sub {
+        margin-top: 4px;
+        font-size: 0.78rem;
+        color: #cbd5e1;
+      }
+      @keyframes aqHeroPulse {
+        0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+        70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+      }
+      @keyframes aqHeroPulseBlue {
+        0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.55); }
+        70% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+      }
+      .aquecedor-runtime-progress {
+        margin-top: 10px;
+      }
+      .aquecedor-runtime-progress-track {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(148, 163, 184, 0.25);
+      }
+      .aquecedor-runtime-progress-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #22c55e, #16a34a);
+        transition: width 300ms ease;
+      }
+      .aquecedor-runtime-progress-fill.processing {
+        width: 35%;
+        animation: aqRuntimeProcessing 1.2s ease-in-out infinite;
+        background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+      }
+      .aquecedor-runtime-progress-caption {
+        margin-top: 6px;
+        font-size: 0.76rem;
+        color: #cbd5e1;
+      }
+      @keyframes aqRuntimeProcessing {
+        0% { transform: translateX(-15%); }
+        50% { transform: translateX(95%); }
+        100% { transform: translateX(-15%); }
       }
 
       .aquecedor-accordion {
@@ -2879,21 +3140,25 @@
         gap: 8px;
       }
       .disparos-campaign-item {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        align-items: start;
         gap: 10px;
       }
       .disparos-campaign-item-body {
-        flex: 1;
+        grid-column: span 9;
         min-width: 0;
       }
       .disparos-campaign-item-actions {
-        flex-shrink: 0;
+        grid-column: span 3;
         display: flex;
         flex-direction: column;
         align-items: flex-end;
         gap: 6px;
+      }
+      .disparos-campaign-item-actions .instance-action-btn {
+        min-width: 132px;
+        justify-content: center;
       }
       .btn-campaign-toggle {
         padding: 5px 10px;
@@ -2902,30 +3167,95 @@
       }
       .disparos-campaign-secondary-actions {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: flex-end;
         gap: 6px;
-        justify-content: flex-end;
         margin-top: 8px;
       }
+      .disparos-runtime-stage-wrap {
+        margin-top: 8px;
+      }
+      .disparos-runtime-stage-track {
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.22);
+        overflow: hidden;
+      }
+      .disparos-runtime-stage-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: inherit;
+        transition: width 0.35s ease;
+      }
+      .disparos-runtime-stage-fill--draft {
+        background: linear-gradient(90deg, #64748b, #94a3b8);
+      }
+      .disparos-runtime-stage-fill--sending {
+        background: linear-gradient(90deg, #22c55e, #16a34a);
+      }
+      .disparos-runtime-stage-fill--waiting_interval {
+        background: linear-gradient(90deg, #facc15, #eab308);
+      }
+      .disparos-runtime-stage-fill--outside_window {
+        background: linear-gradient(90deg, #f59e0b, #d97706);
+      }
+      .disparos-runtime-stage-fill--paused {
+        background: linear-gradient(90deg, #fde047, #facc15);
+      }
+      .disparos-runtime-stage-fill--finished {
+        background: linear-gradient(90deg, #60a5fa, #2563eb);
+      }
+      .disparos-runtime-stage-text {
+        margin-top: 4px;
+        color: #cbd5e1;
+        font-size: 0.69rem;
+      }
       .dis-campaign-instance-tags {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: repeat(10, minmax(0, 1fr));
         gap: 6px;
         margin-top: 8px;
-        align-items: center;
+        align-items: stretch;
+        width: 100%;
       }
       .dis-campaign-instance-tag {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
+        grid-column: span 3;
+        width: 100%;
         padding: 3px 10px;
         border-radius: 999px;
         font-size: 0.68rem;
         font-weight: 700;
         letter-spacing: 0.02em;
-        max-width: min(100%, 220px);
+        max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      @media (max-width: 1280px) {
+        .disparos-campaign-item-body {
+          grid-column: span 8;
+        }
+        .disparos-campaign-item-actions {
+          grid-column: span 4;
+        }
+        .dis-campaign-instance-tag {
+          grid-column: span 4;
+        }
+      }
+      @media (max-width: 980px) {
+        .disparos-campaign-item-body,
+        .disparos-campaign-item-actions {
+          grid-column: span 12;
+        }
+        .disparos-campaign-item-actions {
+          align-items: flex-end;
+        }
+        .dis-campaign-instance-tag {
+          grid-column: span 6;
+        }
       }
       .dis-campaign-instance-tag--connected {
         color: #ecfdf5;
@@ -3686,7 +4016,7 @@
                           class="instance-action-btn btn-delete enabled aquecedor-start-stop-btn hidden"
                           type="button"
                         >
-                          Parar Aquecedor
+                          Pausar Aquecedor
                         </button>
                         <button
                           id="aquecedor-run-once-btn"
@@ -3711,6 +4041,23 @@
                         >
                           Diagnóstico
                         </button>
+                      </div>
+                    </div>
+                    <div id="aquecedor-runtime-hero" class="aquecedor-runtime-hero">
+                      <div class="aquecedor-runtime-hero-row">
+                        <span class="aquecedor-runtime-hero-dot"></span>
+                        <span id="aquecedor-runtime-hero-title" class="aquecedor-runtime-hero-title">Aquecedor parado</span>
+                      </div>
+                      <div id="aquecedor-runtime-hero-sub" class="aquecedor-runtime-hero-sub">
+                        Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.
+                      </div>
+                    </div>
+                    <div class="aquecedor-runtime-progress">
+                      <div class="aquecedor-runtime-progress-track">
+                        <div id="aquecedor-runtime-progress-fill" class="aquecedor-runtime-progress-fill"></div>
+                      </div>
+                      <div id="aquecedor-runtime-progress-caption" class="aquecedor-runtime-progress-caption">
+                        Aguardando status do aquecedor...
                       </div>
                     </div>
                     <div class="aquecedor-command-log">
@@ -4695,6 +5042,29 @@
       </div>
     </div>
 
+    <button id="aquecedor-chat-fab" class="aquecedor-chat-fab" type="button">
+      <span id="aquecedor-chat-fab-indicator" class="aquecedor-chat-fab-indicator red"></span>
+      <span>Simulação envios</span>
+    </button>
+    <div id="aquecedor-chat-modal" class="aquecedor-chat-modal" aria-hidden="true">
+      <div class="aquecedor-chat-head">
+        <div class="aquecedor-chat-head-left">
+          <span class="aquecedor-chat-head-avatar">WA</span>
+          <div>
+            <div class="aquecedor-chat-title">Simulação WhatsApp (Aquecedor)</div>
+            <div class="aquecedor-chat-subtitle">online · envio automático</div>
+          </div>
+        </div>
+        <button id="aquecedor-chat-close" class="aquecedor-chat-close" type="button">Minimizar</button>
+      </div>
+      <div id="aquecedor-chat-body" class="aquecedor-chat-body">
+        <div class="aquecedor-chat-empty">Sem mensagens ainda. Inicie o aquecedor para acompanhar o fluxo.</div>
+      </div>
+      <div class="aquecedor-chat-footer">
+        <div class="aquecedor-chat-compose">Mensagem automática (somente visualização)</div>
+      </div>
+    </div>
+
     <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <script>
@@ -4771,10 +5141,16 @@
       let registerConnectPollTimer = null;
       let registerConnectPollStartedAt = 0;
       let aquecedorEnviosPollTimer = null;
+      let aquecedorRuntimePollTimer = null;
+      let aquecedorRuntimeVizTimer = null;
       let disparosCampaignsPollTimer = null;
+      let aquecedorRuntimeStatusCache = null;
+      let aquecedorChatEvents = [];
+      const aquecedorChatSeen = new Set();
       let disparosNextInstanceTechnicalCache = null;
       let disparosHasRunningCampaign = false;
       let aquecedorEditMode = true;
+      let aquecedorStartUnlocked = false;
       const aquecedorCommandLogs = [];
       const disparosDiagnosticoLogs = [];
       const AQUECEDOR_RECOMMENDED = {
@@ -5072,6 +5448,23 @@
         };
       }
 
+      function getAquecedorMissingRequiredFields() {
+        const required = [
+          { id: "aq-janela-ativa", label: "Janela ativa (horas)" },
+          { id: "aq-pausa", label: "Pausa (minutos)" },
+          { id: "aq-wait-min", label: "Delay mínimo (segundos)" },
+          { id: "aq-wait-max", label: "Delay máximo (segundos)" },
+        ];
+        const missing = required.filter(({ id }) => {
+          const el = document.getElementById(id);
+          return !el || String(el.value ?? "").trim() === "";
+        });
+        if (!aquecedorExpedienteBatches.length) {
+          missing.push({ id: "aq-expediente-batches", label: "Expediente (lotes de dias)" });
+        }
+        return missing;
+      }
+
       function renderExpedienteBatches() {
         const container = document.getElementById("aq-expediente-batches");
         if (!container) return;
@@ -5106,16 +5499,25 @@
       }
 
       function showAquecedorStartStopButtons() {
+        aquecedorStartUnlocked = true;
         updateAquecedorStartStopVisibility(false);
       }
       function updateAquecedorStartStopVisibility(motorRunning) {
         const startBtn = document.getElementById("aquecedor-start-btn");
         const stopBtn = document.getElementById("aquecedor-stop-btn");
+        const runOnceBtn = document.getElementById("aquecedor-run-once-btn");
+        const criarTesteBtn = document.getElementById("aquecedor-criar-teste-btn");
         if (startBtn) {
-          startBtn.classList.toggle("hidden", motorRunning);
+          startBtn.classList.toggle("hidden", motorRunning || !aquecedorStartUnlocked);
         }
         if (stopBtn) {
           stopBtn.classList.toggle("hidden", !motorRunning);
+        }
+        if (runOnceBtn) {
+          runOnceBtn.classList.toggle("hidden", motorRunning);
+        }
+        if (criarTesteBtn) {
+          criarTesteBtn.classList.toggle("hidden", motorRunning);
         }
       }
 
@@ -5195,6 +5597,14 @@
         const saveBtn = document.getElementById("aquecedor-save-btn");
         const statusLabel = document.getElementById("aquecedor-status-label");
         const useRecommended = Boolean(toggle?.checked);
+        const missingFields = getAquecedorMissingRequiredFields();
+        if (missingFields.length) {
+          showToast(
+            `Preencha os campos obrigatórios antes de salvar. Primeiro pendente: ${missingFields[0].label}.`,
+            "warning"
+          );
+          return;
+        }
         const customConfig = getAquecedorFormValues();
         if (customConfig.expediente.length === 0) {
           showToast("Adicione pelo menos um lote de dias no expediente.", "error");
@@ -5246,11 +5656,18 @@
           const label = document.getElementById("aquecedor-runtime-label");
           if (!response.ok) {
             if (label) label.textContent = "Motor: erro ao consultar status";
+            aquecedorRuntimeStatusCache = null;
+            renderAquecedorRuntimeHero(null);
+            renderAquecedorRuntimeProgress();
             return;
           }
           const data = await response.json();
+          aquecedorRuntimeStatusCache = data || null;
           const running = data?.running === true;
           const isProcessing = data?.isProcessing === true;
+          if (running && aquecedorEditMode) {
+            setAquecedorEditMode(false);
+          }
           const nextAllowedAt = data?.nextAllowedAt
             ? new Date(data.nextAllowedAt).toLocaleTimeString("pt-BR")
             : "sem espera";
@@ -5260,10 +5677,108 @@
               running ? "ativo" : "parado"
             } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
           }
+          updateAquecedorStartStopVisibility(running);
+          renderAquecedorRuntimeHero(data);
+          renderAquecedorRuntimeProgress();
+          updateAquecedorChatFabIndicator(data);
         } catch {
           const label = document.getElementById("aquecedor-runtime-label");
           if (label) label.textContent = "Motor: erro ao consultar status";
+          aquecedorRuntimeStatusCache = null;
+          updateAquecedorStartStopVisibility(false);
+          renderAquecedorRuntimeHero(null);
+          renderAquecedorRuntimeProgress();
+          updateAquecedorChatFabIndicator(null);
         }
+      }
+
+      function renderAquecedorRuntimeProgress() {
+        const fillEl = document.getElementById("aquecedor-runtime-progress-fill");
+        const captionEl = document.getElementById("aquecedor-runtime-progress-caption");
+        if (!fillEl || !captionEl) return;
+        const status = aquecedorRuntimeStatusCache || {};
+        const running = status?.running === true;
+        const isProcessing = status?.isProcessing === true;
+        const nextAllowedAtMs = status?.nextAllowedAt ? new Date(status.nextAllowedAt).getTime() : 0;
+        const nowMs = Date.now();
+
+        fillEl.classList.remove("processing");
+        if (!running) {
+          fillEl.style.width = "0%";
+          captionEl.textContent = "Motor parado. Clique em \"Iniciar Aquecedor\" para começar.";
+          return;
+        }
+        if (isProcessing) {
+          fillEl.classList.add("processing");
+          captionEl.textContent = "Processando envio agora...";
+          return;
+        }
+        if (nextAllowedAtMs > nowMs) {
+          const remainingSec = Math.max(0, Math.ceil((nextAllowedAtMs - nowMs) / 1000));
+          const configuredMaxWait = Math.max(
+            10,
+            Math.floor(Number(document.getElementById("aq-wait-max")?.value) || 480)
+          );
+          const progressedPct = Math.max(
+            0,
+            Math.min(100, Math.round(((configuredMaxWait - remainingSec) / configuredMaxWait) * 100))
+          );
+          fillEl.style.width = `${progressedPct}%`;
+          captionEl.textContent = `Aguardando próximo ciclo: ${remainingSec}s restantes.`;
+          return;
+        }
+        fillEl.style.width = "100%";
+        captionEl.textContent = "Pronto para próximo ciclo.";
+      }
+
+      function renderAquecedorRuntimeHero(status) {
+        const hero = document.getElementById("aquecedor-runtime-hero");
+        const titleEl = document.getElementById("aquecedor-runtime-hero-title");
+        const subEl = document.getElementById("aquecedor-runtime-hero-sub");
+        if (!hero || !titleEl || !subEl) return;
+        const running = status?.running === true;
+        const processing = status?.isProcessing === true;
+        const lastResult = String(status?.lastResult || "").trim();
+        hero.classList.remove("active", "processing");
+        if (processing) {
+          hero.classList.add("processing");
+          titleEl.textContent = "Aquecedor processando agora";
+          subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
+          return;
+        }
+        if (running) {
+          hero.classList.add("active");
+          titleEl.textContent = "Aquecedor ativo";
+          subEl.textContent = lastResult || "Motor iniciado e aguardando próximo ciclo.";
+          return;
+        }
+        titleEl.textContent = "Aquecedor parado";
+        subEl.textContent = lastResult || 'Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.';
+      }
+
+      function updateAquecedorChatFabIndicator(status) {
+        const indicator = document.getElementById("aquecedor-chat-fab-indicator");
+        if (!indicator) return;
+        const running = status?.running === true;
+        const processing = status?.isProcessing === true;
+        const nextAllowedMs = status?.nextAllowedAt ? new Date(status.nextAllowedAt).getTime() : 0;
+        const nowMs = Date.now();
+        let nextClass = "red";
+        if (processing) {
+          // envio acontecendo agora
+          nextClass = "green";
+        } else if (running && nextAllowedMs > nowMs) {
+          // motor ativo porém em pausa de espera/janela
+          nextClass = "yellow";
+        } else if (running) {
+          // motor ativo e apto a ciclo
+          nextClass = "green";
+        } else {
+          // sem envio ativo/programado
+          nextClass = "red";
+        }
+        indicator.classList.remove("green", "yellow", "red");
+        indicator.classList.add(nextClass);
       }
 
       async function loadAquecedorEnvios() {
@@ -5281,6 +5796,7 @@
           }
           const data = await response.json().catch(() => ({}));
           const items = Array.isArray(data?.items) ? data.items : [];
+          syncAquecedorChatVisualizer(items);
           if (!items.length) {
             container.innerHTML =
               '<div class="muted">Nenhum envio registrado ainda.</div>';
@@ -5303,6 +5819,66 @@
         } catch {
           container.innerHTML = '<div class="muted">Falha ao carregar envios.</div>';
         }
+      }
+
+      function syncAquecedorChatVisualizer(items) {
+        const list = Array.isArray(items) ? items : [];
+        const additions = [];
+        for (const item of list) {
+          const origem = String(item?.instanciaOrigem || "—").trim();
+          const destino = String(item?.instanciaDestino || "—").trim();
+          const when = String(item?.dataEnvioBr || item?.dataEnvio || "").trim();
+          const key = `${origem}|${destino}|${when}`;
+          if (!origem || !destino || aquecedorChatSeen.has(key)) continue;
+          aquecedorChatSeen.add(key);
+          additions.push({ origem, destino, when });
+        }
+        if (!additions.length) return;
+        additions.reverse().forEach((ev) => {
+          aquecedorChatEvents.push(ev);
+        });
+        if (aquecedorChatEvents.length > 120) {
+          aquecedorChatEvents = aquecedorChatEvents.slice(-120);
+        }
+        renderAquecedorChatVisualizer();
+      }
+
+      function renderAquecedorChatVisualizer() {
+        const body = document.getElementById("aquecedor-chat-body");
+        if (!body) return;
+        if (!aquecedorChatEvents.length) {
+          body.innerHTML =
+            '<div class="aquecedor-chat-empty">Sem mensagens ainda. Inicie o aquecedor para acompanhar o fluxo.</div>';
+          return;
+        }
+        const last = aquecedorChatEvents.slice(-40);
+        body.innerHTML = last
+          .map((ev) => {
+            const origem = String(ev.origem || "—")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            const destino = String(ev.destino || "—")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            const when = String(ev.when || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            return `
+              <div class="aquecedor-chat-bubble outgoing">
+                Olá! Mensagem automática enviada por ${origem}.
+                <span class="aquecedor-chat-bubble-meta">${when || "agora"} · enviado</span>
+              </div>
+              <div class="aquecedor-chat-bubble incoming">
+                Recebido por ${destino}. Retorno registrado no histórico.
+                <span class="aquecedor-chat-bubble-meta">${when || "agora"} · recebido</span>
+              </div>
+            `;
+          })
+          .join("");
+        body.scrollTop = body.scrollHeight;
       }
 
       /** Mesma lógica do botão Diagnóstico do painel do motor — grava linhas em «Logs de comandos». */
@@ -5370,14 +5946,27 @@
 
       function startAquecedorEnviosPolling() {
         if (aquecedorEnviosPollTimer) clearInterval(aquecedorEnviosPollTimer);
+        if (aquecedorRuntimePollTimer) clearInterval(aquecedorRuntimePollTimer);
+        if (aquecedorRuntimeVizTimer) clearInterval(aquecedorRuntimeVizTimer);
         loadAquecedorEnvios();
+        loadAquecedorRuntimeStatus();
         aquecedorEnviosPollTimer = setInterval(loadAquecedorEnvios, 8000);
+        aquecedorRuntimePollTimer = setInterval(loadAquecedorRuntimeStatus, 3000);
+        aquecedorRuntimeVizTimer = setInterval(renderAquecedorRuntimeProgress, 1000);
       }
 
       function stopAquecedorEnviosPolling() {
         if (aquecedorEnviosPollTimer) {
           clearInterval(aquecedorEnviosPollTimer);
           aquecedorEnviosPollTimer = null;
+        }
+        if (aquecedorRuntimePollTimer) {
+          clearInterval(aquecedorRuntimePollTimer);
+          aquecedorRuntimePollTimer = null;
+        }
+        if (aquecedorRuntimeVizTimer) {
+          clearInterval(aquecedorRuntimeVizTimer);
+          aquecedorRuntimeVizTimer = null;
         }
       }
 
@@ -5394,6 +5983,21 @@
           clearInterval(disparosCampaignsPollTimer);
           disparosCampaignsPollTimer = null;
         }
+      }
+
+      function updateAquecedorChatDockVisibility() {
+        const fab = document.getElementById("aquecedor-chat-fab");
+        const modal = document.getElementById("aquecedor-chat-modal");
+        if (!fab || !modal) return;
+        const isAquecedorTab = activeTab === "aquecedor";
+        if (!isAquecedorTab) {
+          fab.style.display = "none";
+          modal.classList.remove("open");
+          modal.setAttribute("aria-hidden", "true");
+          return;
+        }
+        const modalOpen = modal.classList.contains("open");
+        fab.style.display = modalOpen ? "none" : "";
       }
 
       function toggleDisparosModeBoxes() {
@@ -5993,7 +6597,8 @@
               const ok = await saveDisparosConfig({
                 collapseAll: false,
                 useMainButtonLoading: false,
-                skipWhatsappValidation: idx < 4,
+                skipWhatsappValidation: true,
+                skipRequiredValidation: true,
               });
               saveBtn.textContent = original || "Salvar configurações";
               saveBtn.removeAttribute("disabled");
@@ -6106,9 +6711,59 @@
         const useMainButtonLoading = options?.useMainButtonLoading !== false;
         const collapseAllOnSuccess = options?.collapseAll !== false;
         const skipWhatsappValidation = options?.skipWhatsappValidation === true;
-        if (!skipWhatsappValidation && !validateWhatsappTarget(true)) {
-          showToast("Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.", "warning");
-          return false;
+        const skipRequiredValidation = options?.skipRequiredValidation === true;
+        const allowPartialSave = skipRequiredValidation === true;
+        const isAiMode = !document.getElementById("dis-mode-db")?.checked;
+        if (!skipRequiredValidation) {
+          const requiredFields = [
+            { id: "dis-delay-min", label: "Delay mínimo (segundos)" },
+            { id: "dis-delay-max", label: "Delay máximo (segundos)" },
+            { id: "dis-max-hour", label: "Máx/hora por instância" },
+            { id: "dis-max-day", label: "Máx/dia por instância" },
+            { id: "dis-start-hour", label: "Início da janela (hora)" },
+            { id: "dis-end-hour", label: "Fim da janela (hora)" },
+            { id: "dis-whatsapp-target", label: "Número WhatsApp para links" },
+            ...(isAiMode
+              ? [
+                  { id: "dis-ai-tone", label: "Tom da mensagem (IA)" },
+                  { id: "dis-ai-audience", label: "Público alvo (IA)" },
+                  { id: "dis-ai-cta", label: "CTA padrão (IA)" },
+                  { id: "dis-ai-product", label: "Produto/serviço (IA)" },
+                  { id: "dis-ai-objective", label: "Objetivo da mensagem (IA)" },
+                  { id: "dis-ai-pains", label: "Dores do público (IA)" },
+                  { id: "dis-ai-differentials", label: "Diferenciais (IA)" },
+                  { id: "dis-ai-prohibitions", label: "Regras/proibições (IA)" },
+                  { id: "dis-ai-notes", label: "Observações adicionais (IA)" },
+                ]
+              : []),
+          ];
+          const firstMissing = requiredFields.find(({ id }) => {
+            const el = document.getElementById(id);
+            if (!el) return true;
+            return String(el.value ?? "").trim() === "";
+          });
+          if (firstMissing) {
+            showToast(
+              `Preencha os campos obrigatórios antes de salvar. Primeiro pendente: ${firstMissing.label}.`,
+              "warning"
+            );
+            return false;
+          }
+        }
+        if (!skipRequiredValidation) {
+          const selectedInstancesCount = (document.getElementById("dis-selected-instances")?.options || []).length;
+          if (selectedInstancesCount === 0) {
+            showToast("Selecione pelo menos um número para o disparador antes de salvar.", "warning");
+            return false;
+          }
+          if (getDisparosWorkingDays().length === 0) {
+            showToast("Selecione ao menos um dia de expediente antes de salvar.", "warning");
+            return false;
+          }
+          if (!skipWhatsappValidation && !validateWhatsappTarget(true)) {
+            showToast("Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.", "warning");
+            return false;
+          }
         }
         if (useMainButtonLoading && btn) {
           btn.textContent = "Salvando...";
@@ -6120,7 +6775,7 @@
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ config: getDisparosFormValues() }),
+              body: JSON.stringify({ config: getDisparosFormValues(), allowPartialSave }),
             },
             12000
           );
@@ -6378,6 +7033,59 @@
             const statusRaw = String(item?.status || "paused").toLowerCase();
             const isRunning = statusRaw === "running";
             const isFinished = statusRaw === "finished";
+            const runtimeRaw = item?.runtimeStage && typeof item.runtimeStage === "object"
+              ? item.runtimeStage
+              : null;
+            const nextAllowedAtMs = item?.nextAllowedAt ? new Date(item.nextAllowedAt).getTime() : 0;
+            const nowMsRuntime = Date.now();
+            const inferredWaiting = isRunning && nextAllowedAtMs > nowMsRuntime;
+            const runtimePhase = String(runtimeRaw?.phase || "").toLowerCase();
+            const runtimeFillClass =
+              runtimePhase === "sending" ||
+              runtimePhase === "waiting_interval" ||
+              runtimePhase === "outside_window" ||
+              runtimePhase === "paused" ||
+              runtimePhase === "finished" ||
+              runtimePhase === "draft"
+                ? runtimePhase
+                : inferredWaiting
+                ? "waiting_interval"
+                : isFinished
+                ? "finished"
+                : isRunning
+                ? "sending"
+                : statusRaw === "paused"
+                ? "paused"
+                : "draft";
+            const runtimeFillPercent = Math.max(
+              0,
+              Math.min(100, Number(runtimeRaw?.fillPercent ?? (isRunning ? 90 : isFinished ? 100 : 24)))
+            );
+            const runtimeLabel = String(
+              runtimeRaw?.label ||
+                (inferredWaiting
+                  ? "Aguardando intervalo"
+                  :
+                (isFinished
+                  ? "Finalizada"
+                  : isRunning
+                  ? "Enviando agora"
+                  : statusRaw === "paused"
+                  ? "Pausada"
+                  : "Rascunho"))
+            );
+            const inferredWaitingDetail = inferredWaiting
+              ? `Pausa operacional entre envios (${Math.max(
+                  1,
+                  Math.ceil((nextAllowedAtMs - nowMsRuntime) / 1000)
+                )}s restantes).`
+              : "";
+            const runtimeDetail = String(runtimeRaw?.detail || inferredWaitingDetail || "").trim();
+            const health = item?.instanceHealth && typeof item.instanceHealth === "object"
+              ? item.instanceHealth
+              : {};
+            const shouldPauseByDisconnectedRatio =
+              health?.shouldPauseByDisconnectedRatio === true;
             const btnLabel = isFinished ? "Campanha finalizada" : isRunning ? "Pausar" : "Ativar campanha";
             const safeName = campaignName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -6409,6 +7117,9 @@
               tagsBlock =
                 '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
             }
+            if (shouldPauseByDisconnectedRatio) {
+              tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima de instâncias atingida.</div>`;
+            }
 
             const body = document.createElement("div");
             body.className = "disparos-campaign-item-body";
@@ -6419,6 +7130,12 @@
                 ${tagsBlock}
                 <div style="margin-top:6px; height:8px; border-radius:999px; background: rgba(255,255,255,.12); overflow:hidden;">
                   <div style="width:${Math.max(0, Math.min(100, progress))}%; height:100%; background: linear-gradient(90deg, #22c55e, #16a34a);"></div>
+                </div>
+                <div class="disparos-runtime-stage-wrap" aria-label="Etapa atual da campanha">
+                  <div class="disparos-runtime-stage-track">
+                    <div class="disparos-runtime-stage-fill disparos-runtime-stage-fill--${runtimeFillClass}" style="width:${runtimeFillPercent}%;"></div>
+                  </div>
+                  <div class="disparos-runtime-stage-text">${runtimeLabel}${runtimeDetail ? ` · ${runtimeDetail}` : ""}</div>
                 </div>
               `;
 
@@ -6433,8 +7150,15 @@
               toggleBtn.dataset.campaignId = campaignId;
               toggleBtn.dataset.campaignRunning = isRunning ? "1" : "0";
               toggleBtn.dataset.campaignFinished = isFinished ? "1" : "0";
+              toggleBtn.dataset.campaignBlockedByInstances = shouldPauseByDisconnectedRatio ? "1" : "0";
               toggleBtn.textContent = btnLabel;
-              if (isFinished) toggleBtn.disabled = true;
+              if (isFinished || (!isRunning && shouldPauseByDisconnectedRatio)) toggleBtn.disabled = true;
+
+              const addInstancesBtn = document.createElement("button");
+              addInstancesBtn.type = "button";
+              addInstancesBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-add-instances";
+              addInstancesBtn.dataset.campaignId = campaignId;
+              addInstancesBtn.textContent = "+ Instâncias";
 
               const secondary = document.createElement("div");
               secondary.className = "disparos-campaign-secondary-actions";
@@ -6462,6 +7186,7 @@
               delBtn.textContent = "Excluir";
 
               if (isFinished) secondary.appendChild(reportBtn);
+              if (shouldPauseByDisconnectedRatio) secondary.appendChild(addInstancesBtn);
               secondary.appendChild(editBtn);
               secondary.appendChild(delBtn);
               actions.appendChild(toggleBtn);
@@ -6495,6 +7220,43 @@
           return false;
         }
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
+        await loadDisparosTemplates();
+        return true;
+      }
+
+      async function addInstancesToCampaign(campaignId) {
+        const id = String(campaignId || "").trim();
+        if (!id) return false;
+        const selected = Array.from(
+          document.getElementById("dis-selected-instances")?.options || []
+        )
+          .map((opt) => String(opt.value || "").trim())
+          .filter(Boolean);
+        if (!selected.length) {
+          showToast("Selecione instâncias na Seção 1 antes de usar '+ Instâncias'.", "warning");
+          return false;
+        }
+        const response = await fetchWithTimeout(
+          `/disparos/campanhas/${encodeURIComponent(id)}/instancias`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instanceNames: selected }),
+          },
+          15000
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error");
+          return false;
+        }
+        showToast(
+          String(
+            data?.message ||
+              "Instâncias adicionadas. Se a saúde da campanha estiver boa, ative novamente."
+          ),
+          "success"
+        );
         await loadDisparosTemplates();
         return true;
       }
@@ -7076,11 +7838,33 @@
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showToast(data?.error || "Falha ao executar ação do aquecedor.", "error");
+            const runtimeBgOff = data?.runtime?.backgroundProcessing === false;
+            if (action === "start" && runtimeBgOff) {
+              showToast(
+                "Este ambiente está com processamento desativado. Use o ambiente da porta 3000 para iniciar o Aquecedor.",
+                "warning",
+                5200
+              );
+              renderAquecedorRuntimeHero({
+                running: false,
+                isProcessing: false,
+                lastResult:
+                  "Aquecedor indisponível neste ambiente (background desligado). Use a porta 3000.",
+              });
+            } else {
+              showToast(data?.error || "Falha ao executar ação do aquecedor.", "error");
+            }
             return;
           }
           showToast(data?.message || "Ação executada com sucesso.", "success");
           addAquecedorCommandLog(data?.message || `Ação concluída: ${action}.`);
+          if (action === "start") {
+            renderAquecedorRuntimeHero({
+              running: true,
+              isProcessing: false,
+              lastResult: "Aquecedor iniciado com sucesso.",
+            });
+          }
           const lastResult = data?.status?.lastResult;
           if (action === "runOnce" && lastResult) {
             addAquecedorCommandLog("Resultado: " + lastResult);
@@ -7299,6 +8083,7 @@
         }
 
         syncIntegrationEnvWithTab(nextTab);
+        updateAquecedorChatDockVisibility();
       }
 
       function closeMobileTabsDrawer() {
@@ -10721,6 +11506,24 @@
           }
         });
       }
+      const aquecedorChatFab = document.getElementById("aquecedor-chat-fab");
+      const aquecedorChatModal = document.getElementById("aquecedor-chat-modal");
+      const aquecedorChatClose = document.getElementById("aquecedor-chat-close");
+      if (aquecedorChatFab && aquecedorChatModal) {
+        aquecedorChatFab.addEventListener("click", () => {
+          aquecedorChatModal.classList.add("open");
+          aquecedorChatModal.setAttribute("aria-hidden", "false");
+          aquecedorChatFab.style.display = "none";
+          renderAquecedorChatVisualizer();
+        });
+      }
+      if (aquecedorChatClose && aquecedorChatModal && aquecedorChatFab) {
+        aquecedorChatClose.addEventListener("click", () => {
+          aquecedorChatModal.classList.remove("open");
+          aquecedorChatModal.setAttribute("aria-hidden", "true");
+          updateAquecedorChatDockVisibility();
+        });
+      }
       const disparosRefreshBtn = document.getElementById("disparos-refresh-btn");
       if (disparosRefreshBtn) {
         disparosRefreshBtn.addEventListener("click", () => {
@@ -10844,6 +11647,22 @@
             const id = delBtn.dataset.campaignId || delBtn.getAttribute("data-campaign-id");
             const nm = delBtn.dataset.campaignName ?? delBtn.getAttribute("data-campaign-name") ?? "";
             if (id) openDisCampaignDeleteModal(id, nm);
+            return;
+          }
+          const addInstancesBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-add-instances") : null;
+          if (addInstancesBtn && disparosListEl.contains(addInstancesBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id =
+              addInstancesBtn.dataset.campaignId ||
+              addInstancesBtn.getAttribute("data-campaign-id");
+            if (!id) return;
+            addInstancesBtn.setAttribute("disabled", "true");
+            try {
+              await addInstancesToCampaign(id);
+            } finally {
+              addInstancesBtn.removeAttribute("disabled");
+            }
             return;
           }
           const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
@@ -11184,6 +12003,7 @@
       }
 
       setActiveTab(activeTab);
+      updateAquecedorChatDockVisibility();
       setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
       setAquecedorFormDisabled(true);
       setAquecedorEditMode(true);
