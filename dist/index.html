@@ -3272,6 +3272,51 @@
         font-size: 0.7rem;
         white-space: nowrap;
       }
+      .disparos-campaign-icon-actions {
+        margin-top: 8px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        width: 100%;
+      }
+      .disparos-campaign-icon-btn {
+        width: 34px;
+        height: 28px;
+        min-width: 34px !important;
+        padding: 0;
+        border-radius: 8px;
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        background: rgba(30, 64, 175, 0.18);
+        color: #7dd3fc;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        line-height: 1;
+      }
+      .disparos-campaign-icon-btn:hover {
+        border-color: rgba(56, 189, 248, 0.75);
+        background: rgba(37, 99, 235, 0.28);
+      }
+      .disparos-last-message-body {
+        margin-top: 10px;
+        display: grid;
+        gap: 10px;
+      }
+      .disparos-last-message-meta {
+        color: #93c5fd;
+        font-size: 0.78rem;
+      }
+      .disparos-last-message-box {
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(2, 6, 23, 0.45);
+        color: #e2e8f0;
+        font-size: 0.84rem;
+        white-space: pre-wrap;
+        line-height: 1.45;
+      }
       @media (max-width: 992px) {
         .disparos-layout {
           grid-template-columns: 1fr;
@@ -5036,6 +5081,17 @@
         <div id="dis-campaign-report-body"></div>
         <div class="confirm-actions" style="margin-top: 16px">
           <button id="dis-campaign-report-close-btn" type="button" class="instance-action-btn btn-qrcode enabled">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="dis-campaign-last-message-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" style="max-width: 720px">
+        <div class="confirm-title" id="dis-campaign-last-message-title">Última mensagem disparada</div>
+        <div id="dis-campaign-last-message-body" class="disparos-last-message-body"></div>
+        <div class="confirm-actions">
+          <button id="dis-campaign-last-message-close-btn" type="button" class="instance-action-btn btn-qrcode enabled">
             Fechar
           </button>
         </div>
@@ -7203,6 +7259,30 @@
               secondary.appendChild(delBtn);
               actions.appendChild(toggleBtn);
               actions.appendChild(secondary);
+              const iconActions = document.createElement("div");
+              iconActions.className = "disparos-campaign-icon-actions";
+
+              const messageBtn = document.createElement("button");
+              messageBtn.type = "button";
+              messageBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-last-message";
+              messageBtn.dataset.campaignId = campaignId;
+              messageBtn.dataset.campaignName = campaignName;
+              messageBtn.title = "Ver última mensagem disparada";
+              messageBtn.setAttribute("aria-label", "Ver última mensagem disparada");
+              messageBtn.textContent = "💬";
+
+              const urlBtn = document.createElement("button");
+              urlBtn.type = "button";
+              urlBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-last-url";
+              urlBtn.dataset.campaignId = campaignId;
+              urlBtn.dataset.campaignName = campaignName;
+              urlBtn.title = "Abrir última URL utilizada";
+              urlBtn.setAttribute("aria-label", "Abrir última URL utilizada");
+              urlBtn.textContent = "↗";
+
+              iconActions.appendChild(messageBtn);
+              iconActions.appendChild(urlBtn);
+              actions.appendChild(iconActions);
               row.appendChild(actions);
             }
             list.appendChild(row);
@@ -7425,6 +7505,15 @@
         }
       }
 
+      function closeDisCampaignLastMessageModal() {
+        const overlay = document.getElementById("dis-campaign-last-message-overlay");
+        if (overlay) {
+          blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+      }
+
       function renderDisCampaignReportBody(data) {
         const body = document.getElementById("dis-campaign-report-body");
         if (!body) return;
@@ -7515,6 +7604,80 @@
           renderDisCampaignReportBody(data);
         } catch {
           body.innerHTML = '<div class="muted">Erro de rede ao carregar relatório.</div>';
+        }
+      }
+
+      function renderDisCampaignLastMessageBody(data) {
+        const body = document.getElementById("dis-campaign-last-message-body");
+        const title = document.getElementById("dis-campaign-last-message-title");
+        if (!body) return;
+        const campaignName = String(data?.campaignName || "Campanha");
+        if (title) title.textContent = `Última mensagem disparada — ${campaignName}`;
+        if (!data?.found) {
+          body.innerHTML = '<div class="muted">Ainda não há disparo concluído para esta campanha.</div>';
+          return;
+        }
+        const sentAt = data?.sentAt ? new Date(data.sentAt).toLocaleString("pt-BR") : "—";
+        const phone = String(data?.phone || "—");
+        const shortUrl = String(data?.shortUrl || "").trim();
+        const message = String(data?.message || "").trim();
+        body.innerHTML = `
+          <div class="disparos-last-message-meta">Enviado em: ${escapeHtmlCampaign(sentAt)} · Destino: ${escapeHtmlCampaign(phone)}</div>
+          <div class="disparos-last-message-meta">URL: ${shortUrl ? `<a href="${escapeHtmlCampaign(shortUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtmlCampaign(shortUrl)}</a>` : "não disponível"}</div>
+          <div class="disparos-last-message-box">${message ? escapeHtmlCampaign(message) : "Mensagem não registrada para este envio."}</div>
+        `;
+      }
+
+      async function openDisCampaignLastMessageModal(campaignId) {
+        const id = String(campaignId || "").trim();
+        if (!id) return;
+        const overlay = document.getElementById("dis-campaign-last-message-overlay");
+        const body = document.getElementById("dis-campaign-last-message-body");
+        if (!overlay || !body) return;
+        body.innerHTML = '<div class="muted">Carregando última mensagem...</div>';
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        try {
+          const response = await fetchWithTimeout(
+            `/disparos/campanhas/${encodeURIComponent(id)}/ultimo-disparo`,
+            {},
+            10000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(String(data?.error || "Não foi possível carregar a última mensagem."), "error");
+            body.innerHTML = '<div class="muted">Falha ao carregar os dados.</div>';
+            return;
+          }
+          renderDisCampaignLastMessageBody(data);
+        } catch {
+          showToast("Erro de rede ao buscar última mensagem da campanha.", "error");
+          body.innerHTML = '<div class="muted">Erro de rede ao carregar os dados.</div>';
+        }
+      }
+
+      async function openDisCampaignLastUrl(campaignId) {
+        const id = String(campaignId || "").trim();
+        if (!id) return;
+        try {
+          const response = await fetchWithTimeout(
+            `/disparos/campanhas/${encodeURIComponent(id)}/ultimo-disparo`,
+            {},
+            10000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(String(data?.error || "Não foi possível carregar a última URL."), "error");
+            return;
+          }
+          const url = String(data?.shortUrl || "").trim();
+          if (!url) {
+            showToast("Esta campanha ainda não possui URL registrada no último disparo.", "warning");
+            return;
+          }
+          window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+          showToast("Erro de rede ao buscar a última URL da campanha.", "error");
         }
       }
 
@@ -11652,6 +11815,22 @@
             if (id) openDisCampaignRenameModal(id, nm);
             return;
           }
+          const msgBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-last-message") : null;
+          if (msgBtn && disparosListEl.contains(msgBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = msgBtn.dataset.campaignId || msgBtn.getAttribute("data-campaign-id");
+            if (id) void openDisCampaignLastMessageModal(id);
+            return;
+          }
+          const urlBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-last-url") : null;
+          if (urlBtn && disparosListEl.contains(urlBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = urlBtn.dataset.campaignId || urlBtn.getAttribute("data-campaign-id");
+            if (id) void openDisCampaignLastUrl(id);
+            return;
+          }
           const delBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-delete") : null;
           if (delBtn && disparosListEl.contains(delBtn)) {
             e.preventDefault();
@@ -11722,6 +11901,15 @@
       document
         .getElementById("dis-campaign-report-close-btn")
         ?.addEventListener("click", () => closeDisCampaignReportModal());
+      const disCampaignLastMessageOverlay = document.getElementById("dis-campaign-last-message-overlay");
+      if (disCampaignLastMessageOverlay) {
+        disCampaignLastMessageOverlay.addEventListener("click", (e) => {
+          if (e.target === disCampaignLastMessageOverlay) closeDisCampaignLastMessageModal();
+        });
+      }
+      document
+        .getElementById("dis-campaign-last-message-close-btn")
+        ?.addEventListener("click", () => closeDisCampaignLastMessageModal());
 
       const disModeAi = document.getElementById("dis-mode-ai");
       const disModeDb = document.getElementById("dis-mode-db");

@@ -15,6 +15,12 @@ Como usar:
 ## Última atualização
 2026-03-31
 
+**Campanhas Disparador — ícones de última mensagem e última URL:** adicionados dois atalhos no card da campanha (`💬` e `↗`) abaixo dos botões de ação. `💬` abre modal com a última mensagem disparada; `↗` abre a última URL usada no disparo. Backend ganhou `GET /disparos/campanhas/:id/ultimo-disparo` e o lead enviado passou a armazenar `messageText` no estado local. Ver `doc/LOG-2026-03-31__182500__feat-campanhas-icones-ultima-mensagem-url.md`.
+
+Palavras-chave: `campanha-ultima-mensagem`, `campanha-ultima-url`, `GET /disparos/campanhas/:id/ultimo-disparo`
+
+---
+
 **Disparos — diagnóstico com semântica de ciclo ativo:** texto de `proximoEnvio` foi reescrito para evitar leitura de travamento. Agora indica `ciclo em execução`, marca `intervalo operacional (normal)` no cooldown e mostra contagem regressiva `~Xs` para o próximo envio. Ver `doc/LOG-2026-03-31__181300__refactor-diagnostico-campanha-intervalo-normal.md`.
 
 Palavras-chave: `diagnostico-intervalo-normal`, `proximoEnvio-contagem-regressiva`, `ciclo-em-execucao`

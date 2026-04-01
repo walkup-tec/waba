@@ -757,6 +757,7 @@ type DisparosCampaignLead = {
   campaignId: string;
   phone: string;
   status: "pending" | "sent" | "failed";
+  messageText?: string;
   shortUrl?: string;
   /** Preenchido quando status === "failed" (envio na mesma execução); leads antigos sem valor caem em send_error no relatório. */
   failureKind?: LeadFailureKind;
@@ -910,6 +911,7 @@ function queuePersistDisparosLocalState(): void {
           campaignId: l.campaignId,
           phone: l.phone,
           status: l.status,
+          messageText: l.messageText,
           shortUrl: l.shortUrl,
           failureKind: l.failureKind,
           createdAt: l.createdAt,
@@ -994,6 +996,7 @@ async function loadDisparosLocalState(): Promise<void> {
         campaignId: String(l?.campaignId || ""),
         phone: String(l?.phone || ""),
         status,
+        messageText: typeof l?.messageText === "string" ? l.messageText : undefined,
         shortUrl: typeof l?.shortUrl === "string" ? l.shortUrl : undefined,
         failureKind,
         createdAt: String(l?.createdAt || new Date().toISOString()),
@@ -5228,6 +5231,7 @@ async function persistLeadSentAndCampaignCount(
 async function persistLeadFailed(lead: DisparosCampaignLead, kind: LeadFailureKind): Promise<void> {
   lead.status = "failed";
   lead.failureKind = kind;
+  lead.messageText = undefined;
   lead.sentAt = null;
   const supabase = getSupabaseClient();
   if (!supabase) return;
@@ -5316,6 +5320,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
   const sentIso = new Date().toISOString();
   lead.status = "sent";
+  lead.messageText = outbound.text;
   lead.sentAt = sentIso;
   lead.shortUrl = outbound.shortUrl || undefined;
   campaign.sentCount += 1;
@@ -5990,6 +5995,41 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
   } catch (error) {
     console.error("GET /disparos/campanhas/:id/relatorio", error);
     return res.status(500).json({ error: "Erro ao montar relatório da campanha." });
+  }
+});
+
+app.get("/disparos/campanhas/:id/ultimo-disparo", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) {
+      return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
+    }
+    const campaign =
+      disparosCampaignsMemory.find((c) => c.id === id) || (await hydrateCampaignFromDbIfNeeded(id));
+    if (!campaign) {
+      return res.status(404).json({ error: "Campanha não encontrada." });
+    }
+    const sentLeads = disparosCampaignLeadsMemory
+      .filter((l) => l.campaignId === id && l.status === "sent")
+      .sort((a, b) => {
+        const ta = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+        const tb = b.sentAt ? new Date(b.sentAt).getTime() : 0;
+        return tb - ta;
+      });
+    const last = sentLeads[0];
+    const message = String(last?.messageText || "").trim();
+    const shortUrl = String(last?.shortUrl || "").trim();
+    return res.json({
+      campaignId: id,
+      campaignName: campaign.name,
+      found: Boolean(last),
+      sentAt: last?.sentAt || null,
+      phone: last?.phone || null,
+      message: message || null,
+      shortUrl: shortUrl || null,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || "Erro ao consultar último disparo." });
   }
 });
 
