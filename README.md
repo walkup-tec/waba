@@ -1,7 +1,7 @@
 Disparador N8
 ==============
 
-Projeto para integrações e disparos automáticos utilizando n8n.
+Projeto para integrações e disparos automáticos utilizando API oficial e Sem API OFicial (dois modos para atender a necessidades diferentes).
 
 ## Requisitos
 
