@@ -9,11 +9,44 @@ Como usar:
 ## Caminhos (repositórios próximos)
 - **Página vendas SOMA (remoto)**: [github.com/walkup-tec/Pagina-vendas-soma](https://github.com/walkup-tec/Pagina-vendas-soma) — pasta local `D:\SOMA Promotora\Pagina-Vendas`
 - **SOMA Credit Sales** (cópia de trabalho anterior, mesmo stack): `D:\SOMA Promotora\soma-credit-sales`
+- **LV Promotora — landing estática (FTP / cópia local)**: `E:\PaginaVendas-LV` — Meta Pixel `1244070901219529`, evento `Contact` em cliques `wa.me` / `api.whatsapp.com`; WhatsApp CA `+5553991687250` (`wa.me/5553991687250`). Ver `doc/LOG-2026-04-02__150000__meta-pixel-contact-pagina-vendas-lv.md`, `doc/LOG-2026-04-02__160000__update-whatsapp-ca-pagina-vendas-lv.md`.
 
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
-2026-03-31
+2026-04-02
+
+**Waba — deploy FTP via GitHub Actions:** workflow `.github/workflows/deploy-ftp.yml` (push em `master` ou manual) roda `npm run bundle:ftp` e envia `ftp-bundle/` com `SamKirkland/FTP-Deploy-Action`; secrets `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_REMOTE_DIR`. Ver `doc/deploy-ftp-github.md`.
+
+Palavras-chave: `github-actions-ftp`, `bundle:ftp`, `FTP_REMOTE_DIR`
+
+---
+
+**Waba — API Meta Ativos:** callout explicando integração Cloud API **no navegador** (sem app no celular) e **perfis salvos** no `localStorage` (`waba.meta.integrationProfiles.v1`) para alternar token/WABA/phone_number_id. Ver `doc/LOG-2026-04-02__170500__meta-api-callout-perfis-navegador.md`.
+
+Palavras-chave: `meta-perfis-navegador`, `embedded-signup-browser`, `integrationProfiles`
+
+---
+
+**PaginaVendas-LV — número CA WhatsApp:** links de conversão passam a usar `5553991687250` (+55 53 99168-7250) no bundle `index-Di-MQYWG.js`. Ver `doc/LOG-2026-04-02__160000__update-whatsapp-ca-pagina-vendas-lv.md`.
+
+Palavras-chave: `whatsapp-ca-lv`, `5553991687250`, `PaginaVendas-LV`
+
+---
+
+**PaginaVendas-LV — Meta Pixel + Contact:** pixel ativo (`PageView` + `noscript`); script no `index.html` dispara `fbq('track', 'Contact')` em qualquer link `<a href>` para WhatsApp (`wa.me` ou `api.whatsapp.com`), compatível com o bundle em `/assets` sem rebuild. Ver `doc/LOG-2026-04-02__150000__meta-pixel-contact-pagina-vendas-lv.md`.
+
+Palavras-chave: `meta-pixel-lv`, `Contact`, `PaginaVendas-LV`, `wa.me`
+
+---
+
+2026-04-01
+
+**Campanhas — refinamento dos ícones de última mensagem/URL + robustez de endpoint:** ícones de ação no card migrados de emoji para SVG, com feedback explícito quando o ambiente ainda não carregou a rota nova (`404` em `ultimo-disparo`). Backend reforçado para persistir/hidratar `message_text` e `short_url` com fallback legado. Serviço local reiniciado para aplicar build. Ver `doc/LOG-2026-04-01__081600__fix-icones-campanha-e-restart-endpoint-ultimo-disparo.md`.
+
+Palavras-chave: `icone-campanha-svg`, `ultimo-disparo-404-restart`, `message_text-short_url`
+
+---
 
 **Campanhas Disparador — ícones de última mensagem e última URL:** adicionados dois atalhos no card da campanha (`💬` e `↗`) abaixo dos botões de ação. `💬` abre modal com a última mensagem disparada; `↗` abre a última URL usada no disparo. Backend ganhou `GET /disparos/campanhas/:id/ultimo-disparo` e o lead enviado passou a armazenar `messageText` no estado local. Ver `doc/LOG-2026-03-31__182500__feat-campanhas-icones-ultima-mensagem-url.md`.
 

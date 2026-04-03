@@ -1,0 +1,48 @@
+# Deploy automático: após push em `master`, gera ftp-bundle e envia por FTP.
+#
+# Credenciais NUNCA no código — só em GitHub → Settings → Secrets and variables → Actions:
+#   FTP_HOST        → host (ex.: ftp.seudominio.com)
+#   FTP_USERNAME
+#   FTP_PASSWORD
+#   FTP_REMOTE_DIR  → pasta remota (ex.: /public_html ou /www — confira no painel do host)
+#
+# FTPS/porta custom: edite o passo "Enviar para FTP" e acrescente `protocol` / `port`
+# conforme https://github.com/SamKirkland/FTP-Deploy-Action
+#
+# Doc: doc/deploy-ftp-github.md
+
+name: Deploy FTP (bundle)
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Instalar dependências e gerar ftp-bundle
+        run: |
+          npm ci
+          npm run bundle:ftp
+
+      - name: Enviar para FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          local-dir: ./ftp-bundle/
+          log-level: standard

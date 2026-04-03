@@ -7,7 +7,10 @@
     "dev": "ts-node src/index.ts",
     "dev:isolado": "set PORT=3010&& set RUNTIME_MODE=development&& set ENABLE_BACKGROUND_PROCESSING=false&& ts-node src/index.ts",
     "build": "tsc && node scripts/copy-index-html.mjs",
+    "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
     "start": "node dist/index.js",
+    "free:3000": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/free-port-3000.ps1",
+    "start:win": "npm run free:3000 && node dist/index.js",
     "start:prod": "set PORT=3000&& set RUNTIME_MODE=production&& set ENABLE_BACKGROUND_PROCESSING=true&& node dist/index.js",
     "start:prod:maintenance": "set PORT=3000&& set RUNTIME_MODE=production&& set ENABLE_BACKGROUND_PROCESSING=false&& set MAINTENANCE_MODE=true&& node dist/index.js"
   },

@@ -4979,11 +4979,22 @@ async function hydrateCampaignFromDbIfNeeded(
 
     let leadRows: any[] = [];
     try {
-      const { data: lr } = await (supabase
+      let lr: any[] | null = null;
+      const withMessage = await (supabase
         .from("disparos_campaign_leads" as any)
-        .select("id, campaign_id, phone, status, created_at, sent_at")
+        .select("id, campaign_id, phone, status, created_at, sent_at, short_url, message_text")
         .eq("campaign_id", campaignId)
         .limit(100000)) as any;
+      if (!withMessage.error && Array.isArray(withMessage.data)) {
+        lr = withMessage.data;
+      } else {
+        const legacy = await (supabase
+          .from("disparos_campaign_leads" as any)
+          .select("id, campaign_id, phone, status, created_at, sent_at")
+          .eq("campaign_id", campaignId)
+          .limit(100000)) as any;
+        if (!legacy.error && Array.isArray(legacy.data)) lr = legacy.data;
+      }
       if (Array.isArray(lr)) leadRows = lr;
     } catch (e) {
       console.error("[Campanha] Falha ao ler leads no hydrate:", campaignId, e);
@@ -5014,6 +5025,8 @@ async function hydrateCampaignFromDbIfNeeded(
             campaignId: String(lr?.campaign_id || campaignId),
             phone: String(lr?.phone || ""),
             status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
+            shortUrl: typeof lr?.short_url === "string" ? String(lr.short_url) : undefined,
+            messageText: typeof lr?.message_text === "string" ? String(lr.message_text) : undefined,
             createdAt: String(lr?.created_at || new Date().toISOString()),
             sentAt: lr?.sent_at ? String(lr.sent_at) : null,
           });
@@ -5041,6 +5054,8 @@ async function hydrateCampaignFromDbIfNeeded(
           campaignId: String(lr?.campaign_id || campaignId),
           phone: String(lr?.phone || ""),
           status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
+          shortUrl: typeof lr?.short_url === "string" ? String(lr.short_url) : undefined,
+          messageText: typeof lr?.message_text === "string" ? String(lr.message_text) : undefined,
           createdAt: String(lr?.created_at || new Date().toISOString()),
           sentAt: lr?.sent_at ? String(lr.sent_at) : null,
         });
@@ -5210,15 +5225,29 @@ async function composeOutboundMessageForConfig(
 async function persistLeadSentAndCampaignCount(
   campaignId: string,
   leadId: string,
-  nextSentCount: number
+  nextSentCount: number,
+  payload?: { shortUrl?: string | null; messageText?: string | null }
 ): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
   try {
     const sentAt = new Date().toISOString();
-    await (supabase.from("disparos_campaign_leads" as any) as any)
-      .update({ status: "sent", sent_at: sentAt })
-      .eq("id", leadId);
+    const shortUrl = String(payload?.shortUrl || "").trim();
+    const messageText = String(payload?.messageText || "").trim();
+    try {
+      await (supabase.from("disparos_campaign_leads" as any) as any)
+        .update({
+          status: "sent",
+          sent_at: sentAt,
+          short_url: shortUrl || null,
+          message_text: messageText || null,
+        })
+        .eq("id", leadId);
+    } catch {
+      await (supabase.from("disparos_campaign_leads" as any) as any)
+        .update({ status: "sent", sent_at: sentAt })
+        .eq("id", leadId);
+    }
     await (supabase.from("disparos_campaigns" as any) as any)
       .update({ sent_count: nextSentCount })
       .eq("id", campaignId);
@@ -5324,7 +5353,10 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   lead.sentAt = sentIso;
   lead.shortUrl = outbound.shortUrl || undefined;
   campaign.sentCount += 1;
-  await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount);
+  await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
+    shortUrl: lead.shortUrl || null,
+    messageText: lead.messageText || null,
+  });
 
   scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
 }
@@ -6009,13 +6041,57 @@ app.get("/disparos/campanhas/:id/ultimo-disparo", async (req, res) => {
     if (!campaign) {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
-    const sentLeads = disparosCampaignLeadsMemory
+    let sentLeads = disparosCampaignLeadsMemory
       .filter((l) => l.campaignId === id && l.status === "sent")
       .sort((a, b) => {
         const ta = a.sentAt ? new Date(a.sentAt).getTime() : 0;
         const tb = b.sentAt ? new Date(b.sentAt).getTime() : 0;
         return tb - ta;
       });
+    if (!sentLeads.length) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        try {
+          let rows: any[] = [];
+          const withMessage = await (supabase
+            .from("disparos_campaign_leads" as any)
+            .select("id, campaign_id, phone, status, created_at, sent_at, short_url, message_text")
+            .eq("campaign_id", id)
+            .eq("status", "sent")
+            .order("sent_at", { ascending: false })
+            .limit(1)) as any;
+          if (!withMessage.error && Array.isArray(withMessage.data)) {
+            rows = withMessage.data;
+          } else {
+            const legacy = await (supabase
+              .from("disparos_campaign_leads" as any)
+              .select("id, campaign_id, phone, status, created_at, sent_at")
+              .eq("campaign_id", id)
+              .eq("status", "sent")
+              .order("sent_at", { ascending: false })
+              .limit(1)) as any;
+            if (!legacy.error && Array.isArray(legacy.data)) rows = legacy.data;
+          }
+          if (rows.length) {
+            const r = rows[0];
+            sentLeads = [
+              {
+                id: String(r?.id || crypto.randomUUID()),
+                campaignId: String(r?.campaign_id || id),
+                phone: String(r?.phone || ""),
+                status: "sent",
+                messageText: typeof r?.message_text === "string" ? String(r.message_text) : undefined,
+                shortUrl: typeof r?.short_url === "string" ? String(r.short_url) : undefined,
+                createdAt: String(r?.created_at || new Date().toISOString()),
+                sentAt: r?.sent_at ? String(r.sent_at) : null,
+              },
+            ];
+          }
+        } catch {
+          /* */
+        }
+      }
+    }
     const last = sentLeads[0];
     const message = String(last?.messageText || "").trim();
     const shortUrl = String(last?.shortUrl || "").trim();
