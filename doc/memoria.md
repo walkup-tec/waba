@@ -16,6 +16,12 @@ Como usar:
 ## Última atualização
 2026-04-02
 
+**Waba — push do deploy FTP (Git):** commit `0b7dc2a` em `master` (workflow, `bundle:ftp`, `prepare-ftp-bundle.mjs`, docs). Se o Git falhar no **cmd** em `System32`, usar `cd /d E:\Waba` e comandos separados ou `&&`; se aparecer *dubious ownership*, `git config --global --add safe.directory E:/Waba`. Ver `doc/LOG-2026-04-02__183000__git-push-deploy-ftp-cmd-system32.md`.
+
+Palavras-chave: `git-not-a-repository`, `System32`, `safe.directory`, `deploy-ftp-push`
+
+---
+
 **Waba — deploy FTP via GitHub Actions:** workflow `.github/workflows/deploy-ftp.yml` (push em `master` ou manual) roda `npm run bundle:ftp` e envia `ftp-bundle/` com `SamKirkland/FTP-Deploy-Action`; secrets `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_REMOTE_DIR`. Ver `doc/deploy-ftp-github.md`.
 
 Palavras-chave: `github-actions-ftp`, `bundle:ftp`, `FTP_REMOTE_DIR`
