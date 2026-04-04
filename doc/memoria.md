@@ -16,6 +16,18 @@ Como usar:
 ## Última atualização
 2026-04-03
 
+**Waba — Logo DRAX:** substituído PNG inexistente por **`media/drax-logo.svg`**; `Dockerfile` com `COPY media ./media`. Ver `doc/LOG-2026-04-03__220000__fix-logo-drax-svg-deploy.md`.
+
+Palavras-chave: `drax-logo-svg`, `media-folder`
+
+---
+
+**Waba — Rule Cursor "sobe para o servidor":** `.cursor/rules/sobe-para-o-servidor.mdc` (`alwaysApply: true`) — ao pedir **sobe para o servidor** / deploy FTP, o agente faz `git status` → add (sem `.env`/zip) → `commit` → `push origin master` e lembra de checar Actions. Ver `doc/LOG-2026-04-03__210000__cursor-rule-sobe-servidor.md`.
+
+Palavras-chave: `sobe-para-o-servidor`, `rule-cursor-deploy`
+
+---
+
 **Waba — Docker (produção):** `Dockerfile` multi-stage (`node:20.18-alpine`), `CMD node dist/index.js`, `PORT` padrão 3000, volume `/app/data`, healthcheck em `/health`. Ver `doc/deploy-docker.md`.
 
 Palavras-chave: `dockerfile-waba`, `easypanel`, `volume-app-data`

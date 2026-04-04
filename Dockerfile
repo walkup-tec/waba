@@ -12,6 +12,7 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY index.html ./
 COPY scripts/copy-index-html.mjs scripts/
+COPY media ./media
 COPY src ./src
 
 RUN npm run build
