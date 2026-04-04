@@ -16,9 +16,9 @@ Como usar:
 ## Última atualização
 2026-04-03
 
-**Waba — Logo DRAX:** substituído PNG inexistente por **`media/drax-logo.svg`**; `Dockerfile` com `COPY media ./media`. Ver `doc/LOG-2026-04-03__220000__fix-logo-drax-svg-deploy.md`.
+**Waba — Logo DRAX:** voltou **`media/Drax-logo-footer.png`** (asset oficial, mesmo ID Drive do LOG 2026-03-27); `index.html` usa `/media/Drax-logo-footer.png`; `copy-index-html` limpa `dist/media` antes de copiar. Ver `doc/LOG-2026-04-04__logo-png-drax-restaurada.md`.
 
-Palavras-chave: `drax-logo-svg`, `media-folder`
+Palavras-chave: `Drax-logo-footer.png`, `media-folder`
 
 ---
 
