@@ -168,6 +168,34 @@
         display: block;
       }
 
+      /* Wordmark DRAX: HTML + gradiente (SVG <text> falha em vários browsers/containers) */
+      .title-icon .brand-wordmark {
+        display: inline-block;
+        height: 39px;
+        line-height: 39px;
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+          sans-serif;
+        font-size: 1.65rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        color: #2ee4a0;
+        background-image: linear-gradient(90deg, #2ee4a0 0%, #22d3ee 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+        .title-icon .brand-wordmark {
+          background-image: none;
+          -webkit-text-fill-color: unset;
+          color: #2ee4a0;
+        }
+      }
+
       .brand-block {
         display: flex;
         flex-direction: column;
@@ -3458,38 +3486,7 @@
         <div class="title">
           <div class="brand-block">
             <div class="title-icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 200 48"
-                role="img"
-                aria-label="DRAX"
-                class="brand-logo"
-                focusable="false"
-              >
-                <defs>
-                  <linearGradient
-                    id="drax-brand-header"
-                    x1="0%"
-                    y1="50%"
-                    x2="100%"
-                    y2="50%"
-                  >
-                    <stop offset="0%" stop-color="#2ee4a0" />
-                    <stop offset="100%" stop-color="#22d3ee" />
-                  </linearGradient>
-                </defs>
-                <text
-                  x="0"
-                  y="36"
-                  font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-                  font-size="34"
-                  font-weight="800"
-                  letter-spacing="0.04em"
-                  fill="url(#drax-brand-header)"
-                >
-                  DRAX
-                </text>
-              </svg>
+              <span class="brand-logo brand-wordmark" role="img" aria-label="DRAX">DRAX</span>
             </div>
             <div class="brand-caption">WABA - Sistema completo para whatsapp</div>
           </div>
