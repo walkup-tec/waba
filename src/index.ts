@@ -4,7 +4,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import path from "path";
 import crypto from "crypto";
-import { promises as fs } from "fs";
+import { promises as fs, existsSync } from "fs";
 import { createClient } from "@supabase/supabase-js";
 import "dotenv/config";
 
@@ -1481,6 +1481,17 @@ function stopAquecedorRuntime() {
 // __dirname (em dev) é "src", então subimos um nível e usamos "dist"
 const rootPath = path.join(__dirname, "..");
 const distPath = path.join(rootPath, "dist");
+const draxLogoPath = path.join(distPath, "media", "Drax-logo-footer.png");
+
+/** Logo oficial: rota explícita (alguns proxies / static não expõem /media corretamente). */
+app.get("/media/Drax-logo-footer.png", (req, res, next) => {
+  if (!existsSync(draxLogoPath)) {
+    return next();
+  }
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.type("png");
+  return res.sendFile(draxLogoPath);
+});
 
 app.use(express.static(distPath));
 

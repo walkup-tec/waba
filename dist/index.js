@@ -1271,6 +1271,16 @@ function stopAquecedorRuntime() {
 // __dirname (em dev) é "src", então subimos um nível e usamos "dist"
 const rootPath = path_1.default.join(__dirname, "..");
 const distPath = path_1.default.join(rootPath, "dist");
+const draxLogoPath = path_1.default.join(distPath, "media", "Drax-logo-footer.png");
+/** Logo oficial: rota explícita (alguns proxies / static não expõem /media corretamente). */
+app.get("/media/Drax-logo-footer.png", (req, res, next) => {
+    if (!(0, fs_1.existsSync)(draxLogoPath)) {
+        return next();
+    }
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.type("png");
+    return res.sendFile(draxLogoPath);
+});
 app.use(express_1.default.static(distPath));
 app.get("/", (_req, res) => {
     res.sendFile(path_1.default.join(distPath, "index.html"));
