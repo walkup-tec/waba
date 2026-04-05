@@ -6,6 +6,7 @@ import path from "path";
 import crypto from "crypto";
 import { promises as fs, existsSync, readFileSync } from "fs";
 import { createClient } from "@supabase/supabase-js";
+import { DRAX_LOGO_PNG_BASE64 } from "./generated-brand-logo";
 import "dotenv/config";
 
 const app = express();
@@ -14,11 +15,27 @@ const app = express();
 const rootPath = path.join(__dirname, "..");
 const distPath = path.join(rootPath, "dist");
 
-/** Logo DRAX: primeiro middleware — não depende da ordem das outras rotas. */
+/**
+ * Logo DRAX: primeiro middleware.
+ * Prioridade: PNG embutido em base64 (gerado no build) → não depende de ficheiros no disco do container.
+ * Fallback: ficheiros em dist/media ou media/ (dev).
+ */
 let draxLogoBytes: Buffer | null | undefined;
 function resolveDraxLogoPng(): Buffer | null {
   if (draxLogoBytes !== undefined) {
     return draxLogoBytes;
+  }
+  const b64 = typeof DRAX_LOGO_PNG_BASE64 === "string" ? DRAX_LOGO_PNG_BASE64.trim() : "";
+  if (b64.length > 500) {
+    try {
+      const fromEmbed = Buffer.from(b64, "base64");
+      if (fromEmbed.length > 0) {
+        draxLogoBytes = fromEmbed;
+        return fromEmbed;
+      }
+    } catch (e) {
+      console.warn("[brand] decode base64 da logo falhou:", e);
+    }
   }
   const fileName = "Drax-logo-footer.png";
   const candidates = [
@@ -41,7 +58,7 @@ function resolveDraxLogoPng(): Buffer | null {
   }
   draxLogoBytes = null;
   console.error(
-    "[brand] Drax-logo-footer.png não encontrado. cwd=%s __dirname=%s tentou: %s",
+    "[brand] Drax-logo-footer.png não encontrado (embed vazio e disco). cwd=%s __dirname=%s tentou: %s",
     process.cwd(),
     __dirname,
     candidates.join(" | ")

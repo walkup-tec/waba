@@ -44,16 +44,34 @@ const path_1 = __importDefault(require("path"));
 const crypto_1 = __importDefault(require("crypto"));
 const fs_1 = require("fs");
 const supabase_js_1 = require("@supabase/supabase-js");
+const generated_brand_logo_1 = require("./generated-brand-logo");
 require("dotenv/config");
 const app = (0, express_1.default)();
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
 const rootPath = path_1.default.join(__dirname, "..");
 const distPath = path_1.default.join(rootPath, "dist");
-/** Logo DRAX: primeiro middleware — não depende da ordem das outras rotas. */
+/**
+ * Logo DRAX: primeiro middleware.
+ * Prioridade: PNG embutido em base64 (gerado no build) → não depende de ficheiros no disco do container.
+ * Fallback: ficheiros em dist/media ou media/ (dev).
+ */
 let draxLogoBytes;
 function resolveDraxLogoPng() {
     if (draxLogoBytes !== undefined) {
         return draxLogoBytes;
+    }
+    const b64 = typeof generated_brand_logo_1.DRAX_LOGO_PNG_BASE64 === "string" ? generated_brand_logo_1.DRAX_LOGO_PNG_BASE64.trim() : "";
+    if (b64.length > 500) {
+        try {
+            const fromEmbed = Buffer.from(b64, "base64");
+            if (fromEmbed.length > 0) {
+                draxLogoBytes = fromEmbed;
+                return fromEmbed;
+            }
+        }
+        catch (e) {
+            console.warn("[brand] decode base64 da logo falhou:", e);
+        }
     }
     const fileName = "Drax-logo-footer.png";
     const candidates = [
@@ -77,7 +95,7 @@ function resolveDraxLogoPng() {
         }
     }
     draxLogoBytes = null;
-    console.error("[brand] Drax-logo-footer.png não encontrado. cwd=%s __dirname=%s tentou: %s", process.cwd(), __dirname, candidates.join(" | "));
+    console.error("[brand] Drax-logo-footer.png não encontrado (embed vazio e disco). cwd=%s __dirname=%s tentou: %s", process.cwd(), __dirname, candidates.join(" | "));
     return null;
 }
 app.use((req, res, next) => {

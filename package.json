@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "dev:isolado": "set PORT=3010&& set RUNTIME_MODE=development&& set ENABLE_BACKGROUND_PROCESSING=false&& ts-node src/index.ts",
-    "build": "tsc && node scripts/copy-index-html.mjs",
+    "build": "node scripts/generate-brand-logo-module.mjs && tsc && node scripts/copy-index-html.mjs",
     "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
     "start": "node dist/index.js",
     "free:3000": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/free-port-3000.ps1",
