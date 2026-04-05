@@ -98,6 +98,12 @@ function resolveDraxLogoPng() {
     console.error("[brand] Drax-logo-footer.png não encontrado (embed vazio e disco). cwd=%s __dirname=%s tentou: %s", process.cwd(), __dirname, candidates.join(" | "));
     return null;
 }
+/** Caminhos HTTP da logo (evitar só `/media/…` — proxies / painéis costumam reservar ou bloquear `/media`). */
+const DRAX_LOGO_URL_PATHS = new Set([
+    "/logo.png",
+    "/drax-logo.png",
+    "/media/drax-logo-footer.png",
+]);
 app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") {
         return next();
@@ -106,7 +112,7 @@ app.use((req, res, next) => {
         ? req.path
         : String(req.url || "").split("?")[0] || "/";
     const norm = raw.replace(/\/+$/, "") || "/";
-    if (norm.toLowerCase() !== "/media/drax-logo-footer.png") {
+    if (!DRAX_LOGO_URL_PATHS.has(norm.toLowerCase())) {
         return next();
     }
     const buf = resolveDraxLogoPng();
@@ -5990,6 +5996,9 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 });
 app.listen(PORT, () => {
     console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
+    draxLogoBytes = undefined;
+    const logoProbe = resolveDraxLogoPng();
+    console.log(`[brand] logo PNG: ${logoProbe ? `${logoProbe.length} bytes (ok)` : "FALHOU — embed vazio ou ficheiros em falta"} | use GET /logo.png ou /media/Drax-logo-footer.png`);
     console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING}`);
     console.log(`[campanhas] upload planilha até ${Math.round(CAMPAIGN_UPLOAD_MAX_BYTES / 1024 / 1024)}MB (multipart) | JSON legado=${CAMPAIGN_CREATE_JSON_LIMIT}`);
     if (MAINTENANCE_MODE) {
