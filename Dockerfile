@@ -31,6 +31,8 @@ RUN npm ci --omit=dev \
   && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
+# Garante PNG mesmo se dist/media falhar no build (runner só tinha dist antes).
+COPY --from=builder /app/media ./media
 
 RUN mkdir -p /app/data \
   && chown -R nodejs:nodejs /app

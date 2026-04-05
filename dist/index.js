@@ -1271,15 +1271,42 @@ function stopAquecedorRuntime() {
 // __dirname (em dev) é "src", então subimos um nível e usamos "dist"
 const rootPath = path_1.default.join(__dirname, "..");
 const distPath = path_1.default.join(rootPath, "dist");
-const draxLogoPath = path_1.default.join(distPath, "media", "Drax-logo-footer.png");
-/** Logo oficial: rota explícita (alguns proxies / static não expõem /media corretamente). */
-app.get("/media/Drax-logo-footer.png", (req, res, next) => {
-    if (!(0, fs_1.existsSync)(draxLogoPath)) {
-        return next();
+/** Logo DRAX: tenta dist/media (build), depois /media na raiz (Docker COPY dedicado). */
+let draxLogoBytes;
+function resolveDraxLogoPng() {
+    if (draxLogoBytes !== undefined) {
+        return draxLogoBytes;
+    }
+    const candidates = [
+        path_1.default.join(distPath, "media", "Drax-logo-footer.png"),
+        path_1.default.join(rootPath, "media", "Drax-logo-footer.png"),
+    ];
+    for (const filePath of candidates) {
+        if (!(0, fs_1.existsSync)(filePath))
+            continue;
+        try {
+            const buf = (0, fs_1.readFileSync)(filePath);
+            if (buf.length > 0) {
+                draxLogoBytes = buf;
+                return buf;
+            }
+        }
+        catch (e) {
+            console.warn("[brand] erro ao ler logo:", filePath, e);
+        }
+    }
+    draxLogoBytes = null;
+    console.error("[brand] Drax-logo-footer.png não encontrado. Tentou:", candidates.join(" | "));
+    return null;
+}
+app.get("/media/Drax-logo-footer.png", (_req, res) => {
+    const buf = resolveDraxLogoPng();
+    if (!buf) {
+        return res.status(404).end();
     }
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.type("png");
-    return res.sendFile(draxLogoPath);
+    return res.send(buf);
 });
 app.use(express_1.default.static(distPath));
 app.get("/", (_req, res) => {

@@ -4,7 +4,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import path from "path";
 import crypto from "crypto";
-import { promises as fs, existsSync } from "fs";
+import { promises as fs, existsSync, readFileSync } from "fs";
 import { createClient } from "@supabase/supabase-js";
 import "dotenv/config";
 
@@ -1481,16 +1481,42 @@ function stopAquecedorRuntime() {
 // __dirname (em dev) é "src", então subimos um nível e usamos "dist"
 const rootPath = path.join(__dirname, "..");
 const distPath = path.join(rootPath, "dist");
-const draxLogoPath = path.join(distPath, "media", "Drax-logo-footer.png");
 
-/** Logo oficial: rota explícita (alguns proxies / static não expõem /media corretamente). */
-app.get("/media/Drax-logo-footer.png", (req, res, next) => {
-  if (!existsSync(draxLogoPath)) {
-    return next();
+/** Logo DRAX: tenta dist/media (build), depois /media na raiz (Docker COPY dedicado). */
+let draxLogoBytes: Buffer | null | undefined;
+function resolveDraxLogoPng(): Buffer | null {
+  if (draxLogoBytes !== undefined) {
+    return draxLogoBytes;
+  }
+  const candidates = [
+    path.join(distPath, "media", "Drax-logo-footer.png"),
+    path.join(rootPath, "media", "Drax-logo-footer.png"),
+  ];
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) continue;
+    try {
+      const buf = readFileSync(filePath);
+      if (buf.length > 0) {
+        draxLogoBytes = buf;
+        return buf;
+      }
+    } catch (e) {
+      console.warn("[brand] erro ao ler logo:", filePath, e);
+    }
+  }
+  draxLogoBytes = null;
+  console.error("[brand] Drax-logo-footer.png não encontrado. Tentou:", candidates.join(" | "));
+  return null;
+}
+
+app.get("/media/Drax-logo-footer.png", (_req, res) => {
+  const buf = resolveDraxLogoPng();
+  if (!buf) {
+    return res.status(404).end();
   }
   res.setHeader("Cache-Control", "public, max-age=86400");
   res.type("png");
-  return res.sendFile(draxLogoPath);
+  return res.send(buf);
 });
 
 app.use(express.static(distPath));
