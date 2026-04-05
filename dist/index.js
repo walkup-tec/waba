@@ -46,6 +46,59 @@ const fs_1 = require("fs");
 const supabase_js_1 = require("@supabase/supabase-js");
 require("dotenv/config");
 const app = (0, express_1.default)();
+/** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
+const rootPath = path_1.default.join(__dirname, "..");
+const distPath = path_1.default.join(rootPath, "dist");
+/** Logo DRAX: primeiro middleware — não depende da ordem das outras rotas. */
+let draxLogoBytes;
+function resolveDraxLogoPng() {
+    if (draxLogoBytes !== undefined) {
+        return draxLogoBytes;
+    }
+    const fileName = "Drax-logo-footer.png";
+    const candidates = [
+        path_1.default.join(distPath, "media", fileName),
+        path_1.default.join(rootPath, "media", fileName),
+        path_1.default.join(process.cwd(), "media", fileName),
+        path_1.default.join(process.cwd(), "dist", "media", fileName),
+    ];
+    for (const filePath of candidates) {
+        if (!(0, fs_1.existsSync)(filePath))
+            continue;
+        try {
+            const buf = (0, fs_1.readFileSync)(filePath);
+            if (buf.length > 0) {
+                draxLogoBytes = buf;
+                return buf;
+            }
+        }
+        catch (e) {
+            console.warn("[brand] erro ao ler logo:", filePath, e);
+        }
+    }
+    draxLogoBytes = null;
+    console.error("[brand] Drax-logo-footer.png não encontrado. cwd=%s __dirname=%s tentou: %s", process.cwd(), __dirname, candidates.join(" | "));
+    return null;
+}
+app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+        return next();
+    }
+    const raw = typeof req.path === "string" && req.path.length > 0
+        ? req.path
+        : String(req.url || "").split("?")[0] || "/";
+    const norm = raw.replace(/\/+$/, "") || "/";
+    if (norm.toLowerCase() !== "/media/drax-logo-footer.png") {
+        return next();
+    }
+    const buf = resolveDraxLogoPng();
+    if (!buf) {
+        return next();
+    }
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.type("png");
+    return res.send(buf);
+});
 const PORT = process.env.PORT || 3000;
 const RUNTIME_MODE = String(process.env.RUNTIME_MODE || "production").toLowerCase();
 const ENABLE_BACKGROUND_PROCESSING = ["1", "true", "yes", "on"].includes(String(process.env.ENABLE_BACKGROUND_PROCESSING || "true").toLowerCase());
@@ -1268,46 +1321,6 @@ function stopAquecedorRuntime() {
         aquecedorInterval = null;
     }
 }
-// __dirname (em dev) é "src", então subimos um nível e usamos "dist"
-const rootPath = path_1.default.join(__dirname, "..");
-const distPath = path_1.default.join(rootPath, "dist");
-/** Logo DRAX: tenta dist/media (build), depois /media na raiz (Docker COPY dedicado). */
-let draxLogoBytes;
-function resolveDraxLogoPng() {
-    if (draxLogoBytes !== undefined) {
-        return draxLogoBytes;
-    }
-    const candidates = [
-        path_1.default.join(distPath, "media", "Drax-logo-footer.png"),
-        path_1.default.join(rootPath, "media", "Drax-logo-footer.png"),
-    ];
-    for (const filePath of candidates) {
-        if (!(0, fs_1.existsSync)(filePath))
-            continue;
-        try {
-            const buf = (0, fs_1.readFileSync)(filePath);
-            if (buf.length > 0) {
-                draxLogoBytes = buf;
-                return buf;
-            }
-        }
-        catch (e) {
-            console.warn("[brand] erro ao ler logo:", filePath, e);
-        }
-    }
-    draxLogoBytes = null;
-    console.error("[brand] Drax-logo-footer.png não encontrado. Tentou:", candidates.join(" | "));
-    return null;
-}
-app.get("/media/Drax-logo-footer.png", (_req, res) => {
-    const buf = resolveDraxLogoPng();
-    if (!buf) {
-        return res.status(404).end();
-    }
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    res.type("png");
-    return res.send(buf);
-});
 app.use(express_1.default.static(distPath));
 app.get("/", (_req, res) => {
     res.sendFile(path_1.default.join(distPath, "index.html"));
