@@ -10763,7 +10763,7 @@
         const json = await response.json().catch(() => ({}));
         if (!response.ok) {
           const detail = String(json?.detail || json?.error || "Falha na operação.");
-          throw new Error(detail);
+          throw new Error(`[HTTP ${response.status}] ${detail}`);
         }
         return json;
       }
@@ -11333,7 +11333,9 @@
             metaEsEmbeddedSignupSucceeded = false;
             metaEsExchangedAccessToken = "";
             resetMetaEsSession();
-            setMetaAtivosStatus(error?.message || "Falha na troca do código.", "error");
+          const failMsg = error?.message || "Falha na troca do código.";
+          setMetaAtivosStatus(failMsg, "error");
+          setMetaEmbeddedSignupActionMessage(failMsg, true);
             setMetaEsIntegrationResult("fail");
             refreshMetaEmbeddedSignupHint();
             return;
@@ -11416,7 +11418,9 @@
           refreshMetaEmbeddedSignupHint();
         } catch (error) {
           metaEsEmbeddedSignupSucceeded = false;
-          setMetaAtivosStatus(error?.message || "Falha ao finalizar integração.", "error");
+          const failMsg = error?.message || "Falha ao finalizar integração.";
+          setMetaAtivosStatus(failMsg, "error");
+          setMetaEmbeddedSignupActionMessage(failMsg, true);
           setMetaEsIntegrationResult("fail");
           refreshMetaEmbeddedSignupHint();
         } finally {
