@@ -9,71 +9,25 @@ Como usar:
 ## Caminhos (repositórios próximos)
 - **Página vendas SOMA (remoto)**: [github.com/walkup-tec/Pagina-vendas-soma](https://github.com/walkup-tec/Pagina-vendas-soma) — pasta local `D:\SOMA Promotora\Pagina-Vendas`
 - **SOMA Credit Sales** (cópia de trabalho anterior, mesmo stack): `D:\SOMA Promotora\soma-credit-sales`
-- **LV Promotora — landing estática (FTP / cópia local)**: `E:\PaginaVendas-LV` — Meta Pixel `1244070901219529`, evento `Contact` em cliques `wa.me` / `api.whatsapp.com`; WhatsApp CA `+5553991687250` (`wa.me/5553991687250`). Ver `doc/LOG-2026-04-02__150000__meta-pixel-contact-pagina-vendas-lv.md`, `doc/LOG-2026-04-02__160000__update-whatsapp-ca-pagina-vendas-lv.md`.
 
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
 2026-04-06
 
-**Waba — Meta conectado (check + nome):** feedback visual ao lado de **Conectar com Meta** com ícone de sucesso e nome do perfil (fallback Meta ID/WABA) após integração concluída. Ver doc/LOG-2026-04-06__103140__meta-conectado-check-nome.md.
+**Meta Embedded Signup — troca de code sem bloquear no WABA ID:** o frontend esperava `code` e `wabaId` juntos antes de chamar `POST /meta-oficial/embedded-signup/exchange-code`, mas a API só precisa do `code` e o `waba_id` costuma chegar depois no `postMessage`. Ajuste: trocar o code assim que existir; guardar token em memória até o WABA chegar; então preencher campos, webhooks e sucesso. Ver `doc/LOG-2026-04-06__160000__fix-meta-es-code-before-waba-exchange.md`.
 
-Palavras-chave: meta-connected-badge, check-nome-perfil, embedded-signup`n
----
-
-2026-04-03
-
-**Waba — Logo DRAX:** voltou **`media/Drax-logo-footer.png`** (asset oficial, mesmo ID Drive do LOG 2026-03-27); `index.html` usa `/media/Drax-logo-footer.png`; `copy-index-html` limpa `dist/media` antes de copiar. Ver `doc/LOG-2026-04-04__logo-png-drax-restaurada.md`.
-
-Palavras-chave: `Drax-logo-footer.png`, `media-folder`
-
----
-
-**Waba — Rule Cursor "sobe para o servidor":** `.cursor/rules/sobe-para-o-servidor.mdc` (`alwaysApply: true`) — ao pedir **sobe para o servidor** / deploy FTP, o agente faz `git status` → add (sem `.env`/zip) → `commit` → `push origin master` e lembra de checar Actions. Ver `doc/LOG-2026-04-03__210000__cursor-rule-sobe-servidor.md`.
-
-Palavras-chave: `sobe-para-o-servidor`, `rule-cursor-deploy`
-
----
-
-**Waba — Docker (produção):** `Dockerfile` multi-stage (`node:20.18-alpine`), `CMD node dist/index.js`, `PORT` padrão 3000, volume `/app/data`, healthcheck em `/health`. Ver `doc/deploy-docker.md`.
-
-Palavras-chave: `dockerfile-waba`, `easypanel`, `volume-app-data`
-
----
-
-2026-04-02
-
-**Waba — push do deploy FTP (Git):** commit `0b7dc2a` em `master` (workflow, `bundle:ftp`, `prepare-ftp-bundle.mjs`, docs). Se o Git falhar no **cmd** em `System32`, usar `cd /d E:\Waba` e comandos separados ou `&&`; se aparecer *dubious ownership*, `git config --global --add safe.directory E:/Waba`. Ver `doc/LOG-2026-04-02__183000__git-push-deploy-ftp-cmd-system32.md`.
-
-Palavras-chave: `git-not-a-repository`, `System32`, `safe.directory`, `deploy-ftp-push`
-
----
-
-**Waba — deploy FTP via GitHub Actions:** workflow `.github/workflows/deploy-ftp.yml` (push em `master` ou manual) roda `npm run bundle:ftp` e envia `ftp-bundle/` com `SamKirkland/FTP-Deploy-Action`; secrets `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_REMOTE_DIR`. Ver `doc/deploy-ftp-github.md`.
-
-Palavras-chave: `github-actions-ftp`, `bundle:ftp`, `FTP_REMOTE_DIR`
-
----
-
-**Waba — API Meta Ativos:** callout explicando integração Cloud API **no navegador** (sem app no celular) e **perfis salvos** no `localStorage` (`waba.meta.integrationProfiles.v1`) para alternar token/WABA/phone_number_id. Ver `doc/LOG-2026-04-02__170500__meta-api-callout-perfis-navegador.md`.
-
-Palavras-chave: `meta-perfis-navegador`, `embedded-signup-browser`, `integrationProfiles`
-
----
-
-**PaginaVendas-LV — número CA WhatsApp:** links de conversão passam a usar `5553991687250` (+55 53 99168-7250) no bundle `index-Di-MQYWG.js`. Ver `doc/LOG-2026-04-02__160000__update-whatsapp-ca-pagina-vendas-lv.md`.
-
-Palavras-chave: `whatsapp-ca-lv`, `5553991687250`, `PaginaVendas-LV`
-
----
-
-**PaginaVendas-LV — Meta Pixel + Contact:** pixel ativo (`PageView` + `noscript`); script no `index.html` dispara `fbq('track', 'Contact')` em qualquer link `<a href>` para WhatsApp (`wa.me` ou `api.whatsapp.com`), compatível com o bundle em `/assets` sem rebuild. Ver `doc/LOG-2026-04-02__150000__meta-pixel-contact-pagina-vendas-lv.md`.
-
-Palavras-chave: `meta-pixel-lv`, `Contact`, `PaginaVendas-LV`, `wa.me`
+Palavras-chave: `embedded-signup`, `exchange-code`, `waba_id`, `metaEsExchangedAccessToken`
 
 ---
 
 2026-04-01
+
+**Campanhas — pausa por instâncias desconectadas em 50% inclusive:** o limite passou de “mais de 50%” (`> 0.5`) para **50% ou mais** (`>= 0.5`): pausa automática no tick de disparo, `instanceHealth` na listagem e bloqueio de ativação com mensagem ajustada. Ver `doc/LOG-2026-04-01__143000__campanha-pausa-50-porcento-instancias.md`.
+
+Palavras-chave: `campanha-pausa-instancias`, `shouldPauseByDisconnectedRatio`, `50-porcento-desconectadas`
+
+---
 
 **Campanhas — refinamento dos ícones de última mensagem/URL + robustez de endpoint:** ícones de ação no card migrados de emoji para SVG, com feedback explícito quando o ambiente ainda não carregou a rota nova (`404` em `ultimo-disparo`). Backend reforçado para persistir/hidratar `message_text` e `short_url` com fallback legado. Serviço local reiniciado para aplicar build. Ver `doc/LOG-2026-04-01__081600__fix-icones-campanha-e-restart-endpoint-ultimo-disparo.md`.
 

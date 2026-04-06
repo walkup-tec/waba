@@ -11187,6 +11187,7 @@
         metaEsSession.event = null;
         metaEsSession.profileName = null;
         metaEsSession.userId = null;
+        metaEsExchangedAccessToken = "";
       }
       function setMetaConnectedBadge(nameOrLabel) {
         const badge = document.getElementById("meta-es-connected-badge");
@@ -11297,29 +11298,77 @@
       }
 
       let metaEsExchangeInFlight = false;
+      let metaEsCompleteInFlight = false;
+      /** Token obtido na troca do code neste fluxo; usado para concluir quando o WABA chegar depois. */
+      let metaEsExchangedAccessToken = "";
       /** Evita que um 2º callback do FB.login (sem code) apague o banner de sucesso. */
       let metaEsEmbeddedSignupSucceeded = false;
 
+      /**
+       * A Meta costuma enviar o `code` no FB.login antes do `waba_id` no postMessage.
+       * O backend troca o code sem precisar de WABA; concluímos com subscribe quando tivermos os dois.
+       */
       async function tryFinalizeMetaEmbeddedSignup() {
-        const code = metaEsSession.code;
-        const wabaId = metaEsSession.wabaId;
-        if (!code || !wabaId || metaEsExchangeInFlight) return;
-        metaEsExchangeInFlight = true;
-        setMetaEmbeddedSignupActionMessage("", false);
-        try {
-          setMetaAtivosStatus("Conectando com a Meta…");
-          const result = await metaPost("/meta-oficial/embedded-signup/exchange-code", { code });
-          const accessToken = String(
-            result?.accessToken || result?.access_token || ""
-          ).trim();
-          if (!accessToken) {
-            throw new Error("Token não retornado pela Meta.");
+        if (metaEsEmbeddedSignupSucceeded) return;
+
+        const code = String(metaEsSession.code || "").trim();
+        if (code && !metaEsExchangeInFlight) {
+          metaEsExchangeInFlight = true;
+          setMetaEmbeddedSignupActionMessage("", false);
+          try {
+            setMetaAtivosStatus("Trocando código por token…");
+            setMetaInProgressBadge("Trocando código por token…");
+            const result = await metaPost("/meta-oficial/embedded-signup/exchange-code", { code });
+            const accessToken = String(
+              result?.accessToken || result?.access_token || ""
+            ).trim();
+            if (!accessToken) {
+              throw new Error("Token não retornado pela Meta.");
+            }
+            metaEsSession.code = null;
+            metaEsExchangedAccessToken = accessToken;
+            const tokenInput = document.getElementById("meta-token-input");
+            if (tokenInput) tokenInput.value = accessToken;
+          } catch (error) {
+            metaEsEmbeddedSignupSucceeded = false;
+            metaEsExchangedAccessToken = "";
+            resetMetaEsSession();
+            setMetaAtivosStatus(error?.message || "Falha na troca do código.", "error");
+            setMetaEsIntegrationResult("fail");
+            refreshMetaEmbeddedSignupHint();
+            return;
+          } finally {
+            metaEsExchangeInFlight = false;
           }
-          const tokenInput = document.getElementById("meta-token-input");
+        }
+
+        const accessToken = String(metaEsExchangedAccessToken || "").trim();
+        const wabaId = String(metaEsSession.wabaId || "").trim();
+
+        if (!accessToken || !wabaId) {
+          if (accessToken && !wabaId) {
+            setMetaInProgressBadge("Token obtido. Aguardando WABA ID…");
+            setMetaEmbeddedSignupActionMessage(
+              "Token aplicado. Conclua o fluxo na Meta para receber o WABA ID.",
+              false
+            );
+            setMetaAtivosStatus("Token obtido. Aguardando WABA ID do Embedded Signup.");
+            try {
+              syncMetaCredentialsChecklist();
+            } catch (e) {
+              console.warn("[Waba] syncMetaCredentialsChecklist:", e);
+            }
+          }
+          return;
+        }
+
+        if (metaEsCompleteInFlight) return;
+        metaEsCompleteInFlight = true;
+        try {
+          setMetaAtivosStatus("Finalizando integração (WABA + webhooks)…");
           const wabaInput = document.getElementById("meta-waba-id-input");
           const phoneInput = document.getElementById("meta-phone-id-input");
           const sendPhoneInput = document.getElementById("meta-send-phone-id-input");
-          if (tokenInput) tokenInput.value = accessToken;
           if (wabaInput) wabaInput.value = wabaId;
           if (metaEsSession.phoneNumberId) {
             const pid = metaEsSession.phoneNumberId;
@@ -11349,6 +11398,7 @@
           }
           setMetaAtivosStatus("Conexão Meta concluída. Token e WABA aplicados.");
           metaEsEmbeddedSignupSucceeded = true;
+          metaEsExchangedAccessToken = "";
           const connectedName =
             String(metaEsSession.profileName || "").trim() ||
             (metaEsSession.userId ? `Meta ID ${metaEsSession.userId}` : "") ||
@@ -11366,12 +11416,11 @@
           refreshMetaEmbeddedSignupHint();
         } catch (error) {
           metaEsEmbeddedSignupSucceeded = false;
-          resetMetaEsSession();
-          setMetaAtivosStatus(error?.message || "Falha na troca do código.", "error");
+          setMetaAtivosStatus(error?.message || "Falha ao finalizar integração.", "error");
           setMetaEsIntegrationResult("fail");
           refreshMetaEmbeddedSignupHint();
         } finally {
-          metaEsExchangeInFlight = false;
+          metaEsCompleteInFlight = false;
         }
       }
 
@@ -11433,6 +11482,8 @@
       function launchMetaEmbeddedSignup() {
         console.info("[Waba] Embedded Signup: clique processado.");
         metaEsEmbeddedSignupSucceeded = false;
+        metaEsExchangedAccessToken = "";
+        metaEsCompleteInFlight = false;
         setMetaInProgressBadge("Integração em andamento");
         setMetaEsIntegrationResult("progress");
         refreshMetaEmbeddedSignupHint();
