@@ -11521,6 +11521,14 @@
         if (payload.event && metaEsFinishEvents.has(payload.event)) {
           metaEsSession.event = String(payload.event);
         }
+        if (payload.event && metaEsFinishEvents.has(payload.event)) {
+          const eventLabel =
+            String(metaEsSession.profileName || "").trim() ||
+            (metaEsSession.wabaId ? `WABA ${metaEsSession.wabaId}` : "");
+          setMetaConnectedBadge(eventLabel ? `Conectado: ${eventLabel}` : "Conectado com Meta");
+          setMetaEsIntegrationResult("success");
+          setMetaEmbeddedSignupActionMessage("Conexão Meta concluída com sucesso.", false);
+        }
         tryFinalizeMetaEmbeddedSignup();
       });
 
