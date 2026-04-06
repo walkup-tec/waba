@@ -32,3 +32,5 @@ O fluxo GitHub Actions + FTP envia o **bundle** pronto (`ftp-bundle/`). Docker *
 ### Meta Embedded Signup (`/meta-oficial/...`)
 
 Rotas como `POST /meta-oficial/embedded-signup/exchange-code` existem **só no processo Node** (`node dist/index.js`). Se o domínio servir **apenas** `index.html` estático (Apache/nginx sem proxy para Node), o browser recebe HTML **404 / Not Found** em vez de JSON — a integração Meta nunca completa. O domínio público tem de apontar para o **mesmo** serviço que executa a API (Docker/EasyPanel ou `node dist/index.js` por trás do proxy).
+
+**Rota alternativa (proxy/CDN):** o mesmo handler está exposto também em `POST /api/meta/embedded-signup/exchange-code`. O frontend tenta primeiro essa URL e, se receber HTML «Not Found», repete no path longo — útil quando GET `/meta-oficial/.../config` funciona mas POST no mesmo prefixo é bloqueado ou mal encaminhado.

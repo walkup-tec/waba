@@ -4084,6 +4084,8 @@ app.post("/meta-oficial/tokens/system-user-access", parseJsonDefault, async (req
 
 /** Configuração pública para Embedded Signup (Facebook Login for Business). */
 app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.set("Pragma", "no-cache");
   const appId = String(process.env.META_APP_ID || "").trim();
   const configId = String(process.env.META_ES_CONFIG_ID || "").trim();
   res.json({
@@ -4097,8 +4099,11 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
 /**
  * Troca o código do Embedded Signup por business token (Tech Provider / doc Meta nov/2025).
  * Usa META_APP_ID e META_APP_SECRET do ambiente — não envie app secret do cliente.
+ *
+ * Rota duplicada em `/api/meta/embedded-signup/exchange-code`: alguns proxies/CDNs devolvem HTML
+ * «Not Found» em POST para caminhos longos sob `/meta-oficial/...` mesmo com GET ok no mesmo host.
  */
-app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, async (req, res) => {
+async function metaEmbeddedSignupExchangeCodeHandler(req: express.Request, res: express.Response) {
   try {
     const code = String(req.body?.code || "").trim();
     const appId = String(process.env.META_APP_ID || "").trim();
@@ -4186,7 +4191,10 @@ app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, async 
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Erro ao trocar código Embedded Signup." });
   }
-});
+}
+
+app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, metaEmbeddedSignupExchangeCodeHandler);
+app.post("/api/meta/embedded-signup/exchange-code", parseJsonDefault, metaEmbeddedSignupExchangeCodeHandler);
 
 /** Inscreve o app nos webhooks do WABA do cliente (pós-Embedded Signup). */
 app.post("/meta-oficial/embedded-signup/subscribe-webhooks", parseJsonDefault, async (req, res) => {

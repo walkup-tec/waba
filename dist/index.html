@@ -10803,6 +10803,22 @@
         return json || {};
       }
 
+      async function metaPostEmbeddedExchangeCode(payload) {
+        try {
+          return await metaPost("/api/meta/embedded-signup/exchange-code", payload);
+        } catch (e) {
+          const msg = String(e?.message || "");
+          const htmlish =
+            msg.includes("<!DOCTYPE") ||
+            msg.toLowerCase().includes("<title>not found</title>") ||
+            (msg.includes("Not Found") && msg.includes("HTTP"));
+          if (htmlish) {
+            return await metaPost("/meta-oficial/embedded-signup/exchange-code", payload);
+          }
+          throw e;
+        }
+      }
+
       async function fetchAndRenderMetaSubscribedApps(options = {}) {
         const silent = options.silent === true;
         const updateStatus = options.updateStatus !== false;
@@ -11365,7 +11381,7 @@
                 return "";
               }
             })();
-            const result = await metaPost("/meta-oficial/embedded-signup/exchange-code", {
+            const result = await metaPostEmbeddedExchangeCode({
               code,
               redirectUri,
             });
