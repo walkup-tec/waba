@@ -11381,6 +11381,7 @@
             false
           );
           setMetaAtivosStatus("Login Facebook confirmado. Aguardando conclusão do fluxo da Meta.");
+          setMetaEsIntegrationResult("success");
           refreshMetaEmbeddedSignupHint();
         } else {
           resetMetaEsSession();
@@ -11456,6 +11457,28 @@
               override_default_response_type: true,
               extras: { setup: {} },
             });
+            // Fallback determinístico: se a Meta autenticar e não devolver payload completo, refletimos o estado do SDK.
+            window.setTimeout(() => {
+              try {
+                if (typeof FB === "undefined" || typeof FB.getLoginStatus !== "function") return;
+                FB.getLoginStatus((statusResp) => {
+                  if (statusResp?.status !== "connected" || metaEsEmbeddedSignupSucceeded) return;
+                  const uid = String(statusResp?.authResponse?.userID || "").trim();
+                  if (uid) metaEsSession.userId = uid;
+                  setMetaConnectedBadge(
+                    uid ? `Autenticado no Facebook (Meta ID ${uid})` : "Autenticado no Facebook"
+                  );
+                  setMetaEsIntegrationResult("success");
+                  setMetaEmbeddedSignupActionMessage(
+                    "Login do Facebook confirmado. Finalize o fluxo na janela da Meta para concluir a integração.",
+                    false
+                  );
+                  setMetaAtivosStatus("Login Facebook confirmado. Aguardando conclusão do fluxo da Meta.");
+                });
+              } catch {
+                /* noop */
+              }
+            }, 2500);
           } catch (e) {
             const m = e?.message || "Erro ao iniciar login Meta.";
             setMetaEmbeddedSignupActionMessage(m, true);
@@ -11517,7 +11540,14 @@
         } catch {
           return;
         }
-        if (!payload || payload.type !== "WA_EMBEDDED_SIGNUP") return;
+        if (!payload) return;
+        const eventName = typeof payload.event === "string" ? payload.event : "";
+        const isEmbeddedEvent =
+          payload.type === "WA_EMBEDDED_SIGNUP" ||
+          eventName === "CANCEL" ||
+          eventName === "ERROR" ||
+          metaEsFinishEvents.has(eventName);
+        if (!isEmbeddedEvent) return;
         try {
           console.info("[Waba] Embedded Signup event:", payload.event || "unknown");
         } catch {
