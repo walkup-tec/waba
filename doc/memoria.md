@@ -14,6 +14,13 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
+2026-04-06
+
+**Waba — UX Meta (Conexão visível):** adicionado badge com check ao lado de **Conectar com Meta**, exibindo nome do perfil (ou fallback Meta ID/WABA) quando a conexão conclui; checklist API Meta ganhou etapa inicial **Conexão Meta concluída** com marcação automática de sucesso. Ver doc/LOG-2026-04-06__082108__meta-embedded-signup-status-checklist.md.
+
+Palavras-chave: `meta-conectado-badge`, `checklist-api-meta`, `conexao-meta-concluida`
+---
+
 2026-04-03
 
 **Waba — Logo DRAX:** voltou **`media/Drax-logo-footer.png`** (asset oficial, mesmo ID Drive do LOG 2026-03-27); `index.html` usa `/media/Drax-logo-footer.png`; `copy-index-html` limpa `dist/media` antes de copiar. Ver `doc/LOG-2026-04-04__logo-png-drax-restaurada.md`.
@@ -1087,4 +1094,5 @@ Palavras-chave para buscar:
 - onboarding-sem-manual
 - etapa2-automatica
 - etapa3-automatica
+
 
