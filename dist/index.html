@@ -1292,6 +1292,11 @@
         background: rgba(34, 197, 94, 0.12);
         border: 1px solid rgba(34, 197, 94, 0.35);
       }
+      .meta-es-integration-result--progress {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.14);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+      }
       .meta-es-integration-result--fail {
         color: #fecaca;
         background: rgba(127, 29, 29, 0.2);
@@ -11196,6 +11201,18 @@
         badge.hidden = false;
         setMetaGuideStep("integrationConnected", true);
       }
+      function setMetaInProgressBadge(label) {
+        const badge = document.getElementById("meta-es-connected-badge");
+        const iconEl = badge?.querySelector(".meta-es-connected-badge-icon");
+        const textEl = document.getElementById("meta-es-connected-badge-text");
+        if (!badge || !iconEl || !textEl) return;
+        iconEl.innerHTML =
+          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path></svg>';
+        textEl.textContent = String(label || "").trim() || "Integração em andamento";
+        badge.classList.remove("is-pending");
+        badge.hidden = false;
+        setMetaGuideStep("integrationConnected", false);
+      }
       function hideMetaConnectedBadge() {
         const badge = document.getElementById("meta-es-connected-badge");
         const iconEl = badge?.querySelector(".meta-es-connected-badge-icon");
@@ -11242,7 +11259,11 @@
         if (!wrap) return;
         const iconEl = wrap.querySelector(".meta-es-integration-result-icon");
         const textEl = wrap.querySelector(".meta-es-integration-result-text");
-        wrap.classList.remove("meta-es-integration-result--success", "meta-es-integration-result--fail");
+        wrap.classList.remove(
+          "meta-es-integration-result--success",
+          "meta-es-integration-result--progress",
+          "meta-es-integration-result--fail"
+        );
         if (outcome === "hidden") {
           wrap.classList.add("meta-es-integration-result--hidden");
           wrap.setAttribute("aria-hidden", "true");
@@ -11255,12 +11276,18 @@
         wrap.setAttribute("aria-hidden", "false");
         const checkSvg =
           '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+        const progressSvg =
+          '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path></svg>';
         const xSvg =
           '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
         if (outcome === "success") {
           wrap.classList.add("meta-es-integration-result--success");
           if (iconEl) iconEl.innerHTML = checkSvg;
           if (textEl) textEl.textContent = "Integração concluída com sucesso.";
+        } else if (outcome === "progress") {
+          wrap.classList.add("meta-es-integration-result--progress");
+          if (iconEl) iconEl.innerHTML = progressSvg;
+          if (textEl) textEl.textContent = "Integração em andamento. Finalize no fluxo da Meta.";
         } else {
           wrap.classList.add("meta-es-integration-result--fail");
           if (iconEl) iconEl.innerHTML = xSvg;
@@ -11352,6 +11379,8 @@
         if (response.authResponse?.code) {
           setMetaEmbeddedSignupActionMessage("", false);
           metaEsSession.code = String(response.authResponse.code);
+          setMetaInProgressBadge("Código da Meta recebido. Finalizando integração…");
+          setMetaEsIntegrationResult("progress");
           if (response.authResponse?.userID) {
             metaEsSession.userId = String(response.authResponse.userID);
           }
@@ -11375,13 +11404,13 @@
           const partialLabel = metaEsSession.userId
             ? `Autenticado no Facebook (Meta ID ${metaEsSession.userId})`
             : "Autenticado no Facebook";
-          setMetaConnectedBadge(partialLabel);
+          setMetaInProgressBadge(partialLabel);
           setMetaEmbeddedSignupActionMessage(
             "Login do Facebook confirmado. Finalize o fluxo na janela da Meta para concluir a integração.",
             false
           );
           setMetaAtivosStatus("Login Facebook confirmado. Aguardando conclusão do fluxo da Meta.");
-          setMetaEsIntegrationResult("success");
+          setMetaEsIntegrationResult("progress");
           refreshMetaEmbeddedSignupHint();
         } else {
           resetMetaEsSession();
@@ -11404,8 +11433,8 @@
       function launchMetaEmbeddedSignup() {
         console.info("[Waba] Embedded Signup: clique processado.");
         metaEsEmbeddedSignupSucceeded = false;
-        setMetaEsIntegrationResult("hidden");
-        hideMetaConnectedBadge();
+        setMetaInProgressBadge("Integração em andamento");
+        setMetaEsIntegrationResult("progress");
         refreshMetaEmbeddedSignupHint();
         if (window.location.protocol !== "https:") {
           const msg =
@@ -11465,10 +11494,10 @@
                   if (statusResp?.status !== "connected" || metaEsEmbeddedSignupSucceeded) return;
                   const uid = String(statusResp?.authResponse?.userID || "").trim();
                   if (uid) metaEsSession.userId = uid;
-                  setMetaConnectedBadge(
+                  setMetaInProgressBadge(
                     uid ? `Autenticado no Facebook (Meta ID ${uid})` : "Autenticado no Facebook"
                   );
-                  setMetaEsIntegrationResult("success");
+                  setMetaEsIntegrationResult("progress");
                   setMetaEmbeddedSignupActionMessage(
                     "Login do Facebook confirmado. Finalize o fluxo na janela da Meta para concluir a integração.",
                     false
@@ -11593,9 +11622,14 @@
           const eventLabel =
             String(metaEsSession.profileName || "").trim() ||
             (metaEsSession.wabaId ? `WABA ${metaEsSession.wabaId}` : "");
-          setMetaConnectedBadge(eventLabel ? `Conectado: ${eventLabel}` : "Conectado com Meta");
-          setMetaEsIntegrationResult("success");
-          setMetaEmbeddedSignupActionMessage("Conexão Meta concluída com sucesso.", false);
+          setMetaInProgressBadge(
+            eventLabel ? `Finalizando integração: ${eventLabel}` : "Finalizando integração com Meta"
+          );
+          setMetaEsIntegrationResult("progress");
+          setMetaEmbeddedSignupActionMessage(
+            "Meta confirmou o fluxo. Estamos finalizando a integração no servidor…",
+            false
+          );
         }
         tryFinalizeMetaEmbeddedSignup();
       });
