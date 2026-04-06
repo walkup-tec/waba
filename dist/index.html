@@ -1320,6 +1320,11 @@
         line-height: 1.2;
         white-space: nowrap;
       }
+      .meta-es-connected-badge.is-pending {
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(148, 163, 184, 0.12);
+        color: #cbd5e1;
+      }
       .meta-es-connected-badge[hidden] {
         display: none !important;
       }
@@ -4631,9 +4636,9 @@
                       >
                         Conectar com Meta
                       </button>
-                      <span id="meta-es-connected-badge" class="meta-es-connected-badge" hidden>
+                      <span id="meta-es-connected-badge" class="meta-es-connected-badge is-pending">
                         <span class="meta-es-connected-badge-icon" aria-hidden="true"></span>
-                        <span id="meta-es-connected-badge-text">Conectado</span>
+                        <span id="meta-es-connected-badge-text">Aguardando integração</span>
                       </span>
                       <span id="meta-embedded-signup-hint" class="muted" style="flex: 1 1 220px;"></span>
                     </div>
@@ -4923,6 +4928,10 @@
             </button>
           </div>
           <div class="meta-guide-list">
+            <div class="meta-guide-item" data-guide-key="integrationConnected">
+              <span class="meta-guide-label">Integração com Meta concluída</span>
+              <span class="meta-guide-pill">Pendente</span>
+            </div>
             <div class="meta-guide-item" data-guide-key="credentials">
               <span class="meta-guide-label">Credenciais preenchidas (Token + WABA ID)</span>
               <span class="meta-guide-pill">Pendente</span>
@@ -4957,7 +4966,7 @@
           aria-controls="meta-guide-dock-panel"
         >
           <span class="meta-guide-dock-toggle-label">Checklist API Meta</span>
-          <span class="meta-guide-dock-toggle-count" id="meta-guide-dock-count">0/6</span>
+          <span class="meta-guide-dock-toggle-count" id="meta-guide-dock-count">0/7</span>
         </button>
       </div>
     </div>
@@ -10507,6 +10516,7 @@
       }
 
       const metaGuideState = {
+        integrationConnected: false,
         credentials: false,
         phoneListed: false,
         numberRegistered: false,
@@ -11182,12 +11192,20 @@
         iconEl.innerHTML =
           '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
         textEl.textContent = label;
+        badge.classList.remove("is-pending");
         badge.hidden = false;
+        setMetaGuideStep("integrationConnected", true);
       }
       function hideMetaConnectedBadge() {
         const badge = document.getElementById("meta-es-connected-badge");
-        if (!badge) return;
-        badge.hidden = true;
+        const iconEl = badge?.querySelector(".meta-es-connected-badge-icon");
+        const textEl = document.getElementById("meta-es-connected-badge-text");
+        if (!badge || !iconEl || !textEl) return;
+        iconEl.innerHTML = "";
+        textEl.textContent = "Aguardando integração";
+        badge.classList.add("is-pending");
+        badge.hidden = false;
+        setMetaGuideStep("integrationConnected", false);
       }
       function refreshMetaEmbeddedSignupHint() {
         const hint = document.getElementById("meta-embedded-signup-hint");
