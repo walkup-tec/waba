@@ -10770,17 +10770,32 @@
         if (!response.ok) {
           let detail = String(json?.detail || json?.error || "").trim();
           if (!detail) {
-            const snippet = String(raw || "")
-              .replace(/\s+/g, " ")
-              .trim()
-              .slice(0, 240);
-            if (snippet) {
-              detail = snippet;
-            } else if (response.status === 502) {
+            const rawLower = String(raw || "").toLowerCase();
+            const looksLikeHtml =
+              rawLower.includes("<!doctype") ||
+              rawLower.includes("<html") ||
+              rawLower.includes("<title>");
+            const looksLikeNotFound =
+              rawLower.includes("not found") || rawLower.includes("<title>not found</title>");
+            if (looksLikeHtml && (looksLikeNotFound || response.status === 404)) {
               detail =
-                "502 sem resposta JSON do app: o proxy pode não estar alcançando o Node (container parado, crash na rota ou timeout). Confira no EasyPanel se o serviço está saudável e os logs do container.";
+                "Esta URL não está a chegar ao servidor Node do Waba (resposta HTML «Not Found»). O domínio provavelmente serve só ficheiros estáticos ou o proxy não encaminha POST para a app. No EasyPanel use o serviço Docker/Node do repositório (node dist/index.js), não só upload de HTML. Teste no mesmo host: GET /health e POST /meta-oficial/embedded-signup/exchange-code devem responder JSON.";
+            } else if (looksLikeHtml) {
+              detail =
+                "Resposta HTML em vez de JSON: o proxy ou o host não está a encaminhar este pedido para a API Node do Waba.";
             } else {
-              detail = "Falha na operação.";
+              const snippet = String(raw || "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 240);
+              if (snippet) {
+                detail = snippet;
+              } else if (response.status === 502) {
+                detail =
+                  "502 sem corpo JSON: o proxy pode não alcançar o Node (container parado, crash ou timeout). Veja logs do serviço no EasyPanel.";
+              } else {
+                detail = "Falha na operação.";
+              }
             }
           }
           throw new Error(`[HTTP ${response.status}] ${detail}`);

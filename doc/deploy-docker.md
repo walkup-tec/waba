@@ -28,3 +28,7 @@ docker run -d --name waba -p 3000:3000 --env-file .env -v waba-data:/app/data wa
 ## FTP vs Docker
 
 O fluxo GitHub Actions + FTP envia o **bundle** pronto (`ftp-bundle/`). Docker **não** usa esse zip: o host (ou CI) faz `docker build` a partir do código-fonte ou de uma imagem já buildada no registry.
+
+### Meta Embedded Signup (`/meta-oficial/...`)
+
+Rotas como `POST /meta-oficial/embedded-signup/exchange-code` existem **só no processo Node** (`node dist/index.js`). Se o domínio servir **apenas** `index.html` estático (Apache/nginx sem proxy para Node), o browser recebe HTML **404 / Not Found** em vez de JSON — a integração Meta nunca completa. O domínio público tem de apontar para o **mesmo** serviço que executa a API (Docker/EasyPanel ou `node dist/index.js` por trás do proxy).
