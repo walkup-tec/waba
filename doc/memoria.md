@@ -14,6 +14,13 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
+2026-04-06
+
+**Waba — Meta conectado (check + nome):** feedback visual ao lado de **Conectar com Meta** com ícone de sucesso e nome do perfil (fallback Meta ID/WABA) após integração concluída. Ver doc/LOG-2026-04-06__103140__meta-conectado-check-nome.md.
+
+Palavras-chave: meta-connected-badge, check-nome-perfil, embedded-signup`n
+---
+
 2026-04-03
 
 **Waba — Logo DRAX:** voltou **`media/Drax-logo-footer.png`** (asset oficial, mesmo ID Drive do LOG 2026-03-27); `index.html` usa `/media/Drax-logo-footer.png`; `copy-index-html` limpa `dist/media` antes de copiar. Ver `doc/LOG-2026-04-04__logo-png-drax-restaurada.md`.
