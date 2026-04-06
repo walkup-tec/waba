@@ -11123,7 +11123,23 @@
       const metaWabaInput = document.getElementById("meta-waba-id-input");
       const syncMetaCredentialsChecklist = () => {
         const { token, wabaId } = getMetaAtivosPayloadBase();
-        setMetaGuideStep("credentials", Boolean(token && wabaId));
+        const hasCredentials = Boolean(token && wabaId);
+        setMetaGuideStep("credentials", hasCredentials);
+        if (hasCredentials) {
+          const currentBadgeText = String(
+            document.getElementById("meta-es-connected-badge-text")?.textContent || ""
+          ).trim();
+          // Fallback visual: se o fluxo de signup não retornar nome, ainda mostramos conexão concluída.
+          if (!currentBadgeText || currentBadgeText.toLowerCase() === "conectado") {
+            setMetaConnectedBadge(`Conectado: WABA ${wabaId}`);
+          }
+          const hintText = String(
+            document.getElementById("meta-embedded-signup-hint")?.textContent || ""
+          ).trim();
+          if (!hintText) {
+            setMetaEmbeddedSignupActionMessage("Conexão Meta concluída com sucesso.", false);
+          }
+        }
         renderMetaIntegrationKeySummary();
       };
       if (metaTokenInput) metaTokenInput.addEventListener("input", syncMetaCredentialsChecklist);
