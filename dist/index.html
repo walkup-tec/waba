@@ -11367,6 +11367,21 @@
             /* noop */
           }
           tryFinalizeMetaEmbeddedSignup();
+        } else if (response && response.authResponse) {
+          // Em alguns cenários a Meta autentica o perfil, mas não devolve "code" neste callback.
+          if (response.authResponse?.userID) {
+            metaEsSession.userId = String(response.authResponse.userID);
+          }
+          const partialLabel = metaEsSession.userId
+            ? `Autenticado no Facebook (Meta ID ${metaEsSession.userId})`
+            : "Autenticado no Facebook";
+          setMetaConnectedBadge(partialLabel);
+          setMetaEmbeddedSignupActionMessage(
+            "Login do Facebook confirmado. Finalize o fluxo na janela da Meta para concluir a integração.",
+            false
+          );
+          setMetaAtivosStatus("Login Facebook confirmado. Aguardando conclusão do fluxo da Meta.");
+          refreshMetaEmbeddedSignupHint();
         } else {
           resetMetaEsSession();
           if (metaEsEmbeddedSignupSucceeded) {
@@ -11503,6 +11518,11 @@
           return;
         }
         if (!payload || payload.type !== "WA_EMBEDDED_SIGNUP") return;
+        try {
+          console.info("[Waba] Embedded Signup event:", payload.event || "unknown");
+        } catch {
+          /* noop */
+        }
         if (payload.event !== "CANCEL" && payload.event !== "ERROR") {
           setMetaEmbeddedSignupActionMessage("", false);
         }
