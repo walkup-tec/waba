@@ -11176,14 +11176,30 @@
       function removeLegacyMetaHttpsNotice() {
         const root = document.getElementById("tab-meta-ativos");
         if (!root) return;
-        const nodes = root.querySelectorAll("p.muted");
-        nodes.forEach((el) => {
-          const text = String(el.textContent || "").toLowerCase();
-          if (
-            text.includes("a meta só permite este passo em página https") ||
-            (text.includes("http://localhost") && text.includes("login é bloqueado"))
-          ) {
-            el.remove();
+        const normalized = (s) =>
+          String(s || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+        const isLegacyNode = (text) => {
+          const t = normalized(text);
+          return (
+            t.includes("a meta so permite este passo em pagina https") ||
+            (t.includes("http://localhost") && t.includes("login e bloqueado")) ||
+            (t.includes("acesse o waba pelo endereco publico") && t.includes("https://"))
+          );
+        };
+
+        // Remove por conteúdo, independente da tag (p/div/span/etc).
+        const all = root.querySelectorAll("*");
+        all.forEach((el) => {
+          if (!(el instanceof HTMLElement)) return;
+          if (isLegacyNode(el.textContent || "")) {
+            // Evita remover contêiner grande: remove só blocos pequenos de texto.
+            const childCount = el.children ? el.children.length : 0;
+            if (childCount <= 2) {
+              el.remove();
+            }
           }
         });
       }
@@ -11218,6 +11234,18 @@
       refreshMetaEmbeddedSignupHint();
       setTimeout(refreshMetaEmbeddedSignupHint, 1200);
       setTimeout(removeLegacyMetaHttpsNotice, 0);
+      // Se algum script legado re-renderizar o aviso, removemos novamente.
+      try {
+        const legacyNoticeObserver = new MutationObserver(() => {
+          removeLegacyMetaHttpsNotice();
+        });
+        const metaTabRoot = document.getElementById("tab-meta-ativos");
+        if (metaTabRoot) {
+          legacyNoticeObserver.observe(metaTabRoot, { childList: true, subtree: true });
+        }
+      } catch {
+        /* noop */
+      }
 
       function setMetaEsIntegrationResult(outcome) {
         const wrap = document.getElementById("meta-es-integration-result");
