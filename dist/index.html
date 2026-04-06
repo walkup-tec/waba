@@ -11173,10 +11173,25 @@
         if (!badge) return;
         badge.hidden = true;
       }
+      function removeLegacyMetaHttpsNotice() {
+        const root = document.getElementById("tab-meta-ativos");
+        if (!root) return;
+        const nodes = root.querySelectorAll("p.muted");
+        nodes.forEach((el) => {
+          const text = String(el.textContent || "").toLowerCase();
+          if (
+            text.includes("a meta só permite este passo em página https") ||
+            (text.includes("http://localhost") && text.includes("login é bloqueado"))
+          ) {
+            el.remove();
+          }
+        });
+      }
       function refreshMetaEmbeddedSignupHint() {
         const hint = document.getElementById("meta-embedded-signup-hint");
         const cfg = window.__META_ES_CONFIG || {};
         if (!hint) return;
+        removeLegacyMetaHttpsNotice();
         hint.style.color = "";
         if (cfg.loadError) {
           hint.textContent =
@@ -11202,6 +11217,7 @@
       }
       refreshMetaEmbeddedSignupHint();
       setTimeout(refreshMetaEmbeddedSignupHint, 1200);
+      setTimeout(removeLegacyMetaHttpsNotice, 0);
 
       function setMetaEsIntegrationResult(outcome) {
         const wrap = document.getElementById("meta-es-integration-result");
