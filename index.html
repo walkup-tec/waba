@@ -11255,7 +11255,7 @@
       refreshMetaEmbeddedSignupHint();
       setTimeout(refreshMetaEmbeddedSignupHint, 1200);
 
-      function setMetaEsIntegrationResult(outcome) {
+      function setMetaEsIntegrationResult(outcome, detailText) {
         const wrap = document.getElementById("meta-es-integration-result");
         if (!wrap) return;
         const iconEl = wrap.querySelector(".meta-es-integration-result-icon");
@@ -11292,7 +11292,12 @@
         } else {
           wrap.classList.add("meta-es-integration-result--fail");
           if (iconEl) iconEl.innerHTML = xSvg;
-          if (textEl) textEl.textContent = "Integração falhou, tente novamente.";
+          const detail = String(detailText || "").trim();
+          if (textEl) {
+            textEl.textContent = detail
+              ? detail
+              : "Integração falhou, tente novamente.";
+          }
           hideMetaConnectedBadge();
         }
       }
@@ -11318,7 +11323,17 @@
           try {
             setMetaAtivosStatus("Trocando código por token…");
             setMetaInProgressBadge("Trocando código por token…");
-            const result = await metaPost("/meta-oficial/embedded-signup/exchange-code", { code });
+            const redirectUri = (() => {
+              try {
+                return String(window.location.href.split("#")[0] || "").trim();
+              } catch {
+                return "";
+              }
+            })();
+            const result = await metaPost("/meta-oficial/embedded-signup/exchange-code", {
+              code,
+              redirectUri,
+            });
             const accessToken = String(
               result?.accessToken || result?.access_token || ""
             ).trim();
@@ -11333,10 +11348,10 @@
             metaEsEmbeddedSignupSucceeded = false;
             metaEsExchangedAccessToken = "";
             resetMetaEsSession();
-          const failMsg = error?.message || "Falha na troca do código.";
-          setMetaAtivosStatus(failMsg, "error");
-          setMetaEmbeddedSignupActionMessage(failMsg, true);
-            setMetaEsIntegrationResult("fail");
+            const failMsg = error?.message || "Falha na troca do código.";
+            setMetaAtivosStatus(failMsg, "error");
+            setMetaEmbeddedSignupActionMessage(failMsg, true);
+            setMetaEsIntegrationResult("fail", failMsg);
             refreshMetaEmbeddedSignupHint();
             return;
           } finally {
@@ -11421,7 +11436,7 @@
           const failMsg = error?.message || "Falha ao finalizar integração.";
           setMetaAtivosStatus(failMsg, "error");
           setMetaEmbeddedSignupActionMessage(failMsg, true);
-          setMetaEsIntegrationResult("fail");
+          setMetaEsIntegrationResult("fail", failMsg);
           refreshMetaEmbeddedSignupHint();
         } finally {
           metaEsCompleteInFlight = false;

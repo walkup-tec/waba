@@ -15,6 +15,12 @@ Como usar:
 ## Última atualização
 2026-04-06
 
+**Meta exchange-code + redirect_uri:** troca do código do Embedded Signup passa a enviar `redirect_uri` (URL da página ou `META_OAUTH_REDIRECT_URI`) para a Graph API, com fallbacks quando a Meta reclama de redirect. Ver `doc/LOG-2026-04-06__170000__meta-exchange-code-redirect-uri.md`.
+
+Palavras-chave: `META_OAUTH_REDIRECT_URI`, `exchange-code`, `redirect_uri`
+
+---
+
 **Meta Embedded Signup — troca de code sem bloquear no WABA ID:** o frontend esperava `code` e `wabaId` juntos antes de chamar `POST /meta-oficial/embedded-signup/exchange-code`, mas a API só precisa do `code` e o `waba_id` costuma chegar depois no `postMessage`. Ajuste: trocar o code assim que existir; guardar token em memória até o WABA chegar; então preencher campos, webhooks e sucesso. Ver `doc/LOG-2026-04-06__160000__fix-meta-es-code-before-waba-exchange.md`.
 
 Palavras-chave: `embedded-signup`, `exchange-code`, `waba_id`, `metaEsExchangedAccessToken`

@@ -2586,7 +2586,7 @@ function getCampaignInstanceHealth(
   const disconnectedPercent =
     selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
   const shouldPauseByDisconnectedRatio =
-    selectedCount > 0 && disconnectedCount / selectedCount > 0.5;
+    selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
   return {
     selectedCount,
     connectedCount,
@@ -4103,6 +4103,8 @@ app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, async 
     const code = String(req.body?.code || "").trim();
     const appId = String(process.env.META_APP_ID || "").trim();
     const appSecret = String(process.env.META_APP_SECRET || "").trim();
+    const redirectFromBody = String(req.body?.redirectUri || req.body?.redirect_uri || "").trim();
+    const redirectFromEnv = String(process.env.META_OAUTH_REDIRECT_URI || "").trim();
     if (!code) {
       return res.status(400).json({ error: "Campo 'code' é obrigatório (código de ~30s do Embedded Signup)." });
     }
@@ -4111,30 +4113,65 @@ app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, async 
         error: "Servidor sem META_APP_ID / META_APP_SECRET configurados para Embedded Signup.",
       });
     }
-    const url = new URL(`${META_GRAPH_BASE}/${META_GRAPH_VERSION}/oauth/access_token`);
-    url.searchParams.set("client_id", appId);
-    url.searchParams.set("client_secret", appSecret);
-    url.searchParams.set("code", code);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
-    let response: Response;
-    try {
-      response = await fetch(url.toString(), { method: "GET", signal: controller.signal });
-    } finally {
-      clearTimeout(timeoutId);
+    const tryExchange = async (redirectUri: string | undefined) => {
+      const url = new URL(`${META_GRAPH_BASE}/${META_GRAPH_VERSION}/oauth/access_token`);
+      url.searchParams.set("client_id", appId);
+      url.searchParams.set("client_secret", appSecret);
+      url.searchParams.set("code", code);
+      if (redirectUri) {
+        url.searchParams.set("redirect_uri", redirectUri);
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      let response: Response;
+      try {
+        response = await fetch(url.toString(), { method: "GET", signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      const text = await response.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+      return { response, text, json };
+    };
+
+    const uniqueRedirects = Array.from(
+      new Set([redirectFromBody, redirectFromEnv].filter((u) => Boolean(String(u || "").trim())))
+    ) as string[];
+    const candidates: (string | undefined)[] = [...uniqueRedirects, undefined];
+
+    let last: { response: Response; text: string; json: any } | null = null;
+    for (const redirectUri of candidates) {
+      last = await tryExchange(redirectUri);
+      if (last.response.ok) break;
+      const msg = String(
+        last.json?.error?.message || last.json?.error_description || last.text || ""
+      ).toLowerCase();
+      const retryWithoutRedirect =
+        redirectUri &&
+        (msg.includes("redirect_uri") ||
+          msg.includes("redirect uri") ||
+          msg.includes("matching") ||
+          msg.includes("doesn't match"));
+      if (retryWithoutRedirect) {
+        last = await tryExchange(undefined);
+        if (last.response.ok) break;
+      }
     }
-    const text = await response.text();
-    let json: any = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
+
+    if (!last) {
+      return res.status(500).json({ error: "Falha interna ao consultar a Meta." });
     }
+    const { response, text, json } = last;
     if (!response.ok) {
       const detail = String(
         json?.error?.message || json?.error_description || text || ""
-      ).slice(0, 280);
+      ).slice(0, 500);
       return res.status(502).json({
         error: "Falha ao trocar código por token na Meta.",
         status: response.status,
@@ -5899,7 +5936,7 @@ app.get("/disparos/campanhas", async (_req, res) => {
         const disconnectedPercent =
           selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
         const shouldPauseByDisconnectedRatio =
-          selectedCount > 0 && disconnectedCount / selectedCount > 0.5;
+          selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
         const runtimeStage = buildCampaignRuntimeStage(
           item,
           configByCampaignId.get(item.id),
@@ -6240,7 +6277,7 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
       if (health.shouldPauseByDisconnectedRatio) {
         return res.status(409).json({
           error:
-            "Campanha bloqueada para ativação: mais de 50% das instâncias selecionadas estão desconectadas. Use o botão '+ Instâncias' para ampliar a base conectada.",
+            "Campanha bloqueada para ativação: 50% ou mais das instâncias selecionadas estão desconectadas. Use o botão '+ Instâncias' para ampliar a base conectada.",
           instanceHealth: health,
         });
       }
