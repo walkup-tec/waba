@@ -11133,12 +11133,17 @@
           if (!currentBadgeText || currentBadgeText.toLowerCase() === "conectado") {
             setMetaConnectedBadge(`Conectado: WABA ${wabaId}`);
           }
+          // Confirmação visual forte e persistente quando já há credenciais completas.
+          setMetaEsIntegrationResult("success");
           const hintText = String(
             document.getElementById("meta-embedded-signup-hint")?.textContent || ""
           ).trim();
           if (!hintText) {
             setMetaEmbeddedSignupActionMessage("Conexão Meta concluída com sucesso.", false);
           }
+        } else {
+          hideMetaConnectedBadge();
+          setMetaEsIntegrationResult("hidden");
         }
         renderMetaIntegrationKeySummary();
       };
