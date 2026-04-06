@@ -10760,12 +10760,32 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload || {}),
         });
-        const json = await response.json().catch(() => ({}));
+        const raw = await response.text();
+        let json = null;
+        try {
+          json = raw ? JSON.parse(raw) : null;
+        } catch {
+          json = null;
+        }
         if (!response.ok) {
-          const detail = String(json?.detail || json?.error || "Falha na operação.");
+          let detail = String(json?.detail || json?.error || "").trim();
+          if (!detail) {
+            const snippet = String(raw || "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 240);
+            if (snippet) {
+              detail = snippet;
+            } else if (response.status === 502) {
+              detail =
+                "502 sem resposta JSON do app: o proxy pode não estar alcançando o Node (container parado, crash na rota ou timeout). Confira no EasyPanel se o serviço está saudável e os logs do container.";
+            } else {
+              detail = "Falha na operação.";
+            }
+          }
           throw new Error(`[HTTP ${response.status}] ${detail}`);
         }
-        return json;
+        return json || {};
       }
 
       async function fetchAndRenderMetaSubscribedApps(options = {}) {
