@@ -1307,32 +1307,6 @@
         display: block;
       }
 
-      .meta-es-connected-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        border: 1px solid rgba(34, 197, 94, 0.38);
-        background: rgba(34, 197, 94, 0.14);
-        color: #86efac;
-        font-size: 0.78rem;
-        font-weight: 700;
-        line-height: 1.2;
-        white-space: nowrap;
-      }
-      .meta-es-connected-badge[hidden] {
-        display: none !important;
-      }
-      .meta-es-connected-badge-icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .meta-es-connected-badge-icon svg {
-        display: block;
-      }
-
       .integration-env-btn.active {
         background: rgba(139, 92, 246, 0.3);
         color: #f8fafc;
@@ -4632,10 +4606,6 @@
                       >
                         Conectar com Meta
                       </button>
-                      <span id="meta-es-connected-badge" class="meta-es-connected-badge" hidden>
-                        <span class="meta-es-connected-badge-icon" aria-hidden="true"></span>
-                        <span id="meta-es-connected-badge-text">Conectado</span>
-                      </span>
                       <span id="meta-embedded-signup-hint" class="muted" style="flex: 1 1 220px;"></span>
                     </div>
                     <div
@@ -4649,6 +4619,13 @@
                       <span class="meta-es-integration-result-icon" aria-hidden="true"></span>
                       <span class="meta-es-integration-result-text"></span>
                     </div>
+                    <p class="muted" style="font-size: 0.78rem; margin: 10px 0 0 0; line-height: 1.4; max-width: 520px">
+                      A Meta só permite este passo em página <strong>HTTPS</strong> (cadeado no navegador). Abra o Waba pelo
+                      endereço público com <code style="font-size: 0.72rem">https://</code> — em
+                      <code style="font-size: 0.72rem">http://localhost</code> ou <code style="font-size: 0.72rem">http://</code>
+                      o login é bloqueado.
+                    </p>
+
                     <div class="aquecedor-section-title" style="font-size: 0.82rem; opacity: 0.95">1.a) Token de aplicativo</div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
@@ -4923,10 +4900,6 @@
             </button>
           </div>
           <div class="meta-guide-list">
-            <div class="meta-guide-item" data-guide-key="metaConnected">
-              <span class="meta-guide-label">Conexão Meta concluída</span>
-              <span class="meta-guide-pill">Pendente</span>
-            </div>
             <div class="meta-guide-item" data-guide-key="credentials">
               <span class="meta-guide-label">Credenciais preenchidas (Token + WABA ID)</span>
               <span class="meta-guide-pill">Pendente</span>
@@ -4961,7 +4934,7 @@
           aria-controls="meta-guide-dock-panel"
         >
           <span class="meta-guide-dock-toggle-label">Checklist API Meta</span>
-          <span class="meta-guide-dock-toggle-count" id="meta-guide-dock-count">0/7</span>
+          <span class="meta-guide-dock-toggle-count" id="meta-guide-dock-count">0/6</span>
         </button>
       </div>
     </div>
@@ -10511,7 +10484,6 @@
       }
 
       const metaGuideState = {
-        metaConnected: false,
         credentials: false,
         phoneListed: false,
         numberRegistered: false,
@@ -11146,32 +11118,12 @@
         wabaId: null,
         phoneNumberId: null,
         event: null,
-        profileName: null,
-        userId: null,
       };
       function resetMetaEsSession() {
         metaEsSession.code = null;
         metaEsSession.wabaId = null;
         metaEsSession.phoneNumberId = null;
         metaEsSession.event = null;
-        metaEsSession.profileName = null;
-        metaEsSession.userId = null;
-      }
-      function setMetaConnectedBadge(nameOrLabel) {
-        const badge = document.getElementById("meta-es-connected-badge");
-        const iconEl = badge?.querySelector(".meta-es-connected-badge-icon");
-        const textEl = document.getElementById("meta-es-connected-badge-text");
-        if (!badge || !iconEl || !textEl) return;
-        const label = String(nameOrLabel || "").trim() || "Conectado com sucesso";
-        iconEl.innerHTML =
-          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
-        textEl.textContent = label;
-        badge.hidden = false;
-      }
-      function hideMetaConnectedBadge() {
-        const badge = document.getElementById("meta-es-connected-badge");
-        if (!badge) return;
-        badge.hidden = true;
       }
       function refreshMetaEmbeddedSignupHint() {
         const hint = document.getElementById("meta-embedded-signup-hint");
@@ -11214,7 +11166,6 @@
           wrap.setAttribute("aria-hidden", "true");
           if (iconEl) iconEl.innerHTML = "";
           if (textEl) textEl.textContent = "";
-          hideMetaConnectedBadge();
           return;
         }
         wrap.classList.remove("meta-es-integration-result--hidden");
@@ -11231,7 +11182,6 @@
           wrap.classList.add("meta-es-integration-result--fail");
           if (iconEl) iconEl.innerHTML = xSvg;
           if (textEl) textEl.textContent = "Integração falhou, tente novamente.";
-          hideMetaConnectedBadge();
         }
       }
 
@@ -11288,12 +11238,6 @@
           }
           setMetaAtivosStatus("Conexão Meta concluída. Token e WABA aplicados.");
           metaEsEmbeddedSignupSucceeded = true;
-          setMetaGuideStep("metaConnected", true);
-          const connectedName =
-            String(metaEsSession.profileName || "").trim() ||
-            (metaEsSession.userId ? `Meta ID ${metaEsSession.userId}` : "") ||
-            `WABA ${wabaId}`;
-          setMetaConnectedBadge(`Conectado: ${connectedName}`);
           const paintEsSuccess = () => setMetaEsIntegrationResult("success");
           paintEsSuccess();
           if (typeof requestAnimationFrame === "function") {
@@ -11319,20 +11263,6 @@
         if (response.authResponse?.code) {
           setMetaEmbeddedSignupActionMessage("", false);
           metaEsSession.code = String(response.authResponse.code);
-          if (response.authResponse?.userID) {
-            metaEsSession.userId = String(response.authResponse.userID);
-          }
-          try {
-            if (typeof FB !== "undefined" && typeof FB.api === "function") {
-              FB.api("/me", { fields: "name" }, function (r) {
-                if (r && !r.error && r.name) {
-                  metaEsSession.profileName = String(r.name);
-                }
-              });
-            }
-          } catch {
-            /* noop */
-          }
           tryFinalizeMetaEmbeddedSignup();
         } else {
           resetMetaEsSession();
@@ -11356,7 +11286,6 @@
         console.info("[Waba] Embedded Signup: clique processado.");
         metaEsEmbeddedSignupSucceeded = false;
         setMetaEsIntegrationResult("hidden");
-        hideMetaConnectedBadge();
         refreshMetaEmbeddedSignupHint();
         if (window.location.protocol !== "https:") {
           const msg =
@@ -11497,12 +11426,6 @@
         /* Meta pode enviar waba_id em eventos intermediários; antes dávamos return e nunca guardávamos o ID. */
         if (inner.waba_id) metaEsSession.wabaId = String(inner.waba_id);
         if (inner.phone_number_id) metaEsSession.phoneNumberId = String(inner.phone_number_id);
-        if (inner.business_name) metaEsSession.profileName = String(inner.business_name);
-        else if (inner.whatsapp_business_account_name) {
-          metaEsSession.profileName = String(inner.whatsapp_business_account_name);
-        } else if (inner.name) {
-          metaEsSession.profileName = String(inner.name);
-        }
         if (payload.event && metaEsFinishEvents.has(payload.event)) {
           metaEsSession.event = String(payload.event);
         }
