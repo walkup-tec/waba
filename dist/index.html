@@ -10779,7 +10779,7 @@
               rawLower.includes("not found") || rawLower.includes("<title>not found</title>");
             if (looksLikeHtml && (looksLikeNotFound || response.status === 404)) {
               detail =
-                "Esta URL não está a chegar ao servidor Node do Waba (resposta HTML «Not Found»). O domínio provavelmente serve só ficheiros estáticos ou o proxy não encaminha POST para a app. No EasyPanel use o serviço Docker/Node do repositório (node dist/index.js), não só upload de HTML. Teste no mesmo host: GET /health e POST /meta-oficial/embedded-signup/exchange-code devem responder JSON.";
+                "POST não chegou à API Node: o proxy devolveu HTML «Not Found» (não é resposta do Express). Se GET /health e GET /meta-oficial/embedded-signup/config já devolvem JSON, o Node está no ar — falta encaminhar POST para o mesmo serviço (regra no EasyPanel/Traefik, segundo vhost estático, ou CDN). Atualize o deploy para a última versão (tenta POST /api/meta/embedded-signup/exchange-code). Teste: POST com body JSON {\"code\":\"x\"} deve retornar JSON (ex. 400), nunca página HTML.";
             } else if (looksLikeHtml) {
               detail =
                 "Resposta HTML em vez de JSON: o proxy ou o host não está a encaminhar este pedido para a API Node do Waba.";
