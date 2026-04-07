@@ -10754,12 +10754,28 @@
         }
       }
 
-      async function metaPost(path, payload) {
-        const response = await fetch(path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload || {}),
-        });
+      async function metaPost(path, payload, options) {
+        const asForm = options && options.asForm === true;
+        const response = await fetch(
+          path,
+          asForm
+            ? {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+                body: new URLSearchParams(
+                  Object.fromEntries(
+                    Object.entries(payload || {}).filter(
+                      ([, v]) => v != null && String(v).length > 0
+                    )
+                  )
+                ).toString(),
+              }
+            : {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload || {}),
+              }
+        );
         const raw = await response.text();
         let json = null;
         try {
@@ -10779,10 +10795,10 @@
               rawLower.includes("not found") || rawLower.includes("<title>not found</title>");
             if (looksLikeHtml && (looksLikeNotFound || response.status === 404)) {
               detail =
-                "POST não chegou à API Node: o proxy devolveu HTML «Not Found» (não é resposta do Express). Se GET /health e GET /meta-oficial/embedded-signup/config já devolvem JSON, o Node está no ar — falta encaminhar POST para o mesmo serviço (regra no EasyPanel/Traefik, segundo vhost estático, ou CDN). Atualize o deploy para a última versão (tenta POST /api/meta/embedded-signup/exchange-code). Teste: POST com body JSON {\"code\":\"x\"} deve retornar JSON (ex. 400), nunca página HTML.";
+                "O POST não chegou ao Node: o proxy devolveu HTML «Not Found». Causas frequentes: (1) só o tráfego GET vai para o container e o POST cai em hospedagem estática; (2) regra nginx/Caddy que remove o prefixo /api/ sem o Node ter a rota equivalente — use um único upstream para o app ou ajuste o proxy_pass. Depois do deploy atual, o front tenta também POST /waba-embedded-signup-exchange e /meta/embedded-signup/exchange-code. Teste no servidor: curl -sS -X POST http://127.0.0.1:PORTA/waba-embedded-signup-exchange -d \"code=x\" -H \"Content-Type: application/x-www-form-urlencoded\" deve retornar JSON (ex.: 400), nunca HTML.";
             } else if (looksLikeHtml) {
               detail =
-                "Resposta HTML em vez de JSON: o proxy ou o host não está a encaminhar este pedido para a API Node do Waba.";
+                "Resposta HTML em vez de JSON: o proxy não encaminhou este POST para o mesmo processo Node do Waba.";
             } else {
               const snippet = String(raw || "")
                 .replace(/\s+/g, " ")
@@ -10792,7 +10808,7 @@
                 detail = snippet;
               } else if (response.status === 502) {
                 detail =
-                  "502 sem corpo JSON: o proxy pode não alcançar o Node (container parado, crash ou timeout). Veja logs do serviço no EasyPanel.";
+                  "502 sem JSON: proxy não obteve resposta válida do Node (container parado, crash, timeout ou rota errada). Veja logs no EasyPanel e teste curl direto na porta interna do container.";
               } else {
                 detail = "Falha na operação.";
               }
@@ -10804,19 +10820,43 @@
       }
 
       async function metaPostEmbeddedExchangeCode(payload) {
-        try {
-          return await metaPost("/api/meta/embedded-signup/exchange-code", payload);
-        } catch (e) {
-          const msg = String(e?.message || "");
-          const htmlish =
-            msg.includes("<!DOCTYPE") ||
-            msg.toLowerCase().includes("<title>not found</title>") ||
-            (msg.includes("Not Found") && msg.includes("HTTP"));
-          if (htmlish) {
-            return await metaPost("/meta-oficial/embedded-signup/exchange-code", payload);
+        const opts = { asForm: true };
+        const paths = [
+          "/waba-embedded-signup-exchange",
+          "/api/meta/embedded-signup/exchange-code",
+          "/meta/embedded-signup/exchange-code",
+          "/meta-oficial/embedded-signup/exchange-code",
+        ];
+        const htmlishMsg = (msg) => {
+          const s = String(msg || "");
+          return (
+            s.includes("<!DOCTYPE") ||
+            s.toLowerCase().includes("<title>not found</title>") ||
+            (s.includes("Not Found") && s.includes("HTTP"))
+          );
+        };
+        let lastErr = null;
+        for (const p of paths) {
+          try {
+            return await metaPost(p, payload, opts);
+          } catch (e) {
+            lastErr = e;
+            if (!htmlishMsg(e?.message)) {
+              throw e;
+            }
           }
-          throw e;
         }
+        for (const p of paths) {
+          try {
+            return await metaPost(p, payload);
+          } catch (e) {
+            lastErr = e;
+            if (!htmlishMsg(e?.message)) {
+              throw e;
+            }
+          }
+        }
+        throw lastErr || new Error("Falha ao trocar código Embedded Signup.");
       }
 
       async function fetchAndRenderMetaSubscribedApps(options = {}) {

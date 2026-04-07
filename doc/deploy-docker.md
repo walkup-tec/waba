@@ -33,4 +33,15 @@ O fluxo GitHub Actions + FTP envia o **bundle** pronto (`ftp-bundle/`). Docker *
 
 Rotas como `POST /meta-oficial/embedded-signup/exchange-code` existem **só no processo Node** (`node dist/index.js`). Se o domínio servir **apenas** `index.html` estático (Apache/nginx sem proxy para Node), o browser recebe HTML **404 / Not Found** em vez de JSON — a integração Meta nunca completa. O domínio público tem de apontar para o **mesmo** serviço que executa a API (Docker/EasyPanel ou `node dist/index.js` por trás do proxy).
 
-**Rota alternativa (proxy/CDN):** o mesmo handler está exposto também em `POST /api/meta/embedded-signup/exchange-code`. O frontend tenta primeiro essa URL e, se receber HTML «Not Found», repete no path longo — útil quando GET `/meta-oficial/.../config` funciona mas POST no mesmo prefixo é bloqueado ou mal encaminhado.
+**Rotas do mesmo handler (troca do `code` Embedded Signup):**
+
+| Método | Path | Para quê |
+|--------|------|----------|
+| POST | `/waba-embedded-signup-exchange` | Path curto; reduz chance de regra de proxy/CDN quebrar POST em URL longa. |
+| POST | `/api/meta/embedded-signup/exchange-code` | Padrão “API” sob `/api`. |
+| POST | `/meta/embedded-signup/exchange-code` | **Importante:** se o nginx (ou outro proxy) usar `location /api/ { proxy_pass http://node:3000/; }`, o prefixo `/api` é removido e o Node recebe `/meta/embedded-signup/...` — sem esta rota daria 404/502 com HTML. |
+| POST | `/meta-oficial/embedded-signup/exchange-code` | Legado. |
+
+O frontend tenta **nessa ordem** (primeiro `urlencoded`, depois JSON se todas parecerem HTML de proxy).
+
+**EasyPanel / um único app:** o domínio deve apontar para **um** serviço que rode `node dist/index.js` (Docker). Não misture o mesmo host com “site estático” que atenda POST — o POST precisa chegar ao mesmo container que responde `GET /health`.

@@ -15,6 +15,18 @@ Como usar:
 ## Última atualização
 2026-04-06
 
+**Meta exchange-code — rotas para proxy que remove `/api`:** além de `urlencoded`, o backend passou a expor `POST /waba-embedded-signup-exchange` e `POST /meta/embedded-signup/exchange-code` (mesmo handler). Assim, quando nginx faz `proxy_pass .../` dentro de `location /api/`, o path repassado bate no Express. O front tenta os quatro paths em sequência. Ver `doc/LOG-2026-04-06__210000__fix-meta-exchange-proxy-strip-paths.md`.
+
+Palavras-chave: `exchange-code`, `proxy_pass`, `strip /api`, `waba-embedded-signup-exchange`
+
+---
+
+**Meta exchange-code — POST como `urlencoded`:** o browser passa a chamar `exchange-code` principalmente com `application/x-www-form-urlencoded` (`metaPost(..., { asForm: true })`), com fallback para path legado e, só se ainda parecer HTML de proxy, JSON nos dois paths. Objetivo: contornar proxies que falham em POST JSON. Ver `doc/LOG-2026-04-06__204500__embedded-signup-exchange-urlencoded-fallback.md`.
+
+Palavras-chave: `exchange-code`, `urlencoded`, `502 HTML`, `metaPostEmbeddedExchangeCode`
+
+---
+
 **Meta exchange-code + redirect_uri:** troca do código do Embedded Signup passa a enviar `redirect_uri` (URL da página ou `META_OAUTH_REDIRECT_URI`) para a Graph API, com fallbacks quando a Meta reclama de redirect. Ver `doc/LOG-2026-04-06__170000__meta-exchange-code-redirect-uri.md`.
 
 Palavras-chave: `META_OAUTH_REDIRECT_URI`, `exchange-code`, `redirect_uri`

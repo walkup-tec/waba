@@ -159,6 +159,9 @@ app.use((req, res, next) => {
   return parseJsonDefault(req, res, next);
 });
 
+/** Form POST (alguns proxies lidam melhor com urlencoded do que com JSON no mesmo host). */
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+
 function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
   const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
   if (method !== "GET" && method !== "HEAD") return false;
@@ -4100,8 +4103,12 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
  * Troca o código do Embedded Signup por business token (Tech Provider / doc Meta nov/2025).
  * Usa META_APP_ID e META_APP_SECRET do ambiente — não envie app secret do cliente.
  *
- * Rota duplicada em `/api/meta/embedded-signup/exchange-code`: alguns proxies/CDNs devolvem HTML
- * «Not Found» em POST para caminhos longos sob `/meta-oficial/...` mesmo com GET ok no mesmo host.
+ * Rotas duplicadas:
+ * - `/api/meta/embedded-signup/exchange-code` — prefixo `/api` comum em proxies.
+ * - `/meta/embedded-signup/exchange-code` — quando o proxy faz strip de `/api` e encaminha só o sufixo
+ *   (ex.: nginx `proxy_pass http://node:3000/` dentro de `location /api/`).
+ * - `/waba-embedded-signup-exchange` — path curto (menos regras de CDN/nginx que quebram POST aninhado).
+ * - `/meta-oficial/...` — legado.
  */
 async function metaEmbeddedSignupExchangeCodeHandler(req: express.Request, res: express.Response) {
   try {
@@ -4193,8 +4200,10 @@ async function metaEmbeddedSignupExchangeCodeHandler(req: express.Request, res: 
   }
 }
 
-app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, metaEmbeddedSignupExchangeCodeHandler);
-app.post("/api/meta/embedded-signup/exchange-code", parseJsonDefault, metaEmbeddedSignupExchangeCodeHandler);
+app.post("/waba-embedded-signup-exchange", metaEmbeddedSignupExchangeCodeHandler);
+app.post("/meta/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCodeHandler);
+app.post("/meta-oficial/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCodeHandler);
+app.post("/api/meta/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCodeHandler);
 
 /** Inscreve o app nos webhooks do WABA do cliente (pós-Embedded Signup). */
 app.post("/meta-oficial/embedded-signup/subscribe-webhooks", parseJsonDefault, async (req, res) => {
