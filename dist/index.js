@@ -170,6 +170,8 @@ app.use((req, res, next) => {
     }
     return parseJsonDefault(req, res, next);
 });
+/** Form POST (alguns proxies lidam melhor com urlencoded do que com JSON no mesmo host). */
+app.use(express_1.default.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 function isMaintenanceBypassPath(method, reqPath) {
     const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
     if (method !== "GET" && method !== "HEAD")
@@ -3681,8 +3683,12 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
  * Troca o código do Embedded Signup por business token (Tech Provider / doc Meta nov/2025).
  * Usa META_APP_ID e META_APP_SECRET do ambiente — não envie app secret do cliente.
  *
- * Rota duplicada em `/api/meta/embedded-signup/exchange-code`: alguns proxies/CDNs devolvem HTML
- * «Not Found» em POST para caminhos longos sob `/meta-oficial/...` mesmo com GET ok no mesmo host.
+ * Rotas duplicadas:
+ * - `/api/meta/embedded-signup/exchange-code` — prefixo `/api` comum em proxies.
+ * - `/meta/embedded-signup/exchange-code` — quando o proxy faz strip de `/api` e encaminha só o sufixo
+ *   (ex.: nginx `proxy_pass http://node:3000/` dentro de `location /api/`).
+ * - `/waba-embedded-signup-exchange` — path curto (menos regras de CDN/nginx que quebram POST aninhado).
+ * - `/meta-oficial/...` — legado.
  */
 async function metaEmbeddedSignupExchangeCodeHandler(req, res) {
     try {
@@ -3751,7 +3757,10 @@ async function metaEmbeddedSignupExchangeCodeHandler(req, res) {
         const { response, text, json } = last;
         if (!response.ok) {
             const detail = String(json?.error?.message || json?.error_description || text || "").slice(0, 500);
-            return res.status(502).json({
+            const upstreamStatus = Number(response.status) || 500;
+            // EasyPanel mascara 502 com página HTML; preferimos manter JSON para erro da Meta.
+            const clientStatus = upstreamStatus >= 400 && upstreamStatus < 500 ? upstreamStatus : 424;
+            return res.status(clientStatus).json({
                 error: "Falha ao trocar código por token na Meta.",
                 status: response.status,
                 detail: detail || undefined,
@@ -3759,7 +3768,7 @@ async function metaEmbeddedSignupExchangeCodeHandler(req, res) {
         }
         const accessToken = String(json?.access_token || text || "").trim();
         if (!accessToken) {
-            return res.status(502).json({ error: "Resposta da Meta sem access_token." });
+            return res.status(424).json({ error: "Resposta da Meta sem access_token." });
         }
         return res.json({ ok: true, accessToken });
     }
@@ -3767,8 +3776,10 @@ async function metaEmbeddedSignupExchangeCodeHandler(req, res) {
         return res.status(500).json({ error: error?.message || "Erro ao trocar código Embedded Signup." });
     }
 }
-app.post("/meta-oficial/embedded-signup/exchange-code", parseJsonDefault, metaEmbeddedSignupExchangeCodeHandler);
-app.post("/api/meta/embedded-signup/exchange-code", parseJsonDefault, metaEmbeddedSignupExchangeCodeHandler);
+app.post("/waba-embedded-signup-exchange", metaEmbeddedSignupExchangeCodeHandler);
+app.post("/meta/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCodeHandler);
+app.post("/meta-oficial/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCodeHandler);
+app.post("/api/meta/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCodeHandler);
 /** Inscreve o app nos webhooks do WABA do cliente (pós-Embedded Signup). */
 app.post("/meta-oficial/embedded-signup/subscribe-webhooks", parseJsonDefault, async (req, res) => {
     try {

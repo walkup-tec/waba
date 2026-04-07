@@ -4184,7 +4184,11 @@ async function metaEmbeddedSignupExchangeCodeHandler(req: express.Request, res: 
       const detail = String(
         json?.error?.message || json?.error_description || text || ""
       ).slice(0, 500);
-      return res.status(502).json({
+      const upstreamStatus = Number(response.status) || 500;
+      // EasyPanel mascara 502 com página HTML; preferimos manter JSON para erro da Meta.
+      const clientStatus =
+        upstreamStatus >= 400 && upstreamStatus < 500 ? upstreamStatus : 424;
+      return res.status(clientStatus).json({
         error: "Falha ao trocar código por token na Meta.",
         status: response.status,
         detail: detail || undefined,
@@ -4192,7 +4196,7 @@ async function metaEmbeddedSignupExchangeCodeHandler(req: express.Request, res: 
     }
     const accessToken = String(json?.access_token || text || "").trim();
     if (!accessToken) {
-      return res.status(502).json({ error: "Resposta da Meta sem access_token." });
+      return res.status(424).json({ error: "Resposta da Meta sem access_token." });
     }
     return res.json({ ok: true, accessToken });
   } catch (error: any) {
