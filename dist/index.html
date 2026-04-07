@@ -4717,8 +4717,8 @@
                   <span class="meta-step-state-text" id="meta-step-state-step1">Aguardando configuração</span>
                 </button>
                 <div class="meta-step-body" id="meta-step-body-step1">
-              <div class="row g-3 meta-ativos-duplex align-items-start">
-                <div class="col-12 col-lg-6">
+              <div class="row g-3 align-items-start">
+                <div class="col-12">
                   <div class="aquecedor-section">
                     <div class="aquecedor-section-title">Conectar com Facebook</div>
                     <div class="disparos-inline-actions" style="margin-bottom: 10px; flex-wrap: wrap;">
@@ -4747,8 +4747,31 @@
                       <span class="meta-es-integration-result-icon" aria-hidden="true"></span>
                       <span class="meta-es-integration-result-text"></span>
                     </div>
+                  </div>
+                </div>
+              </div>
+                </div>
+              </div>
 
-                    <div class="aquecedor-section-title" style="font-size: 0.82rem; opacity: 0.95">Token de aplicativo</div>
+              <div class="meta-step-card is-locked" data-meta-step-card="step2">
+                <button
+                  type="button"
+                  class="meta-step-header"
+                  data-meta-step-toggle="step2"
+                  aria-expanded="false"
+                  aria-controls="meta-step-body-step2"
+                >
+                  <span class="meta-step-header-left">
+                    <span class="meta-step-light is-pending" id="meta-step-light-step2" aria-hidden="true"></span>
+                    <span class="meta-step-title">Token de aplicativo</span>
+                  </span>
+                  <span class="meta-step-state-text" id="meta-step-state-step2">Aguardando etapa anterior</span>
+                </button>
+                <div class="meta-step-body" id="meta-step-body-step2" hidden>
+              <div class="row g-3 meta-ativos-duplex align-items-start">
+                <div class="col-12 col-lg-6">
+                  <div class="aquecedor-section">
+                    <div class="aquecedor-section-title">Token de aplicativo</div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
                         <label for="meta-dev-app-id">App ID</label>
@@ -4771,10 +4794,46 @@
                       </button>
                       <span id="meta-app-token-hint" class="muted"></span>
                     </div>
-
-                    <div class="aquecedor-section-title" style="font-size: 0.82rem; margin-top: 14px; opacity: 0.95">
-                      Token permanente (System User)
+                  </div>
+                </div>
+                <aside class="col-12 col-lg-6">
+                  <div class="meta-ativos-side">
+                    <div class="meta-ativos-side-title">Apps criados</div>
+                    <div class="disparos-inline-actions" style="margin-bottom: 8px;">
+                      <button id="meta-refresh-apps-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                        Atualizar lista
+                      </button>
                     </div>
+                    <div class="aquecedor-command-log" style="margin-top: 0;">
+                      <div id="meta-apps-list" class="aquecedor-command-log-list">
+                        <div class="muted">Apps vinculados ao WABA aparecem aqui após Atualizar lista.</div>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+                </div>
+              </div>
+
+              <div class="meta-step-card is-locked" data-meta-step-card="step3">
+                <button
+                  type="button"
+                  class="meta-step-header"
+                  data-meta-step-toggle="step3"
+                  aria-expanded="false"
+                  aria-controls="meta-step-body-step3"
+                >
+                  <span class="meta-step-header-left">
+                    <span class="meta-step-light is-pending" id="meta-step-light-step3" aria-hidden="true"></span>
+                    <span class="meta-step-title">Token permanente (System User)</span>
+                  </span>
+                  <span class="meta-step-state-text" id="meta-step-state-step3">Aguardando etapa anterior</span>
+                </button>
+                <div class="meta-step-body" id="meta-step-body-step3" hidden>
+              <div class="row g-3 meta-ativos-duplex align-items-start">
+                <div class="col-12 col-lg-6">
+                  <div class="aquecedor-section">
+                    <div class="aquecedor-section-title">Token permanente (System User)</div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
                         <label for="meta-system-user-id">System User ID</label>
@@ -4805,23 +4864,16 @@
                     </label>
                     <div class="disparos-inline-actions" style="margin-top: 8px;">
                       <button id="meta-generate-system-user-token-btn" class="instance-action-btn btn-qrcode enabled" type="button">
-                        Gerar token System User e preencher etapa 2
+                        Gerar token System User e preencher etapa 4
                       </button>
                     </div>
                   </div>
                 </div>
                 <aside class="col-12 col-lg-6">
                   <div class="meta-ativos-side">
-                    <div class="meta-ativos-side-title">Apps criados</div>
-                    <div class="disparos-inline-actions" style="margin-bottom: 8px;">
-                      <button id="meta-refresh-apps-btn" class="instance-action-btn btn-refresh enabled" type="button">
-                        Atualizar lista
-                      </button>
-                    </div>
-                    <div class="aquecedor-command-log" style="margin-top: 0;">
-                      <div id="meta-apps-list" class="aquecedor-command-log-list">
-                        <div class="muted">Apps vinculados ao WABA aparecem aqui após Atualizar lista.</div>
-                      </div>
+                    <div class="meta-ativos-side-title">Chave API integrada</div>
+                    <div id="meta-integration-key-list" class="aquecedor-command-log-list">
+                      <div class="muted">Resumo das credenciais informadas nas etapas de integração.</div>
                     </div>
                   </div>
                 </aside>
@@ -4829,21 +4881,21 @@
                 </div>
               </div>
 
-              <div class="meta-step-card is-locked" data-meta-step-card="step2">
+              <div class="meta-step-card is-locked" data-meta-step-card="step4">
                 <button
                   type="button"
                   class="meta-step-header"
-                  data-meta-step-toggle="step2"
+                  data-meta-step-toggle="step4"
                   aria-expanded="false"
-                  aria-controls="meta-step-body-step2"
+                  aria-controls="meta-step-body-step4"
                 >
                   <span class="meta-step-header-left">
-                    <span class="meta-step-light is-pending" id="meta-step-light-step2" aria-hidden="true"></span>
+                    <span class="meta-step-light is-pending" id="meta-step-light-step4" aria-hidden="true"></span>
                     <span class="meta-step-title">Integração API oficial (Meta)</span>
                   </span>
-                  <span class="meta-step-state-text" id="meta-step-state-step2">Aguardando etapa anterior</span>
+                  <span class="meta-step-state-text" id="meta-step-state-step4">Aguardando etapa anterior</span>
                 </button>
-                <div class="meta-step-body" id="meta-step-body-step2" hidden>
+                <div class="meta-step-body" id="meta-step-body-step4" hidden>
               <div class="row g-3 meta-ativos-duplex align-items-start">
                 <div class="col-12 col-lg-6">
                   <div class="aquecedor-section">
@@ -4872,8 +4924,8 @@
                 <aside class="col-12 col-lg-6">
                   <div class="meta-ativos-side">
                     <div class="meta-ativos-side-title">Chave API integrada</div>
-                    <div id="meta-integration-key-list" class="aquecedor-command-log-list">
-                      <div class="muted">Resumo das credenciais informadas à esquerda.</div>
+                    <div id="meta-integration-key-list-step4" class="aquecedor-command-log-list">
+                      <div class="muted">Use Token + WABA ID para validar a API oficial.</div>
                     </div>
                   </div>
                 </aside>
@@ -4881,21 +4933,21 @@
                 </div>
               </div>
 
-              <div class="meta-step-card is-locked" data-meta-step-card="step3">
+              <div class="meta-step-card is-locked" data-meta-step-card="step5">
                 <button
                   type="button"
                   class="meta-step-header"
-                  data-meta-step-toggle="step3"
+                  data-meta-step-toggle="step5"
                   aria-expanded="false"
-                  aria-controls="meta-step-body-step3"
+                  aria-controls="meta-step-body-step5"
                 >
                   <span class="meta-step-header-left">
-                    <span class="meta-step-light is-pending" id="meta-step-light-step3" aria-hidden="true"></span>
+                    <span class="meta-step-light is-pending" id="meta-step-light-step5" aria-hidden="true"></span>
                     <span class="meta-step-title">Integrar números WhatsApp</span>
                   </span>
-                  <span class="meta-step-state-text" id="meta-step-state-step3">Aguardando etapa anterior</span>
+                  <span class="meta-step-state-text" id="meta-step-state-step5">Aguardando etapa anterior</span>
                 </button>
-                <div class="meta-step-body" id="meta-step-body-step3" hidden>
+                <div class="meta-step-body" id="meta-step-body-step5" hidden>
               <div class="row g-3 meta-ativos-duplex align-items-start">
                 <div class="col-12 col-lg-6">
                   <div class="aquecedor-section">
@@ -10767,21 +10819,43 @@
 
       function renderMetaSetupAccordion() {
         const { token, wabaId } = getMetaAtivosPayloadBase();
-        const hasCredentials = Boolean(token && wabaId);
-        const step1Done = metaGuideState.integrationConnected || hasCredentials;
-        const step2Unlocked = step1Done;
-        const step2Done = metaGuideState.phoneListed === true;
-        const step3Unlocked = step2Done;
-        const step3Done = metaGuideState.numberRegistered === true && metaGuideState.appSubscribed === true;
+        const hasApiCredentials = Boolean(token && wabaId);
+        const appId = String(document.getElementById("meta-dev-app-id")?.value || "").trim();
+        const appSecret = String(document.getElementById("meta-dev-app-secret")?.value || "").trim();
+        const systemUserId = String(document.getElementById("meta-system-user-id")?.value || "").trim();
+        const bmAdminToken = String(document.getElementById("meta-bm-admin-token")?.value || "").trim();
 
-        const firstPendingUnlocked = !step1Done ? "step1" : !step2Done ? "step2" : !step3Done ? "step3" : "step3";
-        const currentErrorStep =
-          metaAtivosStatusKind === "error" ? (!step1Done ? "step1" : !step2Done ? "step2" : "step3") : "";
+        const step1Done = metaGuideState.integrationConnected === true;
+        const step2Unlocked = step1Done;
+        const step2Done = Boolean(appId && appSecret);
+        const step3Unlocked = step2Done;
+        const step3Done = Boolean(systemUserId && bmAdminToken);
+        const step4Unlocked = step3Done;
+        const step4Done = metaGuideState.phoneListed === true || hasApiCredentials;
+        const step5Unlocked = step4Done;
+        const step5Done = metaGuideState.numberRegistered === true && metaGuideState.appSubscribed === true;
+
+        const firstPendingUnlocked = !step1Done
+          ? "step1"
+          : !step2Done
+          ? "step2"
+          : !step3Done
+          ? "step3"
+          : !step4Done
+          ? "step4"
+          : !step5Done
+          ? "step5"
+          : "step5";
+        const currentErrorStep = metaAtivosStatusKind === "error" ? firstPendingUnlocked : "";
 
         const step2Card = document.querySelector('[data-meta-step-card="step2"]');
         const step3Card = document.querySelector('[data-meta-step-card="step3"]');
+        const step4Card = document.querySelector('[data-meta-step-card="step4"]');
+        const step5Card = document.querySelector('[data-meta-step-card="step5"]');
         if (step2Card) step2Card.classList.toggle("is-locked", !step2Unlocked);
         if (step3Card) step3Card.classList.toggle("is-locked", !step3Unlocked);
+        if (step4Card) step4Card.classList.toggle("is-locked", !step4Unlocked);
+        if (step5Card) step5Card.classList.toggle("is-locked", !step5Unlocked);
 
         setMetaStepVisual(
           "step1",
@@ -10826,10 +10900,46 @@
             ? "Etapa concluída"
             : "Aguardando configuração"
         );
+        setMetaStepVisual(
+          "step4",
+          !step4Unlocked
+            ? "pending"
+            : currentErrorStep === "step4"
+            ? "error"
+            : step4Done
+            ? "success"
+            : "warning",
+          !step4Unlocked
+            ? "Aguardando etapa anterior"
+            : currentErrorStep === "step4"
+            ? "Erro na configuração"
+            : step4Done
+            ? "Etapa concluída"
+            : "Aguardando configuração"
+        );
+        setMetaStepVisual(
+          "step5",
+          !step5Unlocked
+            ? "pending"
+            : currentErrorStep === "step5"
+            ? "error"
+            : step5Done
+            ? "success"
+            : "warning",
+          !step5Unlocked
+            ? "Aguardando etapa anterior"
+            : currentErrorStep === "step5"
+            ? "Erro na configuração"
+            : step5Done
+            ? "Etapa concluída"
+            : "Aguardando configuração"
+        );
 
         setMetaStepOpen("step1", firstPendingUnlocked === "step1");
         setMetaStepOpen("step2", step2Unlocked && firstPendingUnlocked === "step2");
         setMetaStepOpen("step3", step3Unlocked && firstPendingUnlocked === "step3");
+        setMetaStepOpen("step4", step4Unlocked && firstPendingUnlocked === "step4");
+        setMetaStepOpen("step5", step5Unlocked && firstPendingUnlocked === "step5");
       }
 
       function setMetaAtivosStatus(message, kind = "muted") {
@@ -11451,6 +11561,10 @@
 
       const metaTokenInput = document.getElementById("meta-token-input");
       const metaWabaInput = document.getElementById("meta-waba-id-input");
+      const metaDevAppIdInput = document.getElementById("meta-dev-app-id");
+      const metaDevAppSecretInput = document.getElementById("meta-dev-app-secret");
+      const metaSystemUserIdInput = document.getElementById("meta-system-user-id");
+      const metaBmAdminTokenInput = document.getElementById("meta-bm-admin-token");
       const syncMetaCredentialsChecklist = () => {
         const { token, wabaId } = getMetaAtivosPayloadBase();
         const hasCredentials = Boolean(token && wabaId);
@@ -11479,6 +11593,10 @@
       };
       if (metaTokenInput) metaTokenInput.addEventListener("input", syncMetaCredentialsChecklist);
       if (metaWabaInput) metaWabaInput.addEventListener("input", syncMetaCredentialsChecklist);
+      if (metaDevAppIdInput) metaDevAppIdInput.addEventListener("input", renderMetaSetupAccordion);
+      if (metaDevAppSecretInput) metaDevAppSecretInput.addEventListener("input", renderMetaSetupAccordion);
+      if (metaSystemUserIdInput) metaSystemUserIdInput.addEventListener("input", renderMetaSetupAccordion);
+      if (metaBmAdminTokenInput) metaBmAdminTokenInput.addEventListener("input", renderMetaSetupAccordion);
 
       const metaEsFinishEvents = new Set([
         "FINISH",
