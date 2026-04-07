@@ -1270,6 +1270,80 @@
         margin-bottom: 0;
       }
 
+      #tab-meta-ativos .meta-step-card {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.38);
+        overflow: hidden;
+        margin-bottom: 12px;
+      }
+
+      #tab-meta-ativos .meta-step-header {
+        width: 100%;
+        border: 0;
+        background: rgba(15, 23, 42, 0.55);
+        color: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-align: left;
+        padding: 12px 14px;
+        cursor: pointer;
+      }
+
+      #tab-meta-ativos .meta-step-header-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+      }
+
+      #tab-meta-ativos .meta-step-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+
+      #tab-meta-ativos .meta-step-state-text {
+        font-size: 0.78rem;
+        color: #cbd5e1;
+        white-space: nowrap;
+      }
+
+      #tab-meta-ativos .meta-step-light {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.65);
+        flex: 0 0 auto;
+      }
+
+      #tab-meta-ativos .meta-step-light.is-success {
+        background: #22c55e;
+      }
+
+      #tab-meta-ativos .meta-step-light.is-warning {
+        background: #f59e0b;
+      }
+
+      #tab-meta-ativos .meta-step-light.is-error {
+        background: #ef4444;
+      }
+
+      #tab-meta-ativos .meta-step-light.is-pending {
+        background: #94a3b8;
+      }
+
+      #tab-meta-ativos .meta-step-body {
+        padding: 12px 12px 10px;
+      }
+
+      #tab-meta-ativos .meta-step-card.is-locked .meta-step-header {
+        cursor: not-allowed;
+        opacity: 0.78;
+      }
+
       .meta-es-integration-result {
         display: flex;
         align-items: center;
@@ -4628,10 +4702,25 @@
                 <span class="muted">Conectar e ativar número oficial</span>
               </div>
 
+              <div class="meta-step-card is-open" data-meta-step-card="step1">
+                <button
+                  type="button"
+                  class="meta-step-header"
+                  data-meta-step-toggle="step1"
+                  aria-expanded="true"
+                  aria-controls="meta-step-body-step1"
+                >
+                  <span class="meta-step-header-left">
+                    <span class="meta-step-light is-pending" id="meta-step-light-step1" aria-hidden="true"></span>
+                    <span class="meta-step-title">Conectar com a Meta</span>
+                  </span>
+                  <span class="meta-step-state-text" id="meta-step-state-step1">Aguardando configuração</span>
+                </button>
+                <div class="meta-step-body" id="meta-step-body-step1">
               <div class="row g-3 meta-ativos-duplex align-items-start">
                 <div class="col-12 col-lg-6">
                   <div class="aquecedor-section">
-                    <div class="aquecedor-section-title">1) Conectar com a Meta</div>
+                    <div class="aquecedor-section-title">Conectar com a Meta</div>
                     <div class="disparos-inline-actions" style="margin-bottom: 10px; flex-wrap: wrap;">
                       <button
                         id="meta-embedded-signup-btn"
@@ -4659,7 +4748,7 @@
                       <span class="meta-es-integration-result-text"></span>
                     </div>
 
-                    <div class="aquecedor-section-title" style="font-size: 0.82rem; opacity: 0.95">1.a) Token de aplicativo</div>
+                    <div class="aquecedor-section-title" style="font-size: 0.82rem; opacity: 0.95">Token de aplicativo</div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
                         <label for="meta-dev-app-id">App ID</label>
@@ -4684,7 +4773,7 @@
                     </div>
 
                     <div class="aquecedor-section-title" style="font-size: 0.82rem; margin-top: 14px; opacity: 0.95">
-                      1.b) Token permanente (System User)
+                      Token permanente (System User)
                     </div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
@@ -4737,11 +4826,28 @@
                   </div>
                 </aside>
               </div>
+                </div>
+              </div>
 
+              <div class="meta-step-card is-locked" data-meta-step-card="step2">
+                <button
+                  type="button"
+                  class="meta-step-header"
+                  data-meta-step-toggle="step2"
+                  aria-expanded="false"
+                  aria-controls="meta-step-body-step2"
+                >
+                  <span class="meta-step-header-left">
+                    <span class="meta-step-light is-pending" id="meta-step-light-step2" aria-hidden="true"></span>
+                    <span class="meta-step-title">Integração API oficial (Meta)</span>
+                  </span>
+                  <span class="meta-step-state-text" id="meta-step-state-step2">Aguardando etapa anterior</span>
+                </button>
+                <div class="meta-step-body" id="meta-step-body-step2" hidden>
               <div class="row g-3 meta-ativos-duplex align-items-start">
                 <div class="col-12 col-lg-6">
                   <div class="aquecedor-section">
-                    <div class="aquecedor-section-title">2) Integração API oficial (Meta)</div>
+                    <div class="aquecedor-section-title">Integração API oficial (Meta)</div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
                         <label for="meta-token-input">Token de acesso à API (WABA / Cloud API)</label>
@@ -4772,11 +4878,28 @@
                   </div>
                 </aside>
               </div>
+                </div>
+              </div>
 
+              <div class="meta-step-card is-locked" data-meta-step-card="step3">
+                <button
+                  type="button"
+                  class="meta-step-header"
+                  data-meta-step-toggle="step3"
+                  aria-expanded="false"
+                  aria-controls="meta-step-body-step3"
+                >
+                  <span class="meta-step-header-left">
+                    <span class="meta-step-light is-pending" id="meta-step-light-step3" aria-hidden="true"></span>
+                    <span class="meta-step-title">Integrar números WhatsApp</span>
+                  </span>
+                  <span class="meta-step-state-text" id="meta-step-state-step3">Aguardando etapa anterior</span>
+                </button>
+                <div class="meta-step-body" id="meta-step-body-step3" hidden>
               <div class="row g-3 meta-ativos-duplex align-items-start">
                 <div class="col-12 col-lg-6">
                   <div class="aquecedor-section">
-                    <div class="aquecedor-section-title">3) Integrar números WhatsApp</div>
+                    <div class="aquecedor-section-title">Integrar números WhatsApp</div>
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
                         <label for="meta-phone-id-input">Phone Number ID</label>
@@ -4810,6 +4933,8 @@
                     </div>
                   </div>
                 </aside>
+              </div>
+                </div>
               </div>
             </section>
           </div>
@@ -10608,6 +10733,103 @@
         metaGuideState[key] = value === true;
         persistMetaGuideState();
         renderMetaGuideChecklist();
+        renderMetaSetupAccordion();
+      }
+
+      let metaAtivosStatusKind = "muted";
+      function setMetaStepVisual(stepKey, state, text) {
+        const light = document.getElementById(`meta-step-light-${stepKey}`);
+        const label = document.getElementById(`meta-step-state-${stepKey}`);
+        if (light) {
+          light.classList.remove("is-success", "is-warning", "is-error", "is-pending");
+          light.classList.add(
+            state === "success"
+              ? "is-success"
+              : state === "warning"
+              ? "is-warning"
+              : state === "error"
+              ? "is-error"
+              : "is-pending"
+          );
+        }
+        if (label) label.textContent = String(text || "");
+      }
+
+      function setMetaStepOpen(stepKey, open) {
+        const card = document.querySelector(`[data-meta-step-card="${stepKey}"]`);
+        const body = document.getElementById(`meta-step-body-${stepKey}`);
+        const toggle = document.querySelector(`[data-meta-step-toggle="${stepKey}"]`);
+        if (!card || !body || !toggle) return;
+        card.classList.toggle("is-open", open === true);
+        body.hidden = open !== true;
+        toggle.setAttribute("aria-expanded", open === true ? "true" : "false");
+      }
+
+      function renderMetaSetupAccordion() {
+        const { token, wabaId } = getMetaAtivosPayloadBase();
+        const hasCredentials = Boolean(token && wabaId);
+        const step1Done = metaGuideState.integrationConnected || hasCredentials;
+        const step2Unlocked = step1Done;
+        const step2Done = metaGuideState.phoneListed === true;
+        const step3Unlocked = step2Done;
+        const step3Done = metaGuideState.numberRegistered === true && metaGuideState.appSubscribed === true;
+
+        const firstPendingUnlocked = !step1Done ? "step1" : !step2Done ? "step2" : !step3Done ? "step3" : "step3";
+        const currentErrorStep =
+          metaAtivosStatusKind === "error" ? (!step1Done ? "step1" : !step2Done ? "step2" : "step3") : "";
+
+        const step2Card = document.querySelector('[data-meta-step-card="step2"]');
+        const step3Card = document.querySelector('[data-meta-step-card="step3"]');
+        if (step2Card) step2Card.classList.toggle("is-locked", !step2Unlocked);
+        if (step3Card) step3Card.classList.toggle("is-locked", !step3Unlocked);
+
+        setMetaStepVisual(
+          "step1",
+          currentErrorStep === "step1" ? "error" : step1Done ? "success" : "warning",
+          currentErrorStep === "step1"
+            ? "Erro na configuração"
+            : step1Done
+            ? "Etapa concluída"
+            : "Aguardando configuração"
+        );
+        setMetaStepVisual(
+          "step2",
+          !step2Unlocked
+            ? "pending"
+            : currentErrorStep === "step2"
+            ? "error"
+            : step2Done
+            ? "success"
+            : "warning",
+          !step2Unlocked
+            ? "Aguardando etapa anterior"
+            : currentErrorStep === "step2"
+            ? "Erro na configuração"
+            : step2Done
+            ? "Etapa concluída"
+            : "Aguardando configuração"
+        );
+        setMetaStepVisual(
+          "step3",
+          !step3Unlocked
+            ? "pending"
+            : currentErrorStep === "step3"
+            ? "error"
+            : step3Done
+            ? "success"
+            : "warning",
+          !step3Unlocked
+            ? "Aguardando etapa anterior"
+            : currentErrorStep === "step3"
+            ? "Erro na configuração"
+            : step3Done
+            ? "Etapa concluída"
+            : "Aguardando configuração"
+        );
+
+        setMetaStepOpen("step1", firstPendingUnlocked === "step1");
+        setMetaStepOpen("step2", step2Unlocked && firstPendingUnlocked === "step2");
+        setMetaStepOpen("step3", step3Unlocked && firstPendingUnlocked === "step3");
       }
 
       function setMetaAtivosStatus(message, kind = "muted") {
@@ -10616,6 +10838,8 @@
         el.textContent = String(message || "");
         el.classList.remove("field-error");
         if (kind === "error") el.classList.add("field-error");
+        metaAtivosStatusKind = kind === "error" ? "error" : kind === "warning" ? "warning" : "muted";
+        renderMetaSetupAccordion();
       }
 
       function setMetaTemplatesStatus(message, kind = "muted") {
@@ -11415,8 +11639,11 @@
             setMetaAtivosStatus("Trocando código por token…");
             setMetaInProgressBadge("Trocando código por token…");
             const redirectUri = (() => {
+              const cfg = window.__META_ES_CONFIG || {};
+              const fromConfig = String(cfg.redirectUri || "").trim();
+              if (fromConfig) return fromConfig;
               try {
-                return String(window.location.href.split("#")[0] || "").trim();
+                return String(window.location.origin || "").trim();
               } catch {
                 return "";
               }
@@ -11803,6 +12030,18 @@
       syncMetaCredentialsChecklist();
       applyMetaGuideDockCollapsed(loadMetaGuideDockCollapsed());
       renderMetaGuideChecklist();
+      renderMetaSetupAccordion();
+
+      document.querySelectorAll("[data-meta-step-toggle]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const step = btn.getAttribute("data-meta-step-toggle");
+          if (!step) return;
+          const card = document.querySelector(`[data-meta-step-card="${step}"]`);
+          if (card?.classList.contains("is-locked")) return;
+          const targetState = btn.getAttribute("aria-expanded") !== "true";
+          setMetaStepOpen(step, targetState);
+        });
+      });
 
       document.getElementById("meta-guide-dock-toggle")?.addEventListener("click", () => {
         const dock = document.getElementById("meta-guide-dock");

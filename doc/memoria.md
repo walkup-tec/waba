@@ -13,7 +13,19 @@ Como usar:
 Última atualização: (gerenciado automaticamente)
 
 ## Última atualização
-2026-04-06
+2026-04-07
+
+**Meta Ativos - UX em sanfona com sinaleira por etapa:** a tela foi reorganizada em cards por etapa com indicador visual de status (verde/amarelo/vermelho), desbloqueio condicional da próxima etapa e expansão automática da etapa pendente. Objetivo: reduzir carga cognitiva e guiar configuração passo a passo. Ver `doc/LOG-2026-04-07__120000__ux-meta-ativos-sanfona-sinaleira.md`.
+
+Palavras-chave: `meta-ativos`, `sanfona`, `sinaleira`, `etapas`, `ux`
+
+---
+
+**Meta exchange-code - consistencia de redirect_uri:** o backend passou a expor `redirectUri` no endpoint de config e a priorizar `META_OAUTH_REDIRECT_URI` na troca do code. O frontend agora usa esse valor fixo do servidor (fallback `window.location.origin`) para evitar mismatch com o OAuth dialog. Ver `doc/LOG-2026-04-07__114500__fix-meta-redirect-uri-consistencia-env-config.md`.
+
+Palavras-chave: `redirect_uri`, `META_OAUTH_REDIRECT_URI`, `embedded-signup`, `exchange-code`
+
+---
 
 **Meta exchange-code — rotas para proxy que remove `/api`:** além de `urlencoded`, o backend passou a expor `POST /waba-embedded-signup-exchange` e `POST /meta/embedded-signup/exchange-code` (mesmo handler). Assim, quando nginx faz `proxy_pass .../` dentro de `location /api/`, o path repassado bate no Express. O front tenta os quatro paths em sequência. Ver `doc/LOG-2026-04-06__210000__fix-meta-exchange-proxy-strip-paths.md`.
 

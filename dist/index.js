@@ -3672,10 +3672,12 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
     res.set("Pragma", "no-cache");
     const appId = String(process.env.META_APP_ID || "").trim();
     const configId = String(process.env.META_ES_CONFIG_ID || "").trim();
+    const redirectUri = String(process.env.META_OAUTH_REDIRECT_URI || "").trim();
     res.json({
         ok: Boolean(appId && configId),
         appId: appId || undefined,
         configId: configId || undefined,
+        redirectUri: redirectUri || undefined,
         graphVersion: META_GRAPH_VERSION,
     });
 });
@@ -3732,7 +3734,8 @@ async function metaEmbeddedSignupExchangeCodeHandler(req, res) {
             }
             return { response, text, json };
         };
-        const uniqueRedirects = Array.from(new Set([redirectFromBody, redirectFromEnv].filter((u) => Boolean(String(u || "").trim()))));
+        // Prioriza redirect_uri fixo do ambiente para bater 1:1 com o OAuth dialog.
+        const uniqueRedirects = Array.from(new Set([redirectFromEnv, redirectFromBody].filter((u) => Boolean(String(u || "").trim()))));
         const candidates = [...uniqueRedirects, undefined];
         let last = null;
         for (const redirectUri of candidates) {
