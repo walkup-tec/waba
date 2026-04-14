@@ -1081,3 +1081,15 @@ Palavras-chave para buscar:
 
 
 
+
+## 2026-04-14 - Favicon aplicado do Site Credilix
+
+- Favicon copiado de `D:\Site Credilix\dist\favicon.png` para `E:\Waba\favicon.png`.
+- `index.html` atualizado para usar `href="/favicon.png"`.
+- Log relacionado: `doc/LOG-2026-04-14__131127__update-favicon-site-credilix-no-waba.md`.
+
+### Palavras-chave
+
+- favicon
+- rel icon
+- credilix
