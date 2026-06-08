@@ -171,8 +171,10 @@ resolve_waba_backend_url() {
     fi
   fi
 
-  [[ -n "$ip" ]] && echo "http://${ip}:${port}/" && return 0
-  return 1
+  # Mesmo destino do Easypanel → Domínios (hostname Swarm, não IP overlay)
+  echo "http://${WABA_SWARM_SERVICE}:${port}/"
+  echo "  backend fallback Easypanel: ${WABA_SWARM_SERVICE}:${port}" >&2
+  return 0
 }
 
 ensure_traefik_on_overlay() {
@@ -294,9 +296,9 @@ needles = [public_host, "waba.draxsistemas", "waba_disparador", "waba-disparador
 if easypanel_host:
     needles.append(easypanel_host)
 
-def fix_host_windows(host_needle, correct_ip, port_s="3000"):
+def fix_host_windows(host_needle, backend):
     global text
-    if not host_needle or not correct_ip:
+    if not host_needle or not backend:
         return 0
     lines = text.splitlines(keepends=True)
     i = 0
@@ -308,13 +310,8 @@ def fix_host_windows(host_needle, correct_ip, port_s="3000"):
             block = "".join(lines[i:end])
             orig = block
             block = re.sub(
-                rf"http://[0-9.]+\.{port_s}",
-                f"http://{correct_ip}:{port_s}",
-                block,
-            )
-            block = re.sub(
                 rf'("url"\s*:\s*")http://[^"]+(")',
-                rf'\g<1>http://{correct_ip}:{port_s}/\2',
+                rf'\g<1>{backend}\2',
                 block,
                 count=1,
             )
@@ -331,9 +328,9 @@ def fix_host_windows(host_needle, correct_ip, port_s="3000"):
     return changed
 
 for needle in needles:
-    n = fix_host_windows(needle, waba_ip, port)
+    n = fix_host_windows(needle, backend_url)
     if n:
-        print(f"  janela Host {needle} -> {waba_ip}:{port} ({n}x)")
+        print(f"  janela Host {needle} -> {backend_url} ({n}x)")
 
 open(path, "w", encoding="utf-8").write(text)
 PY
