@@ -15,6 +15,12 @@ Como usar:
 ## Ãšltima atualizaÃ§Ã£o
 2026-06-08
 
+**Produção 404 após redeploy — router Traefik removido:** `grep waba.draxsistemas main.yaml` vazio; app OK em `http://127.0.0.1:30180/health` (200); HTTPS 404 (Traefik sem router). Fix: `scripts/restore-waba-traefik-router-vps.sh` (commit `8adc236`). Ver `doc/LOG-2026-06-08__waba-404-traefik-router-restore.md`.
+
+Palavras-chave: `waba-404`, `restore-waba-traefik`, `main.yaml.bak`, `redeploy-easypanel`
+
+---
+
 **Traefik WABA — script dedicado (não compartilhar com Typebot):** criados `scripts/traefik-permanent-waba-vps.sh` e `scripts/diagnose-waba-502-vps.sh` para o serviço Easypanel **waba/waba_disparador** (Swarm `waba_waba_disparador`, rede `easypanel-waba`, domínio `waba.draxsistemas.com.br`). Instalação VPS: `/root/traefik-permanent-waba-vps.sh install`. Doc: `doc/FIX-TRAEFIK-WABA.md`. Ver `doc/LOG-2026-06-08__traefik-permanent-waba-script-dedicado.md`.
 
 Palavras-chave: `traefik-permanent-waba`, `waba_disparador`, `502-bad-gateway`, `easypanel-waba`, `script-separado-typebot`
