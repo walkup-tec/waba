@@ -1108,3 +1108,13 @@ Palavras-chave para buscar:
 - **Causa:** payload enviado ao `POST /instance/create` incluía `channel`, `token` auto-gerado e `number: ""` → Evolution **400**; connect depois **404**.
 - **Fix:** `src/index.ts` — payload mínimo Evolution v2; `token`/`number` só se informados pelo cliente.
 - **Próximo:** deploy `waba_disparador`; validar `POST registrar-qrcode` após build.
+- **2026-06-08 (limpeza):** removidas 16 instâncias via `DELETE /instancias/:name`; mantidas **Walkup** (51997462102) e **Marcelo Pessoal** (51999666841, número pedido como Marcelo Mozart).
+
+## 2026-06-08 — Ambientes V01 (baseline) e V02 (dev diário)
+
+- **V01:** espelho do estado atual de produção; porta local **3011**; dados em `data/v01/`; branch `v01`.
+- **V02:** desenvolvimento ativo a partir de hoje; porta **3012**; dados em `data/v02/`; branch `v02`.
+- **Produção:** inalterada (`master`, VPS `waba.draxsistemas.com.br`, porta 30180).
+- Código: `src/load-env.ts`, `src/data-path.ts`, scripts `dev-v01.ps1` / `dev-v02.ps1`, `npm run init:env`.
+- Doc: `doc/AMBIENTES-V01-V02.md`.
+- **Pendente:** criar branches `v01`/`v02` no Git; serviços Easypanel `waba_disparador_v01`/`_v02`; Evolution/Supabase separados por ambiente.

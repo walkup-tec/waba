@@ -1,3 +1,4 @@
+import "./load-env";
 process.env.TZ = process.env.TZ || "America/Sao_Paulo";
 import express from "express";
 import multer from "multer";
@@ -7,7 +8,8 @@ import crypto from "crypto";
 import { promises as fs, existsSync, readFileSync } from "fs";
 import { createClient } from "@supabase/supabase-js";
 import { DRAX_LOGO_PNG_BASE64 } from "./generated-brand-logo";
-import "dotenv/config";
+import { WABA_ENV } from "./load-env";
+import { resolveDataFile } from "./data-path";
 
 const app = express();
 
@@ -220,6 +222,7 @@ app.use((req, res, next) => {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
+    wabaEnv: WABA_ENV,
     port: PORT,
     maintenanceMode: MAINTENANCE_MODE,
     runtimeMode: RUNTIME_MODE,
@@ -540,12 +543,12 @@ const EVO_LIVE_PROFILE_SYNC =
   process.env.EVO_LIVE_PROFILE_SYNC === "0" || process.env.EVO_LIVE_PROFILE_SYNC === "false"
     ? false
     : true;
-const INSTANCE_ALIASES_FILE = path.join(process.cwd(), "data", "instance-aliases.json");
-const WHATSAPP_PROFILE_NAMES_FILE = path.join(process.cwd(), "data", "whatsapp-profile-names.json");
+const INSTANCE_ALIASES_FILE = resolveDataFile("instance-aliases.json");
+const WHATSAPP_PROFILE_NAMES_FILE = resolveDataFile("whatsapp-profile-names.json");
 /** Backup local de campanhas + leads (sobrevive a restart; não substitui Supabase quando ambos existem). */
-const DISPAROS_LOCAL_STATE_FILE = path.join(process.cwd(), "data", "disparos-local-state.json");
+const DISPAROS_LOCAL_STATE_FILE = resolveDataFile("disparos-local-state.json");
 /** Última intenção explícita: aquecedor ligado/desligado (retoma após restart do processo na porta 3000). */
-const RUNTIME_INTENT_FILE = path.join(process.cwd(), "data", "runtime-intent.json");
+const RUNTIME_INTENT_FILE = resolveDataFile("runtime-intent.json");
 /** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
 const DISPAROS_CHECKPOINT_MS = Math.max(
   30_000,
@@ -6594,7 +6597,9 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
+  console.log(
+    `Disparador N8 [${WABA_ENV}] - servidor rodando em http://localhost:${PORT}`
+  );
   draxLogoBytes = undefined;
   const logoProbe = resolveDraxLogoPng();
   console.log(

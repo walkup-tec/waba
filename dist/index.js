@@ -36,6 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+require("./load-env");
 process.env.TZ = process.env.TZ || "America/Sao_Paulo";
 const express_1 = __importDefault(require("express"));
 const multer_1 = __importDefault(require("multer"));
@@ -45,7 +46,8 @@ const crypto_1 = __importDefault(require("crypto"));
 const fs_1 = require("fs");
 const supabase_js_1 = require("@supabase/supabase-js");
 const generated_brand_logo_1 = require("./generated-brand-logo");
-require("dotenv/config");
+const load_env_1 = require("./load-env");
+const data_path_1 = require("./data-path");
 const app = (0, express_1.default)();
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
 const rootPath = path_1.default.join(__dirname, "..");
@@ -219,6 +221,7 @@ app.use((req, res, next) => {
 app.get("/health", (_req, res) => {
     res.json({
         ok: true,
+        wabaEnv: load_env_1.WABA_ENV,
         port: PORT,
         maintenanceMode: MAINTENANCE_MODE,
         runtimeMode: RUNTIME_MODE,
@@ -514,12 +517,12 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const EVO_LIVE_PROFILE_SYNC = process.env.EVO_LIVE_PROFILE_SYNC === "0" || process.env.EVO_LIVE_PROFILE_SYNC === "false"
     ? false
     : true;
-const INSTANCE_ALIASES_FILE = path_1.default.join(process.cwd(), "data", "instance-aliases.json");
-const WHATSAPP_PROFILE_NAMES_FILE = path_1.default.join(process.cwd(), "data", "whatsapp-profile-names.json");
+const INSTANCE_ALIASES_FILE = (0, data_path_1.resolveDataFile)("instance-aliases.json");
+const WHATSAPP_PROFILE_NAMES_FILE = (0, data_path_1.resolveDataFile)("whatsapp-profile-names.json");
 /** Backup local de campanhas + leads (sobrevive a restart; não substitui Supabase quando ambos existem). */
-const DISPAROS_LOCAL_STATE_FILE = path_1.default.join(process.cwd(), "data", "disparos-local-state.json");
+const DISPAROS_LOCAL_STATE_FILE = (0, data_path_1.resolveDataFile)("disparos-local-state.json");
 /** Última intenção explícita: aquecedor ligado/desligado (retoma após restart do processo na porta 3000). */
-const RUNTIME_INTENT_FILE = path_1.default.join(process.cwd(), "data", "runtime-intent.json");
+const RUNTIME_INTENT_FILE = (0, data_path_1.resolveDataFile)("runtime-intent.json");
 /** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
 const DISPAROS_CHECKPOINT_MS = Math.max(30000, Number.isFinite(Number(process.env.DISPAROS_CHECKPOINT_MS))
     ? Number(process.env.DISPAROS_CHECKPOINT_MS)
@@ -2841,7 +2844,6 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
 app.post("/instancias/registrar-qrcode", async (req, res) => {
     try {
         const name = String(req.body?.name || "").trim();
-        const channel = String(req.body?.channel || "baileys").trim();
         const rawToken = String(req.body?.token || "").trim();
         const number = String(req.body?.number || "").trim();
         const token = rawToken ||
@@ -2893,16 +2895,19 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         catch {
             // Se a verificação falhar por indisponibilidade externa, não bloqueamos o fluxo.
         }
-        // token é gerado pelo backend quando não informado.
+        // Payload aceito pela Evolution API v2 (sem channel/number vazio — causam HTTP 400).
         const createPayload = {
             name,
             instanceName: name,
-            channel,
-            token,
-            number,
             qrcode: true,
             integration: "WHATSAPP-BAILEYS",
         };
+        if (rawToken) {
+            createPayload.token = token;
+        }
+        if (number) {
+            createPayload.number = number;
+        }
         // Fallbacks para versões diferentes da Evolution API
         const createUrls = [
             EVO_CREATE_INSTANCE_URL,
@@ -6047,7 +6052,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
     }
 });
 app.listen(PORT, () => {
-    console.log(`Disparador N8 - servidor rodando em http://localhost:${PORT}`);
+    console.log(`Disparador N8 [${load_env_1.WABA_ENV}] - servidor rodando em http://localhost:${PORT}`);
     draxLogoBytes = undefined;
     const logoProbe = resolveDraxLogoPng();
     console.log(`[brand] logo PNG: ${logoProbe ? `${logoProbe.length} bytes (ok)` : "FALHOU — embed vazio ou ficheiros em falta"} | use GET /logo.png ou /media/Drax-logo-footer.png`);

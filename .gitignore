@@ -1,5 +1,7 @@
 node_modules
 .env
+.env.v01
+.env.v02
 data/
 ftp-bundle/
 .DS_Store
