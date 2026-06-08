@@ -8,10 +8,10 @@
 #   /root/traefik-permanent-waba-vps.sh install
 #
 # Repositório: https://github.com/walkup-tec/waba
-# Versão (validar após curl): waba-traefik-2026-06-08-v3
+# Versão (validar após curl): waba-traefik-2026-06-08-v4
 set -euo pipefail
 
-WABA_SCRIPT_VERSION="waba-traefik-2026-06-08-v3"
+WABA_SCRIPT_VERSION="waba-traefik-2026-06-08-v4"
 
 INSTALL_PATH="/root/traefik-permanent-waba-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-waba-fix"
@@ -26,6 +26,8 @@ WABA_SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
 WABA_PORT="${WABA_PORT:-3000}"
 WABA_PUBLIC_HOST="${WABA_PUBLIC_HOST:-waba.draxsistemas.com.br}"
 WABA_EASYPANEL_HOST="${WABA_EASYPANEL_HOST:-}"
+# Porta publicada no host (Swarm publish). Neste VPS overlay é inalcançável → 172.17.0.1:PORTA.
+WABA_HOST_PUBLISHED_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
 
 WATCH_SERVICE="traefik-permanent-waba-watch.service"
 TIMER_SERVICE="traefik-permanent-waba-fix.timer"
@@ -140,15 +142,30 @@ resolve_waba_port() {
   echo "${WABA_PORT:-3000}"
 }
 
-# Descobre URL que o Traefik consegue alcançar (overlay IP costuma falhar neste VPS).
+resolve_waba_host_published_port() {
+  local published target_port
+  target_port=$(resolve_waba_port)
+  published=$(docker service inspect "$WABA_SWARM_SERVICE" --format \
+    "{{range .Endpoint.Ports}}{{if eq .TargetPort ${target_port}}}{{.PublishedPort}}{{end}}{{end}}" 2>/dev/null || true)
+  if [[ -n "$published" && "$published" =~ ^[0-9]+$ ]]; then
+    echo "$published"
+    return 0
+  fi
+  if [[ -n "${WABA_HOST_PUBLISHED_PORT:-}" && "${WABA_HOST_PUBLISHED_PORT}" =~ ^[0-9]+$ ]]; then
+    echo "$WABA_HOST_PUBLISHED_PORT"
+    return 0
+  fi
+  return 1
+}
+
+# Descobre URL que o Traefik consegue alcançar (neste VPS: host gateway, não overlay).
 resolve_waba_backend_url() {
-  local traefik ip port host_map host_port candidate
+  local traefik port host_port candidate
   if [[ -n "${WABA_BACKEND_URL:-}" ]]; then
     echo "${WABA_BACKEND_URL%/}/"
     return 0
   fi
   traefik=$(traefik_container)
-  ip=$(resolve_waba_ip || true)
   port=$(resolve_waba_port)
   [[ -z "$traefik" ]] && return 1
 
@@ -156,7 +173,16 @@ resolve_waba_backend_url() {
     docker exec "$traefik" wget -qO- --timeout=4 "$1" 2>/dev/null | grep -q '"ok"'
   }
 
-  # Não usar IP overlay neste VPS (Traefik → 10.0.x costuma ser "Host is unreachable").
+  host_port=$(resolve_waba_host_published_port || true)
+  if [[ -n "${host_port:-}" ]]; then
+    candidate="http://172.17.0.1:${host_port}/health"
+    if traefik_health_ok "$candidate"; then
+      echo "http://172.17.0.1:${host_port}/"
+      echo "  backend via host gateway 172.17.0.1:${host_port}" >&2
+      return 0
+    fi
+  fi
+
   for candidate in \
     "http://tasks.${WABA_SWARM_SERVICE}:${port}/health" \
     "http://${WABA_SWARM_SERVICE}:${port}/health"; do
@@ -166,20 +192,8 @@ resolve_waba_backend_url() {
     fi
   done
 
-  host_map=$(docker port "$(resolve_waba_cid 2>/dev/null || true)" "${port}/tcp" 2>/dev/null | head -1 || true)
-  host_port=$(sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' <<<"$host_map")
-  if [[ -n "$host_port" ]]; then
-    candidate="http://172.17.0.1:${host_port}/health"
-    if traefik_health_ok "$candidate"; then
-      echo "http://172.17.0.1:${host_port}/"
-      echo "  backend via host gateway 172.17.0.1:${host_port}" >&2
-      return 0
-    fi
-  fi
-
-  # Mesmo destino do Easypanel → Domínios (hostname Swarm, não IP overlay)
-  echo "http://${WABA_SWARM_SERVICE}:${port}/"
-  echo "  backend fallback Easypanel: ${WABA_SWARM_SERVICE}:${port}" >&2
+  echo "http://172.17.0.1:${WABA_HOST_PUBLISHED_PORT}/"
+  echo "  backend fallback fixo 172.17.0.1:${WABA_HOST_PUBLISHED_PORT}" >&2
   return 0
 }
 
