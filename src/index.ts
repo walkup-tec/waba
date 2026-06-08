@@ -1599,11 +1599,7 @@ function sendIndexHtml(res: express.Response) {
   res.type("html").send(html);
 }
 
-if (BASE_PATH) {
-  app.use(BASE_PATH, express.static(distPath));
-} else {
-  app.use(express.static(distPath));
-}
+const staticNoIndex = { index: false as const };
 
 app.get("/", (req, res) => {
   if (BASE_PATH && !requestUnderBasePath(req)) {
@@ -1611,6 +1607,16 @@ app.get("/", (req, res) => {
   }
   sendIndexHtml(res);
 });
+
+app.get("/index.html", (_req, res) => {
+  sendIndexHtml(res);
+});
+
+if (BASE_PATH) {
+  app.use(BASE_PATH, express.static(distPath, staticNoIndex));
+} else {
+  app.use(express.static(distPath, staticNoIndex));
+}
 
 // Dados direto do banco (view logs_envios_br já com fuso tratado)
 app.get("/dados", async (req, res) => {

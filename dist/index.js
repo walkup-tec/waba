@@ -1372,18 +1372,22 @@ function sendIndexHtml(res) {
     });
     res.type("html").send(html);
 }
-if (base_path_1.BASE_PATH) {
-    app.use(base_path_1.BASE_PATH, express_1.default.static(distPath));
-}
-else {
-    app.use(express_1.default.static(distPath));
-}
+const staticNoIndex = { index: false };
 app.get("/", (req, res) => {
     if (base_path_1.BASE_PATH && !(0, base_path_1.requestUnderBasePath)(req)) {
         return res.redirect(301, `${base_path_1.BASE_PATH}/`);
     }
     sendIndexHtml(res);
 });
+app.get("/index.html", (_req, res) => {
+    sendIndexHtml(res);
+});
+if (base_path_1.BASE_PATH) {
+    app.use(base_path_1.BASE_PATH, express_1.default.static(distPath, staticNoIndex));
+}
+else {
+    app.use(express_1.default.static(distPath, staticNoIndex));
+}
 // Dados direto do banco (view logs_envios_br já com fuso tratado)
 app.get("/dados", async (req, res) => {
     try {
