@@ -23,6 +23,7 @@ Isso é **proxy sem upstream**, não bug do Express.
 2. `main.yaml` do Traefik fica com IP/hostname morto.
 3. Traefik pode estar fora da rede overlay `easypanel-waba`.
 4. Serviço parado, Pending ou domínio apontando para deploy estático (FTP) sem Node.
+5. **Porta errada no Traefik:** no Easypanel o `PORT` do serviço pode ser **80** (log: `servidor rodando em http://localhost:80`), enquanto o script assumia **3000** → HTTPS 404. O script atual detecta `PORT` do container ou testa 80/3000.
 
 ## Instalação permanente (VPS — uma vez)
 

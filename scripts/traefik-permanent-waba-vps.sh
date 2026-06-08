@@ -82,6 +82,15 @@ container_ip() {
   docker inspect "$cid" --format "{{index .NetworkSettings.Networks \"${network}\" \"IPAddress\"}}"
 }
 
+resolve_waba_cid() {
+  local cid f
+  for f in "$WABA_CONTAINER_FILTER" "$WABA_SWARM_SERVICE" "waba_waba-disparador" "waba_disparador"; do
+    cid=$(docker ps -q -f "name=${f}" -f status=running | head -1)
+    [[ -n "$cid" ]] && echo "$cid" && return 0
+  done
+  return 1
+}
+
 resolve_waba_ip() {
   local ip net
   for f in "$WABA_CONTAINER_FILTER" "$WABA_SWARM_SERVICE" "waba_waba-disparador" "waba_disparador"; do
@@ -91,6 +100,41 @@ resolve_waba_ip() {
     done
   done
   return 1
+}
+
+# Easypanel costuma publicar PORT=80 no serviço; Dockerfile usa 3000. Detecta a porta real.
+resolve_waba_port() {
+  local cid port traefik ip p
+  cid=$(resolve_waba_cid || true)
+  if [[ -n "$cid" ]]; then
+    port=$(docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+      | grep -E '^PORT=' | head -1 | cut -d= -f2- | tr -d '\r')
+    if [[ -n "$port" && "$port" =~ ^[0-9]+$ ]]; then
+      echo "$port"
+      return 0
+    fi
+  fi
+  traefik=$(traefik_container)
+  ip=$(resolve_waba_ip || true)
+  if [[ -n "$traefik" && -n "$ip" ]]; then
+    for p in 80 3000; do
+      if docker exec "$traefik" wget -qO- --timeout=3 "http://${ip}:${p}/health" 2>/dev/null \
+        | grep -q '"ok"'; then
+        echo "$p"
+        return 0
+      fi
+    done
+  fi
+  if [[ -n "$cid" ]]; then
+    for p in 80 3000; do
+      if docker exec "$cid" wget -qO- --timeout=3 "http://127.0.0.1:${p}/health" 2>/dev/null \
+        | grep -q '"ok"'; then
+        echo "$p"
+        return 0
+      fi
+    done
+  fi
+  echo "${WABA_PORT:-3000}"
 }
 
 ensure_traefik_on_overlay() {
@@ -126,8 +170,9 @@ ensure_traefik_on_overlay() {
 }
 
 patch_main_yaml() {
-  local waba_ip resolved_net
+  local waba_ip resolved_net waba_port
   waba_ip=$(resolve_waba_ip || true)
+  waba_port=$(resolve_waba_port)
   resolved_net=$(resolve_overlay_network)
 
   [[ -z "$waba_ip" ]] && {
@@ -143,7 +188,7 @@ patch_main_yaml() {
   after=$(mktemp)
   cp "$CFG" "$before"
 
-  python3 - "$CFG" "$waba_ip" "$WABA_PORT" "$WABA_SWARM_SERVICE" "$WABA_PUBLIC_HOST" "${WABA_EASYPANEL_HOST:-}" <<'PY'
+  python3 - "$CFG" "$waba_ip" "$waba_port" "$WABA_SWARM_SERVICE" "$WABA_PUBLIC_HOST" "${WABA_EASYPANEL_HOST:-}" <<'PY'
 import re, sys
 path, waba_ip, port, swarm_name, public_host, easypanel_host = sys.argv[1:7]
 text = open(path, encoding="utf-8").read()
@@ -254,7 +299,7 @@ PY
     fi
   fi
   rm -f "$before" "$after"
-  echo "IP WABA: ${waba_ip} (rede ${resolved_net}, serviço Easypanel waba/waba_disparador)"
+  echo "IP WABA: ${waba_ip}:${waba_port} (rede ${resolved_net}, serviço Easypanel waba/waba_disparador)"
 }
 
 http_code() {
@@ -264,17 +309,20 @@ http_code() {
 }
 
 waba_health_from_traefik() {
-  local waba_ip traefik code
+  local waba_ip traefik code waba_port
   waba_ip=$(resolve_waba_ip || true)
+  waba_port=$(resolve_waba_port)
   traefik=$(traefik_container)
   [[ -z "$waba_ip" || -z "$traefik" ]] && return 1
-  code=$(docker exec "$traefik" wget -qO- --timeout=5 "http://${waba_ip}:${WABA_PORT}/health" 2>/dev/null || true)
+  code=$(docker exec "$traefik" wget -qO- --timeout=5 "http://${waba_ip}:${waba_port}/health" 2>/dev/null || true)
   grep -q '"ok"[[:space:]]*:[[:space:]]*true' <<<"$code" && return 0
   return 1
 }
 
 run_fix() {
-  echo "=== traefik-permanent-waba $(date -Is) ==="
+  local detected_port
+  detected_port=$(resolve_waba_port)
+  echo "=== traefik-permanent-waba $(date -Is) porta=${detected_port} ==="
   ensure_traefik_on_overlay
   patch_main_yaml || true
 
