@@ -48,7 +48,9 @@ const supabase_js_1 = require("@supabase/supabase-js");
 const generated_brand_logo_1 = require("./generated-brand-logo");
 const load_env_1 = require("./load-env");
 const data_path_1 = require("./data-path");
+const base_path_1 = require("./base-path");
 const app = (0, express_1.default)();
+app.use(base_path_1.stripBasePathMiddleware);
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
 const rootPath = path_1.default.join(__dirname, "..");
 const distPath = path_1.default.join(rootPath, "dist");
@@ -222,6 +224,7 @@ app.get("/health", (_req, res) => {
     res.json({
         ok: true,
         wabaEnv: load_env_1.WABA_ENV,
+        basePath: base_path_1.BASE_PATH || "/",
         port: PORT,
         maintenanceMode: MAINTENANCE_MODE,
         runtimeMode: RUNTIME_MODE,
@@ -1350,9 +1353,36 @@ function stopAquecedorRuntime() {
         aquecedorInterval = null;
     }
 }
-app.use(express_1.default.static(distPath));
-app.get("/", (_req, res) => {
-    res.sendFile(path_1.default.join(distPath, "index.html"));
+let indexHtmlTemplate = null;
+function loadIndexHtmlTemplate() {
+    if (!indexHtmlTemplate) {
+        indexHtmlTemplate = (0, fs_1.readFileSync)(path_1.default.join(distPath, "index.html"), "utf8");
+    }
+    return indexHtmlTemplate;
+}
+function resolveUiProfile() {
+    if (load_env_1.WABA_ENV === "v01" || load_env_1.WABA_ENV === "v02")
+        return "full";
+    return "production";
+}
+function sendIndexHtml(res) {
+    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)(loadIndexHtmlTemplate(), {
+        basePath: base_path_1.BASE_PATH,
+        uiProfile: resolveUiProfile(),
+    });
+    res.type("html").send(html);
+}
+if (base_path_1.BASE_PATH) {
+    app.use(base_path_1.BASE_PATH, express_1.default.static(distPath));
+}
+else {
+    app.use(express_1.default.static(distPath));
+}
+app.get("/", (req, res) => {
+    if (base_path_1.BASE_PATH && !(0, base_path_1.requestUnderBasePath)(req)) {
+        return res.redirect(301, `${base_path_1.BASE_PATH}/`);
+    }
+    sendIndexHtml(res);
 });
 // Dados direto do banco (view logs_envios_br já com fuso tratado)
 app.get("/dados", async (req, res) => {
@@ -6052,7 +6082,13 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
     }
 });
 app.listen(PORT, () => {
-    console.log(`Disparador N8 [${load_env_1.WABA_ENV}] - servidor rodando em http://localhost:${PORT}`);
+    const publicRoot = base_path_1.BASE_PATH
+        ? `http://localhost:${PORT}${base_path_1.BASE_PATH}/`
+        : `http://localhost:${PORT}/`;
+    console.log(`Disparador N8 [${load_env_1.WABA_ENV}] - servidor rodando em ${publicRoot}`);
+    if (base_path_1.BASE_PATH) {
+        console.log(`[base-path] prefixo público: ${base_path_1.BASE_PATH}`);
+    }
     draxLogoBytes = undefined;
     const logoProbe = resolveDraxLogoPng();
     console.log(`[brand] logo PNG: ${logoProbe ? `${logoProbe.length} bytes (ok)` : "FALHOU — embed vazio ou ficheiros em falta"} | use GET /logo.png ou /media/Drax-logo-footer.png`);

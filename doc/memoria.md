@@ -1117,4 +1117,5 @@ Palavras-chave para buscar:
 - **Produção:** inalterada (`master`, VPS `waba.draxsistemas.com.br`, porta 30180).
 - Código: `src/load-env.ts`, `src/data-path.ts`, scripts `dev-v01.ps1` / `dev-v02.ps1`, `npm run init:env`.
 - Doc: `doc/AMBIENTES-V01-V02.md`.
-- **Pendente:** criar branches `v01`/`v02` no Git; serviços Easypanel `waba_disparador_v01`/`_v02`; Evolution/Supabase separados por ambiente.
+- **Pendente:** serviços Easypanel `waba_disparador_v01`/`_v02` + Traefik PathPrefix; Evolution/Supabase separados por ambiente.
+- **2026-06-08 (subpastas):** V01/V02 em `/version-01` e `/version-02` no mesmo domínio (`WABA_BASE_PATH`, `src/base-path.ts`). Doc Traefik: `doc/TRAEFIK-WABA-VERSION-PATHS.md`.

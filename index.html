@@ -2798,6 +2798,111 @@
         color: #e2e8f0;
       }
 
+      /* Produção: menu reduzido + Disparos em breve */
+      .waba-prod-only {
+        display: none !important;
+      }
+      body.waba-ui-production .waba-full-only {
+        display: none !important;
+      }
+      body.waba-ui-production .menu-group-items .tab-button.waba-prod-only {
+        display: inline-flex !important;
+      }
+      body.waba-ui-production .mobile-tabs-drawer .tab-button.waba-prod-only {
+        display: block !important;
+        width: 100%;
+      }
+      body.waba-ui-production #meta-guide-dock {
+        display: none !important;
+      }
+
+      .coming-soon-wrap {
+        min-height: calc(100vh - 220px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 20px 48px;
+      }
+      .coming-soon-card {
+        max-width: 520px;
+        width: 100%;
+        text-align: center;
+        padding: 48px 36px 40px;
+        border-radius: 20px;
+        border: 1px solid rgba(46, 228, 160, 0.28);
+        background: linear-gradient(
+          145deg,
+          rgba(19, 27, 46, 0.95) 0%,
+          rgba(14, 21, 37, 0.88) 55%,
+          rgba(3, 7, 18, 0.92) 100%
+        );
+        box-shadow:
+          0 24px 60px rgba(0, 0, 0, 0.45),
+          0 0 0 1px rgba(46, 228, 160, 0.08) inset;
+        position: relative;
+        overflow: hidden;
+      }
+      .coming-soon-card::before {
+        content: "";
+        position: absolute;
+        inset: -40% -20% auto;
+        height: 220px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(46, 228, 160, 0.18) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .coming-soon-icon {
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 20px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(46, 228, 160, 0.12);
+        border: 1px solid rgba(46, 228, 160, 0.35);
+        color: var(--accent);
+        font-size: 2rem;
+        position: relative;
+        z-index: 1;
+      }
+      .coming-soon-title {
+        font-size: 1.65rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        color: #f8fafc;
+        margin-bottom: 10px;
+        position: relative;
+        z-index: 1;
+      }
+      .coming-soon-sub {
+        font-size: 1rem;
+        line-height: 1.55;
+        color: var(--text-secondary);
+        margin-bottom: 22px;
+        position: relative;
+        z-index: 1;
+      }
+      .coming-soon-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--accent-bright);
+        background: rgba(46, 228, 160, 0.1);
+        border: 1px solid rgba(46, 228, 160, 0.35);
+        position: relative;
+        z-index: 1;
+      }
+
       /* Disparos */
       .disparos-layout {
         display: grid;
@@ -3717,7 +3822,7 @@
                 </button>
                 <button
                   id="tab-btn-disparos"
-                  class="tab-button"
+                  class="tab-button waba-full-only"
                   type="button"
                   role="tab"
                   aria-selected="false"
@@ -3750,8 +3855,28 @@
               </button>
               <div class="menu-group-items">
                 <button
+                  id="tab-btn-disparos-lancamento"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-disparos-lancamento"
+                  data-tab="disparos-lancamento"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+                      <circle cx="12" cy="9" r="1.2"></circle>
+                      <path d="M9 12l-3 3h3"></path>
+                      <path d="M15 12l3 3h-3"></path>
+                      <path d="M12 15v4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Disparos</span>
+                </button>
+                <button
                   id="tab-btn-meta-ativos"
-                  class="tab-button"
+                  class="tab-button waba-full-only"
                   type="button"
                   role="tab"
                   aria-selected="false"
@@ -3769,7 +3894,7 @@
                 </button>
                 <button
                   id="tab-btn-meta-templates"
-                  class="tab-button"
+                  class="tab-button waba-full-only"
                   type="button"
                   role="tab"
                   aria-selected="false"
@@ -3788,7 +3913,7 @@
                 </button>
                 <button
                   id="tab-btn-meta-disparo"
-                  class="tab-button"
+                  class="tab-button waba-full-only"
                   type="button"
                   role="tab"
                   aria-selected="false"
@@ -3857,7 +3982,7 @@
               Aquecedor
             </button>
             <button
-              class="tab-button"
+              class="tab-button waba-full-only"
               type="button"
               data-tab="disparos"
               role="menuitemradio"
@@ -3866,7 +3991,16 @@
               Disparos
             </button>
             <button
-              class="tab-button"
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="disparos-lancamento"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Disparos
+            </button>
+            <button
+              class="tab-button waba-full-only"
               type="button"
               data-tab="meta-ativos"
               role="menuitemradio"
@@ -3875,7 +4009,7 @@
               1) Ativos API
             </button>
             <button
-              class="tab-button"
+              class="tab-button waba-full-only"
               type="button"
               data-tab="meta-templates"
               role="menuitemradio"
@@ -3884,7 +4018,7 @@
               2) Templates
             </button>
             <button
-              class="tab-button"
+              class="tab-button waba-full-only"
               type="button"
               data-tab="meta-disparo"
               role="menuitemradio"
@@ -4297,6 +4431,20 @@
                 </div>
               </div>
             </section>
+          </div>
+        </div>
+
+        <div id="tab-disparos-lancamento" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="coming-soon-wrap">
+            <div class="coming-soon-card">
+              <div class="coming-soon-icon" aria-hidden="true">🚀</div>
+              <h2 class="coming-soon-title">Lançamento em breve</h2>
+              <p class="coming-soon-sub">
+                Estamos preparando o módulo de Disparos com novos recursos.
+                Em breve você poderá criar campanhas e envios por aqui.
+              </p>
+              <span class="coming-soon-badge">Em desenvolvimento</span>
+            </div>
           </div>
         </div>
 
@@ -5449,6 +5597,52 @@
         items: [],
       };
       let activeTab = "dashboard";
+
+      function isProductionUi() {
+        return String(window.WABA_UI_PROFILE || "full") === "production";
+      }
+
+      function integrationEnvLabel(env) {
+        const normalized = env === "oficial" ? "oficial" : "nao-oficial";
+        if (isProductionUi()) {
+          return normalized === "oficial" ? "Disparos" : "AQUECEDOR";
+        }
+        return normalized === "oficial" ? "API Meta" : "API não oficial";
+      }
+
+      function initUiProfile() {
+        if (!isProductionUi()) return;
+        document.body.classList.add("waba-ui-production");
+
+        const naoTitle = document.querySelector(
+          '.menu-group[data-menu-group="nao-oficial"] .menu-group-title'
+        );
+        const ofTitle = document.querySelector(
+          '.menu-group[data-menu-group="oficial"] .menu-group-title'
+        );
+        if (naoTitle) naoTitle.textContent = "AQUECEDOR";
+        if (ofTitle) ofTitle.textContent = "DISPAROS";
+
+        const naoBtn = document.querySelector(
+          '.integration-env-btn[data-integration-env="nao-oficial"]'
+        );
+        const ofBtnSpan = document.querySelector(
+          '.integration-env-btn[data-integration-env="oficial"] span:not(.wa-icon)'
+        );
+        if (naoBtn) naoBtn.textContent = "AQUECEDOR";
+        if (ofBtnSpan) ofBtnSpan.textContent = "Disparos";
+
+        let saved = "nao-oficial";
+        try {
+          saved = localStorage.getItem("waba.integration.env") || "nao-oficial";
+        } catch {
+          /* ignore */
+        }
+        if (saved === "oficial") {
+          setActiveTab("disparos-lancamento");
+        }
+        applyIntegrationEnvironment(saved);
+      }
       let instancesSearchTerm = "";
       let instancesStatusFilter = "all";
       let deleteConfirmInstanceName = "";
@@ -8398,6 +8592,7 @@
         const instanciasPanel = document.getElementById("tab-instancias");
         const aquecedorPanel = document.getElementById("tab-aquecedor");
         const disparosPanel = document.getElementById("tab-disparos");
+        const disparosLancamentoPanel = document.getElementById("tab-disparos-lancamento");
         const metaAtivosPanel = document.getElementById("tab-meta-ativos");
         const metaTemplatesPanel = document.getElementById("tab-meta-templates");
         const metaDisparoPanel = document.getElementById("tab-meta-disparo");
@@ -8438,6 +8633,17 @@
           disparosPanel.setAttribute(
             "aria-hidden",
             nextTab !== "disparos" ? "true" : "false"
+          );
+        }
+
+        if (disparosLancamentoPanel) {
+          disparosLancamentoPanel.classList.toggle(
+            "tab-hidden",
+            nextTab !== "disparos-lancamento"
+          );
+          disparosLancamentoPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "disparos-lancamento" ? "true" : "false"
           );
         }
 
@@ -8507,6 +8713,9 @@
           loadDisparosConfig();
           loadDisparosTemplates();
           startDisparosCampaignsPolling();
+        } else if (nextTab === "disparos-lancamento") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
         } else if (nextTab === "aquecedor") {
           loadAquecedorConfig();
           loadAquecedorRuntimeStatus();
@@ -10603,12 +10812,11 @@
         if (currentLabel) {
           const currentText = currentLabel.querySelector(".env-text");
           const currentWaIcon = currentLabel.querySelector(".wa-icon");
+          const label = integrationEnvLabel(normalized);
           if (currentText) {
-            currentText.textContent =
-              normalized === "oficial" ? "API Meta" : "API não oficial";
+            currentText.textContent = label;
           } else {
-            currentLabel.textContent =
-              normalized === "oficial" ? "API Meta" : "API não oficial";
+            currentLabel.textContent = label;
           }
           if (currentWaIcon) {
             currentWaIcon.classList.toggle("hidden", normalized !== "oficial");
@@ -10630,7 +10838,14 @@
       }
 
       function isOfficialTab(tabName) {
-        return tabName === "meta-ativos" || tabName === "meta-templates" || tabName === "meta-disparo";
+        if (isProductionUi()) {
+          return tabName === "disparos-lancamento";
+        }
+        return (
+          tabName === "meta-ativos" ||
+          tabName === "meta-templates" ||
+          tabName === "meta-disparo"
+        );
       }
 
       function syncIntegrationEnvWithTab(tabName) {
@@ -10676,7 +10891,9 @@
             const wantsOfficial = env === "oficial";
             const currentlyOfficial = isOfficialTab(activeTab);
             if (wantsOfficial && !currentlyOfficial) {
-              setActiveTab("meta-ativos");
+              setActiveTab(
+                isProductionUi() ? "disparos-lancamento" : "meta-ativos"
+              );
             } else if (!wantsOfficial && currentlyOfficial) {
               setActiveTab("dashboard");
             }
@@ -13306,6 +13523,8 @@
           carregar();
         });
       }
+
+      initUiProfile();
 
       // inicial: modo automático com atualização a cada 15s
       setRefreshMode(false);

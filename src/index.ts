@@ -10,8 +10,16 @@ import { createClient } from "@supabase/supabase-js";
 import { DRAX_LOGO_PNG_BASE64 } from "./generated-brand-logo";
 import { WABA_ENV } from "./load-env";
 import { resolveDataFile } from "./data-path";
+import {
+  BASE_PATH,
+  stripBasePathMiddleware,
+  requestUnderBasePath,
+  injectRuntimeIntoIndexHtml,
+  type WabaUiProfile,
+} from "./base-path";
 
 const app = express();
+app.use(stripBasePathMiddleware);
 
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
 const rootPath = path.join(__dirname, "..");
@@ -223,6 +231,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     wabaEnv: WABA_ENV,
+    basePath: BASE_PATH || "/",
     port: PORT,
     maintenanceMode: MAINTENANCE_MODE,
     runtimeMode: RUNTIME_MODE,
@@ -1569,10 +1578,38 @@ function stopAquecedorRuntime() {
   }
 }
 
-app.use(express.static(distPath));
+let indexHtmlTemplate: string | null = null;
+function loadIndexHtmlTemplate(): string {
+  if (!indexHtmlTemplate) {
+    indexHtmlTemplate = readFileSync(path.join(distPath, "index.html"), "utf8");
+  }
+  return indexHtmlTemplate;
+}
 
-app.get("/", (_req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
+function resolveUiProfile(): WabaUiProfile {
+  if (WABA_ENV === "v01" || WABA_ENV === "v02") return "full";
+  return "production";
+}
+
+function sendIndexHtml(res: express.Response) {
+  const html = injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
+    basePath: BASE_PATH,
+    uiProfile: resolveUiProfile(),
+  });
+  res.type("html").send(html);
+}
+
+if (BASE_PATH) {
+  app.use(BASE_PATH, express.static(distPath));
+} else {
+  app.use(express.static(distPath));
+}
+
+app.get("/", (req, res) => {
+  if (BASE_PATH && !requestUnderBasePath(req)) {
+    return res.redirect(301, `${BASE_PATH}/`);
+  }
+  sendIndexHtml(res);
 });
 
 // Dados direto do banco (view logs_envios_br já com fuso tratado)
@@ -6597,9 +6634,13 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(
-    `Disparador N8 [${WABA_ENV}] - servidor rodando em http://localhost:${PORT}`
-  );
+  const publicRoot = BASE_PATH
+    ? `http://localhost:${PORT}${BASE_PATH}/`
+    : `http://localhost:${PORT}/`;
+  console.log(`Disparador N8 [${WABA_ENV}] - servidor rodando em ${publicRoot}`);
+  if (BASE_PATH) {
+    console.log(`[base-path] prefixo público: ${BASE_PATH}`);
+  }
   draxLogoBytes = undefined;
   const logoProbe = resolveDraxLogoPng();
   console.log(

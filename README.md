@@ -10,11 +10,11 @@ Projeto para integrações e disparos automáticos utilizando API oficial e Sem 
 
 ## Ambientes (produção vs V01 vs V02)
 
-| Ambiente | Comando local | Porta | Uso |
-|----------|---------------|-------|-----|
-| Produção | deploy VPS | 443 | clientes |
-| **V01** | `npm run dev:v01` | 3011 | baseline (= produção hoje) |
-| **V02** | `npm run dev:v02` | 3012 | desenvolvimento diário |
+| Ambiente | URL local | Comando |
+|----------|-----------|---------|
+| Produção | https://waba.draxsistemas.com.br/ | deploy VPS `master` |
+| **V01** | http://localhost:3011/version-01/ | `npm run dev:v01` |
+| **V02** | http://localhost:3012/version-02/ | `npm run dev:v02` |
 
 Guia completo: **[doc/AMBIENTES-V01-V02.md](doc/AMBIENTES-V01-V02.md)**
 
