@@ -8,7 +8,10 @@
 #   /root/traefik-permanent-waba-vps.sh install
 #
 # Repositório: https://github.com/walkup-tec/waba
+# Versão (validar após curl): waba-traefik-2026-06-08-v3
 set -euo pipefail
+
+WABA_SCRIPT_VERSION="waba-traefik-2026-06-08-v3"
 
 INSTALL_PATH="/root/traefik-permanent-waba-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-waba-fix"
@@ -140,6 +143,10 @@ resolve_waba_port() {
 # Descobre URL que o Traefik consegue alcançar (overlay IP costuma falhar neste VPS).
 resolve_waba_backend_url() {
   local traefik ip port host_map host_port candidate
+  if [[ -n "${WABA_BACKEND_URL:-}" ]]; then
+    echo "${WABA_BACKEND_URL%/}/"
+    return 0
+  fi
   traefik=$(traefik_container)
   ip=$(resolve_waba_ip || true)
   port=$(resolve_waba_port)
@@ -149,11 +156,10 @@ resolve_waba_backend_url() {
     docker exec "$traefik" wget -qO- --timeout=4 "$1" 2>/dev/null | grep -q '"ok"'
   }
 
+  # Não usar IP overlay neste VPS (Traefik → 10.0.x costuma ser "Host is unreachable").
   for candidate in \
     "http://tasks.${WABA_SWARM_SERVICE}:${port}/health" \
-    "http://${WABA_SWARM_SERVICE}:${port}/health" \
-    "http://${ip}:${port}/health"; do
-    [[ "$candidate" =~ ^http://:[0-9]+/ ]] && continue
+    "http://${WABA_SWARM_SERVICE}:${port}/health"; do
     if traefik_health_ok "$candidate"; then
       echo "${candidate%/health}/"
       return 0
@@ -222,7 +228,7 @@ patch_main_yaml() {
     return 1
   }
 
-  [[ -z "$backend_url" ]] && backend_url="http://${waba_ip}:${waba_port}/"
+  [[ -z "$backend_url" ]] && backend_url="http://${WABA_SWARM_SERVICE}:${waba_port}/"
 
   [[ -f "$CFG" ]] || { echo "ERRO: ${CFG} não existe"; return 1; }
 
@@ -371,7 +377,7 @@ run_fix() {
   local detected_port detected_backend
   detected_port=$(resolve_waba_port)
   detected_backend=$(resolve_waba_backend_url || echo "?")
-  echo "=== traefik-permanent-waba $(date -Is) porta=${detected_port} backend=${detected_backend} ==="
+  echo "=== traefik-permanent-waba ${WABA_SCRIPT_VERSION} $(date -Is) porta=${detected_port} backend=${detected_backend} ==="
   ensure_traefik_on_overlay
   patch_main_yaml || true
 
