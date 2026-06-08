@@ -137,6 +137,44 @@ resolve_waba_port() {
   echo "${WABA_PORT:-3000}"
 }
 
+# Descobre URL que o Traefik consegue alcançar (overlay IP costuma falhar neste VPS).
+resolve_waba_backend_url() {
+  local traefik ip port host_map host_port candidate
+  traefik=$(traefik_container)
+  ip=$(resolve_waba_ip || true)
+  port=$(resolve_waba_port)
+  [[ -z "$traefik" ]] && return 1
+
+  traefik_health_ok() {
+    docker exec "$traefik" wget -qO- --timeout=4 "$1" 2>/dev/null | grep -q '"ok"'
+  }
+
+  for candidate in \
+    "http://tasks.${WABA_SWARM_SERVICE}:${port}/health" \
+    "http://${WABA_SWARM_SERVICE}:${port}/health" \
+    "http://${ip}:${port}/health"; do
+    [[ "$candidate" =~ ^http://:[0-9]+/ ]] && continue
+    if traefik_health_ok "$candidate"; then
+      echo "${candidate%/health}/"
+      return 0
+    fi
+  done
+
+  host_map=$(docker port "$(resolve_waba_cid 2>/dev/null || true)" "${port}/tcp" 2>/dev/null | head -1 || true)
+  host_port=$(sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' <<<"$host_map")
+  if [[ -n "$host_port" ]]; then
+    candidate="http://172.17.0.1:${host_port}/health"
+    if traefik_health_ok "$candidate"; then
+      echo "http://172.17.0.1:${host_port}/"
+      echo "  backend via host gateway 172.17.0.1:${host_port}" >&2
+      return 0
+    fi
+  fi
+
+  [[ -n "$ip" ]] && echo "http://${ip}:${port}/" && return 0
+  return 1
+}
+
 ensure_traefik_on_overlay() {
   local traefik svc net_id on_net update_out resolved_net
   traefik=$(traefik_container)
@@ -170,9 +208,10 @@ ensure_traefik_on_overlay() {
 }
 
 patch_main_yaml() {
-  local waba_ip resolved_net waba_port
+  local waba_ip resolved_net waba_port backend_url
   waba_ip=$(resolve_waba_ip || true)
   waba_port=$(resolve_waba_port)
+  backend_url=$(resolve_waba_backend_url || true)
   resolved_net=$(resolve_overlay_network)
 
   [[ -z "$waba_ip" ]] && {
@@ -181,6 +220,8 @@ patch_main_yaml() {
     return 1
   }
 
+  [[ -z "$backend_url" ]] && backend_url="http://${waba_ip}:${waba_port}/"
+
   [[ -f "$CFG" ]] || { echo "ERRO: ${CFG} não existe"; return 1; }
 
   local before after
@@ -188,11 +229,13 @@ patch_main_yaml() {
   after=$(mktemp)
   cp "$CFG" "$before"
 
-  python3 - "$CFG" "$waba_ip" "$waba_port" "$WABA_SWARM_SERVICE" "$WABA_PUBLIC_HOST" "${WABA_EASYPANEL_HOST:-}" <<'PY'
+  echo "  backend Traefik: ${backend_url} (porta app=${waba_port}, overlay IP=${waba_ip})"
+
+  python3 - "$CFG" "$backend_url" "$WABA_SWARM_SERVICE" "$WABA_PUBLIC_HOST" "${WABA_EASYPANEL_HOST:-}" <<'PY'
 import re, sys
-path, waba_ip, port, swarm_name, public_host, easypanel_host = sys.argv[1:7]
+path, backend_url, swarm_name, public_host, easypanel_host = sys.argv[1:6]
 text = open(path, encoding="utf-8").read()
-port = str(port or "3000")
+backend_url = (backend_url or "").rstrip("/") + "/"
 swarm_name = swarm_name or "waba_waba_disparador"
 public_host = public_host or "waba.draxsistemas.com.br"
 
@@ -209,18 +252,27 @@ service_keys = [
     "waba_disparador",
 ]
 
-def fix_service(name: str, ip: str, p: str) -> int:
+def fix_service(name: str, url: str) -> int:
     global text
-    if not ip or not name:
+    if not url or not name:
         return 0
     pat = rf'("{re.escape(name)}"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")[^"]+(")'
-    text, n = re.subn(pat, rf'\g<1>http://{ip}:{p}/\2', text, count=1)
+    text, n = re.subn(pat, rf'\g<1>{url}\2', text, count=1)
     if n:
-        print(f"  service {name} -> http://{ip}:{p}/")
+        print(f"  service {name} -> {url}")
     return n
 
 for key in service_keys:
-    fix_service(key, waba_ip, port)
+    fix_service(key, backend_url)
+
+# Easypanel regenera :3000 — força :80/tasks/host em qualquer URL do bloco waba_disparador
+waba_url_pat = re.compile(
+    rf'("waba[^"]*disparador[^"]*"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")http://[^"]+(")',
+    re.I,
+)
+text, n_waba = waba_url_pat.subn(rf'\g<1>{backend_url}\2', text)
+if n_waba:
+    print(f"  blocos waba_disparador -> {backend_url} ({n_waba}x)")
 
 host_aliases = [
     swarm_name,
@@ -231,12 +283,12 @@ host_aliases = [
 ]
 for host in host_aliases:
     for prefix in ("", "tasks."):
-        old = f"http://{prefix}{host}:{port}"
-        new = f"http://{waba_ip}:{port}"
-        if old in text:
-            text = text.replace(old + "/", new + "/")
-            text = text.replace(old, new)
-            print(f"  replace {old} -> {new}")
+        for wrong_port in ("3000", "80"):
+            old = f"http://{prefix}{host}:{wrong_port}"
+            if old in text and old + "/" != backend_url.rstrip("/") and not backend_url.startswith(old):
+                text = text.replace(old + "/", backend_url)
+                text = text.replace(old, backend_url.rstrip("/"))
+                print(f"  replace {old}* -> {backend_url}")
 
 needles = [public_host, "waba.draxsistemas", "waba_disparador", "waba-disparador", "waba-waba"]
 if easypanel_host:
@@ -299,7 +351,7 @@ PY
     fi
   fi
   rm -f "$before" "$after"
-  echo "IP WABA: ${waba_ip}:${waba_port} (rede ${resolved_net}, serviço Easypanel waba/waba_disparador)"
+  echo "WABA backend: ${backend_url} (overlay ${waba_ip}:${waba_port}, rede ${resolved_net})"
 }
 
 http_code() {
@@ -309,20 +361,20 @@ http_code() {
 }
 
 waba_health_from_traefik() {
-  local waba_ip traefik code waba_port
-  waba_ip=$(resolve_waba_ip || true)
-  waba_port=$(resolve_waba_port)
+  local traefik code backend_url
+  backend_url=$(resolve_waba_backend_url || true)
   traefik=$(traefik_container)
-  [[ -z "$waba_ip" || -z "$traefik" ]] && return 1
-  code=$(docker exec "$traefik" wget -qO- --timeout=5 "http://${waba_ip}:${waba_port}/health" 2>/dev/null || true)
+  [[ -z "$backend_url" || -z "$traefik" ]] && return 1
+  code=$(docker exec "$traefik" wget -qO- --timeout=5 "${backend_url}health" 2>/dev/null || true)
   grep -q '"ok"[[:space:]]*:[[:space:]]*true' <<<"$code" && return 0
   return 1
 }
 
 run_fix() {
-  local detected_port
+  local detected_port detected_backend
   detected_port=$(resolve_waba_port)
-  echo "=== traefik-permanent-waba $(date -Is) porta=${detected_port} ==="
+  detected_backend=$(resolve_waba_backend_url || echo "?")
+  echo "=== traefik-permanent-waba $(date -Is) porta=${detected_port} backend=${detected_backend} ==="
   ensure_traefik_on_overlay
   patch_main_yaml || true
 
