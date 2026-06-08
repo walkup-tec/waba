@@ -1101,3 +1101,10 @@ Palavras-chave para buscar:
 - favicon
 - rel icon
 - credilix
+
+## 2026-06-08 — QR Code registrar-qrcode (Evolution create 400)
+
+- **Sintoma:** `POST /instancias/registrar-qrcode` → 502; EVO manual create+connect OK.
+- **Causa:** payload enviado ao `POST /instance/create` incluía `channel`, `token` auto-gerado e `number: ""` → Evolution **400**; connect depois **404**.
+- **Fix:** `src/index.ts` — payload mínimo Evolution v2; `token`/`number` só se informados pelo cliente.
+- **Próximo:** deploy `waba_disparador`; validar `POST registrar-qrcode` após build.

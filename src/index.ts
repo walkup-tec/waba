@@ -3191,7 +3191,6 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
 app.post("/instancias/registrar-qrcode", async (req, res) => {
   try {
     const name = String(req.body?.name || "").trim();
-    const channel = String(req.body?.channel || "baileys").trim();
     const rawToken = String(req.body?.token || "").trim();
     const number = String(req.body?.number || "").trim();
     const token =
@@ -3252,16 +3251,19 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
       // Se a verificação falhar por indisponibilidade externa, não bloqueamos o fluxo.
     }
 
-    // token é gerado pelo backend quando não informado.
-    const createPayload = {
+    // Payload aceito pela Evolution API v2 (sem channel/number vazio — causam HTTP 400).
+    const createPayload: Record<string, unknown> = {
       name,
       instanceName: name,
-      channel,
-      token,
-      number,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
     };
+    if (rawToken) {
+      createPayload.token = token;
+    }
+    if (number) {
+      createPayload.number = number;
+    }
 
     // Fallbacks para versões diferentes da Evolution API
     const createUrls = [
