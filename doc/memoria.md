@@ -13,6 +13,14 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Ãšltima atualizaÃ§Ã£o
+2026-06-08
+
+**Traefik WABA — script dedicado (não compartilhar com Typebot):** criados `scripts/traefik-permanent-waba-vps.sh` e `scripts/diagnose-waba-502-vps.sh` para o serviço Easypanel **waba/waba_disparador** (Swarm `waba_waba_disparador`, rede `easypanel-waba`, domínio `waba.draxsistemas.com.br`). Instalação VPS: `/root/traefik-permanent-waba-vps.sh install`. Doc: `doc/FIX-TRAEFIK-WABA.md`. Ver `doc/LOG-2026-06-08__traefik-permanent-waba-script-dedicado.md`.
+
+Palavras-chave: `traefik-permanent-waba`, `waba_disparador`, `502-bad-gateway`, `easypanel-waba`, `script-separado-typebot`
+
+---
+
 2026-04-07
 
 **Meta Ativos - UX em sanfona com sinaleira por etapa:** a tela foi reorganizada em cards por etapa com indicador visual de status (verde/amarelo/vermelho), desbloqueio condicional da prÃ³xima etapa e expansÃ£o automÃ¡tica da etapa pendente. Objetivo: reduzir carga cognitiva e guiar configuraÃ§Ã£o passo a passo. Ver `doc/LOG-2026-04-07__120000__ux-meta-ativos-sanfona-sinaleira.md`.
