@@ -50,6 +50,8 @@ const load_env_1 = require("./load-env");
 const data_path_1 = require("./data-path");
 const base_path_1 = require("./base-path");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
+const instance_integration_probe_1 = require("./instance-integration-probe");
+const deploy_marker_1 = require("./deploy-marker");
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
@@ -179,7 +181,7 @@ app.use((req, res, next) => {
 app.use(express_1.default.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 function isMaintenanceBypassPath(method, reqPath) {
     const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
-    if (p === "/webhooks/asaas")
+    if (p === "/webhooks/asaas" || p === "/webhooks/evolution")
         return true;
     if (method !== "GET" && method !== "HEAD")
         return false;
@@ -226,6 +228,7 @@ app.use((req, res, next) => {
 app.get("/health", (_req, res) => {
     res.json({
         ok: true,
+        deployMarker: deploy_marker_1.WABA_DEPLOY_MARKER,
         wabaEnv: load_env_1.WABA_ENV,
         uiProfile: resolveUiProfile(),
         basePath: base_path_1.BASE_PATH || "/",
@@ -350,6 +353,17 @@ async function persistInstanceUsage(items) {
         // fallback em memória
     }
 }
+(0, instance_integration_probe_1.setIntegrationProbeFinishedHandler)((status) => {
+    if (!status.restrictionSuspected)
+        return;
+    void persistInstanceUsage([
+        {
+            instanceName: status.sourceInstance,
+            useAquecedor: false,
+            useDisparador: false,
+        },
+    ]);
+});
 function parseDisparosConfig(input) {
     const readInt = (value, min, max, fallback) => {
         const n = Number(value);
@@ -1778,6 +1792,46 @@ app.post("/instancias/uso-config", async (req, res) => {
     catch {
         return res.status(500).json({ error: "Erro ao salvar configuração de uso das instâncias." });
     }
+});
+app.post("/webhooks/evolution", (req, res) => {
+    try {
+        (0, instance_integration_probe_1.handleEvolutionWebhookPayload)(req.body);
+        return res.json({ ok: true });
+    }
+    catch (error) {
+        console.error("POST /webhooks/evolution", error);
+        return res.status(500).json({ error: "Erro ao processar webhook Evolution." });
+    }
+});
+app.post("/instancias/:name/probe-integracao", async (req, res) => {
+    try {
+        const name = String(req.params.name || "").trim();
+        const destinationInstanceName = String(req.body?.destinationInstanceName || "").trim() || undefined;
+        const started = await (0, instance_integration_probe_1.startIntegrationProbe)({
+            sourceInstanceName: name,
+            destinationInstanceName,
+        });
+        if (started.error) {
+            return res.status(400).json({ ok: false, error: started.error });
+        }
+        const status = started.status || (0, instance_integration_probe_1.getIntegrationProbeStatus)(String(started.probeId || ""));
+        return res.json({ ok: true, probeId: started.probeId, ...status });
+    }
+    catch (error) {
+        console.error("POST /instancias/:name/probe-integracao", error);
+        return res.status(500).json({ error: error?.message || "Erro ao iniciar teste de integração." });
+    }
+});
+app.get("/instancias/probe-integracao/:probeId", (req, res) => {
+    const probeId = String(req.params.probeId || "").trim();
+    if (!probeId) {
+        return res.status(400).json({ error: "probeId é obrigatório." });
+    }
+    const status = (0, instance_integration_probe_1.getIntegrationProbeStatus)(probeId);
+    if (!status) {
+        return res.status(404).json({ error: "Teste de integração não encontrado ou expirado." });
+    }
+    return res.json({ ok: true, ...status });
 });
 function buildTemplateUrl(template, instanceName) {
     if (!template)

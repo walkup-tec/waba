@@ -3908,6 +3908,109 @@
         background: rgba(14, 116, 144, 0.14);
       }
 
+      .register-probe-panel {
+        display: none;
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(34, 211, 238, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+      }
+
+      .register-probe-panel.open {
+        display: block;
+      }
+
+      .register-probe-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 10px;
+        animation: register-probe-pulse 1.6s ease-in-out infinite;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .register-probe-version {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #67e8f9;
+        background: rgba(8, 47, 73, 0.65);
+        border: 1px solid rgba(34, 211, 238, 0.45);
+        border-radius: 6px;
+        padding: 2px 7px;
+        animation: none;
+      }
+
+      @keyframes register-probe-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
+        }
+      }
+
+      .register-probe-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        margin-bottom: 6px;
+        font-size: 0.82rem;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(30, 41, 59, 0.45);
+      }
+
+      .register-probe-row:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .register-probe-label {
+        color: #cbd5e1;
+        flex: 1;
+      }
+
+      .register-probe-result {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .register-probe-row.pending .register-probe-result {
+        color: #94a3b8;
+      }
+
+      .register-probe-row.success .register-probe-result {
+        color: #6ee7b7;
+      }
+
+      .register-probe-row.fail .register-probe-result {
+        color: #f87171;
+      }
+
+      .register-probe-alert {
+        display: none;
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(248, 113, 113, 0.75);
+        background: rgba(127, 29, 29, 0.38);
+        color: #fecaca;
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
+      .register-probe-alert.open {
+        display: block;
+      }
+
       .spinner-dot {
         width: 9px;
         height: 9px;
@@ -5763,6 +5866,23 @@
 
         <div id="register-qrcode-preview" class="qrcode-preview"></div>
         <div id="register-connect-status" class="connect-status"></div>
+        <div id="register-probe-panel" class="register-probe-panel" aria-live="polite">
+          <div class="register-probe-title">
+            Teste de conexão:
+            <span class="register-probe-version" id="register-probe-version">DEPLOY-2026-06-09-probe-integracao-duplo-v1</span>
+          </div>
+          <div id="register-probe-api-row" class="register-probe-row pending">
+            <span class="register-probe-label">Teste de conexão API</span>
+            <span id="register-probe-api-result" class="register-probe-result">…</span>
+          </div>
+          <div id="register-probe-webhook-row" class="register-probe-row pending">
+            <span class="register-probe-label">Teste de mensagem recebida no destino</span>
+            <span id="register-probe-webhook-result" class="register-probe-result">…</span>
+          </div>
+          <div id="register-probe-alert" class="register-probe-alert">
+            Confira o número antes de prosseguir, possível restrição identificada
+          </div>
+        </div>
       </div>
     </div>
 
@@ -6361,6 +6481,7 @@
       let registerModalDefaultName = "";
       let registerConnectPollTimer = null;
       let registerConnectPollStartedAt = 0;
+      let registerProbePollTimer = null;
       let aquecedorEnviosPollTimer = null;
       let aquecedorRuntimePollTimer = null;
       let aquecedorRuntimeVizTimer = null;
@@ -10503,7 +10624,171 @@
           clearInterval(registerConnectPollTimer);
           registerConnectPollTimer = null;
         }
+        if (registerProbePollTimer) {
+          clearInterval(registerProbePollTimer);
+          registerProbePollTimer = null;
+        }
         registerConnectPollStartedAt = 0;
+        resetRegisterProbePanel();
+      }
+
+      function resetRegisterProbePanel() {
+        const panel = document.getElementById("register-probe-panel");
+        const apiRow = document.getElementById("register-probe-api-row");
+        const webhookRow = document.getElementById("register-probe-webhook-row");
+        const apiResult = document.getElementById("register-probe-api-result");
+        const webhookResult = document.getElementById("register-probe-webhook-result");
+        const alertEl = document.getElementById("register-probe-alert");
+        if (panel) panel.classList.remove("open");
+        if (apiRow) apiRow.className = "register-probe-row pending";
+        if (webhookRow) webhookRow.className = "register-probe-row pending";
+        if (apiResult) apiResult.textContent = "…";
+        if (webhookResult) webhookResult.textContent = "…";
+        if (alertEl) alertEl.classList.remove("open");
+      }
+
+      function showRegisterProbePanel() {
+        const panel = document.getElementById("register-probe-panel");
+        if (panel) panel.classList.add("open");
+      }
+
+      function updateRegisterProbeRow(rowId, resultId, success) {
+        const row = document.getElementById(rowId);
+        const result = document.getElementById(resultId);
+        if (!row || !result) return;
+        if (success === null) {
+          row.className = "register-probe-row pending";
+          result.textContent = "…";
+          return;
+        }
+        row.className = `register-probe-row ${success ? "success" : "fail"}`;
+        result.textContent = success ? "Sucesso" : "Falha";
+      }
+
+      function applyRegisterProbeStatus(status) {
+        if (!status) return;
+        updateRegisterProbeRow(
+          "register-probe-api-row",
+          "register-probe-api-result",
+          status.apiTest?.success ?? null
+        );
+        updateRegisterProbeRow(
+          "register-probe-webhook-row",
+          "register-probe-webhook-result",
+          status.webhookTest?.success ?? null
+        );
+        const alertEl = document.getElementById("register-probe-alert");
+        if (alertEl) {
+          if (status.restrictionSuspected) alertEl.classList.add("open");
+          else alertEl.classList.remove("open");
+        }
+      }
+
+      async function startRegisterIntegrationProbe(instanceName) {
+        showRegisterProbePanel();
+        setRegisterConnectStatus("loading", "Teste de conexão em andamento…");
+        resetRegisterProbePanel();
+        showRegisterProbePanel();
+
+        if (registerProbePollTimer) {
+          clearInterval(registerProbePollTimer);
+          registerProbePollTimer = null;
+        }
+
+        let probeId = "";
+        try {
+          const response = await fetchWithTimeout(
+            `/instancias/${encodeURIComponent(instanceName)}/probe-integracao`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            },
+            30000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            updateRegisterProbeRow("register-probe-api-row", "register-probe-api-result", false);
+            updateRegisterProbeRow(
+              "register-probe-webhook-row",
+              "register-probe-webhook-result",
+              false
+            );
+            const alertEl = document.getElementById("register-probe-alert");
+            if (alertEl) alertEl.classList.add("open");
+            setRegisterConnectStatus(
+              "loading",
+              String(data?.error || "Não foi possível iniciar o teste de conexão.")
+            );
+            return;
+          }
+          probeId = String(data?.probeId || "").trim();
+          applyRegisterProbeStatus(data);
+          if (data?.finished) {
+            if (data?.restrictionSuspected) {
+              setRegisterConnectStatus(
+                "loading",
+                "Integração concluída com alerta de possível restrição."
+              );
+              return;
+            }
+            setRegisterConnectStatus("success", "Dispositivo integrado e testado com sucesso.");
+            await carregar();
+            setTimeout(() => closeRegisterModal(), 1800);
+            return;
+          }
+        } catch {
+          updateRegisterProbeRow("register-probe-api-row", "register-probe-api-result", false);
+          updateRegisterProbeRow(
+            "register-probe-webhook-row",
+            "register-probe-webhook-result",
+            false
+          );
+          const alertEl = document.getElementById("register-probe-alert");
+          if (alertEl) alertEl.classList.add("open");
+          setRegisterConnectStatus("loading", "Erro ao iniciar teste de conexão.");
+          return;
+        }
+
+        if (!probeId) return;
+
+        const probeStartedAt = Date.now();
+        registerProbePollTimer = setInterval(async () => {
+          try {
+            if (Date.now() - probeStartedAt > 120000) {
+              clearInterval(registerProbePollTimer);
+              registerProbePollTimer = null;
+              const alertEl = document.getElementById("register-probe-alert");
+              if (alertEl) alertEl.classList.add("open");
+              setRegisterConnectStatus("loading", "Teste de conexão expirou. Verifique o número.");
+              return;
+            }
+            const pollRes = await fetchWithTimeout(
+              `/instancias/probe-integracao/${encodeURIComponent(probeId)}`,
+              {},
+              12000
+            );
+            if (!pollRes.ok) return;
+            const status = await pollRes.json().catch(() => null);
+            applyRegisterProbeStatus(status);
+            if (!status?.finished) return;
+            clearInterval(registerProbePollTimer);
+            registerProbePollTimer = null;
+            if (status.restrictionSuspected) {
+              setRegisterConnectStatus(
+                "loading",
+                "Integração concluída com alerta de possível restrição."
+              );
+              await carregar();
+              return;
+            }
+            setRegisterConnectStatus("success", "Dispositivo integrado e testado com sucesso.");
+            await carregar();
+            setTimeout(() => closeRegisterModal(), 1800);
+          } catch {
+            // mantém polling
+          }
+        }, 2000);
       }
 
       function openRenameInstanceModal(instanceName) {
@@ -10820,12 +11105,7 @@
             if (status.includes("open")) {
               clearInterval(registerConnectPollTimer);
               registerConnectPollTimer = null;
-              setRegisterConnectStatus(
-                "success",
-                "Dispositivo integrado com sucesso."
-              );
-              await carregar();
-              setTimeout(() => closeRegisterModal(), 1500);
+              await startRegisterIntegrationProbe(instanceName);
             }
           } catch {
             // silencioso para não poluir UX durante polling

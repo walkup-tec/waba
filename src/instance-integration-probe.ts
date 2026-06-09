@@ -1,0 +1,464 @@
+import crypto from "crypto";
+
+const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
+  .replace(/\/$/, "");
+const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
+const EVO_INSTANCES_URL =
+  String(process.env.EVO_INSTANCES_URL || "").trim() ||
+  `${EVO_API_BASE}/instance/fetchInstances`;
+const EVO_SEND_TEXT_URL_TEMPLATE =
+  String(process.env.EVO_SEND_TEXT_URL_TEMPLATE || "").trim() ||
+  `${EVO_API_BASE}/message/sendText/{instance}`;
+const EVO_SEND_TEXT_V1 =
+  process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
+
+const WABA_PUBLIC_BASE_URL = String(
+  process.env.WABA_PUBLIC_BASE_URL || process.env.WABA_WEBHOOK_BASE_URL || ""
+)
+  .trim()
+  .replace(/\/+$/, "");
+
+const PROBE_TIMEOUT_MS = Math.max(
+  15_000,
+  Math.min(90_000, Number(process.env.INTEGRATION_PROBE_TIMEOUT_MS || 45_000) || 45_000)
+);
+const PROBE_POLL_MS = Math.max(
+  1500,
+  Math.min(10_000, Number(process.env.INTEGRATION_PROBE_POLL_MS || 2500) || 2500)
+);
+
+export type ProbeTestResult = {
+  success: boolean | null;
+  detail: string;
+};
+
+export type IntegrationProbeStatus = {
+  probeId: string;
+  finished: boolean;
+  restrictionSuspected: boolean;
+  sourceInstance: string;
+  destinationInstance: string;
+  apiTest: ProbeTestResult;
+  webhookTest: ProbeTestResult;
+  startedAt: string;
+  finishedAt: string | null;
+};
+
+type ProbeRecord = IntegrationProbeStatus & {
+  marker: string;
+  sourceNumber: string;
+  destNumber: string;
+  sendAttempted: boolean;
+  sendHttpOk: boolean;
+};
+
+const probes = new Map<string, ProbeRecord>();
+const markerIndex = new Map<string, string>();
+
+let onProbeFinished: ((status: IntegrationProbeStatus) => void) | null = null;
+
+export function setIntegrationProbeFinishedHandler(
+  handler: ((status: IntegrationProbeStatus) => void) | null
+): void {
+  onProbeFinished = handler;
+}
+
+function notifyProbeFinished(record: ProbeRecord): void {
+  if (!onProbeFinished) return;
+  try {
+    onProbeFinished(publicProbeStatus(record));
+  } catch (e) {
+    console.error("[probe-integracao] onFinished:", e);
+  }
+}
+
+function normalizeWhatsAppNumber(num: string): string {
+  const raw = String(num || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return raw;
+  if (digits.length >= 12 && digits.startsWith("55")) return digits;
+  if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
+    return "55" + digits;
+  }
+  return digits;
+}
+
+function toRemoteJid(num: string): string {
+  const digits = normalizeWhatsAppNumber(num);
+  return digits ? `${digits}@s.whatsapp.net` : "";
+}
+
+async function callEvo(
+  url: string,
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  body?: Record<string, unknown>
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { ok: response.ok, status: response.status, body: text, json };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function buildTemplateUrl(template: string, instanceName: string): string {
+  return template
+    .replace("{instance}", encodeURIComponent(instanceName))
+    .replace("{name}", encodeURIComponent(instanceName));
+}
+
+function extractInstanceNumber(inst: Record<string, unknown>): string {
+  const raw =
+    inst?.owner ??
+    inst?.number ??
+    inst?.phone ??
+    inst?.ownerNumber ??
+    (inst?.profile as Record<string, unknown> | undefined)?.owner ??
+    "";
+  const s = String(raw).trim();
+  if (!s) return "";
+  if (s.includes("@")) return s.split("@")[0] || s;
+  return s;
+}
+
+async function fetchConnectedInstances(): Promise<Array<{ instancia: string; numero: string }>> {
+  const response = await callEvo(EVO_INSTANCES_URL, "GET");
+  if (!response.ok) return [];
+  const raw = response.json;
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as Record<string, unknown>)?.response)
+      ? ((raw as Record<string, unknown>).response as unknown[])
+      : Array.isArray((raw as Record<string, unknown>)?.data)
+        ? ((raw as Record<string, unknown>).data as unknown[])
+        : [];
+  return list
+    .map((item) => {
+      const inst = ((item as Record<string, unknown>)?.instance ?? item) as Record<
+        string,
+        unknown
+      >;
+      const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
+      if (!status.includes("open")) return null;
+      const instancia = String(
+        inst?.name ?? inst?.instanceName ?? inst?.instance ?? ""
+      ).trim();
+      const numero = extractInstanceNumber(inst);
+      if (!instancia || !numero) return null;
+      return { instancia, numero };
+    })
+    .filter((x): x is { instancia: string; numero: string } => x != null);
+}
+
+function collectMessageTexts(node: unknown, out: string[], depth = 0): void {
+  if (depth > 10 || node == null) return;
+  if (typeof node === "string") return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectMessageTexts(item, out, depth + 1);
+    return;
+  }
+  if (typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  if (typeof obj.conversation === "string" && obj.conversation.trim()) {
+    out.push(obj.conversation.trim());
+  }
+  const ext = obj.extendedTextMessage as Record<string, unknown> | undefined;
+  if (typeof ext?.text === "string" && ext.text.trim()) out.push(ext.text.trim());
+  if (typeof obj.text === "string" && obj.text.trim()) out.push(obj.text.trim());
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") collectMessageTexts(value, out, depth + 1);
+  }
+}
+
+function messageTextsIncludeMarker(node: unknown, marker: string): boolean {
+  const texts: string[] = [];
+  collectMessageTexts(node, texts);
+  const needle = marker.toLowerCase();
+  return texts.some((t) => t.toLowerCase().includes(needle));
+}
+
+function publicProbeStatus(record: ProbeRecord): IntegrationProbeStatus {
+  const apiDone = record.apiTest.success !== null;
+  const webhookDone = record.webhookTest.success !== null;
+  const finished = record.finished;
+  const restrictionSuspected =
+    finished &&
+    (record.apiTest.success === false || record.webhookTest.success === false);
+  return {
+    probeId: record.probeId,
+    finished,
+    restrictionSuspected,
+    sourceInstance: record.sourceInstance,
+    destinationInstance: record.destinationInstance,
+    apiTest: { ...record.apiTest },
+    webhookTest: { ...record.webhookTest },
+    startedAt: record.startedAt,
+    finishedAt: record.finishedAt,
+  };
+}
+
+function tryFinalizeProbe(record: ProbeRecord): void {
+  if (record.finished) return;
+  const apiDone = record.apiTest.success !== null;
+  const webhookDone = record.webhookTest.success !== null;
+  if (!apiDone || !webhookDone) return;
+  record.finished = true;
+  record.finishedAt = new Date().toISOString();
+  markerIndex.delete(record.marker);
+  notifyProbeFinished(record);
+}
+
+function finalizeProbeOnTimeout(record: ProbeRecord): void {
+  if (record.finished) return;
+  if (record.apiTest.success === null) {
+    record.apiTest = {
+      success: false,
+      detail: "Tempo esgotado sem confirmar mensagem via API (findMessages).",
+    };
+  }
+  if (record.webhookTest.success === null) {
+    record.webhookTest = {
+      success: false,
+      detail: "Tempo esgotado sem evento de mensagem recebida no destino.",
+    };
+  }
+  tryFinalizeProbe(record);
+}
+
+async function ensureDestinationWebhook(destinationInstance: string): Promise<string> {
+  if (!WABA_PUBLIC_BASE_URL) {
+    return "WABA_PUBLIC_BASE_URL não configurada — teste por webhook pode falhar.";
+  }
+  const webhookUrl = `${WABA_PUBLIC_BASE_URL}/webhooks/evolution`;
+  const setUrl = `${EVO_API_BASE}/webhook/set/${encodeURIComponent(destinationInstance)}`;
+  const body = {
+    webhook: {
+      enabled: true,
+      url: webhookUrl,
+      webhookByEvents: false,
+      webhookBase64: false,
+      events: ["MESSAGES_UPSERT"],
+    },
+  };
+  const result = await callEvo(setUrl, "POST", body);
+  if (!result.ok) {
+    return `Não foi possível registrar webhook na EVO (HTTP ${result.status}).`;
+  }
+  return "";
+}
+
+async function sendProbeMessage(
+  sourceInstance: string,
+  destNumber: string,
+  text: string
+): Promise<{ ok: boolean; status: number; detail: string }> {
+  const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, sourceInstance);
+  const numero = normalizeWhatsAppNumber(destNumber);
+  const sendBody: Record<string, unknown> = EVO_SEND_TEXT_V1
+    ? { number: numero, textMessage: { text } }
+    : { number: numero, text, textMessage: { text } };
+  const result = await callEvo(sendUrl, "POST", sendBody);
+  if (!result.ok) {
+    const detail =
+      (result.json as Record<string, unknown> | null)?.message ||
+      (result.json as Record<string, unknown> | null)?.error ||
+      result.body.slice(0, 180) ||
+      `HTTP ${result.status}`;
+    return { ok: false, status: result.status, detail: String(detail) };
+  }
+  return { ok: true, status: result.status, detail: "sendText retornou sucesso." };
+}
+
+async function findProbeMessageViaApi(
+  destinationInstance: string,
+  sourceNumber: string,
+  marker: string
+): Promise<boolean> {
+  const remoteJid = toRemoteJid(sourceNumber);
+  const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(destinationInstance)}`;
+  const bodies: Record<string, unknown>[] = [
+    { where: { key: { remoteJid } }, limit: 30 },
+    { where: { key: { remoteJid } }, take: 30 },
+    { limit: 40 },
+    {},
+  ];
+  for (const body of bodies) {
+    const result = await callEvo(url, "POST", body);
+    if (!result.ok) continue;
+    if (messageTextsIncludeMarker(result.json, marker)) return true;
+  }
+  return false;
+}
+
+function markWebhookSuccess(probeId: string, detail: string): void {
+  const record = probes.get(probeId);
+  if (!record || record.finished) return;
+  if (record.webhookTest.success === true) return;
+  record.webhookTest = { success: true, detail };
+  tryFinalizeProbe(record);
+}
+
+function markApiSuccess(probeId: string, detail: string): void {
+  const record = probes.get(probeId);
+  if (!record || record.finished) return;
+  if (record.apiTest.success === true) return;
+  record.apiTest = { success: true, detail };
+  tryFinalizeProbe(record);
+}
+
+export function handleEvolutionWebhookPayload(body: unknown): void {
+  if (!body || typeof body !== "object") return;
+  const payload = body as Record<string, unknown>;
+  const instanceName = String(payload.instance || payload.instanceName || "").trim();
+  const event = String(payload.event || "").toUpperCase();
+  if (event && event !== "MESSAGES_UPSERT" && event !== "MESSAGES.UPSERT") return;
+
+  for (const [marker, probeId] of markerIndex.entries()) {
+    const record = probes.get(probeId);
+    if (!record || record.finished) continue;
+    if (instanceName && instanceName !== record.destinationInstance) continue;
+    if (!messageTextsIncludeMarker(payload, marker)) continue;
+    markWebhookSuccess(
+      probeId,
+      `Webhook MESSAGES_UPSERT confirmou mensagem no destino${instanceName ? ` (${instanceName})` : ""}.`
+    );
+    break;
+  }
+}
+
+async function runProbeLoop(record: ProbeRecord): Promise<void> {
+  const deadline = Date.now() + PROBE_TIMEOUT_MS;
+  while (Date.now() < deadline && !record.finished) {
+    if (record.apiTest.success !== true) {
+      try {
+        const found = await findProbeMessageViaApi(
+          record.destinationInstance,
+          record.sourceNumber,
+          record.marker
+        );
+        if (found) {
+          markApiSuccess(record.probeId, "findMessages localizou a mensagem de teste no destino.");
+        }
+      } catch {
+        // continua polling
+      }
+    }
+    if (!record.finished) {
+      await new Promise((r) => setTimeout(r, PROBE_POLL_MS));
+    }
+  }
+  finalizeProbeOnTimeout(record);
+}
+
+export function getIntegrationProbeStatus(probeId: string): IntegrationProbeStatus | null {
+  const record = probes.get(probeId);
+  if (!record) return null;
+  return publicProbeStatus(record);
+}
+
+export async function startIntegrationProbe(input: {
+  sourceInstanceName: string;
+  destinationInstanceName?: string;
+}): Promise<{ probeId?: string; error?: string; status?: IntegrationProbeStatus }> {
+  const sourceInstanceName = String(input.sourceInstanceName || "").trim();
+  if (!sourceInstanceName) {
+    return { error: "Nome da instância de origem é obrigatório." };
+  }
+
+  const connected = await fetchConnectedInstances();
+  const source = connected.find((c) => c.instancia === sourceInstanceName);
+  if (!source) {
+    return {
+      error: `Instância "${sourceInstanceName}" não está conectada (status open) na Evolution.`,
+    };
+  }
+
+  let destination = input.destinationInstanceName
+    ? connected.find((c) => c.instancia === input.destinationInstanceName)
+    : undefined;
+  if (!destination) {
+    destination = connected.find((c) => c.instancia !== sourceInstanceName);
+  }
+  if (!destination) {
+    return {
+      error:
+        "Nenhuma outra instância conectada disponível como destino do teste. Conecte uma instância de referência antes.",
+    };
+  }
+
+  const probeId = crypto.randomUUID();
+  const marker = `WABA-PROBE:${probeId.slice(0, 8)}`;
+  const startedAt = new Date().toISOString();
+  const record: ProbeRecord = {
+    probeId,
+    marker,
+    sourceInstance: source.instancia,
+    destinationInstance: destination.instancia,
+    sourceNumber: source.numero,
+    destNumber: destination.numero,
+    startedAt,
+    finishedAt: null,
+    finished: false,
+    restrictionSuspected: false,
+    sendAttempted: false,
+    sendHttpOk: false,
+    apiTest: { success: null, detail: "Consultando mensagens no destino (findMessages)…" },
+    webhookTest: {
+      success: null,
+      detail: "Aguardando evento de mensagem recebida no destino…",
+    },
+  };
+  probes.set(probeId, record);
+  markerIndex.set(marker, probeId);
+
+  const webhookNote = await ensureDestinationWebhook(destination.instancia);
+  if (webhookNote) {
+    record.webhookTest.detail = `${webhookNote} Aguardando evento…`;
+  }
+
+  const probeText = `Teste de integração WABA. ${marker}`;
+  record.sendAttempted = true;
+  const send = await sendProbeMessage(source.instancia, destination.numero, probeText);
+  record.sendHttpOk = send.ok;
+
+  if (!send.ok) {
+    record.apiTest = { success: false, detail: `Falha ao enviar teste: ${send.detail}` };
+    record.webhookTest = {
+      success: false,
+      detail: "Envio não realizado — webhook não aplicável.",
+    };
+  tryFinalizeProbe(record);
+  return { probeId, status: publicProbeStatus(record) };
+  }
+
+  void runProbeLoop(record);
+  return { probeId, status: publicProbeStatus(record) };
+}
+
+/** Remove probes antigos (> 2 h) para não crescer memória indefinidamente. */
+export function pruneIntegrationProbes(): void {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, record] of probes.entries()) {
+    const started = new Date(record.startedAt).getTime();
+    if (started < cutoff) {
+      markerIndex.delete(record.marker);
+      probes.delete(id);
+    }
+  }
+}
+
+setInterval(() => pruneIntegrationProbes(), 30 * 60 * 1000).unref?.();
