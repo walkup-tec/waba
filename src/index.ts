@@ -17,6 +17,7 @@ import {
   injectRuntimeIntoIndexHtml,
   type WabaUiProfile,
 } from "./base-path";
+import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 
 const app = express();
 app.use(stripBasePathMiddleware);
@@ -174,6 +175,7 @@ app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
   const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
+  if (p === "/webhooks/asaas") return true;
   if (method !== "GET" && method !== "HEAD") return false;
   return (
     p === "/health" ||
@@ -231,6 +233,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     wabaEnv: WABA_ENV,
+    uiProfile: resolveUiProfile(),
     basePath: BASE_PATH || "/",
     port: PORT,
     maintenanceMode: MAINTENANCE_MODE,
@@ -1579,15 +1582,34 @@ function stopAquecedorRuntime() {
 }
 
 let indexHtmlTemplate: string | null = null;
+function resolveIndexHtmlPath(): string {
+  const rootHtml = path.join(rootPath, "index.html");
+  const distHtml = path.join(distPath, "index.html");
+  if (RUNTIME_MODE === "development" && existsSync(rootHtml)) {
+    return rootHtml;
+  }
+  return distHtml;
+}
 function loadIndexHtmlTemplate(): string {
+  const htmlPath = resolveIndexHtmlPath();
+  if (RUNTIME_MODE === "development") {
+    return readFileSync(htmlPath, "utf8");
+  }
   if (!indexHtmlTemplate) {
-    indexHtmlTemplate = readFileSync(path.join(distPath, "index.html"), "utf8");
+    indexHtmlTemplate = readFileSync(htmlPath, "utf8");
   }
   return indexHtmlTemplate;
 }
 
 function resolveUiProfile(): WabaUiProfile {
-  if (WABA_ENV === "v01" || WABA_ENV === "v02") return "full";
+  const explicit = String(process.env.WABA_UI_PROFILE || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "production" || explicit === "full") {
+    return explicit;
+  }
+  // V02 espelha a UI de produção; V01 mantém menu completo (baseline).
+  if (WABA_ENV === "v01") return "full";
   return "production";
 }
 
@@ -1613,7 +1635,11 @@ app.get("/index.html", (_req, res) => {
 });
 
 if (BASE_PATH) {
-  app.use(BASE_PATH, express.static(distPath, staticNoIndex));
+  // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
+  app.use((req, res, next) => {
+    if (!requestUnderBasePath(req)) return next();
+    return express.static(distPath, staticNoIndex)(req, res, next);
+  });
 } else {
   app.use(express.static(distPath, staticNoIndex));
 }
@@ -6638,6 +6664,8 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
     return res.status(500).json({ error: error?.message || "Erro ao excluir campanha." });
   }
 });
+
+registerWabaBillingRoutes(app);
 
 app.listen(PORT, () => {
   const publicRoot = BASE_PATH

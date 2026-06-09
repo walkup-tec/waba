@@ -49,6 +49,7 @@ const generated_brand_logo_1 = require("./generated-brand-logo");
 const load_env_1 = require("./load-env");
 const data_path_1 = require("./data-path");
 const base_path_1 = require("./base-path");
+const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
@@ -178,6 +179,8 @@ app.use((req, res, next) => {
 app.use(express_1.default.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 function isMaintenanceBypassPath(method, reqPath) {
     const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
+    if (p === "/webhooks/asaas")
+        return true;
     if (method !== "GET" && method !== "HEAD")
         return false;
     return (p === "/health" ||
@@ -224,6 +227,7 @@ app.get("/health", (_req, res) => {
     res.json({
         ok: true,
         wabaEnv: load_env_1.WABA_ENV,
+        uiProfile: resolveUiProfile(),
         basePath: base_path_1.BASE_PATH || "/",
         port: PORT,
         maintenanceMode: MAINTENANCE_MODE,
@@ -1354,14 +1358,33 @@ function stopAquecedorRuntime() {
     }
 }
 let indexHtmlTemplate = null;
+function resolveIndexHtmlPath() {
+    const rootHtml = path_1.default.join(rootPath, "index.html");
+    const distHtml = path_1.default.join(distPath, "index.html");
+    if (RUNTIME_MODE === "development" && (0, fs_1.existsSync)(rootHtml)) {
+        return rootHtml;
+    }
+    return distHtml;
+}
 function loadIndexHtmlTemplate() {
+    const htmlPath = resolveIndexHtmlPath();
+    if (RUNTIME_MODE === "development") {
+        return (0, fs_1.readFileSync)(htmlPath, "utf8");
+    }
     if (!indexHtmlTemplate) {
-        indexHtmlTemplate = (0, fs_1.readFileSync)(path_1.default.join(distPath, "index.html"), "utf8");
+        indexHtmlTemplate = (0, fs_1.readFileSync)(htmlPath, "utf8");
     }
     return indexHtmlTemplate;
 }
 function resolveUiProfile() {
-    if (load_env_1.WABA_ENV === "v01" || load_env_1.WABA_ENV === "v02")
+    const explicit = String(process.env.WABA_UI_PROFILE || "")
+        .trim()
+        .toLowerCase();
+    if (explicit === "production" || explicit === "full") {
+        return explicit;
+    }
+    // V02 espelha a UI de produção; V01 mantém menu completo (baseline).
+    if (load_env_1.WABA_ENV === "v01")
         return "full";
     return "production";
 }
@@ -1383,7 +1406,12 @@ app.get("/index.html", (_req, res) => {
     sendIndexHtml(res);
 });
 if (base_path_1.BASE_PATH) {
-    app.use(base_path_1.BASE_PATH, express_1.default.static(distPath, staticNoIndex));
+    // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
+    app.use((req, res, next) => {
+        if (!(0, base_path_1.requestUnderBasePath)(req))
+            return next();
+        return express_1.default.static(distPath, staticNoIndex)(req, res, next);
+    });
 }
 else {
     app.use(express_1.default.static(distPath, staticNoIndex));
@@ -6085,6 +6113,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
         return res.status(500).json({ error: error?.message || "Erro ao excluir campanha." });
     }
 });
+(0, waba_billing_routes_1.registerWabaBillingRoutes)(app);
 app.listen(PORT, () => {
     const publicRoot = base_path_1.BASE_PATH
         ? `http://localhost:${PORT}${base_path_1.BASE_PATH}/`
