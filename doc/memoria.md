@@ -13,11 +13,53 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Ãšltima atualizaÃ§Ã£o
-2026-06-08
+2026-06-09
 
-**Produção 404 após redeploy — router Traefik removido:** `grep waba.draxsistemas main.yaml` vazio; app OK em `http://127.0.0.1:30180/health` (200); HTTPS 404 (Traefik sem router). Fix: `scripts/restore-waba-traefik-router-vps.sh` (commit `8adc236`). Ver `doc/LOG-2026-06-08__waba-404-traefik-router-restore.md`.
+**Probe pós-integração (findMessages + webhook):** após QR `open`, modal roda `POST /instancias/:name/probe-integracao` + polling; UI mostra Teste API e Teste webhook; falha → alerta vermelho restrição + `useAquecedor:false`. Env `WABA_PUBLIC_BASE_URL`. Ver `doc/LOG-2026-06-09__probe-integracao-duplo-findmessages-webhook.md`.
 
-Palavras-chave: `waba-404`, `restore-waba-traefik`, `main.yaml.bak`, `redeploy-easypanel`
+Palavras-chave: `probe-integracao`, `findMessages`, `webhooks/evolution`, `WABA_PUBLIC_BASE_URL`
+
+---
+
+**Investigação Geovana 62982578262 — REVISÃO:** prints WhatsApp confirmam **só recebe** de Walkup/Marcelo; horários do print batem com logs `Walkup→Geovana` (ex. 08:43, 09:16…). Logs mostram `Geovana→Walkup` ~10 min depois mas **mensagens não aparecem no chat** → EVO retorna HTTP OK sem entrega real. Ver `doc/LOG-2026-06-09__geovana-evidencia-whatsapp-so-recebe.md`.
+
+Palavras-chave: `geovana-so-recebe`, `evo-sendtext-falso-positivo`, `geovana-62982578262`
+
+---
+
+**Aquecedor produção — PARADO (validação pendente):** `POST /aquecedor/stop` + `POST /disparos/parar-envios` + instâncias Walkup/Geovana novo/Marcelo Pessoal com `useAquecedor:false`. Motor `running:false`; `runtime-intent` desligado; diagnóstico `connectedCount:0` para aquecedor. Fila Supabase ~38k PENDENTE inativa. Ver `doc/LOG-2026-06-09__parar-aquecedor-producao-validacao.md`.
+
+Palavras-chave: `aquecedor-parado-producao`, `parar-envios`, `validacao-erro-aquecedor`
+
+---
+
+**Contratar Disparos — PIX Asaas:** botão Contratar abre modal → `POST /billing/disparos/checkout` → QR PIX. Identificação na conta Asaas compartilhada: `externalReference` = `waba:{uuid}`, `description` = `WABA Disparos · …`. Webhook `POST /webhooks/asaas` filtra prefixo `waba:`. Ver `doc/LOG-2026-06-09__disparos-contratar-pix-asaas.md`.
+
+Palavras-chave: `waba-asaas`, `billing/disparos`, `waba-billing-orders.json`
+
+---
+
+**Favicon produção (master):** commit `91d4a8f` — favicon igual Typebot admin (`favicon.ico` + `media/favcon.png`); push `origin/master`. Validar após redeploy `waba_disparador`. Ver `doc/LOG-2026-06-09__favicon-deploy-master.md`.
+
+Palavras-chave: `favicon-waba`, `favcon.png`, `91d4a8f`
+
+---
+
+**Disparos V02 — API Oficial vs Alternativa:** tela comparativa no menu DISPAROS (`tab-disparos-lancamento`), mockup com dois cards, Contratar + localStorage. Ver `doc/LOG-2026-06-08__disparos-api-oficial-alternativa-v02.md`.
+
+Palavras-chave: `disparos-api-oficial`, `disparos-api-alternativa`, `tab-disparos-lancamento`
+
+---
+
+**V02 UI igual produção:** local OK após `npm run dev:v02` (`uiProfile=production`). URL pública `/version-02/` ainda **404** (sem serviço VPS). `dev-v02.ps1` libera porta 3012; `.env.v02` com `WABA_UI_PROFILE=production`. Ver `doc/LOG-2026-06-08__v02-ui-igual-producao.md`.
+
+Palavras-chave: `v02-production-ui`, `WABA_UI_PROFILE`, `resolveUiProfile`
+
+---
+
+**Produção 404 após redeploy — RESOLVIDO:** merge cirúrgico v1 falhou (chaves router existiam sem `Host(waba…)`). Fix aplicado no VPS: `cp main.yaml.bak-waba-20260608-172040 → main.yaml` + `/root/traefik-permanent-waba-vps.sh run` → **waba:200 health:200**. Script v2 (`defacbe`): restore completo do backup. Ver `doc/LOG-2026-06-08__waba-404-traefik-router-restore.md`.
+
+Palavras-chave: `waba-404-resolvido`, `restore-waba-traefik`, `bak-waba-20260608`, `traefik-permanent-waba`
 
 ---
 

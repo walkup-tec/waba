@@ -17,6 +17,14 @@ import {
   injectRuntimeIntoIndexHtml,
   type WabaUiProfile,
 } from "./base-path";
+import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
+import {
+  getIntegrationProbeStatus,
+  handleEvolutionWebhookPayload,
+  setIntegrationProbeFinishedHandler,
+  startIntegrationProbe,
+} from "./instance-integration-probe";
+import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 
 const app = express();
 app.use(stripBasePathMiddleware);
@@ -174,6 +182,7 @@ app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
   const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
+  if (p === "/webhooks/asaas" || p === "/webhooks/evolution") return true;
   if (method !== "GET" && method !== "HEAD") return false;
   return (
     p === "/health" ||
@@ -230,7 +239,9 @@ app.use((req, res, next) => {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
+    deployMarker: WABA_DEPLOY_MARKER,
     wabaEnv: WABA_ENV,
+    uiProfile: resolveUiProfile(),
     basePath: BASE_PATH || "/",
     port: PORT,
     maintenanceMode: MAINTENANCE_MODE,
@@ -354,6 +365,17 @@ async function persistInstanceUsage(
     // fallback em memória
   }
 }
+
+setIntegrationProbeFinishedHandler((status) => {
+  if (!status.restrictionSuspected) return;
+  void persistInstanceUsage([
+    {
+      instanceName: status.sourceInstance,
+      useAquecedor: false,
+      useDisparador: false,
+    },
+  ]);
+});
 
 function parseDisparosConfig(input: any): DisparosConfig {
   const readInt = (value: any, min: number, max: number, fallback: number) => {
@@ -1579,15 +1601,34 @@ function stopAquecedorRuntime() {
 }
 
 let indexHtmlTemplate: string | null = null;
+function resolveIndexHtmlPath(): string {
+  const rootHtml = path.join(rootPath, "index.html");
+  const distHtml = path.join(distPath, "index.html");
+  if (RUNTIME_MODE === "development" && existsSync(rootHtml)) {
+    return rootHtml;
+  }
+  return distHtml;
+}
 function loadIndexHtmlTemplate(): string {
+  const htmlPath = resolveIndexHtmlPath();
+  if (RUNTIME_MODE === "development") {
+    return readFileSync(htmlPath, "utf8");
+  }
   if (!indexHtmlTemplate) {
-    indexHtmlTemplate = readFileSync(path.join(distPath, "index.html"), "utf8");
+    indexHtmlTemplate = readFileSync(htmlPath, "utf8");
   }
   return indexHtmlTemplate;
 }
 
 function resolveUiProfile(): WabaUiProfile {
-  if (WABA_ENV === "v01" || WABA_ENV === "v02") return "full";
+  const explicit = String(process.env.WABA_UI_PROFILE || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "production" || explicit === "full") {
+    return explicit;
+  }
+  // V02 espelha a UI de produção; V01 mantém menu completo (baseline).
+  if (WABA_ENV === "v01") return "full";
   return "production";
 }
 
@@ -1613,7 +1654,11 @@ app.get("/index.html", (_req, res) => {
 });
 
 if (BASE_PATH) {
-  app.use(BASE_PATH, express.static(distPath, staticNoIndex));
+  // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
+  app.use((req, res, next) => {
+    if (!requestUnderBasePath(req)) return next();
+    return express.static(distPath, staticNoIndex)(req, res, next);
+  });
 } else {
   app.use(express.static(distPath, staticNoIndex));
 }
@@ -2043,6 +2088,47 @@ app.post("/instancias/uso-config", async (req, res) => {
   } catch {
     return res.status(500).json({ error: "Erro ao salvar configuração de uso das instâncias." });
   }
+});
+
+app.post("/webhooks/evolution", (req, res) => {
+  try {
+    handleEvolutionWebhookPayload(req.body);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("POST /webhooks/evolution", error);
+    return res.status(500).json({ error: "Erro ao processar webhook Evolution." });
+  }
+});
+
+app.post("/instancias/:name/probe-integracao", async (req, res) => {
+  try {
+    const name = String(req.params.name || "").trim();
+    const destinationInstanceName = String(req.body?.destinationInstanceName || "").trim() || undefined;
+    const started = await startIntegrationProbe({
+      sourceInstanceName: name,
+      destinationInstanceName,
+    });
+    if (started.error) {
+      return res.status(400).json({ ok: false, error: started.error });
+    }
+    const status = started.status || getIntegrationProbeStatus(String(started.probeId || ""));
+    return res.json({ ok: true, probeId: started.probeId, ...status });
+  } catch (error: any) {
+    console.error("POST /instancias/:name/probe-integracao", error);
+    return res.status(500).json({ error: error?.message || "Erro ao iniciar teste de integração." });
+  }
+});
+
+app.get("/instancias/probe-integracao/:probeId", (req, res) => {
+  const probeId = String(req.params.probeId || "").trim();
+  if (!probeId) {
+    return res.status(400).json({ error: "probeId é obrigatório." });
+  }
+  const status = getIntegrationProbeStatus(probeId);
+  if (!status) {
+    return res.status(404).json({ error: "Teste de integração não encontrado ou expirado." });
+  }
+  return res.json({ ok: true, ...status });
 });
 
 function buildTemplateUrl(template: string, instanceName: string) {
@@ -6638,6 +6724,8 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
     return res.status(500).json({ error: error?.message || "Erro ao excluir campanha." });
   }
 });
+
+registerWabaBillingRoutes(app);
 
 app.listen(PORT, () => {
   const publicRoot = BASE_PATH

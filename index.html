@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DRAX - WABA</title>
-    <link rel="icon" type="image/png" href="/media/favicon.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/media/favcon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/media/favcon.png" />
     <meta name="theme-color" content="#2ee4a0" />
 
     <!-- Bootstrap 5 CSS -->
@@ -2903,6 +2906,298 @@
         z-index: 1;
       }
 
+      /* Disparos — fiel ao mockup (cores e espaçamentos do Figma/tela desenhada) */
+      .disparos-choice-wrap {
+        --disp-page-bg: #0b111b;
+        --disp-card-bg: #131a26;
+        --disp-green: #10b981;
+        --disp-preview-bg: #d1d1d1;
+        --disp-preview-img-bg: #3d4654;
+        --disp-preview-text: #4b5563;
+        --disp-note-bg: #6b6320;
+        --disp-note-gold: #e3d667;
+        --disp-card-width: 300px;
+        --disp-cards-gap: 28px;
+        --disp-note-margin-y: 48px;
+        --disp-note-slot-height: 196px;
+        min-height: calc(100vh - 200px);
+        padding: 32px 20px 48px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: var(--disp-page-bg);
+      }
+      #tab-disparos-lancamento {
+        background: #0b111b;
+      }
+      .disparos-choice-grid {
+        display: grid;
+        grid-template-columns: repeat(2, var(--disp-card-width));
+        gap: var(--disp-cards-gap);
+        width: fit-content;
+        max-width: 100%;
+        margin: 0 auto;
+        position: relative;
+      }
+      @media (max-width: 700px) {
+        .disparos-choice-grid {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .disparos-api-card[data-disparos-api="oficial"] {
+          order: 1;
+        }
+        .disparos-choice-note {
+          order: 2;
+          position: static !important;
+          transform: none !important;
+          width: min(400px, 92vw) !important;
+          margin: var(--disp-note-margin-y) auto;
+          pointer-events: auto;
+        }
+        .disparos-api-card[data-disparos-api="alternativa"] {
+          order: 3;
+        }
+        .disparos-note-slot {
+          display: none;
+        }
+      }
+      .disparos-note-slot {
+        width: 100%;
+        height: var(--disp-note-slot-height);
+        min-height: var(--disp-note-slot-height);
+        flex-shrink: 0;
+      }
+      .disparos-api-card {
+        width: var(--disp-card-width);
+        max-width: 100%;
+        border-radius: 16px;
+        border: none;
+        background: var(--disp-card-bg);
+        padding: 20px 14px 22px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 14px;
+        box-shadow: none;
+        position: relative;
+        z-index: 1;
+      }
+      .disparos-api-card-header {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .disparos-api-card-title {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
+        color: #ffffff;
+        letter-spacing: 0;
+      }
+      .disparos-api-card-header .wa-icon {
+        width: 20px;
+        height: 20px;
+        color: var(--disp-green);
+        flex-shrink: 0;
+        display: block;
+        margin: 0;
+      }
+      .disparos-api-section-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--disp-green);
+        background: transparent;
+        color: var(--disp-green);
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+      .disparos-msg-preview {
+        width: 100%;
+        border-radius: 12px;
+        background: var(--disp-preview-bg);
+        color: var(--disp-preview-text);
+        padding: 12px;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        text-align: center;
+        box-shadow: none;
+      }
+      .disparos-msg-preview-image {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 10px;
+        background: var(--disp-preview-img-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 14px 10px;
+        color: #ffffff;
+        box-sizing: border-box;
+      }
+      .disparos-msg-preview-image svg {
+        width: 28px;
+        height: 28px;
+        opacity: 0.9;
+        stroke: #ffffff;
+      }
+      .disparos-msg-preview-image span {
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.25;
+        color: #e5e7eb;
+      }
+      .disparos-msg-preview-text {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--disp-preview-text);
+        text-align: center;
+        margin: 0;
+      }
+      .disparos-msg-preview-btn {
+        margin-top: 2px;
+        width: 100%;
+        padding: 9px 10px;
+        border: none;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #0ea5e9;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        box-shadow: none;
+      }
+      .disparos-msg-preview-link {
+        margin-top: 2px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #2563eb;
+        text-decoration: underline;
+        word-break: break-all;
+      }
+      .disparos-api-price {
+        width: 100%;
+        font-size: 20px;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 0;
+        line-height: 1.25;
+        text-align: center;
+        margin: 0;
+      }
+      .disparos-api-contratar {
+        width: 100%;
+        align-self: stretch;
+        padding: 12px 14px;
+        border: none;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #374151;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.2;
+        cursor: pointer;
+        box-shadow: none;
+      }
+      .disparos-api-contratar:hover {
+        background: #f9fafb;
+      }
+      .disparos-api-min-creditos {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 400;
+        color: #ffffff;
+        margin: 0;
+        line-height: 1.4;
+      }
+      .disparos-api-min-creditos strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      #disparos-billing-overlay,
+      #disparos-pix-overlay {
+        z-index: 2400;
+      }
+      .disparos-billing-hint {
+        font-size: 12px;
+        color: #9ca3af;
+        margin: 0 0 10px;
+        line-height: 1.45;
+      }
+      .disparos-pix-qr {
+        display: flex;
+        justify-content: center;
+        margin: 12px 0;
+      }
+      .disparos-pix-qr img {
+        width: 220px;
+        height: 220px;
+        border-radius: 10px;
+        background: #fff;
+      }
+      .disparos-pix-copy {
+        width: 100%;
+        min-height: 72px;
+        resize: vertical;
+        font-size: 11px;
+        font-family: ui-monospace, monospace;
+      }
+      .disparos-pix-status {
+        text-align: center;
+        font-size: 13px;
+        color: #d1d5db;
+        margin-top: 10px;
+      }
+      /* Sobrepõe os cards inteiros — entre prévia e tag Investimento (top via JS) */
+      .disparos-choice-note {
+        position: absolute;
+        left: 50%;
+        top: 286px;
+        transform: translateX(-50%) translateY(-50%);
+        width: 400px;
+        max-width: calc(100vw - 24px);
+        padding: 20px 30px;
+        border-radius: 20px;
+        border: 1.5px solid #e3d667 !important;
+        background: #6b6320 !important;
+        background-color: #6b6320 !important;
+        color: #e3d667 !important;
+        -webkit-text-fill-color: #e3d667 !important;
+        font-size: 13px;
+        line-height: 1.5;
+        font-weight: 500;
+        text-align: center;
+        box-shadow: none;
+        z-index: 5;
+        pointer-events: none;
+      }
+      .disparos-api-card.is-selected {
+        box-shadow: inset 0 0 0 1.5px var(--disp-green);
+      }
+
       /* Disparos */
       .disparos-layout {
         display: grid;
@@ -3611,6 +3906,109 @@
         border-color: rgba(34, 211, 238, 0.45);
         color: #bae6fd;
         background: rgba(14, 116, 144, 0.14);
+      }
+
+      .register-probe-panel {
+        display: none;
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(34, 211, 238, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+      }
+
+      .register-probe-panel.open {
+        display: block;
+      }
+
+      .register-probe-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 10px;
+        animation: register-probe-pulse 1.6s ease-in-out infinite;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .register-probe-version {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #67e8f9;
+        background: rgba(8, 47, 73, 0.65);
+        border: 1px solid rgba(34, 211, 238, 0.45);
+        border-radius: 6px;
+        padding: 2px 7px;
+        animation: none;
+      }
+
+      @keyframes register-probe-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
+        }
+      }
+
+      .register-probe-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        margin-bottom: 6px;
+        font-size: 0.82rem;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(30, 41, 59, 0.45);
+      }
+
+      .register-probe-row:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .register-probe-label {
+        color: #cbd5e1;
+        flex: 1;
+      }
+
+      .register-probe-result {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .register-probe-row.pending .register-probe-result {
+        color: #94a3b8;
+      }
+
+      .register-probe-row.success .register-probe-result {
+        color: #6ee7b7;
+      }
+
+      .register-probe-row.fail .register-probe-result {
+        color: #f87171;
+      }
+
+      .register-probe-alert {
+        display: none;
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(248, 113, 113, 0.75);
+        background: rgba(127, 29, 29, 0.38);
+        color: #fecaca;
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
+      .register-probe-alert.open {
+        display: block;
       }
 
       .spinner-dot {
@@ -4435,15 +4833,112 @@
         </div>
 
         <div id="tab-disparos-lancamento" class="tab-panel tab-hidden" aria-hidden="true">
-          <div class="coming-soon-wrap">
-            <div class="coming-soon-card">
-              <div class="coming-soon-icon" aria-hidden="true">🚀</div>
-              <h2 class="coming-soon-title">Lançamento em breve</h2>
-              <p class="coming-soon-sub">
-                Estamos preparando o módulo de Disparos com novos recursos.
-                Em breve você poderá criar campanhas e envios por aqui.
-              </p>
-              <span class="coming-soon-badge">Em desenvolvimento</span>
+          <div class="disparos-choice-wrap">
+            <div class="disparos-choice-grid">
+              <article class="disparos-api-card" data-disparos-api="oficial">
+                <header class="disparos-api-card-header">
+                  <span class="disparos-api-card-title">
+                    <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
+                      />
+                    </svg>
+                    <span>API Oficial</span>
+                  </span>
+                </header>
+
+                <span class="disparos-api-section-label">Modelo de mensagem</span>
+                <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
+                  <div class="disparos-msg-preview-image" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                      <circle cx="8.5" cy="10" r="1.5"></circle>
+                      <path d="M21 16l-5-5-4 4-2-2-5 5"></path>
+                    </svg>
+                    <span>Imagem que você escolher</span>
+                  </div>
+                  <p class="disparos-msg-preview-text">
+                    Aqui vai o texto de venda do seu produto ou serviço e, a baixo, o botão de ação.
+                  </p>
+                  <div class="disparos-msg-preview-btn" role="presentation">Mais informações</div>
+                </div>
+
+                <div class="disparos-note-slot" aria-hidden="true"></div>
+
+                <span class="disparos-api-section-label">Investimento</span>
+                <p class="disparos-api-price">De R$ 0,29 a R$ 0,32</p>
+
+                <button
+                  type="button"
+                  class="disparos-api-contratar"
+                  data-disparos-contratar="oficial"
+                >
+                  Contratar
+                </button>
+                <p class="disparos-api-min-creditos">
+                  Valor mínimo de créditos:
+                  <strong>R$ 300,00</strong>
+                </p>
+              </article>
+
+              <article class="disparos-api-card" data-disparos-api="alternativa">
+                <header class="disparos-api-card-header">
+                  <span class="disparos-api-card-title">
+                    <span>API Alternativa</span>
+                  </span>
+                </header>
+
+                <span class="disparos-api-section-label">Modelo de mensagem</span>
+                <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
+                  <div class="disparos-msg-preview-image" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                      <circle cx="8.5" cy="10" r="1.5"></circle>
+                      <path d="M21 16l-5-5-4 4-2-2-5 5"></path>
+                    </svg>
+                    <span>Imagem que você escolher</span>
+                  </div>
+                  <p class="disparos-msg-preview-text">
+                    Aqui vai o texto de venda do seu produto ou serviço e, a baixo, o link que a pessoa será direcionada:
+                  </p>
+                  <a
+                    class="disparos-msg-preview-link"
+                    href="#"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    onclick="return false;"
+                  >https://sitedecompra.com.br</a>
+                </div>
+
+                <div class="disparos-note-slot" aria-hidden="true"></div>
+
+                <span class="disparos-api-section-label">Investimento</span>
+                <p class="disparos-api-price">De R$ 0,17 a R$ 0,24</p>
+
+                <button
+                  type="button"
+                  class="disparos-api-contratar"
+                  data-disparos-contratar="alternativa"
+                >
+                  Contratar
+                </button>
+                <p class="disparos-api-min-creditos">
+                  Valor mínimo de créditos:
+                  <strong>R$ 300,00</strong>
+                </p>
+              </article>
+
+              <aside
+                class="disparos-choice-note"
+                aria-label="Diferença entre as APIs"
+                style="border-color:#e3d667;background:#6b6320;color:#e3d667"
+              >
+                Sim. Basicamente a diferença é o botão de ação.<br />
+                Na API oficial aparece um botão, já na API<br />
+                alternativa, a mensagem ganha um link de<br />
+                destino (link que definido por você).
+              </aside>
             </div>
           </div>
         </div>
@@ -5371,6 +5866,23 @@
 
         <div id="register-qrcode-preview" class="qrcode-preview"></div>
         <div id="register-connect-status" class="connect-status"></div>
+        <div id="register-probe-panel" class="register-probe-panel" aria-live="polite">
+          <div class="register-probe-title">
+            Teste de conexão:
+            <span class="register-probe-version" id="register-probe-version">DEPLOY-2026-06-09-probe-integracao-duplo-v1</span>
+          </div>
+          <div id="register-probe-api-row" class="register-probe-row pending">
+            <span class="register-probe-label">Teste de conexão API</span>
+            <span id="register-probe-api-result" class="register-probe-result">…</span>
+          </div>
+          <div id="register-probe-webhook-row" class="register-probe-row pending">
+            <span class="register-probe-label">Teste de mensagem recebida no destino</span>
+            <span id="register-probe-webhook-result" class="register-probe-result">…</span>
+          </div>
+          <div id="register-probe-alert" class="register-probe-alert">
+            Confira o número antes de prosseguir, possível restrição identificada
+          </div>
+        </div>
       </div>
     </div>
 
@@ -5458,6 +5970,72 @@
         <div class="confirm-actions">
           <button id="dis-campaign-rename-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
           <button id="dis-campaign-rename-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="disparos-billing-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal register-modal" role="dialog" aria-modal="true" style="max-width: 520px">
+        <div class="confirm-title" id="disparos-billing-title">Contratar créditos</div>
+        <p class="disparos-billing-hint" id="disparos-billing-hint">
+          Pagamento via PIX (Asaas). A cobrança será identificada como <strong>WABA</strong> no painel Asaas.
+        </p>
+        <div class="register-grid">
+          <label class="register-label" for="disparos-billing-name">Nome *</label>
+          <input id="disparos-billing-name" class="register-input" type="text" autocomplete="name" />
+
+          <label class="register-label" for="disparos-billing-email">E-mail *</label>
+          <input id="disparos-billing-email" class="register-input" type="email" autocomplete="email" />
+
+          <label class="register-label" for="disparos-billing-cpf">CPF ou CNPJ *</label>
+          <input id="disparos-billing-cpf" class="register-input" type="text" autocomplete="off" />
+
+          <label class="register-label" for="disparos-billing-whatsapp">WhatsApp *</label>
+          <input
+            id="disparos-billing-whatsapp"
+            class="register-input"
+            type="tel"
+            placeholder="(11) 99999-9999"
+            autocomplete="tel"
+          />
+
+          <label class="register-label" for="disparos-billing-value">Valor dos créditos (PIX)</label>
+          <input id="disparos-billing-value" class="register-input" type="text" readonly />
+        </div>
+        <div class="register-actions">
+          <button id="disparos-billing-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="disparos-billing-submit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+            Gerar PIX
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="disparos-pix-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal register-modal" role="dialog" aria-modal="true" style="max-width: 520px">
+        <div class="confirm-title">Pague com PIX</div>
+        <p class="disparos-billing-hint">
+          Escaneie o QR Code ou copie o código. Confirmamos automaticamente após o pagamento.
+        </p>
+        <div class="disparos-pix-qr" id="disparos-pix-qr-wrap" hidden>
+          <img id="disparos-pix-qr-image" alt="QR Code PIX" />
+        </div>
+        <label class="register-label" for="disparos-pix-copy">PIX copia e cola</label>
+        <textarea id="disparos-pix-copy" class="register-input disparos-pix-copy" readonly></textarea>
+        <div class="register-actions">
+          <button id="disparos-pix-copy-btn" class="instance-action-btn" type="button">Copiar código</button>
+          <a
+            id="disparos-pix-invoice-link"
+            class="instance-action-btn btn-qrcode enabled"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            hidden
+          >Abrir fatura Asaas</a>
+        </div>
+        <div class="disparos-pix-status" id="disparos-pix-status">Aguardando pagamento…</div>
+        <div class="register-actions" style="margin-top: 8px">
+          <button id="disparos-pix-close-btn" class="instance-action-btn" type="button">Fechar</button>
         </div>
       </div>
     </div>
@@ -5643,12 +6221,267 @@
         }
         applyIntegrationEnvironment(saved);
       }
+
+      function positionDisparosChoiceNote() {
+        const note = document.querySelector(".disparos-choice-note");
+        const grid = document.querySelector(".disparos-choice-grid");
+        const card = document.querySelector('.disparos-api-card[data-disparos-api="oficial"]');
+        if (!note || !grid || !card) return;
+        if (window.matchMedia("(max-width: 700px)").matches) {
+          note.style.top = "";
+          return;
+        }
+        const slot = card.querySelector(".disparos-note-slot");
+        if (!slot) return;
+        const gridRect = grid.getBoundingClientRect();
+        const slotRect = slot.getBoundingClientRect();
+        const midY = (slotRect.top + slotRect.bottom) / 2 - gridRect.top;
+        note.style.top = `${midY}px`;
+      }
+
+      let disparosBillingConfigCache = null;
+      let disparosBillingPollTimer = null;
+      let disparosBillingCurrentOrderId = "";
+      let disparosBillingSelectedKind = "oficial";
+
+      function openDisparosOverlay(overlayId) {
+        const el = document.getElementById(overlayId);
+        if (!el) return;
+        el.classList.add("open");
+        el.setAttribute("aria-hidden", "false");
+      }
+
+      function closeDisparosOverlay(overlayId) {
+        const el = document.getElementById(overlayId);
+        if (!el) return;
+        el.classList.remove("open");
+        el.setAttribute("aria-hidden", "true");
+      }
+
+      function formatBrlFromCents(cents) {
+        const value = Number(cents || 0) / 100;
+        return `R$ ${value.toFixed(2).replace(".", ",")}`;
+      }
+
+      async function loadDisparosBillingConfig() {
+        if (disparosBillingConfigCache) return disparosBillingConfigCache;
+        const response = await fetch("/billing/disparos/config");
+        if (!response.ok) {
+          throw new Error("Não foi possível carregar a configuração de pagamento.");
+        }
+        disparosBillingConfigCache = await response.json();
+        return disparosBillingConfigCache;
+      }
+
+      function stopDisparosBillingPoll() {
+        if (disparosBillingPollTimer) {
+          clearInterval(disparosBillingPollTimer);
+          disparosBillingPollTimer = null;
+        }
+      }
+
+      function startDisparosBillingPoll(orderId) {
+        stopDisparosBillingPoll();
+        disparosBillingCurrentOrderId = orderId;
+        disparosBillingPollTimer = setInterval(async () => {
+          try {
+            const response = await fetch(`/billing/disparos/orders/${encodeURIComponent(orderId)}`);
+            if (!response.ok) return;
+            const order = await response.json();
+            const statusEl = document.getElementById("disparos-pix-status");
+            if (order.status === "paid") {
+              stopDisparosBillingPoll();
+              if (statusEl) {
+                statusEl.textContent = "Pagamento confirmado! Seus créditos foram liberados.";
+              }
+              showToast("Pagamento PIX confirmado. Contratação concluída.", "success", 5200);
+              try {
+                localStorage.setItem("waba.disparos.paid-order", order.id);
+              } catch {
+                /* ignore */
+              }
+            } else if (statusEl) {
+              statusEl.textContent = "Aguardando pagamento…";
+            }
+          } catch {
+            /* ignore polling errors */
+          }
+        }, 5000);
+      }
+
+      function showDisparosPixCheckout(order) {
+        const qrWrap = document.getElementById("disparos-pix-qr-wrap");
+        const qrImage = document.getElementById("disparos-pix-qr-image");
+        const copyField = document.getElementById("disparos-pix-copy");
+        const invoiceLink = document.getElementById("disparos-pix-invoice-link");
+        const statusEl = document.getElementById("disparos-pix-status");
+
+        if (copyField) copyField.value = String(order.pixCopyPaste || "");
+        if (qrImage && order.pixQrCodeBase64) {
+          qrImage.src = `data:image/png;base64,${order.pixQrCodeBase64}`;
+          if (qrWrap) qrWrap.hidden = false;
+        } else if (qrWrap) {
+          qrWrap.hidden = true;
+        }
+
+        if (invoiceLink) {
+          const url = String(order.paymentUrl || "").trim();
+          if (url) {
+            invoiceLink.href = url;
+            invoiceLink.hidden = false;
+          } else {
+            invoiceLink.hidden = true;
+          }
+        }
+
+        if (statusEl) statusEl.textContent = "Aguardando pagamento…";
+        closeDisparosOverlay("disparos-billing-overlay");
+        openDisparosOverlay("disparos-pix-overlay");
+        startDisparosBillingPoll(order.id);
+      }
+
+      async function openDisparosBillingModal(apiKind) {
+        const label = apiKind === "oficial" ? "API Oficial" : "API Alternativa";
+        disparosBillingSelectedKind = apiKind;
+
+        try {
+          const config = await loadDisparosBillingConfig();
+          if (!config.paymentConfigured) {
+            showToast("Pagamentos PIX ainda não configurados no servidor.", "error", 4800);
+            return;
+          }
+
+          const title = document.getElementById("disparos-billing-title");
+          const valueInput = document.getElementById("disparos-billing-value");
+          if (title) title.textContent = `Contratar · ${label}`;
+          if (valueInput) valueInput.value = formatBrlFromCents(config.minCreditCents);
+
+          openDisparosOverlay("disparos-billing-overlay");
+        } catch (error) {
+          showToast(error?.message || "Erro ao abrir contratação.", "error", 4800);
+        }
+      }
+
+      async function submitDisparosBillingCheckout() {
+        const submitBtn = document.getElementById("disparos-billing-submit-btn");
+        const name = String(document.getElementById("disparos-billing-name")?.value || "").trim();
+        const ownerEmail = String(document.getElementById("disparos-billing-email")?.value || "").trim();
+        const cpfCnpj = String(document.getElementById("disparos-billing-cpf")?.value || "").trim();
+        const whatsapp = String(document.getElementById("disparos-billing-whatsapp")?.value || "").trim();
+
+        if (!name || !ownerEmail || !cpfCnpj || !whatsapp) {
+          showToast("Preencha todos os campos obrigatórios.", "error", 4200);
+          return;
+        }
+
+        if (submitBtn) submitBtn.disabled = true;
+        try {
+          const config = await loadDisparosBillingConfig();
+          const response = await fetch("/billing/disparos/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              apiKind: disparosBillingSelectedKind,
+              customerName: name,
+              ownerEmail,
+              cpfCnpj,
+              whatsapp,
+              valueCents: config.minCreditCents,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível gerar o PIX.");
+          }
+          showDisparosPixCheckout(payload);
+        } catch (error) {
+          showToast(error?.message || "Erro ao gerar PIX.", "error", 4800);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      }
+
+      function initDisparosBillingUi() {
+        document
+          .getElementById("disparos-billing-cancel-btn")
+          ?.addEventListener("click", () => closeDisparosOverlay("disparos-billing-overlay"));
+        document
+          .getElementById("disparos-billing-submit-btn")
+          ?.addEventListener("click", () => void submitDisparosBillingCheckout());
+        document.getElementById("disparos-pix-close-btn")?.addEventListener("click", () => {
+          stopDisparosBillingPoll();
+          closeDisparosOverlay("disparos-pix-overlay");
+        });
+        document.getElementById("disparos-pix-copy-btn")?.addEventListener("click", async () => {
+          const copyField = document.getElementById("disparos-pix-copy");
+          const code = String(copyField?.value || "").trim();
+          if (!code) {
+            showToast("Código PIX indisponível.", "error", 3200);
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(code);
+            showToast("Código PIX copiado.", "success", 2800);
+          } catch {
+            copyField?.select();
+            showToast("Selecione e copie o código manualmente.", "info", 3200);
+          }
+        });
+      }
+
+      function initDisparosApiChoice() {
+        const cards = document.querySelectorAll(".disparos-api-card[data-disparos-api]");
+        if (!cards.length) return;
+
+        const storageKey = "waba.disparos.api-choice";
+        let saved = "";
+        try {
+          saved = localStorage.getItem(storageKey) || "";
+        } catch {
+          /* ignore */
+        }
+        if (saved) {
+          cards.forEach((card) => {
+            card.classList.toggle(
+              "is-selected",
+              card.getAttribute("data-disparos-api") === saved
+            );
+          });
+        }
+
+        document.querySelectorAll("[data-disparos-contratar]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const kind = btn.getAttribute("data-disparos-contratar") || "oficial";
+            const normalizedKind = kind === "alternativa" ? "alternativa" : "oficial";
+            cards.forEach((card) => {
+              card.classList.toggle(
+                "is-selected",
+                card.getAttribute("data-disparos-api") === normalizedKind
+              );
+            });
+            try {
+              localStorage.setItem(storageKey, normalizedKind);
+            } catch {
+              /* ignore */
+            }
+            void openDisparosBillingModal(normalizedKind);
+          });
+        });
+
+        positionDisparosChoiceNote();
+        if (!window.__disparosNoteResizeBound) {
+          window.__disparosNoteResizeBound = true;
+          window.addEventListener("resize", positionDisparosChoiceNote);
+        }
+      }
+
       let instancesSearchTerm = "";
       let instancesStatusFilter = "all";
       let deleteConfirmInstanceName = "";
       let registerModalDefaultName = "";
       let registerConnectPollTimer = null;
       let registerConnectPollStartedAt = 0;
+      let registerProbePollTimer = null;
       let aquecedorEnviosPollTimer = null;
       let aquecedorRuntimePollTimer = null;
       let aquecedorRuntimeVizTimer = null;
@@ -8716,6 +9549,7 @@
         } else if (nextTab === "disparos-lancamento") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
+          requestAnimationFrame(() => positionDisparosChoiceNote());
         } else if (nextTab === "aquecedor") {
           loadAquecedorConfig();
           loadAquecedorRuntimeStatus();
@@ -9790,7 +10624,171 @@
           clearInterval(registerConnectPollTimer);
           registerConnectPollTimer = null;
         }
+        if (registerProbePollTimer) {
+          clearInterval(registerProbePollTimer);
+          registerProbePollTimer = null;
+        }
         registerConnectPollStartedAt = 0;
+        resetRegisterProbePanel();
+      }
+
+      function resetRegisterProbePanel() {
+        const panel = document.getElementById("register-probe-panel");
+        const apiRow = document.getElementById("register-probe-api-row");
+        const webhookRow = document.getElementById("register-probe-webhook-row");
+        const apiResult = document.getElementById("register-probe-api-result");
+        const webhookResult = document.getElementById("register-probe-webhook-result");
+        const alertEl = document.getElementById("register-probe-alert");
+        if (panel) panel.classList.remove("open");
+        if (apiRow) apiRow.className = "register-probe-row pending";
+        if (webhookRow) webhookRow.className = "register-probe-row pending";
+        if (apiResult) apiResult.textContent = "…";
+        if (webhookResult) webhookResult.textContent = "…";
+        if (alertEl) alertEl.classList.remove("open");
+      }
+
+      function showRegisterProbePanel() {
+        const panel = document.getElementById("register-probe-panel");
+        if (panel) panel.classList.add("open");
+      }
+
+      function updateRegisterProbeRow(rowId, resultId, success) {
+        const row = document.getElementById(rowId);
+        const result = document.getElementById(resultId);
+        if (!row || !result) return;
+        if (success === null) {
+          row.className = "register-probe-row pending";
+          result.textContent = "…";
+          return;
+        }
+        row.className = `register-probe-row ${success ? "success" : "fail"}`;
+        result.textContent = success ? "Sucesso" : "Falha";
+      }
+
+      function applyRegisterProbeStatus(status) {
+        if (!status) return;
+        updateRegisterProbeRow(
+          "register-probe-api-row",
+          "register-probe-api-result",
+          status.apiTest?.success ?? null
+        );
+        updateRegisterProbeRow(
+          "register-probe-webhook-row",
+          "register-probe-webhook-result",
+          status.webhookTest?.success ?? null
+        );
+        const alertEl = document.getElementById("register-probe-alert");
+        if (alertEl) {
+          if (status.restrictionSuspected) alertEl.classList.add("open");
+          else alertEl.classList.remove("open");
+        }
+      }
+
+      async function startRegisterIntegrationProbe(instanceName) {
+        showRegisterProbePanel();
+        setRegisterConnectStatus("loading", "Teste de conexão em andamento…");
+        resetRegisterProbePanel();
+        showRegisterProbePanel();
+
+        if (registerProbePollTimer) {
+          clearInterval(registerProbePollTimer);
+          registerProbePollTimer = null;
+        }
+
+        let probeId = "";
+        try {
+          const response = await fetchWithTimeout(
+            `/instancias/${encodeURIComponent(instanceName)}/probe-integracao`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            },
+            30000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            updateRegisterProbeRow("register-probe-api-row", "register-probe-api-result", false);
+            updateRegisterProbeRow(
+              "register-probe-webhook-row",
+              "register-probe-webhook-result",
+              false
+            );
+            const alertEl = document.getElementById("register-probe-alert");
+            if (alertEl) alertEl.classList.add("open");
+            setRegisterConnectStatus(
+              "loading",
+              String(data?.error || "Não foi possível iniciar o teste de conexão.")
+            );
+            return;
+          }
+          probeId = String(data?.probeId || "").trim();
+          applyRegisterProbeStatus(data);
+          if (data?.finished) {
+            if (data?.restrictionSuspected) {
+              setRegisterConnectStatus(
+                "loading",
+                "Integração concluída com alerta de possível restrição."
+              );
+              return;
+            }
+            setRegisterConnectStatus("success", "Dispositivo integrado e testado com sucesso.");
+            await carregar();
+            setTimeout(() => closeRegisterModal(), 1800);
+            return;
+          }
+        } catch {
+          updateRegisterProbeRow("register-probe-api-row", "register-probe-api-result", false);
+          updateRegisterProbeRow(
+            "register-probe-webhook-row",
+            "register-probe-webhook-result",
+            false
+          );
+          const alertEl = document.getElementById("register-probe-alert");
+          if (alertEl) alertEl.classList.add("open");
+          setRegisterConnectStatus("loading", "Erro ao iniciar teste de conexão.");
+          return;
+        }
+
+        if (!probeId) return;
+
+        const probeStartedAt = Date.now();
+        registerProbePollTimer = setInterval(async () => {
+          try {
+            if (Date.now() - probeStartedAt > 120000) {
+              clearInterval(registerProbePollTimer);
+              registerProbePollTimer = null;
+              const alertEl = document.getElementById("register-probe-alert");
+              if (alertEl) alertEl.classList.add("open");
+              setRegisterConnectStatus("loading", "Teste de conexão expirou. Verifique o número.");
+              return;
+            }
+            const pollRes = await fetchWithTimeout(
+              `/instancias/probe-integracao/${encodeURIComponent(probeId)}`,
+              {},
+              12000
+            );
+            if (!pollRes.ok) return;
+            const status = await pollRes.json().catch(() => null);
+            applyRegisterProbeStatus(status);
+            if (!status?.finished) return;
+            clearInterval(registerProbePollTimer);
+            registerProbePollTimer = null;
+            if (status.restrictionSuspected) {
+              setRegisterConnectStatus(
+                "loading",
+                "Integração concluída com alerta de possível restrição."
+              );
+              await carregar();
+              return;
+            }
+            setRegisterConnectStatus("success", "Dispositivo integrado e testado com sucesso.");
+            await carregar();
+            setTimeout(() => closeRegisterModal(), 1800);
+          } catch {
+            // mantém polling
+          }
+        }, 2000);
       }
 
       function openRenameInstanceModal(instanceName) {
@@ -10107,12 +11105,7 @@
             if (status.includes("open")) {
               clearInterval(registerConnectPollTimer);
               registerConnectPollTimer = null;
-              setRegisterConnectStatus(
-                "success",
-                "Dispositivo integrado com sucesso."
-              );
-              await carregar();
-              setTimeout(() => closeRegisterModal(), 1500);
+              await startRegisterIntegrationProbe(instanceName);
             }
           } catch {
             // silencioso para não poluir UX durante polling
@@ -13525,6 +14518,8 @@
       }
 
       initUiProfile();
+      initDisparosBillingUi();
+      initDisparosApiChoice();
 
       // inicial: modo automático com atualização a cada 15s
       setRefreshMode(false);
