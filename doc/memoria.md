@@ -13,11 +13,161 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Ãšltima atualizaÃ§Ã£o
+2026-06-08
+
+**Disparos — nudge saldo zerado:** quando `remainingShipments === 0`, card "Ainda disponíveis" pulsa (laranja), banner no topo + card no resumo com CTA "Adicionar créditos" → `disparos-lancamento`; wizard "Nova campanha" bloqueado. Ver `doc/LOG-2026-06-08__disparos-saldo-zero-nudge.md`.
+
+---
+
+2026-06-08
+
+**Operacional Campanhas — fluxo completo:** copiar textos no modal; botão Campanha Iniciada (`generated`→`in_progress`); botão Relatório com 5 métricas (Total Leads, Enviados, Entregues, Lidos, Falhados); salvar finaliza campanha. Ver `doc/LOG-2026-06-08__operacional-campanhas-relatorio.md`.
+
+---
+
+2026-06-08
+
+**Tela operacional Campanhas (admin):** menu `admin-campanhas` para equipe operacional; lista campanhas de todos os assinantes (ID, plano API, nome, envios); modal com detalhes + download imagem/planilha truncada; planilha limitada a `plannedSendCount` no intake. Ver `doc/LOG-2026-06-08__operacional-campanhas-fila.md`.
+
+---
+
+2026-06-11
+
+**Campanha linhas × envios:** contagem de linhas na importação; envios limitados ao saldo contratado; exibição no card de Campanhas. Ver `doc/LOG-2026-06-11__campanha-linhas-envios-limite.md`.
+
+---
+
+2026-06-11
+
+**Permissões de menu imediatas:** `campanhas` acoplado a `disparos-lancamento`; menu Campanhas respeita permissão + créditos; sessão revalidada a cada 45s/foco. Ver `doc/LOG-2026-06-11__menu-permissoes-imediatas.md`.
+
+---
+
+2026-06-11
+
+**Fix Salvar alterações (editar usuário):** servidor dev precisava reinício para carregar `PATCH /admin/users/:id`; modal com scroll + botão submit no form; `dist` sincronizado. Ver `doc/LOG-2026-06-11__fix-admin-editar-salvar.md`.
+
+---
+
+2026-06-11
+
+**Editar usuário completo:** modal com nome, e-mail, senha (opcional) e menus; `PATCH /admin/users/:id`. Ver `doc/LOG-2026-06-11__admin-editar-usuario-completo.md`.
+
+---
+
+2026-06-11
+
+**Seções renomeadas:** API não oficial → Aquecedor; Disparos/API Meta → Disparos. Ver `doc/LOG-2026-06-11__renomear-secoes-aquecedor-disparos.md`.
+
+---
+
+2026-06-11
+
+**Admin Usuários Editar/Remover:** botões na coluna Ações; `DELETE /admin/users/:id`. Ver `doc/LOG-2026-06-11__admin-usuarios-editar-remover.md`.
+
+---
+
+2026-06-11
+
+**Fix card Admin no canto:** `</div>` extra em `#tab-disparos` fechava `<main>` cedo; painéis admin saíam para o `body` e iam para a direita. Ver `doc/LOG-2026-06-11__fix-html-main-fechado-cedo.md`.
+
+---
+
+2026-06-11
+
+**Permissões dinâmicas de menus:** registry `waba-menu-registry.ts`, checkboxes ao criar/editar usuário; menus novos desabilitados para usuários antigos. Ver `doc/LOG-2026-06-11__menus-permissoes-dinamicas.md`.
+
+---
+
+2026-06-11
+
+**Admin Usuários:** equipe Master/Operacional/Suporte em `waba-system-users.json`; menu + CRUD master. Ver `doc/LOG-2026-06-11__admin-usuarios-sistema.md`.
+
+---
+
+2026-06-08
+
+**Admin Assinantes:** listagem master com créditos, disparos, aguardando e finalizados. API `GET /admin/subscribers`. Ver `doc/LOG-2026-06-08__admin-assinantes-lista.md`.
+
+---
+
+2026-06-08
+
+**Master walkup@walkuptec.com.br:** local v02 já em `.env.v02`; login testado com `role: master`. Produção = vars no Easypanel. Ver `doc/LOG-2026-06-08__master-walkup-auth.md`.
+
+---
+
+2026-06-08
+
+**Fix Gerar Campanha (wizard):** feedback inline quando falta planilha/dados; init do wizard no boot; validação completa no envio. Ver `doc/LOG-2026-06-08__fix-wizard-gerar-campanha.md`.
+
+---
+
+2026-06-11
+
+**Menu Campanhas (1º acesso):** liberado após créditos pagos; pulse + badge Novo até primeiro clique. Ver `doc/LOG-2026-06-11__menu-campanhas-efeito-primeiro-acesso.md`.
+
+---
+
+2026-06-11
+
+**Painel créditos Disparos:** contratados / consumidos / saldo na aba Disparos após PIX pago. API `GET /billing/disparos/credits`. Ver `doc/LOG-2026-06-11__disparos-painel-creditos-saldo.md`.
+
+---
+
+2026-06-08
+
+**Overlay Aquecedor mais transparente:** fundo visível com blur 8px, opacity 0.62; overlay `rgba(5,5,5,0.2)` + blur 6px. Ver `doc/LOG-2026-06-08__aquecedor-gate-mais-transparente.md`.
+
+---
+
+2026-06-10
+
+**Assinantes + Aquecedor 30 dias:** cadastro PV/API, entitlement pós-PIX, bloqueio Aquecedor. Ver `doc/LOG-2026-06-10__assinantes-cadastro-aquecedor-30-dias.md`.
+
+---
+
+2026-06-10
+
+**Login WABA — UX:** ícone olho (mostrar/ocultar senha) + link **Esqueci minha senha** (modal com instruções de reset via `WABA_ADMIN_PASSWORD`).
+
+---
+
+**Login master WABA:** tela de acesso + sessão cookie; credenciais em `WABA_ADMIN_EMAIL` / `WABA_ADMIN_PASSWORD` (`.env.v02` local). Ver `doc/LOG-2026-06-10__login-master-waba-auth.md`.
+
+---
+
+2026-06-10
+
+**Menu Admin:** seção **Admin** com Dashboard, Assinantes e Financeiro (painéis placeholder). Ver `doc/LOG-2026-06-10__menu-admin-dashboard-assinantes-financeiro.md`.
+
+---
+
+2026-06-10
+
+**Fix modal PIX fecha ao Gerar PIX:** Asaas mínimo R$ 5,00; pacote teste ajustado para **100 envios · R$ 5,00**; loading no formulário até sucesso. Ver `doc/LOG-2026-06-10__fix-pix-modal-fecha-asaas-minimo.md`.
+
+---
+
+2026-06-08
+
+**Pacote teste Disparos PIX (100 envios · R$ 5,00 — antes R$ 1,00 inválido no Asaas):** tier `testOnly` no topo de `DISPAROS_PRICING_TIERS` (oficial + alternativa) em `index.html`; backend aceita `valueCents=100` + `shipmentCount=100`. Ver `doc/LOG-2026-06-08__pacote-teste-100-envios-1-real.md`.
+
+Palavras-chave: `disparos-pacote-teste-1-real`, `DISPAROS_TEST_PACKAGE_CENTS`
+
+---
+
 2026-06-09
 
-**Probe pós-integração (findMessages + webhook):** após QR `open`, modal roda `POST /instancias/:name/probe-integracao` + polling; UI mostra Teste API e Teste webhook; falha → alerta vermelho restrição + `useAquecedor:false`. Env `WABA_PUBLIC_BASE_URL`. Ver `doc/LOG-2026-06-09__probe-integracao-duplo-findmessages-webhook.md`.
+**WABA 404 pós-deploy probe (10/06) — RESOLVIDO:** Traefik sem router `waba.draxsistemas.com.br`; restore via `restore-waba-traefik-router-vps.sh` (curl GitHub) → **200**. Ver `doc/LOG-2026-06-10__waba-404-traefik-pos-deploy-probe.md`.
 
-Palavras-chave: `probe-integracao`, `findMessages`, `webhooks/evolution`, `WABA_PUBLIC_BASE_URL`
+Palavras-chave: `waba-404-traefik-2026-06-10`, `restore-waba-traefik`
+
+---
+
+**Probe pós-integração — VALIDADO em produção (09/06):** deploy `cbcf674` / marker `DEPLOY-2026-06-09-probe-integracao-duplo-v1`; `WABA_PUBLIC_BASE_URL` OK; teste retornou conforme esperado (API + webhook no modal). Ver `doc/LOG-2026-06-09__probe-integracao-duplo-findmessages-webhook.md`.
+
+Palavras-chave: `probe-integracao-validado`, `DEPLOY-2026-06-09-probe-integracao-duplo-v1`, `cbcf674`
 
 ---
 
