@@ -13,6 +13,12 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-19
+
+**WABA — aquecedor fila vazia (produção):** corrige `ensureAquecedorPendingMessage` — promove PENDENTE preso, loga erro de insert, semente no ciclo e reabastece após envio. Marker `DEPLOY-2026-06-19-aquecedor-fila-ensure-fix`. Ver `doc/LOG-2026-06-19__aquecedor-fila-ensure-fix.md`.
+
+**WABA — V01 local login:** `.env.v01` recebeu `WABA_ADMIN_EMAIL`, `WABA_ADMIN_PASSWORD`, `WABA_SESSION_SECRET`, `WABA_SESSION_TTL_HOURS` (mesmas credenciais do V02). Servidor reiniciado (`npm run dev:v01`). `GET /version-01/auth/session` → `authConfigured: true`; login master OK. Ver `doc/LOG-2026-06-19__waba-v01-login-env-fix.md`.
+
 2026-06-08
 
 **WABA — Aquecedor Salvar configurações:** um clique grava; auto-refresh pausado na aba. Marker `DEPLOY-2026-06-08-waba-aquecedor-salvar-config-fix`. Ver `doc/LOG-2026-06-08__waba-aquecedor-salvar-config-fix.md`.

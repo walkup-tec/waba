@@ -1408,61 +1408,99 @@ async function fetchProcessableAquecedorPending(supabase: NonNullable<ReturnType
   return data ?? null;
 }
 
+type EnsureAquecedorPendingResult = {
+  ok: boolean;
+  reason?: string;
+  pendingId?: string | number;
+};
+
 async function ensureAquecedorPendingMessage(
   pair?: AquecedorPairContext | null,
-): Promise<void> {
+): Promise<EnsureAquecedorPendingResult> {
   const supabase = getSupabaseClient();
-  if (!supabase) return;
+  if (!supabase) {
+    return { ok: false, reason: "Supabase não configurado ao preparar fila do aquecedor." };
+  }
   const now = new Date().toISOString();
+  const nowMs = Date.now();
 
   const { count: processableCount, error: processableError } = (await (supabase
     .from("aquecedor" as any)
     .select("id", { count: "exact", head: true })
     .eq("status", "PENDENTE")
-    .lte("scheduled_at", now))) as { count: number | null; error: unknown };
-  if (processableError) return;
-  if (typeof processableCount === "number" && processableCount > 0) return;
-
-  const { data: futureRow, error: futureError } = (await (supabase
-    .from("aquecedor" as any)
-    .select("id, mensagem")
-    .eq("status", "PENDENTE")
-    .gt("scheduled_at", now)
-    .order("scheduled_at", { ascending: true })
-    .limit(1)
-    .maybeSingle())) as any;
-  if (!futureError && futureRow?.id) {
-    if (pair) {
-      const exclude = await buildAquecedorExcludeSet(supabase, pair);
-      const current = String(futureRow.mensagem || "").trim();
-      if (!current || isAquecedorSystemMessage(current) || exclude.has(current)) {
-        const mensagem = await pickAquecedorMessageText(supabase, exclude);
-        await (supabase.from("aquecedor" as any) as any)
-          .update({ mensagem, scheduled_at: now })
-          .eq("id", futureRow.id);
-        return;
-      }
-    }
-    await (supabase.from("aquecedor" as any) as any)
-      .update({ scheduled_at: now })
-      .eq("id", futureRow.id);
-    return;
+    .lte("scheduled_at", now))) as { count: number | null; error: { message?: string } | null };
+  if (processableError) {
+    return {
+      ok: false,
+      reason: `Erro ao consultar fila processável: ${processableError.message || "desconhecido"}.`,
+    };
+  }
+  if (typeof processableCount === "number" && processableCount > 0) {
+    return { ok: true };
   }
 
-  const { count, error } = (await (supabase
+  const { data: oldestPending, error: oldestError } = (await (supabase
     .from("aquecedor" as any)
-    .select("id", { count: "exact", head: true })
-    .eq("status", "PENDENTE"))) as { count: number | null; error: unknown };
-  if (error) return;
-  if (typeof count === "number" && count > 0) return;
+    .select("id, mensagem, scheduled_at")
+    .eq("status", "PENDENTE")
+    .order("scheduled_at", { ascending: true, nullsFirst: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle())) as any;
+  if (oldestError) {
+    return {
+      ok: false,
+      reason: `Erro ao consultar fila pendente: ${oldestError.message || "desconhecido"}.`,
+    };
+  }
+
+  if (oldestPending?.id) {
+    const schedMs = oldestPending.scheduled_at
+      ? new Date(String(oldestPending.scheduled_at)).getTime()
+      : Number.NaN;
+    const processableNow = Number.isFinite(schedMs) && schedMs <= nowMs;
+    let mensagem: string | undefined;
+    if (pair) {
+      const exclude = await buildAquecedorExcludeSet(supabase, pair);
+      const current = String(oldestPending.mensagem || "").trim();
+      if (!current || isAquecedorSystemMessage(current) || exclude.has(current)) {
+        mensagem = await pickAquecedorMessageText(supabase, exclude);
+      }
+    }
+    if (!processableNow || mensagem) {
+      const payload: Record<string, unknown> = { scheduled_at: now };
+      if (mensagem) payload.mensagem = mensagem;
+      const { error: promoteError } = await (supabase.from("aquecedor" as any) as any)
+        .update(payload)
+        .eq("id", oldestPending.id);
+      if (promoteError) {
+        return {
+          ok: false,
+          reason: `Erro ao liberar mensagem na fila: ${promoteError.message || "desconhecido"}.`,
+        };
+      }
+    }
+    return { ok: true, pendingId: oldestPending.id };
+  }
 
   const exclude = pair ? await buildAquecedorExcludeSet(supabase, pair) : undefined;
   const mensagem = await pickAquecedorMessageText(supabase, exclude);
-  await (supabase.from("aquecedor" as any) as any).insert({
-    mensagem,
-    status: "PENDENTE",
-    scheduled_at: now,
-  });
+  const { data: inserted, error: insertError } = await (supabase.from("aquecedor" as any) as any)
+    .insert({
+      mensagem,
+      status: "PENDENTE",
+      scheduled_at: now,
+    })
+    .select("id")
+    .single();
+  if (insertError) {
+    console.error("[Aquecedor] ensure insert falhou:", insertError);
+    return {
+      ok: false,
+      reason: `Erro ao inserir mensagem na fila aquecedor: ${insertError.message || "desconhecido"}.`,
+    };
+  }
+  return { ok: true, pendingId: inserted?.id };
 }
 /** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
 const DISPAROS_CHECKPOINT_MS = Math.max(
@@ -2604,6 +2642,8 @@ async function runAquecedorCycle(forceTest = false) {
       return;
     }
 
+    await ensureAquecedorPendingMessage();
+
     const { data: cicloData } = await (supabase
       .from("controle_ciclo" as any)
       .select("id, ciclo_global")
@@ -2635,13 +2675,13 @@ async function runAquecedorCycle(forceTest = false) {
     const proximo = picked.index + 1;
     const pairContext = buildAquecedorPairContext(chosen, connected);
 
-    let pendingData = await fetchProcessableAquecedorPending(supabase);
+    const ensured = await ensureAquecedorPendingMessage(pairContext);
+    const pendingData = await fetchProcessableAquecedorPending(supabase);
     if (!pendingData?.id) {
-      await ensureAquecedorPendingMessage(pairContext);
-      pendingData = await fetchProcessableAquecedorPending(supabase);
-    }
-    if (!pendingData?.id) {
-      aquecedorRuntime.lastResult = "Sem mensagem pendente para envio.";
+      aquecedorRuntime.lastResult = ensured.ok
+        ? "Sem mensagem pendente para envio (fila vazia após preparação)."
+        : ensured.reason ||
+          "Falha ao preparar mensagem pendente na fila do aquecedor.";
       return;
     }
 
@@ -2742,11 +2782,9 @@ async function runAquecedorCycle(forceTest = false) {
       combinations,
       proximo,
     );
-    if (nextPick) {
-      await ensureAquecedorPendingMessage(
-        buildAquecedorPairContext(nextPick.chosen, connected),
-      );
-    }
+    await ensureAquecedorPendingMessage(
+      nextPick ? buildAquecedorPairContext(nextPick.chosen, connected) : null,
+    );
 
     await (supabase.from("controle_ciclo" as any) as any).upsert(
       { id: 1, ciclo_global: proximo },
@@ -5439,13 +5477,18 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
       diag.evo.connectedCount = connected.length;
       diag.evo.instances = connected.map((c) => c.instancia);
       if (connected.length >= 2) {
-        const combinations: Array<{ origem: string; destino: string }> = [];
+        const combinations: Array<{
+          origem: string;
+          destino: string;
+          numero_whatsapp: string;
+        }> = [];
         for (const origem of connected) {
           for (const destino of connected) {
             if (origem.instancia === destino.instancia) continue;
             combinations.push({
               origem: origem.instancia,
               destino: destino.instancia,
+              numero_whatsapp: destino.numero,
             });
           }
         }
@@ -5473,8 +5516,26 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
                 : 0;
             diag.cicloGlobal = cicloGlobal;
             if (combinations.length) {
-              const chosen = combinations[cicloGlobal % combinations.length];
-              diag.proximaCombinacao = chosen;
+              const comboRows = combinations.map((combo) => ({
+                instancia_origem: combo.origem,
+                instancia_destino: combo.destino,
+                numero_whatsapp: combo.numero_whatsapp,
+              }));
+              const picked = await pickAquecedorCombinationAsync(
+                supabase,
+                connected,
+                comboRows,
+                cicloGlobal,
+              );
+              if (picked) {
+                diag.proximaCombinacao = {
+                  origem: picked.chosen.instancia_origem,
+                  destino: picked.chosen.instancia_destino,
+                };
+              } else {
+                diag.proximaCombinacao = null;
+                diag.turnoBloqueado = true;
+              }
             }
           } catch (supErr) {
             diag.supabase.mensagem = (supErr as Error)?.message || "Erro ao consultar Supabase.";
