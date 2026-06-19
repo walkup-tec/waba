@@ -216,6 +216,9 @@ export const registerWabaAdminRoutes = (app: Express) => {
         role: String(body.role ?? ""),
         menuPermissions: body.menuPermissions,
         operacionalDispatchesApi: body.operacionalDispatchesApi,
+        masterUnlimitedCredits: body.masterUnlimitedCredits,
+        masterSplitSuppliers: body.masterSplitSuppliers,
+        masterSplitProfits: body.masterSplitProfits,
       });
       return res.status(201).json({ ok: true, user });
     } catch (error) {
@@ -235,6 +238,9 @@ export const registerWabaAdminRoutes = (app: Express) => {
         password: body.password !== undefined ? String(body.password) : undefined,
         menuPermissions: body.menuPermissions,
         operacionalDispatchesApi: body.operacionalDispatchesApi,
+        masterUnlimitedCredits: body.masterUnlimitedCredits,
+        masterSplitSuppliers: body.masterSplitSuppliers,
+        masterSplitProfits: body.masterSplitProfits,
       });
       return res.status(200).json({ ok: true, user });
     } catch (error) {

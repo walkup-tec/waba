@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-policy.service";
 import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
@@ -10,7 +11,10 @@ import {
   type SplitParticipant,
   type SplitSupplier,
 } from "./waba-financeiro-split.repository";
-import { WabaFinanceiroSplitSettlementRepository } from "./waba-financeiro-split-settlement.repository";
+import {
+  WabaFinanceiroSplitSettlementRepository,
+  deriveSettlementPayoutStatus,
+} from "./waba-financeiro-split-settlement.repository";
 import type {
   FinanceiroSplitSettlement,
   SplitSettlementLine,
@@ -132,6 +136,7 @@ export class WabaFinanceiroSplitService {
     private readonly settlementRepository = new WabaFinanceiroSplitSettlementRepository(),
     private readonly payoutService = new WabaFinanceiroSplitPayoutService(),
     private readonly orderRepository = new WabaBillingOrderRepository(),
+    private readonly masterPolicyService = new WabaMasterDisparosPolicyService(),
   ) {}
 
   getConfig(): FinanceiroSplitConfig {
@@ -303,15 +308,21 @@ export class WabaFinanceiroSplitService {
 
     const config = this.configRepository.get();
     const apiKind = resolveOrderApiKind(order);
+    const masterPolicy = this.masterPolicyService.resolveForEmail(order.ownerEmail);
+    const paySuppliers = !masterPolicy || masterPolicy.splitSuppliers;
+    const payProfits = !masterPolicy || masterPolicy.splitProfits;
     const supplier = this.resolveActiveSupplier(config, apiKind);
-    if (!supplier?.pixKey) {
+    if (paySuppliers && !supplier?.pixKey) {
       this.logSettlementSkip(order, `fornecedor ativo sem PIX para plano ${apiKind}`);
       return null;
     }
 
     const activeParticipants = config.participants.filter((item) => item.active);
     const purchasedShipmentCount = this.resolvePurchasedShipmentCount(order);
-    const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
+    const costPerShipmentCents = Math.max(
+      0,
+      Math.round(Number((paySuppliers ? supplier?.costPerShipmentCents : 0) ?? 0)),
+    );
     const paidValueCents = Math.max(0, Math.round(Number(order.valueCents ?? 0)));
     const breakdown = buildSplitCostBreakdown(
       paidValueCents,
@@ -319,8 +330,9 @@ export class WabaFinanceiroSplitService {
       costPerShipmentCents,
     );
     const { supplierCostCents, cetCents, totalCostCents, distributableCents } = breakdown;
+    const effectiveSupplierCostCents = paySuppliers ? supplierCostCents : 0;
 
-    if (distributableCents > 0) {
+    if (distributableCents > 0 && payProfits) {
       if (!activeParticipants.length) {
         this.logSettlementSkip(order, "lucro distribuível sem participantes ativos");
         return null;
@@ -350,20 +362,23 @@ export class WabaFinanceiroSplitService {
       });
     }
 
-    lines.push({
-      lineKind: "supplier",
-      participantId: supplier.id,
-      participantLabel: supplier.name,
-      participantEmail: "",
-      pixKey: supplier.pixKey,
-      sharePercent: 0,
-      amountCents: supplierCostCents,
-      shipmentCount: purchasedShipmentCount,
-      costPerShipmentCents,
-      payoutStatus: supplierCostCents > 0 ? "pending" : "skipped",
-    });
+    if (supplier) {
+      lines.push({
+        lineKind: "supplier",
+        participantId: supplier.id,
+        participantLabel: supplier.name,
+        participantEmail: "",
+        pixKey: paySuppliers ? supplier.pixKey : "",
+        sharePercent: 0,
+        amountCents: effectiveSupplierCostCents,
+        shipmentCount: purchasedShipmentCount,
+        costPerShipmentCents: paySuppliers ? costPerShipmentCents : 0,
+        payoutStatus:
+          paySuppliers && effectiveSupplierCostCents > 0 ? "pending" : "skipped",
+      });
+    }
 
-    if (distributableCents > 0 && activeParticipants.length) {
+    if (distributableCents > 0 && payProfits && activeParticipants.length) {
       const percents = activeParticipants.map((item) => item.sharePercent);
       const amounts = distributeCentsByPercents(distributableCents, percents);
       for (const [index, participant] of activeParticipants.entries()) {
@@ -389,15 +404,15 @@ export class WabaFinanceiroSplitService {
       paidValueCents,
       purchasedShipmentCount,
       costPerShipmentCents,
-      supplierCostCents,
+      supplierCostCents: effectiveSupplierCostCents,
       totalCostCents,
       grossProfitCents: distributableCents,
       cetCents,
       distributableCents,
-      supplierId: supplier.id,
-      supplierName: supplier.name,
+      supplierId: supplier?.id ?? "",
+      supplierName: supplier?.name ?? "",
       lines,
-      payoutStatus: "pending",
+      payoutStatus: deriveSettlementPayoutStatus(lines),
     });
   }
 

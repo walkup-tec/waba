@@ -13,6 +13,10 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-08
+
+**WABA — política master parametrizável (disparos + split):** Admin · Usuários → tipo Master exibe checkboxes Créditos ilimitados, Split Fornecedores/Lucros. Créditos/intake/split Asaas respeitam flags por usuário. Padrão master: ilimitado + fornecedores, lucros off. Marker `DEPLOY-2026-06-08-waba-master-disparos-policy`. Ver `doc/LOG-2026-06-08__waba-master-disparos-policy.md`.
+
 2026-06-18
 
 **WABA — aquecedor turno por número:** impede envios consecutivos da mesma origem no par (ex. drax→soma×3 sem soma→drax). Turno lê `aquecedor` ENVIADO por `instancia` + `numero_destino`. Marker `DEPLOY-2026-06-18-aquecedor-turno-por-numero`. Ver `doc/LOG-2026-06-18__aquecedor-turno-por-numero.md`.

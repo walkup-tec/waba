@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaFinanceiroSplitService = void 0;
 const node_crypto_1 = require("node:crypto");
+const waba_master_disparos_policy_service_1 = require("../users/waba-master-disparos-policy.service");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments");
@@ -88,11 +89,12 @@ const normalizeSupplier = (input) => {
     };
 };
 class WabaFinanceiroSplitService {
-    constructor(configRepository = new waba_financeiro_split_repository_1.WabaFinanceiroSplitRepository(), settlementRepository = new waba_financeiro_split_settlement_repository_1.WabaFinanceiroSplitSettlementRepository(), payoutService = new waba_financeiro_split_payout_service_1.WabaFinanceiroSplitPayoutService(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository()) {
+    constructor(configRepository = new waba_financeiro_split_repository_1.WabaFinanceiroSplitRepository(), settlementRepository = new waba_financeiro_split_settlement_repository_1.WabaFinanceiroSplitSettlementRepository(), payoutService = new waba_financeiro_split_payout_service_1.WabaFinanceiroSplitPayoutService(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService()) {
         this.configRepository = configRepository;
         this.settlementRepository = settlementRepository;
         this.payoutService = payoutService;
         this.orderRepository = orderRepository;
+        this.masterPolicyService = masterPolicyService;
     }
     getConfig() {
         return this.configRepository.get();
@@ -226,18 +228,22 @@ class WabaFinanceiroSplitService {
             return existing;
         const config = this.configRepository.get();
         const apiKind = (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order);
+        const masterPolicy = this.masterPolicyService.resolveForEmail(order.ownerEmail);
+        const paySuppliers = !masterPolicy || masterPolicy.splitSuppliers;
+        const payProfits = !masterPolicy || masterPolicy.splitProfits;
         const supplier = this.resolveActiveSupplier(config, apiKind);
-        if (!supplier?.pixKey) {
+        if (paySuppliers && !supplier?.pixKey) {
             this.logSettlementSkip(order, `fornecedor ativo sem PIX para plano ${apiKind}`);
             return null;
         }
         const activeParticipants = config.participants.filter((item) => item.active);
         const purchasedShipmentCount = this.resolvePurchasedShipmentCount(order);
-        const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
+        const costPerShipmentCents = Math.max(0, Math.round(Number((paySuppliers ? supplier?.costPerShipmentCents : 0) ?? 0)));
         const paidValueCents = Math.max(0, Math.round(Number(order.valueCents ?? 0)));
         const breakdown = buildSplitCostBreakdown(paidValueCents, purchasedShipmentCount, costPerShipmentCents);
         const { supplierCostCents, cetCents, totalCostCents, distributableCents } = breakdown;
-        if (distributableCents > 0) {
+        const effectiveSupplierCostCents = paySuppliers ? supplierCostCents : 0;
+        if (distributableCents > 0 && payProfits) {
             if (!activeParticipants.length) {
                 this.logSettlementSkip(order, "lucro distribuível sem participantes ativos");
                 return null;
@@ -261,19 +267,21 @@ class WabaFinanceiroSplitService {
                 payoutStatus: "skipped",
             });
         }
-        lines.push({
-            lineKind: "supplier",
-            participantId: supplier.id,
-            participantLabel: supplier.name,
-            participantEmail: "",
-            pixKey: supplier.pixKey,
-            sharePercent: 0,
-            amountCents: supplierCostCents,
-            shipmentCount: purchasedShipmentCount,
-            costPerShipmentCents,
-            payoutStatus: supplierCostCents > 0 ? "pending" : "skipped",
-        });
-        if (distributableCents > 0 && activeParticipants.length) {
+        if (supplier) {
+            lines.push({
+                lineKind: "supplier",
+                participantId: supplier.id,
+                participantLabel: supplier.name,
+                participantEmail: "",
+                pixKey: paySuppliers ? supplier.pixKey : "",
+                sharePercent: 0,
+                amountCents: effectiveSupplierCostCents,
+                shipmentCount: purchasedShipmentCount,
+                costPerShipmentCents: paySuppliers ? costPerShipmentCents : 0,
+                payoutStatus: paySuppliers && effectiveSupplierCostCents > 0 ? "pending" : "skipped",
+            });
+        }
+        if (distributableCents > 0 && payProfits && activeParticipants.length) {
             const percents = activeParticipants.map((item) => item.sharePercent);
             const amounts = distributeCentsByPercents(distributableCents, percents);
             for (const [index, participant] of activeParticipants.entries()) {
@@ -298,15 +306,15 @@ class WabaFinanceiroSplitService {
             paidValueCents,
             purchasedShipmentCount,
             costPerShipmentCents,
-            supplierCostCents,
+            supplierCostCents: effectiveSupplierCostCents,
             totalCostCents,
             grossProfitCents: distributableCents,
             cetCents,
             distributableCents,
-            supplierId: supplier.id,
-            supplierName: supplier.name,
+            supplierId: supplier?.id ?? "",
+            supplierName: supplier?.name ?? "",
             lines,
-            payoutStatus: "pending",
+            payoutStatus: (0, waba_financeiro_split_settlement_repository_1.deriveSettlementPayoutStatus)(lines),
         });
     }
     async settleAndPayoutPaidOrder(order) {

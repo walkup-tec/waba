@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.emptyDisparosCreditsByApi = exports.emptyDisparosApiCreditsBucket = exports.WabaDisparosCreditsService = void 0;
-const waba_auth_service_1 = require("../auth/waba-auth.service");
+const waba_master_disparos_policy_service_1 = require("../users/waba-master-disparos-policy.service");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
@@ -14,13 +14,15 @@ const waba_disparos_credit_usage_repository_1 = require("./waba-disparos-credit-
 const waba_disparos_order_shipments_1 = require("./waba-disparos-order-shipments");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const normalizeEmail = (value) => value.trim().toLowerCase();
+const UNLIMITED_CREDITS_REMAINING = 9999999;
 class WabaDisparosCreditsService {
-    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), usageRepository = new waba_disparos_credit_usage_repository_1.WabaDisparosCreditUsageRepository(), bonusService = new waba_disparos_bonus_service_1.WabaDisparosBonusService(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository()) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), usageRepository = new waba_disparos_credit_usage_repository_1.WabaDisparosCreditUsageRepository(), bonusService = new waba_disparos_bonus_service_1.WabaDisparosBonusService(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService()) {
         this.orderRepository = orderRepository;
         this.usageRepository = usageRepository;
         this.bonusService = bonusService;
         this.bonusSettlementService = bonusSettlementService;
         this.intakeRepository = intakeRepository;
+        this.masterPolicyService = masterPolicyService;
     }
     listPaidOrdersForEmail(email) {
         const normalized = normalizeEmail(email);
@@ -98,6 +100,7 @@ class WabaDisparosCreditsService {
     }
     getCreditsSummary(email) {
         const normalized = normalizeEmail(email);
+        const unlimitedCredits = this.masterPolicyService.hasUnlimitedCredits(normalized);
         this.ensureUsageMigrated(normalized);
         this.bonusSettlementService.settleAllUnsettledPaidOrdersForEmail(normalized);
         const paidOrders = this.listPaidOrdersForEmail(normalized);
@@ -105,13 +108,24 @@ class WabaDisparosCreditsService {
             oficial: this.buildApiBucket(normalized, "oficial", paidOrders),
             alternativa: this.buildApiBucket(normalized, "alternativa", paidOrders),
         };
+        if (unlimitedCredits) {
+            for (const kind of ["oficial", "alternativa"]) {
+                byApi[kind] = {
+                    ...byApi[kind],
+                    remainingShipments: UNLIMITED_CREDITS_REMAINING,
+                };
+            }
+        }
         const contractedShipments = byApi.oficial.contractedShipments + byApi.alternativa.contractedShipments;
         const consumedShipments = byApi.oficial.consumedShipments + byApi.alternativa.consumedShipments;
-        const remainingShipments = byApi.oficial.remainingShipments + byApi.alternativa.remainingShipments;
+        const remainingShipments = unlimitedCredits
+            ? UNLIMITED_CREDITS_REMAINING
+            : byApi.oficial.remainingShipments + byApi.alternativa.remainingShipments;
         const pendingBonusShipments = byApi.oficial.pendingBonusShipments + byApi.alternativa.pendingBonusShipments;
         const contractedValueCents = paidOrders.reduce((sum, order) => sum + Math.round(Number(order.valueCents ?? 0)), 0);
         return {
-            hasCredits: contractedShipments > 0,
+            hasCredits: unlimitedCredits || contractedShipments > 0,
+            unlimitedCredits,
             email: normalized,
             activeApiKind: (0, waba_dispatches_api_kind_1.resolveSubscriberDispatchesApiKindFromOrders)(normalized, this.orderRepository),
             byApi,
@@ -139,7 +153,7 @@ class WabaDisparosCreditsService {
         return this.getCreditsSummary(normalized);
     }
     isMasterUnlimited(email) {
-        return (0, waba_auth_service_1.isWabaMasterEmail)(normalizeEmail(email));
+        return this.masterPolicyService.hasUnlimitedCredits(normalizeEmail(email));
     }
     listPurchaseHistory(email, limit = 20) {
         const cap = Math.max(1, Math.min(50, Math.floor(limit)));

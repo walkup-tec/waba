@@ -14,6 +14,12 @@ export type WabaSystemUser = {
   role: WabaSystemUserRole;
   /** Operacional: fila de campanhas (API Oficial ou API Alternativa). */
   operacionalDispatchesApi?: WabaDispatchesApiKind | null;
+  /** Master: créditos ilimitados para disparos (padrão true). */
+  masterUnlimitedCredits?: boolean;
+  /** Master: repasse PIX ao fornecedor no split (padrão true). */
+  masterSplitSuppliers?: boolean;
+  /** Master: repasse PIX de lucros no split (padrão false). */
+  masterSplitProfits?: boolean;
   /** null = legado (migrar na primeira leitura); chave ausente = menu desabilitado */
   menuPermissions?: Record<string, boolean> | null;
   createdAt: string;
@@ -89,6 +95,9 @@ export class WabaSystemUserRepository {
         WabaSystemUser,
         | "menuPermissions"
         | "operacionalDispatchesApi"
+        | "masterUnlimitedCredits"
+        | "masterSplitSuppliers"
+        | "masterSplitProfits"
         | "updatedAt"
         | "fullName"
         | "email"

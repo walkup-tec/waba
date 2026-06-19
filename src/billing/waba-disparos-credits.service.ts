@@ -1,4 +1,4 @@
-import { isWabaMasterEmail } from "../auth/waba-auth.service";
+import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-policy.service";
 import { WabaCampaignIntakeRepository } from "../disparos/waba-campaign-intake.repository";
 import {
   resolveIntakeApiKindFromIntake,
@@ -22,8 +22,11 @@ import { shouldCountCampaignIntakeCredits } from "../disparos/waba-campaign-inta
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
+const UNLIMITED_CREDITS_REMAINING = 9_999_999;
+
 export type DisparosCreditsSummary = {
   hasCredits: boolean;
+  unlimitedCredits: boolean;
   email: string;
   activeApiKind: WabaDispatchesApiKind;
   byApi: DisparosCreditsByApi;
@@ -43,6 +46,7 @@ export class WabaDisparosCreditsService {
     private readonly bonusService = new WabaDisparosBonusService(),
     private readonly bonusSettlementService = new WabaDisparosBonusSettlementService(),
     private readonly intakeRepository = new WabaCampaignIntakeRepository(),
+    private readonly masterPolicyService = new WabaMasterDisparosPolicyService(),
   ) {}
 
   private listPaidOrdersForEmail(email: string): WabaBillingOrder[] {
@@ -136,6 +140,7 @@ export class WabaDisparosCreditsService {
 
   getCreditsSummary(email: string): DisparosCreditsSummary {
     const normalized = normalizeEmail(email);
+    const unlimitedCredits = this.masterPolicyService.hasUnlimitedCredits(normalized);
     this.ensureUsageMigrated(normalized);
     this.bonusSettlementService.settleAllUnsettledPaidOrdersForEmail(normalized);
     const paidOrders = this.listPaidOrdersForEmail(normalized);
@@ -145,10 +150,21 @@ export class WabaDisparosCreditsService {
       alternativa: this.buildApiBucket(normalized, "alternativa", paidOrders),
     };
 
+    if (unlimitedCredits) {
+      for (const kind of ["oficial", "alternativa"] as const) {
+        byApi[kind] = {
+          ...byApi[kind],
+          remainingShipments: UNLIMITED_CREDITS_REMAINING,
+        };
+      }
+    }
+
     const contractedShipments =
       byApi.oficial.contractedShipments + byApi.alternativa.contractedShipments;
     const consumedShipments = byApi.oficial.consumedShipments + byApi.alternativa.consumedShipments;
-    const remainingShipments = byApi.oficial.remainingShipments + byApi.alternativa.remainingShipments;
+    const remainingShipments = unlimitedCredits
+      ? UNLIMITED_CREDITS_REMAINING
+      : byApi.oficial.remainingShipments + byApi.alternativa.remainingShipments;
     const pendingBonusShipments =
       byApi.oficial.pendingBonusShipments + byApi.alternativa.pendingBonusShipments;
 
@@ -158,7 +174,8 @@ export class WabaDisparosCreditsService {
     );
 
     return {
-      hasCredits: contractedShipments > 0,
+      hasCredits: unlimitedCredits || contractedShipments > 0,
+      unlimitedCredits,
       email: normalized,
       activeApiKind: resolveSubscriberDispatchesApiKindFromOrders(normalized, this.orderRepository),
       byApi,
@@ -191,7 +208,7 @@ export class WabaDisparosCreditsService {
   }
 
   isMasterUnlimited(email: string): boolean {
-    return isWabaMasterEmail(normalizeEmail(email));
+    return this.masterPolicyService.hasUnlimitedCredits(normalizeEmail(email));
   }
 
   listPurchaseHistory(email: string, limit = 20) {

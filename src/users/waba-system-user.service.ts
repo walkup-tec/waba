@@ -21,6 +21,11 @@ import {
   type WabaSystemUser,
   type WabaSystemUserRole,
 } from "./waba-system-user.repository";
+import {
+  parseMasterDisparosPolicyInput,
+  resolveMasterDisparosPolicyFromUser,
+  type MasterDisparosPolicy,
+} from "./waba-master-disparos-policy.service";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
@@ -79,6 +84,9 @@ export type CreateSystemUserInput = {
   role: string;
   menuPermissions?: unknown;
   operacionalDispatchesApi?: unknown;
+  masterUnlimitedCredits?: unknown;
+  masterSplitSuppliers?: unknown;
+  masterSplitProfits?: unknown;
 };
 
 export type UpdateSystemUserInput = {
@@ -87,6 +95,9 @@ export type UpdateSystemUserInput = {
   password?: string;
   menuPermissions?: unknown;
   operacionalDispatchesApi?: unknown;
+  masterUnlimitedCredits?: unknown;
+  masterSplitSuppliers?: unknown;
+  masterSplitProfits?: unknown;
 };
 
 export type PublicSystemUser = {
@@ -102,6 +113,19 @@ export type PublicSystemUser = {
   allowedMenuIds: string[];
   operacionalDispatchesApi: WabaDispatchesApiKind | null;
   operacionalDispatchesApiLabel: string;
+  masterUnlimitedCredits: boolean;
+  masterSplitSuppliers: boolean;
+  masterSplitProfits: boolean;
+  masterDisparosPolicyLabel: string;
+};
+
+const formatMasterDisparosPolicyLabel = (policy: MasterDisparosPolicy): string => {
+  const creditsLabel = policy.unlimitedCredits ? "Ilimitado" : "Créditos";
+  const splitParts: string[] = [];
+  if (policy.splitSuppliers) splitParts.push("Fornec.");
+  if (policy.splitProfits) splitParts.push("Lucros");
+  const splitLabel = splitParts.length ? splitParts.join(" + ") : "Sem split";
+  return `${creditsLabel} · ${splitLabel}`;
 };
 
 const formatCreatedAtLabel = (iso: string): string => {
@@ -138,6 +162,8 @@ export class WabaSystemUserService {
 
   private toPublicUser(user: WabaSystemUser): PublicSystemUser {
     const effective = resolveEffectiveMenuPermissions(user);
+    const masterPolicy =
+      user.role === "master" ? resolveMasterDisparosPolicyFromUser(user) : null;
     return {
       id: user.id,
       fullName: user.fullName,
@@ -153,6 +179,10 @@ export class WabaSystemUserService {
       operacionalDispatchesApiLabel: user.operacionalDispatchesApi
         ? WABA_DISPATCHES_API_LABELS[user.operacionalDispatchesApi]
         : "—",
+      masterUnlimitedCredits: masterPolicy?.unlimitedCredits ?? false,
+      masterSplitSuppliers: masterPolicy?.splitSuppliers ?? false,
+      masterSplitProfits: masterPolicy?.splitProfits ?? false,
+      masterDisparosPolicyLabel: masterPolicy ? formatMasterDisparosPolicyLabel(masterPolicy) : "—",
     };
   }
 
@@ -215,6 +245,10 @@ export class WabaSystemUserService {
       input.operacionalDispatchesApi,
       { required: true },
     );
+    const masterPolicy =
+      role === "master"
+        ? parseMasterDisparosPolicyInput(input, { applyDefaults: true })
+        : null;
 
     const now = new Date().toISOString();
     const user = this.repository.create({
@@ -224,6 +258,9 @@ export class WabaSystemUserService {
       passwordHash: hashPassword(password),
       role,
       operacionalDispatchesApi,
+      masterUnlimitedCredits: masterPolicy?.unlimitedCredits,
+      masterSplitSuppliers: masterPolicy?.splitSuppliers,
+      masterSplitProfits: masterPolicy?.splitProfits,
       menuPermissions,
       createdAt: now,
       updatedAt: now,
@@ -256,7 +293,14 @@ export class WabaSystemUserService {
     const patch: Partial<
       Pick<
         WabaSystemUser,
-        "fullName" | "email" | "passwordHash" | "menuPermissions" | "operacionalDispatchesApi"
+        | "fullName"
+        | "email"
+        | "passwordHash"
+        | "menuPermissions"
+        | "operacionalDispatchesApi"
+        | "masterUnlimitedCredits"
+        | "masterSplitSuppliers"
+        | "masterSplitProfits"
       >
     > = { fullName, email };
 
@@ -277,6 +321,36 @@ export class WabaSystemUserService {
         input.operacionalDispatchesApi,
         { required: user.role === "operacional" },
       );
+    }
+
+    if (user.role === "master") {
+      const hasMasterPolicyInput =
+        input.masterUnlimitedCredits !== undefined ||
+        input.masterSplitSuppliers !== undefined ||
+        input.masterSplitProfits !== undefined;
+      if (hasMasterPolicyInput) {
+        const currentPolicy = resolveMasterDisparosPolicyFromUser(user);
+        const nextPolicy = parseMasterDisparosPolicyInput(
+          {
+            masterUnlimitedCredits:
+              input.masterUnlimitedCredits !== undefined
+                ? input.masterUnlimitedCredits
+                : currentPolicy.unlimitedCredits,
+            masterSplitSuppliers:
+              input.masterSplitSuppliers !== undefined
+                ? input.masterSplitSuppliers
+                : currentPolicy.splitSuppliers,
+            masterSplitProfits:
+              input.masterSplitProfits !== undefined
+                ? input.masterSplitProfits
+                : currentPolicy.splitProfits,
+          },
+          { applyDefaults: false },
+        );
+        patch.masterUnlimitedCredits = nextPolicy.unlimitedCredits;
+        patch.masterSplitSuppliers = nextPolicy.splitSuppliers;
+        patch.masterSplitProfits = nextPolicy.splitProfits;
+      }
     }
 
     const updated = this.repository.updateById(user.id, patch);
@@ -322,6 +396,9 @@ export class WabaSystemUserService {
       email: adminEmail,
       passwordHash: hashPassword(adminPassword),
       role: "master",
+      masterUnlimitedCredits: true,
+      masterSplitSuppliers: true,
+      masterSplitProfits: false,
       menuPermissions: buildAllMenusEnabled(),
       createdAt: now,
       updatedAt: now,

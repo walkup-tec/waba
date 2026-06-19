@@ -10,6 +10,7 @@ const node_path_1 = __importDefault(require("node:path"));
 const multer_1 = __importDefault(require("multer"));
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
+const waba_master_disparos_policy_service_1 = require("../users/waba-master-disparos-policy.service");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
@@ -18,6 +19,7 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
+const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
 const UPLOAD_MAX_BYTES = Math.max(5, Number(process.env.CAMPAIGN_UPLOAD_MAX_MB || 100)) * 1024 * 1024;
 const uploadIntake = (0, multer_1.default)({
@@ -55,22 +57,22 @@ const parseRequestedPlannedSendCount = (body) => {
     return n;
 };
 const resolvePlannedSendCount = (ownerEmail, importedLineCount, requestedSendCount, apiKind) => {
-    const isMaster = (0, waba_auth_service_1.isWabaMasterEmail)(ownerEmail);
+    const unlimitedCredits = masterPolicyService.hasUnlimitedCredits(ownerEmail);
     if (requestedSendCount === null) {
         return {
             plannedSendCount: 0,
-            isMaster,
+            isMaster: unlimitedCredits,
             error: "Informe a quantidade de envios desejada.",
         };
     }
     if (requestedSendCount > importedLineCount) {
         return {
             plannedSendCount: 0,
-            isMaster,
+            isMaster: unlimitedCredits,
             error: `A planilha contém apenas ${importedLineCount} linha(s). Reduza a quantidade ou importe mais contatos.`,
         };
     }
-    if (isMaster) {
+    if (unlimitedCredits) {
         return { plannedSendCount: requestedSendCount, isMaster: true };
     }
     const remaining = disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, apiKind);
@@ -150,7 +152,7 @@ const listAvailableApiKindsForEmail = (ownerEmail) => {
 };
 const parseRequestedApiKind = (body, ownerEmail) => {
     const email = ownerEmail.trim().toLowerCase();
-    if ((0, waba_auth_service_1.isWabaMasterEmail)(email)) {
+    if (masterPolicyService.hasUnlimitedCredits(email)) {
         const parsed = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(body.apiKind);
         return { apiKind: parsed === "alternativa" ? "alternativa" : "oficial" };
     }

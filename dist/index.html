@@ -5062,6 +5062,39 @@
         line-height: 1.45;
       }
 
+      .admin-user-master-policy-block {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.35);
+      }
+
+      .admin-user-policy-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.84rem;
+        color: #e2e8f0;
+        cursor: pointer;
+      }
+
+      .admin-user-split-fieldset {
+        margin: 0;
+        padding: 8px 10px 10px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 8px;
+      }
+
+      .admin-user-split-fieldset legend {
+        padding: 0 6px;
+        font-size: 0.78rem;
+        color: #94a3b8;
+      }
+
       .admin-users-form-footer {
         display: flex;
         justify-content: flex-end;
@@ -12822,6 +12855,27 @@
                         Campanhas contratadas neste plano aparecem no painel operacional deste usuário.
                       </p>
                     </div>
+                    <div id="admin-user-master-policy-block" class="admin-user-master-policy-block" hidden>
+                      <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
+                      <label class="admin-user-policy-check">
+                        <input id="admin-user-master-unlimited" type="checkbox" checked />
+                        Créditos ilimitados
+                      </label>
+                      <fieldset class="admin-user-split-fieldset">
+                        <legend>Split de receita</legend>
+                        <label class="admin-user-policy-check">
+                          <input id="admin-user-master-split-suppliers" type="checkbox" checked />
+                          Fornecedores
+                        </label>
+                        <label class="admin-user-policy-check">
+                          <input id="admin-user-master-split-profits" type="checkbox" />
+                          Lucros
+                        </label>
+                      </fieldset>
+                      <p class="admin-users-menus-hint" style="margin-top: 6px">
+                        Com Lucros desmarcado, não há repasse PIX de lucro via Asaas. Fornecedores só repassa se marcado.
+                      </p>
+                    </div>
                   </div>
                   <div class="admin-users-menus-block">
                     <h3 class="admin-users-menus-title">Menus liberados</h3>
@@ -13563,6 +13617,27 @@
               </select>
               <p class="admin-users-menus-hint" style="margin-top: 6px">
                 Define quais campanhas contratadas este operacional enxerga no painel Campanhas.
+              </p>
+            </div>
+            <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block" hidden>
+              <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
+              <label class="admin-user-policy-check">
+                <input id="admin-user-edit-master-unlimited" type="checkbox" />
+                Créditos ilimitados
+              </label>
+              <fieldset class="admin-user-split-fieldset">
+                <legend>Split de receita</legend>
+                <label class="admin-user-policy-check">
+                  <input id="admin-user-edit-master-split-suppliers" type="checkbox" />
+                  Fornecedores
+                </label>
+                <label class="admin-user-policy-check">
+                  <input id="admin-user-edit-master-split-profits" type="checkbox" />
+                  Lucros
+                </label>
+              </fieldset>
+              <p class="admin-users-menus-hint" style="margin-top: 6px">
+                Com Lucros desmarcado, não há repasse PIX de lucro via Asaas. Fornecedores só repassa se marcado.
               </p>
             </div>
           </div>
@@ -17828,6 +17903,52 @@
             if (!isOperacional) editSelect.value = "";
           }
         }
+        syncAdminUserMasterPolicyField(role, options);
+      }
+
+      function syncAdminUserMasterPolicyField(role, options = {}) {
+        const isMaster = String(role || "").toLowerCase() === "master";
+        const mode = String(options.mode || "create");
+        const user = options.user || null;
+
+        if (mode === "create" || mode === "both") {
+          const block = document.getElementById("admin-user-master-policy-block");
+          if (block) block.hidden = !isMaster;
+          if (isMaster) {
+            const unlimited = document.getElementById("admin-user-master-unlimited");
+            const suppliers = document.getElementById("admin-user-master-split-suppliers");
+            const profits = document.getElementById("admin-user-master-split-profits");
+            if (unlimited && !options.preserveValues) unlimited.checked = true;
+            if (suppliers && !options.preserveValues) suppliers.checked = true;
+            if (profits && !options.preserveValues) profits.checked = false;
+          }
+        }
+
+        if (mode === "edit" || mode === "both") {
+          const block = document.getElementById("admin-user-edit-master-policy-block");
+          if (block) block.hidden = !isMaster;
+          if (isMaster && user) {
+            const unlimited = document.getElementById("admin-user-edit-master-unlimited");
+            const suppliers = document.getElementById("admin-user-edit-master-split-suppliers");
+            const profits = document.getElementById("admin-user-edit-master-split-profits");
+            if (unlimited) unlimited.checked = Boolean(user.masterUnlimitedCredits);
+            if (suppliers) suppliers.checked = Boolean(user.masterSplitSuppliers);
+            if (profits) profits.checked = Boolean(user.masterSplitProfits);
+          }
+        }
+      }
+
+      function readAdminUserMasterPolicyValues(mode = "create") {
+        const prefix = mode === "edit" ? "admin-user-edit-master" : "admin-user-master";
+        return {
+          masterUnlimitedCredits: Boolean(
+            document.getElementById(`${prefix}-unlimited`)?.checked
+          ),
+          masterSplitSuppliers: Boolean(
+            document.getElementById(`${prefix}-split-suppliers`)?.checked
+          ),
+          masterSplitProfits: Boolean(document.getElementById(`${prefix}-split-profits`)?.checked),
+        };
       }
 
       function readAdminUserOperacionalApiValue(mode = "create") {
@@ -17925,7 +18046,11 @@
             const role = String(item?.role || "").toLowerCase();
             const roleLabel = escapeAdminHtml(item?.roleLabel || role || "—");
             const dispatchesLabel = escapeAdminHtml(
-              role === "operacional" ? item?.operacionalDispatchesApiLabel || "Não definido" : "—"
+              role === "operacional"
+                ? item?.operacionalDispatchesApiLabel || "Não definido"
+                : role === "master"
+                  ? item?.masterDisparosPolicyLabel || "—"
+                  : "—"
             );
             const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
             const menuCount = escapeAdminHtml(formatDisparosQty(item?.enabledMenuCount ?? 0));
@@ -17991,7 +18116,7 @@
         if (emailInput) emailInput.value = user.email || "";
         if (passwordInput) passwordInput.value = "";
         if (roleInput) roleInput.value = user.roleLabel || user.role || "";
-        syncAdminUserOperacionalApiField(user.role, { mode: "edit" });
+        syncAdminUserOperacionalApiField(user.role, { mode: "edit", user });
         const operacionalApiSelect = document.getElementById("admin-user-edit-operacional-api");
         if (operacionalApiSelect) {
           operacionalApiSelect.value = String(user.operacionalDispatchesApi || "");
@@ -18118,6 +18243,9 @@
           }
           body.operacionalDispatchesApi = operacionalDispatchesApi;
         }
+        if (user?.role === "master") {
+          Object.assign(body, readAdminUserMasterPolicyValues("edit"));
+        }
 
         if (saveBtn) {
           saveBtn.disabled = true;
@@ -18233,6 +18361,7 @@
                 role,
                 menuPermissions,
                 operacionalDispatchesApi: role === "operacional" ? operacionalDispatchesApi : undefined,
+                ...(role === "master" ? readAdminUserMasterPolicyValues("create") : {}),
               }),
             },
             12000
@@ -20580,11 +20709,14 @@
 
         const contracted = Number(credits.contractedShipments || 0);
         const consumed = Number(credits.consumedShipments || 0);
-        const remaining = Number(credits.remainingShipments || 0);
+        const unlimitedCredits = Boolean(credits.unlimitedCredits);
+        const remaining = unlimitedCredits
+          ? "Ilimitado"
+          : formatDisparosQty(Number(credits.remainingShipments || 0));
 
         contractedEl.textContent = formatDisparosQty(contracted);
         consumedEl.textContent = formatDisparosQty(consumed);
-        remainingEl.textContent = formatDisparosQty(remaining);
+        remainingEl.textContent = remaining;
         if (bonusStatEl && bonusEl) {
           const showBonus = pendingBonus > 0;
           bonusStatEl.hidden = !showBonus;
@@ -20598,9 +20730,17 @@
             orders > 1 ? `${valueLabel} · ${orders} pacotes pagos` : `${valueLabel} investidos`;
         }
         if (remainingMetaEl) {
-          const longText =
-            remaining > 0 ? "disponíveis para novos envios" : "saldo esgotado — contrate mais";
-          const shortText = remaining > 0 ? "disponíveis" : "esgotado";
+          const remainingCount = Number(credits.remainingShipments || 0);
+          const longText = unlimitedCredits
+            ? "créditos ilimitados para disparos"
+            : remainingCount > 0
+              ? "disponíveis para novos envios"
+              : "saldo esgotado — contrate mais";
+          const shortText = unlimitedCredits
+            ? "ilimitado"
+            : remainingCount > 0
+              ? "disponíveis"
+              : "esgotado";
           remainingMetaEl.innerHTML = `<span class="disparos-credits-meta-long">${longText}</span><span class="disparos-credits-meta-short">${shortText}</span>`;
         }
         if (subtitleEl && credits.lastPaidAt) {

@@ -4,12 +4,12 @@ import path from "node:path";
 import type { Express, Request } from "express";
 import multer from "multer";
 import {
-  isWabaMasterEmail,
   readWabaSessionCookie,
   resolveSessionRole,
   verifyWabaSessionToken,
 } from "../auth/waba-auth.service";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
+import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-policy.service";
 import {
   resolveCampaignIntakeStorageDir,
   WabaCampaignIntakeRepository,
@@ -34,6 +34,7 @@ import {
 
 const intakeRepository = new WabaCampaignIntakeRepository();
 const disparosCreditsService = new WabaDisparosCreditsService();
+const masterPolicyService = new WabaMasterDisparosPolicyService();
 const subscriberRepository = new WabaSubscriberRepository();
 
 const UPLOAD_MAX_BYTES = Math.max(5, Number(process.env.CAMPAIGN_UPLOAD_MAX_MB || 100)) * 1024 * 1024;
@@ -81,22 +82,22 @@ const resolvePlannedSendCount = (
   requestedSendCount: number | null,
   apiKind: WabaDispatchesApiKind,
 ): { plannedSendCount: number; isMaster: boolean; error?: string } => {
-  const isMaster = isWabaMasterEmail(ownerEmail);
+  const unlimitedCredits = masterPolicyService.hasUnlimitedCredits(ownerEmail);
   if (requestedSendCount === null) {
     return {
       plannedSendCount: 0,
-      isMaster,
+      isMaster: unlimitedCredits,
       error: "Informe a quantidade de envios desejada.",
     };
   }
   if (requestedSendCount > importedLineCount) {
     return {
       plannedSendCount: 0,
-      isMaster,
+      isMaster: unlimitedCredits,
       error: `A planilha contém apenas ${importedLineCount} linha(s). Reduza a quantidade ou importe mais contatos.`,
     };
   }
-  if (isMaster) {
+  if (unlimitedCredits) {
     return { plannedSendCount: requestedSendCount, isMaster: true };
   }
   const remaining = disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, apiKind);
@@ -180,7 +181,7 @@ const parseRequestedApiKind = (
 ): { apiKind: WabaDispatchesApiKind; error?: string } => {
   const email = ownerEmail.trim().toLowerCase();
 
-  if (isWabaMasterEmail(email)) {
+  if (masterPolicyService.hasUnlimitedCredits(email)) {
     const parsed = normalizeDispatchesApiKind(body.apiKind);
     return { apiKind: parsed === "alternativa" ? "alternativa" : "oficial" };
   }
