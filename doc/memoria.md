@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-08
 
+**WABA — Aquecedor Salvar configurações:** um clique grava; auto-refresh pausado na aba. Marker `DEPLOY-2026-06-08-waba-aquecedor-salvar-config-fix`. Ver `doc/LOG-2026-06-08__waba-aquecedor-salvar-config-fix.md`.
+
+2026-06-08
+
 **WABA — split rateio auto-save:** participantes/fornecedores gravam ao incluir/remover/editar; soma 100% só no repasse. Marker `DEPLOY-2026-06-08-waba-split-autosave-persist`. Ver `doc/LOG-2026-06-08__waba-split-autosave-persist.md`.
 
 2026-06-08

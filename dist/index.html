@@ -14071,10 +14071,15 @@
       let allEvents = [];
       let refreshTimer = null;
       let isManualMode = false;
-      const ADMIN_FORM_TABS_SKIP_AUTO_REFRESH = new Set(["admin-usuarios", "admin-financeiro"]);
+      const ADMIN_FORM_TABS_SKIP_AUTO_REFRESH = new Set([
+        "admin-usuarios",
+        "admin-financeiro",
+        "aquecedor",
+      ]);
 
       function isAdminFormEditingTab(tab = activeTab) {
-        return ADMIN_FORM_TABS_SKIP_AUTO_REFRESH.has(tab);
+        if (ADMIN_FORM_TABS_SKIP_AUTO_REFRESH.has(tab)) return true;
+        return false;
       }
 
       function syncGlobalAutoRefreshTimer() {
@@ -23299,7 +23304,11 @@
 
       async function loadAquecedorConfig() {
         try {
-          const response = await fetchWithTimeout("/aquecedor/config", {}, 10000);
+          const response = await fetchWithTimeout(
+            "/aquecedor/config",
+            { credentials: "same-origin" },
+            10000
+          );
           const statusLabel = document.getElementById("aquecedor-status-label");
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -23330,15 +23339,25 @@
       }
 
       async function saveAquecedorConfig() {
-        if (!aquecedorEditMode) {
-          setAquecedorEditMode(true);
-          addAquecedorCommandLog("Modo de edição de configurações habilitado.");
-          return;
-        }
         const toggle = document.getElementById("aquecedor-use-recommended");
         const saveBtn = document.getElementById("aquecedor-save-btn");
         const statusLabel = document.getElementById("aquecedor-status-label");
+        const isEditOnly =
+          saveBtn && /editar/i.test(String(saveBtn.textContent || "").trim());
+
+        if (!aquecedorEditMode) {
+          setAquecedorEditMode(true);
+          if (isEditOnly) {
+            showToast("Modo de edição habilitado. Ajuste os campos e clique em Salvar.", "success", 2800);
+            addAquecedorCommandLog("Modo de edição de configurações habilitado.");
+            return;
+          }
+        }
+
         const useRecommended = Boolean(toggle?.checked);
+        if (useRecommended) {
+          setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
+        }
         const missingFields = getAquecedorMissingRequiredFields();
         if (missingFields.length) {
           showToast(
@@ -23352,6 +23371,7 @@
           showToast("Adicione pelo menos um lote de dias no expediente.", "error");
           return;
         }
+        if (statusLabel) statusLabel.textContent = "Salvando configuração…";
         if (saveBtn) {
           saveBtn.textContent = "Salvando...";
           saveBtn.setAttribute("disabled", "true");
@@ -23361,6 +23381,7 @@
             "/aquecedor/config",
             {
               method: "POST",
+              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ useRecommended, customConfig }),
             },
@@ -23382,9 +23403,11 @@
             const storageHint =
               data?.storageSource === "local" ? " (armazenamento local)" : "";
             statusLabel.textContent = useRecommended
-              ? `Usando padrão recomendado${storageHint}`
-              : `Usando configuração personalizada${storageHint}`;
+              ? `Salvo · padrão recomendado${storageHint}`
+              : `Salvo · configuração personalizada${storageHint}`;
           }
+          setAquecedorFormDisabled(useRecommended);
+          updateRemoveButtonsVisibility();
           setAquecedorEditMode(false);
         } catch {
           showToast("Erro ao salvar configuração do Aquecedor.", "error");
@@ -23415,7 +23438,7 @@
           aquecedorRuntimeStatusCache = data || null;
           const running = data?.running === true;
           const isProcessing = data?.isProcessing === true;
-          if (running && aquecedorEditMode) {
+          if (running && aquecedorEditMode && !document.getElementById("aquecedor-save-btn")?.disabled) {
             setAquecedorEditMode(false);
           }
           const nextAllowedAt = data?.nextAllowedAt

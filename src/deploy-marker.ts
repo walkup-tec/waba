@@ -1,2 +1,2 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-08-waba-split-autosave-persist";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-08-waba-aquecedor-salvar-config-fix";
