@@ -2341,6 +2341,44 @@ async function filterConnectedForAquecedorOwner(
   return connected.filter((c) => allowedLower.has(c.instancia.toLowerCase()));
 }
 
+async function buildAquecedorConnectedFromControleInstancia(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  ownerEmail: string,
+): Promise<Array<{ instancia: string; numero: string }>> {
+  const { data: instanciasData } = (await (supabase
+    .from("controle_instancia" as any)
+    .select("instancia, numero_whatsapp")
+    .limit(500)) as any);
+  const connectedAll = (Array.isArray(instanciasData) ? instanciasData : [])
+    .map((row: { instancia?: string; numero_whatsapp?: string }) => ({
+      instancia: String(row?.instancia || "").trim(),
+      numero: String(row?.numero_whatsapp || "").trim(),
+    }))
+    .filter((item) => item.instancia && item.numero);
+  const connectedOwned = await filterConnectedForAquecedorOwner(connectedAll, ownerEmail);
+  const usageMap = await loadInstanceUsageMap();
+  return connectedOwned.filter((item) => {
+    const usage = getInstanceUsageFromMap(usageMap, item.instancia);
+    return usage ? usage.useAquecedor !== false : true;
+  });
+}
+
+async function buildControleInstanciaNumToNameMap(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const { data: instanciasData } = (await (supabase
+    .from("controle_instancia" as any)
+    .select("instancia, numero_whatsapp")
+    .limit(500)) as any);
+  for (const row of Array.isArray(instanciasData) ? instanciasData : []) {
+    const num = normalizeWhatsAppNumber(String(row?.numero_whatsapp || "").trim());
+    const inst = String(row?.instancia || "").trim();
+    if (num && inst) map.set(num, inst);
+  }
+  return map;
+}
+
 type AquecedorInstanceEligibilityRow = {
   instancia: string;
   eligible: boolean;
@@ -5251,11 +5289,7 @@ app.get("/aquecedor/envios", async (req, res) => {
 
     let pendingCount = 0;
     if (supabase) {
-      const cutoffStuck = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      await ((supabase.from("aquecedor" as any) as any)
-        .update({ status: "PENDENTE" })
-        .eq("status", "PROCESSANDO")
-        .lt("processing_at", cutoffStuck));
+      const numToInst = await buildControleInstanciaNumToNameMap(supabase);
 
       const { data: processandoData } = await (supabase
         .from("aquecedor" as any)
@@ -5265,18 +5299,10 @@ app.get("/aquecedor/envios", async (req, res) => {
         .limit(5)) as any;
 
       if (Array.isArray(processandoData) && processandoData.length > 0) {
-        const { data: instanciasData } = await (supabase
-          .from("controle_instancia" as any)
-          .select("instancia, numero_whatsapp")) as any;
-        const numToInst = new Map<string, string>();
-        for (const r of instanciasData || []) {
-          const num = String(r?.numero_whatsapp || "").trim();
-          if (num) numToInst.set(num, String(r?.instancia || "").trim());
-        }
         for (const row of processandoData) {
           const origem = String(row?.instancia || "").trim() || "—";
-          const numDest = String(row?.numero_destino || "").trim();
-          const destino = numToInst.get(numDest) || numDest || "—";
+          const numDest = normalizeWhatsAppNumber(String(row?.numero_destino || "").trim());
+          const destino = numToInst.get(numDest) || String(row?.numero_destino || "").trim() || "—";
           const dataEnvio = String(row?.scheduled_at || row?.processing_at || "").trim() || null;
           pushItem(origem, destino, dataEnvio, "Em Fila");
         }
@@ -5290,64 +5316,55 @@ app.get("/aquecedor/envios", async (req, res) => {
 
       const { data: pendingData } = await (supabase
         .from("aquecedor" as any)
-        .select("scheduled_at")
+        .select("scheduled_at, instancia, numero_destino")
         .eq("status", "PENDENTE")
         .order("scheduled_at", { ascending: true })
         .limit(1)
         .maybeSingle()) as any;
 
       if (pendingData) {
-        let origem = "—";
+        let origem = String(pendingData?.instancia || "").trim();
         let destino = "—";
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(EVO_INSTANCES_URL, {
-            headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (response.ok) {
-            const instances: any[] = (await response.json().catch(() => [])) || [];
-            const connectedAll = buildConnectedFromEvoResponse(instances);
-            const connectedOwned = ownerEmail
-              ? await filterConnectedForAquecedorOwner(connectedAll, ownerEmail)
-              : connectedAll;
-            const usageMap = await loadInstanceUsageMap();
-            const connected = connectedOwned.filter((item) => {
-              const usage = getInstanceUsageFromMap(usageMap, item.instancia);
-              return usage ? usage.useAquecedor !== false : true;
-            });
-            if (connected.length >= 2) {
-              const combinations: Array<{ origem: string; destino: string }> = [];
-              for (const o of connected) {
-                for (const d of connected) {
-                  if (o.instancia === d.instancia) continue;
-                  combinations.push({ origem: o.instancia, destino: d.instancia });
-                }
-              }
-              const { data: cicloData } = await (supabase
-                .from("controle_ciclo" as any)
-                .select("ciclo_global")
-                .order("id", { ascending: true })
-                .limit(1)
-                .maybeSingle()) as any;
-              const cicloGlobal =
-                typeof cicloData?.ciclo_global === "number"
-                  ? Math.floor(cicloData.ciclo_global)
-                  : 0;
-              const chosen = combinations[cicloGlobal % combinations.length];
-              if (chosen) {
-                origem = chosen.origem;
-                destino = chosen.destino;
-              }
+        const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
+        const numDest = normalizeWhatsAppNumber(String(pendingData?.numero_destino || "").trim());
+        if (numDest) {
+          destino = numToInst.get(numDest) || "—";
+        }
+        if (!origem || destino === "—") {
+          const connected = await buildAquecedorConnectedFromControleInstancia(supabase, ownerEmail);
+          if (connected.length >= 2) {
+            const combinations = connected.flatMap((origemItem) =>
+              connected
+                .filter((destinoItem) => destinoItem.instancia !== origemItem.instancia)
+                .map((destinoItem) => ({
+                  instancia_origem: origemItem.instancia,
+                  instancia_destino: destinoItem.instancia,
+                  numero_whatsapp: destinoItem.numero,
+                })),
+            );
+            const { data: cicloData } = await (supabase
+              .from("controle_ciclo" as any)
+              .select("ciclo_global")
+              .order("id", { ascending: true })
+              .limit(1)
+              .maybeSingle()) as any;
+            const cicloGlobal =
+              typeof cicloData?.ciclo_global === "number"
+                ? Math.floor(cicloData.ciclo_global)
+                : 0;
+            const picked = await pickAquecedorCombinationAsync(
+              supabase,
+              connected,
+              combinations,
+              cicloGlobal,
+            );
+            if (picked) {
+              origem = picked.chosen.instancia_origem;
+              destino = picked.chosen.instancia_destino;
             }
           }
-        } catch {
-          // manter — quando não for possível obter origem/destino
         }
-        const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
-        pushItem(origem, destino, dataEnvio, "Em Fila");
+        pushItem(origem || "—", destino, dataEnvio, "Em Fila");
       }
 
       const { data: logsData, error } = await (supabase

@@ -15,11 +15,15 @@ Como usar:
 ## Última atualização
 2026-06-19
 
+**WABA — V01 tela preta:** corrigido `??` corrompido em `loadDisparosEvoCampaigns` (`index.html` + `dist/index.html`); JS parse OK. Ver `doc/LOG-2026-06-19__v01-tela-preta-js-syntax-fix.md`.
+
 **WABA — V01 baseline pré-08/06:** UI `baseline` — API não oficial (Aquecedor + Disparos EVO) + API Meta (Disparo oficial); oculto fluxo comercial Disparos/Campanhas SaaS. Ver `doc/LOG-2026-06-19__v01-baseline-pre-disparador-comercial.md`.
 
 **WABA — V01 Disparador EVO reativado:** tick campanhas ligado (`WABA_EVO_DISPARADOR=true`); UI full; backup 4 campanhas em `data/v01/`. Ver `doc/LOG-2026-06-19__v01-evo-disparador-reativado.md`.
 
 **WABA — V01 master local:** `walkup@walkuptec.com.br` como master em `data/v01/waba-system-users.json` + `.env.v01`; login HTTP 200 role master confirmado.
+
+**WABA — aquecedor envios sem flicker:** API /aquecedor/envios sem EVO; UI mantém última lista em falha. Marker `DEPLOY-2026-06-19-aquecedor-envios-sem-flicker`. Ver `doc/LOG-2026-06-19__aquecedor-envios-sem-flicker.md`.
 
 **WABA — aquecedor Supabase retry:** retry 3x + reset cliente em `fetch failed`; mensagem amigável e backoff 60s. Marker `DEPLOY-2026-06-19-aquecedor-supabase-retry`. Ver `doc/LOG-2026-06-19__aquecedor-supabase-retry.md`.
 
