@@ -24172,6 +24172,10 @@
       }
 
       async function loadAquecedorRuntimeStatus() {
+        return syncAquecedorRuntimeUi({ autoResume: false });
+      }
+
+      async function resumeAquecedorRuntimeFromPersistedIntent() {
         return syncAquecedorRuntimeUi({ autoResume: true });
       }
 
@@ -24483,7 +24487,7 @@
         if (aquecedorRuntimePollTimer) clearInterval(aquecedorRuntimePollTimer);
         if (aquecedorRuntimeVizTimer) clearInterval(aquecedorRuntimeVizTimer);
         loadAquecedorEnvios();
-        loadAquecedorRuntimeStatus();
+        void resumeAquecedorRuntimeFromPersistedIntent();
         aquecedorEnviosPollTimer = setInterval(loadAquecedorEnvios, 8000);
         aquecedorRuntimePollTimer = setInterval(loadAquecedorRuntimeStatus, 3000);
         aquecedorRuntimeVizTimer = setInterval(renderAquecedorRuntimeProgress, 1000);
@@ -27072,8 +27076,17 @@
           if (action === "stop") {
             showAquecedorStartStopButtons();
             updateAquecedorStartStopVisibility(false);
+            aquecedorRuntimeStatusCache = {
+              ...(data?.status || {}),
+              running: false,
+              desiredRunning: false,
+              isProcessing: false,
+              lastResult: data?.message || "Aquecedor parado.",
+            };
+            renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
+            renderAquecedorRuntimeProgress();
           }
-          await loadAquecedorRuntimeStatus();
+          await syncAquecedorRuntimeUi({ autoResume: false });
           if (action === "runOnce") loadAquecedorEnvios();
         } catch {
           showToast("Erro ao executar ação do aquecedor.", "error");
@@ -32811,7 +32824,7 @@
         setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
         setAquecedorFormDisabled(true);
         updateAquecedorParamsSummary();
-        await syncAquecedorRuntimeUi({ autoResume: true });
+        await resumeAquecedorRuntimeFromPersistedIntent();
         setAquecedorEditMode(false);
         renderAquecedorCommandLogs();
 

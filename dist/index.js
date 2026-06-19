@@ -1792,7 +1792,37 @@ function queuePersistDisparosLocalState() {
         }
     });
 }
+let aquecedorRuntimeIntentCache = { desired: null, ownerEmail: null };
+let aquecedorRuntimeIntentHydrated = false;
+async function readAquecedorRuntimeIntentFromDisk() {
+    try {
+        const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
+        const p = JSON.parse(raw);
+        if (p?.version !== 1 || typeof p.aquecedorRuntimeDesired !== "boolean") {
+            return { desired: null, ownerEmail: null };
+        }
+        const ownerEmail = typeof p.aquecedorOwnerEmail === "string" && p.aquecedorOwnerEmail.trim()
+            ? p.aquecedorOwnerEmail.trim().toLowerCase()
+            : null;
+        return { desired: p.aquecedorRuntimeDesired, ownerEmail };
+    }
+    catch {
+        return { desired: null, ownerEmail: null };
+    }
+}
+async function hydrateAquecedorRuntimeIntentCache() {
+    if (!aquecedorRuntimeIntentHydrated) {
+        aquecedorRuntimeIntentCache = await readAquecedorRuntimeIntentFromDisk();
+        aquecedorRuntimeIntentHydrated = true;
+    }
+    return aquecedorRuntimeIntentCache;
+}
 async function persistAquecedorRuntimeIntent(desired, ownerEmail) {
+    aquecedorRuntimeIntentCache = {
+        desired,
+        ownerEmail: ownerEmail?.trim().toLowerCase() || null,
+    };
+    aquecedorRuntimeIntentHydrated = true;
     try {
         await fs_1.promises.mkdir(path_1.default.dirname(RUNTIME_INTENT_FILE), { recursive: true });
         const payload = {
@@ -1811,20 +1841,8 @@ async function persistAquecedorRuntimeIntent(desired, ownerEmail) {
     }
 }
 async function loadAquecedorRuntimeIntent() {
-    try {
-        const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
-        const p = JSON.parse(raw);
-        if (p?.version !== 1 || typeof p.aquecedorRuntimeDesired !== "boolean") {
-            return { desired: null, ownerEmail: null };
-        }
-        const ownerEmail = typeof p.aquecedorOwnerEmail === "string" && p.aquecedorOwnerEmail.trim()
-            ? p.aquecedorOwnerEmail.trim().toLowerCase()
-            : null;
-        return { desired: p.aquecedorRuntimeDesired, ownerEmail };
-    }
-    catch {
-        return { desired: null, ownerEmail: null };
-    }
+    await hydrateAquecedorRuntimeIntentCache();
+    return { ...aquecedorRuntimeIntentCache };
 }
 async function loadDisparosLocalState() {
     try {
@@ -4807,7 +4825,7 @@ app.get("/aquecedor/envios", async (req, res) => {
         return res.status(500).json({ error: "Erro ao listar envios do aquecedor." });
     }
 });
-app.post("/aquecedor/start", (req, res) => {
+app.post("/aquecedor/start", async (req, res) => {
     if (rejectAquecedorWithoutEntitlement(req, res))
         return;
     if (!ENABLE_AQUECEDOR_PROCESSING) {
@@ -4829,13 +4847,13 @@ app.post("/aquecedor/start", (req, res) => {
     }
     startAquecedorRuntime();
     void ensureAquecedorPendingMessage();
-    void persistAquecedorRuntimeIntent(true, aquecedorRuntimeOwnerEmail);
-    return res.json({ ok: true, message: "Aquecedor iniciado.", status: aquecedorRuntime });
+    await persistAquecedorRuntimeIntent(true, aquecedorRuntimeOwnerEmail);
+    return res.json({ ok: true, message: "Aquecedor iniciado.", status: aquecedorRuntime, desiredRunning: true });
 });
-app.post("/aquecedor/stop", (_req, res) => {
+app.post("/aquecedor/stop", async (_req, res) => {
     stopAquecedorRuntime();
-    void persistAquecedorRuntimeIntent(false, null);
-    return res.json({ ok: true, message: "Aquecedor parado.", status: aquecedorRuntime });
+    await persistAquecedorRuntimeIntent(false, null);
+    return res.json({ ok: true, message: "Aquecedor parado.", status: aquecedorRuntime, desiredRunning: false });
 });
 app.post("/aquecedor/run-once", async (req, res) => {
     if (rejectAquecedorWithoutEntitlement(req, res))
