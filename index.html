@@ -1308,6 +1308,10 @@
         stroke-linejoin: round;
       }
 
+      .tab-icon svg.tab-icon-wa {
+        stroke-width: 1.35;
+      }
+
       .tab-label {
         display: inline;
       }
@@ -1508,6 +1512,19 @@
         flex: 0 0 auto;
       }
 
+      .integration-env-btn .rocket-icon,
+      .integration-env-current .rocket-icon {
+        width: 16px;
+        height: 16px;
+        color: #38bdf8;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
       .integration-env-current .wa-icon {
         width: 16px;
         height: 16px;
@@ -1516,6 +1533,10 @@
       }
 
       .integration-env-current .wa-icon.hidden {
+        display: none;
+      }
+
+      .integration-env-current .rocket-icon.hidden {
         display: none;
       }
 
@@ -6848,6 +6869,18 @@
         flex-wrap: wrap;
       }
 
+      .aquecedor-save-feedback {
+        flex: 1 1 100%;
+        font-size: 0.82rem;
+        min-height: 1.1em;
+      }
+      .aquecedor-save-feedback.ok {
+        color: #4ade80;
+      }
+      .aquecedor-save-feedback.err {
+        color: #f87171;
+      }
+
       .aquecedor-toggle {
         display: inline-flex;
         align-items: center;
@@ -10241,6 +10274,13 @@
                 d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
               />
             </svg>
+            <svg class="rocket-icon hidden" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+              <circle cx="12" cy="9" r="1.2"></circle>
+              <path d="M9 12l-3 3h3"></path>
+              <path d="M15 12l3 3h-3"></path>
+              <path d="M12 15v4"></path>
+            </svg>
             <span class="env-text">Aquecedor</span>
           </span>
         </div>
@@ -10263,15 +10303,22 @@
                 d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
               />
             </svg>
-            <span>Disparos</span>
+            <span>API Oficial</span>
           </button>
           <button
             type="button"
-            class="integration-env-btn"
+            class="integration-env-btn with-icon"
             data-integration-env="alternativa"
             hidden
           >
-            API Alternativa
+            <svg class="rocket-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+              <circle cx="12" cy="9" r="1.2"></circle>
+              <path d="M9 12l-3 3h3"></path>
+              <path d="M15 12l3 3h-3"></path>
+              <path d="M12 15v4"></path>
+            </svg>
+            <span>API Alternativa</span>
           </button>
         </div>
       </div>
@@ -10414,27 +10461,6 @@
                   <span class="tab-label">Dashboard</span>
                 </button>
                 <button
-                  id="tab-btn-disparo-evo"
-                  class="tab-button waba-prod-only"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                  aria-controls="tab-disparos"
-                  data-tab="disparo-evo"
-                  data-menu-key="disparo-evo"
-                >
-                  <span class="tab-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
-                      <circle cx="12" cy="9" r="1.2"></circle>
-                      <path d="M9 12l-3 3h3"></path>
-                      <path d="M15 12l3 3h-3"></path>
-                      <path d="M12 15v4"></path>
-                    </svg>
-                  </span>
-                  <span class="tab-label">Disparo</span>
-                </button>
-                <button
                   id="tab-btn-disparos-lancamento"
                   class="tab-button waba-prod-only"
                   type="button"
@@ -10454,6 +10480,27 @@
                   <span class="tab-label">Créditos</span>
                 </button>
                 <button
+                  id="tab-btn-disparo-evo"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-disparos"
+                  data-tab="disparo-evo"
+                  data-menu-key="disparo-evo"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+                      <circle cx="12" cy="9" r="1.2"></circle>
+                      <path d="M9 12l-3 3h3"></path>
+                      <path d="M15 12l3 3h-3"></path>
+                      <path d="M12 15v4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">API Alternativa</span>
+                </button>
+                <button
                   id="tab-btn-campanhas"
                   class="tab-button waba-prod-only waba-campanhas-menu"
                   type="button"
@@ -10466,13 +10513,14 @@
                   aria-hidden="true"
                 >
                   <span class="tab-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="8"></circle>
-                      <circle cx="12" cy="12" r="4.5"></circle>
-                      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"></circle>
+                    <svg class="tab-icon-wa" viewBox="0 0 24 24">
+                      <path d="M21 11.5a8.38 8.38 0 0 0-.9-3.8 8.5 8.5 0 0 0-7.6-4.7 8.38 8.38 0 0 0-3.8.9L3 21l1.9-5.7a8.38 8.38 0 0 0-.9-3.8 8.5 8.5 0 0 0 4.7-7.6 8.38 8.38 0 0 0 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                      <path d="M9 10h.01"></path>
+                      <path d="M12 10h.01"></path>
+                      <path d="M15 10h.01"></path>
                     </svg>
                   </span>
-                  <span class="tab-label">Campanhas</span>
+                  <span class="tab-label">API Oficial</span>
                 </button>
                 <button
                   id="tab-btn-meta-ativos"
@@ -10794,22 +10842,22 @@
             <button
               class="tab-button waba-prod-only"
               type="button"
-              data-tab="disparo-evo"
-              data-menu-key="disparo-evo"
-              role="menuitemradio"
-              aria-checked="false"
-            >
-              Disparo
-            </button>
-            <button
-              class="tab-button waba-prod-only"
-              type="button"
               data-tab="disparos-lancamento"
               data-menu-key="disparos-lancamento"
               role="menuitemradio"
               aria-checked="false"
             >
               Créditos
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="disparo-evo"
+              data-menu-key="disparo-evo"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              API Alternativa
             </button>
             <button
               class="tab-button waba-prod-only waba-campanhas-menu"
@@ -10821,7 +10869,7 @@
               hidden
               aria-hidden="true"
             >
-              Campanhas
+              API Oficial
             </button>
             <button
               class="tab-button waba-full-only"
@@ -11228,6 +11276,7 @@
                     >
                       Salvar configurações
                     </button>
+                    <span id="aquecedor-save-feedback" class="aquecedor-save-feedback muted" aria-live="polite"></span>
                   </div>
                   <div id="aquecedor-config-accordion" class="aquecedor-accordion">
                     <div class="aquecedor-section">
@@ -11290,7 +11339,7 @@
                       </div>
                     </div>
                   </div>
-                  <div id="aquecedor-runtime-box" class="aquecedor-runtime hidden">
+                  <div id="aquecedor-runtime-box" class="aquecedor-runtime">
                     <div class="aquecedor-runtime-row">
                       <span id="aquecedor-runtime-label" class="muted">Motor: carregando...</span>
                       <div id="aquecedor-runtime-actions" class="instance-actions">
@@ -14463,7 +14512,9 @@
       }
 
       function getOfficialSectionLabel() {
-        if (hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()) return "Campanhas";
+        if (hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()) {
+          return isProductionUi() ? "API Oficial" : "Campanhas";
+        }
         return "Disparos";
       }
 
@@ -14884,10 +14935,10 @@
               "dashboard",
               "instancias",
               "aquecedor",
-              "disparo-evo",
-              "disparos",
               "disparos-dashboard",
               "disparos-lancamento",
+              "disparo-evo",
+              "disparos",
               "admin-dashboard",
               "admin-assinantes",
               "admin-campanhas",
@@ -14964,7 +15015,7 @@
         if (panelTitle) {
           panelTitle.textContent =
             hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()
-              ? "Campanhas"
+              ? "API Oficial"
               : "Disparos";
         }
         const activeEnv = readActiveIntegrationEnv();
@@ -15260,11 +15311,11 @@
         }
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
-          panelTitle.textContent = "Disparo";
+          panelTitle.textContent = "API Alternativa";
         } else if (panelTitle && isProductionUi() && activeTab === "disparos") {
           panelTitle.textContent =
             hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()
-              ? "Campanhas"
+              ? "API Oficial"
               : "Disparos";
         }
       }
@@ -15356,8 +15407,9 @@
           else ofBtn.textContent = "API Oficial";
         }
         if (altBtn) {
-          altBtn.hidden = false;
-          altBtn.textContent = "API Alternativa";
+          altBtn.classList.add("with-icon");
+          const labelSpan = altBtn.querySelector("span:not(.rocket-icon)");
+          if (labelSpan) labelSpan.textContent = "API Alternativa";
         }
       }
 
@@ -23564,16 +23616,21 @@
         renderDisparosDiagnosticoLogs();
       }
 
+      function setAquecedorSaveFeedback(message, type = "") {
+        const el = document.getElementById("aquecedor-save-feedback");
+        if (!el) return;
+        el.textContent = String(message || "");
+        el.classList.remove("ok", "err");
+        if (type === "ok") el.classList.add("ok");
+        if (type === "err") el.classList.add("err");
+      }
+
       function setAquecedorEditMode(isEditing) {
         aquecedorEditMode = Boolean(isEditing);
         const accordion = document.getElementById("aquecedor-config-accordion");
-        const runtimeBox = document.getElementById("aquecedor-runtime-box");
         const saveBtn = document.getElementById("aquecedor-save-btn");
         if (accordion) {
           accordion.classList.toggle("collapsed", !aquecedorEditMode);
-        }
-        if (runtimeBox) {
-          runtimeBox.classList.toggle("hidden", aquecedorEditMode);
         }
         if (saveBtn) {
           saveBtn.textContent = aquecedorEditMode
@@ -23758,6 +23815,7 @@
 
         if (!aquecedorEditMode) {
           setAquecedorEditMode(true);
+          setAquecedorSaveFeedback("");
           if (isEditOnly) {
             showToast("Modo de edição habilitado. Ajuste os campos e clique em Salvar.", "success", 2800);
             addAquecedorCommandLog("Modo de edição de configurações habilitado.");
@@ -23771,6 +23829,8 @@
         }
         const missingFields = getAquecedorMissingRequiredFields();
         if (missingFields.length) {
+          const msg = `Preencha: ${missingFields[0].label}.`;
+          setAquecedorSaveFeedback(msg, "err");
           showToast(
             `Preencha os campos obrigatórios antes de salvar. Primeiro pendente: ${missingFields[0].label}.`,
             "warning"
@@ -23779,10 +23839,17 @@
         }
         const customConfig = getAquecedorFormValues();
         if (customConfig.expediente.length === 0) {
+          setAquecedorSaveFeedback("Adicione pelo menos um lote no expediente.", "err");
           showToast("Adicione pelo menos um lote de dias no expediente.", "error");
           return;
         }
+        if (customConfig.waitMaxSeconds < customConfig.waitMinSeconds) {
+          setAquecedorSaveFeedback("Espera máxima deve ser ≥ mínima.", "err");
+          showToast("Espera máxima deve ser maior ou igual à mínima.", "warning");
+          return;
+        }
         if (statusLabel) statusLabel.textContent = "Salvando configuração…";
+        setAquecedorSaveFeedback("Salvando…");
         if (saveBtn) {
           saveBtn.textContent = "Salvando...";
           saveBtn.setAttribute("disabled", "true");
@@ -23796,11 +23863,12 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ useRecommended, customConfig }),
             },
-            12000
+            20000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            const errMsg = data?.error || "Falha ao salvar Aquecedor.";
+            const errMsg = data?.error || `Falha ao salvar (HTTP ${response.status}).`;
+            setAquecedorSaveFeedback(errMsg, "err");
             showToast(errMsg, "error");
             if (statusLabel) statusLabel.textContent = "Erro ao salvar";
             addAquecedorCommandLog(`Falha ao salvar: ${errMsg}`);
@@ -23808,7 +23876,8 @@
           }
           const successMsg =
             data?.message || "Configuração do Aquecedor salva com sucesso.";
-          showToast(successMsg, "success");
+          setAquecedorSaveFeedback(successMsg, "ok");
+          showToast(successMsg, "success", 4500);
           addAquecedorCommandLog("Configurações salvas com sucesso.");
           if (statusLabel) {
             const storageHint =
@@ -23820,10 +23889,15 @@
           setAquecedorFormDisabled(useRecommended);
           updateRemoveButtonsVisibility();
           setAquecedorEditMode(false);
-        } catch {
-          showToast("Erro ao salvar configuração do Aquecedor.", "error");
+        } catch (err) {
+          const errMsg =
+            err instanceof Error && err.message === "timeout"
+              ? "Tempo esgotado ao salvar. Tente novamente."
+              : "Erro de rede ao salvar configuração.";
+          setAquecedorSaveFeedback(errMsg, "err");
+          showToast(errMsg, "error");
           if (statusLabel) statusLabel.textContent = "Erro ao salvar";
-          addAquecedorCommandLog("Falha ao salvar configurações.");
+          addAquecedorCommandLog(`Falha ao salvar: ${errMsg}`);
         } finally {
           if (saveBtn) {
             saveBtn.textContent = aquecedorEditMode
@@ -23884,11 +23958,7 @@
           aquecedorRuntimeStatusCache = data || null;
           const isProcessing = data?.isProcessing === true;
           if (running || desiredRunning) {
-            setAquecedorEditMode(false);
             showAquecedorStartStopButtons();
-          }
-          if (running && aquecedorEditMode && !document.getElementById("aquecedor-save-btn")?.disabled) {
-            setAquecedorEditMode(false);
           }
           const nextAllowedAt = data?.nextAllowedAt
             ? new Date(data.nextAllowedAt).toLocaleTimeString("pt-BR")
@@ -29909,6 +29979,7 @@
         if (currentLabel) {
           const currentText = currentLabel.querySelector(".env-text");
           const currentWaIcon = currentLabel.querySelector(".wa-icon");
+          const currentRocketIcon = currentLabel.querySelector(".rocket-icon");
           const label = integrationEnvLabel(normalized);
           if (currentText) {
             currentText.textContent = label;
@@ -29917,6 +29988,9 @@
           }
           if (currentWaIcon) {
             currentWaIcon.classList.toggle("hidden", normalized !== "oficial");
+          }
+          if (currentRocketIcon) {
+            currentRocketIcon.classList.toggle("hidden", normalized !== "alternativa");
           }
         }
         document.body.classList.toggle("integration-env-official", normalized === "oficial");
@@ -32554,12 +32628,10 @@
         setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
         setAquecedorFormDisabled(true);
         await syncAquecedorRuntimeUi({ autoResume: true });
-        if (
-          !aquecedorRuntimeStatusCache?.running &&
-          !aquecedorRuntimeStatusCache?.desiredRunning
-        ) {
-          setAquecedorEditMode(true);
-        }
+        const motorOn =
+          aquecedorRuntimeStatusCache?.running === true ||
+          aquecedorRuntimeStatusCache?.desiredRunning === true;
+        setAquecedorEditMode(!motorOn);
         renderAquecedorCommandLogs();
 
       document.getElementById("sender-filter")?.addEventListener("change", (e) => {
