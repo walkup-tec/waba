@@ -1,31 +1,16 @@
 # LOG — Aquecedor parâmetros recolhíveis (UI)
 
-**Data:** 2026-06-19
+**Data:** 2026-06-19 (recommit após regressão em commits posteriores)
 
-## Pedido
+## Contexto
 
-Seção **Parâmetros** do Aquecedor deve ficar recolhida por padrão, com seta para expandir quando o usuário quiser salvar novas configurações. Interface mais limpa e intuitiva.
+UI recolhível foi incluída em `7b0cdf2` mas **revertida** nos commits `7d478ad` / `b82108d` (HTML/JS voltou ao formulário sempre visível). CSS do painel permaneceu no arquivo.
 
-## Alterações
+## Alterações (reaplicadas)
 
-**Arquivo:** `index.html` (+ cópia `dist/index.html`)
+- Painel `aquecedor-params-panel` recolhido por padrão
+- Chevron, resumo compacto, badge Padrão/Personalizado
+- Salvar só dentro do painel expandido
+- Recolhe após salvar e ao carregar config
 
-- Painel `aquecedor-params-panel` com header clicável (chevron ▸ → ▾)
-- Resumo compacto quando recolhido: expediente + janela/pausa/envio
-- Badge **Padrão** / **Personalizado**
-- Formulário + toggle + botão Salvar só visíveis expandidos
-- Após salvar ou carregar config: recolhe automaticamente
-- Texto introdutório orientando uso do motor vs parâmetros
-
-**JS:** `updateAquecedorParamsSummary`, `setAquecedorEditMode` refatorado, `aquecedorEditMode` default `false`
-
-## Validação
-
-```bash
-node scripts/copy-index-html.mjs
-```
-
-## Pendências
-
-- Deploy Easypanel (HTML estático no serviço waba_disparador)
-- Validar visual em mobile (ellipsis no resumo)
+**Marker:** `DEPLOY-2026-06-19-aquecedor-params-collapsible-ui`

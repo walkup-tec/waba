@@ -11369,83 +11369,100 @@
                 <span id="aquecedor-status-label">Configuração</span>
               </div>
               <div class="muted">
-                Defina as variáveis do aquecedor. O padrão recomendado já inicia habilitado.
+                Controle o motor abaixo. Toque em <strong>Parâmetros</strong> só se quiser alterar expediente ou intervalos.
               </div>
               <div class="aquecedor-layout">
                 <div class="aquecedor-side">
-                  <div class="aquecedor-side-title">Parâmetros</div>
-                  <div class="aquecedor-actions">
-                    <label class="aquecedor-toggle">
-                      <input id="aquecedor-use-recommended" type="checkbox" checked />
-                      Usar padrão recomendado
-                    </label>
+                  <div id="aquecedor-params-panel" class="aquecedor-params-panel">
                     <button
-                      id="aquecedor-save-btn"
-                      class="instance-action-btn btn-qrcode enabled"
                       type="button"
+                      id="aquecedor-params-toggle"
+                      class="aquecedor-params-header"
+                      aria-expanded="false"
+                      aria-controls="aquecedor-config-accordion"
                     >
-                      Salvar configurações
+                      <span class="aquecedor-params-chevron" aria-hidden="true">▸</span>
+                      <span class="aquecedor-params-header-text">
+                        <span class="aquecedor-params-title">Parâmetros</span>
+                        <span id="aquecedor-params-summary" class="aquecedor-params-summary">
+                          Carregando configuração…
+                        </span>
+                      </span>
+                      <span id="aquecedor-params-badge" class="aquecedor-params-badge">Padrão</span>
                     </button>
-                    <span id="aquecedor-save-feedback" class="aquecedor-save-feedback muted" aria-live="polite"></span>
-                  </div>
-                  <div id="aquecedor-config-accordion" class="aquecedor-accordion">
-                    <div class="aquecedor-section">
-                      <div class="aquecedor-section-title">Expediente de envio</div>
-                      <p class="aquecedor-hint" style="margin-bottom: 10px;">Selecione os dias e informe horário de início e fim. Salve o lote para adicionar outro.</p>
-                      <div id="aq-expediente-batches" class="aquecedor-batches-list"></div>
-                      <div class="aquecedor-expediente-add">
-                        <div class="aquecedor-day-checkboxes">
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="seg" /> Seg</label>
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="ter" /> Ter</label>
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="qua" /> Qua</label>
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="qui" /> Qui</label>
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="sex" /> Sex</label>
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="sab" /> Sáb</label>
-                          <label class="aquecedor-day-chk"><input type="checkbox" data-day="dom" /> Dom</label>
-                        </div>
-                        <div class="aquecedor-inline-fields">
-                          <div class="aquecedor-field">
-                            <label for="aq-exp-inicio">Início (hora)</label>
-                            <input id="aq-exp-inicio" type="number" min="0" max="23" placeholder="7" />
+                    <div id="aquecedor-config-accordion" class="aquecedor-params-body aquecedor-accordion collapsed">
+                      <div class="aquecedor-section" style="margin-top: 12px">
+                        <div class="aquecedor-section-title">Expediente de envio</div>
+                        <p class="aquecedor-hint" style="margin-bottom: 10px;">Selecione os dias e informe horário de início e fim. Salve o lote para adicionar outro.</p>
+                        <div id="aq-expediente-batches" class="aquecedor-batches-list"></div>
+                        <div class="aquecedor-expediente-add">
+                          <div class="aquecedor-day-checkboxes">
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="seg" /> Seg</label>
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="ter" /> Ter</label>
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="qua" /> Qua</label>
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="qui" /> Qui</label>
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="sex" /> Sex</label>
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="sab" /> Sáb</label>
+                            <label class="aquecedor-day-chk"><input type="checkbox" data-day="dom" /> Dom</label>
                           </div>
-                          <div class="aquecedor-field">
-                            <label for="aq-exp-fim">Fim (hora)</label>
-                            <input id="aq-exp-fim" type="number" min="1" max="24" placeholder="22" />
-                          </div>
-                          <button type="button" id="aq-exp-add-btn" class="instance-action-btn enabled" style="align-self: flex-end;">Adicionar lote</button>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="aquecedor-fluxo-pausa-row">
-                      <div class="aquecedor-section aquecedor-fluxo-col">
-                        <div class="aquecedor-section-title">Fluxo</div>
-                        <div class="aquecedor-grid aquecedor-grid-2">
-                          <div class="aquecedor-field">
-                            <label for="aq-janela-ativa">Janela ativa (horas)</label>
-                            <input id="aq-janela-ativa" type="number" min="0.5" max="4" step="0.5" />
-                            <span class="aquecedor-hint">Padrão: 1</span>
-                          </div>
-                          <div class="aquecedor-field">
-                            <label for="aq-pausa">Pausa (minutos)</label>
-                            <input id="aq-pausa" type="number" min="0" max="240" />
-                            <span class="aquecedor-hint">Padrão: 14</span>
+                          <div class="aquecedor-inline-fields">
+                            <div class="aquecedor-field">
+                              <label for="aq-exp-inicio">Início (hora)</label>
+                              <input id="aq-exp-inicio" type="number" min="0" max="23" placeholder="7" />
+                            </div>
+                            <div class="aquecedor-field">
+                              <label for="aq-exp-fim">Fim (hora)</label>
+                              <input id="aq-exp-fim" type="number" min="1" max="24" placeholder="22" />
+                            </div>
+                            <button type="button" id="aq-exp-add-btn" class="instance-action-btn enabled" style="align-self: flex-end;">Adicionar lote</button>
                           </div>
                         </div>
                       </div>
-                      <div class="aquecedor-section aquecedor-pausa-col">
-                        <div class="aquecedor-section-title">Pausa entre envios</div>
-                        <div class="aquecedor-grid aquecedor-grid-2">
-                          <div class="aquecedor-field">
-                            <label for="aq-wait-min">Espera mínima (segundos)</label>
-                            <input id="aq-wait-min" type="number" min="10" max="3600" />
-                            <span class="aquecedor-hint">Padrão: 180</span>
-                          </div>
-                          <div class="aquecedor-field">
-                            <label for="aq-wait-max">Espera máxima (segundos)</label>
-                            <input id="aq-wait-max" type="number" min="10" max="3600" />
-                            <span class="aquecedor-hint">Padrão: 480</span>
+                      <div class="aquecedor-fluxo-pausa-row">
+                        <div class="aquecedor-section aquecedor-fluxo-col">
+                          <div class="aquecedor-section-title">Fluxo</div>
+                          <div class="aquecedor-grid aquecedor-grid-2">
+                            <div class="aquecedor-field">
+                              <label for="aq-janela-ativa">Janela ativa (horas)</label>
+                              <input id="aq-janela-ativa" type="number" min="0.5" max="4" step="0.5" />
+                              <span class="aquecedor-hint">Padrão: 1</span>
+                            </div>
+                            <div class="aquecedor-field">
+                              <label for="aq-pausa">Pausa (minutos)</label>
+                              <input id="aq-pausa" type="number" min="0" max="240" />
+                              <span class="aquecedor-hint">Padrão: 14</span>
+                            </div>
                           </div>
                         </div>
+                        <div class="aquecedor-section aquecedor-pausa-col">
+                          <div class="aquecedor-section-title">Pausa entre envios</div>
+                          <div class="aquecedor-grid aquecedor-grid-2">
+                            <div class="aquecedor-field">
+                              <label for="aq-wait-min">Espera mínima (segundos)</label>
+                              <input id="aq-wait-min" type="number" min="10" max="3600" />
+                              <span class="aquecedor-hint">Padrão: 180</span>
+                            </div>
+                            <div class="aquecedor-field">
+                              <label for="aq-wait-max">Espera máxima (segundos)</label>
+                              <input id="aq-wait-max" type="number" min="10" max="3600" />
+                              <span class="aquecedor-hint">Padrão: 480</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="aquecedor-params-footer">
+                        <label class="aquecedor-toggle">
+                          <input id="aquecedor-use-recommended" type="checkbox" checked />
+                          Usar padrão recomendado
+                        </label>
+                        <button
+                          id="aquecedor-save-btn"
+                          class="instance-action-btn btn-qrcode enabled"
+                          type="button"
+                        >
+                          Salvar configurações
+                        </button>
+                        <span id="aquecedor-save-feedback" class="aquecedor-save-feedback muted" aria-live="polite"></span>
                       </div>
                     </div>
                   </div>
@@ -23486,7 +23503,7 @@
           });
         }
       }
-      let aquecedorEditMode = true;
+      let aquecedorEditMode = false;
       let aquecedorStartUnlocked = false;
       const aquecedorCommandLogs = [];
       const disparosDiagnosticoLogs = [];
@@ -23757,18 +23774,59 @@
         if (type === "err") el.classList.add("err");
       }
 
+      function formatAquecedorExpedienteSummary(batches) {
+        const DAY_LABELS = {
+          seg: "Seg",
+          ter: "Ter",
+          qua: "Qua",
+          qui: "Qui",
+          sex: "Sex",
+          sab: "Sáb",
+          dom: "Dom",
+        };
+        if (!Array.isArray(batches) || !batches.length) return "Sem expediente";
+        return batches
+          .map((batch) => {
+            const days = (batch.days || [])
+              .map((day) => DAY_LABELS[day] || day)
+              .join(", ");
+            return `${days} ${batch.startHour}h–${batch.endHour}h`;
+          })
+          .join(" · ");
+      }
+
+      function updateAquecedorParamsSummary() {
+        const summaryEl = document.getElementById("aquecedor-params-summary");
+        const badgeEl = document.getElementById("aquecedor-params-badge");
+        const useRecommended = Boolean(
+          document.getElementById("aquecedor-use-recommended")?.checked
+        );
+        const values = useRecommended ? AQUECEDOR_RECOMMENDED : getAquecedorFormValues();
+        const batches = useRecommended
+          ? AQUECEDOR_RECOMMENDED.expediente
+          : aquecedorExpedienteBatches;
+        const janelaHoras = (values.janelaAtivaMinutos || 60) / 60;
+        const timing = `Janela ${janelaHoras}h · pausa ${values.pausaMinutos}min · envio ${values.waitMinSeconds}s–${values.waitMaxSeconds}s`;
+        if (summaryEl) {
+          summaryEl.textContent = `${formatAquecedorExpedienteSummary(batches)} · ${timing}`;
+        }
+        if (badgeEl) {
+          badgeEl.textContent = useRecommended ? "Padrão" : "Personalizado";
+          badgeEl.classList.toggle("custom", !useRecommended);
+        }
+      }
+
       function setAquecedorEditMode(isEditing) {
         aquecedorEditMode = Boolean(isEditing);
+        const panel = document.getElementById("aquecedor-params-panel");
         const accordion = document.getElementById("aquecedor-config-accordion");
-        const saveBtn = document.getElementById("aquecedor-save-btn");
-        if (accordion) {
-          accordion.classList.toggle("collapsed", !aquecedorEditMode);
+        const toggleBtn = document.getElementById("aquecedor-params-toggle");
+        if (panel) panel.classList.toggle("is-open", aquecedorEditMode);
+        if (accordion) accordion.classList.toggle("collapsed", !aquecedorEditMode);
+        if (toggleBtn) {
+          toggleBtn.setAttribute("aria-expanded", aquecedorEditMode ? "true" : "false");
         }
-        if (saveBtn) {
-          saveBtn.textContent = aquecedorEditMode
-            ? "Salvar configurações"
-            : "Editar configurações";
-        }
+        if (!aquecedorEditMode) updateAquecedorParamsSummary();
       }
 
       function getAquecedorFormValues() {
@@ -23831,6 +23889,7 @@
           });
         });
         updateRemoveButtonsVisibility();
+        updateAquecedorParamsSummary();
       }
 
       function updateRemoveButtonsVisibility() {
@@ -23933,6 +23992,8 @@
               ? `Usando padrão recomendado${storageHint}`
               : `Usando configuração personalizada${storageHint}`;
           }
+          updateAquecedorParamsSummary();
+          setAquecedorEditMode(false);
         } catch {
           showToast("Erro ao carregar configuração do Aquecedor.", "error");
         }
@@ -23942,17 +24003,11 @@
         const toggle = document.getElementById("aquecedor-use-recommended");
         const saveBtn = document.getElementById("aquecedor-save-btn");
         const statusLabel = document.getElementById("aquecedor-status-label");
-        const isEditOnly =
-          saveBtn && /editar/i.test(String(saveBtn.textContent || "").trim());
 
         if (!aquecedorEditMode) {
           setAquecedorEditMode(true);
-          setAquecedorSaveFeedback("");
-          if (isEditOnly) {
-            showToast("Modo de edição habilitado. Ajuste os campos e clique em Salvar.", "success", 2800);
-            addAquecedorCommandLog("Modo de edição de configurações habilitado.");
-            return;
-          }
+          setAquecedorSaveFeedback("Expanda os parâmetros, ajuste os campos e clique em Salvar.");
+          return;
         }
 
         const useRecommended = Boolean(toggle?.checked);
@@ -24020,6 +24075,7 @@
           }
           setAquecedorFormDisabled(useRecommended);
           updateRemoveButtonsVisibility();
+          updateAquecedorParamsSummary();
           setAquecedorEditMode(false);
         } catch (err) {
           const errMsg =
@@ -24032,9 +24088,7 @@
           addAquecedorCommandLog(`Falha ao salvar: ${errMsg}`);
         } finally {
           if (saveBtn) {
-            saveBtn.textContent = aquecedorEditMode
-              ? "Salvar configurações"
-              : "Editar configurações";
+            saveBtn.textContent = "Salvar configurações";
             saveBtn.removeAttribute("disabled");
           }
         }
@@ -31977,6 +32031,17 @@
           }
           setAquecedorFormDisabled(useRecommended);
           updateRemoveButtonsVisibility();
+          updateAquecedorParamsSummary();
+        });
+      }
+
+      const aquecedorParamsToggle = document.getElementById("aquecedor-params-toggle");
+      if (aquecedorParamsToggle) {
+        aquecedorParamsToggle.addEventListener("click", () => {
+          setAquecedorEditMode(!aquecedorEditMode);
+          if (aquecedorEditMode) {
+            setAquecedorSaveFeedback("");
+          }
         });
       }
 
@@ -32745,11 +32810,9 @@
         updateAquecedorChatDockVisibility();
         setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
         setAquecedorFormDisabled(true);
+        updateAquecedorParamsSummary();
         await syncAquecedorRuntimeUi({ autoResume: true });
-        const motorOn =
-          aquecedorRuntimeStatusCache?.running === true ||
-          aquecedorRuntimeStatusCache?.desiredRunning === true;
-        setAquecedorEditMode(!motorOn);
+        setAquecedorEditMode(false);
         renderAquecedorCommandLogs();
 
       document.getElementById("sender-filter")?.addEventListener("change", (e) => {
