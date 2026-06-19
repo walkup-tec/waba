@@ -7,6 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { promises as fs, existsSync, readFileSync } from "fs";
 import { lookup } from "dns/promises";
+import { hostname } from "os";
 import { createClient } from "@supabase/supabase-js";
 import { DRAX_LOGO_PNG_BASE64 } from "./generated-brand-logo";
 import { WABA_ENV } from "./load-env";
@@ -2216,72 +2217,6 @@ function queuePersistDisparosLocalState(): void {
   });
 }
 
-type AquecedorRuntimeIntent = {
-  desired: boolean | null;
-  ownerEmail: string | null;
-};
-
-let aquecedorRuntimeIntentCache: AquecedorRuntimeIntent = { desired: null, ownerEmail: null };
-let aquecedorRuntimeIntentHydrated = false;
-
-async function readAquecedorRuntimeIntentFromDisk(): Promise<AquecedorRuntimeIntent> {
-  try {
-    const raw = await fs.readFile(RUNTIME_INTENT_FILE, "utf-8");
-    const p = JSON.parse(raw);
-    if (p?.version !== 1 || typeof p.aquecedorRuntimeDesired !== "boolean") {
-      return { desired: null, ownerEmail: null };
-    }
-    const ownerEmail =
-      typeof p.aquecedorOwnerEmail === "string" && p.aquecedorOwnerEmail.trim()
-        ? p.aquecedorOwnerEmail.trim().toLowerCase()
-        : null;
-    return { desired: p.aquecedorRuntimeDesired, ownerEmail };
-  } catch {
-    return { desired: null, ownerEmail: null };
-  }
-}
-
-async function hydrateAquecedorRuntimeIntentCache(): Promise<AquecedorRuntimeIntent> {
-  if (!aquecedorRuntimeIntentHydrated) {
-    aquecedorRuntimeIntentCache = await readAquecedorRuntimeIntentFromDisk();
-    aquecedorRuntimeIntentHydrated = true;
-  }
-  return aquecedorRuntimeIntentCache;
-}
-
-async function persistAquecedorRuntimeIntent(
-  desired: boolean,
-  ownerEmail: string | null
-): Promise<void> {
-  aquecedorRuntimeIntentCache = {
-    desired,
-    ownerEmail: ownerEmail?.trim().toLowerCase() || null,
-  };
-  aquecedorRuntimeIntentHydrated = true;
-  try {
-    await fs.mkdir(path.dirname(RUNTIME_INTENT_FILE), { recursive: true });
-    const payload = {
-      version: 1 as const,
-      savedAt: new Date().toISOString(),
-      aquecedorRuntimeDesired: desired,
-      aquecedorOwnerEmail: ownerEmail,
-    };
-    const tmp = `${RUNTIME_INTENT_FILE}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
-    await fs.rename(tmp, RUNTIME_INTENT_FILE);
-    console.log(
-      `[Runtime] runtime-intent: aquecedor desejado = ${desired ? "ligado" : "desligado"}${ownerEmail ? ` (${ownerEmail})` : ""}.`
-    );
-  } catch (e) {
-    console.error("[Runtime] falha ao gravar runtime-intent.json:", e);
-  }
-}
-
-async function loadAquecedorRuntimeIntent(): Promise<AquecedorRuntimeIntent> {
-  await hydrateAquecedorRuntimeIntentCache();
-  return { ...aquecedorRuntimeIntentCache };
-}
-
 async function loadDisparosLocalState(): Promise<void> {
   try {
     const raw = await fs.readFile(DISPAROS_LOCAL_STATE_FILE, "utf-8");
@@ -2390,6 +2325,219 @@ const aquecedorRuntime: AquecedorRuntimeStatus = {
 
 let aquecedorInterval: NodeJS.Timeout | null = null;
 let aquecedorRuntimeOwnerEmail: string | null = null;
+
+type AquecedorRuntimeIntent = {
+  desired: boolean | null;
+  ownerEmail: string | null;
+};
+
+type AquecedorRuntimePersistedSnapshot = AquecedorRuntimeStatus & {
+  workerId: string | null;
+  workerHeartbeatAt: string | null;
+};
+
+type AquecedorRuntimePersistedBundle = AquecedorRuntimeIntent & {
+  snapshot: AquecedorRuntimePersistedSnapshot;
+};
+
+const AQUECEDOR_WORKER_LEASE_MS = 45_000;
+const AQUECEDOR_WORKER_SYNC_MS = 12_000;
+const AQUECEDOR_WORKER_ID = `${hostname()}:${process.pid}`;
+
+function createDefaultAquecedorRuntimeSnapshot(): AquecedorRuntimePersistedSnapshot {
+  return {
+    running: false,
+    isProcessing: false,
+    nextAllowedAt: null,
+    lastRunAt: null,
+    lastResult: null,
+    lastEvoError: null,
+    workerId: null,
+    workerHeartbeatAt: null,
+  };
+}
+
+let aquecedorPersistedBundle: AquecedorRuntimePersistedBundle = {
+  desired: null,
+  ownerEmail: null,
+  snapshot: createDefaultAquecedorRuntimeSnapshot(),
+};
+
+function getAquecedorWorkerId(): string {
+  return AQUECEDOR_WORKER_ID;
+}
+
+function isAquecedorWorkerLeaseValid(snapshot: AquecedorRuntimePersistedSnapshot): boolean {
+  if (!snapshot.workerHeartbeatAt) return false;
+  const heartbeatMs = new Date(snapshot.workerHeartbeatAt).getTime();
+  if (!Number.isFinite(heartbeatMs)) return false;
+  return Date.now() - heartbeatMs <= AQUECEDOR_WORKER_LEASE_MS;
+}
+
+function shouldThisProcessLeadAquecedor(bundle: AquecedorRuntimePersistedBundle): boolean {
+  if (bundle.desired !== true || !bundle.snapshot.running) return false;
+  const snapshot = bundle.snapshot;
+  if (snapshot.workerId === getAquecedorWorkerId()) return true;
+  if (!snapshot.workerId || !isAquecedorWorkerLeaseValid(snapshot)) return true;
+  return false;
+}
+
+function applyPersistedSnapshotToLocal(snapshot: AquecedorRuntimePersistedSnapshot): void {
+  aquecedorRuntime.running = snapshot.running === true;
+  aquecedorRuntime.isProcessing = snapshot.isProcessing === true;
+  aquecedorRuntime.nextAllowedAt = snapshot.nextAllowedAt;
+  aquecedorRuntime.lastRunAt = snapshot.lastRunAt;
+  aquecedorRuntime.lastResult = snapshot.lastResult;
+  aquecedorRuntime.lastEvoError = snapshot.lastEvoError;
+}
+
+function buildPersistedSnapshotFromLocal(
+  overrides: Partial<AquecedorRuntimePersistedSnapshot> = {},
+): AquecedorRuntimePersistedSnapshot {
+  return {
+    running: aquecedorRuntime.running,
+    isProcessing: aquecedorRuntime.isProcessing,
+    nextAllowedAt: aquecedorRuntime.nextAllowedAt,
+    lastRunAt: aquecedorRuntime.lastRunAt,
+    lastResult: aquecedorRuntime.lastResult,
+    lastEvoError: aquecedorRuntime.lastEvoError,
+    workerId: aquecedorPersistedBundle.snapshot.workerId,
+    workerHeartbeatAt: aquecedorPersistedBundle.snapshot.workerHeartbeatAt,
+    ...overrides,
+  };
+}
+
+function parseAquecedorRuntimePersistedBundle(raw: unknown): AquecedorRuntimePersistedBundle {
+  const p = raw as Record<string, unknown>;
+  const version = Number(p?.version);
+  if (version !== 1 && version !== 2) {
+    return {
+      desired: null,
+      ownerEmail: null,
+      snapshot: createDefaultAquecedorRuntimeSnapshot(),
+    };
+  }
+  const desired =
+    typeof p.aquecedorRuntimeDesired === "boolean" ? p.aquecedorRuntimeDesired : null;
+  const ownerEmail =
+    typeof p.aquecedorOwnerEmail === "string" && p.aquecedorOwnerEmail.trim()
+      ? p.aquecedorOwnerEmail.trim().toLowerCase()
+      : null;
+  const snapRaw = (p.aquecedorRuntimeSnapshot || {}) as Record<string, unknown>;
+  const snapshot: AquecedorRuntimePersistedSnapshot = {
+    running: snapRaw.running === true,
+    isProcessing: snapRaw.isProcessing === true,
+    nextAllowedAt:
+      typeof snapRaw.nextAllowedAt === "string" ? snapRaw.nextAllowedAt : null,
+    lastRunAt: typeof snapRaw.lastRunAt === "string" ? snapRaw.lastRunAt : null,
+    lastResult: typeof snapRaw.lastResult === "string" ? snapRaw.lastResult : null,
+    lastEvoError:
+      snapRaw.lastEvoError && typeof snapRaw.lastEvoError === "object"
+        ? (snapRaw.lastEvoError as AquecedorRuntimeStatus["lastEvoError"])
+        : null,
+    workerId: typeof snapRaw.workerId === "string" ? snapRaw.workerId : null,
+    workerHeartbeatAt:
+      typeof snapRaw.workerHeartbeatAt === "string" ? snapRaw.workerHeartbeatAt : null,
+  };
+  if (version === 1) {
+    snapshot.running = desired === true;
+  }
+  return { desired, ownerEmail, snapshot };
+}
+
+async function reloadAquecedorPersistedBundleFromDisk(): Promise<AquecedorRuntimePersistedBundle> {
+  try {
+    const raw = await fs.readFile(RUNTIME_INTENT_FILE, "utf-8");
+    aquecedorPersistedBundle = parseAquecedorRuntimePersistedBundle(JSON.parse(raw));
+  } catch {
+    /* mantém cache em memória */
+  }
+  return aquecedorPersistedBundle;
+}
+
+async function writeAquecedorPersistedBundleToDisk(): Promise<void> {
+  try {
+    await fs.mkdir(path.dirname(RUNTIME_INTENT_FILE), { recursive: true });
+    const payload = {
+      version: 2 as const,
+      savedAt: new Date().toISOString(),
+      aquecedorRuntimeDesired: aquecedorPersistedBundle.desired === true,
+      aquecedorOwnerEmail: aquecedorPersistedBundle.ownerEmail,
+      aquecedorRuntimeSnapshot: aquecedorPersistedBundle.snapshot,
+    };
+    const tmp = `${RUNTIME_INTENT_FILE}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
+    await fs.rename(tmp, RUNTIME_INTENT_FILE);
+  } catch (e) {
+    console.error("[Runtime] falha ao gravar runtime-intent.json:", e);
+  }
+}
+
+async function persistAquecedorRuntimeSnapshot(
+  overrides: Partial<AquecedorRuntimePersistedSnapshot> = {},
+): Promise<void> {
+  aquecedorPersistedBundle.snapshot = buildPersistedSnapshotFromLocal(overrides);
+  await writeAquecedorPersistedBundleToDisk();
+}
+
+async function persistAquecedorRuntimeIntent(
+  desired: boolean,
+  ownerEmail: string | null,
+): Promise<void> {
+  const normalizedOwner = ownerEmail?.trim().toLowerCase() || null;
+  aquecedorPersistedBundle.desired = desired;
+  aquecedorPersistedBundle.ownerEmail = desired ? normalizedOwner : null;
+  aquecedorPersistedBundle.snapshot = buildPersistedSnapshotFromLocal({
+    running: desired,
+    workerId: desired ? getAquecedorWorkerId() : null,
+    workerHeartbeatAt: desired ? new Date().toISOString() : null,
+    isProcessing: desired ? aquecedorRuntime.isProcessing : false,
+  });
+  await writeAquecedorPersistedBundleToDisk();
+  console.log(
+    `[Runtime] runtime-intent: aquecedor desejado = ${desired ? "ligado" : "desligado"}${normalizedOwner ? ` (${normalizedOwner})` : ""}.`
+  );
+}
+
+async function loadAquecedorRuntimeIntent(): Promise<AquecedorRuntimeIntent> {
+  await reloadAquecedorPersistedBundleFromDisk();
+  return {
+    desired: aquecedorPersistedBundle.desired,
+    ownerEmail: aquecedorPersistedBundle.ownerEmail,
+  };
+}
+
+function stopAquecedorRuntimeLocal(): void {
+  aquecedorRuntime.running = false;
+  if (aquecedorInterval) {
+    clearInterval(aquecedorInterval);
+    aquecedorInterval = null;
+  }
+}
+
+async function syncAquecedorWorkerLeadership(): Promise<void> {
+  if (!ENABLE_AQUECEDOR_PROCESSING || MAINTENANCE_MODE) return;
+  await reloadAquecedorPersistedBundleFromDisk();
+  const bundle = aquecedorPersistedBundle;
+  applyPersistedSnapshotToLocal(bundle.snapshot);
+  aquecedorRuntimeOwnerEmail = bundle.ownerEmail;
+
+  if (bundle.desired !== true || !bundle.snapshot.running) {
+    stopAquecedorRuntimeLocal();
+    return;
+  }
+
+  if (shouldThisProcessLeadAquecedor(bundle)) {
+    startAquecedorRuntimeLocal();
+    bundle.snapshot.workerId = getAquecedorWorkerId();
+    bundle.snapshot.workerHeartbeatAt = new Date().toISOString();
+    aquecedorPersistedBundle.snapshot = bundle.snapshot;
+    await writeAquecedorPersistedBundleToDisk();
+    return;
+  }
+
+  stopAquecedorRuntimeLocal();
+}
 
 type AquecedorConfigRecord = {
   useRecommended: boolean;
@@ -3124,10 +3272,16 @@ async function runAquecedorCycle(forceTest = false) {
     aquecedorRuntime.lastResult = `Erro no ciclo do aquecedor: ${msg.slice(0, 200)}`;
   } finally {
     aquecedorRuntime.isProcessing = false;
+    if (shouldThisProcessLeadAquecedor(aquecedorPersistedBundle)) {
+      void persistAquecedorRuntimeSnapshot({
+        workerId: getAquecedorWorkerId(),
+        workerHeartbeatAt: new Date().toISOString(),
+      });
+    }
   }
 }
 
-function startAquecedorRuntime() {
+function startAquecedorRuntimeLocal(): void {
   if (!ENABLE_AQUECEDOR_PROCESSING) {
     aquecedorRuntime.running = false;
     aquecedorRuntime.lastResult =
@@ -3144,13 +3298,13 @@ function startAquecedorRuntime() {
   runAquecedorCycle();
 }
 
-function stopAquecedorRuntime() {
-  aquecedorRuntime.running = false;
+function startAquecedorRuntime(): void {
+  startAquecedorRuntimeLocal();
+}
+
+function stopAquecedorRuntime(): void {
+  stopAquecedorRuntimeLocal();
   aquecedorRuntimeOwnerEmail = null;
-  if (aquecedorInterval) {
-    clearInterval(aquecedorInterval);
-    aquecedorInterval = null;
-  }
 }
 
 let indexHtmlTemplate: string | null = null;
@@ -5450,12 +5604,17 @@ app.post("/aquecedor/config", async (req, res) => {
 });
 
 app.get("/aquecedor/status", async (_req, res) => {
-  const intent = await loadAquecedorRuntimeIntent();
+  await reloadAquecedorPersistedBundleFromDisk();
+  const bundle = aquecedorPersistedBundle;
+  applyPersistedSnapshotToLocal(bundle.snapshot);
   return res.json({
-    ...aquecedorRuntime,
-    desiredRunning: intent.desired === true,
-    persistedOwnerEmail: intent.ownerEmail,
-    ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || intent.ownerEmail),
+    ...bundle.snapshot,
+    running: bundle.desired === true && bundle.snapshot.running === true,
+    desiredRunning: bundle.desired === true,
+    persistedOwnerEmail: bundle.ownerEmail,
+    ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || bundle.ownerEmail),
+    workerId: bundle.snapshot.workerId,
+    workerHeartbeatAt: bundle.snapshot.workerHeartbeatAt,
   });
 });
 
@@ -5662,16 +5821,39 @@ app.post("/aquecedor/start", async (req, res) => {
   if (!aquecedorRuntimeOwnerEmail) {
     return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
   }
-  startAquecedorRuntime();
+  startAquecedorRuntimeLocal();
   void ensureAquecedorPendingMessage();
   await persistAquecedorRuntimeIntent(true, aquecedorRuntimeOwnerEmail);
-  return res.json({ ok: true, message: "Aquecedor iniciado.", status: aquecedorRuntime, desiredRunning: true });
+  await reloadAquecedorPersistedBundleFromDisk();
+  return res.json({
+    ok: true,
+    message: "Aquecedor iniciado.",
+    status: {
+      ...aquecedorPersistedBundle.snapshot,
+      running: true,
+      desiredRunning: true,
+    },
+    desiredRunning: true,
+  });
 });
 
 app.post("/aquecedor/stop", async (_req, res) => {
   stopAquecedorRuntime();
+  aquecedorRuntime.lastResult = "Aquecedor parado.";
   await persistAquecedorRuntimeIntent(false, null);
-  return res.json({ ok: true, message: "Aquecedor parado.", status: aquecedorRuntime, desiredRunning: false });
+  await reloadAquecedorPersistedBundleFromDisk();
+  return res.json({
+    ok: true,
+    message: "Aquecedor parado.",
+    status: {
+      ...aquecedorPersistedBundle.snapshot,
+      running: false,
+      desiredRunning: false,
+      isProcessing: false,
+      lastResult: "Aquecedor parado.",
+    },
+    desiredRunning: false,
+  });
 });
 
 app.post("/aquecedor/run-once", async (req, res) => {
@@ -8718,13 +8900,18 @@ app.listen(PORT, () => {
           "[Aquecedor] runtime-intent pede motor ligado, mas sem aquecedorOwnerEmail — aguardando POST /aquecedor/start.",
         );
       } else {
-        void ensureAquecedorPendingMessage();
-        startAquecedorRuntime();
+        await syncAquecedorWorkerLeadership();
         console.log(
           "[Aquecedor] retomado após restart (data/runtime-intent.json — último «Iniciar» explícito).",
         );
       }
     }
+
+    setInterval(() => {
+      syncAquecedorWorkerLeadership().catch((err) =>
+        console.error("[Aquecedor] sync worker:", err),
+      );
+    }, AQUECEDOR_WORKER_SYNC_MS);
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
       if (WABA_ENV === "v01") {

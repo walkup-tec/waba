@@ -27022,6 +27022,7 @@
             url,
             {
               method: "POST",
+              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
             },
             runOnceTimeout
@@ -27054,11 +27055,15 @@
           showToast(data?.message || "Ação executada com sucesso.", "success");
           addAquecedorCommandLog(data?.message || `Ação concluída: ${action}.`);
           if (action === "start") {
-            renderAquecedorRuntimeHero({
+            aquecedorRuntimeStatusCache = {
+              ...(data?.status || {}),
               running: true,
+              desiredRunning: true,
               isProcessing: false,
-              lastResult: "Aquecedor iniciado com sucesso.",
-            });
+              lastResult: data?.message || "Aquecedor iniciado com sucesso.",
+            };
+            renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
+            renderAquecedorRuntimeProgress();
           }
           const lastResult = data?.status?.lastResult;
           if (action === "runOnce" && lastResult) {
