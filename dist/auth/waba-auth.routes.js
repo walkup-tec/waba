@@ -36,16 +36,19 @@ const clearSessionCookie = (res) => {
 const sendSession = (req, res) => {
     const config = (0, waba_auth_service_1.getWabaAuthPublicConfig)();
     if (!config.authConfigured) {
+        clearSessionCookie(res);
         return res.status(200).json({
-            authenticated: true,
+            authenticated: false,
             authConfigured: false,
             email: "",
-            role: "guest",
+            role: "",
         });
     }
     const token = (0, waba_auth_service_1.readWabaSessionCookie)(req.headers.cookie);
     const session = (0, waba_auth_service_1.verifyWabaSessionToken)(token);
     if (!session) {
+        if (token)
+            clearSessionCookie(res);
         return res.status(200).json({
             authenticated: false,
             authConfigured: true,
@@ -87,6 +90,8 @@ const isAuthBypassPath = (method, reqPath) => {
         return true;
     if (p === "/auth/logout" && method === "POST")
         return true;
+    if (p === "/auth/force-logout" && method === "GET")
+        return true;
     if (p === "/auth/session" && (method === "GET" || method === "HEAD"))
         return true;
     if (p === "/subscribers/register" && method === "POST")
@@ -119,6 +124,12 @@ const isAuthBypassPath = (method, reqPath) => {
 };
 const wabaRequireAuthMiddleware = (req, res, next) => {
     if (!(0, waba_auth_service_1.isWabaAuthConfigured)()) {
+        const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
+        if (runtime === "production") {
+            return res.status(503).json({
+                error: "Login não configurado. Defina WABA_ADMIN_EMAIL e WABA_ADMIN_PASSWORD no servidor.",
+            });
+        }
         return next();
     }
     if (isAuthBypassPath(req.method, req.path)) {
@@ -197,6 +208,11 @@ const registerWabaAuthRoutes = (app) => {
     app.post("/auth/logout", (_req, res) => {
         clearSessionCookie(res);
         return res.status(200).json({ ok: true });
+    });
+    app.get("/auth/force-logout", (_req, res) => {
+        clearSessionCookie(res);
+        const base = base_path_1.BASE_PATH && base_path_1.BASE_PATH !== "/" ? base_path_1.BASE_PATH : "";
+        return res.redirect(302, `${base}/`);
     });
 };
 exports.registerWabaAuthRoutes = registerWabaAuthRoutes;

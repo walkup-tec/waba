@@ -38,6 +38,13 @@ type SessionPayload = {
   email: string;
   exp: number;
   role?: WabaSessionRole;
+  epoch?: string;
+};
+
+const resolveSessionEpoch = (): string => {
+  const fromEnv = String(process.env.WABA_SESSION_EPOCH ?? "").trim();
+  if (fromEnv) return fromEnv;
+  return "1";
 };
 
 const signPayload = (payload: SessionPayload): string => {
@@ -66,6 +73,10 @@ const readSessionToken = (token: string): SessionPayload | null => {
     if (!payload?.email || !Number.isFinite(payload.exp) || payload.exp < Date.now()) {
       return null;
     }
+    const tokenEpoch = String(payload.epoch ?? "1").trim() || "1";
+    if (tokenEpoch !== resolveSessionEpoch()) {
+      return null;
+    }
     return payload;
   } catch {
     return null;
@@ -80,6 +91,7 @@ export const createWabaSessionToken = (
     email: normalizeEmail(email),
     exp: Date.now() + resolveSessionTtlMs(),
     role,
+    epoch: resolveSessionEpoch(),
   };
   return signPayload(payload);
 };

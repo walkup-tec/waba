@@ -14745,17 +14745,32 @@
       }
 
       async function initWabaAuthGate() {
+        let session = {};
         try {
           const response = await fetch("/auth/session", { credentials: "same-origin" });
-          const session = await response.json().catch(() => ({}));
-          if (response.ok && session.authenticated) {
+          session = await response.json().catch(() => ({}));
+          const email = String(session.email || "").trim();
+          const hasValidSession = response.ok && session.authenticated === true && Boolean(email);
+          if (hasValidSession) {
             unlockWabaApp(session);
             return true;
+          }
+          if (session.authenticated === false) {
+            try {
+              await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+            } catch {
+              /* ignore */
+            }
           }
         } catch {
           /* ignore */
         }
         lockWabaApp();
+        if (session.authConfigured === false) {
+          setWabaLoginError(
+            "Login não configurado no servidor. Defina WABA_ADMIN_EMAIL e WABA_ADMIN_PASSWORD no Easypanel."
+          );
+        }
         return false;
       }
 

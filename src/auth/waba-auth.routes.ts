@@ -45,17 +45,19 @@ const clearSessionCookie = (res: Response) => {
 const sendSession = (req: Request, res: Response) => {
   const config = getWabaAuthPublicConfig();
   if (!config.authConfigured) {
+    clearSessionCookie(res);
     return res.status(200).json({
-      authenticated: true,
+      authenticated: false,
       authConfigured: false,
       email: "",
-      role: "guest",
+      role: "",
     });
   }
 
   const token = readWabaSessionCookie(req.headers.cookie);
   const session = verifyWabaSessionToken(token);
   if (!session) {
+    if (token) clearSessionCookie(res);
     return res.status(200).json({
       authenticated: false,
       authConfigured: true,
@@ -101,6 +103,7 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
 
   if (p === "/auth/login" && method === "POST") return true;
   if (p === "/auth/logout" && method === "POST") return true;
+  if (p === "/auth/force-logout" && method === "GET") return true;
   if (p === "/auth/session" && (method === "GET" || method === "HEAD")) return true;
   if (p === "/subscribers/register" && method === "POST") return true;
   if (p === "/subscribers/login" && method === "POST") return true;
@@ -135,6 +138,12 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
 
 export const wabaRequireAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
   if (!isWabaAuthConfigured()) {
+    const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
+    if (runtime === "production") {
+      return res.status(503).json({
+        error: "Login não configurado. Defina WABA_ADMIN_EMAIL e WABA_ADMIN_PASSWORD no servidor.",
+      });
+    }
     return next();
   }
 
@@ -223,5 +232,11 @@ export const registerWabaAuthRoutes = (app: Express) => {
   app.post("/auth/logout", (_req, res) => {
     clearSessionCookie(res);
     return res.status(200).json({ ok: true });
+  });
+
+  app.get("/auth/force-logout", (_req, res) => {
+    clearSessionCookie(res);
+    const base = BASE_PATH && BASE_PATH !== "/" ? BASE_PATH : "";
+    return res.redirect(302, `${base}/`);
   });
 };

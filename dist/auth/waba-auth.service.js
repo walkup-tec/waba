@@ -31,6 +31,12 @@ const getWabaAuthPublicConfig = () => ({
     sessionCookieName: SESSION_COOKIE,
 });
 exports.getWabaAuthPublicConfig = getWabaAuthPublicConfig;
+const resolveSessionEpoch = () => {
+    const fromEnv = String(process.env.WABA_SESSION_EPOCH ?? "").trim();
+    if (fromEnv)
+        return fromEnv;
+    return "1";
+};
 const signPayload = (payload) => {
     const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
     const sig = node_crypto_1.default.createHmac("sha256", resolveSessionSecret()).update(body).digest("base64url");
@@ -54,6 +60,10 @@ const readSessionToken = (token) => {
         if (!payload?.email || !Number.isFinite(payload.exp) || payload.exp < Date.now()) {
             return null;
         }
+        const tokenEpoch = String(payload.epoch ?? "1").trim() || "1";
+        if (tokenEpoch !== resolveSessionEpoch()) {
+            return null;
+        }
         return payload;
     }
     catch {
@@ -65,6 +75,7 @@ const createWabaSessionToken = (email, role = "subscriber") => {
         email: normalizeEmail(email),
         exp: Date.now() + resolveSessionTtlMs(),
         role,
+        epoch: resolveSessionEpoch(),
     };
     return signPayload(payload);
 };
