@@ -224,6 +224,42 @@ class WabaInstanceOwnershipService {
         const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
         return names.filter((name) => allowedLower.has(normalizeInstanceName(name).toLowerCase()));
     }
+    /**
+     * Instâncias legadas na Evolution sem dono em instance-owners.json ficam invisíveis.
+     * O master reconcilia órfãs para o próprio e-mail na primeira listagem.
+     */
+    async reconcileOrphanInstancesForMaster(auth, instanceNames) {
+        if (!(0, waba_auth_service_1.isWabaAuthConfigured)())
+            return 0;
+        const email = normalizeEmail(auth.email);
+        if (!email.includes("@"))
+            return 0;
+        const isMaster = auth.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(email);
+        if (!isMaster)
+            return 0;
+        let assigned = 0;
+        await this.runLocked(async () => {
+            const store = await this.loadStore();
+            let changed = false;
+            for (const rawName of instanceNames) {
+                const name = normalizeInstanceName(rawName);
+                if (!name)
+                    continue;
+                const existingKey = this.findStoreKey(store, name);
+                if (existingKey)
+                    continue;
+                store.instances[name] = {
+                    ownerEmail: email,
+                    createdAt: new Date().toISOString(),
+                };
+                assigned += 1;
+                changed = true;
+            }
+            if (changed)
+                await this.saveStore(store);
+        });
+        return assigned;
+    }
 }
 exports.WabaInstanceOwnershipService = WabaInstanceOwnershipService;
 exports.wabaInstanceOwnershipService = new WabaInstanceOwnershipService();

@@ -3151,6 +3151,16 @@ app.get("/instancias", async (req, res) => {
     }
 
     const auth = resolveWabaRequestAuth(req);
+    const allNames = baseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
+    const reconciled = await wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(
+      auth,
+      allNames,
+    );
+    if (reconciled > 0) {
+      console.info(
+        `[instancias] ${reconciled} instância(s) órfã(s) vinculada(s) ao master ${auth.email}.`,
+      );
+    }
     items = await wabaInstanceOwnershipService.filterItemsForAuth(auth, items, (row) =>
       String(row?.name || "")
     );

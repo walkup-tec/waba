@@ -1,8 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { isWabaAuthConfigured } from "../auth/waba-auth.service";
-import type { WabaRequestAuth } from "../auth/waba-request-auth";
-import { resolveDataFile } from "../data-path";
+import { isWabaAuthConfigured, isWabaMasterEmail } from "../auth/waba-auth.service";
+import type { WabaRequestAuth } from "../auth/waba-request-auth";import { resolveDataFile } from "../data-path";
 
 export type InstanceOwnerRecord = {
   ownerEmail: string;
@@ -241,6 +240,42 @@ export class WabaInstanceOwnershipService {
     const allowed = await this.filterInstanceNamesForAuth(auth, names);
     const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
     return names.filter((name) => allowedLower.has(normalizeInstanceName(name).toLowerCase()));
+  }
+
+  /**
+   * Instâncias legadas na Evolution sem dono em instance-owners.json ficam invisíveis.
+   * O master reconcilia órfãs para o próprio e-mail na primeira listagem.
+   */
+  async reconcileOrphanInstancesForMaster(
+    auth: WabaRequestAuth,
+    instanceNames: string[],
+  ): Promise<number> {
+    if (!isWabaAuthConfigured()) return 0;
+
+    const email = normalizeEmail(auth.email);
+    if (!email.includes("@")) return 0;
+    const isMaster = auth.role === "master" || isWabaMasterEmail(email);
+    if (!isMaster) return 0;
+
+    let assigned = 0;
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      let changed = false;
+      for (const rawName of instanceNames) {
+        const name = normalizeInstanceName(rawName);
+        if (!name) continue;
+        const existingKey = this.findStoreKey(store, name);
+        if (existingKey) continue;
+        store.instances[name] = {
+          ownerEmail: email,
+          createdAt: new Date().toISOString(),
+        };
+        assigned += 1;
+        changed = true;
+      }
+      if (changed) await this.saveStore(store);
+    });
+    return assigned;
   }
 }
 
