@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import path from "path";
 import crypto from "crypto";
 import { promises as fs, existsSync, readFileSync } from "fs";
+import { lookup } from "dns/promises";
 import { createClient } from "@supabase/supabase-js";
 import { DRAX_LOGO_PNG_BASE64 } from "./generated-brand-logo";
 import { WABA_ENV } from "./load-env";
@@ -491,6 +492,36 @@ function isSupabaseTransientError(error: unknown): boolean {
 
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getSupabaseUrlHost(): string | null {
+  try {
+    const raw = String(process.env.SUPABASE_URL || "").trim();
+    if (!raw) return null;
+    return new URL(raw).hostname;
+  } catch {
+    return null;
+  }
+}
+
+async function describeSupabaseConnectivityFailure(): Promise<string> {
+  const host = getSupabaseUrlHost();
+  if (!host) {
+    return "SUPABASE_URL inválida ou ausente no servidor (Easypanel → Environment).";
+  }
+  if (!String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim()) {
+    return "SUPABASE_SERVICE_ROLE_KEY ausente no servidor (Easypanel → Environment).";
+  }
+  try {
+    await lookup(host);
+  } catch (err) {
+    const code = String((err as NodeJS.ErrnoException)?.code || "");
+    if (code === "ENOTFOUND" || code === "ESERVFAIL") {
+      return `SUPABASE_URL incorreta: o host "${host}" não existe no DNS. Copie a Project URL no dashboard Supabase.`;
+    }
+    return `Supabase inacessível em "${host}" (${code || "erro de rede"}). Verifique SUPABASE_URL no Easypanel.`;
+  }
+  return `Conexão com Supabase em "${host}" falhou após 3 tentativas. Confira service_role key e se o projeto está ativo.`;
 }
 
 function normalizeInstanceUsageRow(row: any): InstanceUsageConfig {
@@ -1560,8 +1591,7 @@ async function ensureAquecedorPendingMessage(
   }
   return {
     ok: false,
-    reason:
-      "Conexão com Supabase instável (rede). Confira SUPABASE_URL e conectividade do servidor.",
+    reason: await describeSupabaseConnectivityFailure(),
   };
 }
 /** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
@@ -2744,8 +2774,7 @@ async function runAquecedorCycle(forceTest = false) {
         ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
       if (!ensured.ok && isSupabaseTransientError({ message: reason })) {
         aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 60_000).toISOString();
-        aquecedorRuntime.lastResult =
-          "Conexão temporária com Supabase indisponível. Nova tentativa em ~60s.";
+        aquecedorRuntime.lastResult = await describeSupabaseConnectivityFailure();
       } else {
         aquecedorRuntime.lastResult = ensured.ok
           ? "Sem mensagem pendente para envio (fila vazia após preparação)."
