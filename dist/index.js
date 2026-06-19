@@ -867,74 +867,6 @@ function buildAquecedorPairKey(instanciaA, instanciaB) {
     const b = String(instanciaB || "").trim();
     return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
 }
-function canAquecedorOrigemSendOnPair(origem, destino, lastSenders, canonicalMap) {
-    const from = canonicalMap
-        ? resolveAquecedorCanonicalInstance(origem, canonicalMap)
-        : String(origem || "").trim();
-    const to = canonicalMap
-        ? resolveAquecedorCanonicalInstance(destino, canonicalMap)
-        : String(destino || "").trim();
-    if (!from || !to || from.toLowerCase() === to.toLowerCase())
-        return false;
-    const last = lastSenders.get(buildAquecedorPairKey(from, to));
-    if (!last)
-        return true;
-    return last.toLowerCase() !== from.toLowerCase();
-}
-function pickAquecedorCombination(combinations, startIndex, lastSenders, canonicalMap) {
-    if (!combinations.length)
-        return null;
-    const base = ((startIndex % combinations.length) + combinations.length) % combinations.length;
-    for (let offset = 0; offset < combinations.length; offset += 1) {
-        const index = (base + offset) % combinations.length;
-        const combo = combinations[index];
-        if (canAquecedorOrigemSendOnPair(combo.instancia_origem, combo.instancia_destino, lastSenders, canonicalMap)) {
-            return { chosen: combo, index };
-        }
-    }
-    return null;
-}
-async function getLastAquecedorDirectedExchange(supabase, connected, instanciaOrigem, instanciaDestino) {
-    const aliasesMap = await loadInstanceAliasesMap();
-    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-    const origem = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaOrigem);
-    const destino = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaDestino);
-    if (!origem || !destino)
-        return null;
-    const origemName = resolveAquecedorCanonicalInstance(origem.instancia, canonicalMap);
-    const destinoName = resolveAquecedorCanonicalInstance(destino.instancia, canonicalMap);
-    const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
-    const instanceNames = connected.map((item) => item.instancia);
-    try {
-        const { data, error } = await (supabase
-            .from("aquecedor")
-            .select("instancia, numero_destino, sent_at")
-            .eq("status", "ENVIADO")
-            .in("instancia", instanceNames)
-            .order("sent_at", { ascending: false })
-            .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
-        if (error || !Array.isArray(data))
-            return null;
-        for (const row of data) {
-            const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-            const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
-            const toInst = numberToInstance.get(toNum) || "";
-            if (!fromInst || !toInst)
-                continue;
-            const isOrigemToDestino = fromInst.toLowerCase() === origemName.toLowerCase() &&
-                toInst.toLowerCase() === destinoName.toLowerCase();
-            const isDestinoToOrigem = fromInst.toLowerCase() === destinoName.toLowerCase() &&
-                toInst.toLowerCase() === origemName.toLowerCase();
-            if (!isOrigemToDestino && !isDestinoToOrigem)
-                continue;
-            return isOrigemToDestino ? "origem_to_destino" : "destino_to_origem";
-        }
-    }
-    catch {
-        /* */
-    }
-    return null;
-}
 function buildAquecedorNumberToInstanceMap(connected, canonicalMap) {
     const map = new Map();
     for (const item of connected) {
@@ -949,22 +881,181 @@ function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
     const target = resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase();
     return (connected.find((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase() === target) || null);
 }
-async function canAquecedorOrigemSendDirected(supabase, connected, instanciaOrigem, instanciaDestino) {
-    const last = await getLastAquecedorDirectedExchange(supabase, connected, instanciaOrigem, instanciaDestino);
-    return last !== "origem_to_destino";
+async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance) {
+    const events = [];
+    const instanceNames = connected.map((item) => item.instancia);
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("instancia, numero_destino, sent_at")
+            .eq("status", "ENVIADO")
+            .in("instancia", instanceNames)
+            .order("sent_at", { ascending: false })
+            .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
+        if (!error && Array.isArray(data)) {
+            for (const row of data) {
+                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
+                const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
+                const toInst = numberToInstance.get(toNum) || "";
+                const at = String(row?.sent_at || "").trim();
+                if (fromInst && toInst && at)
+                    events.push({ at, fromInst, toInst });
+            }
+        }
+    }
+    catch {
+        /* */
+    }
+    try {
+        const { data, error } = await (supabase
+            .from("logs_envios")
+            .select("instancia_origem, instancia_destino, data_envio")
+            .order("data_envio", { ascending: false })
+            .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
+        if (!error && Array.isArray(data)) {
+            for (const row of data) {
+                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia_origem || ""), canonicalMap);
+                const toInst = resolveAquecedorCanonicalInstance(String(row?.instancia_destino || ""), canonicalMap);
+                const at = String(row?.data_envio || "").trim();
+                if (fromInst && toInst && at)
+                    events.push({ at, fromInst, toInst });
+            }
+        }
+    }
+    catch {
+        /* */
+    }
+    const dedup = new Map();
+    for (const ev of events) {
+        const atMs = new Date(ev.at).getTime();
+        const bucket = Number.isFinite(atMs) ? Math.floor(atMs / 1000) : ev.at;
+        const key = `${ev.fromInst.toLowerCase()}|${ev.toInst.toLowerCase()}|${bucket}`;
+        if (!dedup.has(key))
+            dedup.set(key, ev);
+    }
+    return Array.from(dedup.values()).sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+async function loadAquecedorTurnManager(supabase, connected) {
+    const aliasesMap = await loadInstanceAliasesMap();
+    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+    const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+    const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
+    const instanceStats = new Map();
+    const pairLastSender = new Map();
+    const ensureStats = (canonical) => {
+        const key = canonical.toLowerCase();
+        let stats = instanceStats.get(key);
+        if (!stats) {
+            stats = {
+                canonical,
+                lastSentAt: null,
+                lastReceivedAt: null,
+                lastReceivedFrom: null,
+                sendCount: 0,
+                receiveCount: 0,
+            };
+            instanceStats.set(key, stats);
+        }
+        return stats;
+    };
+    for (const ev of events) {
+        const fromStats = ensureStats(ev.fromInst);
+        const toStats = ensureStats(ev.toInst);
+        fromStats.sendCount += 1;
+        toStats.receiveCount += 1;
+        fromStats.lastSentAt = ev.at;
+        toStats.lastReceivedAt = ev.at;
+        toStats.lastReceivedFrom = ev.fromInst;
+        pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+    }
+    const canSendDirected = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+            return false;
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const lastSender = pairLastSender.get(pairKey);
+        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+            return false;
+        }
+        const stats = instanceStats.get(origem.toLowerCase());
+        if (!stats?.lastSentAt)
+            return true;
+        if (!stats.lastReceivedAt)
+            return false;
+        return stats.lastReceivedAt >= stats.lastSentAt;
+    };
+    const describeBlockReason = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const lastSender = pairLastSender.get(pairKey);
+        const stats = instanceStats.get(origem.toLowerCase());
+        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+            return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
+        }
+        if (stats?.lastSentAt && (!stats.lastReceivedAt || stats.lastReceivedAt < stats.lastSentAt)) {
+            const esperado = stats.lastReceivedFrom
+                ? ` Responder a ${stats.lastReceivedFrom} libera o turno.`
+                : "";
+            return `${origem} enviou ${stats.sendCount} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+        }
+        return `${origem} não pode enviar para ${destino} no turno atual.`;
+    };
+    const scoreCombination = (origemRaw, destinoRaw, comboIndex, startIndex) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const stats = instanceStats.get(origem.toLowerCase());
+        let score = 0;
+        if (stats?.lastReceivedAt &&
+            stats?.lastSentAt &&
+            stats.lastReceivedAt > stats.lastSentAt) {
+            score -= 1000000;
+            if (stats.lastReceivedFrom &&
+                stats.lastReceivedFrom.toLowerCase() === destino.toLowerCase()) {
+                score -= 500000;
+            }
+        }
+        score += (stats?.sendCount || 0) * 1000;
+        const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
+        score += rotation;
+        return score;
+    };
+    return {
+        canonicalMap,
+        totalEvents: events.length,
+        canSendDirected,
+        describeBlockReason,
+        scoreCombination,
+    };
+}
+async function canAquecedorOrigemSendDirected(supabase, connected, instanciaOrigem, instanciaDestino, manager) {
+    const turn = manager || (await loadAquecedorTurnManager(supabase, connected));
+    return turn.canSendDirected(instanciaOrigem, instanciaDestino);
 }
 async function pickAquecedorCombinationAsync(supabase, connected, combinations, startIndex) {
     if (!combinations.length)
         return null;
-    const base = ((startIndex % combinations.length) + combinations.length) % combinations.length;
-    for (let offset = 0; offset < combinations.length; offset += 1) {
-        const index = (base + offset) % combinations.length;
+    const manager = await loadAquecedorTurnManager(supabase, connected);
+    const eligible = [];
+    for (let index = 0; index < combinations.length; index += 1) {
         const combo = combinations[index];
-        if (await canAquecedorOrigemSendDirected(supabase, connected, combo.instancia_origem, combo.instancia_destino)) {
-            return { chosen: combo, index };
-        }
+        if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino))
+            continue;
+        eligible.push({
+            combo,
+            index,
+            score: manager.scoreCombination(combo.instancia_origem, combo.instancia_destino, index, startIndex),
+        });
     }
-    return null;
+    if (!eligible.length)
+        return null;
+    eligible.sort((a, b) => a.score - b.score);
+    const bestScore = eligible[0].score;
+    const ties = eligible.filter((item) => item.score === bestScore);
+    const base = ((startIndex % ties.length) + ties.length) % ties.length;
+    const picked = ties[base];
+    return { chosen: picked.combo, index: picked.index };
 }
 async function loadRecentAquecedorPairLastSenders(supabase, connected) {
     const aliasesMap = await loadInstanceAliasesMap();
@@ -1002,15 +1093,13 @@ async function loadRecentAquecedorPairLastSenders(supabase, connected) {
     return lastSenders;
 }
 async function verifyAquecedorConversationTurn(supabase, connected, instanciaOrigem, instanciaDestino) {
-    const aliasesMap = await loadInstanceAliasesMap();
-    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-    const origem = resolveAquecedorCanonicalInstance(instanciaOrigem, canonicalMap);
-    const destino = resolveAquecedorCanonicalInstance(instanciaDestino, canonicalMap);
-    const last = await getLastAquecedorDirectedExchange(supabase, connected, instanciaOrigem, instanciaDestino);
-    if (last === "origem_to_destino") {
+    const manager = await loadAquecedorTurnManager(supabase, connected);
+    const origem = resolveAquecedorCanonicalInstance(instanciaOrigem, manager.canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(instanciaDestino, manager.canonicalMap);
+    if (!manager.canSendDirected(instanciaOrigem, instanciaDestino)) {
         return {
             ok: false,
-            reason: `${origem} não pode enviar de novo para ${destino} sem ${destino} responder no WhatsApp (último envio foi da mesma origem para o mesmo número).`,
+            reason: manager.describeBlockReason(instanciaOrigem, instanciaDestino),
         };
     }
     return { ok: true, reason: "" };
@@ -2330,7 +2419,7 @@ async function runAquecedorCycle(forceTest = false) {
             const retrySeconds = Math.max(60, Math.min(config.waitMinSeconds, 180));
             aquecedorRuntime.nextAllowedAt = new Date(Date.now() + retrySeconds * 1000).toISOString();
             aquecedorRuntime.lastResult =
-                "Aguardando resposta: nenhuma instância pode enviar de novo sem a outra responder no par.";
+                "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.";
             return;
         }
         const chosen = picked.chosen;
@@ -3573,7 +3662,10 @@ function describeEvoQrFailure(createStatus, qrStatus, createDetail, qrDetail) {
         if (/self-signed certificate|DEPTH_ZERO_SELF_SIGNED_CERT/i.test(detail)) {
             return "Evolution API com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no ambiente de desenvolvimento.";
         }
-        return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}).`;
+        if (/timeout/i.test(detail)) {
+            return "Evolution API demorou para gerar o QRCode (timeout). Tente «Atualizar QR» ou aumente EVO_HTTP_TIMEOUT_MS no servidor.";
+        }
+        return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o serviço Evolution está no ar.`;
     }
     return "Dados salvos, mas falha ao gerar QRCode na EVO.";
 }
@@ -3627,11 +3719,12 @@ function describeEvoInstancesFetchError(status, detail) {
     }
     return normalized || "Erro ao buscar dados na Evolution API.";
 }
-async function callEvoAction(url, method, body) {
+async function callEvoAction(url, method, body, options) {
     const result = await (0, evo_http_client_1.evoHttpRequest)(url, method, {
         apiKey: EVO_API_KEY,
         body,
-        timeoutMs: 12000,
+        timeoutMs: options?.timeoutMs ?? (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+        retries: options?.retries ?? 1,
     });
     const mergedBody = result.error
         ? [result.error, result.body].filter(Boolean).join(" | ")
@@ -4237,23 +4330,29 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         // não permitir criar instância com nome já usado por outra instância ativa/conectada.
         // Instâncias desconectadas são desconsideradas nesse comparativo.
         try {
-            const checkController = new AbortController();
-            const checkTimeout = setTimeout(() => checkController.abort(), 8000);
-            const checkResponse = await fetch(EVO_INSTANCES_URL, {
-                headers: {
-                    apikey: EVO_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                signal: checkController.signal,
-            }).finally(() => clearTimeout(checkTimeout));
-            if (checkResponse.ok) {
-                const rawInstances = await checkResponse.json().catch(() => []);
-                const list = Array.isArray(rawInstances)
-                    ? rawInstances
-                    : Array.isArray(rawInstances?.response)
-                        ? rawInstances.response
-                        : Array.isArray(rawInstances?.data)
-                            ? rawInstances.data
+            const checkResult = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", {
+                apiKey: EVO_API_KEY,
+                timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 15000),
+                retries: 2,
+            });
+            if (checkResult.ok) {
+                const rawInstances = checkResult.json ?? checkResult.body;
+                const parsed = typeof rawInstances === "string"
+                    ? (() => {
+                        try {
+                            return JSON.parse(rawInstances);
+                        }
+                        catch {
+                            return [];
+                        }
+                    })()
+                    : rawInstances;
+                const list = Array.isArray(parsed)
+                    ? parsed
+                    : Array.isArray(parsed?.response)
+                        ? parsed.response
+                        : Array.isArray(parsed?.data)
+                            ? parsed.data
                             : [];
                 const alreadyActive = list.some((item) => {
                     const inst = item?.instance ?? item;
@@ -4294,7 +4393,10 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         let lastCreateDetail = "";
         let qrFromCreate = null;
         for (const createUrl of createUrls) {
-            const createResult = await callEvoAction(createUrl, "POST", createPayload);
+            const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+                timeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+                retries: 3,
+            });
             lastCreateStatus = createResult.status;
             lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
             if (createResult.ok || createResult.status === 409) {
@@ -4338,7 +4440,10 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         let lastQrStatus = 0;
         let lastQrDetail = "";
         for (const qrcodeUrl of qrcodeUrls) {
-            const result = await callEvoAction(qrcodeUrl, "GET");
+            const result = await callEvoAction(qrcodeUrl, "GET", undefined, {
+                timeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+                retries: 3,
+            });
             lastQrStatus = result.status;
             lastQrDetail = String(result.body || result.error || "").slice(0, 400);
             if (result.ok) {

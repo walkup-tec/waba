@@ -26,7 +26,7 @@ import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
-import { evoHttpRequest } from "./evo-http.client";
+import { defaultEvoHttpTimeoutMs, evoHttpRequest } from "./evo-http.client";
 import {
   createWabaShortUrl,
   fetchWabaShortUrlClicks,
@@ -4369,7 +4369,10 @@ function describeEvoQrFailure(
     if (/self-signed certificate|DEPTH_ZERO_SELF_SIGNED_CERT/i.test(detail)) {
       return "Evolution API com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no ambiente de desenvolvimento.";
     }
-    return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}).`;
+    if (/timeout/i.test(detail)) {
+      return "Evolution API demorou para gerar o QRCode (timeout). Tente «Atualizar QR» ou aumente EVO_HTTP_TIMEOUT_MS no servidor.";
+    }
+    return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o serviço Evolution está no ar.`;
   }
   return "Dados salvos, mas falha ao gerar QRCode na EVO.";
 }
@@ -4431,11 +4434,13 @@ async function callEvoAction(
   url: string,
   method: "GET" | "POST" | "PUT" | "DELETE",
   body?: Record<string, any>,
+  options?: { timeoutMs?: number; retries?: number },
 ) {
   const result = await evoHttpRequest(url, method, {
     apiKey: EVO_API_KEY,
     body,
-    timeoutMs: 12000,
+    timeoutMs: options?.timeoutMs ?? defaultEvoHttpTimeoutMs(),
+    retries: options?.retries ?? 1,
   });
   const mergedBody = result.error
     ? [result.error, result.body].filter(Boolean).join(" | ")
@@ -5077,24 +5082,30 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     // não permitir criar instância com nome já usado por outra instância ativa/conectada.
     // Instâncias desconectadas são desconsideradas nesse comparativo.
     try {
-      const checkController = new AbortController();
-      const checkTimeout = setTimeout(() => checkController.abort(), 8000);
-      const checkResponse = await fetch(EVO_INSTANCES_URL, {
-        headers: {
-          apikey: EVO_API_KEY,
-          "Content-Type": "application/json",
-        },
-        signal: checkController.signal,
-      }).finally(() => clearTimeout(checkTimeout));
+      const checkResult = await evoHttpRequest(EVO_INSTANCES_URL, "GET", {
+        apiKey: EVO_API_KEY,
+        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 15000),
+        retries: 2,
+      });
 
-      if (checkResponse.ok) {
-        const rawInstances: any = await checkResponse.json().catch(() => []);
-        const list = Array.isArray(rawInstances)
-          ? rawInstances
-          : Array.isArray(rawInstances?.response)
-            ? rawInstances.response
-            : Array.isArray(rawInstances?.data)
-              ? rawInstances.data
+      if (checkResult.ok) {
+        const rawInstances: any = checkResult.json ?? checkResult.body;
+        const parsed =
+          typeof rawInstances === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(rawInstances);
+                } catch {
+                  return [];
+                }
+              })()
+            : rawInstances;
+        const list = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.response)
+            ? parsed.response
+            : Array.isArray(parsed?.data)
+              ? parsed.data
               : [];
 
         const alreadyActive = list.some((item: any) => {
@@ -5142,7 +5153,10 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     let lastCreateDetail = "";
     let qrFromCreate: string | null = null;
     for (const createUrl of createUrls) {
-      const createResult = await callEvoAction(createUrl, "POST", createPayload);
+      const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+        timeoutMs: defaultEvoHttpTimeoutMs(),
+        retries: 3,
+      });
       lastCreateStatus = createResult.status;
       lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
       if (createResult.ok || createResult.status === 409) {
@@ -5194,7 +5208,10 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     let lastQrStatus = 0;
     let lastQrDetail = "";
     for (const qrcodeUrl of qrcodeUrls) {
-      const result = await callEvoAction(qrcodeUrl, "GET");
+      const result = await callEvoAction(qrcodeUrl, "GET", undefined, {
+        timeoutMs: defaultEvoHttpTimeoutMs(),
+        retries: 3,
+      });
       lastQrStatus = result.status;
       lastQrDetail = String(result.body || result.error || "").slice(0, 400);
       if (result.ok) {

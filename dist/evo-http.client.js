@@ -3,10 +3,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isEvoTlsInsecure = void 0;
+exports.isEvoTlsInsecure = exports.defaultEvoHttpTimeoutMs = void 0;
 exports.evoHttpRequest = evoHttpRequest;
 const node_http_1 = __importDefault(require("node:http"));
 const node_https_1 = __importDefault(require("node:https"));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const defaultEvoHttpTimeoutMs = () => {
+    const raw = Number(process.env.EVO_HTTP_TIMEOUT_MS ?? 45000);
+    return Number.isFinite(raw) && raw >= 5000 ? Math.round(raw) : 45000;
+};
+exports.defaultEvoHttpTimeoutMs = defaultEvoHttpTimeoutMs;
 const parseJson = (text) => {
     if (!text)
         return null;
@@ -28,8 +34,17 @@ const isEvoTlsInsecure = () => {
     return runtime === "development" && base.startsWith("https://");
 };
 exports.isEvoTlsInsecure = isEvoTlsInsecure;
-function evoHttpRequest(url, method, options) {
-    const timeoutMs = Math.max(1000, Math.round(Number(options.timeoutMs ?? 12000)));
+const shouldRetryEvoRequest = (result) => {
+    if (result.ok)
+        return false;
+    if (result.status === 0)
+        return true;
+    if (result.status >= 500)
+        return true;
+    return false;
+};
+function evoHttpRequestOnce(url, method, options) {
+    const timeoutMs = Math.max(5000, Math.round(Number(options.timeoutMs ?? (0, exports.defaultEvoHttpTimeoutMs)())));
     const bodyText = options.body && Object.keys(options.body).length > 0
         ? JSON.stringify(options.body)
         : "";
@@ -64,9 +79,12 @@ function evoHttpRequest(url, method, options) {
             path: `${parsed.pathname}${parsed.search}`,
             method,
             headers,
+            timeout: timeoutMs,
             ...(isHttps && (0, exports.isEvoTlsInsecure)() ? { rejectUnauthorized: false } : {}),
         };
         const req = lib.request(requestOptions, (res) => {
+            req.setTimeout(0);
+            res.setTimeout(0);
             let text = "";
             res.setEncoding("utf8");
             res.on("data", (chunk) => {
@@ -82,7 +100,7 @@ function evoHttpRequest(url, method, options) {
                 });
             });
         });
-        req.setTimeout(timeoutMs, () => {
+        req.on("timeout", () => {
             req.destroy(new Error("timeout"));
         });
         req.on("error", (error) => {
@@ -98,4 +116,29 @@ function evoHttpRequest(url, method, options) {
             req.write(bodyText);
         req.end();
     });
+}
+function evoHttpRequest(url, method, options) {
+    const maxAttempts = Math.max(1, Math.min(5, Math.round(Number(options.retries ?? 1))));
+    const timeoutMs = options.timeoutMs ?? (0, exports.defaultEvoHttpTimeoutMs)();
+    return (async () => {
+        let last = {
+            ok: false,
+            status: 0,
+            body: "",
+            json: null,
+            error: "Evolution API sem resposta.",
+        };
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            last = await evoHttpRequestOnce(url, method, {
+                apiKey: options.apiKey,
+                body: options.body,
+                timeoutMs,
+            });
+            if (!shouldRetryEvoRequest(last) || attempt >= maxAttempts) {
+                return last;
+            }
+            await sleep(350 * attempt);
+        }
+        return last;
+    })();
 }

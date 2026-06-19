@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-19
 
+**WABA — fix QRCode Aquecedor (EVO timeout):** timeout 45s + retry na Evolution; `registrar-qrcode` estável. Ver `doc/LOG-2026-06-19__fix-aquecedor-qrcode-evo-timeout.md`.
+
 **WABA — V02 abas superiores navegação:** Aquecedor → `aquecedor`; API Oficial → `disparos`; API Alternativa → `disparo-evo`. Ver `doc/LOG-2026-06-19__v02-top-tabs-navigation-fix.md`.
 
 **WABA — aquecedor turn manager (fila):** gerenciador global de turnos — instância só reenvia após receber; par A↔B alterna remetente; prioriza quem deve responder. Marker `DEPLOY-2026-06-19-aquecedor-turn-manager-fila`. Ver `doc/LOG-2026-06-19__aquecedor-turn-manager-fila.md`.
