@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-19
 
+**WABA — V02 abas superiores navegação:** Aquecedor → `aquecedor`; API Oficial → `disparos`; API Alternativa → `disparo-evo`. Ver `doc/LOG-2026-06-19__v02-top-tabs-navigation-fix.md`.
+
+**WABA — aquecedor turn manager (fila):** gerenciador global de turnos — instância só reenvia após receber; par A↔B alterna remetente; prioriza quem deve responder. Marker `DEPLOY-2026-06-19-aquecedor-turn-manager-fila`. Ver `doc/LOG-2026-06-19__aquecedor-turn-manager-fila.md`.
+
 **WABA — V02 Disparo EVO (V01):** menu Disparo + aba API Alternativa abrem tela EVO (instâncias/config/campanhas). Ver `doc/LOG-2026-06-19__v02-disparo-evo-v01-screen.md`.
 
 **WABA — V02 UI topo + Créditos:** produção com 3 abas (Aquecedor / API Oficial / API Alternativa); menu lateral Disparos → Créditos (carrinho). Ver `doc/LOG-2026-06-19__v02-top-tabs-creditos-menu.md`.
@@ -26,6 +30,8 @@ Como usar:
 **WABA — V01 Disparador EVO reativado:** tick campanhas ligado (`WABA_EVO_DISPARADOR=true`); UI full; backup 4 campanhas em `data/v01/`. Ver `doc/LOG-2026-06-19__v01-evo-disparador-reativado.md`.
 
 **WABA — V01 master local:** `walkup@walkuptec.com.br` como master em `data/v01/waba-system-users.json` + `.env.v01`; login HTTP 200 role master confirmado.
+
+**WABA — aquecedor salvar config feedback:** mensagem inline ao salvar; motor visível ao editar. Marker `DEPLOY-2026-06-19-aquecedor-salvar-config-feedback`. Ver `doc/LOG-2026-06-19__aquecedor-salvar-config-feedback.md`.
 
 **WABA — aquecedor persiste após refresh:** UI retoma motor + auto-start se runtime-intent ligado. Marker `DEPLOY-2026-06-19-aquecedor-persiste-apos-refresh`. Ver `doc/LOG-2026-06-19__aquecedor-persiste-apos-refresh.md`.
 

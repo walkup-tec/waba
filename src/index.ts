@@ -27,6 +27,12 @@ import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { evoHttpRequest } from "./evo-http.client";
+import {
+  createWabaShortUrl,
+  fetchWabaShortUrlClicks,
+  isWabaManagedShortUrl,
+  resolveWabaShortRedirect,
+} from "./shortener/waba-shortener.service";
 import { WabaSystemUserService } from "./users/waba-system-user.service";
 import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intake.routes";
 import { countSpreadsheetImportedRows } from "./disparos/waba-campaign-spreadsheet.util";
@@ -193,6 +199,18 @@ app.use((req, res, next) => {
     }
   }
   return next();
+});
+
+/** Encurtador próprio — redirect público na raiz do host (/s/:slug). */
+app.get("/s/:slug", async (req, res) => {
+  try {
+    const target = await resolveWabaShortRedirect(String(req.params.slug || ""));
+    if (!target) return res.status(404).type("text/plain").send("Not Found");
+    return res.redirect(302, target);
+  } catch (error) {
+    console.error("[shortener] redirect error:", error);
+    return res.status(500).type("text/plain").send("Erro ao redirecionar.");
+  }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -646,9 +664,12 @@ function parseDisparosConfig(input: any): DisparosConfig {
     : DISPAROS_DEFAULTS.workingDays;
   const provider = String(input?.shortenerProvider || DISPAROS_DEFAULTS.shortenerProvider).toLowerCase();
   const safeProvider: DisparosConfig["shortenerProvider"] =
-    provider === "encurtadorpro" || provider === "isgd" || provider === "tinyurl"
+    provider === "encurtadorpro" ||
+    provider === "isgd" ||
+    provider === "tinyurl" ||
+    provider === "waba"
       ? (provider as DisparosConfig["shortenerProvider"])
-      : "encurtadorpro";
+      : "waba";
   const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
   const safeMode: DisparosConfig["messageMode"] = mode === "database" ? "database" : "ai";
   const selectedRaw =
@@ -979,98 +1000,6 @@ function buildAquecedorPairKey(instanciaA: string, instanciaB: string): string {
   return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
 }
 
-function canAquecedorOrigemSendOnPair(
-  origem: string,
-  destino: string,
-  lastSenders: Map<string, string>,
-  canonicalMap?: Map<string, string>,
-): boolean {
-  const from = canonicalMap
-    ? resolveAquecedorCanonicalInstance(origem, canonicalMap)
-    : String(origem || "").trim();
-  const to = canonicalMap
-    ? resolveAquecedorCanonicalInstance(destino, canonicalMap)
-    : String(destino || "").trim();
-  if (!from || !to || from.toLowerCase() === to.toLowerCase()) return false;
-  const last = lastSenders.get(buildAquecedorPairKey(from, to));
-  if (!last) return true;
-  return last.toLowerCase() !== from.toLowerCase();
-}
-
-function pickAquecedorCombination<T extends { instancia_origem: string; instancia_destino: string }>(
-  combinations: T[],
-  startIndex: number,
-  lastSenders: Map<string, string>,
-  canonicalMap?: Map<string, string>,
-): { chosen: T; index: number } | null {
-  if (!combinations.length) return null;
-  const base = ((startIndex % combinations.length) + combinations.length) % combinations.length;
-  for (let offset = 0; offset < combinations.length; offset += 1) {
-    const index = (base + offset) % combinations.length;
-    const combo = combinations[index];
-    if (
-      canAquecedorOrigemSendOnPair(
-        combo.instancia_origem,
-        combo.instancia_destino,
-        lastSenders,
-        canonicalMap,
-      )
-    ) {
-      return { chosen: combo, index };
-    }
-  }
-  return null;
-}
-
-async function getLastAquecedorDirectedExchange(
-  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
-  connected: Array<{ instancia: string; numero: string }>,
-  instanciaOrigem: string,
-  instanciaDestino: string,
-): Promise<"origem_to_destino" | "destino_to_origem" | null> {
-  const aliasesMap = await loadInstanceAliasesMap();
-  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-  const origem = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaOrigem);
-  const destino = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaDestino);
-  if (!origem || !destino) return null;
-
-  const origemName = resolveAquecedorCanonicalInstance(origem.instancia, canonicalMap);
-  const destinoName = resolveAquecedorCanonicalInstance(destino.instancia, canonicalMap);
-  const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
-  const instanceNames = connected.map((item) => item.instancia);
-
-  try {
-    const { data, error } = (await (supabase
-      .from("aquecedor" as any)
-      .select("instancia, numero_destino, sent_at")
-      .eq("status", "ENVIADO")
-      .in("instancia", instanceNames)
-      .order("sent_at", { ascending: false })
-      .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
-    if (error || !Array.isArray(data)) return null;
-
-    for (const row of data) {
-      const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-      const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
-      const toInst = numberToInstance.get(toNum) || "";
-      if (!fromInst || !toInst) continue;
-
-      const isOrigemToDestino =
-        fromInst.toLowerCase() === origemName.toLowerCase() &&
-        toInst.toLowerCase() === destinoName.toLowerCase();
-      const isDestinoToOrigem =
-        fromInst.toLowerCase() === destinoName.toLowerCase() &&
-        toInst.toLowerCase() === origemName.toLowerCase();
-      if (!isOrigemToDestino && !isDestinoToOrigem) continue;
-
-      return isOrigemToDestino ? "origem_to_destino" : "destino_to_origem";
-    }
-  } catch {
-    /* */
-  }
-  return null;
-}
-
 function buildAquecedorNumberToInstanceMap(
   connected: Array<{ instancia: string; numero: string }>,
   canonicalMap: Map<string, string>,
@@ -1098,19 +1027,225 @@ function resolveAquecedorConnectedByName(
   );
 }
 
+async function loadAquecedorExchangeEvents(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+  canonicalMap: Map<string, string>,
+  numberToInstance: Map<string, string>,
+): Promise<Array<{ at: string; fromInst: string; toInst: string }>> {
+  const events: Array<{ at: string; fromInst: string; toInst: string }> = [];
+  const instanceNames = connected.map((item) => item.instancia);
+
+  try {
+    const { data, error } = (await (supabase
+      .from("aquecedor" as any)
+      .select("instancia, numero_destino, sent_at")
+      .eq("status", "ENVIADO")
+      .in("instancia", instanceNames)
+      .order("sent_at", { ascending: false })
+      .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
+    if (!error && Array.isArray(data)) {
+      for (const row of data) {
+        const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
+        const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
+        const toInst = numberToInstance.get(toNum) || "";
+        const at = String(row?.sent_at || "").trim();
+        if (fromInst && toInst && at) events.push({ at, fromInst, toInst });
+      }
+    }
+  } catch {
+    /* */
+  }
+
+  try {
+    const { data, error } = (await (supabase
+      .from("logs_envios" as any)
+      .select("instancia_origem, instancia_destino, data_envio")
+      .order("data_envio", { ascending: false })
+      .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
+    if (!error && Array.isArray(data)) {
+      for (const row of data) {
+        const fromInst = resolveAquecedorCanonicalInstance(
+          String(row?.instancia_origem || ""),
+          canonicalMap,
+        );
+        const toInst = resolveAquecedorCanonicalInstance(
+          String(row?.instancia_destino || ""),
+          canonicalMap,
+        );
+        const at = String(row?.data_envio || "").trim();
+        if (fromInst && toInst && at) events.push({ at, fromInst, toInst });
+      }
+    }
+  } catch {
+    /* */
+  }
+
+  const dedup = new Map<string, { at: string; fromInst: string; toInst: string }>();
+  for (const ev of events) {
+    const atMs = new Date(ev.at).getTime();
+    const bucket = Number.isFinite(atMs) ? Math.floor(atMs / 1000) : ev.at;
+    const key = `${ev.fromInst.toLowerCase()}|${ev.toInst.toLowerCase()}|${bucket}`;
+    if (!dedup.has(key)) dedup.set(key, ev);
+  }
+
+  return Array.from(dedup.values()).sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+  );
+}
+
+type AquecedorInstanceTurnStats = {
+  canonical: string;
+  lastSentAt: string | null;
+  lastReceivedAt: string | null;
+  lastReceivedFrom: string | null;
+  sendCount: number;
+  receiveCount: number;
+};
+
+type AquecedorTurnManager = {
+  canonicalMap: Map<string, string>;
+  totalEvents: number;
+  canSendDirected: (origemRaw: string, destinoRaw: string) => boolean;
+  describeBlockReason: (origemRaw: string, destinoRaw: string) => string;
+  scoreCombination: (
+    origemRaw: string,
+    destinoRaw: string,
+    comboIndex: number,
+    startIndex: number,
+  ) => number;
+};
+
+async function loadAquecedorTurnManager(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+): Promise<AquecedorTurnManager> {
+  const aliasesMap = await loadInstanceAliasesMap();
+  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+  const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+  const events = await loadAquecedorExchangeEvents(
+    supabase,
+    connected,
+    canonicalMap,
+    numberToInstance,
+  );
+
+  const instanceStats = new Map<string, AquecedorInstanceTurnStats>();
+  const pairLastSender = new Map<string, string>();
+
+  const ensureStats = (canonical: string): AquecedorInstanceTurnStats => {
+    const key = canonical.toLowerCase();
+    let stats = instanceStats.get(key);
+    if (!stats) {
+      stats = {
+        canonical,
+        lastSentAt: null,
+        lastReceivedAt: null,
+        lastReceivedFrom: null,
+        sendCount: 0,
+        receiveCount: 0,
+      };
+      instanceStats.set(key, stats);
+    }
+    return stats;
+  };
+
+  for (const ev of events) {
+    const fromStats = ensureStats(ev.fromInst);
+    const toStats = ensureStats(ev.toInst);
+    fromStats.sendCount += 1;
+    toStats.receiveCount += 1;
+    fromStats.lastSentAt = ev.at;
+    toStats.lastReceivedAt = ev.at;
+    toStats.lastReceivedFrom = ev.fromInst;
+    pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+  }
+
+  const canSendDirected = (origemRaw: string, destinoRaw: string): boolean => {
+    const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+    if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return false;
+
+    const pairKey = buildAquecedorPairKey(origem, destino);
+    const lastSender = pairLastSender.get(pairKey);
+    if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+      return false;
+    }
+
+    const stats = instanceStats.get(origem.toLowerCase());
+    if (!stats?.lastSentAt) return true;
+    if (!stats.lastReceivedAt) return false;
+    return stats.lastReceivedAt >= stats.lastSentAt;
+  };
+
+  const describeBlockReason = (origemRaw: string, destinoRaw: string): string => {
+    const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+    const pairKey = buildAquecedorPairKey(origem, destino);
+    const lastSender = pairLastSender.get(pairKey);
+    const stats = instanceStats.get(origem.toLowerCase());
+
+    if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+      return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
+    }
+    if (stats?.lastSentAt && (!stats.lastReceivedAt || stats.lastReceivedAt < stats.lastSentAt)) {
+      const esperado = stats.lastReceivedFrom
+        ? ` Responder a ${stats.lastReceivedFrom} libera o turno.`
+        : "";
+      return `${origem} enviou ${stats.sendCount} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+    }
+    return `${origem} não pode enviar para ${destino} no turno atual.`;
+  };
+
+  const scoreCombination = (
+    origemRaw: string,
+    destinoRaw: string,
+    comboIndex: number,
+    startIndex: number,
+  ): number => {
+    const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+    const stats = instanceStats.get(origem.toLowerCase());
+    let score = 0;
+
+    if (
+      stats?.lastReceivedAt &&
+      stats?.lastSentAt &&
+      stats.lastReceivedAt > stats.lastSentAt
+    ) {
+      score -= 1_000_000;
+      if (
+        stats.lastReceivedFrom &&
+        stats.lastReceivedFrom.toLowerCase() === destino.toLowerCase()
+      ) {
+        score -= 500_000;
+      }
+    }
+
+    score += (stats?.sendCount || 0) * 1_000;
+    const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
+    score += rotation;
+    return score;
+  };
+
+  return {
+    canonicalMap,
+    totalEvents: events.length,
+    canSendDirected,
+    describeBlockReason,
+    scoreCombination,
+  };
+}
+
 async function canAquecedorOrigemSendDirected(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
   connected: Array<{ instancia: string; numero: string }>,
   instanciaOrigem: string,
   instanciaDestino: string,
+  manager?: AquecedorTurnManager,
 ): Promise<boolean> {
-  const last = await getLastAquecedorDirectedExchange(
-    supabase,
-    connected,
-    instanciaOrigem,
-    instanciaDestino,
-  );
-  return last !== "origem_to_destino";
+  const turn = manager || (await loadAquecedorTurnManager(supabase, connected));
+  return turn.canSendDirected(instanciaOrigem, instanciaDestino);
 }
 
 async function pickAquecedorCombinationAsync<T extends { instancia_origem: string; instancia_destino: string }>(
@@ -1120,22 +1255,32 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
   startIndex: number,
 ): Promise<{ chosen: T; index: number } | null> {
   if (!combinations.length) return null;
-  const base = ((startIndex % combinations.length) + combinations.length) % combinations.length;
-  for (let offset = 0; offset < combinations.length; offset += 1) {
-    const index = (base + offset) % combinations.length;
+  const manager = await loadAquecedorTurnManager(supabase, connected);
+  const eligible: Array<{ combo: T; index: number; score: number }> = [];
+
+  for (let index = 0; index < combinations.length; index += 1) {
     const combo = combinations[index];
-    if (
-      await canAquecedorOrigemSendDirected(
-        supabase,
-        connected,
+    if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino)) continue;
+    eligible.push({
+      combo,
+      index,
+      score: manager.scoreCombination(
         combo.instancia_origem,
         combo.instancia_destino,
-      )
-    ) {
-      return { chosen: combo, index };
-    }
+        index,
+        startIndex,
+      ),
+    });
   }
-  return null;
+
+  if (!eligible.length) return null;
+
+  eligible.sort((a, b) => a.score - b.score);
+  const bestScore = eligible[0].score;
+  const ties = eligible.filter((item) => item.score === bestScore);
+  const base = ((startIndex % ties.length) + ties.length) % ties.length;
+  const picked = ties[base];
+  return { chosen: picked.combo, index: picked.index };
 }
 
 async function loadRecentAquecedorPairLastSenders(
@@ -1181,21 +1326,20 @@ async function verifyAquecedorConversationTurn(
   instanciaOrigem: string,
   instanciaDestino: string,
 ): Promise<{ ok: boolean; reason: string }> {
-  const aliasesMap = await loadInstanceAliasesMap();
-  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-  const origem = resolveAquecedorCanonicalInstance(instanciaOrigem, canonicalMap);
-  const destino = resolveAquecedorCanonicalInstance(instanciaDestino, canonicalMap);
-  const last = await getLastAquecedorDirectedExchange(
-    supabase,
-    connected,
+  const manager = await loadAquecedorTurnManager(supabase, connected);
+  const origem = resolveAquecedorCanonicalInstance(
     instanciaOrigem,
+    manager.canonicalMap,
+  );
+  const destino = resolveAquecedorCanonicalInstance(
     instanciaDestino,
+    manager.canonicalMap,
   );
 
-  if (last === "origem_to_destino") {
+  if (!manager.canSendDirected(instanciaOrigem, instanciaDestino)) {
     return {
       ok: false,
-      reason: `${origem} não pode enviar de novo para ${destino} sem ${destino} responder no WhatsApp (último envio foi da mesma origem para o mesmo número).`,
+      reason: manager.describeBlockReason(instanciaOrigem, instanciaDestino),
     };
   }
 
@@ -1855,7 +1999,7 @@ type DisparosConfig = {
   aiTone: string;
   aiCta: string;
   aiAudience: string;
-  shortenerProvider: "encurtadorpro" | "isgd" | "tinyurl";
+  shortenerProvider: "encurtadorpro" | "isgd" | "tinyurl" | "waba";
   shortenerDomain: string;
   whatsappTargetNumber: string;
   selectedDisparadorInstances: string[];
@@ -1919,7 +2063,7 @@ const DISPAROS_DEFAULTS: DisparosConfig = {
   aiTone: "consultivo",
   aiCta: "Responda no link abaixo",
   aiAudience: "CORBAN",
-  shortenerProvider: "encurtadorpro",
+  shortenerProvider: "waba",
   shortenerDomain: "",
   whatsappTargetNumber: "",
   selectedDisparadorInstances: [],
@@ -2182,14 +2326,24 @@ const shortUrlClicksCache = new Map<string, { clicks: number; checkedAtMs: numbe
 function normalizeShortenerProvider(
   value: string | null | undefined
 ): DisparosConfig["shortenerProvider"] {
-  const raw = String(value || "").trim().toLowerCase();
+  const raw = String(value || process.env.SHORTENER_PROVIDER || "waba")
+    .trim()
+    .toLowerCase();
   if (raw === "encurtadorpro") return "encurtadorpro";
-  return "encurtadorpro";
+  if (raw === "isgd") return "isgd";
+  if (raw === "tinyurl") return "tinyurl";
+  return "waba";
 }
 
 function getAutoShortenerProviderOrder(): DisparosConfig["shortenerProvider"][] {
-  // Regra operacional: usar apenas EncurtadorPro.
-  return ["encurtadorpro"];
+  const primary = normalizeShortenerProvider(process.env.SHORTENER_PROVIDER);
+  const order: DisparosConfig["shortenerProvider"][] = [primary];
+  if (primary === "waba" && String(process.env.ENCURTADORPRO_API_KEY || "").trim()) {
+    order.push("encurtadorpro");
+  } else if (primary === "encurtadorpro") {
+    order.push("waba");
+  }
+  return Array.from(new Set(order));
 }
 
 type AquecedorRuntimeStatus = {
@@ -2804,7 +2958,7 @@ async function runAquecedorCycle(forceTest = false) {
       const retrySeconds = Math.max(60, Math.min(config.waitMinSeconds, 180));
       aquecedorRuntime.nextAllowedAt = new Date(Date.now() + retrySeconds * 1000).toISOString();
       aquecedorRuntime.lastResult =
-        "Aguardando resposta: nenhuma instância pode enviar de novo sem a outra responder no par.";
+        "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.";
       return;
     }
 
@@ -4529,6 +4683,14 @@ function parseEncurtadorProClicks(payload: any): number {
   return 0;
 }
 
+async function fetchClicksForShortUrl(shortUrl: string): Promise<number> {
+  if (isWabaManagedShortUrl(shortUrl)) {
+    const local = await fetchWabaShortUrlClicks(shortUrl);
+    if (local != null) return local;
+  }
+  return fetchClicksForShortUrlFromEncurtadorPro(shortUrl);
+}
+
 async function fetchClicksForShortUrlFromEncurtadorPro(shortUrl: string): Promise<number> {
   const safeShort = String(shortUrl || "").trim();
   if (!/^https?:\/\//i.test(safeShort)) return 0;
@@ -4663,6 +4825,13 @@ async function shortenUrlWithProvider(
   if (!safeLongUrl) {
     throw new Error("URL original é obrigatória.");
   }
+  if (provider === "waba") {
+    try {
+      return await createWabaShortUrl(safeLongUrl, { tenantId: "disparador" });
+    } catch (error: any) {
+      throw new Error(String(error?.message || "Falha no encurtador WABA."));
+    }
+  }
   if (provider === "encurtadorpro") {
     const apiKey = String(process.env.ENCURTADORPRO_API_KEY || "").trim();
     if (!apiKey) {
@@ -4732,7 +4901,7 @@ async function shortenUrlWithProvider(
     throw new Error(lastErrorMessage);
   }
 
-  throw new Error("Provedor de encurtador não suportado. Use apenas EncurtadorPro.");
+  throw new Error("Provedor de encurtador não suportado.");
 }
 
 function appendAntiRepeatParam(rawUrl: string, attempt: number) {
@@ -6307,6 +6476,7 @@ app.get("/disparos/config", async (req, res) => {
       shortenerAuto: true,
       currentShortenerProvider,
       shortenerProviders: [
+        { id: "waba", label: "WABA (encurtador próprio)", auth: "interno" },
         { id: "encurtadorpro", label: "EncurtadorPro", auth: "requer API key (Bearer)" },
       ],
     });
@@ -6583,7 +6753,7 @@ app.post("/disparos/shorten", async (req, res) => {
 
     if (!shortUrl) {
       return res.status(502).json({
-        error: "Não foi possível gerar link curto no EncurtadorPro.",
+        error: "Não foi possível gerar link curto.",
       });
     }
     return res.json({
@@ -7936,7 +8106,7 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
     ).slice(0, 25);
     const cliqueChecksDisponiveis = uniqueShortUrls.length;
     for (const shortUrl of uniqueShortUrls) {
-      const clicks = await fetchClicksForShortUrlFromEncurtadorPro(String(shortUrl));
+      const clicks = await fetchClicksForShortUrl(String(shortUrl));
       totalCliques += clicks;
     }
     const cliqueChecksExecutados = uniqueShortUrls.length;

@@ -7260,6 +7260,10 @@
       .waba-prod-only {
         display: none !important;
       }
+      /* V01 baseline (pré 08/06/2026): esconde fluxo comercial Disparos/Campanhas SaaS */
+      body.waba-ui-baseline .waba-prod-only {
+        display: none !important;
+      }
       body.waba-ui-production .waba-full-only {
         display: none !important;
       }
@@ -8686,6 +8690,37 @@
       }
       #disparos-config-legacy {
         display: none !important;
+      }
+      .disparos-evo-baseline-only {
+        display: none !important;
+      }
+      body.waba-ui-baseline .disparos-saas-only {
+        display: none !important;
+      }
+      body.waba-ui-baseline .disparos-evo-baseline-only {
+        display: block !important;
+      }
+      body.waba-ui-baseline button.disparos-evo-baseline-only,
+      body.waba-ui-baseline .instance-action-btn.disparos-evo-baseline-only {
+        display: inline-flex !important;
+      }
+      body.waba-ui-baseline #disparos-config-legacy {
+        display: block !important;
+      }
+      body.waba-ui-baseline #tab-disparos .disparos-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+        gap: 16px;
+        align-items: start;
+      }
+      body.waba-ui-baseline #tab-disparos .disparos-side-campanhas {
+        order: 2;
+      }
+      body.waba-ui-baseline #disparos-evo-baseline-left {
+        order: 1;
+      }
+      body.waba-ui-baseline #disparos-config-legacy {
+        margin-top: 12px;
       }
       .disparos-config-area {
         min-height: 120px;
@@ -11573,7 +11608,7 @@
                 </div>
                 <div
                   id="disparos-subscriber-toolbar"
-                  class="disparos-subscriber-toolbar"
+                  class="disparos-subscriber-toolbar disparos-saas-only"
                   hidden
                   aria-label="Conta e compras"
                 >
@@ -11619,7 +11654,7 @@
                   </button>
                 </div>
               </div>
-              <div id="disparos-credits-top-nudge" class="disparos-credits-top-nudge" hidden>
+              <div id="disparos-credits-top-nudge" class="disparos-credits-top-nudge disparos-saas-only" hidden>
                 <div class="disparos-credits-top-nudge-text">
                   <strong>Saldo de envios esgotado</strong>
                   <span>Contrate mais créditos para voltar a gerar campanhas.</span>
@@ -11633,11 +11668,49 @@
                 </button>
               </div>
               <div class="disparos-layout">
+                <div id="disparos-evo-baseline-left" class="disparos-evo-baseline-only">
+                  <div class="disparos-side-title">Resumo</div>
+                  <div class="summary-grid">
+                    <div class="summary-card">
+                      <div class="summary-label">Enviados hoje</div>
+                      <div class="summary-value" id="disparos-enviados-hoje">—</div>
+                      <div class="summary-sub">Total do dia</div>
+                    </div>
+                    <div class="summary-card">
+                      <div class="summary-label">Na fila</div>
+                      <div class="summary-value" id="disparos-na-fila">—</div>
+                      <div class="summary-sub">Aguardando envio</div>
+                    </div>
+                    <div class="summary-card">
+                      <div class="summary-label">Instâncias selecionadas</div>
+                      <div class="summary-value" id="disparos-selecionadas-count">0</div>
+                      <div class="summary-sub" id="disparos-selecionadas-sub">
+                        Nenhuma selecionada · API usa todas elegíveis
+                      </div>
+                    </div>
+                    <div class="summary-card">
+                      <div class="summary-label">Instância ativa</div>
+                      <div class="summary-value" id="disparos-instancia-ativa">—</div>
+                      <div class="summary-sub" id="disparos-instancia-ativa-sub"></div>
+                    </div>
+                  </div>
+                  <div class="disparos-side-title" style="margin-top: 20px;">Variáveis e regras</div>
+                </div>
                 <div class="disparos-side disparos-side-campanhas">
                   <div class="disparos-side-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                     <span>Campanhas</span>
-                    <button
-                      id="disparos-refresh-btn"
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                      <button
+                        id="disparos-diagnostico-btn"
+                        type="button"
+                        class="instance-action-btn enabled disparos-evo-baseline-only"
+                        style="padding: 4px 10px; font-size: 0.8rem;"
+                        title="Diagnóstico de envio (janela, EVO, campanhas em execução)"
+                      >
+                        Diagnóstico
+                      </button>
+                      <button
+                        id="disparos-refresh-btn"
                       type="button"
                       class="instance-action-btn enabled"
                       style="padding: 4px 10px; font-size: 0.8rem;"
@@ -11645,12 +11718,19 @@
                     >
                       Atualizar
                     </button>
+                    </div>
                   </div>
                   <div id="disparos-list" class="disparos-list list-wrapper">
                     <div class="muted">Carregando campanhas...</div>
                   </div>
+                  <div class="aquecedor-command-log disparos-evo-baseline-only" style="margin-top: 14px;">
+                    <div class="disparos-side-title" style="margin-bottom: 6px;">Log de diagnóstico</div>
+                    <div id="disparos-diagnostico-log-list" class="aquecedor-command-log-list">
+                      <div class="muted">Clique em Diagnóstico para ver o estado do envio e das campanhas.</div>
+                    </div>
+                  </div>
                 </div>
-                <div class="disparos-side disparos-side-resumo">
+                <div class="disparos-side disparos-side-resumo disparos-saas-only">
                   <div class="disparos-side-title">Resumo</div>
                   <div class="disparos-resumo-grid" aria-label="Resumo de envios">
                     <article class="disparos-resumo-stat">
@@ -11722,7 +11802,7 @@
                   </div>
                 </div>
               </div>
-              <div class="disparos-config-panel">
+              <div class="disparos-config-panel disparos-saas-only">
                 <div class="disparos-config-panel-title">Nova campanha</div>
                 <div id="dis-campaign-wizard" class="dis-campaign-wizard">
                   <div class="dis-campaign-wizard-steps" id="dis-campaign-wizard-steps" aria-label="Etapas da campanha">
@@ -12162,6 +12242,67 @@
                           <button id="dis-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">Mapear colunas e importar</button>
                         </div>
                         <span id="dis-import-status" class="muted" style="display:block; margin-top:8px;">Nenhuma importação executada.</span>
+                      </div>
+                    </div>
+
+                    <div class="aquecedor-section">
+                      <div class="aquecedor-section-title">7) Campanha</div>
+                      <div class="disparos-box dis-campaign-panel" id="dis-campaign-panel">
+                        <div class="aquecedor-field">
+                          <label for="dis-campaign-name">Nome da campanha</label>
+                          <input id="dis-campaign-name" type="text" placeholder="Ex.: Campanha CLT Maio 2026" />
+                        </div>
+                        <div class="dis-campaign-import-wrap">
+                          <span class="dis-campaign-import-label">Planilha de números (Excel)</span>
+                          <div class="dis-campaign-dropzone" id="dis-campaign-dropzone">
+                            <input
+                              type="file"
+                              id="dis-campaign-file"
+                              class="dis-campaign-file-input"
+                              accept=".xlsx,.xls"
+                              aria-label="Selecionar planilha Excel da campanha"
+                            />
+                            <div class="dis-campaign-dropzone-visual">
+                              <div class="dis-campaign-dropzone-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                  <line x1="12" y1="18" x2="12" y2="12" />
+                                  <line x1="9" y1="15" x2="15" y2="15" />
+                                </svg>
+                              </div>
+                              <div class="dis-campaign-dropzone-text">
+                                <strong>Arraste a planilha até aqui</strong>
+                                <span>ou clique para escolher · .xlsx ou .xls</span>
+                                <div class="dis-campaign-file-meta" id="dis-campaign-file-label">Nenhum arquivo carregado.</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="dis-campaign-preview hidden" id="dis-campaign-preview">
+                          <div class="dis-campaign-preview-head">
+                            <span class="dis-campaign-preview-title">Prévia da planilha</span>
+                            <span class="dis-campaign-preview-badge" id="dis-campaign-preview-badge">10 primeiras linhas</span>
+                          </div>
+                          <div class="dis-campaign-preview-scroll">
+                            <table class="dis-campaign-preview-table" id="dis-campaign-preview-table" aria-describedby="dis-campaign-preview-caption">
+                              <caption id="dis-campaign-preview-caption" class="sr-only">
+                                Amostra das primeiras linhas importadas da planilha da campanha
+                              </caption>
+                            </table>
+                          </div>
+                        </div>
+                        <div class="disparos-inline-actions" style="margin-top: 12px;">
+                          <button id="dis-campaign-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                            Mapear coluna e criar campanha
+                          </button>
+                          <span id="dis-campaign-create-status" class="muted">Aguardando importação da planilha.</span>
+                        </div>
+                        <div
+                          id="dis-campaign-dedupe-caption"
+                          class="dis-campaign-dedupe-caption hidden"
+                          aria-live="polite"
+                        ></div>
                       </div>
                     </div>
 
@@ -14511,6 +14652,7 @@
       }
 
       function shouldUseCampanhasSubscriberUi() {
+        if (isBaselineUi()) return false;
         return !isStaffRole(wabaAuthRole) && hasCampanhasMenuAccess();
       }
 
@@ -14638,6 +14780,9 @@
 
       function resolveSubscriberPostLoginTab(requestedTab) {
         const tab = String(requestedTab || "").trim();
+        if (isBaselineUi()) {
+          return tab || "dashboard";
+        }
         if (shouldUseCampanhasSubscriberUi()) {
           return tab === "disparos-lancamento" ? "disparos" : tab || "disparos";
         }
@@ -15008,13 +15153,73 @@
         return String(window.WABA_UI_PROFILE || "full") === "production";
       }
 
+      function isBaselineUi() {
+        return String(window.WABA_UI_PROFILE || "full") === "baseline";
+      }
+
       function integrationEnvLabel(env) {
         const normalized = env === "oficial" ? "oficial" : "nao-oficial";
+        if (isBaselineUi()) {
+          return normalized === "oficial" ? "API Meta" : "API não oficial";
+        }
         if (normalized === "oficial") return getOfficialSectionLabel();
         return isProductionUi() ? "AQUECEDOR" : "Aquecedor";
       }
 
+      function initBaselineUi() {
+        document.body.classList.add("waba-ui-baseline");
+
+        const envTitle = document.querySelector(".integration-env-title");
+        if (envTitle) envTitle.textContent = "Ambiente de integração";
+
+        const naoBtn = document.querySelector(
+          '.integration-env-btn[data-integration-env="nao-oficial"]'
+        );
+        if (naoBtn) naoBtn.textContent = "API não oficial";
+
+        const ofBtn = document.querySelector('.integration-env-btn[data-integration-env="oficial"]');
+        if (ofBtn) {
+          const labelSpan = ofBtn.querySelector("span:not(.wa-icon)");
+          if (labelSpan) labelSpan.textContent = "API Meta";
+        }
+
+        const naoGroupTitle = document.querySelector(
+          '.menu-group[data-menu-group="nao-oficial"] .menu-group-title'
+        );
+        const ofGroupTitle = document.querySelector(
+          '.menu-group[data-menu-group="oficial"] .menu-group-title'
+        );
+        if (naoGroupTitle) naoGroupTitle.textContent = "API não oficial";
+        if (ofGroupTitle) ofGroupTitle.textContent = "API Meta";
+
+        setDesktopMenuGroupOpen("nao-oficial", true);
+        setDesktopMenuGroupOpen("oficial", true);
+
+        let saved = "nao-oficial";
+        try {
+          saved = localStorage.getItem("waba.integration.env") || "nao-oficial";
+        } catch {
+          /* ignore */
+        }
+        applyIntegrationEnvironment(saved);
+        initBaselineDisparosPanel();
+      }
+
+      function initBaselineDisparosPanel() {
+        if (!isBaselineUi()) return;
+        const legacy = document.getElementById("disparos-config-legacy");
+        const left = document.getElementById("disparos-evo-baseline-left");
+        if (legacy && left && !left.contains(legacy)) {
+          left.appendChild(legacy);
+        }
+        if (legacy) legacy.removeAttribute("aria-hidden");
+      }
+
       function initUiProfile() {
+        if (isBaselineUi()) {
+          initBaselineUi();
+          return;
+        }
         if (!isProductionUi()) return;
         document.body.classList.add("waba-ui-production");
 
@@ -17912,6 +18117,10 @@
 
       function filterMenusForCurrentUiProfile(menus) {
         const items = Array.isArray(menus) ? menus : [];
+        if (isBaselineUi()) {
+          const hidden = new Set(["disparos-dashboard", "disparos-lancamento", "campanhas"]);
+          return items.filter((menu) => !hidden.has(String(menu?.id || "")));
+        }
         if (!isProductionUi()) {
           return items.filter((menu) => menu?.profile !== "production");
         }
@@ -23768,6 +23977,9 @@
       }
 
       function refreshDisparosCampaignsAndResumo() {
+        if (isBaselineUi()) {
+          return loadDisparosEvoCampaigns();
+        }
         return loadDisparosTemplates().then(() => loadDisparosCredits());
       }
 
@@ -25060,6 +25272,7 @@
       }
 
       function syncDisparosResumoSide(campaignItems) {
+        if (isBaselineUi()) return;
         const enviadosEl = document.getElementById("disparos-resumo-enviados");
         const filaEl = document.getElementById("disparos-resumo-fila");
         const oficialDisponiveisEl = document.getElementById("disparos-resumo-oficial-disponiveis");
@@ -25110,7 +25323,265 @@
         });
       }
 
+      async function loadDisparosEvoCampaigns(options = {}) {
+        const silent = Boolean(options.silent);
+        const list = document.getElementById("disparos-list");
+        const sent = document.getElementById("disparos-enviados-hoje");
+        const fila = document.getElementById("disparos-na-fila");
+        if (!list) return;
+        try {
+          const response = await fetchWithTimeout("/disparos/campanhas", {}, 10000);
+          if (!response.ok) {
+            if (!silent) {
+              disparosHasRunningCampaign = false;
+              applyDisparosActiveInstanceCardDisplay("");
+              list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
+            }
+            return;
+          }
+                const data = await response.json().catch(() => ({}));
+                const items = Array.isArray(data?.items) ? data.items : [];
+                const totalSent = items.reduce((acc, item) => acc + Number(item?.sentCount || 0), 0);
+                const runningCount = items.filter((item) => String(item?.status || "").toLowerCase() === "running").length;
+                disparosHasRunningCampaign = runningCount > 0;
+                if (sent) sent.textContent = String(totalSent);
+                if (fila) fila.textContent = String(runningCount);
+                updateDisparosSelectedInstancesSummaryCard();
+                await refreshDisparosActiveInstanceFromServer();
+                if (!items.length) {
+                  list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
+                  return;
+                }
+                list.innerHTML = "";
+                items.slice(0, 80).forEach((item) => {
+                  const row = document.createElement("div");
+                  row.className = "aquecedor-envio-item disparos-campaign-item";
+                  const createdAt = String(item?.createdAt || "").trim();
+                  const dateText = createdAt
+                    ? new Date(createdAt).toLocaleDateString("pt-BR")
+                    : "sem data";
+                  const campaignName = String(item?.name || "Campanha sem nome").trim();
+                  const sentCount = Number(item?.sentCount || 0);
+                  const totalNumbers = Number(item?.totalNumbers || 0);
+                  const processedCount = Number(
+                    item?.processedCount != null ? item.processedCount : sentCount
+                  );
+                  const progress = Number(item?.progressPercent || 0);
+                  const campaignId = String(item?.id || "").trim();
+                  const statusRaw = String(item?.status || "paused").toLowerCase();
+                  const isRunning = statusRaw === "running";
+                  const isFinished = statusRaw === "finished";
+                  const runtimeRaw = item?.runtimeStage && typeof item.runtimeStage === "object"
+                    ? item.runtimeStage
+                    : null;
+                  const nextAllowedAtMs = item?.nextAllowedAt ? new Date(item.nextAllowedAt).getTime() : 0;
+                  const nowMsRuntime = Date.now();
+                  const inferredWaiting = isRunning && nextAllowedAtMs > nowMsRuntime;
+                  const runtimePhase = String(runtimeRaw?.phase || "").toLowerCase();
+                  const runtimeFillClass =
+                    runtimePhase === "sending" ||
+                    runtimePhase === "waiting_interval" ||
+                    runtimePhase === "outside_window" ||
+                    runtimePhase === "paused" ||
+                    runtimePhase === "finished" ||
+                    runtimePhase === "draft"
+                      ? runtimePhase
+                      : inferredWaiting
+                      ? "waiting_interval"
+                      : isFinished
+                      ? "finished"
+                      : isRunning
+                      ? "sending"
+                      : statusRaw === "paused"
+                      ? "paused"
+                      : "draft";
+                  const runtimeFillPercent = Math.max(
+                    0,
+                    Math.min(100, Number(runtimeRaw?.fillPercent ?? (isRunning ? 90 : isFinished ? 100 : 24)))
+                  );
+                  const runtimeFillGradient =
+                    runtimeFillClass === "waiting_interval"
+                      ? "linear-gradient(90deg, #facc15, #eab308)"
+                      : runtimeFillClass === "outside_window"
+                      ? "linear-gradient(90deg, #f59e0b, #d97706)"
+                      : runtimeFillClass === "paused"
+                      ? "linear-gradient(90deg, #fde047, #facc15)"
+                      : runtimeFillClass === "finished"
+                      ? "linear-gradient(90deg, #60a5fa, #2563eb)"
+                      : runtimeFillClass === "draft"
+                      ? "linear-gradient(90deg, #64748b, #94a3b8)"
+                      : "linear-gradient(90deg, #22c55e, #16a34a)";
+                  const runtimeLabel = String(
+                    runtimeRaw?.label ||
+                      (inferredWaiting
+                        ? "Aguardando intervalo"
+                        :
+                      (isFinished
+                        ? "Finalizada"
+                        : isRunning
+                        ? "Enviando agora"
+                        : statusRaw === "paused"
+                        ? "Pausada"
+                        : "Rascunho"))
+                  );
+                  const inferredWaitingDetail = inferredWaiting
+                    ? `Pausa operacional entre envios (${Math.max(
+                        1,
+                        Math.ceil((nextAllowedAtMs - nowMsRuntime) / 1000)
+                      )}s restantes).`
+                    : "";
+                  const runtimeDetail = String(runtimeRaw?.detail || inferredWaitingDetail || "").trim();
+                  const health = item?.instanceHealth && typeof item.instanceHealth === "object"
+                    ? item.instanceHealth
+                    : {};
+                  const shouldPauseByDisconnectedRatio =
+                    health?.shouldPauseByDisconnectedRatio === true;
+                  const btnLabel = isFinished ? "Campanha finalizada" : isRunning ? "Pausar" : "Ativar campanha";
+                  const safeName = campaignName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      
+                  const disInst = Array.isArray(item?.disparadorInstances) ? item.disparadorInstances : [];
+                  let tagsBlock = "";
+                  if (disInst.length) {
+                    const parts = disInst.map((t) => {
+                      const nm = String(t?.instanceName || "").trim();
+                      const safe = nm
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;");
+                      const ok = t?.connected === true;
+                      const cls = ok
+                        ? "dis-campaign-instance-tag dis-campaign-instance-tag--connected"
+                        : "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected";
+                      const title = ok
+                        ? "Inst·ncia conectada na EVO"
+                        : "Desconectada ou indispon·vel na EVO neste momento";
+                      return `<span class="${cls}" title="${title}">${safe || "·?"}</span>`;
+                    });
+                    tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Inst·ncias desta campanha">${parts.join("")}</div>`;
+                    if (item?.disparadorInstancesFromGlobalFallback) {
+                      tagsBlock +=
+                        '<div class="aquecedor-envio-time muted" style="margin-top:4px;font-size:0.7rem;">Etiquetas pela sele··o atual (Se··o 1): o snapshot desta campanha n·o guardou a lista de inst·ncias.</div>';
+                    }
+                  } else if (isRunning) {
+                    tagsBlock =
+                      '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Inst·ncias: nenhuma definida no snapshot ·? selecione na Se··o 1.</div>';
+                  }
+                  if (shouldPauseByDisconnectedRatio) {
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade m·nima de inst·ncias atingida.</div>`;
+                  }
+      
+                  const body = document.createElement("div");
+                  body.className = "disparos-campaign-item-body";
+                  body.innerHTML = `
+                      <div class="aquecedor-envio-main">${safeName}</div>
+                      <div class="aquecedor-envio-time">Início: ${dateText}</div>
+                      <div class="aquecedor-envio-time">${processedCount} de ${totalNumbers} destinos processados · ${sentCount} enviados</div>
+                      ${tagsBlock}
+                      <div style="margin-top:6px; height:8px; border-radius:999px; background: rgba(255,255,255,.12); overflow:hidden;">
+                        <div style="width:${Math.max(0, Math.min(100, progress))}%; height:100%; background: linear-gradient(90deg, #38bdf8, #2563eb);"></div>
+                      </div>
+                      <div class="disparos-runtime-stage-wrap" aria-label="Etapa atual da campanha">
+                        <div class="disparos-runtime-stage-track">
+                          <div class="disparos-runtime-stage-fill disparos-runtime-stage-fill--${runtimeFillClass}" style="width:${runtimeFillPercent}%; background:${runtimeFillGradient};"></div>
+                        </div>
+                        <div class="disparos-runtime-stage-text">${runtimeLabel}${runtimeDetail ? ` · ${runtimeDetail}` : ""}</div>
+                      </div>
+                    `;
+      
+                  row.appendChild(body);
+                  if (campaignId) {
+                    const actions = document.createElement("div");
+                    actions.className = "disparos-campaign-item-actions";
+      
+                    const toggleBtn = document.createElement("button");
+                    toggleBtn.type = "button";
+                    toggleBtn.className = `instance-action-btn btn-qrcode ${isFinished ? "disabled" : "enabled"} btn-campaign-toggle${isRunning ? " running" : ""}`;
+                    toggleBtn.dataset.campaignId = campaignId;
+                    toggleBtn.dataset.campaignRunning = isRunning ? "1" : "0";
+                    toggleBtn.dataset.campaignFinished = isFinished ? "1" : "0";
+                    toggleBtn.dataset.campaignBlockedByInstances = shouldPauseByDisconnectedRatio ? "1" : "0";
+                    toggleBtn.textContent = btnLabel;
+                    if (isFinished || (!isRunning && shouldPauseByDisconnectedRatio)) toggleBtn.disabled = true;
+      
+                    const addInstancesBtn = document.createElement("button");
+                    addInstancesBtn.type = "button";
+                    addInstancesBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-add-instances";
+                    addInstancesBtn.dataset.campaignId = campaignId;
+                    addInstancesBtn.textContent = "+ Inst·ncias";
+      
+                    const secondary = document.createElement("div");
+                    secondary.className = "disparos-campaign-secondary-actions";
+      
+                    const reportBtn = document.createElement("button");
+                    reportBtn.type = "button";
+                    reportBtn.className =
+                      "instance-action-btn enabled btn-campaign-secondary btn-campaign-report";
+                    reportBtn.dataset.campaignId = campaignId;
+                    reportBtn.dataset.campaignName = campaignName;
+                    reportBtn.textContent = "Relat·rio";
+      
+                    const editBtn = document.createElement("button");
+                    editBtn.type = "button";
+                    editBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-edit";
+                    editBtn.dataset.campaignId = campaignId;
+                    editBtn.dataset.campaignName = campaignName;
+                    editBtn.textContent = "Editar nome";
+      
+                    const delBtn = document.createElement("button");
+                    delBtn.type = "button";
+                    delBtn.className = "instance-action-btn btn-delete enabled btn-campaign-secondary btn-campaign-delete";
+                    delBtn.dataset.campaignId = campaignId;
+                    delBtn.dataset.campaignName = campaignName;
+                    delBtn.textContent = "Excluir";
+      
+                    if (isFinished) secondary.appendChild(reportBtn);
+                    if (shouldPauseByDisconnectedRatio) secondary.appendChild(addInstancesBtn);
+                    secondary.appendChild(editBtn);
+                    secondary.appendChild(delBtn);
+                    actions.appendChild(toggleBtn);
+                    actions.appendChild(secondary);
+                    const iconActions = document.createElement("div");
+                    iconActions.className = "disparos-campaign-icon-actions";
+      
+                    const messageBtn = document.createElement("button");
+                    messageBtn.type = "button";
+                    messageBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-last-message";
+                    messageBtn.dataset.campaignId = campaignId;
+                    messageBtn.dataset.campaignName = campaignName;
+                    messageBtn.title = "Ver ·ltima mensagem disparada";
+                    messageBtn.setAttribute("aria-label", "Ver ·ltima mensagem disparada");
+                    messageBtn.innerHTML =
+                      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-8.5 8.5H7l-4 3v-5.5A8.5 8.5 0 1 1 21 12Z"></path></svg>';
+      
+                    const urlBtn = document.createElement("button");
+                    urlBtn.type = "button";
+                    urlBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-last-url";
+                    urlBtn.dataset.campaignId = campaignId;
+                    urlBtn.dataset.campaignName = campaignName;
+                    urlBtn.title = "Abrir ·ltima URL utilizada";
+                    urlBtn.setAttribute("aria-label", "Abrir ·ltima URL utilizada");
+                    urlBtn.innerHTML =
+                      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5"></path><path d="M10 14 19 5"></path><path d="M19 14v4a1 1 0 0 1-1 1h-4"></path><path d="M10 19H6a1 1 0 0 1-1-1v-4"></path></svg>';
+      
+                    iconActions.appendChild(messageBtn);
+                    iconActions.appendChild(urlBtn);
+                    actions.appendChild(iconActions);
+                    row.appendChild(actions);
+                  }
+                  list.appendChild(row);
+                });
+              } catch {
+                disparosHasRunningCampaign = false;
+                applyDisparosActiveInstanceCardDisplay("");
+                list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
+              }
+      }
+
       async function loadDisparosTemplates(options = {}) {
+        if (isBaselineUi()) {
+          return loadDisparosEvoCampaigns(options);
+        }
         const silent = Boolean(options.silent);
         const list = document.getElementById("disparos-list");
         if (!list) return;
@@ -25190,7 +25661,11 @@
           return false;
         }
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
-        await loadDisparosTemplates();
+        if (isBaselineUi()) {
+          await loadDisparosEvoCampaigns();
+        } else {
+          await loadDisparosTemplates();
+        }
         return true;
       }
 
