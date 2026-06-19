@@ -31,7 +31,19 @@ export const isEvoTlsInsecure = (): boolean => {
   if (flag === "0" || flag === "false" || flag === "no") return false;
   const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
   const base = String(process.env.EVO_API_URL ?? "").trim().toLowerCase();
-  return runtime === "development" && base.startsWith("https://");
+  if (runtime === "development" && base.startsWith("https://")) return true;
+  // Easypanel Evolution publica HTTPS com certificado autoassinado/intermediário.
+  if (base.startsWith("https://") && /\.easypanel\.host(\/|$)/i.test(base)) return true;
+  return false;
+};
+
+export const describeEvoApiBaseForOps = (rawUrl: string): string => {
+  try {
+    const parsed = new URL(String(rawUrl || "").trim() || "http://invalid.local");
+    return `${parsed.protocol}//${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+  } catch {
+    return String(rawUrl || "").trim() || "(invalid)";
+  }
 };
 
 const shouldRetryEvoRequest = (result: EvoHttpResult): boolean => {

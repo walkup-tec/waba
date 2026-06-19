@@ -337,6 +337,9 @@ app.get("/health", (_req, res) => {
         runtimeMode: RUNTIME_MODE,
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
         aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+        evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
+        evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
+        evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
     });
 });
 app.get("/ready", (_req, res) => {
@@ -7665,6 +7668,10 @@ app.listen(PORT, () => {
     const logoProbe = resolveDraxLogoPng();
     console.log(`[brand] logo PNG: ${logoProbe ? `${logoProbe.length} bytes (ok)` : "FALHOU — embed vazio ou ficheiros em falta"} | use GET /logo.png ou /media/Drax-logo-footer.png`);
     console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING} aquecedorProcessing=${ENABLE_AQUECEDOR_PROCESSING}`);
+    console.log(`[evo] base=${(0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE)} tlsInsecure=${(0, evo_http_client_1.isEvoTlsInsecure)()} timeoutMs=${(0, evo_http_client_1.defaultEvoHttpTimeoutMs)()}`);
+    if (/walkup[-_]evo|evo-walkup-api:8080/i.test(EVO_API_BASE)) {
+        console.warn("[evo] EVO_API_URL parece hostname interno Docker/Swarm. Se QRCode falhar em producao, use https://walkup-evo-walkup-api.achpyp.easypanel.host ou http://172.17.0.1:30181");
+    }
     console.log(`[campanhas] upload planilha até ${Math.round(CAMPAIGN_UPLOAD_MAX_BYTES / 1024 / 1024)}MB (multipart) | JSON legado=${CAMPAIGN_CREATE_JSON_LIMIT}`);
     if (MAINTENANCE_MODE) {
         console.log(`[maintenance] ativo — tráfego de API bloqueado; probes em /health, /ready, /service/maintenance (porta ${PORT})`);

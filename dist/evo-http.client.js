@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isEvoTlsInsecure = exports.defaultEvoHttpTimeoutMs = void 0;
+exports.describeEvoApiBaseForOps = exports.isEvoTlsInsecure = exports.defaultEvoHttpTimeoutMs = void 0;
 exports.evoHttpRequest = evoHttpRequest;
 const node_http_1 = __importDefault(require("node:http"));
 const node_https_1 = __importDefault(require("node:https"));
@@ -31,9 +31,24 @@ const isEvoTlsInsecure = () => {
         return false;
     const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
     const base = String(process.env.EVO_API_URL ?? "").trim().toLowerCase();
-    return runtime === "development" && base.startsWith("https://");
+    if (runtime === "development" && base.startsWith("https://"))
+        return true;
+    // Easypanel Evolution publica HTTPS com certificado autoassinado/intermediário.
+    if (base.startsWith("https://") && /\.easypanel\.host(\/|$)/i.test(base))
+        return true;
+    return false;
 };
 exports.isEvoTlsInsecure = isEvoTlsInsecure;
+const describeEvoApiBaseForOps = (rawUrl) => {
+    try {
+        const parsed = new URL(String(rawUrl || "").trim() || "http://invalid.local");
+        return `${parsed.protocol}//${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+    }
+    catch {
+        return String(rawUrl || "").trim() || "(invalid)";
+    }
+};
+exports.describeEvoApiBaseForOps = describeEvoApiBaseForOps;
 const shouldRetryEvoRequest = (result) => {
     if (result.ok)
         return false;
