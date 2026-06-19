@@ -26,7 +26,7 @@ export function requestUnderBasePath(req: Request): boolean {
   return Boolean((req as Request & { underBasePath?: boolean }).underBasePath);
 }
 
-export type WabaUiProfile = "production" | "full";
+export type WabaUiProfile = "production" | "full" | "baseline";
 
 function buildBasePathScript(basePath: string): string {
   const safe = basePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
