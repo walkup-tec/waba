@@ -1,4 +1,4 @@
-﻿# MemÃ³ria Consolidada do Projeto
+# MemÃ³ria Consolidada do Projeto
 
 Este arquivo Ã© atualizado a cada tarefa executada.
 
@@ -12,7 +12,176 @@ Como usar:
 
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
-## Ãšltima atualizaÃ§Ã£o
+## Última atualização
+2026-06-18
+
+**WABA — créditos teste mozart.pmo@gmail.com:** +500 envios disponíveis em cada API (oficial 800 contratado / 300 consumido; alternativa 700 / 200). Pedidos fictícios `402b734d…` e `47752b89…`. Script `scripts/grant-disparos-credits-v02.cjs`. Ver `doc/LOG-2026-06-18__waba-mozart-creditos-teste-500.md`.
+
+**WABA — e-mail boas-vindas cadastro landing:** após `POST /subscribers/register`, e-mail com resumo do cadastro + botão «Acessar o sistema». Marker `DEPLOY-2026-06-18-waba-cadastro-boas-vindas-email`. Ver `doc/LOG-2026-06-18__waba-cadastro-boas-vindas-email.md`.
+
+**WABA — campanha erro reportado (operacional):** botão Reportar Erro, status Erro Reportado, restituição de saldo, e-mail «Veja o motivo». Marker `DEPLOY-2026-06-18-waba-campanha-erro-reportado`. Ver `doc/LOG-2026-06-18__waba-campanha-erro-reportado.md`.
+
+**WABA — e-mails assinante (chamado/campanha finalizados):** SMTP nodemailer; textos cordiais; botão «Acesse o relatório» com deep link `?campanhaRelatorio=`. Marker `DEPLOY-2026-06-18-waba-email-notifications`. Ver `doc/LOG-2026-06-18__waba-email-notifications.md`.
+
+**WABA — chamados coluna ID + demo atraso:** coluna `displayId` na listagem; ticket `CHM-260618-975A9E` retroagido para 16/06/2026 (teste relógio 24h). Marker `DEPLOY-2026-06-18-waba-chamados-id-column`. Ver `doc/LOG-2026-06-18__waba-chamados-id-column-demo-overdue.md`.
+
+**WABA — chamados atraso 24h:** ícone de relógio na lista master quando chamado pendente passa de 24h sem finalizar (mesmo padrão visual de campanhas). API `isCloseOverdue`/`closeDeadlineAt`. Marker `DEPLOY-2026-06-18-waba-chamados-overdue-24h`. Ver `doc/LOG-2026-06-18__waba-chamados-overdue-24h.md`.
+
+**WABA — aquecedor alternância por par:** bloqueia envio consecutivo da mesma instância no mesmo par; conversa A↔B alterna remetente. Marker `DEPLOY-2026-06-18-aquecedor-pair-alternancia`. Ver `doc/LOG-2026-06-18__aquecedor-pair-alternancia.md`.
+
+**WABA — suporte assinante áudio anexo:** gravação com `recorder.start(250)`, `requestData` ao parar, lista com ícone de áudio e spinner de processamento. Marker `DEPLOY-2026-06-18-waba-support-audio-attach-processing`. Ver `doc/LOG-2026-06-18__waba-support-audio-attach-processing.md`.
+
+**WABA — chamados master ícones anexo:** imagem/vídeo/áudio com ícone clicável (abre arquivo em nova aba) na lista e no modal Detalhes. Marker `DEPLOY-2026-06-18-waba-chamados-attachment-icons`. Ver `doc/LOG-2026-06-18__waba-chamados-attachment-icons.md`.
+
+**WABA — FAB suporte 15px esquerda:** correção em `D:\Waba\index.html` (servidor local roda de `D:\Waba`, não `E:\Waba`). CSS desktop `left: 15px` e `syncWabaSupportFabPosition()` deixa de calcular pela borda direita da sidebar. Marker `DEPLOY-2026-06-18-waba-support-fab-left-15px`. Ver `doc/LOG-2026-06-18__waba-support-fab-left-15px.md`.
+
+**WABA — demo assinante.teste@walkup.com:** script `prepare-demo-subscriber-v02.cjs`; senha `Walkup@2026`; conta zerada (0 créditos, sem campanhas, aquecedor bloqueado). Ver `doc/LOG-2026-06-18__demo-assinante-teste-walkup.md`.
+
+**WABA — FAB suporte fora da sidebar:** `syncWabaSupportFabPosition()` posiciona o `?` à direita do painel do menu (não mais em `left: 20px` sobre a coluna lateral). Marker `DEPLOY-2026-06-08-waba-support-fab-outside-sidebar`.
+
+**WABA — FAB suporte discreto:** botão flutuante canto inferior esquerdo, ícone `?` redondo, transparente/discreto; azul só no hover. Removido da sidebar e do drawer mobile.
+
+**WABA — dashboard Disparos gate (assinante novo):** prévia borrada + overlay «Contratar créditos» quando sem campanhas com relatório. Ver `doc/LOG-2026-06-18__waba-disparos-dashboard-gate.md`.
+
+**WABA — badge total por seção (menu recolhido):** soma contadores nos títulos Admin/Suporte quando o grupo está fechado. Ver `doc/LOG-2026-06-18__waba-menu-group-badge-total.md`.
+
+**WABA — badges master menu (ativos novos):** tag branca com contagem em Assinantes, Campanhas, Usuários, Financeiro e Chamados. API `GET/POST /admin/master-menu-badges`. Ver `doc/LOG-2026-06-08__waba-master-menu-badges.md`.
+
+**WABA — botão Suporte fora do menu:** `#waba-support-btn` movido para `.waba-sidebar-support-outside`, acima do `.tabs-wrapper` (stack `.waba-sidebar-stack`). Menu lateral mantém só o toggle ☰ no topo.
+
+**WABA — identidade visual menu por seção:** cada grupo (`nao-oficial`/Aquecedor laranja, `oficial`/Disparos verde, `admin` amarelo, `suporte` azul) aplica cor no toggle e no item `.active`. Mobile usa `data-menu-section` nos botões. `resolveMenuGroupForTab` inclui `suporte` (Chamados). Ver `doc/LOG-2026-06-08__menu-section-visual-identity.md`.
+
+**WABA — master Suporte/Chamados:** seção Suporte com menu Chamados; abas Pendentes e Atendidos; modal master com resposta e finalização. Ver `doc/LOG-2026-06-08__waba-master-support-chamados.md`.
+
+**WABA — suporte assinantes:** botão fixo canto superior esquerdo; modal com descrição, anexos e ID de chamado. Ver `doc/LOG-2026-06-08__waba-support-tickets.md`.
+
+**Disparos — dashboard master autocomplete:** busca por trecho de nome ou e-mail com lista selecionável abaixo do campo; gráfico filtra após seleção. `compareSubscribers` na API. Ver `doc/LOG-2026-06-08__disparos-dashboard-subscriber-autocomplete.md`.
+
+**Disparos — dashboard master:** usuários `master` veem relatório consolidado somando campanhas de **todos os assinantes**; demais usuários só as próprias. Ver `doc/LOG-2026-06-08__disparos-dashboard-master-assinantes.md`.
+
+**Disparos — menu Dashboard:** aba `disparos-dashboard` com relatório consolidado (mesmo layout do relatório de campanha) somando indicadores de todas as campanhas finalizadas do usuário. API `GET /disparos/dashboard/overview` escopada por `ownerEmail`. Ver `doc/LOG-2026-06-08__disparos-dashboard-consolidado.md`.
+
+**Disparos — menu Dashboard (base):** nova aba `disparos-dashboard` na seção Disparos (produção). Ver `doc/LOG-2026-06-08__disparos-dashboard-menu.md`.
+
+**Aquecedor — Soma Promotora fora do ciclo:** bug `name` vs `instanceName` na Evolution; diagnóstico com `instancias.excluded`. Marker `DEPLOY-2026-06-08-aquecedor-pair-and-instances`. Ver `doc/LOG-2026-06-08__aquecedor-soma-instancia-excluida.md`.
+
+**Aquecedor — sem repetir mensagem no par:** ao enviar entre duas instâncias (ex. drax↔walkup), o texto não pode repetir na ida e na volta. Exclusão por par + fila + últimas globais. Marker `DEPLOY-2026-06-08-aquecedor-no-duplicate-pair`. Ver `doc/LOG-2026-06-08__aquecedor-no-duplicate-pair.md`.
+
+**Wizard instância — etapa 3 (textos):** trocado "celular de referência" por "outro WhatsApp (não o que está integrando)" em `index.html` e `instance-inbound-validation.service.ts`. Ver `doc/LOG-2026-06-08__wizard-etapa3-outro-whatsapp.md`.
+
+**Aquecedor — mensagens aleatórias:** corrigido `ensureAquecedorPendingMessage` que enfileirava só o texto fixo; agora sorteia do banco (`aquecedor_message_templates` / legado / disparos templates) evitando repetir as últimas 50 enviadas. SQL `doc/SQL-2026-06-17__create-aquecedor-message-templates.sql`. Marker `DEPLOY-2026-06-17-aquecedor-random-messages`. Ver `doc/LOG-2026-06-17__aquecedor-random-messages.md`.
+
+**Admin Dashboard — crescimento assinantes × receita:** nova seção com KPIs (ARPU, assinantes, receita acumulada, razão receita÷assinantes), gráfico de índices base 100 (assinantes vs receita) e gráfico de evolução da receita média por assinante. API `growthAnalysis` em `GET /admin/dashboard/overview`. Marker `DEPLOY-2026-06-17-subscriber-revenue-growth`. Ver `doc/LOG-2026-06-17__admin-dashboard-growth-analysis.md`.
+
+**Admin Dashboard:** visão geral com KPIs financeiros (receita, custo, lucro, margem), operação (assinantes, campanhas, usuários), comparativo API Oficial/Alternativa, gráfico receita 30 dias e atividade recente. API `GET /admin/dashboard/overview`. Marker `DEPLOY-2026-06-17-admin-dashboard`. Ver `doc/LOG-2026-06-17__admin-dashboard.md`.
+
+**Financeiro — rateio em colunas:** linhas do split separadas em 3 colunas (descrição | valor | ícones) via `.admin-financeiro-split-line` grid; funções `formatSplitSettlementLineLabel` / `formatSplitSettlementLineValue`. Marker `DEPLOY-2026-06-17-split-grid-columns`. Ver `doc/LOG-2026-06-17__financeiro-split-grid-columns.md`.
+
+**Traefik DEFINITIVO:** script mestre `traefik-permanent-all-vps.sh` — restore routers + patch backend + guarda inotify no main.yaml + watchers WABA/EVO. Ver `doc/FIX-TRAEFIK-DEFINITIVO.md`.
+
+**Traefik Evolution (walkup):** v2 com auto-restore router + reação a eventos traefik/easypanel.
+
+
+**Supabase novo projeto DEV:** ref `wcexaxeenvuigktyomdq`, URL `https://wcexaxeenvuigktyomdq.supabase.co`. Schema completo: `doc/SQL-2026-06-16__create-waba-supabase-schema-completo.sql`. `.env` e `.env.v02` com `SUPABASE_SERVICE_ROLE_KEY` preenchida; SQL executado com sucesso. Setup passo a passo: **4/8** — retomar teste Aquecedor (Evolution/Traefik corrigidos 2026-06-16).
+
+**Financeiro — split fornecedores:** cadastro de fornecedor (nome, plano, custo/envio, PIX); no split o fornecedor recebe envios × custo; lucro segue rateio % entre masters. **Repasse PIX via Asaas** (`POST /transfers`) ao confirmar pagamento + backfill/retry no Admin. Env `WABA_FINANCEIRO_SPLIT_PAYOUT_ENABLED`. Marker `DEPLOY-2026-06-16-financeiro-split-payout-pix`. Ver `doc/LOG-2026-06-16__financeiro-split-payout-pix.md`.
+
+**Sidebar menu scroll:** `.desktop-tabs` com `overflow-y: auto` dentro de `.tabs-wrapper` fixo; ao expandir sidebar abre só o grupo da aba ativa. Ver `doc/LOG-2026-06-08__sidebar-menu-scroll-overflow.md`.
+
+**Aquecedor — listagem Envios por usuário:** `GET /aquecedor/envios` com auth, filtro por instâncias do dono (`listOwnedInstanceNames`), merge log local `aquecedor-envios-log.json` + Supabase (`logs_envios`, fila PENDENTE/PROCESSANDO); `recordAquecedorEnvio` após envio; auto-enfileira mensagem no `start` e quando fila vazia no ciclo; UI mostra `hint` quando vazio. Marker `DEPLOY-2026-06-08-aquecedor-envios-listagem-owner`. Ver `doc/LOG-2026-06-08__aquecedor-envios-listagem-owner.md`.
+
+**Financeiro — somente conciliadas:** lista só `paid`, sem botão Conciliar PIX. Ver `doc/LOG-2026-06-08__financeiro-somente-conciliadas.md`.
+
+**Financeiro — pedidos paginados:** API `GET /admin/financeiro/orders`, 10 por vez + scroll. Ver `doc/LOG-2026-06-08__financeiro-pedidos-scroll-paginado.md`.
+
+**Financeiro — split inputs:** cabeçalho único, cards escuros, inputs tema dark, grid alinhado PIX/rateio. Ver `doc/LOG-2026-06-08__financeiro-split-inputs-layout.md`.
+
+**Financeiro — métricas comparativas:** cards por indicador (Total contratado, Custo total, Lucro bruto) com Oficial vs Alternativa, barras e consolidado. **API Oficial = verde `#4ade80`** (legenda + barras). Ver `doc/LOG-2026-06-08__financeiro-metricas-comparativas.md`.
+
+**Aquecedor — salvar config + instâncias por usuário:** fallback local `aquecedor-config.json` sem Supabase; motor filtra instâncias por `aquecedorRuntimeOwnerEmail` + `instance-owners.json`. Marker `DEPLOY-2026-06-08-aquecedor-config-local-instancias-usuario`. Ver `doc/LOG-2026-06-08__aquecedor-salvar-config-instancias-usuario.md`.
+
+**Instâncias por usuário (v2):** sem bypass master — walkup@walkuptec.com.br só vê instâncias próprias. `instance-owners.json` obrigatório. Marker `DEPLOY-2026-06-16-instancias-estritas-por-usuario-v2`. Ver `doc/LOG-2026-06-16__fix-instancias-sem-bypass-master.md`.
+
+**Traefik Evolution (walkup):** instalado + router restaurado (`restore-walkup-evo-traefik-router-vps.sh` de `main.yaml.bak-waba-20260616-070104`). HTTPS `fetchInstances` → **200**. Backend `172.17.0.1:30181`, watcher ativo.
+
+**Fix validação inbound passo 3:** Evolution usa `ownerJid` (não `owner`); validação não iniciava e número ficava "—". Resposta automática usa JID `@lid` quando aplicável. Marker `DEPLOY-2026-06-08-validacao-inbound-ownerjid-v1`. Ver `doc/LOG-2026-06-08__fix-validacao-inbound-ownerjid-lid.md`.
+
+**Listagem instância pós-wizard:** instância fica oculta na tabela durante todo o modal (QR + validação); só aparece após passo 4 e botão **Concluir**. Ver `doc/LOG-2026-06-08__instancia-lista-apos-wizard-concluir.md`.
+
+**Validação inbound modal instância:** após QR `open`, fluxo seguro CONFIRMAR → resposta na mesma conversa; sem envio frio entre instâncias. Endpoints `validacao-inbound`. Marker `DEPLOY-2026-06-08-validacao-inbound-v1`. Ver `doc/LOG-2026-06-08__validacao-inbound-modal-instancia.md`.
+
+---
+
+**CRÍTICO — Probe automático pós-QR (ban WhatsApp):** após conectar instância, o sistema enviava mensagem de teste automaticamente e marcava falha técnica como "possível restrição". Corrigido: sem envio automático; teste de mensagem só com botão opcional + confirmação; `restrictionSuspected` só com recusa explícita da Evolution. Marker `DEPLOY-2026-06-08-safe-connect-v1`. Ver `doc/LOG-2026-06-08__fix-probe-auto-mensagem-ban-whatsapp.md`.
+
+---
+
+2026-06-15
+
+**Grant Mozart +40 Alternativa (v02):** pedido `c7a3f1e2`; +10 bônus na compra → disponível Alternativa **500**. Ver `doc/LOG-2026-06-15__grant-mozart-40-alternativa.md`.
+
+---
+
+**Grant Mozart +400 Oficial (v02):** pedido `b8f4e2a1` paid; +100 bônus liquidou na compra → disponível Oficial **700**. Ver `doc/LOG-2026-06-15__grant-mozart-400-oficial.md`.
+
+---
+
+2026-06-12
+
+**Fix liquidação bônus na compra:** bonificados somam ao disponível na próxima compra do mesmo plano; Mozart v02: Oficial 700/0, Alternativa 650/0. Ver `doc/LOG-2026-06-12__fix-bonus-soma-disponivel-compra.md`.
+
+---
+
+**Fix resumo Disparos:** total não vai mais só para API Oficial; reiniciar dev:v02. Ver `doc/LOG-2026-06-12__fix-resumo-saldo-por-api.md`.
+
+---
+
+**Reset saldo Mozart (v02):** apenas 500 API Oficial + 500 API Alternativa; bônus zerado. Ver `doc/LOG-2026-06-12__reset-mozart-500-oficial-500-alternativa.md`.
+
+---
+
+**Créditos por plano:** saldo e bonificação separados (Oficial/Alternativa); card Resumo com grid; bônus liquida na compra do mesmo plano. Ver `doc/LOG-2026-06-12__creditos-bonificacao-por-plano.md`.
+
+---
+
+**Bonificação na compra:** próxima compra paga soma `pendingBonus` ao pedido e zera bonificação; liquidação em créditos, webhook e polling. Ver `doc/LOG-2026-06-12__bonificacao-liquida-na-compra.md`.
+
+---
+
+**Campanhas API Oficial retroativas:** fallback de plano usa pedido na data de criação do intake; backfill `apiKind: oficial` nos legados. Ver `doc/LOG-2026-06-12__fix-campanhas-api-oficial-retroativo.md`.
+
+---
+
+**Campanha Alternativa 02 — status master:** digitalcorban (API Oficial) não finaliza campanhas Alternativa; corrigido persistência + UX; campanha `d33c148c` finalizada por somaconecta. Ver `doc/LOG-2026-06-12__fix-campanha-alternativa-02-status-master.md`.
+
+---
+
+**Crédito mozart — +500 API Alternativa:** pedido `0d7b5407-f030-4a9c-97a2-618de2a9fe56` (total contratado 2910, disponíveis 500). Ver `doc/LOG-2026-06-12__grant-mozart-500-alternativa-2.md`.
+
+**Crédito mozart — API Alternativa 500 envios:** pedido paid `a21d204d-3be4-4f02-8a5d-6eda4481ee55` em `waba-billing-orders.json` (v02). Saldo: 500 disponíveis. Ver `doc/LOG-2026-06-12__grant-mozart-500-alternativa.md`.
+
+---
+
+2026-06-12
+
+**Ícone atraso campanhas (master):** cor = ID assinante; persiste em `in_progress` se iniciou após SLA 6h; some só ao finalizar (`completed`). Ver `doc/LOG-2026-06-12__icone-atraso-persiste-ate-finalizar.md`.
+
+**Ícone atraso — cor:** `--admin-subscriber-id-color` = `--bs-code-color`. Ver `doc/LOG-2026-06-12__icone-atraso-cor-id-assinante.md`.
+
+---
+
+2026-06-12
+
+**Campanhas assinante — Resumo + relatório:** ao mudar status da campanha (polling), `loadDisparosCredits()` atualiza Resumo (créditos bonificados); relatório usa **Créditos bonificados** no lugar de Saldo bonificado/reembolsado. Ver `doc/LOG-2026-06-12__resumo-bonificado-status-sync.md`.
+
+---
+
+2026-06-12
+
+**Wizard Nova campanha — quantidade de envios:** etapa 5 (Leads) ganhou input `dis-wizard-planned-send-count` após importar planilha; validação contra saldo (`remainingShipments`) e linhas do arquivo; `plannedSendCount` enviado no intake; backend valida em `waba-campaign-intake.routes.ts`. Ver `doc/LOG-2026-06-12__wizard-quantidade-envios-input.md`.
+
+---
+
 2026-06-08
 
 **Disparos — nudge saldo zerado:** quando `remainingShipments === 0`, card "Ainda disponíveis" pulsa (laranja), banner no topo + card no resumo com CTA "Adicionar créditos" → `disparos-lancamento`; wizard "Nova campanha" bloqueado. Ver `doc/LOG-2026-06-08__disparos-saldo-zero-nudge.md`.

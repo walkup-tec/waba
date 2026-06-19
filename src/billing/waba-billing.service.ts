@@ -15,6 +15,8 @@ import {
   resolveAsaasPaymentUrl,
 } from "./asaas.client";
 import { formatBrazilMobileForAsaas } from "./phone";
+import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
+import { WabaFinanceiroSplitService } from "./waba-financeiro-split.service";
 import { WabaBillingOrderRepository, type WabaBillingOrder } from "./waba-billing-order.repository";
 
 export type CreateDisparosCheckoutInput = {
@@ -24,6 +26,7 @@ export type CreateDisparosCheckoutInput = {
   cpfCnpj: string;
   whatsapp: string;
   valueCents?: number;
+  shipmentCount?: number;
 };
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
@@ -50,8 +53,34 @@ const resolveMinCreditCents = (): number => {
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 30000;
 };
 
+/** Pacotes de teste (100 envios) — valores abaixo do mínimo comercial. */
+const DISPAROS_TEST_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: number }> = [
+  { shipments: 100, valueCents: 500 },
+  { shipments: 100, valueCents: 3000 },
+];
+
+const isDisparosTestPackage = (shipmentCount: number, valueCents: number): boolean =>
+  DISPAROS_TEST_PACKAGES.some(
+    (pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents,
+  );
+
 export class WabaBillingService {
-  constructor(private readonly orderRepository: WabaBillingOrderRepository) {}
+  constructor(
+    private readonly orderRepository = new WabaBillingOrderRepository(),
+    private readonly bonusSettlementService = new WabaDisparosBonusSettlementService(),
+    private readonly splitService = new WabaFinanceiroSplitService(),
+  ) {}
+
+  private finalizePaidOrder(order: WabaBillingOrder): WabaBillingOrder {
+    const settled = this.bonusSettlementService.settlePaidOrder(order);
+    void this.splitService.settleAndPayoutPaidOrder(settled).catch((error) => {
+      console.error(
+        `[FinanceiroSplit] erro ao liquidar/repassar pedido ${settled.id}:`,
+        error instanceof Error ? error.message : error,
+      );
+    });
+    return settled;
+  }
 
   getDisparosConfig() {
     return {
@@ -77,18 +106,24 @@ export class WabaBillingService {
   }
 
   private toPublicOrder(order: WabaBillingOrder) {
+    const settled =
+      order.product === "waba-disparos" && order.status === "paid"
+        ? this.bonusSettlementService.settlePaidOrder(order)
+        : order;
     return {
-      id: order.id,
-      product: order.product,
-      apiKind: order.apiKind,
-      status: order.status,
-      valueCents: order.valueCents,
-      paymentUrl: order.paymentUrl ?? "",
-      pixCopyPaste: order.pixCopyPaste ?? "",
-      pixQrCodeBase64: order.pixQrCodeBase64 ?? "",
-      paidAt: order.paidAt ?? "",
-      updatedAt: order.updatedAt,
-      asaasExternalReference: order.asaasExternalReference,
+      id: settled.id,
+      product: settled.product,
+      apiKind: settled.apiKind,
+      status: settled.status,
+      valueCents: settled.valueCents,
+      shipmentCount: settled.shipmentCount ?? 0,
+      bonusShipmentsApplied: settled.bonusShipmentsApplied ?? 0,
+      paymentUrl: settled.paymentUrl ?? "",
+      pixCopyPaste: settled.pixCopyPaste ?? "",
+      pixQrCodeBase64: settled.pixQrCodeBase64 ?? "",
+      paidAt: settled.paidAt ?? "",
+      updatedAt: settled.updatedAt,
+      asaasExternalReference: settled.asaasExternalReference,
     };
   }
 
@@ -117,13 +152,24 @@ export class WabaBillingService {
 
     const minCreditCents = resolveMinCreditCents();
     const valueCents = Math.round(Number(input.valueCents ?? minCreditCents));
-    if (!Number.isFinite(valueCents) || valueCents < minCreditCents) {
+    const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
+    const isTestPackage = isDisparosTestPackage(shipmentCount, valueCents);
+    const effectiveMin = isTestPackage ? valueCents : minCreditCents;
+    if (!Number.isFinite(valueCents) || valueCents < effectiveMin) {
       throw new Error(
-        `Valor mínimo de créditos: R$ ${centsToCurrency(minCreditCents).toFixed(2).replace(".", ",")}.`,
+        `Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`,
       );
     }
 
-    return { apiKind, customerName, ownerEmail, cpfCnpj, whatsapp, valueCents };
+    return {
+      apiKind,
+      customerName,
+      ownerEmail,
+      cpfCnpj,
+      whatsapp,
+      valueCents,
+      shipmentCount: shipmentCount > 0 ? shipmentCount : undefined,
+    };
   }
 
   async createDisparosPixCheckout(input: CreateDisparosCheckoutInput) {
@@ -146,6 +192,7 @@ export class WabaBillingService {
       cpfCnpj: validated.cpfCnpj,
       billingType: "PIX",
       valueCents: validated.valueCents,
+      shipmentCount: validated.shipmentCount,
       status: "pending_payment",
       asaasExternalReference,
       createdAt: now,
@@ -165,7 +212,9 @@ export class WabaBillingService {
       billingType: "PIX",
       value: centsToCurrency(order.valueCents),
       dueDate: formatDueDate(1),
-      description: buildWabaPaymentDescription(order.apiKind),
+      description: validated.shipmentCount
+        ? `${buildWabaPaymentDescription(order.apiKind)} · ${validated.shipmentCount.toLocaleString("pt-BR")} envios`
+        : buildWabaPaymentDescription(order.apiKind),
       externalReference: asaasExternalReference,
     });
 
@@ -215,7 +264,7 @@ export class WabaBillingService {
         paymentUrl,
       }) ?? order;
 
-    return this.toPublicOrder(paidOrder);
+    return this.toPublicOrder(this.finalizePaidOrder(paidOrder));
   }
 
   async handleAsaasWebhook(
@@ -261,7 +310,8 @@ export class WabaBillingService {
           paidAt: new Date().toISOString(),
           asaasPaymentId: paymentId || order.asaasPaymentId,
         }) ?? order;
-      return { ok: true, orderId: paid.id, status: paid.status };
+      const settled = this.finalizePaidOrder(paid);
+      return { ok: true, orderId: settled.id, status: settled.status };
     }
 
     return { ok: true, orderId: order.id, status: order.status, event: normalizedEvent };

@@ -14,6 +14,7 @@ export type WabaBillingOrder = {
   cpfCnpj: string;
   billingType: "PIX";
   valueCents: number;
+  shipmentCount?: number;
   status: WabaBillingOrderStatus;
   asaasCustomerId?: string;
   asaasPaymentId?: string;
@@ -24,6 +25,10 @@ export type WabaBillingOrder = {
   createdAt: string;
   updatedAt: string;
   paidAt?: string;
+  /** Envios bonificados aplicados na confirmação do pagamento. */
+  bonusShipmentsApplied?: number;
+  /** Marca que o saldo bonificado pendente já foi avaliado neste pedido. */
+  bonusSettlementAt?: string;
 };
 
 const ORDERS_FILE = resolveDataFile("waba-billing-orders.json");

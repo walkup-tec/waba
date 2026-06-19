@@ -25,7 +25,8 @@ docker run -d --name waba -p 3000:3000 --env-file .env -v waba-data:/app/data wa
 - **Dockerfile path:** `Dockerfile`.
 - **Comando:** padrão da imagem (`node dist/index.js`).
 - **Volume:** host ou nomeado → ponto de montagem **`/app/data`**.
-- **502 Bad Gateway após redeploy:** script **deste repo** (não usar o do Typebot) — ver **[FIX-TRAEFIK-WABA.md](FIX-TRAEFIK-WABA.md)** → `scripts/traefik-permanent-waba-vps.sh`.
+- **502 Bad Gateway após redeploy:** script definitivo **WABA + Evolution** — ver **[FIX-TRAEFIK-DEFINITIVO.md](FIX-TRAEFIK-DEFINITIVO.md)** → `scripts/traefik-permanent-all-vps.sh`.
+- WABA isolado: [FIX-TRAEFIK-WABA.md](FIX-TRAEFIK-WABA.md) → `scripts/traefik-permanent-waba-vps.sh`.
 
 ## FTP vs Docker
 

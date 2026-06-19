@@ -8,10 +8,10 @@
 #   /root/traefik-permanent-waba-vps.sh install
 #
 # Repositório: https://github.com/walkup-tec/waba
-# Versão (validar após curl): waba-traefik-2026-06-08-v4
+# Versão (validar após curl): waba-traefik-2026-06-17-v5
 set -euo pipefail
 
-WABA_SCRIPT_VERSION="waba-traefik-2026-06-08-v4"
+WABA_SCRIPT_VERSION="waba-traefik-2026-06-17-v5"
 
 INSTALL_PATH="/root/traefik-permanent-waba-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-waba-fix"
@@ -229,6 +229,39 @@ ensure_traefik_on_overlay() {
   fi
 }
 
+find_backup_with_host() {
+  local host="$1"
+  local f golden="/etc/easypanel/traefik/config/main.yaml.golden-traefik-all"
+  if [[ -f "$golden" ]] && grep -q "Host(\`${host}\`)" "$golden" 2>/dev/null; then
+    echo "$golden"
+    return 0
+  fi
+  for f in $(ls -t /etc/easypanel/traefik/config/main.yaml.bak* 2>/dev/null); do
+    if grep -q "Host(\`${host}\`)" "$f" 2>/dev/null; then
+      echo "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
+ensure_waba_public_router() {
+  [[ -f "$CFG" ]] || return 1
+  if grep -q "Host(\`${WABA_PUBLIC_HOST}\`)" "$CFG" 2>/dev/null; then
+    return 0
+  fi
+  local bak
+  bak=$(find_backup_with_host "$WABA_PUBLIC_HOST" || true)
+  if [[ -z "$bak" ]]; then
+    echo "ERRO: router ${WABA_PUBLIC_HOST} ausente e sem backup em ${CFG}.bak*"
+    return 1
+  fi
+  echo "ALERTA: router ${WABA_PUBLIC_HOST} removido — restaurando de ${bak}"
+  cp -a "$CFG" "${CFG}.bak-before-auto-waba-restore-$(date +%Y%m%d-%H%M%S)"
+  cp -a "$bak" "$CFG"
+  return 0
+}
+
 patch_main_yaml() {
   local waba_ip resolved_net waba_port backend_url
   waba_ip=$(resolve_waba_ip || true)
@@ -236,13 +269,9 @@ patch_main_yaml() {
   backend_url=$(resolve_waba_backend_url || true)
   resolved_net=$(resolve_overlay_network)
 
-  [[ -z "$waba_ip" ]] && {
-    echo "ERRO: container ${WABA_CONTAINER_FILTER} sem IP na rede ${resolved_net}"
-    echo "  Verifique Easypanel → waba → waba_disparador (running) e docker ps -a | grep -i waba"
-    return 1
-  }
+  [[ -z "$waba_ip" ]] && echo "AVISO: container ${WABA_CONTAINER_FILTER} sem IP overlay — usando host gateway"
 
-  [[ -z "$backend_url" ]] && backend_url="http://${WABA_SWARM_SERVICE}:${waba_port}/"
+  [[ -z "$backend_url" ]] && backend_url="http://172.17.0.1:${WABA_HOST_PUBLISHED_PORT}/"
 
   [[ -f "$CFG" ]] || { echo "ERRO: ${CFG} não existe"; return 1; }
 
@@ -389,6 +418,7 @@ waba_health_from_traefik() {
 
 run_fix() {
   local detected_port detected_backend
+  ensure_waba_public_router || true
   detected_port=$(resolve_waba_port)
   detected_backend=$(resolve_waba_backend_url || echo "?")
   echo "=== traefik-permanent-waba ${WABA_SCRIPT_VERSION} $(date -Is) porta=${detected_port} backend=${detected_backend} ==="
@@ -436,6 +466,9 @@ should_patch_for_name() {
   local name="$1"
   case "$name" in
     *waba_disparador*|*waba-disparador*|*waba_waba*|waba_*)
+      return 0
+      ;;
+    *traefik*|*easypanel*)
       return 0
       ;;
   esac

@@ -1,14 +1,43 @@
 import type { Express, Request } from "express";
+import { readWabaSessionCookie, resolveSessionRole, verifyWabaSessionToken } from "../auth/waba-auth.service";
+import { AsaasTransferAuthService } from "./asaas-transfer-auth.service";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaBillingService } from "./waba-billing.service";
+import { WabaDisparosCreditsService } from "./waba-disparos-credits.service";
 
 const orderRepository = new WabaBillingOrderRepository();
 const billingService = new WabaBillingService(orderRepository);
+const disparosCreditsService = new WabaDisparosCreditsService();
+const transferAuthService = new AsaasTransferAuthService();
+
+const resolveRequestAuth = (req: Request) => {
+  const token = readWabaSessionCookie(req.headers.cookie);
+  const session = verifyWabaSessionToken(token);
+  if (!session) return { email: "", role: "guest" as const };
+  return {
+    email: session.email,
+    role: resolveSessionRole(session),
+  };
+};
 
 const resolveAsaasWebhookToken = (): string => String(process.env.ASAAS_WEBHOOK_ACCESS_TOKEN ?? "").trim();
 
+const resolveAsaasTransferWebhookToken = (): string =>
+  String(
+    process.env.ASAAS_TRANSFER_WEBHOOK_ACCESS_TOKEN ??
+      process.env.ASAAS_WEBHOOK_ACCESS_TOKEN ??
+      "",
+  ).trim();
+
 const isAuthorizedAsaasWebhook = (req: Request): boolean => {
   const expected = resolveAsaasWebhookToken();
+  if (!expected) return true;
+  const received = String(req.header("asaas-access-token") ?? "").trim();
+  return received.length > 0 && received === expected;
+};
+
+const isAuthorizedAsaasTransferWebhook = (req: Request): boolean => {
+  const expected = resolveAsaasTransferWebhookToken();
   if (!expected) return true;
   const received = String(req.header("asaas-access-token") ?? "").trim();
   return received.length > 0 && received === expected;
@@ -26,16 +55,44 @@ export const registerWabaBillingRoutes = (app: Express) => {
     });
   });
 
+  app.get("/billing/disparos/credits", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para consultar seus créditos." });
+    }
+    return res.status(200).json({
+      ...disparosCreditsService.getCreditsSummary(auth.email),
+      role: auth.role,
+    });
+  });
+
+  app.get("/billing/disparos/purchases", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para consultar suas compras." });
+    }
+    const limitRaw = Number(req.query.limit ?? 20);
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 20;
+    return res.status(200).json({
+      items: disparosCreditsService.listPurchaseHistory(auth.email, limit),
+    });
+  });
+
   app.post("/billing/disparos/checkout", async (req, res) => {
     try {
+      const auth = resolveRequestAuth(req);
+      if (!auth.email) {
+        return res.status(401).json({ error: "Faça login para contratar créditos." });
+      }
       const body = req.body as Record<string, unknown>;
       const checkout = await billingService.createDisparosPixCheckout({
         apiKind: body.apiKind === "alternativa" ? "alternativa" : "oficial",
         customerName: String(body.customerName ?? ""),
-        ownerEmail: String(body.ownerEmail ?? ""),
+        ownerEmail: auth.email,
         cpfCnpj: String(body.cpfCnpj ?? ""),
         whatsapp: String(body.whatsapp ?? ""),
         valueCents: body.valueCents !== undefined ? Number(body.valueCents) : undefined,
+        shipmentCount: body.shipmentCount !== undefined ? Number(body.shipmentCount) : undefined,
       });
       return res.status(201).json(checkout);
     } catch (error) {
@@ -79,6 +136,22 @@ export const registerWabaBillingRoutes = (app: Express) => {
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Webhook inválido.",
+      });
+    }
+  });
+
+  app.post("/webhooks/asaas/transfer-authorization", (req, res) => {
+    if (!isAuthorizedAsaasTransferWebhook(req)) {
+      return res.status(401).json({ error: "Webhook de autorização de transferência não autorizado." });
+    }
+
+    try {
+      const result = transferAuthService.resolveTransferAuthorization(req.body);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        status: "REFUSED",
+        refuseReason: error instanceof Error ? error.message : "Falha ao validar transferência.",
       });
     }
   });

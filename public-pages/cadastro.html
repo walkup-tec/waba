@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Drax — Disparos de WhatsApp em Escala com Máxima Segurança</title>
+  <meta name="description" content="Plataforma WABA profissional para disparos de WhatsApp em massa. Cadastro gratuito, pague apenas pelos envios a partir de R$ 0,30." />
+  <link rel="icon" type="image/png" href="/media/favcon.png" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/media/favcon.png" />
+  <meta name="theme-color" content="#2ee4a0" />
+  <style>
+    :root { --bg:#050505; --card:#0a0a0a; --brand:#25d366; --brand-dark:#128c7e; --text:#f8fafc; --muted:#94a3b8; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:72rem;margin:0 auto;padding:0 1.5rem}
+    .label{display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .75rem;border-radius:999px;background:rgba(37,211,102,.1);border:1px solid rgba(37,211,102,.2);font-size:.65rem;font-family:monospace;text-transform:uppercase;letter-spacing:.2em;color:var(--brand)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.5rem;border-radius:.75rem;font-weight:700;background:var(--brand);color:#000;transition:.2s}
+    .btn:hover{box-shadow:0 0 40px rgba(37,211,102,.35);transform:translateY(-1px)}
+    .btn-ghost{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1)}
+    header{position:fixed;inset:0 0 auto;z-index:50;height:4rem;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(5,5,5,.8);backdrop-filter:blur(12px)}
+    header .wrap{height:100%;display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center}
+    .logo img{display:block;height:2rem;width:auto}
+    footer .logo img{height:2.25rem;margin:0 auto}
+    .form-grid .pw{margin-top:0}
+    nav{display:none;gap:1.75rem;font-size:.875rem;color:rgba(255,255,255,.6)}
+    nav a:hover{color:var(--brand)}
+    @media(min-width:768px){nav{display:flex}}
+    section{padding:5rem 0;border-top:1px solid rgba(255,255,255,.05)}
+    .hero{padding-top:8rem;padding-bottom:5rem;text-align:center;position:relative}
+    .hero h1{font-size:clamp(2rem,5vw,4rem);font-weight:800;line-height:1.05;margin:1.5rem 0}
+    .grad{background:linear-gradient(90deg,var(--brand),var(--brand-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .hero p{color:rgba(255,255,255,.6);font-size:1.125rem;max-width:36rem;margin:0 auto}
+    .badges{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;margin:1.5rem 0}
+    .badge{padding:.25rem .75rem;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:.75rem;color:rgba(255,255,255,.7)}
+    h2{font-size:clamp(1.75rem,4vw,3rem);font-weight:700;line-height:1.1}
+    .sub{color:rgba(255,255,255,.5);margin-top:1rem;font-size:1.05rem}
+    .grid-3{display:grid;gap:1px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:1rem;overflow:hidden}
+    @media(min-width:640px){.grid-3{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1024px){.grid-3.cols-3{grid-template-columns:repeat(3,1fr)}}
+    .cell{background:var(--card);padding:2rem}
+    .cell h3{font-size:1.1rem;margin-bottom:.5rem}
+    .cell p{font-size:.875rem;color:rgba(255,255,255,.5)}
+    .cols-2{display:grid;gap:2rem}
+    @media(min-width:1024px){.cols-2{grid-template-columns:1fr 1fr;align-items:center}}
+    .check{display:flex;gap:.75rem;margin-bottom:.75rem;color:rgba(255,255,255,.8)}
+    .check::before{content:"✓";color:var(--brand);font-weight:700}
+    .api-grid{display:grid;gap:1px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.1);border-radius:1.5rem;overflow:hidden}
+    @media(min-width:768px){.api-grid{grid-template-columns:1fr 1fr}}
+    .api-card{padding:2.5rem;background:var(--card)}
+    .api-card.alt{background:linear-gradient(180deg,rgba(37,211,102,.08),var(--card))}
+    .benefits{display:grid;gap:1rem}
+    @media(min-width:640px){.benefits{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1024px){.benefits{grid-template-columns:repeat(3,1fr)}}
+    .benefit{padding:1.75rem;border:1px solid rgba(255,255,255,.1);border-radius:1rem;background:linear-gradient(180deg,rgba(255,255,255,.03),transparent)}
+    .benefit h3{font-size:1.05rem;margin:.75rem 0 .25rem}
+    .warmer{border:1px solid rgba(37,211,102,.3);border-radius:2rem;padding:2.5rem;background:linear-gradient(135deg,rgba(37,211,102,.12),transparent);position:relative}
+    .price-box{margin-top:3rem;padding:3rem;border:1px solid rgba(255,255,255,.1);border-radius:1.5rem;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent);text-align:center}
+    .price{font-size:clamp(3rem,8vw,5rem);font-weight:900;background:linear-gradient(90deg,var(--brand),var(--brand-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .metrics{display:grid;gap:1px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:1rem;overflow:hidden;margin-bottom:2rem}
+    @media(min-width:768px){.metrics{grid-template-columns:repeat(4,1fr)}}
+    .metric{background:var(--card);padding:2rem;text-align:center}
+    .metric strong{display:block;font-size:2rem;color:var(--brand)}
+    .metric span{font-size:.7rem;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.1em}
+    details{border:1px solid rgba(255,255,255,.1);border-radius:1rem;margin-bottom:.75rem;background:rgba(255,255,255,.02)}
+    summary{padding:1.25rem 1.5rem;cursor:pointer;font-weight:600;list-style:none}
+    details p{padding:0 1.5rem 1.25rem;color:rgba(255,255,255,.6);font-size:.9rem}
+    #cadastro{text-align:center}
+    form{margin-top:2rem;text-align:left;padding:2rem;border:1px solid rgba(255,255,255,.1);border-radius:1rem;background:rgba(255,255,255,.03)}
+    .form-grid{display:grid;gap:1rem}
+    @media(min-width:768px){.form-grid{grid-template-columns:1fr 1fr}}
+    label{display:block;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.7);margin-bottom:.35rem}
+    input{width:100%;padding:.75rem 1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.4);color:#fff;font-size:1rem}
+    input:focus{outline:none;border-color:rgba(37,211,102,.5)}
+    .pw{position:relative}
+    .pw input{padding-right:2.75rem}
+    .pw button{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);border:0;background:0;color:var(--muted);cursor:pointer}
+    .msg{margin-top:.75rem;font-size:.875rem;text-align:center}
+    .msg.err{color:#fca5a5}.msg.ok{color:#86efac}
+    footer{padding:4rem 0 2rem;border-top:1px solid rgba(255,255,255,.05);color:rgba(255,255,255,.4);font-size:.875rem}
+    .center{text-align:center}
+  </style>
+</head>
+<body>
+  <header id="top">
+    <div class="wrap">
+      <a href="#top" class="logo"><img src="/logo.png" alt="DRAX" width="120" height="39" decoding="async" /></a>
+      <nav>
+        <a href="#solucao">Solução</a>
+        <a href="#apis">APIs</a>
+        <a href="#beneficios">Benefícios</a>
+        <a href="#preco">Preço</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a href="#cadastro" class="btn" style="font-size:.875rem;padding:.5rem 1rem">Criar Conta Gratuitamente</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap">
+      <div class="label">Plataforma Profissional WABA</div>
+      <h1>Disparos de WhatsApp em Escala com <span class="grad">Máxima Segurança</span></h1>
+      <p>Utilize API Oficial ou API Alternativa para campanhas em massa sem comprometer o WhatsApp do atendimento da sua empresa.</p>
+      <div class="badges">
+        <span class="badge">✓ Cadastro Gratuito</span><span class="badge">✓ API Oficial</span><span class="badge">✓ API Alternativa</span>
+        <span class="badge">✓ Alta Escalabilidade</span><span class="badge">✓ Envio Profissional</span>
+      </div>
+      <div style="margin-top:1.5rem"><a href="#cadastro" class="btn">Criar Conta Gratuitamente →</a></div>
+      <p style="margin-top:1rem;font-size:.8rem;color:rgba(255,255,255,.4)">🔒 Sem cartão · Setup em 2 min</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="label">O Problema</div>
+      <h2 style="margin-top:1rem">A instabilidade é o maior inimigo da sua operação.</h2>
+      <p class="sub">Ferramentas amadoras colocam seu principal canal de comunicação em risco.</p>
+      <div class="grid-3 cols-3" style="margin-top:2.5rem">
+        <div class="cell"><h3>Bloqueios Frequentes</h3><p>Números banidos por falta de estrutura profissional de envios em massa.</p></div>
+        <div class="cell"><h3>Perda de Números</h3><p>Investimento perdido quando um chip cai no meio da campanha.</p></div>
+        <div class="cell"><h3>Atendimento Comprometido</h3><p>Disparos no número de suporte travam o relacionamento com clientes.</p></div>
+        <div class="cell"><h3>Falta de Escalabilidade</h3><p>Plataformas que travam nas campanhas grandes.</p></div>
+        <div class="cell"><h3>Ferramentas Instáveis</h3><p>Sistemas que param no meio de campanhas críticas.</p></div>
+        <div class="cell"><h3>Baixa Taxa de Entrega</h3><p>Mensagens marcadas como spam ou que nunca chegam.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="solucao">
+    <div class="wrap cols-2">
+      <div>
+        <div class="label">A Solução Drax</div>
+        <h2 style="margin-top:1rem">Estrutura de disparos <span class="grad">totalmente isolada</span> do seu WhatsApp receptivo.</h2>
+        <p class="sub">Sua operação de disparos roda em ambiente independente. Risco minimizado, performance maximizada.</p>
+        <div style="margin-top:1.5rem">
+          <div class="check">O número de atendimento nunca é impactado pelos disparos.</div>
+          <div class="check">Envios em estrutura totalmente independente.</div>
+          <div class="check">Escalabilidade real para altíssimo volume.</div>
+          <div class="check">Ambiente preparado para operações 24/7.</div>
+        </div>
+        <a href="#cadastro" class="btn" style="margin-top:1.5rem">Criar Conta Grátis →</a>
+      </div>
+      <div style="padding:2rem;border:1px solid rgba(255,255,255,.1);border-radius:1.5rem;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent)">
+        <div style="font-size:1.5rem;font-weight:700">Seu Número Principal</div>
+        <p style="color:rgba(255,255,255,.5);margin-top:.5rem">Intacto. Sem risco. 100% protegido.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem">
+          <div style="padding:1rem;border:1px solid rgba(37,211,102,.3);border-radius:1rem;background:rgba(37,211,102,.05)"><strong>Estrutura de Envio</strong><br><small style="color:rgba(255,255,255,.5)">Isolada · Escalável</small></div>
+          <div style="padding:1rem;border:1px solid rgba(37,211,102,.3);border-radius:1rem;background:rgba(37,211,102,.05)"><strong>Risco Operacional</strong><br><small style="color:rgba(255,255,255,.5)">Reduzido em até 85%</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="apis">
+    <div class="wrap center">
+      <div class="label">API Oficial vs Alternativa</div>
+      <h2 style="margin-top:1rem">Escolha o motor ideal para o seu momento.</h2>
+      <p class="sub">Duas tecnologias robustas. Você decide. Nós entregamos.</p>
+      <div class="api-grid" style="margin-top:2.5rem;text-align:left">
+        <div class="api-card">
+          <h3>API Oficial</h3>
+          <p style="color:rgba(255,255,255,.5);margin:.5rem 0 1.5rem">WABA homologada pela Meta.</p>
+          <p>• Maior credibilidade institucional</p><p>• Conta verificada pela Meta</p><p>• Operação 100% empresarial</p><p>• Recursos oficiais nativos</p>
+          <a href="#cadastro" class="btn btn-ghost" style="width:100%;margin-top:1.5rem">Começar Gratuito</a>
+        </div>
+        <div class="api-card alt">
+          <h3>API Alternativa</h3>
+          <p style="color:rgba(255,255,255,.5);margin:.5rem 0 1.5rem">Escala rápida com flexibilidade.</p>
+          <p>• Implantação imediata</p><p>• Flexibilidade operacional</p><p>• Excelente custo-benefício</p><p>• Alta performance em volume</p>
+          <a href="#cadastro" class="btn" style="width:100%;margin-top:1.5rem">Começar Gratuito</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="beneficios">
+    <div class="wrap center">
+      <div class="label">Benefícios</div>
+      <h2 style="margin-top:1rem">Tudo que sua operação precisa, em um só lugar.</h2>
+      <div class="benefits" style="margin-top:2.5rem;text-align:left">
+        <div class="benefit"><h3>Cadastro Gratuito</h3><p style="color:rgba(255,255,255,.5)">Sem mensalidade, sem cartão. Comece em 2 minutos.</p></div>
+        <div class="benefit"><h3>Disparos em Massa</h3><p style="color:rgba(255,255,255,.5)">Milhões de mensagens com estabilidade.</p></div>
+        <div class="benefit"><h3>Gestão Centralizada</h3><p style="color:rgba(255,255,255,.5)">Números e campanhas em um painel.</p></div>
+        <div class="benefit"><h3>Alta Performance</h3><p style="color:rgba(255,255,255,.5)">Throughput elevado e filas otimizadas.</p></div>
+        <div class="benefit"><h3>Suporte Especializado</h3><p style="color:rgba(255,255,255,.5)">Equipe técnica via WhatsApp.</p></div>
+        <div class="benefit"><h3>Relatórios Completos</h3><p style="color:rgba(255,255,255,.5)">Métricas em tempo real.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="warmer">
+        <span style="position:absolute;top:1.5rem;right:1.5rem;background:var(--brand);color:#000;font-size:.7rem;font-weight:800;padding:.35rem 1rem;border-radius:999px">★ 100% Gratuito</span>
+        <div class="label">Bônus Exclusivo</div>
+        <h2 style="margin-top:1rem">Ganhe o Aquecedor de Números WhatsApp.</h2>
+        <p class="sub">Ao confirmar pagamento de disparos, libere o Aquecedor por <strong>30 dias</strong>. Sem nova contratação em 30 dias, o acesso pausa até a próxima compra.</p>
+        <a href="#cadastro" class="btn" style="margin-top:1.5rem">Garantir Meu Acesso Grátis →</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="preco">
+    <div class="wrap center">
+      <div class="label">Transparência Total</div>
+      <h2 style="margin-top:1rem">Comece Gratuitamente.</h2>
+      <p class="sub">Pague apenas pelos envios. Sem mensalidade. Sem fidelidade.</p>
+      <div class="price-box">
+        <p style="font-size:.7rem;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.2em">A partir de</p>
+        <div class="price">R$ 0,30 <span style="font-size:1.5rem;-webkit-text-fill-color:rgba(255,255,255,.4)">/ envio</span></div>
+        <a href="#cadastro" class="btn" style="margin-top:2rem">Criar Conta Gratuitamente →</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap center">
+      <div class="label">Prova Social</div>
+      <h2 style="margin-top:1rem">Empresas que escalam pela Drax.</h2>
+      <div class="metrics" style="margin-top:2rem">
+        <div class="metric"><strong>+150M</strong><span>Mensagens/mês</span></div>
+        <div class="metric"><strong>98.7%</strong><span>Taxa de entrega</span></div>
+        <div class="metric"><strong>+1.200</strong><span>Empresas ativas</span></div>
+        <div class="metric"><strong>24/7</strong><span>Operação contínua</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap" style="max-width:48rem">
+      <div class="center"><div class="label">FAQ</div><h2 style="margin-top:1rem">Perguntas Frequentes</h2></div>
+      <div style="margin-top:2rem">
+        <details open><summary>O cadastro é realmente gratuito?</summary><p>Sim. Sem cartão e sem mensalidade. A cobrança só acontece quando você realizar envios.</p></details>
+        <details><summary>Qual a diferença entre API Oficial e Alternativa?</summary><p>A Oficial é homologada pela Meta com selo verificado. A Alternativa oferece implantação imediata e melhor custo-benefício em alto volume.</p></details>
+        <details><summary>Como funciona a cobrança?</summary><p>Créditos pré-pagos. Carregue o valor que quiser e o saldo é debitado por envio. Sem fidelidade.</p></details>
+        <details><summary>Como funciona o aquecimento gratuito?</summary><p>Ao confirmar pagamento de disparos, libera o Aquecedor por 30 dias. Sem nova contratação em 30 dias, pausa até a próxima compra.</p></details>
+        <details><summary>Quanto custa cada envio?</summary><p>A partir de R$ 0,30 por envio, reduzindo conforme o volume do pacote.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section id="cadastro">
+    <div class="wrap" style="max-width:40rem">
+      <div class="label">Cadastro gratuito</div>
+      <h2 style="margin-top:1rem">Crie sua conta em minutos</h2>
+      <p class="sub">Cadastre-se sem custo. Depois entre no painel, contrate disparos e libere o Aquecedor por 30 dias após cada pagamento.</p>
+      <form id="register-form">
+        <div class="form-grid">
+          <div><label for="fullName">Como quer ser chamado</label><input id="fullName" required /></div>
+          <div><label for="email">E-mail</label><input id="email" type="email" required /></div>
+          <div><label for="whatsapp">WhatsApp</label><input id="whatsapp" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999" maxlength="16" required /></div>
+          <div><label for="phone">Telefone</label><input id="phone" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="(11) 3333-4444" maxlength="16" required /></div>
+          <div><label for="cpfCnpj">CPF ou CNPJ</label><input id="cpfCnpj" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="18" required /></div>
+          <div><label for="password">Senha de acesso</label>
+            <div class="pw"><input id="password" type="password" minlength="6" required /><button type="button" id="toggle-eye" aria-label="Mostrar senha">👁</button></div>
+          </div>
+        </div>
+        <button type="submit" id="submit-btn" class="btn" style="width:100%;margin-top:1.25rem">Criar conta gratuitamente →</button>
+        <p id="message" class="msg" hidden></p>
+        <p style="text-align:center;font-size:.75rem;color:rgba(255,255,255,.4);margin-top:.75rem">Sem cartão · Após o cadastro você será direcionado ao painel WABA</p>
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap center">
+      <a href="#top" class="logo" style="justify-content:center;margin-bottom:1rem"><img src="/logo.png" alt="DRAX" width="120" height="39" decoding="async" /></a>
+      <p>Infraestrutura premium para disparos de WhatsApp em larga escala.</p>
+      <p style="margin-top:2rem;font-size:.75rem">© Drax WABA · Todos os direitos reservados</p>
+    </div>
+  </footer>
+
+  <script>
+    const apiBase = (window.WABA_BASE_PATH || "").replace(/\/$/, "") || window.location.pathname.replace(/\/(vendas|cadastro)\/?$/, "").replace(/\/$/, "") || "";
+    const loginUrl = apiBase + "/";
+    const pw = document.getElementById("password");
+    const onlyDigits = (value) => String(value || "").replace(/\D/g, "");
+    const maskMobile = (value) => {
+      const digits = onlyDigits(value).slice(0, 11);
+      if (digits.length <= 2) return digits ? "(" + digits : "";
+      if (digits.length <= 7) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
+      return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
+    };
+    const maskPhone = (value) => {
+      const digits = onlyDigits(value).slice(0, 11);
+      if (digits.length <= 2) return digits ? "(" + digits : "";
+      if (digits.length <= 6) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
+      if (digits.length <= 10) return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 6) + "-" + digits.slice(6);
+      return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
+    };
+    const maskCpfCnpj = (value) => {
+      const digits = onlyDigits(value).slice(0, 14);
+      if (digits.length <= 11) {
+        return digits
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+      }
+      return digits
+        .replace(/^(\d{2})(\d)/, "$1.$2")
+        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1/$2")
+        .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+    };
+    const bindMask = (id, maskFn) => {
+      const input = document.getElementById(id);
+      input.addEventListener("input", () => {
+        const start = input.selectionStart;
+        const before = input.value;
+        input.value = maskFn(before);
+        const delta = input.value.length - before.length;
+        input.setSelectionRange(Math.max(0, (start || 0) + delta), Math.max(0, (start || 0) + delta));
+      });
+    };
+    bindMask("whatsapp", maskMobile);
+    bindMask("phone", maskPhone);
+    bindMask("cpfCnpj", maskCpfCnpj);
+    document.getElementById("toggle-eye").onclick = () => { pw.type = pw.type === "text" ? "password" : "text"; };
+    document.getElementById("register-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("message");
+      const btn = document.getElementById("submit-btn");
+      msg.hidden = true; btn.disabled = true;
+      try {
+        const res = await fetch(apiBase + "/subscribers/register", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: document.getElementById("fullName").value.trim(),
+            email: document.getElementById("email").value.trim(),
+            password: pw.value,
+            whatsapp: document.getElementById("whatsapp").value.trim(),
+            phone: document.getElementById("phone").value.trim(),
+            cpfCnpj: document.getElementById("cpfCnpj").value.trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Falha no cadastro.");
+        msg.className = "msg ok"; msg.textContent = data.message || "Cadastro realizado. Redirecionando…"; msg.hidden = false;
+        setTimeout(() => { window.location.href = data.loginUrl || loginUrl; }, 1200);
+      } catch (err) {
+        msg.className = "msg err"; msg.textContent = err.message || "Não foi possível cadastrar."; msg.hidden = false;
+      } finally { btn.disabled = false; }
+    };
+  </script>
+</body>
+</html>

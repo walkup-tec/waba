@@ -5,6 +5,9 @@ const node_crypto_1 = require("node:crypto");
 const asaas_identifiers_1 = require("./asaas-identifiers");
 const asaas_client_1 = require("./asaas.client");
 const phone_1 = require("./phone");
+const waba_disparos_bonus_settlement_service_1 = require("./waba-disparos-bonus-settlement.service");
+const waba_financeiro_split_service_1 = require("./waba-financeiro-split.service");
+const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeDigits = (value) => value.replace(/\D/g, "");
 const formatDueDate = (daysAhead) => {
@@ -24,9 +27,24 @@ const resolveMinCreditCents = () => {
     const raw = Number(process.env.WABA_DISPAROS_MIN_CREDIT_CENTS ?? 30000);
     return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 30000;
 };
+/** Pacotes de teste (100 envios) — valores abaixo do mínimo comercial. */
+const DISPAROS_TEST_PACKAGES = [
+    { shipments: 100, valueCents: 500 },
+    { shipments: 100, valueCents: 3000 },
+];
+const isDisparosTestPackage = (shipmentCount, valueCents) => DISPAROS_TEST_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
 class WabaBillingService {
-    constructor(orderRepository) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), bonusSettlementService = new waba_disparos_bonus_settlement_service_1.WabaDisparosBonusSettlementService(), splitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService()) {
         this.orderRepository = orderRepository;
+        this.bonusSettlementService = bonusSettlementService;
+        this.splitService = splitService;
+    }
+    finalizePaidOrder(order) {
+        const settled = this.bonusSettlementService.settlePaidOrder(order);
+        void this.splitService.settleAndPayoutPaidOrder(settled).catch((error) => {
+            console.error(`[FinanceiroSplit] erro ao liquidar/repassar pedido ${settled.id}:`, error instanceof Error ? error.message : error);
+        });
+        return settled;
     }
     getDisparosConfig() {
         return {
@@ -50,18 +68,23 @@ class WabaBillingService {
             .map((order) => this.toPublicOrder(order));
     }
     toPublicOrder(order) {
+        const settled = order.product === "waba-disparos" && order.status === "paid"
+            ? this.bonusSettlementService.settlePaidOrder(order)
+            : order;
         return {
-            id: order.id,
-            product: order.product,
-            apiKind: order.apiKind,
-            status: order.status,
-            valueCents: order.valueCents,
-            paymentUrl: order.paymentUrl ?? "",
-            pixCopyPaste: order.pixCopyPaste ?? "",
-            pixQrCodeBase64: order.pixQrCodeBase64 ?? "",
-            paidAt: order.paidAt ?? "",
-            updatedAt: order.updatedAt,
-            asaasExternalReference: order.asaasExternalReference,
+            id: settled.id,
+            product: settled.product,
+            apiKind: settled.apiKind,
+            status: settled.status,
+            valueCents: settled.valueCents,
+            shipmentCount: settled.shipmentCount ?? 0,
+            bonusShipmentsApplied: settled.bonusShipmentsApplied ?? 0,
+            paymentUrl: settled.paymentUrl ?? "",
+            pixCopyPaste: settled.pixCopyPaste ?? "",
+            pixQrCodeBase64: settled.pixQrCodeBase64 ?? "",
+            paidAt: settled.paidAt ?? "",
+            updatedAt: settled.updatedAt,
+            asaasExternalReference: settled.asaasExternalReference,
         };
     }
     validateCheckoutInput(input) {
@@ -84,10 +107,21 @@ class WabaBillingService {
         const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
         const minCreditCents = resolveMinCreditCents();
         const valueCents = Math.round(Number(input.valueCents ?? minCreditCents));
-        if (!Number.isFinite(valueCents) || valueCents < minCreditCents) {
-            throw new Error(`Valor mínimo de créditos: R$ ${centsToCurrency(minCreditCents).toFixed(2).replace(".", ",")}.`);
+        const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
+        const isTestPackage = isDisparosTestPackage(shipmentCount, valueCents);
+        const effectiveMin = isTestPackage ? valueCents : minCreditCents;
+        if (!Number.isFinite(valueCents) || valueCents < effectiveMin) {
+            throw new Error(`Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`);
         }
-        return { apiKind, customerName, ownerEmail, cpfCnpj, whatsapp, valueCents };
+        return {
+            apiKind,
+            customerName,
+            ownerEmail,
+            cpfCnpj,
+            whatsapp,
+            valueCents,
+            shipmentCount: shipmentCount > 0 ? shipmentCount : undefined,
+        };
     }
     async createDisparosPixCheckout(input) {
         if (!(0, asaas_client_1.isAsaasConfigured)()) {
@@ -107,6 +141,7 @@ class WabaBillingService {
             cpfCnpj: validated.cpfCnpj,
             billingType: "PIX",
             valueCents: validated.valueCents,
+            shipmentCount: validated.shipmentCount,
             status: "pending_payment",
             asaasExternalReference,
             createdAt: now,
@@ -124,7 +159,9 @@ class WabaBillingService {
             billingType: "PIX",
             value: centsToCurrency(order.valueCents),
             dueDate: formatDueDate(1),
-            description: (0, asaas_identifiers_1.buildWabaPaymentDescription)(order.apiKind),
+            description: validated.shipmentCount
+                ? `${(0, asaas_identifiers_1.buildWabaPaymentDescription)(order.apiKind)} · ${validated.shipmentCount.toLocaleString("pt-BR")} envios`
+                : (0, asaas_identifiers_1.buildWabaPaymentDescription)(order.apiKind),
             externalReference: asaasExternalReference,
         });
         const paymentUrl = (0, asaas_client_1.resolveAsaasPaymentUrl)(payment);
@@ -165,7 +202,7 @@ class WabaBillingService {
             paidAt: new Date().toISOString(),
             paymentUrl,
         }) ?? order;
-        return this.toPublicOrder(paidOrder);
+        return this.toPublicOrder(this.finalizePaidOrder(paidOrder));
     }
     async handleAsaasWebhook(event, payment) {
         const normalizedEvent = String(event ?? "").trim().toUpperCase();
@@ -201,7 +238,8 @@ class WabaBillingService {
                 paidAt: new Date().toISOString(),
                 asaasPaymentId: paymentId || order.asaasPaymentId,
             }) ?? order;
-            return { ok: true, orderId: paid.id, status: paid.status };
+            const settled = this.finalizePaidOrder(paid);
+            return { ok: true, orderId: settled.id, status: settled.status };
         }
         return { ok: true, orderId: order.id, status: order.status, event: normalizedEvent };
     }

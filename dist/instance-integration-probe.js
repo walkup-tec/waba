@@ -9,6 +9,7 @@ exports.getIntegrationProbeStatus = getIntegrationProbeStatus;
 exports.startIntegrationProbe = startIntegrationProbe;
 exports.pruneIntegrationProbes = pruneIntegrationProbes;
 const crypto_1 = __importDefault(require("crypto"));
+const evo_instance_key_1 = require("./instances/evo-instance-key");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
     .replace(/\/$/, "");
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
@@ -22,6 +23,9 @@ const WABA_PUBLIC_BASE_URL = String(process.env.WABA_PUBLIC_BASE_URL || process.
     .replace(/\/+$/, "");
 const PROBE_TIMEOUT_MS = Math.max(15000, Math.min(90000, Number(process.env.INTEGRATION_PROBE_TIMEOUT_MS || 45000) || 45000));
 const PROBE_POLL_MS = Math.max(1500, Math.min(10000, Number(process.env.INTEGRATION_PROBE_POLL_MS || 2500) || 2500));
+/** Bloqueio global: INTEGRATION_PROBE_DISABLE_MESSAGE_SEND=1 impede envio mesmo com opt-in. */
+const INTEGRATION_PROBE_MESSAGE_SEND_DISABLED = process.env.INTEGRATION_PROBE_DISABLE_MESSAGE_SEND === "1" ||
+    process.env.INTEGRATION_PROBE_DISABLE_MESSAGE_SEND === "true";
 const probes = new Map();
 const markerIndex = new Map();
 let onProbeFinished = null;
@@ -84,7 +88,8 @@ function buildTemplateUrl(template, instanceName) {
         .replace("{name}", encodeURIComponent(instanceName));
 }
 function extractInstanceNumber(inst) {
-    const raw = inst?.owner ??
+    const raw = inst?.ownerJid ??
+        inst?.owner ??
         inst?.number ??
         inst?.phone ??
         inst?.ownerNumber ??
@@ -115,7 +120,7 @@ async function fetchConnectedInstances() {
         const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
         if (!status.includes("open"))
             return null;
-        const instancia = String(inst?.name ?? inst?.instanceName ?? inst?.instance ?? "").trim();
+        const instancia = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
         const numero = extractInstanceNumber(inst);
         if (!instancia || !numero)
             return null;
@@ -155,12 +160,41 @@ function messageTextsIncludeMarker(node, marker) {
     const needle = marker.toLowerCase();
     return texts.some((t) => t.toLowerCase().includes(needle));
 }
+function isLikelyWhatsAppRestriction(detail, httpStatus) {
+    const d = String(detail || "").toLowerCase();
+    const patterns = [
+        "ban",
+        "banned",
+        "blocked",
+        "blocklist",
+        "restricted",
+        "restriction",
+        "suspended",
+        "suspend",
+        "not authorized",
+        "forbidden",
+        "rate-overlimit",
+        "spam",
+        "integrity",
+        "logged out",
+        "logout",
+        "connection closed",
+        "disconnected",
+    ];
+    if (patterns.some((p) => d.includes(p)))
+        return true;
+    return httpStatus === 403;
+}
+function computeRestrictionSuspected(record) {
+    if (!record.finished || !record.sendAttempted)
+        return false;
+    if (record.sendHttpOk)
+        return false;
+    return isLikelyWhatsAppRestriction(record.apiTest.detail);
+}
 function publicProbeStatus(record) {
-    const apiDone = record.apiTest.success !== null;
-    const webhookDone = record.webhookTest.success !== null;
     const finished = record.finished;
-    const restrictionSuspected = finished &&
-        (record.apiTest.success === false || record.webhookTest.success === false);
+    const restrictionSuspected = computeRestrictionSuspected(record);
     return {
         probeId: record.probeId,
         finished,
@@ -333,6 +367,29 @@ async function startIntegrationProbe(input) {
             error: `Instância "${sourceInstanceName}" não está conectada (status open) na Evolution.`,
         };
     }
+    const allowMessageSend = input.allowMessageSend === true && !INTEGRATION_PROBE_MESSAGE_SEND_DISABLED;
+    if (!allowMessageSend) {
+        const startedAt = new Date().toISOString();
+        return {
+            status: {
+                probeId: "",
+                finished: true,
+                restrictionSuspected: false,
+                sourceInstance: source.instancia,
+                destinationInstance: "",
+                apiTest: {
+                    success: true,
+                    detail: "Conexão confirmada (status open) na Evolution.",
+                },
+                webhookTest: {
+                    success: null,
+                    detail: "Nenhuma mensagem de teste enviada (modo seguro).",
+                },
+                startedAt,
+                finishedAt: startedAt,
+            },
+        };
+    }
     let destination = input.destinationInstanceName
         ? connected.find((c) => c.instancia === input.destinationInstanceName)
         : undefined;
@@ -377,10 +434,13 @@ async function startIntegrationProbe(input) {
     const send = await sendProbeMessage(source.instancia, destination.numero, probeText);
     record.sendHttpOk = send.ok;
     if (!send.ok) {
+        const restricted = isLikelyWhatsAppRestriction(String(send.detail), send.status);
         record.apiTest = { success: false, detail: `Falha ao enviar teste: ${send.detail}` };
         record.webhookTest = {
-            success: false,
-            detail: "Envio não realizado — webhook não aplicável.",
+            success: restricted ? false : null,
+            detail: restricted
+                ? "Evolution indicou possível restrição no envio."
+                : "Envio não confirmado (falha técnica — não indica bloqueio do número).",
         };
         tryFinalizeProbe(record);
         return { probeId, status: publicProbeStatus(record) };
