@@ -954,57 +954,22 @@ function pickAquecedorCombination<T extends { instancia_origem: string; instanci
   return null;
 }
 
-async function loadRecentAquecedorPairLastSenders(
+async function getLastAquecedorDirectedExchange(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
   connected: Array<{ instancia: string; numero: string }>,
-): Promise<Map<string, string>> {
+  instanciaOrigem: string,
+  instanciaDestino: string,
+): Promise<"origem_to_destino" | "destino_to_origem" | null> {
   const aliasesMap = await loadInstanceAliasesMap();
   const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-  const instanceNames = connected
-    .map((item) => String(item.instancia || "").trim())
-    .filter(Boolean);
-  const allowed = new Set(instanceNames.map((name) => name.toLowerCase()));
-  const lastSenders = new Map<string, string>();
-  if (instanceNames.length < 2) return lastSenders;
+  const origem = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaOrigem);
+  const destino = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaDestino);
+  if (!origem || !destino) return null;
 
-  const numberToInstance = new Map<string, string>();
-  for (const item of connected) {
-    const num = normalizeWhatsAppNumber(String(item.numero || "").trim());
-    if (num) numberToInstance.set(num, item.instancia);
-  }
-
-  const registerLastSender = (origemRaw: string, destinoRaw: string) => {
-    const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-    let destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-    if (!allowed.has(destino.toLowerCase())) {
-      const byNumber = numberToInstance.get(normalizeWhatsAppNumber(destinoRaw));
-      if (byNumber) destino = resolveAquecedorCanonicalInstance(byNumber, canonicalMap);
-    }
-    if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return;
-    if (!allowed.has(origem.toLowerCase()) || !allowed.has(destino.toLowerCase())) return;
-    const key = buildAquecedorPairKey(origem, destino);
-    if (lastSenders.has(key)) return;
-    lastSenders.set(key, origem);
-  };
-
-  try {
-    const { data, error } = (await (supabase
-      .from("logs_envios" as any)
-      .select("instancia_origem, instancia_destino, data_envio")
-      .in("instancia_origem", instanceNames)
-      .order("data_envio", { ascending: false })
-      .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
-    if (!error && Array.isArray(data)) {
-      for (const row of data) {
-        registerLastSender(
-          String(row?.instancia_origem || ""),
-          String(row?.instancia_destino || ""),
-        );
-      }
-    }
-  } catch {
-    /* */
-  }
+  const origemName = resolveAquecedorCanonicalInstance(origem.instancia, canonicalMap);
+  const destinoName = resolveAquecedorCanonicalInstance(destino.instancia, canonicalMap);
+  const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+  const instanceNames = connected.map((item) => item.instancia);
 
   try {
     const { data, error } = (await (supabase
@@ -1014,13 +979,126 @@ async function loadRecentAquecedorPairLastSenders(
       .in("instancia", instanceNames)
       .order("sent_at", { ascending: false })
       .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
-    if (!error && Array.isArray(data)) {
-      for (const row of data) {
-        const origem = String(row?.instancia || "").trim();
-        const destNum = normalizeWhatsAppNumber(String(row?.numero_destino || "").trim());
-        const destino = numberToInstance.get(destNum) || destNum;
-        registerLastSender(origem, destino);
-      }
+    if (error || !Array.isArray(data)) return null;
+
+    for (const row of data) {
+      const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
+      const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
+      const toInst = numberToInstance.get(toNum) || "";
+      if (!fromInst || !toInst) continue;
+
+      const isOrigemToDestino =
+        fromInst.toLowerCase() === origemName.toLowerCase() &&
+        toInst.toLowerCase() === destinoName.toLowerCase();
+      const isDestinoToOrigem =
+        fromInst.toLowerCase() === destinoName.toLowerCase() &&
+        toInst.toLowerCase() === origemName.toLowerCase();
+      if (!isOrigemToDestino && !isDestinoToOrigem) continue;
+
+      return isOrigemToDestino ? "origem_to_destino" : "destino_to_origem";
+    }
+  } catch {
+    /* */
+  }
+  return null;
+}
+
+function buildAquecedorNumberToInstanceMap(
+  connected: Array<{ instancia: string; numero: string }>,
+  canonicalMap: Map<string, string>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const item of connected) {
+    const num = normalizeWhatsAppNumber(String(item.numero || "").trim());
+    const inst = resolveAquecedorCanonicalInstance(item.instancia, canonicalMap);
+    if (num && inst) map.set(num, inst);
+  }
+  return map;
+}
+
+function resolveAquecedorConnectedByName(
+  connected: Array<{ instancia: string; numero: string }>,
+  canonicalMap: Map<string, string>,
+  name: string,
+): { instancia: string; numero: string } | null {
+  const target = resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase();
+  return (
+    connected.find(
+      (item) =>
+        resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase() === target,
+    ) || null
+  );
+}
+
+async function canAquecedorOrigemSendDirected(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+  instanciaOrigem: string,
+  instanciaDestino: string,
+): Promise<boolean> {
+  const last = await getLastAquecedorDirectedExchange(
+    supabase,
+    connected,
+    instanciaOrigem,
+    instanciaDestino,
+  );
+  return last !== "origem_to_destino";
+}
+
+async function pickAquecedorCombinationAsync<T extends { instancia_origem: string; instancia_destino: string }>(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+  combinations: T[],
+  startIndex: number,
+): Promise<{ chosen: T; index: number } | null> {
+  if (!combinations.length) return null;
+  const base = ((startIndex % combinations.length) + combinations.length) % combinations.length;
+  for (let offset = 0; offset < combinations.length; offset += 1) {
+    const index = (base + offset) % combinations.length;
+    const combo = combinations[index];
+    if (
+      await canAquecedorOrigemSendDirected(
+        supabase,
+        connected,
+        combo.instancia_origem,
+        combo.instancia_destino,
+      )
+    ) {
+      return { chosen: combo, index };
+    }
+  }
+  return null;
+}
+
+async function loadRecentAquecedorPairLastSenders(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+): Promise<Map<string, string>> {
+  const aliasesMap = await loadInstanceAliasesMap();
+  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+  const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+  const lastSenders = new Map<string, string>();
+  const instanceNames = connected.map((item) => item.instancia);
+  if (instanceNames.length < 2) return lastSenders;
+
+  try {
+    const { data, error } = (await (supabase
+      .from("aquecedor" as any)
+      .select("instancia, numero_destino, sent_at")
+      .eq("status", "ENVIADO")
+      .in("instancia", instanceNames)
+      .order("sent_at", { ascending: false })
+      .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
+    if (error || !Array.isArray(data)) return lastSenders;
+
+    for (const row of data) {
+      const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
+      const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
+      const toInst = numberToInstance.get(toNum) || "";
+      if (!fromInst || !toInst || fromInst.toLowerCase() === toInst.toLowerCase()) continue;
+      const key = buildAquecedorPairKey(fromInst, toInst);
+      if (lastSenders.has(key)) continue;
+      lastSenders.set(key, fromInst);
     }
   } catch {
     /* */
@@ -1039,12 +1117,17 @@ async function verifyAquecedorConversationTurn(
   const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
   const origem = resolveAquecedorCanonicalInstance(instanciaOrigem, canonicalMap);
   const destino = resolveAquecedorCanonicalInstance(instanciaDestino, canonicalMap);
-  const lastSenders = await loadRecentAquecedorPairLastSenders(supabase, connected);
+  const last = await getLastAquecedorDirectedExchange(
+    supabase,
+    connected,
+    instanciaOrigem,
+    instanciaDestino,
+  );
 
-  if (!canAquecedorOrigemSendOnPair(origem, destino, lastSenders, canonicalMap)) {
+  if (last === "origem_to_destino") {
     return {
       ok: false,
-      reason: `${origem} não pode enviar de novo para ${destino} sem receber resposta antes (conversa unilateral bloqueada).`,
+      reason: `${origem} não pode enviar de novo para ${destino} sem ${destino} responder no WhatsApp (último envio foi da mesma origem para o mesmo número).`,
     };
   }
 
@@ -1067,20 +1150,41 @@ function buildAquecedorEnvioDedupKey(item: {
 
 async function hasRecentAquecedorSendBetween(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
   instanciaOrigem: string,
   instanciaDestino: string,
   withinSeconds: number,
 ): Promise<boolean> {
-  const origem = String(instanciaOrigem || "").trim();
-  const destino = String(instanciaDestino || "").trim();
+  const aliasesMap = await loadInstanceAliasesMap();
+  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+  const origem = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaOrigem);
+  const destino = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaDestino);
   if (!origem || !destino) return false;
+
+  const numDestino = normalizeWhatsAppNumber(destino.numero);
+  if (!numDestino) return false;
   const since = new Date(Date.now() - Math.max(30, withinSeconds) * 1000).toISOString();
+
+  try {
+    const { data, error } = (await (supabase
+      .from("aquecedor" as any)
+      .select("id")
+      .eq("status", "ENVIADO")
+      .eq("instancia", origem.instancia)
+      .eq("numero_destino", numDestino)
+      .gte("sent_at", since)
+      .limit(1)) as any);
+    if (!error && Array.isArray(data) && data.length > 0) return true;
+  } catch {
+    /* */
+  }
+
   try {
     const { data, error } = (await (supabase
       .from("logs_envios" as any)
       .select("id")
-      .eq("instancia_origem", origem)
-      .eq("instancia_destino", destino)
+      .eq("instancia_origem", origem.instancia)
+      .eq("instancia_destino", destino.instancia)
       .gte("data_envio", since)
       .limit(1)) as any);
     if (error) return false;
@@ -2328,10 +2432,12 @@ async function runAquecedorCycleTestBatch(
       });
     }
   }
-  const pairLastSenders = await loadRecentAquecedorPairLastSenders(supabase, connected);
-  const aliasesMap = await loadInstanceAliasesMap();
-  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-  const picked = pickAquecedorCombination(combinations, cicloGlobal, pairLastSenders, canonicalMap);
+  const picked = await pickAquecedorCombinationAsync(
+    supabase,
+    connected,
+    combinations,
+    cicloGlobal,
+  );
   if (!picked) {
     aquecedorRuntime.lastResult =
       "Teste: nenhum par disponível no momento (aguardando alternância entre instâncias).";
@@ -2511,14 +2617,11 @@ async function runAquecedorCycle(forceTest = false) {
       return;
     }
 
-    const pairLastSenders = await loadRecentAquecedorPairLastSenders(supabase, connected);
-    const aliasesMap = await loadInstanceAliasesMap();
-    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
-    const picked = pickAquecedorCombination(
+    const picked = await pickAquecedorCombinationAsync(
+      supabase,
+      connected,
       combinations,
       cicloGlobal,
-      pairLastSenders,
-      canonicalMap,
     );
     if (!picked) {
       const retrySeconds = Math.max(60, Math.min(config.waitMinSeconds, 180));
@@ -2564,6 +2667,7 @@ async function runAquecedorCycle(forceTest = false) {
     if (
       await hasRecentAquecedorSendBetween(
         supabase,
+        connected,
         chosen.instancia_origem,
         chosen.instancia_destino,
         90,
@@ -2579,7 +2683,7 @@ async function runAquecedorCycle(forceTest = false) {
         status: "PROCESSANDO",
         processing_at: new Date().toISOString(),
         instancia: chosen.instancia_origem,
-        numero_destino: chosen.numero_whatsapp,
+        numero_destino: normalizeWhatsAppNumber(chosen.numero_whatsapp) || chosen.numero_whatsapp,
         mensagem: texto,
       })
       .eq("id", pendingData.id);
@@ -2632,18 +2736,11 @@ async function runAquecedorCycle(forceTest = false) {
       status: "Envio com Sucesso",
     });
 
-    pairLastSenders.set(
-      buildAquecedorPairKey(
-        resolveAquecedorCanonicalInstance(chosen.instancia_origem, canonicalMap),
-        resolveAquecedorCanonicalInstance(chosen.instancia_destino, canonicalMap),
-      ),
-      resolveAquecedorCanonicalInstance(chosen.instancia_origem, canonicalMap),
-    );
-    const nextPick = pickAquecedorCombination(
+    const nextPick = await pickAquecedorCombinationAsync(
+      supabase,
+      connected,
       combinations,
       proximo,
-      pairLastSenders,
-      canonicalMap,
     );
     if (nextPick) {
       await ensureAquecedorPendingMessage(
