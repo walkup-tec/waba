@@ -12999,6 +12999,9 @@
                       Salvar split
                     </button>
                     <span id="admin-financeiro-split-sum" class="admin-financeiro-split-sum warn">Soma: 0%</span>
+                    <span class="admin-users-menus-hint" style="margin-top: 4px">
+                      Alterações no rateio são gravadas automaticamente ao incluir, remover ou editar.
+                    </span>
                   </div>
                   <div class="admin-financeiro-split-actions" id="admin-financeiro-split-actions">
                     <button
@@ -15431,6 +15434,9 @@
         document
           .getElementById("admin-financeiro-split-suppliers-list")
           ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        void persistAdminFinanceiroSplitConfig({
+          successMessage: "Fornecedor incluído e salvo.",
+        });
       }
 
       function renderAdminFinanceiroSplitSuppliers() {
@@ -15599,6 +15605,11 @@
           pix?.focus?.();
           return;
         }
+        if (!sharePercent || sharePercent <= 0) {
+          showToast("Informe o percentual de rateio maior que zero.", "warning", 4200);
+          rateio?.focus?.();
+          return;
+        }
         const duplicate = (adminFinanceiroSplitDraft.participants || []).some(
           (item) => String(item?.email || "").trim().toLowerCase() === email
         );
@@ -15616,6 +15627,110 @@
         clearAdminFinanceiroSplitDraftForm();
         renderAdminFinanceiroSplitParticipants();
         updateAdminFinanceiroSplitSumLabel();
+        void persistAdminFinanceiroSplitConfig({
+          successMessage: "Participante incluído e salvo.",
+        });
+      }
+
+      let adminFinanceiroSplitPersistTimer = null;
+
+      function scheduleAdminFinanceiroSplitPersist(delayMs = 900) {
+        if (adminFinanceiroSplitPersistTimer) {
+          clearTimeout(adminFinanceiroSplitPersistTimer);
+        }
+        adminFinanceiroSplitPersistTimer = window.setTimeout(() => {
+          adminFinanceiroSplitPersistTimer = null;
+          void persistAdminFinanceiroSplitConfig({ silent: true });
+        }, delayMs);
+      }
+
+      function absorbPendingParticipantDraftForSave() {
+        if (!adminFinanceiroSplitDraft) return false;
+        const master = document.getElementById("admin-split-draft-master");
+        const pix = document.getElementById("admin-split-draft-pix");
+        const rateio = document.getElementById("admin-split-draft-rateio");
+        const email = String(master?.value || "").trim().toLowerCase();
+        const pixKey = String(pix?.value || "").trim();
+        const sharePercent = parsePercentMaskToNumber(rateio?.value);
+        const hasAnyDraftValue = Boolean(email || pixKey || sharePercent > 0);
+        if (!hasAnyDraftValue) return false;
+
+        if (!email) {
+          showToast("Selecione o usuário master antes de salvar.", "warning", 4200);
+          master?.focus?.();
+          return true;
+        }
+        if (!pixKey) {
+          showToast("Informe a chave PIX antes de salvar.", "warning", 4200);
+          pix?.focus?.();
+          return true;
+        }
+        if (!sharePercent || sharePercent <= 0) {
+          showToast("Informe o percentual de rateio maior que zero.", "warning", 4200);
+          rateio?.focus?.();
+          return true;
+        }
+        const duplicate = (adminFinanceiroSplitDraft.participants || []).some(
+          (item) => String(item?.email || "").trim().toLowerCase() === email
+        );
+        if (duplicate) {
+          showToast("Este usuário master já está na lista.", "warning", 4200);
+          return true;
+        }
+
+        const participant = createEmptySplitParticipant();
+        applySplitMasterSelection(participant, email);
+        participant.pixKey = pixKey;
+        participant.sharePercent = sharePercent;
+        participant.active = true;
+        adminFinanceiroSplitDraft.participants.push(participant);
+        clearAdminFinanceiroSplitDraftForm();
+        renderAdminFinanceiroSplitParticipants();
+        updateAdminFinanceiroSplitSumLabel();
+        return false;
+      }
+
+      async function persistAdminFinanceiroSplitConfig(options = {}) {
+        const silent = Boolean(options.silent);
+        const successMessage = String(options.successMessage || "").trim();
+        if (absorbPendingSupplierDraftForSave()) return false;
+        if (absorbPendingParticipantDraftForSave()) return false;
+        const payload = collectAdminFinanceiroSplitDraftFromDom();
+        if (!payload) return false;
+        if (!validateAdminFinanceiroSplitDraftForSave(payload)) return false;
+        const saveBtn = document.getElementById("admin-financeiro-split-save-btn");
+        if (saveBtn && !silent) {
+          saveBtn.textContent = "Salvando…";
+          saveBtn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/financeiro/split-config",
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            },
+            15000
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.error || "Não foi possível salvar o split.");
+          }
+          renderAdminFinanceiroSplitConfig(data.config || payload);
+          if (!silent) {
+            showToast(successMessage || "Configuração de split salva.", "success");
+          }
+          return true;
+        } catch (error) {
+          showToast(error?.message || "Falha ao salvar split.", "error");
+          return false;
+        } finally {
+          if (saveBtn && !silent) {
+            saveBtn.textContent = "Salvar split";
+            saveBtn.removeAttribute("disabled");
+          }
+        }
       }
 
       function updateAdminFinanceiroSplitSumLabel() {
@@ -15793,6 +15908,24 @@
           const pixKey = String(supplier.pixKey || "").trim();
           if (!pixKey || pixKey.length < 5) {
             showToast(`Informe a chave PIX do fornecedor ${label}.`, "warning", 4500);
+            return false;
+          }
+        }
+        const participants = Array.isArray(payload?.participants) ? payload.participants : [];
+        for (const participant of participants) {
+          if (participant.active === false) continue;
+          const label = String(participant.label || participant.email || "participante").trim();
+          if (!participant.email) {
+            showToast(`Selecione o usuário master de ${label}.`, "warning", 4500);
+            return false;
+          }
+          const pixKey = String(participant.pixKey || "").trim();
+          if (!pixKey || pixKey.length < 5) {
+            showToast(`Informe a chave PIX de ${label}.`, "warning", 4500);
+            return false;
+          }
+          if (Number(participant.sharePercent || 0) <= 0) {
+            showToast(`Percentual de ${label} deve ser maior que zero.`, "warning", 4500);
             return false;
           }
         }
@@ -16262,41 +16395,11 @@
       }
 
       async function saveAdminFinanceiroSplitConfig() {
-        if (absorbPendingSupplierDraftForSave()) return;
-        const payload = collectAdminFinanceiroSplitDraftFromDom();
-        if (!payload) return;
-        if (!validateAdminFinanceiroSplitDraftForSave(payload)) return;
-        const saveBtn = document.getElementById("admin-financeiro-split-save-btn");
-        if (saveBtn) {
-          saveBtn.textContent = "Salvando…";
-          saveBtn.setAttribute("disabled", "true");
-        }
-        try {
-          const response = await fetchWithTimeout(
-            "/admin/financeiro/split-config",
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            },
-            15000
-          );
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            throw new Error(data.error || "Não foi possível salvar o split.");
-          }
-          renderAdminFinanceiroSplitConfig(data.config || payload);
-          showToast("Configuração de split salva.", "success");
+        const saved = await persistAdminFinanceiroSplitConfig();
+        if (saved) {
           document
             .getElementById("admin-financeiro-split-suppliers-list")
             ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        } catch (error) {
-          showToast(error?.message || "Falha ao salvar split.", "error");
-        } finally {
-          if (saveBtn) {
-            saveBtn.textContent = "Salvar split";
-            saveBtn.removeAttribute("disabled");
-          }
         }
       }
 
@@ -18565,6 +18668,7 @@
             }
             if (event.target?.closest?.("[data-supplier-field]")) {
               collectAdminFinanceiroSplitDraftFromDom();
+              scheduleAdminFinanceiroSplitPersist();
             }
           });
         document
@@ -18572,6 +18676,7 @@
           ?.addEventListener("change", (event) => {
             if (event.target?.closest?.("[data-supplier-field]")) {
               collectAdminFinanceiroSplitDraftFromDom();
+              scheduleAdminFinanceiroSplitPersist();
             }
           });
         document
@@ -18587,6 +18692,7 @@
             if (!Number.isFinite(index)) return;
             adminFinanceiroSplitDraft.suppliers.splice(index, 1);
             renderAdminFinanceiroSplitSuppliers();
+            void persistAdminFinanceiroSplitConfig({ successMessage: "Fornecedor removido e salvo." });
           });
         document
           .getElementById("admin-financeiro-split-participants")
@@ -18597,6 +18703,7 @@
             if (event.target?.closest?.("[data-split-field]")) {
               collectAdminFinanceiroSplitDraftFromDom();
               updateAdminFinanceiroSplitSumLabel();
+              scheduleAdminFinanceiroSplitPersist();
             }
           });
         document
@@ -18611,6 +18718,7 @@
             if (!participant) return;
             applySplitMasterSelection(participant, String(target.value || "").trim());
             updateAdminFinanceiroSplitSumLabel();
+            scheduleAdminFinanceiroSplitPersist();
           });
         document
           .getElementById("admin-financeiro-split-participants")
@@ -18626,6 +18734,7 @@
             adminFinanceiroSplitDraft.participants.splice(index, 1);
             renderAdminFinanceiroSplitParticipants();
             updateAdminFinanceiroSplitSumLabel();
+            void persistAdminFinanceiroSplitConfig({ successMessage: "Participante removido e salvo." });
           });
         initAdminFinanceiroSplitCardToggles();
       }

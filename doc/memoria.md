@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-08
 
+**WABA — split rateio auto-save:** participantes/fornecedores gravam ao incluir/remover/editar; soma 100% só no repasse. Marker `DEPLOY-2026-06-08-waba-split-autosave-persist`. Ver `doc/LOG-2026-06-08__waba-split-autosave-persist.md`.
+
+2026-06-08
+
 **WABA — pausar auto-refresh em Admin Usuários/Financeiro:** timer 15s não recarrega mais formulários em cadastro; label «Atualização automática pausada nesta tela». Marker `DEPLOY-2026-06-08-waba-admin-forms-no-auto-refresh`. Ver `doc/LOG-2026-06-08__waba-admin-forms-no-auto-refresh.md`.
 
 2026-06-08

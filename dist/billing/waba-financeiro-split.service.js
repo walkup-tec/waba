@@ -149,10 +149,6 @@ class WabaFinanceiroSplitService {
             }
         }
         if (activeParticipants.length) {
-            const percentSum = roundPercent(activeParticipants.reduce((sum, item) => sum + item.sharePercent, 0));
-            if (Math.abs(percentSum - 100) > PERCENT_SUM_TOLERANCE) {
-                throw new Error(`A soma dos percentuais do lucro deve ser 100% (atual: ${percentSum.toFixed(2)}%).`);
-            }
             const emails = new Set();
             for (const participant of activeParticipants) {
                 if (emails.has(participant.email)) {
