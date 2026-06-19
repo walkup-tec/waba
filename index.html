@@ -14067,6 +14067,34 @@
       let rawEvents = [];
       let allEvents = [];
       let refreshTimer = null;
+      let isManualMode = false;
+      const ADMIN_FORM_TABS_SKIP_AUTO_REFRESH = new Set(["admin-usuarios", "admin-financeiro"]);
+
+      function isAdminFormEditingTab(tab = activeTab) {
+        return ADMIN_FORM_TABS_SKIP_AUTO_REFRESH.has(tab);
+      }
+
+      function syncGlobalAutoRefreshTimer() {
+        if (isManualMode || isAdminFormEditingTab()) {
+          if (refreshTimer) {
+            clearInterval(refreshTimer);
+            refreshTimer = null;
+          }
+          return;
+        }
+        if (!refreshTimer) {
+          refreshTimer = window.setInterval(carregar, 15000);
+        }
+      }
+
+      function syncAdminFormTabRefreshLabel(tab = activeTab) {
+        const lastUpdateLabel = document.getElementById("last-update-label");
+        if (!lastUpdateLabel) return;
+        if (isAdminFormEditingTab(tab)) {
+          lastUpdateLabel.textContent = "Atualização automática pausada nesta tela";
+        }
+      }
+
       let isFirstLoad = true;
       let senderFilter = "";
       let receiverFilter = "";
@@ -26269,6 +26297,9 @@
           const badgeKey = getMenuKeysForTab(nextTab).find((key) => MASTER_MENU_BADGE_KEYS.has(key));
           if (badgeKey) void markMasterMenuBadgeSeen(badgeKey);
         }
+
+        syncGlobalAutoRefreshTimer();
+        syncAdminFormTabRefreshLabel(nextTab);
       }
 
       function closeMobileTabsDrawer() {
@@ -26283,7 +26314,6 @@
           toggle.setAttribute("aria-expanded", "false");
         }
       }
-      let isManualMode = false;
       // Litepicker range em um único input
       let dateRangePicker = null;
       // Armazena o range selecionado para garantir consistência
@@ -28709,6 +28739,8 @@
       }
 
       async function refreshActiveTabData() {
+        if (isAdminFormEditingTab()) return;
+
         switch (activeTab) {
           case "admin-chamados":
             await loadAdminChamados();
@@ -28839,13 +28871,19 @@
               renderInstancesList();
             }
 
-            await refreshActiveTabData();
+            if (!isAdminFormEditingTab()) {
+              await refreshActiveTabData();
+            }
 
             const now = new Date();
-            lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
-              "pt-BR",
-              { hour: "2-digit", minute: "2-digit", second: "2-digit" }
-            )}`;
+            if (isAdminFormEditingTab()) {
+              syncAdminFormTabRefreshLabel();
+            } else {
+              lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
+                "pt-BR",
+                { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+              )}`;
+            }
             return;
           }
 
@@ -31786,8 +31824,7 @@
         }
 
         if (!manual) {
-          // modo automático: agenda atualização a cada 15s
-          refreshTimer = setInterval(carregar, 15000);
+          syncGlobalAutoRefreshTimer();
         }
       }
 
