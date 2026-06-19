@@ -196,9 +196,21 @@ app.use((req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 const RUNTIME_MODE = String(process.env.RUNTIME_MODE || "production").toLowerCase();
-const ENABLE_BACKGROUND_PROCESSING = ["1", "true", "yes", "on"].includes(
-  String(process.env.ENABLE_BACKGROUND_PROCESSING || "true").toLowerCase()
-);
+const parseEnvBoolean = (raw: string | undefined, defaultValue: boolean): boolean => {
+  const value = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (!value) return defaultValue;
+  if (["1", "true", "yes", "on"].includes(value)) return true;
+  if (["0", "false", "no", "off"].includes(value)) return false;
+  return defaultValue;
+};
+
+/** Disparador EVO (API não oficial): ativo por padrão no V01 baseline; demais ambientes seguem ENABLE_BACKGROUND_PROCESSING. */
+const ENABLE_BACKGROUND_PROCESSING =
+  WABA_ENV === "v01"
+    ? parseEnvBoolean(process.env.WABA_EVO_DISPARADOR ?? process.env.ENABLE_BACKGROUND_PROCESSING, true)
+    : parseEnvBoolean(process.env.ENABLE_BACKGROUND_PROCESSING, true);
 /** Aquecedor pode rodar em dev (v02) mesmo com campanhas desligadas. Se omitido, segue ENABLE_BACKGROUND_PROCESSING. */
 const ENABLE_AQUECEDOR_PROCESSING = (() => {
   const raw = String(process.env.ENABLE_AQUECEDOR_PROCESSING ?? "").trim().toLowerCase();
@@ -449,14 +461,36 @@ function rejectAquecedorWithoutEntitlement(req: express.Request, res: express.Re
 
 // Supabase (criado sob demanda para evitar travamentos quando faltar config)
 let supabaseClient: ReturnType<typeof createClient> | null = null;
+function resetSupabaseClient() {
+  supabaseClient = null;
+}
 function getSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseKey) return null;
   if (!supabaseClient) {
-    supabaseClient = createClient(supabaseUrl, supabaseKey);
+    supabaseClient = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
   }
   return supabaseClient;
+}
+
+function isSupabaseTransientError(error: unknown): boolean {
+  const msg = String((error as { message?: string })?.message || error || "").toLowerCase();
+  return (
+    msg.includes("fetch failed") ||
+    msg.includes("network") ||
+    msg.includes("timeout") ||
+    msg.includes("econnrefused") ||
+    msg.includes("enotfound") ||
+    msg.includes("econnreset") ||
+    msg.includes("socket hang up")
+  );
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeInstanceUsageRow(row: any): InstanceUsageConfig {
@@ -1414,7 +1448,7 @@ type EnsureAquecedorPendingResult = {
   pendingId?: string | number;
 };
 
-async function ensureAquecedorPendingMessage(
+async function ensureAquecedorPendingMessageOnce(
   pair?: AquecedorPairContext | null,
 ): Promise<EnsureAquecedorPendingResult> {
   const supabase = getSupabaseClient();
@@ -1501,6 +1535,34 @@ async function ensureAquecedorPendingMessage(
     };
   }
   return { ok: true, pendingId: inserted?.id };
+}
+
+async function ensureAquecedorPendingMessage(
+  pair?: AquecedorPairContext | null,
+): Promise<EnsureAquecedorPendingResult> {
+  let lastResult: EnsureAquecedorPendingResult = {
+    ok: false,
+    reason: "Falha ao preparar fila do aquecedor.",
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) {
+      resetSupabaseClient();
+      await sleepMs(600 * attempt);
+    }
+    lastResult = await ensureAquecedorPendingMessageOnce(pair);
+    if (lastResult.ok || !isSupabaseTransientError({ message: lastResult.reason })) {
+      return lastResult;
+    }
+    console.warn(
+      `[Aquecedor] ensure fila tentativa ${attempt + 1}/3 falhou:`,
+      lastResult.reason,
+    );
+  }
+  return {
+    ok: false,
+    reason:
+      "Conexão com Supabase instável (rede). Confira SUPABASE_URL e conectividade do servidor.",
+  };
 }
 /** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
 const DISPAROS_CHECKPOINT_MS = Math.max(
@@ -2678,10 +2740,17 @@ async function runAquecedorCycle(forceTest = false) {
     const ensured = await ensureAquecedorPendingMessage(pairContext);
     const pendingData = await fetchProcessableAquecedorPending(supabase);
     if (!pendingData?.id) {
-      aquecedorRuntime.lastResult = ensured.ok
-        ? "Sem mensagem pendente para envio (fila vazia após preparação)."
-        : ensured.reason ||
-          "Falha ao preparar mensagem pendente na fila do aquecedor.";
+      const reason =
+        ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
+      if (!ensured.ok && isSupabaseTransientError({ message: reason })) {
+        aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 60_000).toISOString();
+        aquecedorRuntime.lastResult =
+          "Conexão temporária com Supabase indisponível. Nova tentativa em ~60s.";
+      } else {
+        aquecedorRuntime.lastResult = ensured.ok
+          ? "Sem mensagem pendente para envio (fila vazia após preparação)."
+          : reason;
+      }
       return;
     }
 
@@ -2858,8 +2927,8 @@ function resolveUiProfile(): WabaUiProfile {
   if (explicit === "production" || explicit === "full") {
     return explicit;
   }
-  // V02 espelha a UI de produção; V01 mantém menu completo (baseline).
-  if (WABA_ENV === "v01") return "full";
+  // V01 = UI pré-disparador comercial (08/06/2026): API não oficial + API Meta.
+  if (WABA_ENV === "v01") return "baseline";
   return "production";
 }
 
@@ -8375,12 +8444,17 @@ app.listen(PORT, () => {
     }
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
+      if (WABA_ENV === "v01") {
+        console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");
+      }
       setInterval(() => {
         runCampaignDispatchTick().catch((err) => console.error("[Campanhas] tick:", err));
       }, 7000);
     } else if (!ENABLE_BACKGROUND_PROCESSING) {
       console.log(
-        "[campanhas] processamento automático desativado neste processo (dev isolado)."
+        WABA_ENV === "v01"
+          ? "[campanhas] Disparador EVO desativado neste processo (WABA_EVO_DISPARADOR=false)."
+          : "[campanhas] processamento automático desativado neste processo (dev isolado)."
       );
     }
   })();

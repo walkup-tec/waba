@@ -15,6 +15,14 @@ Como usar:
 ## Última atualização
 2026-06-19
 
+**WABA — V01 baseline pré-08/06:** UI `baseline` — API não oficial (Aquecedor + Disparos EVO) + API Meta (Disparo oficial); oculto fluxo comercial Disparos/Campanhas SaaS. Ver `doc/LOG-2026-06-19__v01-baseline-pre-disparador-comercial.md`.
+
+**WABA — V01 Disparador EVO reativado:** tick campanhas ligado (`WABA_EVO_DISPARADOR=true`); UI full; backup 4 campanhas em `data/v01/`. Ver `doc/LOG-2026-06-19__v01-evo-disparador-reativado.md`.
+
+**WABA — V01 master local:** `walkup@walkuptec.com.br` como master em `data/v01/waba-system-users.json` + `.env.v01`; login HTTP 200 role master confirmado.
+
+**WABA — aquecedor Supabase retry:** retry 3x + reset cliente em `fetch failed`; mensagem amigável e backoff 60s. Marker `DEPLOY-2026-06-19-aquecedor-supabase-retry`. Ver `doc/LOG-2026-06-19__aquecedor-supabase-retry.md`.
+
 **WABA — aquecedor fila vazia (produção):** corrige `ensureAquecedorPendingMessage` — promove PENDENTE preso, loga erro de insert, semente no ciclo e reabastece após envio. Marker `DEPLOY-2026-06-19-aquecedor-fila-ensure-fix`. Ver `doc/LOG-2026-06-19__aquecedor-fila-ensure-fix.md`.
 
 **WABA — V01 local login:** `.env.v01` recebeu `WABA_ADMIN_EMAIL`, `WABA_ADMIN_PASSWORD`, `WABA_SESSION_SECRET`, `WABA_SESSION_TTL_HOURS` (mesmas credenciais do V02). Servidor reiniciado (`npm run dev:v01`). `GET /version-01/auth/session` → `authConfigured: true`; login master OK. Ver `doc/LOG-2026-06-19__waba-v01-login-env-fix.md`.
