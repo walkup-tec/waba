@@ -207,10 +207,13 @@ const parseEnvBoolean = (raw: string | undefined, defaultValue: boolean): boolea
   return defaultValue;
 };
 
-/** Disparador EVO (API não oficial): ativo por padrão no V01 baseline; demais ambientes seguem ENABLE_BACKGROUND_PROCESSING. */
+/** Disparador EVO (API não oficial): V01/V02 usam WABA_EVO_DISPARADOR; demais ambientes seguem ENABLE_BACKGROUND_PROCESSING. */
 const ENABLE_BACKGROUND_PROCESSING =
-  WABA_ENV === "v01"
-    ? parseEnvBoolean(process.env.WABA_EVO_DISPARADOR ?? process.env.ENABLE_BACKGROUND_PROCESSING, true)
+  WABA_ENV === "v01" || WABA_ENV === "v02"
+    ? parseEnvBoolean(
+        process.env.WABA_EVO_DISPARADOR ?? process.env.ENABLE_BACKGROUND_PROCESSING,
+        WABA_ENV === "v01"
+      )
     : parseEnvBoolean(process.env.ENABLE_BACKGROUND_PROCESSING, true);
 /** Aquecedor pode rodar em dev (v02) mesmo com campanhas desligadas. Se omitido, segue ENABLE_BACKGROUND_PROCESSING. */
 const ENABLE_AQUECEDOR_PROCESSING = (() => {
@@ -2685,6 +2688,10 @@ async function runAquecedorCycle(forceTest = false) {
         },
         signal: controller.signal,
       });
+    } catch (evoErr) {
+      const msg = evoErr instanceof Error ? evoErr.message : String(evoErr);
+      aquecedorRuntime.lastResult = `Falha ao buscar instâncias da EVO (${msg}).`;
+      return;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -2934,8 +2941,9 @@ async function runAquecedorCycle(forceTest = false) {
     aquecedorRuntime.nextAllowedAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
     aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.`;
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("Erro no ciclo do aquecedor:", error);
-    aquecedorRuntime.lastResult = "Erro inesperado no ciclo do aquecedor.";
+    aquecedorRuntime.lastResult = `Erro no ciclo do aquecedor: ${msg.slice(0, 200)}`;
   } finally {
     aquecedorRuntime.isProcessing = false;
   }
@@ -5231,9 +5239,13 @@ app.post("/aquecedor/config", async (req, res) => {
   }
 });
 
-app.get("/aquecedor/status", (_req, res) => {
+app.get("/aquecedor/status", async (_req, res) => {
+  const intent = await loadAquecedorRuntimeIntent();
   return res.json({
     ...aquecedorRuntime,
+    desiredRunning: intent.desired === true,
+    persistedOwnerEmail: intent.ownerEmail,
+    ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || intent.ownerEmail),
   });
 });
 
@@ -8482,11 +8494,17 @@ app.listen(PORT, () => {
       !MAINTENANCE_MODE
     ) {
       aquecedorRuntimeOwnerEmail = desiredHeater.ownerEmail;
-      void ensureAquecedorPendingMessage();
-      startAquecedorRuntime();
-      console.log(
-        "[Aquecedor] retomado após restart (data/runtime-intent.json — último «Iniciar» explícito)."
-      );
+      if (!aquecedorRuntimeOwnerEmail) {
+        console.warn(
+          "[Aquecedor] runtime-intent pede motor ligado, mas sem aquecedorOwnerEmail — aguardando POST /aquecedor/start.",
+        );
+      } else {
+        void ensureAquecedorPendingMessage();
+        startAquecedorRuntime();
+        console.log(
+          "[Aquecedor] retomado após restart (data/runtime-intent.json — último «Iniciar» explícito).",
+        );
+      }
     }
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {

@@ -1892,6 +1892,31 @@
         background: rgba(34, 197, 94, 0.3);
       }
 
+      body.integration-env-alternativa .integration-env-strip {
+        border-color: rgba(56, 189, 248, 0.34);
+        background: linear-gradient(145deg, rgba(8, 47, 73, 0.7), rgba(12, 30, 48, 0.65));
+      }
+
+      body.integration-env-alternativa .integration-env-btn.active {
+        background: rgba(56, 189, 248, 0.28);
+      }
+
+      body.waba-ui-production .integration-env-btn[data-integration-env="alternativa"] {
+        display: inline-flex;
+      }
+
+      @media (max-width: 720px) {
+        body.waba-ui-production .integration-env-toggle {
+          flex-wrap: wrap;
+          border-radius: 12px;
+          max-width: 100%;
+        }
+        body.waba-ui-production .integration-env-btn {
+          font-size: 0.72rem;
+          padding: 7px 8px;
+        }
+      }
+
       @media (min-width: 992px) {
         .desktop-tabs {
           display: flex;
@@ -8694,32 +8719,41 @@
       .disparos-evo-baseline-only {
         display: none !important;
       }
-      body.waba-ui-baseline .disparos-saas-only {
+      body.waba-ui-baseline .disparos-saas-only,
+      body.waba-disparo-evo-mode .disparos-saas-only {
         display: none !important;
       }
-      body.waba-ui-baseline .disparos-evo-baseline-only {
+      body.waba-ui-baseline .disparos-evo-baseline-only,
+      body.waba-disparo-evo-mode .disparos-evo-baseline-only {
         display: block !important;
       }
       body.waba-ui-baseline button.disparos-evo-baseline-only,
-      body.waba-ui-baseline .instance-action-btn.disparos-evo-baseline-only {
+      body.waba-ui-baseline .instance-action-btn.disparos-evo-baseline-only,
+      body.waba-disparo-evo-mode button.disparos-evo-baseline-only,
+      body.waba-disparo-evo-mode .instance-action-btn.disparos-evo-baseline-only {
         display: inline-flex !important;
       }
-      body.waba-ui-baseline #disparos-config-legacy {
+      body.waba-ui-baseline #disparos-config-legacy,
+      body.waba-disparo-evo-mode #disparos-config-legacy {
         display: block !important;
       }
-      body.waba-ui-baseline #tab-disparos .disparos-layout {
+      body.waba-ui-baseline #tab-disparos .disparos-layout,
+      body.waba-disparo-evo-mode #tab-disparos .disparos-layout {
         display: grid;
         grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
         gap: 16px;
         align-items: start;
       }
-      body.waba-ui-baseline #tab-disparos .disparos-side-campanhas {
+      body.waba-ui-baseline #tab-disparos .disparos-side-campanhas,
+      body.waba-disparo-evo-mode #tab-disparos .disparos-side-campanhas {
         order: 2;
       }
-      body.waba-ui-baseline #disparos-evo-baseline-left {
+      body.waba-ui-baseline #disparos-evo-baseline-left,
+      body.waba-disparo-evo-mode #disparos-evo-baseline-left {
         order: 1;
       }
-      body.waba-ui-baseline #disparos-config-legacy {
+      body.waba-ui-baseline #disparos-config-legacy,
+      body.waba-disparo-evo-mode #disparos-config-legacy {
         margin-top: 12px;
       }
       .disparos-config-area {
@@ -10231,6 +10265,14 @@
             </svg>
             <span>Disparos</span>
           </button>
+          <button
+            type="button"
+            class="integration-env-btn"
+            data-integration-env="alternativa"
+            hidden
+          >
+            API Alternativa
+          </button>
         </div>
       </div>
 
@@ -10372,6 +10414,27 @@
                   <span class="tab-label">Dashboard</span>
                 </button>
                 <button
+                  id="tab-btn-disparo-evo"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-disparos"
+                  data-tab="disparo-evo"
+                  data-menu-key="disparo-evo"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+                      <circle cx="12" cy="9" r="1.2"></circle>
+                      <path d="M9 12l-3 3h3"></path>
+                      <path d="M15 12l3 3h-3"></path>
+                      <path d="M12 15v4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Disparo</span>
+                </button>
+                <button
                   id="tab-btn-disparos-lancamento"
                   class="tab-button waba-prod-only"
                   type="button"
@@ -10383,14 +10446,12 @@
                 >
                   <span class="tab-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24">
-                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
-                      <circle cx="12" cy="9" r="1.2"></circle>
-                      <path d="M9 12l-3 3h3"></path>
-                      <path d="M15 12l3 3h-3"></path>
-                      <path d="M12 15v4"></path>
+                      <circle cx="9" cy="20" r="1.4"></circle>
+                      <circle cx="17" cy="20" r="1.4"></circle>
+                      <path d="M2 3h2l1.2 6.4a1 1 0 0 0 1 .82h10.3a1 1 0 0 0 .98-.8L19 7H6"></path>
                     </svg>
                   </span>
-                  <span class="tab-label">Disparos</span>
+                  <span class="tab-label">Créditos</span>
                 </button>
                 <button
                   id="tab-btn-campanhas"
@@ -10733,12 +10794,22 @@
             <button
               class="tab-button waba-prod-only"
               type="button"
+              data-tab="disparo-evo"
+              data-menu-key="disparo-evo"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Disparo
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
               data-tab="disparos-lancamento"
               data-menu-key="disparos-lancamento"
               role="menuitemradio"
               aria-checked="false"
             >
-              Disparos
+              Créditos
             </button>
             <button
               class="tab-button waba-prod-only waba-campanhas-menu"
@@ -14403,6 +14474,7 @@
           return (
             hasStaffMenuAccess("disparos-dashboard") ||
             hasStaffMenuAccess("disparos-lancamento") ||
+            hasStaffMenuAccess("disparo-evo") ||
             hasStaffMenuAccess("campanhas")
           );
         }
@@ -14651,6 +14723,14 @@
         return !Boolean(disparosCreditsCache?.hasCredits);
       }
 
+      function shouldShowDisparoEvoMenu() {
+        if (!isProductionUi()) return false;
+        if (isStaffRole(wabaAuthRole) && wabaAuthRole !== "master") {
+          return hasStaffMenuAccess("disparo-evo");
+        }
+        return true;
+      }
+
       function shouldUseCampanhasSubscriberUi() {
         if (isBaselineUi()) return false;
         return !isStaffRole(wabaAuthRole) && hasCampanhasMenuAccess();
@@ -14714,7 +14794,7 @@
       function getMenuSectionForTab(tabName) {
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
-        if (tabName === "disparos" || isOfficialTab(tabName)) return "disparos";
+        if (tabName === "disparos" || tabName === "disparo-evo" || isOfficialTab(tabName)) return "disparos";
         return "aquecedor";
       }
 
@@ -14733,6 +14813,9 @@
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
         if (tabName === "disparos-lancamento" && !shouldShowDisparosLancamentoMenu()) {
+          return true;
+        }
+        if (tabName === "disparo-evo" && !shouldShowDisparoEvoMenu()) {
           return true;
         }
         if (getMenuSectionForTab(tabName) === "admin" && !hasAdminAccess()) return true;
@@ -14801,6 +14884,7 @@
               "dashboard",
               "instancias",
               "aquecedor",
+              "disparo-evo",
               "disparos",
               "disparos-dashboard",
               "disparos-lancamento",
@@ -14840,6 +14924,9 @@
         const oficialBtn = document.querySelector(
           '.integration-env-btn[data-integration-env="oficial"]'
         );
+        const alternativaBtn = document.querySelector(
+          '.integration-env-btn[data-integration-env="alternativa"]'
+        );
         const showAquecedor = hasAquecedorSectionMenuAccess();
         const showOficial = hasOfficialDisparosMenuAccess();
         if (aquecedorBtn) {
@@ -14850,9 +14937,15 @@
           oficialBtn.hidden = !showOficial;
           oficialBtn.toggleAttribute("disabled", !showOficial);
         }
+        if (alternativaBtn) {
+          const showAlternativa = isProductionUi() && showOficial;
+          alternativaBtn.hidden = !showAlternativa;
+          alternativaBtn.toggleAttribute("disabled", !showAlternativa);
+        }
         if (strip) {
           strip.hidden = !showAquecedor && !showOficial;
         }
+        syncProductionIntegrationStripLabels();
       }
 
       function syncStaffNoMenusState() {
@@ -14867,10 +14960,6 @@
           '.menu-group[data-menu-group="oficial"] .menu-group-title'
         );
         if (groupTitle) groupTitle.textContent = label.toUpperCase();
-        const ofBtnSpan = document.querySelector(
-          '.integration-env-btn[data-integration-env="oficial"] span:not(.wa-icon)'
-        );
-        if (ofBtnSpan) ofBtnSpan.textContent = label;
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle) {
           panelTitle.textContent =
@@ -14878,9 +14967,10 @@
               ? "Campanhas"
               : "Disparos";
         }
-        if (document.body.classList.contains("integration-env-official")) {
+        const activeEnv = readActiveIntegrationEnv();
+        if (isDisparosApiIntegrationEnv(activeEnv)) {
           const currentText = document.querySelector("#integration-env-current .env-text");
-          if (currentText) currentText.textContent = label;
+          if (currentText) currentText.textContent = integrationEnvLabel(activeEnv);
         }
       }
 
@@ -15157,13 +15247,132 @@
         return String(window.WABA_UI_PROFILE || "full") === "baseline";
       }
 
+      function isDisparoEvoUi() {
+        if (isBaselineUi()) return true;
+        return isProductionUi() && activeTab === "disparo-evo";
+      }
+
+      function syncDisparoEvoMode() {
+        const on = isDisparoEvoUi();
+        document.body.classList.toggle("waba-disparo-evo-mode", on && !isBaselineUi());
+        if (on) {
+          initDisparoEvoPanelLayout();
+        }
+        const panelTitle = document.querySelector("#tab-disparos .panel-title");
+        if (panelTitle && on && isProductionUi()) {
+          panelTitle.textContent = "Disparo";
+        } else if (panelTitle && isProductionUi() && activeTab === "disparos") {
+          panelTitle.textContent =
+            hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()
+              ? "Campanhas"
+              : "Disparos";
+        }
+      }
+
+      function initDisparoEvoPanelLayout() {
+        const legacy = document.getElementById("disparos-config-legacy");
+        const left = document.getElementById("disparos-evo-baseline-left");
+        if (legacy && left && !left.contains(legacy)) {
+          left.appendChild(legacy);
+        }
+        if (legacy) legacy.removeAttribute("aria-hidden");
+      }
+
+      function normalizeIntegrationEnv(env) {
+        const raw = String(env || "").trim().toLowerCase();
+        if (raw === "alternativa") return "alternativa";
+        if (raw === "oficial") return "oficial";
+        return "nao-oficial";
+      }
+
+      function isDisparosApiIntegrationEnv(env) {
+        const normalized = normalizeIntegrationEnv(env);
+        return normalized === "oficial" || normalized === "alternativa";
+      }
+
+      function selectDisparosApiKind(kind) {
+        const normalized = kind === "alternativa" ? "alternativa" : "oficial";
+        document.querySelectorAll(".disparos-api-card[data-disparos-api]").forEach((card) => {
+          card.classList.toggle(
+            "is-selected",
+            card.getAttribute("data-disparos-api") === normalized
+          );
+        });
+        try {
+          localStorage.setItem("waba.disparos.api-choice", normalized);
+        } catch {
+          /* ignore */
+        }
+        return normalized;
+      }
+
+      function resolveTabForDisparosApiEnv(env) {
+        const normalized = normalizeIntegrationEnv(env);
+        if (!isProductionUi()) {
+          return normalized === "oficial" ? "meta-ativos" : "dashboard";
+        }
+        if (normalized === "alternativa") return "disparo-evo";
+        return defaultDisparosTab();
+      }
+
+      function resolveDisparosIntegrationEnvFromTab(tabName) {
+        if (tabName === "disparo-evo") return "alternativa";
+        if (!isOfficialTab(tabName)) return "nao-oficial";
+        if (!isProductionUi()) return "oficial";
+        try {
+          const savedEnv = localStorage.getItem("waba.integration.env") || "";
+          if (savedEnv === "alternativa" || savedEnv === "oficial") return savedEnv;
+        } catch {
+          /* ignore */
+        }
+        try {
+          const apiChoice = localStorage.getItem("waba.disparos.api-choice") || "";
+          if (apiChoice === "alternativa") return "alternativa";
+        } catch {
+          /* ignore */
+        }
+        return "oficial";
+      }
+
+      function readActiveIntegrationEnv() {
+        if (document.body.classList.contains("integration-env-alternativa")) return "alternativa";
+        if (document.body.classList.contains("integration-env-official")) return "oficial";
+        return "nao-oficial";
+      }
+
+      function syncProductionIntegrationStripLabels() {
+        if (!isProductionUi()) return;
+        const naoBtn = document.querySelector(
+          '.integration-env-btn[data-integration-env="nao-oficial"]'
+        );
+        const ofBtn = document.querySelector('.integration-env-btn[data-integration-env="oficial"]');
+        const altBtn = document.querySelector(
+          '.integration-env-btn[data-integration-env="alternativa"]'
+        );
+        if (naoBtn) naoBtn.textContent = "Aquecedor";
+        if (ofBtn) {
+          const labelSpan = ofBtn.querySelector("span:not(.wa-icon)");
+          if (labelSpan) labelSpan.textContent = "API Oficial";
+          else ofBtn.textContent = "API Oficial";
+        }
+        if (altBtn) {
+          altBtn.hidden = false;
+          altBtn.textContent = "API Alternativa";
+        }
+      }
+
       function integrationEnvLabel(env) {
-        const normalized = env === "oficial" ? "oficial" : "nao-oficial";
+        const normalized = normalizeIntegrationEnv(env);
         if (isBaselineUi()) {
           return normalized === "oficial" ? "API Meta" : "API não oficial";
         }
+        if (isProductionUi()) {
+          if (normalized === "alternativa") return "API Alternativa";
+          if (normalized === "oficial") return "API Oficial";
+          return "Aquecedor";
+        }
         if (normalized === "oficial") return getOfficialSectionLabel();
-        return isProductionUi() ? "AQUECEDOR" : "Aquecedor";
+        return "Aquecedor";
       }
 
       function initBaselineUi() {
@@ -15207,12 +15416,7 @@
 
       function initBaselineDisparosPanel() {
         if (!isBaselineUi()) return;
-        const legacy = document.getElementById("disparos-config-legacy");
-        const left = document.getElementById("disparos-evo-baseline-left");
-        if (legacy && left && !left.contains(legacy)) {
-          left.appendChild(legacy);
-        }
-        if (legacy) legacy.removeAttribute("aria-hidden");
+        initDisparoEvoPanelLayout();
       }
 
       function initUiProfile() {
@@ -15226,14 +15430,8 @@
         const naoTitle = document.querySelector(
           '.menu-group[data-menu-group="nao-oficial"] .menu-group-title'
         );
-        const ofTitle = document.querySelector(
-          '.menu-group[data-menu-group="oficial"] .menu-group-title'
-        );
         if (naoTitle) naoTitle.textContent = "AQUECEDOR";
-        const naoBtn = document.querySelector(
-          '.integration-env-btn[data-integration-env="nao-oficial"]'
-        );
-        if (naoBtn) naoBtn.textContent = "AQUECEDOR";
+        syncProductionIntegrationStripLabels();
         syncOfficialSectionLabels();
 
         let saved = "nao-oficial";
@@ -15242,8 +15440,9 @@
         } catch {
           /* ignore */
         }
-        if (saved === "oficial") {
-          const officialTab = defaultDisparosTab();
+        if (saved === "oficial" || saved === "alternativa") {
+          const officialTab =
+            saved === "alternativa" ? "disparo-evo" : defaultDisparosTab();
           if (!isTabBlockedByMenuPolicy(officialTab)) {
             setActiveTab(officialTab);
           }
@@ -22366,6 +22565,7 @@
       let adminCampanhasPollTimer = null;
       const ADMIN_CAMPANHAS_POLL_MS = 15 * 60 * 1000;
       let aquecedorRuntimeStatusCache = null;
+      let aquecedorRuntimeResumeInFlight = false;
       let aquecedorChatEvents = [];
       const aquecedorChatSeen = new Set();
       let disparosNextInstanceTechnicalCache = null;
@@ -23634,21 +23834,59 @@
         }
       }
 
-      async function loadAquecedorRuntimeStatus() {
+      async function syncAquecedorRuntimeUi(options = {}) {
+        const autoResume = options.autoResume !== false;
+        const label = document.getElementById("aquecedor-runtime-label");
         try {
-          const response = await fetchWithTimeout("/aquecedor/status", {}, 10000);
-          const label = document.getElementById("aquecedor-runtime-label");
+          const response = await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 10000);
           if (!response.ok) {
             if (label) label.textContent = "Motor: erro ao consultar status";
             aquecedorRuntimeStatusCache = null;
             renderAquecedorRuntimeHero(null);
             renderAquecedorRuntimeProgress();
-            return;
+            return null;
           }
-          const data = await response.json();
+          let data = await response.json().catch(() => ({}));
+          const desiredRunning = data?.desiredRunning === true;
+          let running = data?.running === true;
+
+          if (
+            autoResume &&
+            desiredRunning &&
+            !running &&
+            hasAquecedorAccess() &&
+            !aquecedorRuntimeResumeInFlight
+          ) {
+            aquecedorRuntimeResumeInFlight = true;
+            try {
+              const resumeRes = await fetchWithTimeout(
+                "/aquecedor/start",
+                { method: "POST", credentials: "same-origin" },
+                15000
+              );
+              if (resumeRes.ok) {
+                const resumeData = await resumeRes.json().catch(() => ({}));
+                data = resumeData?.status
+                  ? { ...resumeData.status, desiredRunning: true, running: true }
+                  : await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 10000)
+                      .then((r) => (r.ok ? r.json() : data))
+                      .catch(() => data);
+                running = data?.running === true;
+                addAquecedorCommandLog("Motor retomado automaticamente (sessão anterior).");
+              }
+            } catch {
+              /* mantém status atual */
+            } finally {
+              aquecedorRuntimeResumeInFlight = false;
+            }
+          }
+
           aquecedorRuntimeStatusCache = data || null;
-          const running = data?.running === true;
           const isProcessing = data?.isProcessing === true;
+          if (running || desiredRunning) {
+            setAquecedorEditMode(false);
+            showAquecedorStartStopButtons();
+          }
           if (running && aquecedorEditMode && !document.getElementById("aquecedor-save-btn")?.disabled) {
             setAquecedorEditMode(false);
           }
@@ -23658,22 +23896,27 @@
           const lastResult = String(data?.lastResult || "sem histórico");
           if (label) {
             label.textContent = `Motor: ${
-              running ? "ativo" : "parado"
+              running ? "ativo" : desiredRunning ? "retomando" : "parado"
             } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
           }
           updateAquecedorStartStopVisibility(running);
           renderAquecedorRuntimeHero(data);
           renderAquecedorRuntimeProgress();
           updateAquecedorChatFabIndicator(data);
+          return data;
         } catch {
-          const label = document.getElementById("aquecedor-runtime-label");
           if (label) label.textContent = "Motor: erro ao consultar status";
           aquecedorRuntimeStatusCache = null;
           updateAquecedorStartStopVisibility(false);
           renderAquecedorRuntimeHero(null);
           renderAquecedorRuntimeProgress();
           updateAquecedorChatFabIndicator(null);
+          return null;
         }
+      }
+
+      async function loadAquecedorRuntimeStatus() {
+        return syncAquecedorRuntimeUi({ autoResume: true });
       }
 
       function renderAquecedorRuntimeProgress() {
@@ -24023,7 +24266,7 @@
       }
 
       function refreshDisparosCampaignsAndResumo() {
-        if (isBaselineUi()) {
+        if (isDisparoEvoUi()) {
           return loadDisparosEvoCampaigns();
         }
         return loadDisparosTemplates().then(() => loadDisparosCredits());
@@ -25318,7 +25561,7 @@
       }
 
       function syncDisparosResumoSide(campaignItems) {
-        if (isBaselineUi()) return;
+        if (isDisparoEvoUi()) return;
         const enviadosEl = document.getElementById("disparos-resumo-enviados");
         const filaEl = document.getElementById("disparos-resumo-fila");
         const oficialDisponiveisEl = document.getElementById("disparos-resumo-oficial-disponiveis");
@@ -25625,7 +25868,7 @@
       }
 
       async function loadDisparosTemplates(options = {}) {
-        if (isBaselineUi()) {
+        if (isDisparoEvoUi()) {
           return loadDisparosEvoCampaigns(options);
         }
         const silent = Boolean(options.silent);
@@ -25707,7 +25950,7 @@
           return false;
         }
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
-        if (isBaselineUi()) {
+        if (isDisparoEvoUi()) {
           await loadDisparosEvoCampaigns();
         } else {
           await loadDisparosTemplates();
@@ -26718,10 +26961,11 @@
         }
 
         if (disparosPanel) {
-          disparosPanel.classList.toggle("tab-hidden", nextTab !== "disparos");
+          const showDisparosPanel = nextTab === "disparos" || nextTab === "disparo-evo";
+          disparosPanel.classList.toggle("tab-hidden", !showDisparosPanel);
           disparosPanel.setAttribute(
             "aria-hidden",
-            nextTab !== "disparos" ? "true" : "false"
+            !showDisparosPanel ? "true" : "false"
           );
         }
 
@@ -26861,7 +27105,7 @@
           stopDisparosCampaignsPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
-        } else if (nextTab === "disparos") {
+        } else if (nextTab === "disparo-evo" || nextTab === "disparos") {
           stopAquecedorEnviosPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
@@ -26941,6 +27185,7 @@
         }
 
         syncIntegrationEnvWithTab(nextTab);
+        syncDisparoEvoMode();
         updateAquecedorChatDockVisibility();
         syncAquecedorSectionVisual();
         syncTabButtonMenuSections();
@@ -29655,7 +29900,11 @@
       }
 
       function applyIntegrationEnvironment(env) {
-        const normalized = env === "oficial" ? "oficial" : "nao-oficial";
+        const normalized = isProductionUi()
+          ? normalizeIntegrationEnv(env)
+          : env === "oficial"
+            ? "oficial"
+            : "nao-oficial";
         const currentLabel = document.getElementById("integration-env-current");
         if (currentLabel) {
           const currentText = currentLabel.querySelector(".env-text");
@@ -29670,10 +29919,8 @@
             currentWaIcon.classList.toggle("hidden", normalized !== "oficial");
           }
         }
-        document.body.classList.toggle(
-          "integration-env-official",
-          normalized === "oficial"
-        );
+        document.body.classList.toggle("integration-env-official", normalized === "oficial");
+        document.body.classList.toggle("integration-env-alternativa", normalized === "alternativa");
         document
           .querySelectorAll(".integration-env-btn[data-integration-env]")
           .forEach((btn) => {
@@ -29682,12 +29929,17 @@
             btn.setAttribute("aria-pressed", active ? "true" : "false");
           });
 
+        if (isDisparosApiIntegrationEnv(normalized)) {
+          selectDisparosApiKind(normalized);
+        }
+
         // Ambiente define contexto visual/topo, mas não recolhe grupos do menu lateral.
       }
 
       function isOfficialTab(tabName) {
         if (isProductionUi()) {
           return (
+            tabName === "disparo-evo" ||
             tabName === "disparos-dashboard" ||
             tabName === "disparos-lancamento" ||
             tabName === "disparos"
@@ -29716,7 +29968,9 @@
 
       function syncIntegrationEnvWithTab(tabName) {
         if (isMasterWorkspaceTab(tabName)) return;
-        const env = isOfficialTab(tabName) ? "oficial" : "nao-oficial";
+        const env = isOfficialTab(tabName)
+          ? resolveDisparosIntegrationEnvFromTab(tabName)
+          : "nao-oficial";
         applyIntegrationEnvironment(env);
         try {
           localStorage.setItem("waba.integration.env", env);
@@ -29756,17 +30010,31 @@
         .querySelectorAll(".integration-env-btn[data-integration-env]")
         .forEach((btn) => {
           btn.addEventListener("click", () => {
-            const env = btn.getAttribute("data-integration-env") || "nao-oficial";
-            applyIntegrationEnvironment(env);
-            const wantsOfficial = env === "oficial";
-            const currentlyOfficial = isOfficialTab(activeTab);
-            if (wantsOfficial && !currentlyOfficial) {
+            const env = normalizeIntegrationEnv(
+              btn.getAttribute("data-integration-env") || "nao-oficial"
+            );
+            const currentEnv = readActiveIntegrationEnv();
+            const wantsDisparosApi = isDisparosApiIntegrationEnv(env);
+            const currentlyDisparosApi = isDisparosApiIntegrationEnv(currentEnv);
+
+            if (wantsDisparosApi && !currentlyDisparosApi) {
               if (!hasOfficialDisparosMenuAccess()) {
-                showToast("Você não tem permissão para a área Disparos.", "warning");
+                showToast("Você não tem permissão para a área de créditos/disparos.", "warning");
                 return;
               }
-              setActiveTab(isProductionUi() ? defaultDisparosTab() : "meta-ativos");
-            } else if (!wantsOfficial && currentlyOfficial) {
+              selectDisparosApiKind(env);
+              setActiveTab(resolveTabForDisparosApiEnv(env));
+            } else if (wantsDisparosApi && currentlyDisparosApi && env !== currentEnv) {
+              if (!hasOfficialDisparosMenuAccess()) {
+                showToast("Você não tem permissão para a área de créditos/disparos.", "warning");
+                return;
+              }
+              selectDisparosApiKind(env);
+              const targetTab = resolveTabForDisparosApiEnv(env);
+              if (activeTab !== targetTab) {
+                setActiveTab(targetTab);
+              }
+            } else if (!wantsDisparosApi && currentlyDisparosApi) {
               if (!hasAquecedorSectionMenuAccess()) {
                 showToast("Você não tem permissão para a área Aquecedor.", "warning");
                 return;
@@ -29776,10 +30044,13 @@
                 fallback || (hasAquecedorSectionMenuAccess() ? "dashboard" : defaultDisparosTab())
               );
             }
-            localStorage.setItem(
-              "waba.integration.env",
-              env === "oficial" ? "oficial" : "nao-oficial"
-            );
+
+            applyIntegrationEnvironment(env);
+            try {
+              localStorage.setItem("waba.integration.env", env);
+            } catch {
+              /* ignore */
+            }
           });
         });
 
@@ -32282,7 +32553,13 @@
         updateAquecedorChatDockVisibility();
         setAquecedorFormValues(AQUECEDOR_RECOMMENDED);
         setAquecedorFormDisabled(true);
-        setAquecedorEditMode(true);
+        await syncAquecedorRuntimeUi({ autoResume: true });
+        if (
+          !aquecedorRuntimeStatusCache?.running &&
+          !aquecedorRuntimeStatusCache?.desiredRunning
+        ) {
+          setAquecedorEditMode(true);
+        }
         renderAquecedorCommandLogs();
 
       document.getElementById("sender-filter")?.addEventListener("change", (e) => {
