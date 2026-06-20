@@ -22,6 +22,7 @@ import {
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
 import { resolveWabaRequestAuth } from "./auth/waba-request-auth";
 import { isWabaAuthConfigured, isWabaMasterEmail } from "./auth/waba-auth.service";
+import { WabaSystemUserRepository } from "./users/waba-system-user.repository";
 import { AlternativaNumberActivationRepository } from "./billing/alternativa-number-activation.repository";
 import { wabaInstanceOwnershipService } from "./instances/waba-instance-ownership.service";
 import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
@@ -2824,11 +2825,85 @@ async function syncAquecedorConnectedInstances(
   }
 }
 
+const wabaSystemUserRepository = new WabaSystemUserRepository();
+
+function isAquecedorGlobalScopeOwner(ownerEmail: string): boolean {
+  const email = String(ownerEmail || "")
+    .trim()
+    .toLowerCase();
+  if (!email.includes("@")) return false;
+  if (isWabaMasterEmail(email)) return true;
+  return wabaSystemUserRepository.getRoleByEmail(email) === "master";
+}
+
+async function listEvoInstanceNamesForScopeReconcile(): Promise<string[]> {
+  const names = new Set<string>();
+  const evoList = await fetchEvoInstancesList();
+  if (evoList.ok) {
+    for (const inst of evoList.instances) {
+      const key = resolveEvoInstanceKey(inst);
+      if (key) names.add(key);
+    }
+  }
+  if (!names.size) {
+    const cache = await loadEvoInstancesCache();
+    for (const item of cache?.items || []) {
+      const name = String(item?.name || "").trim();
+      if (name) names.add(name);
+    }
+  }
+  return Array.from(names);
+}
+
+async function listConnectedEvoInstancesUnscoped(): Promise<
+  Array<{ instancia: string; numero: string }>
+> {
+  const evoList = await fetchEvoInstancesList();
+  if (evoList.ok) {
+    const fromLive = buildConnectedFromEvoResponse(evoList.instances);
+    if (fromLive.length) return fromLive;
+  }
+  const cache = await loadEvoInstancesCache();
+  if (cache?.items?.length) {
+    return buildConnectedFromEvoCacheItems(cache.items);
+  }
+  if (evoList.ok) {
+    return buildConnectedFromEvoResponse(evoList.instances);
+  }
+  return [];
+}
+
 async function listAquecedorScopedInstanceNames(ownerEmail: string): Promise<string[]> {
   const email = String(ownerEmail || "")
     .trim()
     .toLowerCase();
   if (!email.includes("@")) return [];
+
+  if (isAquecedorGlobalScopeOwner(email)) {
+    const reconcileNames = await listEvoInstanceNamesForScopeReconcile();
+    if (reconcileNames.length) {
+      const reconciled = await wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(
+        { email, role: "master" },
+        reconcileNames,
+      );
+      if (reconciled > 0) {
+        console.info(
+          `[Aquecedor] ${reconciled} instância(s) órfã(s) vinculada(s) ao master ${email}.`,
+        );
+      }
+    }
+    const usageMap = await loadInstanceUsageMap();
+    const connected = await listConnectedEvoInstancesUnscoped();
+    const scoped = new Set<string>();
+    for (const item of connected) {
+      const usage = getInstanceUsageFromMap(usageMap, item.instancia);
+      if (usage ? usage.useAquecedor !== false : true) {
+        scoped.add(item.instancia);
+      }
+    }
+    return Array.from(scoped).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+
   const owned = await wabaInstanceOwnershipService.listOwnedInstanceNames(email);
   const activations = new AlternativaNumberActivationRepository()
     .listForEmail(email)

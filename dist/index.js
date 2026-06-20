@@ -54,6 +54,7 @@ const base_path_1 = require("./base-path");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
 const waba_auth_service_1 = require("./auth/waba-auth.service");
+const waba_system_user_repository_1 = require("./users/waba-system-user.repository");
 const alternativa_number_activation_repository_1 = require("./billing/alternativa-number-activation.repository");
 const waba_instance_ownership_service_1 = require("./instances/waba-instance-ownership.service");
 const evo_instance_key_1 = require("./instances/evo-instance-key");
@@ -2290,12 +2291,78 @@ async function syncAquecedorConnectedInstances(supabase, connected) {
         await persistInstanceUsage(toRegister);
     }
 }
+const wabaSystemUserRepository = new waba_system_user_repository_1.WabaSystemUserRepository();
+function isAquecedorGlobalScopeOwner(ownerEmail) {
+    const email = String(ownerEmail || "")
+        .trim()
+        .toLowerCase();
+    if (!email.includes("@"))
+        return false;
+    if ((0, waba_auth_service_1.isWabaMasterEmail)(email))
+        return true;
+    return wabaSystemUserRepository.getRoleByEmail(email) === "master";
+}
+async function listEvoInstanceNamesForScopeReconcile() {
+    const names = new Set();
+    const evoList = await fetchEvoInstancesList();
+    if (evoList.ok) {
+        for (const inst of evoList.instances) {
+            const key = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
+            if (key)
+                names.add(key);
+        }
+    }
+    if (!names.size) {
+        const cache = await loadEvoInstancesCache();
+        for (const item of cache?.items || []) {
+            const name = String(item?.name || "").trim();
+            if (name)
+                names.add(name);
+        }
+    }
+    return Array.from(names);
+}
+async function listConnectedEvoInstancesUnscoped() {
+    const evoList = await fetchEvoInstancesList();
+    if (evoList.ok) {
+        const fromLive = buildConnectedFromEvoResponse(evoList.instances);
+        if (fromLive.length)
+            return fromLive;
+    }
+    const cache = await loadEvoInstancesCache();
+    if (cache?.items?.length) {
+        return buildConnectedFromEvoCacheItems(cache.items);
+    }
+    if (evoList.ok) {
+        return buildConnectedFromEvoResponse(evoList.instances);
+    }
+    return [];
+}
 async function listAquecedorScopedInstanceNames(ownerEmail) {
     const email = String(ownerEmail || "")
         .trim()
         .toLowerCase();
     if (!email.includes("@"))
         return [];
+    if (isAquecedorGlobalScopeOwner(email)) {
+        const reconcileNames = await listEvoInstanceNamesForScopeReconcile();
+        if (reconcileNames.length) {
+            const reconciled = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster({ email, role: "master" }, reconcileNames);
+            if (reconciled > 0) {
+                console.info(`[Aquecedor] ${reconciled} instância(s) órfã(s) vinculada(s) ao master ${email}.`);
+            }
+        }
+        const usageMap = await loadInstanceUsageMap();
+        const connected = await listConnectedEvoInstancesUnscoped();
+        const scoped = new Set();
+        for (const item of connected) {
+            const usage = getInstanceUsageFromMap(usageMap, item.instancia);
+            if (usage ? usage.useAquecedor !== false : true) {
+                scoped.add(item.instancia);
+            }
+        }
+        return Array.from(scoped).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
     const owned = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(email);
     const activations = new alternativa_number_activation_repository_1.AlternativaNumberActivationRepository()
         .listForEmail(email)
