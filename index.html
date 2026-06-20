@@ -8223,6 +8223,188 @@
         color: #d1d5db;
         margin-top: 10px;
       }
+
+      /* API Alternativa — compra de números */
+      #dis-number-source-tabs {
+        display: none;
+        gap: 8px;
+        margin: 0 0 14px;
+        padding: 4px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      body.waba-disparo-evo-mode #dis-number-source-tabs {
+        display: flex;
+      }
+      .dis-number-source-tab {
+        flex: 1;
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(226, 232, 240, 0.82);
+        background: transparent;
+        cursor: pointer;
+        transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+      }
+      .dis-number-source-tab.active {
+        color: #ecfeff;
+        background: linear-gradient(135deg, rgba(20, 184, 166, 0.28), rgba(14, 116, 144, 0.35));
+        box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.35);
+      }
+      .alt-numbers-shop {
+        display: grid;
+        gap: 14px;
+      }
+      .alt-numbers-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .alt-numbers-stat {
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+      .alt-numbers-stat span {
+        display: block;
+        font-size: 11px;
+        color: rgba(148, 163, 184, 0.95);
+        margin-bottom: 4px;
+      }
+      .alt-numbers-stat strong {
+        font-size: 22px;
+        color: #f8fafc;
+        line-height: 1.1;
+      }
+      .alt-numbers-buy-card {
+        padding: 16px;
+        border-radius: 14px;
+        background: linear-gradient(160deg, rgba(15, 23, 42, 0.92), rgba(8, 47, 73, 0.55));
+        border: 1px solid rgba(45, 212, 191, 0.22);
+      }
+      .alt-numbers-buy-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+      }
+      .alt-numbers-buy-head h4 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        color: #f8fafc;
+      }
+      .alt-numbers-buy-head p {
+        margin: 0;
+        font-size: 12px;
+        color: rgba(148, 163, 184, 0.95);
+      }
+      .alt-numbers-unit-badge {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #5eead4;
+        background: rgba(20, 184, 166, 0.14);
+        border: 1px solid rgba(45, 212, 191, 0.28);
+        white-space: nowrap;
+      }
+      .alt-numbers-qty-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .alt-numbers-stepper {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px;
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      .alt-numbers-stepper button {
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 10px;
+        background: rgba(30, 41, 59, 0.9);
+        color: #e2e8f0;
+        font-size: 18px;
+        cursor: pointer;
+      }
+      .alt-numbers-stepper button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .alt-numbers-stepper output {
+        min-width: 34px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .alt-numbers-total-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.45);
+        border: 1px dashed rgba(45, 212, 191, 0.35);
+        margin-bottom: 14px;
+      }
+      .alt-numbers-total-box span {
+        font-size: 13px;
+        color: rgba(148, 163, 184, 0.95);
+      }
+      .alt-numbers-total-box strong {
+        font-size: 24px;
+        color: #5eead4;
+      }
+      .alt-numbers-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .alt-numbers-activated-list {
+        display: grid;
+        gap: 8px;
+      }
+      .alt-numbers-activated-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.65);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+        font-size: 13px;
+      }
+      .alt-numbers-empty {
+        padding: 14px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.45);
+        border: 1px dashed rgba(148, 163, 184, 0.18);
+        color: rgba(148, 163, 184, 0.95);
+        font-size: 13px;
+      }
+      @media (max-width: 720px) {
+        .alt-numbers-stats {
+          grid-template-columns: 1fr;
+        }
+        .alt-numbers-buy-head {
+          flex-direction: column;
+        }
+      }
+
       /* Sobrepõe os cards inteiros — entre prévia e tag Investimento (top via JS) */
       .disparos-choice-note {
         position: absolute;
@@ -12241,21 +12423,107 @@
                 <div id="disparos-config-area" class="disparos-config-area">
                     <div class="aquecedor-section">
                       <div class="aquecedor-section-title">1) Seleção de números</div>
-                      <div class="dis-number-picker">
-                        <div class="aquecedor-field">
-                          <label for="dis-available-instances">Números disponíveis</label>
-                          <select id="dis-available-instances" size="8"></select>
+
+                      <div id="dis-number-source-tabs" class="dis-number-source-tabs" role="tablist" aria-label="Origem dos números">
+                        <button type="button" class="dis-number-source-tab active" data-source="aquecedor" role="tab" aria-selected="true">
+                          Instâncias do Aquecedor
+                        </button>
+                        <button type="button" class="dis-number-source-tab" data-source="comprar" role="tab" aria-selected="false">
+                          Comprar números
+                        </button>
+                      </div>
+
+                      <div id="dis-number-panel-aquecedor">
+                        <div class="dis-number-picker">
+                          <div class="aquecedor-field">
+                            <label for="dis-available-instances">Números disponíveis</label>
+                            <select id="dis-available-instances" size="8"></select>
+                          </div>
+                          <div class="dis-number-picker-actions">
+                            <button id="dis-add-instance-btn" type="button" class="instance-action-btn enabled">→</button>
+                            <button id="dis-remove-instance-btn" type="button" class="instance-action-btn enabled">←</button>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="dis-selected-instances">Números selecionados para disparo</label>
+                            <select id="dis-selected-instances" size="8"></select>
+                          </div>
                         </div>
-                        <div class="dis-number-picker-actions">
-                          <button id="dis-add-instance-btn" type="button" class="instance-action-btn enabled">→</button>
-                          <button id="dis-remove-instance-btn" type="button" class="instance-action-btn enabled">←</button>
+                        <span class="aquecedor-hint">Clique no número para mover entre disponíveis e selecionados.</span>
+                      </div>
+
+                      <div id="dis-number-panel-comprar" class="alt-numbers-shop" hidden>
+                        <div class="alt-numbers-stats">
+                          <div class="alt-numbers-stat">
+                            <span>Comprados</span>
+                            <strong id="alt-numbers-purchased">0</strong>
+                          </div>
+                          <div class="alt-numbers-stat">
+                            <span>Ativados</span>
+                            <strong id="alt-numbers-activated">0</strong>
+                          </div>
+                          <div class="alt-numbers-stat">
+                            <span>Disponíveis p/ conectar</span>
+                            <strong id="alt-numbers-available">0</strong>
+                          </div>
                         </div>
-                        <div class="aquecedor-field">
-                          <label for="dis-selected-instances">Números selecionados para disparo</label>
-                          <select id="dis-selected-instances" size="8"></select>
+
+                        <div class="alt-numbers-buy-card">
+                          <div class="alt-numbers-buy-head">
+                            <div>
+                              <h4>Adquira números para disparo</h4>
+                              <p>Cada número WhatsApp custa R$ 20,00. Após o pagamento PIX, conecte via QR Code.</p>
+                            </div>
+                            <div class="alt-numbers-unit-badge">R$ 20 / número</div>
+                          </div>
+                          <div class="alt-numbers-qty-row">
+                            <span class="aquecedor-hint" style="margin:0">Quantidade de números</span>
+                            <div class="alt-numbers-stepper">
+                              <button id="alt-numbers-qty-minus" type="button" aria-label="Diminuir quantidade">−</button>
+                              <output id="alt-numbers-qty-value" for="alt-numbers-qty-minus alt-numbers-qty-plus">1</output>
+                              <button id="alt-numbers-qty-plus" type="button" aria-label="Aumentar quantidade">+</button>
+                            </div>
+                          </div>
+                          <div class="alt-numbers-total-box">
+                            <span>Total a pagar</span>
+                            <strong id="alt-numbers-total-value">R$ 20,00</strong>
+                          </div>
+                          <div class="alt-numbers-actions">
+                            <button id="alt-numbers-pay-btn" type="button" class="instance-action-btn btn-qrcode enabled">
+                              Pagar com PIX
+                            </button>
+                            <button id="alt-numbers-connect-btn" type="button" class="instance-action-btn enabled" hidden>
+                              Conectar número comprado
+                            </button>
+                          </div>
+                        </div>
+
+                        <div id="alt-numbers-activated-wrap" hidden>
+                          <div class="aquecedor-section-title" style="margin-bottom:8px;font-size:13px;">Números já ativados</div>
+                          <div id="alt-numbers-activated-list" class="alt-numbers-activated-list"></div>
+                        </div>
+
+                        <div id="alt-numbers-picker-wrap" hidden>
+                          <div class="dis-number-picker" style="margin-top:4px;">
+                            <div class="aquecedor-field">
+                              <label for="dis-available-instances-comprar">Números comprados disponíveis</label>
+                              <select id="dis-available-instances-comprar" size="6"></select>
+                            </div>
+                            <div class="dis-number-picker-actions">
+                              <button id="dis-add-instance-comprar-btn" type="button" class="instance-action-btn enabled">→</button>
+                              <button id="dis-remove-instance-comprar-btn" type="button" class="instance-action-btn enabled">←</button>
+                            </div>
+                            <div class="aquecedor-field">
+                              <label for="dis-selected-instances-comprar">Selecionados para disparo</label>
+                              <select id="dis-selected-instances-comprar" size="6"></select>
+                            </div>
+                          </div>
+                          <span class="aquecedor-hint">Selecione quais números comprados entram no disparador.</span>
+                        </div>
+
+                        <div id="alt-numbers-empty-hint" class="alt-numbers-empty" hidden>
+                          Você ainda não possui números comprados. Escolha a quantidade acima e pague com PIX para liberar a conexão.
                         </div>
                       </div>
-                      <span class="aquecedor-hint">Clique no número para mover entre disponíveis e selecionados.</span>
                     </div>
 
                     <div class="aquecedor-section">
@@ -15721,8 +15989,232 @@
       let disparosBillingSelectedKind = "oficial";
       let disparosBillingCheckoutInFlight = false;
       let disparosSelectedPackage = null;
+      const ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
+      const ALTERNATIVA_NUMBER_MAX_QTY = 20;
+      let alternativaNumbersSummary = null;
+      let alternativaNumbersSelectedQty = 1;
+      let disNumberSourceTab = "aquecedor";
+      let alternativaNumbersCheckoutActive = false;
+      let alternativaNumbersPendingActivation = false;
 
-      function formatDisparosQty(value) {
+      function resolveDisparosSelectedInstancesElement() {
+        if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
+          return document.getElementById("dis-selected-instances-comprar");
+        }
+        return document.getElementById("dis-selected-instances");
+      }
+
+      function getActiveDisSelectedInstanceValues() {
+        return getSelectOptionValues(resolveDisparosSelectedInstancesElement());
+      }
+
+      function formatAlternativaNumbersTotal(qty) {
+        return formatDisparosMoneyFromCents(qty * ALTERNATIVA_NUMBER_UNIT_CENTS);
+      }
+
+      function renderAlternativaNumbersShop() {
+        const summary = alternativaNumbersSummary;
+        const purchasedEl = document.getElementById("alt-numbers-purchased");
+        const activatedEl = document.getElementById("alt-numbers-activated");
+        const availableEl = document.getElementById("alt-numbers-available");
+        const qtyOut = document.getElementById("alt-numbers-qty-value");
+        const totalEl = document.getElementById("alt-numbers-total-value");
+        const minusBtn = document.getElementById("alt-numbers-qty-minus");
+        const plusBtn = document.getElementById("alt-numbers-qty-plus");
+        const connectBtn = document.getElementById("alt-numbers-connect-btn");
+        const emptyHint = document.getElementById("alt-numbers-empty-hint");
+        const pickerWrap = document.getElementById("alt-numbers-picker-wrap");
+        const activatedWrap = document.getElementById("alt-numbers-activated-wrap");
+        const activatedList = document.getElementById("alt-numbers-activated-list");
+
+        if (purchasedEl) purchasedEl.textContent = String(summary?.purchasedSlots ?? 0);
+        if (activatedEl) activatedEl.textContent = String(summary?.activatedCount ?? 0);
+        if (availableEl) availableEl.textContent = String(summary?.availableSlots ?? 0);
+        if (qtyOut) qtyOut.textContent = String(alternativaNumbersSelectedQty);
+        if (totalEl) totalEl.textContent = formatAlternativaNumbersTotal(alternativaNumbersSelectedQty);
+        if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= 1;
+        if (plusBtn) {
+          plusBtn.disabled = alternativaNumbersSelectedQty >= (summary?.maxQuantity ?? ALTERNATIVA_NUMBER_MAX_QTY);
+        }
+        if (connectBtn) {
+          connectBtn.hidden = !(summary?.availableSlots > 0);
+        }
+
+        const hasPurchased = (summary?.purchasedSlots ?? 0) > 0;
+        const hasActivated = (summary?.activatedCount ?? 0) > 0;
+        if (emptyHint) emptyHint.hidden = hasPurchased;
+        if (activatedWrap) activatedWrap.hidden = !hasActivated;
+        if (pickerWrap) pickerWrap.hidden = !hasActivated;
+
+        if (activatedList && hasActivated) {
+          activatedList.innerHTML = "";
+          (summary?.activations || []).forEach((row) => {
+            const item = document.createElement("div");
+            item.className = "alt-numbers-activated-item";
+            const label = getDisparadorInstanceLabelByValue(row.instanceName) || row.instanceName;
+            item.innerHTML = `<span>${label}</span><span class="muted">Conectado</span>`;
+            activatedList.appendChild(item);
+          });
+        }
+      }
+
+      async function loadAlternativaNumbersSummary() {
+        if (!isDisparoEvoUi()) return null;
+        try {
+          const response = await fetch("/billing/alternativa-numbers/summary");
+          if (!response.ok) return null;
+          alternativaNumbersSummary = await response.json();
+          renderAlternativaNumbersShop();
+          syncDisparadorNumberPicker();
+          return alternativaNumbersSummary;
+        } catch {
+          return null;
+        }
+      }
+
+      function setDisNumberSourceTab(source) {
+        const normalized = source === "comprar" ? "comprar" : "aquecedor";
+        disNumberSourceTab = normalized;
+        document.querySelectorAll(".dis-number-source-tab").forEach((btn) => {
+          const active = btn.getAttribute("data-source") === normalized;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        const aquecedorPanel = document.getElementById("dis-number-panel-aquecedor");
+        const comprarPanel = document.getElementById("dis-number-panel-comprar");
+        if (aquecedorPanel) aquecedorPanel.hidden = normalized === "comprar";
+        if (comprarPanel) comprarPanel.hidden = normalized !== "comprar";
+        if (normalized === "comprar") {
+          void loadAlternativaNumbersSummary();
+        } else {
+          syncDisparadorNumberPicker();
+        }
+      }
+
+      async function openAlternativaNumbersBillingModal() {
+        const qty = alternativaNumbersSelectedQty;
+        if (!qty || qty < 1) {
+          showToast("Selecione a quantidade de números.", "warning");
+          return;
+        }
+        alternativaNumbersCheckoutActive = true;
+        disparosSelectedPackage = {
+          shipments: qty,
+          totalCents: qty * ALTERNATIVA_NUMBER_UNIT_CENTS,
+          pricePerSend: 20,
+          kind: "alternativa-numbers",
+        };
+        disparosBillingSelectedKind = "alternativa";
+        try {
+          const config = await loadDisparosBillingConfig();
+          const title = document.getElementById("disparos-billing-title");
+          if (title) {
+            title.textContent = `Comprar números · ${qty} × R$ 20,00 · ${formatAlternativaNumbersTotal(qty)}`;
+          }
+          syncDisparosBillingModalState(config);
+          prefillDisparosBillingForm();
+          openDisparosOverlay("disparos-billing-overlay");
+          if (!config.paymentConfigured) {
+            showToast("Configure ASAAS_API_KEY no servidor para gerar o PIX.", "info", 5200);
+          }
+        } catch (error) {
+          alternativaNumbersCheckoutActive = false;
+          showToast(error?.message || "Erro ao abrir pagamento.", "error", 4800);
+        }
+      }
+
+      async function submitAlternativaNumbersCheckout() {
+        const name = String(document.getElementById("disparos-billing-name")?.value || "").trim();
+        const cpfCnpj = String(document.getElementById("disparos-billing-cpf")?.value || "").trim();
+        const whatsapp = String(document.getElementById("disparos-billing-whatsapp")?.value || "").trim();
+        const qty = alternativaNumbersSelectedQty;
+        if (!name || !cpfCnpj || !whatsapp) {
+          showToast("Preencha todos os campos obrigatórios.", "error", 4200);
+          return;
+        }
+        setDisparosBillingSubmitLoading(true);
+        try {
+          const response = await fetch("/billing/alternativa-numbers/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              customerName: name,
+              cpfCnpj,
+              whatsapp,
+              quantity: qty,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível gerar o PIX.");
+          }
+          closeDisparosOverlay("disparos-billing-overlay");
+          showDisparosPixCheckout(payload);
+        } catch (error) {
+          showToast(error?.message || "Erro ao gerar PIX.", "error", 4800);
+        } finally {
+          setDisparosBillingSubmitLoading(false);
+        }
+      }
+
+      async function registerAlternativaNumberActivation(instanceName) {
+        if (!instanceName) return;
+        try {
+          const response = await fetch("/billing/alternativa-numbers/activate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instanceName }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível registrar o número comprado.");
+          }
+          alternativaNumbersSummary = payload.summary || alternativaNumbersSummary;
+          renderAlternativaNumbersShop();
+          syncDisparadorNumberPicker();
+        } catch (error) {
+          showToast(error?.message || "Erro ao ativar número comprado.", "warning", 5200);
+        }
+      }
+
+      function openAlternativaNumberConnectWizard() {
+        if (!(alternativaNumbersSummary?.availableSlots > 0)) {
+          showToast("Compre e pague números antes de conectar.", "warning", 4200);
+          return;
+        }
+        alternativaNumbersPendingActivation = true;
+        openRegisterModal();
+      }
+
+      function initDisNumberSourceTabs() {
+        document.querySelectorAll(".dis-number-source-tab").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            setDisNumberSourceTab(btn.getAttribute("data-source") || "aquecedor");
+          });
+        });
+        document.getElementById("alt-numbers-qty-minus")?.addEventListener("click", () => {
+          alternativaNumbersSelectedQty = Math.max(1, alternativaNumbersSelectedQty - 1);
+          renderAlternativaNumbersShop();
+        });
+        document.getElementById("alt-numbers-qty-plus")?.addEventListener("click", () => {
+          const max = alternativaNumbersSummary?.maxQuantity ?? ALTERNATIVA_NUMBER_MAX_QTY;
+          alternativaNumbersSelectedQty = Math.min(max, alternativaNumbersSelectedQty + 1);
+          renderAlternativaNumbersShop();
+        });
+        document.getElementById("alt-numbers-pay-btn")?.addEventListener("click", () => {
+          void openAlternativaNumbersBillingModal();
+        });
+        document.getElementById("alt-numbers-connect-btn")?.addEventListener("click", () => {
+          openAlternativaNumberConnectWizard();
+        });
+        document.getElementById("dis-add-instance-comprar-btn")?.addEventListener("click", () => {
+          moveDisparadorNumbers("dis-available-instances-comprar", "dis-selected-instances-comprar");
+        });
+        document.getElementById("dis-remove-instance-comprar-btn")?.addEventListener("click", () => {
+          moveDisparadorNumbers("dis-selected-instances-comprar", "dis-available-instances-comprar");
+        });
+      }
+
         return Number(value || 0).toLocaleString("pt-BR");
       }
 
@@ -21386,11 +21878,27 @@
         if (payBody) payBody.classList.add("is-hidden");
         if (closeBtn) closeBtn.classList.remove("is-hidden");
         if (title) title.textContent = "Pagamento confirmado";
-        showToast("Pagamento PIX confirmado. Contratação concluída.", "success", 5200);
+        const isNumbersCheckout = alternativaNumbersCheckoutActive;
+        showToast(
+          isNumbersCheckout
+            ? "Pagamento confirmado. Agora conecte seus números via QR Code."
+            : "Pagamento PIX confirmado. Contratação concluída.",
+          "success",
+          5200
+        );
         try {
           if (orderId) localStorage.setItem("waba.disparos.paid-order", orderId);
         } catch {
           /* ignore */
+        }
+        alternativaNumbersCheckoutActive = false;
+        if (isNumbersCheckout) {
+          closeDisparosOverlay("disparos-pix-overlay");
+          setDisNumberSourceTab("comprar");
+          void loadAlternativaNumbersSummary().then(() => {
+            showToast("Clique em «Conectar número comprado» para escanear o QR Code.", "info", 6200);
+          });
+          return;
         }
         void loadAquecedorEntitlement();
         void loadDisparosCredits().then(() => {
@@ -22480,6 +22988,10 @@
       }
 
       async function submitDisparosBillingCheckout() {
+        if (alternativaNumbersCheckoutActive) {
+          await submitAlternativaNumbersCheckout();
+          return;
+        }
         const name = String(document.getElementById("disparos-billing-name")?.value || "").trim();
         const ownerEmail = String(document.getElementById("disparos-billing-email")?.value || "").trim();
         const cpfCnpj = String(document.getElementById("disparos-billing-cpf")?.value || "").trim();
@@ -24097,14 +24609,37 @@
       async function syncAquecedorRuntimeUi(options = {}) {
         const autoResume = options.autoResume !== false;
         const label = document.getElementById("aquecedor-runtime-label");
+        const renderStatusFailure = (reason = "") => {
+          const cached = aquecedorRuntimeStatusCache;
+          if (cached && (cached.running === true || cached.desiredRunning === true)) {
+            if (label) {
+              label.textContent = `Motor: ${
+                cached.running ? "ativo" : "retomando"
+              } | atualizando status…${reason ? ` (${reason})` : ""}`;
+            }
+            renderAquecedorRuntimeHero(cached);
+            renderAquecedorRuntimeProgress();
+            updateAquecedorChatFabIndicator(cached);
+            return cached;
+          }
+          if (label) {
+            label.textContent = `Motor: erro ao consultar status${reason ? ` (${reason})` : ""}`;
+          }
+          aquecedorRuntimeStatusCache = null;
+          updateAquecedorStartStopVisibility(false);
+          renderAquecedorRuntimeHero(null);
+          renderAquecedorRuntimeProgress();
+          updateAquecedorChatFabIndicator(null);
+          return null;
+        };
         try {
           const response = await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 10000);
           if (!response.ok) {
-            if (label) label.textContent = "Motor: erro ao consultar status";
-            aquecedorRuntimeStatusCache = null;
-            renderAquecedorRuntimeHero(null);
-            renderAquecedorRuntimeProgress();
-            return null;
+            const reason =
+              response.status === 401
+                ? "sessão expirada — faça login novamente"
+                : `HTTP ${response.status}`;
+            return renderStatusFailure(reason);
           }
           let data = await response.json().catch(() => ({}));
           const desiredRunning = data?.desiredRunning === true;
@@ -24160,14 +24695,12 @@
           renderAquecedorRuntimeProgress();
           updateAquecedorChatFabIndicator(data);
           return data;
-        } catch {
-          if (label) label.textContent = "Motor: erro ao consultar status";
-          aquecedorRuntimeStatusCache = null;
-          updateAquecedorStartStopVisibility(false);
-          renderAquecedorRuntimeHero(null);
-          renderAquecedorRuntimeProgress();
-          updateAquecedorChatFabIndicator(null);
-          return null;
+        } catch (err) {
+          const reason =
+            err instanceof Error && err.message === "timeout"
+              ? "tempo esgotado"
+              : "rede";
+          return renderStatusFailure(reason);
         }
       }
 
@@ -24421,10 +24954,17 @@
 
       /** Mesma lógica do botão Diagnóstico do painel do motor — grava linhas em «Logs de comandos». */
       async function aquecedorRunDiagnosticoAndLog() {
-        const response = await fetchWithTimeout("/aquecedor/diagnostico", {}, 10000);
+        const response = await fetchWithTimeout(
+          "/aquecedor/diagnostico",
+          { credentials: "same-origin" },
+          25000
+        );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const errMsg = data?.error || `HTTP ${response.status}`;
+          const errMsg =
+            response.status === 401
+              ? "sessão expirada — faça login novamente"
+              : data?.error || `HTTP ${response.status}`;
           addAquecedorCommandLog("Diagnóstico: erro ao obter dados — " + errMsg);
           return;
         }
@@ -24435,6 +24975,14 @@
         const janela = data?.janela || {};
         const janelaOk = janela.aberta === true;
         const proxOk = !!data?.proximaCombinacao;
+        const rt = data?.runtime || {};
+        if (rt.running === true || rt.persistedRunning === true || rt.desiredRunning === true) {
+          addAquecedorCommandLog(
+            "Motor persistido: " +
+              (rt.persistedRunning || rt.running ? "ativo" : "parado") +
+              (rt.workerId ? ` | worker ${rt.workerId}` : "")
+          );
+        }
         const parts = [
           "EVO: " + (evoOk ? "Ok" : "Erro"),
           "Fila: " + (supOk ? "Ok" : "Erro"),
@@ -24458,7 +25006,11 @@
           );
         }
         try {
-          const flRes = await fetchWithTimeout("/aquecedor/fila-localizar", {}, 8000);
+          const flRes = await fetchWithTimeout(
+            "/aquecedor/fila-localizar",
+            { credentials: "same-origin" },
+            12000
+          );
           const fl = await flRes.json().catch(() => ({}));
           if (flRes.ok && fl) {
             const proc = fl.processando || [];
@@ -24849,11 +25401,7 @@
         const aiBriefing = buildDisparosAiBriefingStructured();
         const hiddenBriefing = document.getElementById("dis-ai-briefing");
         if (hiddenBriefing) hiddenBriefing.value = aiBriefing;
-        const selectedInstances = Array.from(
-          document.getElementById("dis-selected-instances")?.options || []
-        )
-          .map((opt) => String(opt.value || "").trim())
-          .filter(Boolean);
+        const selectedInstances = getActiveDisSelectedInstanceValues();
         return {
           delayMinSeconds: readInt("dis-delay-min", 120),
           delayMaxSeconds: readInt("dis-delay-max", 320),
@@ -24975,7 +25523,7 @@
       }
 
       function disparosNextInstanceQueryFromUiSelection() {
-        const sel = getSelectOptionValues(document.getElementById("dis-selected-instances"));
+        const sel = getActiveDisSelectedInstanceValues();
         const parts = [
           "preview=1",
           sel.length ? `instances=${encodeURIComponent(sel.join(","))}` : "",
@@ -25010,53 +25558,75 @@
       }
 
       function syncDisparadorNumberPicker() {
-        const availableEl = document.getElementById("dis-available-instances");
-        const selectedEl = document.getElementById("dis-selected-instances");
-        if (!availableEl || !selectedEl) return;
+        const syncOnePicker = (availableId, selectedId, filterFn) => {
+          const availableEl = document.getElementById(availableId);
+          const selectedEl = document.getElementById(selectedId);
+          if (!availableEl || !selectedEl) return;
 
-        const candidates = (Array.isArray(instancesData?.items) ? instancesData.items : [])
-          .map((inst) => ({
-            name: String(inst?.name || inst?.instanceName || "").trim(),
-            label: String(
-              inst?.instanceAlias ||
-              inst?.instanceLabel ||
-              inst?.name ||
-              inst?.instanceName ||
-              ""
-            ).trim(),
-            status: String(inst?.connectionStatus || "").toLowerCase(),
-          }))
-          .filter(
-            (row) =>
-              row.name &&
-              row.status.includes("open") &&
-              getInstanceUsage(row.name).useDisparador
-          );
+          const candidates = (Array.isArray(instancesData?.items) ? instancesData.items : [])
+            .map((inst) => ({
+              name: String(inst?.name || inst?.instanceName || "").trim(),
+              label: String(
+                inst?.instanceAlias ||
+                  inst?.instanceLabel ||
+                  inst?.name ||
+                  inst?.instanceName ||
+                  ""
+              ).trim(),
+              status: String(inst?.connectionStatus || "").toLowerCase(),
+            }))
+            .filter((row) => row.name && row.status.includes("open") && filterFn(row.name));
 
-        const currentSelected = new Set([
-          ...pendingSelectedDisparadorInstances,
-          ...getSelectOptionValues(selectedEl),
-        ]);
+          const currentSelected = new Set([
+            ...pendingSelectedDisparadorInstances,
+            ...getSelectOptionValues(selectedEl),
+          ]);
 
-        const selected = candidates.filter((row) => currentSelected.has(row.name));
-        const available = candidates.filter((row) => !currentSelected.has(row.name));
+          const selected = candidates.filter((row) => currentSelected.has(row.name));
+          const available = candidates.filter((row) => !currentSelected.has(row.name));
 
-        const fillSelectWithRows = (selectEl, rows) => {
-          if (!selectEl) return;
-          selectEl.innerHTML = "";
-          rows.forEach((row) => {
-            const opt = document.createElement("option");
-            opt.value = row.name; // valor técnico permanece igual
-            opt.textContent = row.label || row.name; // texto exibido usa alias
-            selectEl.appendChild(opt);
-          });
+          const fillSelectWithRows = (selectEl, rows) => {
+            if (!selectEl) return;
+            selectEl.innerHTML = "";
+            rows.forEach((row) => {
+              const opt = document.createElement("option");
+              opt.value = row.name;
+              opt.textContent = row.label || row.name;
+              selectEl.appendChild(opt);
+            });
+          };
+
+          fillSelectWithRows(availableEl, available);
+          fillSelectWithRows(selectedEl, selected);
+          return selected.map((row) => row.name);
         };
 
-        fillSelectWithRows(availableEl, available);
-        fillSelectWithRows(selectedEl, selected);
-        pendingSelectedDisparadorInstances = selected.map((row) => row.name);
+        const activationNames = new Set(
+          (alternativaNumbersSummary?.activations || []).map((row) =>
+            String(row.instanceName || "").trim().toLowerCase()
+          )
+        );
+
+        const aquecedorSelected = syncOnePicker(
+          "dis-available-instances",
+          "dis-selected-instances",
+          (name) => getInstanceUsage(name).useDisparador
+        );
+
+        const comprarSelected = syncOnePicker(
+          "dis-available-instances-comprar",
+          "dis-selected-instances-comprar",
+          (name) => activationNames.has(String(name || "").trim().toLowerCase())
+        );
+
+        if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
+          pendingSelectedDisparadorInstances = comprarSelected || [];
+        } else {
+          pendingSelectedDisparadorInstances = aquecedorSelected || [];
+        }
+
         updateDisparosSelectedInstancesSummaryCard();
-        if (activeTab === "disparos") {
+        if (activeTab === "disparos" || activeTab === "disparo-evo") {
           void refreshDisparosActiveInstanceFromServer();
         } else {
           refreshDisparosActiveInstanceCardLabelOnly();
@@ -25067,7 +25637,7 @@
         const valueEl = document.getElementById("disparos-selecionadas-count");
         const subEl = document.getElementById("disparos-selecionadas-sub");
         if (!valueEl) return;
-        const sel = document.getElementById("dis-selected-instances");
+        const sel = resolveDisparosSelectedInstancesElement();
         const n = getSelectOptionValues(sel).length;
         valueEl.textContent = String(n);
         if (subEl) {
@@ -25091,7 +25661,7 @@
         fillSelectWithValues(fromEl, newFrom);
         fillSelectWithValues(toEl, newTo);
         pendingSelectedDisparadorInstances = getSelectOptionValues(
-          document.getElementById("dis-selected-instances")
+          resolveDisparosSelectedInstancesElement()
         );
         updateDisparosSelectedInstancesSummaryCard();
         void refreshDisparosActiveInstanceFromServer();
@@ -25130,7 +25700,7 @@
         rebuildWithLabels(toEl, toValues);
 
         pendingSelectedDisparadorInstances = getSelectOptionValues(
-          document.getElementById("dis-selected-instances")
+          resolveDisparosSelectedInstancesElement()
         );
         updateDisparosSelectedInstancesSummaryCard();
         void refreshDisparosActiveInstanceFromServer();
@@ -25359,7 +25929,7 @@
           }
         }
         if (!skipRequiredValidation) {
-          const selectedInstancesCount = (document.getElementById("dis-selected-instances")?.options || []).length;
+          const selectedInstancesCount = getActiveDisSelectedInstanceValues().length;
           if (selectedInstancesCount === 0) {
             showToast("Selecione pelo menos um número para o disparador antes de salvar.", "warning");
             return false;
@@ -26222,11 +26792,7 @@
       async function addInstancesToCampaign(campaignId) {
         const id = String(campaignId || "").trim();
         if (!id) return false;
-        const selected = Array.from(
-          document.getElementById("dis-selected-instances")?.options || []
-        )
-          .map((opt) => String(opt.value || "").trim())
-          .filter(Boolean);
+        const selected = getActiveDisSelectedInstanceValues();
         if (!selected.length) {
           showToast("Selecione instâncias na Seção 1 antes de usar '+ Instâncias'.", "warning");
           return false;
@@ -27387,6 +27953,9 @@
           loadDisparosConfig();
           void refreshDisparosCampaignsAndResumo();
           startDisparosCampaignsPolling();
+          if (nextTab === "disparo-evo") {
+            void loadAlternativaNumbersSummary();
+          }
         } else if (nextTab === "disparos-dashboard") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
@@ -28913,6 +29482,10 @@
         if (msgEl && message) msgEl.textContent = message;
         markRegisterWizardValidationComplete();
         setRegisterWizardStep(4);
+        if (alternativaNumbersPendingActivation && registerConnectedInstanceName) {
+          alternativaNumbersPendingActivation = false;
+          void registerAlternativaNumberActivation(registerConnectedInstanceName);
+        }
       }
 
       async function startRegisterInboundValidation(instanceName) {
@@ -32125,8 +32698,12 @@
           aquecedorDiagnosticoBtn.setAttribute("disabled", "true");
           try {
             await aquecedorRunDiagnosticoAndLog();
-          } catch {
-            addAquecedorCommandLog("Diagnóstico: erro ao consultar.");
+          } catch (err) {
+            const hint =
+              err instanceof Error && err.message === "timeout"
+                ? " (tempo esgotado — tente de novo)"
+                : "";
+            addAquecedorCommandLog("Diagnóstico: erro ao consultar." + hint);
           } finally {
             aquecedorDiagnosticoBtn.textContent = "Diagnóstico";
             aquecedorDiagnosticoBtn.classList.remove("disabled");
@@ -32707,6 +33284,7 @@
           );
         });
       }
+      initDisNumberSourceTabs();
 
       const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");
       if (disDownloadTemplateBtn) {

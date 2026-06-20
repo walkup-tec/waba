@@ -1887,8 +1887,9 @@ const aquecedorRuntime = {
 };
 let aquecedorInterval = null;
 let aquecedorRuntimeOwnerEmail = null;
-const AQUECEDOR_WORKER_LEASE_MS = 45000;
+const AQUECEDOR_WORKER_LEASE_MS = 90000;
 const AQUECEDOR_WORKER_SYNC_MS = 12000;
+const AQUECEDOR_PERSISTED_RELOAD_MS = 2000;
 const AQUECEDOR_WORKER_ID = `${(0, os_1.hostname)()}:${process.pid}`;
 function createDefaultAquecedorRuntimeSnapshot() {
     return {
@@ -1907,6 +1908,7 @@ let aquecedorPersistedBundle = {
     ownerEmail: null,
     snapshot: createDefaultAquecedorRuntimeSnapshot(),
 };
+let aquecedorPersistedBundleReloadedAt = 0;
 function getAquecedorWorkerId() {
     return AQUECEDOR_WORKER_ID;
 }
@@ -1981,7 +1983,12 @@ function parseAquecedorRuntimePersistedBundle(raw) {
     }
     return { desired, ownerEmail, snapshot };
 }
-async function reloadAquecedorPersistedBundleFromDisk() {
+async function reloadAquecedorPersistedBundleFromDisk(force = false) {
+    const now = Date.now();
+    if (!force && now - aquecedorPersistedBundleReloadedAt < AQUECEDOR_PERSISTED_RELOAD_MS) {
+        return aquecedorPersistedBundle;
+    }
+    aquecedorPersistedBundleReloadedAt = now;
     try {
         const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
         aquecedorPersistedBundle = parseAquecedorRuntimePersistedBundle(JSON.parse(raw));
@@ -1990,6 +1997,34 @@ async function reloadAquecedorPersistedBundleFromDisk() {
         /* mantém cache em memória */
     }
     return aquecedorPersistedBundle;
+}
+function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
+    const running = bundle.desired === true && bundle.snapshot.running === true;
+    return {
+        ...bundle.snapshot,
+        running,
+        desiredRunning: bundle.desired === true,
+        persistedOwnerEmail: bundle.ownerEmail,
+        ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || bundle.ownerEmail),
+        workerId: bundle.snapshot.workerId,
+        workerHeartbeatAt: bundle.snapshot.workerHeartbeatAt,
+        workerLeaseValid: isAquecedorWorkerLeaseValid(bundle.snapshot),
+    };
+}
+async function withAquecedorTimeout(promise, ms, fallback) {
+    let timer = null;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((resolve) => {
+                timer = setTimeout(() => resolve(fallback), ms);
+            }),
+        ]);
+    }
+    finally {
+        if (timer)
+            clearTimeout(timer);
+    }
 }
 async function writeAquecedorPersistedBundleToDisk() {
     try {
@@ -2027,7 +2062,7 @@ async function persistAquecedorRuntimeIntent(desired, ownerEmail) {
     console.log(`[Runtime] runtime-intent: aquecedor desejado = ${desired ? "ligado" : "desligado"}${normalizedOwner ? ` (${normalizedOwner})` : ""}.`);
 }
 async function loadAquecedorRuntimeIntent() {
-    await reloadAquecedorPersistedBundleFromDisk();
+    await reloadAquecedorPersistedBundleFromDisk(true);
     return {
         desired: aquecedorPersistedBundle.desired,
         ownerEmail: aquecedorPersistedBundle.ownerEmail,
@@ -2043,7 +2078,7 @@ function stopAquecedorRuntimeLocal() {
 async function syncAquecedorWorkerLeadership() {
     if (!ENABLE_AQUECEDOR_PROCESSING || MAINTENANCE_MODE)
         return;
-    await reloadAquecedorPersistedBundleFromDisk();
+    await reloadAquecedorPersistedBundleFromDisk(true);
     const bundle = aquecedorPersistedBundle;
     applyPersistedSnapshotToLocal(bundle.snapshot);
     aquecedorRuntimeOwnerEmail = bundle.ownerEmail;
@@ -4794,18 +4829,19 @@ app.post("/aquecedor/config", async (req, res) => {
     }
 });
 app.get("/aquecedor/status", async (_req, res) => {
-    await reloadAquecedorPersistedBundleFromDisk();
-    const bundle = aquecedorPersistedBundle;
-    applyPersistedSnapshotToLocal(bundle.snapshot);
-    return res.json({
-        ...bundle.snapshot,
-        running: bundle.desired === true && bundle.snapshot.running === true,
-        desiredRunning: bundle.desired === true,
-        persistedOwnerEmail: bundle.ownerEmail,
-        ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || bundle.ownerEmail),
-        workerId: bundle.snapshot.workerId,
-        workerHeartbeatAt: bundle.snapshot.workerHeartbeatAt,
-    });
+    try {
+        await reloadAquecedorPersistedBundleFromDisk();
+        applyPersistedSnapshotToLocal(aquecedorPersistedBundle.snapshot);
+        return res.json(buildAquecedorStatusPayload());
+    }
+    catch (error) {
+        console.error("[Aquecedor] erro em GET /aquecedor/status:", error);
+        return res.json({
+            ...buildAquecedorStatusPayload(),
+            statusReadError: true,
+            statusReadMessage: "Falha ao ler estado persistido; exibindo último snapshot conhecido.",
+        });
+    }
 });
 app.get("/aquecedor/envios", async (req, res) => {
     if (rejectAquecedorWithoutEntitlement(req, res))
@@ -5118,8 +5154,15 @@ app.get("/aquecedor/fila-localizar", async (_req, res) => {
     }
 });
 app.get("/aquecedor/diagnostico", async (req, res) => {
+    await reloadAquecedorPersistedBundleFromDisk();
+    const persistedStatus = buildAquecedorStatusPayload();
     const diag = {
-        runtime: { ...aquecedorRuntime },
+        runtime: {
+            ...aquecedorRuntime,
+            ...persistedStatus,
+            localRunning: aquecedorRuntime.running,
+            persistedRunning: persistedStatus.running,
+        },
         evo: { ok: false, connectedCount: 0, instances: [] },
         supabase: { ok: false, pendingCount: 0, messageBankCount: 0 },
         janela: { aberta: false, motivo: "" },
@@ -5129,7 +5172,7 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
     let timeoutId = null;
     try {
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 8000);
+        timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(EVO_INSTANCES_URL, {
             headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
             signal: controller.signal,
@@ -5189,7 +5232,7 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
                                 instancia_destino: combo.destino,
                                 numero_whatsapp: combo.numero_whatsapp,
                             }));
-                            const picked = await pickAquecedorCombinationAsync(supabase, connected, comboRows, cicloGlobal);
+                            const picked = await withAquecedorTimeout(pickAquecedorCombinationAsync(supabase, connected, comboRows, cicloGlobal), 4000, null);
                             if (picked) {
                                 diag.proximaCombinacao = {
                                     origem: picked.chosen.instancia_origem,
