@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  buildAlternativaNumbersPaymentDescription,
   buildWabaAsaasExternalReference,
   buildWabaPaymentDescription,
   isWabaAsaasExternalReference,
@@ -18,6 +19,18 @@ import { formatBrazilMobileForAsaas } from "./phone";
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaFinanceiroSplitService } from "./waba-financeiro-split.service";
 import { WabaBillingOrderRepository, type WabaBillingOrder } from "./waba-billing-order.repository";
+import {
+  WabaAlternativaNumbersService,
+} from "./waba-alternativa-numbers.service";
+
+export type CreateAlternativaNumbersCheckoutInput = {
+  customerName: string;
+  ownerEmail: string;
+  cpfCnpj: string;
+  whatsapp: string;
+  quantity: number;
+  valueCents: number;
+};
 
 export type CreateDisparosCheckoutInput = {
   apiKind: "oficial" | "alternativa";
@@ -69,9 +82,13 @@ export class WabaBillingService {
     private readonly orderRepository = new WabaBillingOrderRepository(),
     private readonly bonusSettlementService = new WabaDisparosBonusSettlementService(),
     private readonly splitService = new WabaFinanceiroSplitService(),
+    private readonly alternativaNumbersService = new WabaAlternativaNumbersService(),
   ) {}
 
   private finalizePaidOrder(order: WabaBillingOrder): WabaBillingOrder {
+    if (order.product !== "waba-disparos") {
+      return order;
+    }
     const settled = this.bonusSettlementService.settlePaidOrder(order);
     void this.splitService.settleAndPayoutPaidOrder(settled).catch((error) => {
       console.error(
@@ -117,6 +134,7 @@ export class WabaBillingService {
       status: settled.status,
       valueCents: settled.valueCents,
       shipmentCount: settled.shipmentCount ?? 0,
+      numberCount: settled.product === "waba-alternativa-numbers" ? settled.shipmentCount ?? 0 : 0,
       bonusShipmentsApplied: settled.bonusShipmentsApplied ?? 0,
       paymentUrl: settled.paymentUrl ?? "",
       pixCopyPaste: settled.pixCopyPaste ?? "",
@@ -215,6 +233,99 @@ export class WabaBillingService {
       description: validated.shipmentCount
         ? `${buildWabaPaymentDescription(order.apiKind)} · ${validated.shipmentCount.toLocaleString("pt-BR")} envios`
         : buildWabaPaymentDescription(order.apiKind),
+      externalReference: asaasExternalReference,
+    });
+
+    const paymentUrl = resolveAsaasPaymentUrl(payment);
+    let pixCopyPaste = "";
+    let pixQrCodeBase64 = "";
+
+    try {
+      const pix = await getAsaasPixQrCode(payment.id);
+      pixCopyPaste = String(pix.payload ?? "").trim();
+      pixQrCodeBase64 = String(pix.encodedImage ?? "").trim();
+    } catch {
+      /* invoiceUrl continua disponível como fallback */
+    }
+
+    const updated =
+      this.orderRepository.update(order.id, {
+        asaasCustomerId: customer.id,
+        asaasPaymentId: payment.id,
+        paymentUrl,
+        pixCopyPaste,
+        pixQrCodeBase64,
+      }) ?? order;
+
+    return this.toPublicOrder(updated);
+  }
+
+  private validateAlternativaNumbersCheckoutInput(input: CreateAlternativaNumbersCheckoutInput) {
+    const customerName = String(input.customerName ?? "").trim();
+    if (customerName.length < 2) {
+      throw new Error("Informe o nome completo.");
+    }
+
+    const ownerEmail = normalizeEmail(String(input.ownerEmail ?? ""));
+    if (!ownerEmail.includes("@")) {
+      throw new Error("Informe um e-mail válido.");
+    }
+
+    const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
+    if (cpfCnpj.length < 11) {
+      throw new Error("Informe CPF ou CNPJ válido.");
+    }
+
+    const whatsapp = formatBrazilMobileForAsaas(String(input.whatsapp ?? ""));
+    const { quantity, valueCents } = this.alternativaNumbersService.validateCheckout(
+      input.quantity,
+      input.valueCents,
+    );
+
+    return { customerName, ownerEmail, cpfCnpj, whatsapp, quantity, valueCents };
+  }
+
+  async createAlternativaNumbersPixCheckout(input: CreateAlternativaNumbersCheckoutInput) {
+    if (!isAsaasConfigured()) {
+      throw new Error("Pagamentos indisponíveis no momento. Configure ASAAS_API_KEY no servidor.");
+    }
+
+    const validated = this.validateAlternativaNumbersCheckoutInput(input);
+    const now = new Date().toISOString();
+    const orderId = randomUUID();
+    const asaasExternalReference = buildWabaAsaasExternalReference(orderId);
+
+    const order = this.orderRepository.create({
+      id: orderId,
+      product: "waba-alternativa-numbers",
+      apiKind: "alternativa",
+      customerName: validated.customerName,
+      ownerEmail: validated.ownerEmail,
+      whatsapp: validated.whatsapp,
+      cpfCnpj: validated.cpfCnpj,
+      billingType: "PIX",
+      valueCents: validated.valueCents,
+      shipmentCount: validated.quantity,
+      status: "pending_payment",
+      asaasExternalReference,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const customer = await createAsaasCustomer({
+      name: order.customerName,
+      email: order.ownerEmail,
+      mobilePhone: order.whatsapp,
+      cpfCnpj: order.cpfCnpj,
+      externalReference: asaasExternalReference,
+    });
+
+    const payment = await createAsaasPayment({
+      customerId: customer.id,
+      billingType: "PIX",
+      value: centsToCurrency(order.valueCents),
+      dueDate: formatDueDate(1),
+      description: buildAlternativaNumbersPaymentDescription(validated.quantity),
       externalReference: asaasExternalReference,
     });
 

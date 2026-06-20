@@ -5966,17 +5966,53 @@
         min-height: 0;
         margin-top: clamp(10px, 2.5vw, 14px);
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
       }
 
       .reg-wizard-pane {
         display: none;
-        height: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
         padding: 0 1px;
         box-sizing: border-box;
       }
 
       .reg-wizard-pane.active {
-        display: block;
+        display: flex;
+        flex-direction: column;
+        gap: clamp(8px, 2vw, 12px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .reg-wizard-pane-intro {
+        flex-shrink: 0;
+      }
+
+      .reg-wizard-pane-progress {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: clamp(8px, 2vw, 10px);
+      }
+
+      .reg-wizard-pane[data-pane="3"].reg-pane-validating .reg-wizard-pane-lead,
+      .reg-wizard-pane[data-pane="3"].reg-pane-validating .reg-instruction-card {
+        display: none;
+      }
+
+      .reg-wizard-pane[data-pane="3"].reg-pane-validating .reg-wizard-pane-title {
+        margin-bottom: 4px;
+        font-size: var(--reg-text-lg);
+      }
+
+      .reg-wizard-pane[data-pane="3"].reg-pane-validating .reg-wizard-pane-intro {
+        flex-shrink: 0;
       }
 
       .reg-wizard-pane-title {
@@ -13898,7 +13934,7 @@
       <div class="confirm-modal register-modal register-wizard-modal" role="dialog" aria-modal="true">
         <div class="reg-wizard-header">
           <div class="confirm-title">Conectar instância WhatsApp</div>
-          <p class="reg-wizard-subtitle">Siga os passos — tudo nesta tela, sem rolar a página.</p>
+          <p class="reg-wizard-subtitle">Siga os passos — o conteúdo se ajusta conforme cada etapa avança.</p>
           <ol class="reg-wizard-stepper" id="register-wizard-stepper" aria-label="Progresso da conexão">
             <li class="reg-step active" data-step="1">
               <span class="reg-step-num">1</span>
@@ -13962,39 +13998,43 @@
 
           <!-- Passo 3: Validação inbound -->
           <div class="reg-wizard-pane" data-pane="3">
-            <h3 class="reg-wizard-pane-title">Passo 3 — Validar envio e recepção</h3>
-            <p class="reg-wizard-pane-lead">Use <strong>outro WhatsApp</strong> (não pode ser o que você está integrando). O sistema responde automaticamente pelo número conectado.</p>
-            <div class="reg-instruction-card">
-              <ol>
-                <li>No outro WhatsApp, abra o chat com <span class="reg-instruction-highlight" id="register-inbound-number">—</span></li>
-                <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span></li>
-                <li>Aguarde a resposta automática: <em>Validação WABA concluída…</em></li>
-              </ol>
-            </div>
-            <div id="register-inbound-waiting" class="reg-inbound-waiting" aria-live="polite">
-              <span class="reg-val-spinner" aria-hidden="true"></span>
-              <span id="register-inbound-waiting-text">Aguardando envio de CONFIRMAR pelo outro WhatsApp (não o que está integrando)…</span>
-            </div>
-            <div class="reg-val-checks">
-              <div id="register-inbound-receive-row" class="reg-val-check is-hidden" hidden>
-                <span class="reg-val-check-icon">1</span>
-                <span class="reg-val-check-text">
-                  <span class="reg-val-check-title">Recepção da mensagem</span>
-                  <span class="reg-val-check-detail" id="register-inbound-receive-detail"></span>
-                </span>
-                <span id="register-inbound-receive-result" class="reg-val-check-status"></span>
-              </div>
-              <div id="register-inbound-send-row" class="reg-val-check is-hidden" hidden>
-                <span class="reg-val-check-icon">2</span>
-                <span class="reg-val-check-text">
-                  <span class="reg-val-check-title">Resposta automática</span>
-                  <span class="reg-val-check-detail" id="register-inbound-send-detail"></span>
-                </span>
-                <span id="register-inbound-send-result" class="reg-val-check-status"></span>
+            <div class="reg-wizard-pane-intro">
+              <h3 class="reg-wizard-pane-title">Passo 3 — Validar envio e recepção</h3>
+              <p class="reg-wizard-pane-lead">Use <strong>outro WhatsApp</strong> (não pode ser o que você está integrando). O sistema responde automaticamente pelo número conectado.</p>
+              <div class="reg-instruction-card">
+                <ol>
+                  <li>No outro WhatsApp, abra o chat com <span class="reg-instruction-highlight" id="register-inbound-number">—</span></li>
+                  <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span></li>
+                  <li>Aguarde a resposta automática: <em>Validação WABA concluída…</em></li>
+                </ol>
               </div>
             </div>
-            <div id="register-inbound-alert" class="register-probe-alert">
-              A Evolution recusou a resposta com indícios de restrição neste número.
+            <div class="reg-wizard-pane-progress" id="register-inbound-progress">
+              <div id="register-inbound-waiting" class="reg-inbound-waiting" aria-live="polite">
+                <span class="reg-val-spinner" aria-hidden="true"></span>
+                <span id="register-inbound-waiting-text">Aguardando envio de CONFIRMAR pelo outro WhatsApp (não o que está integrando)…</span>
+              </div>
+              <div class="reg-val-checks">
+                <div id="register-inbound-receive-row" class="reg-val-check is-hidden" hidden>
+                  <span class="reg-val-check-icon">1</span>
+                  <span class="reg-val-check-text">
+                    <span class="reg-val-check-title">Recepção da mensagem</span>
+                    <span class="reg-val-check-detail" id="register-inbound-receive-detail"></span>
+                  </span>
+                  <span id="register-inbound-receive-result" class="reg-val-check-status"></span>
+                </div>
+                <div id="register-inbound-send-row" class="reg-val-check is-hidden" hidden>
+                  <span class="reg-val-check-icon">2</span>
+                  <span class="reg-val-check-text">
+                    <span class="reg-val-check-title">Resposta automática</span>
+                    <span class="reg-val-check-detail" id="register-inbound-send-detail"></span>
+                  </span>
+                  <span id="register-inbound-send-result" class="reg-val-check-status"></span>
+                </div>
+              </div>
+              <div id="register-inbound-alert" class="register-probe-alert">
+                A Evolution recusou a resposta com indícios de restrição neste número.
+              </div>
             </div>
           </div>
 
@@ -29529,6 +29569,34 @@
         if (refBtn) refBtn.hidden = n !== 2;
         if (doneBtn) doneBtn.hidden = n !== 4;
         if (skipBtn) skipBtn.hidden = n !== 3;
+        scrollRegisterWizardPaneToTop();
+      }
+
+      function scrollRegisterWizardPaneToTop() {
+        const pane = document.querySelector(".reg-wizard-pane.active");
+        if (pane) pane.scrollTop = 0;
+      }
+
+      function scrollRegisterWizardToProgress() {
+        const pane = document.querySelector('.reg-wizard-pane[data-pane="3"].active');
+        if (!pane) return;
+        requestAnimationFrame(() => {
+          const anchor =
+            pane.querySelector(".reg-val-check:not(.is-hidden):last-of-type") ||
+            pane.querySelector(".reg-inbound-waiting:not(.is-hidden)") ||
+            pane.querySelector(".reg-wizard-pane-progress");
+          if (!anchor) return;
+          anchor.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      }
+
+      function syncRegisterValidationPaneLayout(status) {
+        const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
+        if (!pane) return;
+        const receiveDone =
+          status?.receiveTest?.success !== null && status?.receiveTest?.success !== undefined;
+        pane.classList.toggle("reg-pane-validating", Boolean(receiveDone));
+        scrollRegisterWizardToProgress();
       }
 
       function openRegisterModal(instanceName, number, options = {}) {
@@ -29652,6 +29720,8 @@
         if (numberEl) numberEl.textContent = "—";
         if (keywordEl) keywordEl.textContent = "CONFIRMAR";
         setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+        const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
+        if (pane) pane.classList.remove("reg-pane-validating");
       }
 
       function updateRegisterInboundRow(rowId, resultId, success, detailId, detailText) {
@@ -29727,6 +29797,7 @@
           if (status.finished && status.restrictionSuspected) alertEl.classList.add("open");
           else alertEl.classList.remove("open");
         }
+        syncRegisterValidationPaneLayout(status);
       }
 
       function finishRegisterWizardSuccess(message) {

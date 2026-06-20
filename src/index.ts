@@ -3569,15 +3569,45 @@ app.get("/dados", async (req, res) => {
 });
 
 // Status das instancias (Evolution API)
+app.get("/instancias/snapshot", async (req, res) => {
+  try {
+    const auth = resolveWabaRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para consultar instâncias." });
+    }
+    const snapshot = await buildInstancesSnapshotForAuth(auth);
+    return res.status(200).json(snapshot);
+  } catch (error) {
+    console.error("Erro ao carregar snapshot de instâncias:", error);
+    return res.status(500).json({ error: "Erro ao carregar instâncias do cache." });
+  }
+});
+
+// Status das instancias (Evolution API)
 app.get("/instancias", async (req, res) => {
   try {
+    const auth = resolveWabaRequestAuth(req);
+    const forceRefresh = String(req.query.refresh ?? "").trim() === "1";
+    if (!forceRefresh) {
+      const snapshot = await buildInstancesSnapshotForAuth(auth);
+      return res.status(200).json(snapshot);
+    }
+
     const aliasesMap = await loadInstanceAliasesMap();
     const whatsappNamesMap = await loadWhatsappProfileNamesMap();
     const evoList = await fetchEvoInstancesList();
     if (!evoList.ok) {
+      const evolutionError = describeEvoInstancesFetchError(evoList.status, evoList.detail);
       console.error("Erro Evolution API:", evoList.status, evoList.detail);
+      const fallback = await buildFallbackInstancesForAuth(auth, evolutionError);
+      if (fallback.items.length > 0) {
+        console.warn(
+          `[instancias] Evolution indisponível — retornando ${fallback.items.length} instância(s) do cache/dono (${auth.email || "guest"}).`,
+        );
+        return res.status(200).json(fallback);
+      }
       return res.status(500).json({
-        error: describeEvoInstancesFetchError(evoList.status, evoList.detail),
+        error: evolutionError,
         evolutionStatus: evoList.status,
         evolutionDetail: evoList.detail,
       });
@@ -3705,7 +3735,6 @@ app.get("/instancias", async (req, res) => {
       );
     }
 
-    const auth = resolveWabaRequestAuth(req);
     const allNames = baseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
     const reconciled = await wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(
       auth,
@@ -3723,6 +3752,10 @@ app.get("/instancias", async (req, res) => {
       .length;
     desconectadas = items.length - ativas;
 
+    void saveEvoInstancesCache(
+      baseItems.map((row) => ({ ...row })) as Array<Record<string, unknown>>,
+    );
+
     return res.json({ total: items.length, ativas, desconectadas, items });
   } catch (error) {
     console.error("Erro ao consultar Evolution API:", error);
@@ -3732,26 +3765,57 @@ app.get("/instancias", async (req, res) => {
   }
 });
 
+function isAllowedAvatarHost(hostname: string): boolean {
+  const host = String(hostname || "").toLowerCase();
+  const allowedHosts = [
+    "whatsapp.net",
+    "whatsapp.com",
+    "fbcdn.net",
+    "facebook.com",
+    "cdninstagram.com",
+  ];
+  return allowedHosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+}
+
+const INSTANCE_AVATAR_PLACEHOLDER_SVG = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Sem foto">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="32" fill="url(#g)"/>
+  <text x="32" y="39" text-anchor="middle" fill="#ffffff" font-size="22" font-family="Segoe UI, sans-serif">◎</text>
+</svg>`,
+  "utf-8",
+);
+
+function sendInstanceAvatarPlaceholder(res: express.Response) {
+  res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  return res.status(200).send(INSTANCE_AVATAR_PLACEHOLDER_SVG);
+}
+
 app.get("/instancias/avatar", async (req, res) => {
   try {
     const rawUrl = String(req.query.url || "").trim();
     if (!rawUrl) {
-      return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
+      return sendInstanceAvatarPlaceholder(res);
     }
     let parsed: URL;
     try {
       parsed = new URL(rawUrl);
     } catch {
-      return res.status(400).json({ error: "URL de avatar inválida." });
+      return sendInstanceAvatarPlaceholder(res);
     }
     if (!/^https?:$/i.test(parsed.protocol)) {
-      return res.status(400).json({ error: "Protocolo de URL não suportado." });
+      return sendInstanceAvatarPlaceholder(res);
     }
-    const host = String(parsed.hostname || "").toLowerCase();
-    const allowedHosts = ["whatsapp.net", "whatsapp.com", "fbcdn.net"];
-    const isAllowed = allowedHosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
-    if (!isAllowed) {
-      return res.status(400).json({ error: "Host de avatar não permitido." });
+    if (!isAllowedAvatarHost(parsed.hostname)) {
+      return sendInstanceAvatarPlaceholder(res);
     }
 
     const controller = new AbortController();
@@ -3764,19 +3828,23 @@ app.get("/instancias/avatar", async (req, res) => {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          Referer: "https://web.whatsapp.com/",
         },
         redirect: "follow",
       });
       if (!response.ok) {
-        return res.status(502).json({ error: "Falha ao buscar avatar remoto." });
+        return sendInstanceAvatarPlaceholder(res);
       }
       const contentType = String(response.headers.get("content-type") || "").toLowerCase();
       if (contentType && !contentType.startsWith("image/")) {
-        return res.status(502).json({ error: "Resposta remota não é uma imagem." });
+        return sendInstanceAvatarPlaceholder(res);
       }
       const resolvedType = contentType.startsWith("image/") ? contentType : "image/jpeg";
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      if (buffer.length < 16) {
+        return sendInstanceAvatarPlaceholder(res);
+      }
       res.setHeader("Content-Type", resolvedType);
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       res.setHeader("Pragma", "no-cache");
@@ -3787,7 +3855,7 @@ app.get("/instancias/avatar", async (req, res) => {
     }
   } catch (error) {
     console.error("Erro ao buscar avatar proxy:", error);
-    return res.status(500).json({ error: "Erro ao carregar avatar." });
+    return sendInstanceAvatarPlaceholder(res);
   }
 });
 
@@ -4686,7 +4754,10 @@ function parseEvoInstancesList(raw: unknown): any[] {
 async function fetchEvoInstancesList(): Promise<
   { ok: true; instances: any[] } | { ok: false; status: number; detail: string }
 > {
-  const result = await callEvoAction(EVO_INSTANCES_URL, "GET");
+  const result = await callEvoAction(EVO_INSTANCES_URL, "GET", undefined, {
+    timeoutMs: 12000,
+    retries: 1,
+  });
   if (!result.ok) {
     const detail = summarizeEvolutionErrorDetail(
       String(result.body || result.error || "Erro ao buscar instâncias na Evolution API."),
@@ -4695,6 +4766,146 @@ async function fetchEvoInstancesList(): Promise<
     return { ok: false, status: result.status, detail };
   }
   return { ok: true, instances: parseEvoInstancesList(result.json) };
+}
+
+const EVO_INSTANCES_CACHE_FILE = resolveDataFile("evo-instances-cache.json");
+
+type EvoInstancesCacheStore = {
+  updatedAt: string;
+  items: Array<Record<string, unknown>>;
+};
+
+async function loadEvoInstancesCache(): Promise<EvoInstancesCacheStore | null> {
+  try {
+    const raw = await fs.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as Partial<EvoInstancesCacheStore>;
+    if (!Array.isArray(parsed?.items)) return null;
+    return {
+      updatedAt: String(parsed.updatedAt || ""),
+      items: parsed.items as Array<Record<string, unknown>>,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function saveEvoInstancesCache(items: Array<Record<string, unknown>>): Promise<void> {
+  try {
+    const payload: EvoInstancesCacheStore = {
+      updatedAt: new Date().toISOString(),
+      items,
+    };
+    await fs.mkdir(path.dirname(EVO_INSTANCES_CACHE_FILE), { recursive: true });
+    await fs.writeFile(EVO_INSTANCES_CACHE_FILE, JSON.stringify(payload, null, 2), "utf-8");
+  } catch {
+    /* cache opcional */
+  }
+}
+
+async function removeInstanceFromEvoCache(instanceName: string): Promise<void> {
+  const normalized = String(instanceName || "").trim().toLowerCase();
+  if (!normalized) return;
+  const cache = await loadEvoInstancesCache();
+  if (!cache?.items?.length) return;
+  const nextItems = cache.items.filter(
+    (row) => String(row?.name || "").trim().toLowerCase() !== normalized,
+  );
+  if (nextItems.length === cache.items.length) return;
+  await saveEvoInstancesCache(nextItems);
+}
+
+function canDeleteInstanceLocallyAfterEvoFailure(status: number, body: string): boolean {
+  if (status === 0) return true;
+  if (status === 404) return true;
+  const normalized = String(body || "").toLowerCase();
+  return (
+    normalized.includes("not found") ||
+    normalized.includes("não encontr") ||
+    normalized.includes("nao encontr")
+  );
+}
+
+async function buildInstancesSnapshotForAuth(
+  auth: ReturnType<typeof resolveWabaRequestAuth>,
+): Promise<{
+  total: number;
+  ativas: number;
+  desconectadas: number;
+  items: any[];
+  fromCache: true;
+  cacheUpdatedAt: string;
+}> {
+  const ownedNames = await wabaInstanceOwnershipService.listOwnedInstanceNames(auth.email);
+  const cache = await loadEvoInstancesCache();
+  const cacheByName = new Map<string, Record<string, unknown>>();
+  for (const row of cache?.items || []) {
+    const name = String(row?.name || "").trim();
+    if (name) cacheByName.set(name.toLowerCase(), row);
+  }
+
+  const aliasesMap = await loadInstanceAliasesMap();
+  const whatsappNamesMap = await loadWhatsappProfileNamesMap();
+
+  const items = ownedNames.map((instanceName) => {
+    const cached = cacheByName.get(instanceName.toLowerCase());
+    if (cached) {
+      return {
+        ...cached,
+        name: instanceName,
+        displayName:
+          String(cached.displayName || cached.name || instanceName).trim() || instanceName,
+        connectionStatus: String(cached.connectionStatus || "unknown"),
+      };
+    }
+    const instanceAlias = aliasesMap.get(instanceName) || "";
+    const whatsappNameOverride = whatsappNamesMap.get(instanceName) || "";
+    return {
+      name: instanceName,
+      displayName: whatsappNameOverride || instanceAlias || instanceName,
+      whatsappNameOverride,
+      instanceAlias,
+      connectionStatus: "unknown",
+      number: "",
+      contacts: 0,
+      messages: 0,
+      profilePicUrl: "",
+      avatarVersion: "",
+      createdAt: "",
+    };
+  });
+
+  const ativas = items.filter((row) =>
+    String(row?.connectionStatus || "").toLowerCase().includes("open"),
+  ).length;
+
+  return {
+    total: items.length,
+    ativas,
+    desconectadas: items.length - ativas,
+    items,
+    fromCache: true,
+    cacheUpdatedAt: String(cache?.updatedAt || ""),
+  };
+}
+
+async function buildFallbackInstancesForAuth(
+  auth: ReturnType<typeof resolveWabaRequestAuth>,
+  evolutionError: string,
+): Promise<{
+  total: number;
+  ativas: number;
+  desconectadas: number;
+  items: any[];
+  degraded: true;
+  evolutionError: string;
+  cacheUpdatedAt: string;
+}> {
+  const snapshot = await buildInstancesSnapshotForAuth(auth);
+  return {
+    ...snapshot,
+    degraded: true,
+    evolutionError,
+  };
 }
 
 async function callEvoSendTextWithRetry(
@@ -5197,6 +5408,47 @@ function tryExtractQrCode(payload: any): string | null {
   return visit(payload);
 }
 
+async function fetchInstanceQrCodeFromEvo(
+  instanceName: string,
+  number = "",
+): Promise<
+  | { ok: true; qrCode: string; providerResponse: unknown }
+  | { ok: false; lastQrStatus: number; lastQrDetail: string }
+> {
+  const connectCandidates: Array<{ url: string; method: "GET" | "POST" }> = [
+    { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(instanceName)}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/qr/${encodeURIComponent(instanceName)}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "POST" as const },
+  ].filter((candidate) => candidate.url);
+
+  let lastQrStatus = 0;
+  let lastQrDetail = "";
+
+  for (const candidate of connectCandidates) {
+    const targetUrl = number
+      ? `${candidate.url}${candidate.url.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
+      : candidate.url;
+
+    const result = await callEvoAction(targetUrl, candidate.method, undefined, {
+      timeoutMs: defaultEvoHttpTimeoutMs(),
+      retries: 3,
+    });
+    lastQrStatus = result.status;
+    lastQrDetail = String(result.body || result.error || "").slice(0, 400);
+
+    if (!result.ok) continue;
+
+    const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
+    if (qrCode) {
+      return { ok: true, qrCode, providerResponse: result.json ?? null };
+    }
+  }
+
+  return { ok: false, lastQrStatus, lastQrDetail };
+}
+
 app.post("/instancias/:name/atualizar", async (req, res) => {
   try {
     const instanceName = String(req.params.name || "").trim();
@@ -5244,23 +5496,20 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
     }
 
     const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
-    const urlWithQuery = number
-      ? `${url}${url.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
-      : url;
 
-    const result = await callEvoAction(urlWithQuery, "GET");
-    if (!result.ok) {
+    const qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number);
+    if (!qrFetch.ok) {
       return res.status(502).json({
-        error: "Falha ao solicitar QRCode na EVO.",
-        status: result.status,
+        error: describeEvoQrFailure(0, qrFetch.lastQrStatus, "", qrFetch.lastQrDetail),
+        evoQrStatus: qrFetch.lastQrStatus,
+        detail: qrFetch.lastQrDetail,
       });
     }
-    const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
     return res.json({
       ok: true,
       message: "QRCode solicitado com sucesso.",
-      qrCode,
-      providerResponse: result.json ?? null,
+      qrCode: qrFetch.qrCode,
+      providerResponse: qrFetch.providerResponse,
     });
   } catch (error) {
     console.error("Erro ao solicitar QRCode:", error);
@@ -5408,47 +5657,16 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
       });
     }
 
-    const connectCandidates = [
-      buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, name),
-      `${EVO_API_BASE}/instance/connect/${encodeURIComponent(name)}`,
-      `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(name)}`,
-      `${EVO_API_BASE}/instance/qr/${encodeURIComponent(name)}`,
-    ].filter(Boolean) as string[];
-
-    const qrcodeUrls = connectCandidates.map((candidate) =>
-      number
-        ? `${candidate}${candidate.includes("?") ? "&" : "?"}number=${encodeURIComponent(
-            number
-          )}`
-        : candidate
-    );
-
-    let qrResult: Awaited<ReturnType<typeof callEvoAction>> | null = null;
-    let lastQrStatus = 0;
-    let lastQrDetail = "";
-    for (const qrcodeUrl of qrcodeUrls) {
-      const result = await callEvoAction(qrcodeUrl, "GET", undefined, {
-        timeoutMs: defaultEvoHttpTimeoutMs(),
-        retries: 3,
-      });
-      lastQrStatus = result.status;
-      lastQrDetail = String(result.body || result.error || "").slice(0, 400);
-      if (result.ok) {
-        qrResult = result;
-        break;
-      }
-    }
-
-    if (!qrResult || !qrResult.ok) {
+    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number);
+    if (!qrFetch.ok) {
       return res.status(502).json({
-        error: describeEvoQrFailure(lastCreateStatus, lastQrStatus, lastCreateDetail, lastQrDetail),
+        error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
         evoCreateStatus: lastCreateStatus,
-        evoQrStatus: lastQrStatus,
-        detail: lastQrDetail || lastCreateDetail,
+        evoQrStatus: qrFetch.lastQrStatus,
+        detail: qrFetch.lastQrDetail || lastCreateDetail,
       });
     }
 
-    const qrCode = tryExtractQrCode(qrResult.json);
     const claim = await wabaInstanceOwnershipService.claimOnRegister(name, auth.email);
     if (!claim.ok) {
       return res.status(409).json({ error: claim.error });
@@ -5459,8 +5677,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         ? "QRCode gerado com sucesso para a instância existente."
         : "Dados salvos e QRCode gerado com sucesso.",
       warning: createWarning,
-      qrCode,
-      providerResponse: qrResult.json ?? null,
+      qrCode: qrFetch.qrCode,
+      providerResponse: qrFetch.providerResponse,
     });
   } catch (error) {
     console.error("Erro ao registrar instância e gerar QRCode:", error);
@@ -5488,15 +5706,42 @@ app.delete("/instancias/:name", async (req, res) => {
       });
     }
 
-    const result = await callEvoAction(url, "DELETE");
-    if (!result.ok) {
+    const result = await callEvoAction(url, "DELETE", undefined, {
+      timeoutMs: 12000,
+      retries: 1,
+    });
+
+    const evoDeleted = result.ok;
+    const evoSoftDelete = !evoDeleted && canDeleteInstanceLocallyAfterEvoFailure(
+      result.status,
+      String(result.body || result.error || ""),
+    );
+
+    if (!evoDeleted && !evoSoftDelete) {
       return res.status(502).json({
-        error: "Falha ao deletar instância na EVO.",
+        error: "Falha ao deletar instância na Evolution API.",
         status: result.status,
+        detail: summarizeEvolutionErrorDetail(
+          String(result.body || result.error || ""),
+          result.status,
+        ),
       });
     }
+
     await wabaInstanceOwnershipService.removeOwner(instanceName);
-    return res.json({ ok: true, message: "Instância deletada com sucesso." });
+    await removeInstanceFromEvoCache(instanceName);
+
+    const message = evoDeleted
+      ? "Instância deletada com sucesso."
+      : result.status === 404
+        ? "Instância removida do painel (não encontrada na Evolution)."
+        : "Instância removida do painel. A Evolution está offline — remova na EVO quando voltar, se ainda existir.";
+
+    return res.json({
+      ok: true,
+      message,
+      degraded: !evoDeleted,
+    });
   } catch (error) {
     console.error("Erro ao deletar instância:", error);
     return res.status(500).json({ error: "Erro ao deletar instância." });

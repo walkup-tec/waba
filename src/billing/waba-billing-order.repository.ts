@@ -4,9 +4,11 @@ import { resolveDataFile } from "../data-path";
 
 export type WabaBillingOrderStatus = "pending_payment" | "paid" | "cancelled" | "failed";
 
+export type WabaBillingProduct = "waba-disparos" | "waba-alternativa-numbers";
+
 export type WabaBillingOrder = {
   id: string;
-  product: "waba-disparos";
+  product: WabaBillingProduct;
   apiKind: "oficial" | "alternativa";
   customerName: string;
   ownerEmail: string;

@@ -24,3 +24,7 @@ export function buildWabaPaymentDescription(apiKind: "oficial" | "alternativa"):
   const label = apiKind === "oficial" ? "API Oficial" : "API Alternativa";
   return `WABA Disparos · ${label} · créditos`;
 }
+
+export function buildAlternativaNumbersPaymentDescription(quantity: number): string {
+  return `WABA API Alternativa · ${quantity.toLocaleString("pt-BR")} número(s) WhatsApp`;
+}
