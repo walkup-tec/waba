@@ -9,6 +9,23 @@ Após **redeploy no Easypanel**, o Traefik regenera `/etc/easypanel/traefik/conf
 | WABA | `waba.draxsistemas.com.br` |
 | Evolution API | `walkup-evo-walkup-api.achpyp.easypanel.host` |
 
+### Classe diferente: `curl (7)` — nada na porta 443
+
+Os scripts **não substituem** o Traefik Easypanel quando o **processo/proxy inteiro está parado** (`docker ps | grep traefik` vazio, `ss` sem `:443`). Isso não é router errado — é **Easypanel Traefik down**.
+
+**Sintoma:** `Failed to connect ... port 443` (até de dentro do VPS).
+
+**Causas comuns:** reboot VPS, `docker service` Traefik em 0/1, OOM, update Easypanel, task Swarm `Rejected`.
+
+**Desde v2 (`traefik-permanent-all-2026-06-20-v2`):** `run` tenta `docker service update --force easypanel-traefik` e republicar `:30180` no WABA antes do patch do `main.yaml`. Se Traefik não existir no Swarm, só o painel Easypanel resolve.
+
+| Situação | Scripts resolvem? |
+|----------|-----------------|
+| 502 / router sumiu / IP morto no `main.yaml` | Sim (automático após `install`) |
+| Traefik running, WABA OK em `:30180`, HTTPS 502 | Sim |
+| **Nada escutando em :443** (Traefik down) | Só com v2 `run` ou manual |
+| WABA sem porta publicada no host | v2 tenta `--publish-add 30180` |
+
 ## Solução definitiva (uma instalação no VPS)
 
 Script mestre que instala **tudo**:

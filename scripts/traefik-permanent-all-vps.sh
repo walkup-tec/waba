@@ -8,10 +8,12 @@
 #   chmod +x /root/traefik-permanent-all-vps.sh
 #   /root/traefik-permanent-all-vps.sh install
 #
-# Versão: traefik-permanent-all-2026-06-17-v1
+# Versão: traefik-permanent-all-2026-06-20-v2
 set -euo pipefail
 
-ALL_VERSION="traefik-permanent-all-2026-06-17-v1"
+ALL_VERSION="traefik-permanent-all-2026-06-20-v2"
+WABA_SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
+WABA_HOST_PUBLISHED_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
 INSTALL_PATH="/root/traefik-permanent-all-vps.sh"
 REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
 
@@ -106,8 +108,60 @@ EOF
   echo "Systemd: ${GUARD_SERVICE} ativo"
 }
 
+traefik_running() {
+  docker ps -q -f name=easypanel-traefik -f status=running | head -1
+}
+
+ensure_easypanel_traefik_running() {
+  local svc traefik replicas
+  traefik=$(traefik_running)
+  [[ -n "$traefik" ]] && return 0
+
+  svc=$(docker service ls --format '{{.Name}}' 2>/dev/null | grep -iE '^easypanel-traefik$|^easypanel_traefik$' | head -1)
+  if [[ -z "$svc" ]]; then
+    echo "ERRO: serviço Swarm easypanel-traefik não encontrado — subir Traefik no painel Easypanel" | tee -a "$LOG"
+    return 1
+  fi
+
+  replicas=$(docker service ls --filter "name=${svc}" --format '{{.Replicas}}' 2>/dev/null || echo "?")
+  echo "AVISO: Traefik ausente (replicas=${replicas}) — docker service update --force ${svc}" | tee -a "$LOG"
+  timeout 90 docker service update --force "$svc" >>"$LOG" 2>&1 || true
+
+  local i
+  for i in 1 2 3 4 5 6; do
+    sleep 5
+    traefik=$(traefik_running)
+    [[ -n "$traefik" ]] && {
+      echo "Traefik restaurado (${svc})" | tee -a "$LOG"
+      return 0
+    }
+  done
+
+  echo "ERRO: Traefik ainda down após force update — ver: docker service ps ${svc}" | tee -a "$LOG"
+  return 1
+}
+
+ensure_waba_host_port() {
+  if curl -sf -m 4 "http://127.0.0.1:${WABA_HOST_PUBLISHED_PORT}/health" >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! docker service ls --format '{{.Name}}' 2>/dev/null | grep -qx "$WABA_SWARM_SERVICE"; then
+    echo "AVISO: serviço ${WABA_SWARM_SERVICE} ausente — skip publish ${WABA_HOST_PUBLISHED_PORT}" | tee -a "$LOG"
+    return 1
+  fi
+  echo "AVISO: :${WABA_HOST_PUBLISHED_PORT} sem resposta — publicando ${WABA_SWARM_SERVICE}" | tee -a "$LOG"
+  timeout 90 docker service update \
+    --publish-add "published=${WABA_HOST_PUBLISHED_PORT},target=80,protocol=tcp" \
+    "$WABA_SWARM_SERVICE" >>"$LOG" 2>&1 || true
+  sleep 5
+  curl -sf -m 4 "http://127.0.0.1:${WABA_HOST_PUBLISHED_PORT}/health" >/dev/null 2>&1
+}
+
 run_all() {
   echo "=== ${ALL_VERSION} run $(date -Is) ===" | tee -a "$LOG"
+
+  ensure_easypanel_traefik_running || true
+  ensure_waba_host_port || true
 
   local ok_waba=0 ok_evo=0
 

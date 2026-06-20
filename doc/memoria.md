@@ -19,6 +19,8 @@ Como usar:
 
 **WABA — V02 avatar WhatsApp corrompido:** proxy `/instancias/avatar` devolve SVG placeholder (200) em falha; frontend sanitiza URL e fallback ◎; cache local grava payload sanitizado. Build + restart V02. Ver `doc/LOG-2026-06-20__v02-whatsapp-avatar-corrupted-fix.md`.
 
+**WABA — Traefik Easypanel DOWN (2026-06-20):** scripts v1 só corrigiam **502/router** com Traefik running; proxy morto (`curl 7`, :443 vazio) ficava fora. v2 `traefik-permanent-all-2026-06-20-v2` tenta `force easypanel-traefik` + publish 30180. Caso srv1261237: `waba_disparador` 1/1 mas Traefik/30180 ausentes. Ver `doc/FIX-TRAEFIK-DEFINITIVO.md`, `doc/LOG-2026-06-20__traefik-down-waba-443.md`.
+
 **WABA — Docker prebuilt dist (deploy Easypanel):** Dockerfile **sem tsc no VPS** — copia `dist/` do Git; só `npm ci --omit=dev`. Marker `DEPLOY-2026-06-20-docker-prebuilt-dist`. Antes do push: `npm run build`. Ver `doc/LOG-2026-06-20__docker-prebuilt-dist-no-tsc-vps.md`.
 
 **WABA — Easypanel build travado (processando infinito):** Dockerfile otimizado — um `npm ci`, `npm prune`, echo nos steps, `NODE_OPTIONS` no tsc; `.dockerignore` exclui doc/CSVs (~14 MB). Marker `DEPLOY-2026-06-20-docker-build-fast`. VPS: `docker builder prune -af`. Ver `doc/FIX-EASYPANEL-DOCKER-BUILD-HANG.md`.
