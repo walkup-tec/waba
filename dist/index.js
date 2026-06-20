@@ -56,6 +56,8 @@ const waba_request_auth_1 = require("./auth/waba-request-auth");
 const waba_auth_service_1 = require("./auth/waba-auth.service");
 const waba_system_user_repository_1 = require("./users/waba-system-user.repository");
 const alternativa_number_activation_repository_1 = require("./billing/alternativa-number-activation.repository");
+const waba_alternativa_numbers_service_1 = require("./billing/waba-alternativa-numbers.service");
+const alternativa_dispatch_rules_1 = require("./disparos/alternativa-dispatch-rules");
 const waba_instance_ownership_service_1 = require("./instances/waba-instance-ownership.service");
 const evo_instance_key_1 = require("./instances/evo-instance-key");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
@@ -1915,6 +1917,9 @@ async function loadDisparosLocalState() {
 const campaignNextAllowedSendAt = new Map();
 const campaignDisparadorRoundRobin = new Map();
 let disparosRoundRobinCounter = 0;
+const alternativaNumbersService = new waba_alternativa_numbers_service_1.WabaAlternativaNumbersService();
+const alternativaActivationRepository = new alternativa_number_activation_repository_1.AlternativaNumberActivationRepository();
+const instanceDailySendCounts = new Map();
 let lastShortUrlIssued = "";
 const shortUrlClicksCache = new Map();
 function normalizeShortenerProvider(value) {
@@ -1972,6 +1977,14 @@ let aquecedorPersistedBundle = {
     snapshot: createDefaultAquecedorRuntimeSnapshot(),
 };
 let aquecedorPersistedBundleReloadedAt = 0;
+let aquecedorConnectedSummaryCache = { count: 0, names: [], at: 0 };
+function updateAquecedorConnectedSummary(connected) {
+    aquecedorConnectedSummaryCache = {
+        count: connected.length,
+        names: connected.map((item) => item.instancia),
+        at: Date.now(),
+    };
+}
 function getAquecedorWorkerId() {
     return AQUECEDOR_WORKER_ID;
 }
@@ -2072,6 +2085,11 @@ function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
         workerId: bundle.snapshot.workerId,
         workerHeartbeatAt: bundle.snapshot.workerHeartbeatAt,
         workerLeaseValid: isAquecedorWorkerLeaseValid(bundle.snapshot),
+        connectedInstanceCount: aquecedorConnectedSummaryCache.count,
+        connectedInstances: aquecedorConnectedSummaryCache.names,
+        connectedSummaryAt: aquecedorConnectedSummaryCache.at
+            ? new Date(aquecedorConnectedSummaryCache.at).toISOString()
+            : null,
     };
 }
 async function withAquecedorTimeout(promise, ms, fallback) {
@@ -2691,6 +2709,62 @@ function parseAquecedorConfig(input) {
 function nowInSaoPaulo() {
     return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 }
+function saoPauloDateKey(now = nowInSaoPaulo()) {
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+function getInstanceDailySendCount(instanceName, dateKey = saoPauloDateKey()) {
+    const key = String(instanceName || "").trim().toLowerCase();
+    if (!key)
+        return 0;
+    const bucket = instanceDailySendCounts.get(key);
+    if (!bucket || bucket.dateKey !== dateKey)
+        return 0;
+    return bucket.count;
+}
+function recordInstanceDailySend(instanceName) {
+    const key = String(instanceName || "").trim().toLowerCase();
+    if (!key)
+        return;
+    const dateKey = saoPauloDateKey();
+    const bucket = instanceDailySendCounts.get(key);
+    if (!bucket || bucket.dateKey !== dateKey) {
+        instanceDailySendCounts.set(key, { dateKey, count: 1 });
+        return;
+    }
+    bucket.count += 1;
+}
+function applyAlternativaDispatchProfile(config) {
+    const throttle = (0, alternativa_dispatch_rules_1.computeAlternativaThrottle)({
+        startHour: config.startHour ?? DISPAROS_DEFAULTS.startHour,
+        endHour: config.endHour ?? DISPAROS_DEFAULTS.endHour,
+    });
+    return {
+        ...config,
+        delayMinSeconds: throttle.delayMinSeconds,
+        delayMaxSeconds: throttle.delayMaxSeconds,
+        maxPerHourPerInstance: throttle.maxPerHourPerInstance,
+        maxPerDayPerInstance: throttle.maxPerDayPerInstance,
+        lockTtlSeconds: Math.max(180, Math.min(1800, throttle.delayMaxSeconds * 3)),
+    };
+}
+async function shouldApplyAlternativaDispatchProfile(email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized.includes("@"))
+        return false;
+    const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+    const activated = alternativaActivationRepository.listForEmail(normalized).length;
+    return purchased > 0 || activated > 0;
+}
+async function assertAlternativaDispatchReady(email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!(await shouldApplyAlternativaDispatchProfile(normalized)))
+        return;
+    const activated = alternativaActivationRepository.listForEmail(normalized).length;
+    (0, alternativa_dispatch_rules_1.assertAlternativaMinActivated)(activated);
+}
 function formatDateBr(isoOrNull) {
     if (!isoOrNull || typeof isoOrNull !== "string")
         return "sem data";
@@ -2776,7 +2850,8 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
         return;
     }
     const chosen = picked.chosen;
-    const texto = "Mensagem de teste do aquecedor.";
+    const deliveryTag = buildAquecedorDeliveryTag();
+    const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
     const numero = normalizeWhatsAppNumber(chosen.numero_whatsapp);
     const sendBody = EVO_SEND_TEXT_V1
@@ -2784,7 +2859,7 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
         : { number: numero, text: texto, textMessage: { text: texto } };
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
     const proximo = picked.index + 1;
-    const origemConnected = connected.find((item) => item.instancia === chosen.instancia_origem);
+    const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
     if (sendResult.ok) {
         const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), texto);
         if (!deliveryCheck.ok) {
@@ -2853,6 +2928,7 @@ async function runAquecedorCycle(forceTest = false) {
         }
         const resolved = await resolveAquecedorConnectedForOwner(aquecedorRuntimeOwnerEmail);
         const connected = resolved.connected;
+        updateAquecedorConnectedSummary(connected);
         if (connected.length < 2) {
             const analysis = await analyzeAquecedorInstances(aquecedorRuntimeOwnerEmail);
             const hints = analysis.excluded
@@ -2956,20 +3032,22 @@ async function runAquecedorCycle(forceTest = false) {
             aquecedorRuntime.lastResult = turnRecheck.reason;
             return;
         }
+        const deliveryTag = buildAquecedorDeliveryTag();
+        const textoEnvio = appendAquecedorDeliveryTag(texto, deliveryTag);
         await supabase.from("aquecedor")
             .update({
             status: "PROCESSANDO",
             processing_at: new Date().toISOString(),
             instancia: chosen.instancia_origem,
             numero_destino: normalizeWhatsAppNumber(chosen.numero_whatsapp) || chosen.numero_whatsapp,
-            mensagem: texto,
+            mensagem: textoEnvio,
         })
             .eq("id", pendingData.id);
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
         const numero = normalizeWhatsAppNumber(chosen.numero_whatsapp);
         const sendBody = EVO_SEND_TEXT_V1
-            ? { number: numero, textMessage: { text: texto } }
-            : { number: numero, text: texto, textMessage: { text: texto } };
+            ? { number: numero, textMessage: { text: textoEnvio } }
+            : { number: numero, text: textoEnvio, textMessage: { text: textoEnvio } };
         const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
         if (!sendResult.ok) {
             await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
@@ -2989,8 +3067,8 @@ async function runAquecedorCycle(forceTest = false) {
             console.error("[Aquecedor] sendText falhou:", aquecedorRuntime.lastEvoError);
             return;
         }
-        const origemConnected = connected.find((item) => item.instancia === chosen.instancia_origem);
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), texto);
+        const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
+        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), textoEnvio);
         if (!deliveryCheck.ok) {
             await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
             aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 120000).toISOString();
@@ -4522,6 +4600,34 @@ function toAquecedorRemoteJid(num) {
     const digits = normalizeWhatsAppNumber(String(num || "").trim());
     return digits ? `${digits}@s.whatsapp.net` : "";
 }
+function buildAquecedorRemoteJidCandidates(num) {
+    const digits = normalizeWhatsAppNumber(String(num || "").trim());
+    if (!digits)
+        return [];
+    const out = new Set();
+    out.add(`${digits}@s.whatsapp.net`);
+    if (digits.startsWith("55") && digits.length > 11) {
+        out.add(`${digits.slice(2)}@s.whatsapp.net`);
+    }
+    const rawDigits = String(num || "").replace(/\D/g, "");
+    if (rawDigits && rawDigits !== digits) {
+        out.add(`${rawDigits}@s.whatsapp.net`);
+    }
+    return Array.from(out);
+}
+function buildAquecedorDeliveryTag() {
+    const raw = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    return raw.replace(/[^a-z0-9]/gi, "").slice(-6).toLowerCase().padStart(6, "0");
+}
+function appendAquecedorDeliveryTag(text, tag) {
+    const base = String(text || "").trim();
+    const token = String(tag || "").trim();
+    if (!base)
+        return token;
+    if (!token)
+        return base;
+    return `${base} ${token}`;
+}
 function extractAquecedorMessageMarker(text) {
     const value = String(text || "").trim();
     const suffix = value.match(/\b([a-z0-9]{5,8})\s*$/i);
@@ -4556,38 +4662,59 @@ function collectEvoChatMessageTexts(node, out, depth = 0) {
     }
 }
 function evoChatTextsIncludeMarker(node, marker) {
+    return evoChatTextsIncludeNeedle(node, [marker]);
+}
+function evoChatTextsIncludeNeedle(node, needles) {
     const texts = [];
     collectEvoChatMessageTexts(node, texts);
-    const needle = String(marker || "").trim().toLowerCase();
-    if (!needle)
+    const normalizedNeedles = needles
+        .map((needle) => String(needle || "").trim().toLowerCase())
+        .filter(Boolean);
+    if (!normalizedNeedles.length)
         return false;
-    return texts.some((text) => text.toLowerCase().includes(needle));
+    return texts.some((text) => {
+        const lowered = text.toLowerCase();
+        return normalizedNeedles.some((needle) => lowered.includes(needle));
+    });
 }
-async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, maxAttempts = 4) {
+async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, maxAttempts = 8) {
     const destino = String(instanciaDestino || "").trim();
-    const remoteJid = toAquecedorRemoteJid(numeroOrigem);
-    if (!destino || !remoteJid) {
+    const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
+    if (!destino || !remoteJids.length) {
         return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
     }
     const marker = extractAquecedorMessageMarker(messageText);
+    const fullText = String(messageText || "").trim().toLowerCase();
+    const needles = new Set();
+    if (marker)
+        needles.add(marker);
+    if (fullText.length >= 6)
+        needles.add(fullText);
+    if (fullText.length >= 12)
+        needles.add(fullText.slice(0, 48));
     const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(destino)}`;
-    const bodies = [
-        { where: { key: { remoteJid } }, limit: 40 },
-        { where: { key: { remoteJid } }, take: 40 },
-        { limit: 60 },
-    ];
+    await sleepMs(2500);
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         if (attempt > 1)
-            await sleepMs(2000);
-        for (const body of bodies) {
-            const result = await callEvoAction(url, "POST", body, {
-                timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000),
-                retries: 1,
-            });
-            if (!result.ok)
-                continue;
-            if (evoChatTextsIncludeMarker(result.json, marker)) {
-                return { ok: true, detail: "" };
+            await sleepMs(2500);
+        for (const remoteJid of remoteJids) {
+            const bodies = [
+                { where: { key: { remoteJid } }, limit: 50 },
+                { where: { key: { remoteJid } }, take: 50 },
+                { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
+                { limit: 80 },
+                {},
+            ];
+            for (const body of bodies) {
+                const result = await callEvoAction(url, "POST", body, {
+                    timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
+                    retries: 1,
+                });
+                if (!result.ok)
+                    continue;
+                if (evoChatTextsIncludeNeedle(result.json, Array.from(needles))) {
+                    return { ok: true, detail: "" };
+                }
             }
         }
     }
@@ -6536,6 +6663,16 @@ app.get("/disparos/config", async (req, res) => {
             config: { ...config, selectedDisparadorInstances },
             shortenerAuto: true,
             currentShortenerProvider,
+            alternativaDispatch: auth.email && (await shouldApplyAlternativaDispatchProfile(auth.email))
+                ? {
+                    active: true,
+                    rules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)(),
+                    throttle: (0, alternativa_dispatch_rules_1.computeAlternativaThrottle)({
+                        startHour: config.startHour,
+                        endHour: config.endHour,
+                    }),
+                }
+                : { active: false, rules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)() },
             shortenerProviders: [
                 { id: "waba", label: "WABA (encurtador próprio)", auth: "interno" },
                 { id: "encurtadorpro", label: "EncurtadorPro", auth: "requer API key (Bearer)" },
@@ -6559,6 +6696,9 @@ app.post("/disparos/config", async (req, res) => {
         }
         let config = parseDisparosConfig(mergedConfig);
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (auth.email && (await shouldApplyAlternativaDispatchProfile(auth.email))) {
+            config = applyAlternativaDispatchProfile(config);
+        }
         config = {
             ...config,
             selectedDisparadorInstances: await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, config.selectedDisparadorInstances),
@@ -6568,6 +6708,32 @@ app.post("/disparos/config", async (req, res) => {
     }
     catch (error) {
         return res.status(400).json({ error: error?.message || "Configuração inválida." });
+    }
+});
+app.get("/disparos/alternativa/estimate", async (req, res) => {
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (!auth.email) {
+            return res.status(401).json({ error: "Faça login para consultar a projeção." });
+        }
+        const plannedSendCount = Math.floor(Number(req.query.plannedSendCount) || 0);
+        const summary = await alternativaNumbersService.getSummaryAsync(auth.email);
+        const config = await loadDisparosConfigFromDb();
+        const workingDaysPerWeek = Array.isArray(config.workingDays) ? config.workingDays.length : 5;
+        const estimate = (0, alternativa_dispatch_rules_1.estimateAlternativaCampaignDuration)({
+            plannedSendCount,
+            activatedInstanceCount: summary.activatedCount,
+            workingDaysPerWeek,
+        });
+        return res.json({
+            ...estimate,
+            dispatchRules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)(),
+            canSend: summary.canSend,
+            activatedCount: summary.activatedCount,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({ error: error?.message || "Erro ao estimar duração da campanha." });
     }
 });
 app.get("/disparos/messenger-products", async (_req, res) => {
@@ -7270,12 +7436,17 @@ async function pickDisparadorInstanceForConfig(config) {
         });
         if (!eligible.length)
             return null;
+        const maxPerDay = Math.max(1, Number(config.maxPerDayPerInstance) || DISPAROS_DEFAULTS.maxPerDayPerInstance);
+        const dateKey = saoPauloDateKey();
+        const pool = eligible.filter((item) => getInstanceDailySendCount(item.instancia, dateKey) < maxPerDay);
+        if (!pool.length)
+            return null;
         const key = "__global_rr__";
         const cur = campaignDisparadorRoundRobin.get(key) ?? disparosRoundRobinCounter;
-        const idx = cur % eligible.length;
+        const idx = cur % pool.length;
         campaignDisparadorRoundRobin.set(key, cur + 1);
         disparosRoundRobinCounter = cur + 1;
-        return eligible[idx];
+        return pool[idx];
     }
     catch {
         return null;
@@ -7472,6 +7643,7 @@ async function processOneCampaignDispatch(campaignId) {
     lead.sentAt = sentIso;
     lead.shortUrl = outbound.shortUrl || undefined;
     campaign.sentCount += 1;
+    recordInstanceDailySend(instancePick.instancia);
     const ownerEmail = String(campaign.ownerEmail || "").trim();
     if (ownerEmail) {
         disparosCreditsService.recordShipmentConsumed(ownerEmail, 1);
@@ -7662,6 +7834,17 @@ app.post("/disparos/campanhas", (req, res, next) => {
                 });
             }
             disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length);
+        }
+        if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+            try {
+                await assertAlternativaDispatchReady(ownerEmail);
+            }
+            catch (err) {
+                return res.status(400).json({
+                    error: err?.message || "Requisitos da API Alternativa não atendidos.",
+                });
+            }
+            configSnapshot = applyAlternativaDispatchProfile(configSnapshot);
         }
         const campaignInstances = Array.isArray(configSnapshot.selectedDisparadorInstances)
             ? configSnapshot.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
@@ -8235,6 +8418,17 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             });
         }
         if (ativa) {
+            const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
+            if (ownerEmail) {
+                try {
+                    await assertAlternativaDispatchReady(ownerEmail);
+                }
+                catch (err) {
+                    return res.status(400).json({
+                        error: err?.message || "Requisitos da API Alternativa não atendidos.",
+                    });
+                }
+            }
             let evoRows = [];
             try {
                 evoRows = await fetchEvoInstanceTagRows();
