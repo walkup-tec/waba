@@ -3,7 +3,7 @@
 # Instalado por traefik-permanent-all-vps.sh install
 set -euo pipefail
 
-GUARD_VERSION="traefik-config-guard-2026-06-17-v1"
+GUARD_VERSION="traefik-config-guard-2026-06-20-v2"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 CFG_FILE="${CFG_DIR}/main.yaml"
 LOG="${TRAEFIK_CONFIG_GUARD_LOG:-/var/log/traefik-easypanel-config-guard.log}"
@@ -16,6 +16,12 @@ log() {
 }
 
 run_all_fixes() {
+  if [[ -x /root/traefik-easypanel-bootstrap-vps.sh ]]; then
+    TRAEFIK_BOOTSTRAP_LOG="$LOG"
+    # shellcheck disable=SC1090
+    source /root/traefik-easypanel-bootstrap-vps.sh
+    traefik_bootstrap_ensure_traefik || true
+  fi
   if [[ ! -x "$ALL_SCRIPT" ]]; then
     log "ERRO: ${ALL_SCRIPT} ausente — rode traefik-permanent-all-vps.sh install"
     return 1

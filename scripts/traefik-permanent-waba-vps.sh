@@ -8,10 +8,11 @@
 #   /root/traefik-permanent-waba-vps.sh install
 #
 # Repositório: https://github.com/walkup-tec/waba
-# Versão (validar após curl): waba-traefik-2026-06-17-v5
+# Versão (validar após curl): waba-traefik-2026-06-20-v6
 set -euo pipefail
 
-WABA_SCRIPT_VERSION="waba-traefik-2026-06-17-v5"
+WABA_SCRIPT_VERSION="waba-traefik-2026-06-20-v6"
+TRAEFIK_BOOTSTRAP_SCRIPT="/root/traefik-easypanel-bootstrap-vps.sh"
 
 INSTALL_PATH="/root/traefik-permanent-waba-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-waba-fix"
@@ -49,6 +50,14 @@ script_path() {
 
 traefik_container() {
   docker ps -q -f name=easypanel-traefik -f status=running | head -1
+}
+
+load_traefik_bootstrap() {
+  [[ -f "$TRAEFIK_BOOTSTRAP_SCRIPT" ]] || return 0
+  TRAEFIK_BOOTSTRAP_LOG="$LOG"
+  # shellcheck disable=SC1090
+  source "$TRAEFIK_BOOTSTRAP_SCRIPT"
+  traefik_bootstrap_ensure_traefik || true
 }
 
 traefik_swarm_service() {
@@ -418,6 +427,7 @@ waba_health_from_traefik() {
 
 run_fix() {
   local detected_port detected_backend
+  load_traefik_bootstrap
   ensure_waba_public_router || true
   detected_port=$(resolve_waba_port)
   detected_backend=$(resolve_waba_backend_url || echo "?")

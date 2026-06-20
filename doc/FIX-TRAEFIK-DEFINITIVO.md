@@ -11,20 +11,21 @@ Após **redeploy no Easypanel**, o Traefik regenera `/etc/easypanel/traefik/conf
 
 ### Classe diferente: `curl (7)` — nada na porta 443
 
-Os scripts **não substituem** o Traefik Easypanel quando o **processo/proxy inteiro está parado** (`docker ps | grep traefik` vazio, `ss` sem `:443`). Isso não é router errado — é **Easypanel Traefik down**.
+Os scripts **v1** só corrigiam router com Traefik running. **v3** também recupera proxy morto e porta 80 zumbi.
 
 **Sintoma:** `Failed to connect ... port 443` (até de dentro do VPS).
 
-**Causas comuns:** reboot VPS, `docker service` Traefik em 0/1, OOM, update Easypanel, task Swarm `Rejected`.
+**Causas comuns:** reboot VPS, `docker service` Traefik em 0/1, OOM, update Easypanel, task Swarm `Rejected`, **docker-proxy zumbi na :80**.
 
-**Desde v2 (`traefik-permanent-all-2026-06-20-v2`):** `run` tenta `docker service update --force easypanel-traefik` e republicar `:30180` no WABA antes do patch do `main.yaml`. Se Traefik não existir no Swarm, só o painel Easypanel resolve.
+**Desde v3 (`traefik-permanent-all-2026-06-20-v3`):** módulo **`traefik-easypanel-bootstrap-vps.sh`** — libera porta 80 zumbi, force Traefik, timer a cada 2 min.
 
 | Situação | Scripts resolvem? |
 |----------|-----------------|
 | 502 / router sumiu / IP morto no `main.yaml` | Sim (automático após `install`) |
 | Traefik running, WABA OK em `:30180`, HTTPS 502 | Sim |
-| **Nada escutando em :443** (Traefik down) | Só com v2 `run` ou manual |
-| WABA sem porta publicada no host | v2 tenta `--publish-add 30180` |
+| **Nada escutando em :443** (Traefik down) | Sim (bootstrap v3 + timer) |
+| **Porta 80 presa por docker-proxy zumbi** | Sim (bootstrap v3) |
+| WABA sem porta publicada no host | v3 tenta `--publish-add 30180` |
 
 ## Solução definitiva (uma instalação no VPS)
 
@@ -82,6 +83,7 @@ Se algo falhar:
 
 | Arquivo | Função |
 |---------|--------|
+| `/root/traefik-easypanel-bootstrap-vps.sh` | Bootstrap Traefik (porta 80 zumbi + force proxy) |
 | `/root/traefik-permanent-all-vps.sh` | Orquestrador (install / run / status) |
 | `/root/traefik-permanent-waba-vps.sh` | Fix WABA |
 | `/root/traefik-permanent-walkup-evo-vps.sh` | Fix Evolution |

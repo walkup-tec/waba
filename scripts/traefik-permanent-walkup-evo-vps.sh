@@ -8,10 +8,11 @@
 #   /root/traefik-permanent-walkup-evo-vps.sh install
 #
 # Repositório: https://github.com/walkup-tec/waba
-# Versão: walkup-evo-traefik-2026-06-17-v2
+# Versão: walkup-evo-traefik-2026-06-20-v3
 set -euo pipefail
 
-EVO_SCRIPT_VERSION="walkup-evo-traefik-2026-06-17-v2"
+EVO_SCRIPT_VERSION="walkup-evo-traefik-2026-06-20-v3"
+TRAEFIK_BOOTSTRAP_SCRIPT="/root/traefik-easypanel-bootstrap-vps.sh"
 
 INSTALL_PATH="/root/traefik-permanent-walkup-evo-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-walkup-evo-fix"
@@ -49,6 +50,14 @@ script_path() {
 
 traefik_container() {
   docker ps -q -f name=easypanel-traefik -f status=running | head -1
+}
+
+load_traefik_bootstrap() {
+  [[ -f "$TRAEFIK_BOOTSTRAP_SCRIPT" ]] || return 0
+  TRAEFIK_BOOTSTRAP_LOG="$LOG"
+  # shellcheck disable=SC1090
+  source "$TRAEFIK_BOOTSTRAP_SCRIPT"
+  traefik_bootstrap_ensure_traefik || true
 }
 
 traefik_swarm_service() {
@@ -424,6 +433,7 @@ evo_reachable_from_traefik() {
 
 run_fix() {
   local detected_port detected_backend
+  load_traefik_bootstrap
   ensure_evo_public_router || true
   detected_port=$(resolve_evo_port)
   detected_backend=$(resolve_evo_backend_url || echo "?")
