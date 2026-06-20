@@ -2845,32 +2845,60 @@ async function listEvoInstanceNamesForScopeReconcile(): Promise<string[]> {
       if (key) names.add(key);
     }
   }
-  if (!names.size) {
-    const cache = await loadEvoInstancesCache();
-    for (const item of cache?.items || []) {
-      const name = String(item?.name || "").trim();
-      if (name) names.add(name);
-    }
+  const cache = await loadEvoInstancesCache();
+  for (const item of cache?.items || []) {
+    const name = String(item?.name || "").trim();
+    if (name) names.add(name);
   }
   return Array.from(names);
+}
+
+/** Mesma estratégia do painel `/instancias`: cache preenche lacunas quando a EVO live vem incompleta. */
+function mergeAquecedorConnectedRows(
+  primary: Array<{ instancia: string; numero: string }>,
+  secondary: Array<{ instancia: string; numero: string }>,
+): Array<{ instancia: string; numero: string }> {
+  const byKey = new Map<string, { instancia: string; numero: string }>();
+  for (const row of secondary) {
+    const key = row.instancia.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, row);
+  }
+  for (const row of primary) {
+    const key = row.instancia.toLowerCase();
+    const prev = byKey.get(key);
+    byKey.set(key, {
+      instancia: row.instancia,
+      numero: String(row.numero || prev?.numero || "").trim(),
+    });
+  }
+  return Array.from(byKey.values()).sort((a, b) => a.instancia.localeCompare(b.instancia, "pt-BR"));
+}
+
+async function listMergedConnectedEvoInstancesUnscoped(): Promise<{
+  rows: Array<{ instancia: string; numero: string }>;
+  liveCount: number;
+  cacheCount: number;
+  evoOk: boolean;
+  evoError?: string;
+}> {
+  const evoList = await fetchEvoInstancesList();
+  const cache = await loadEvoInstancesCache();
+  const fromLive = evoList.ok ? buildConnectedFromEvoResponse(evoList.instances) : [];
+  const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
+  return {
+    rows: mergeAquecedorConnectedRows(fromLive, fromCache),
+    liveCount: fromLive.length,
+    cacheCount: fromCache.length,
+    evoOk: evoList.ok,
+    evoError: evoList.ok ? undefined : evoList.detail,
+  };
 }
 
 async function listConnectedEvoInstancesUnscoped(): Promise<
   Array<{ instancia: string; numero: string }>
 > {
-  const evoList = await fetchEvoInstancesList();
-  if (evoList.ok) {
-    const fromLive = buildConnectedFromEvoResponse(evoList.instances);
-    if (fromLive.length) return fromLive;
-  }
-  const cache = await loadEvoInstancesCache();
-  if (cache?.items?.length) {
-    return buildConnectedFromEvoCacheItems(cache.items);
-  }
-  if (evoList.ok) {
-    return buildConnectedFromEvoResponse(evoList.instances);
-  }
-  return [];
+  const merged = await listMergedConnectedEvoInstancesUnscoped();
+  return merged.rows;
 }
 
 async function listAquecedorScopedInstanceNames(ownerEmail: string): Promise<string[]> {
@@ -2909,10 +2937,14 @@ async function listAquecedorScopedInstanceNames(ownerEmail: string): Promise<str
     .listForEmail(email)
     .map((row) => String(row.instanceName || "").trim())
     .filter(Boolean);
+  const usageMap = await loadInstanceUsageMap();
   const merged = new Set<string>();
   for (const name of [...owned, ...activations]) {
     const normalized = String(name || "").trim();
-    if (normalized) merged.add(normalized);
+    if (!normalized) continue;
+    const usage = getInstanceUsageFromMap(usageMap, normalized);
+    if (usage?.useAquecedor === false) continue;
+    merged.add(normalized);
   }
   return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
@@ -2923,8 +2955,19 @@ async function filterConnectedForAquecedorOwner(
 ): Promise<Array<{ instancia: string; numero: string }>> {
   const allowed = await listAquecedorScopedInstanceNames(String(ownerEmail || ""));
   if (!allowed.length) return [];
-  const allowedLower = new Set(allowed.map((n) => n.toLowerCase()));
-  return connected.filter((c) => allowedLower.has(c.instancia.toLowerCase()));
+  const aliasesMap = await loadInstanceAliasesMap();
+  const allowedLower = new Set<string>();
+  for (const name of allowed) {
+    allowedLower.add(name.toLowerCase());
+    const alias = mapGetInsensitive(aliasesMap, name);
+    if (alias) allowedLower.add(alias.toLowerCase());
+  }
+  return connected.filter((c) => {
+    const keys = [c.instancia.toLowerCase()];
+    const alias = mapGetInsensitive(aliasesMap, c.instancia);
+    if (alias) keys.push(alias.toLowerCase());
+    return keys.some((key) => allowedLower.has(key));
+  });
 }
 
 function buildConnectedFromEvoCacheItems(
@@ -2940,6 +2983,82 @@ function buildConnectedFromEvoCacheItems(
       return { instancia, numero };
     })
     .filter((row): row is { instancia: string; numero: string } => row != null);
+}
+
+async function enrichAquecedorConnectedNumbersFromControleInstancia(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+  allowedNames: string[],
+): Promise<Array<{ instancia: string; numero: string }>> {
+  const byKey = new Map<string, { instancia: string; numero: string }>();
+  for (const row of connected) {
+    byKey.set(row.instancia.toLowerCase(), row);
+  }
+
+  const needsNumber = allowedNames.filter((name) => {
+    const row = byKey.get(String(name || "").trim().toLowerCase());
+    return row && !String(row.numero || "").trim();
+  });
+  if (!needsNumber.length) return connected;
+
+  try {
+    const { data } = (await (supabase
+      .from("controle_instancia" as any)
+      .select("instancia, numero_whatsapp")
+      .in("instancia", needsNumber)
+      .limit(500)) as any);
+    for (const row of Array.isArray(data) ? data : []) {
+      const instancia = String(row?.instancia || "").trim();
+      const numero = normalizeWhatsAppNumber(String(row?.numero_whatsapp || "").trim());
+      if (!instancia || !numero) continue;
+      const existing = byKey.get(instancia.toLowerCase());
+      if (existing && !String(existing.numero || "").trim()) {
+        existing.numero = numero;
+      }
+    }
+  } catch {
+    /* opcional */
+  }
+
+  return Array.from(byKey.values()).sort((a, b) => a.instancia.localeCompare(b.instancia, "pt-BR"));
+}
+
+function buildEvoInstanceLookupMap(
+  liveInstances: any[],
+  cacheItems: Array<Record<string, unknown>>,
+  aliasesMap: Map<string, string>,
+): Map<string, any> {
+  const map = new Map<string, any>();
+  const bind = (key: string, inst: any) => {
+    const normalized = String(key || "").trim().toLowerCase();
+    if (normalized && !map.has(normalized)) map.set(normalized, inst);
+  };
+
+  for (const item of cacheItems) {
+    const name = String(item?.name || "").trim();
+    if (!name) continue;
+    bind(name, {
+      instanceName: name,
+      name,
+      connectionStatus: item.connectionStatus,
+      number: item.number,
+      ownerJid: item.number,
+    });
+  }
+
+  for (const item of liveInstances) {
+    const inst = item?.instance ?? item;
+    bind(resolveEvoInstanceKey(inst), inst);
+    bind(String(inst?.instanceName || ""), inst);
+    bind(String(inst?.name || ""), inst);
+  }
+
+  for (const [technical, alias] of aliasesMap) {
+    const inst = map.get(String(technical || "").trim().toLowerCase());
+    if (inst && alias) bind(alias, inst);
+  }
+
+  return map;
 }
 
 async function resolveAquecedorConnectedForOwner(ownerEmail: string): Promise<{
@@ -2958,40 +3077,30 @@ async function resolveAquecedorConnectedForOwner(ownerEmail: string): Promise<{
     });
   };
 
-  const evoList = await fetchEvoInstancesList();
-  if (evoList.ok) {
-    const fromLive = await filterScoped(buildConnectedFromEvoResponse(evoList.instances));
-    if (fromLive.length >= 2) {
-      return { connected: fromLive, source: "evo-live", evoDegraded: false };
-    }
+  const mergedEvo = await listMergedConnectedEvoInstancesUnscoped();
+  let connected = await filterScoped(mergedEvo.rows);
+
+  const supabase = getSupabaseClient();
+  if (supabase && connected.length) {
+    const allowed = await listAquecedorScopedInstanceNames(ownerEmail);
+    connected = await enrichAquecedorConnectedNumbersFromControleInstancia(
+      supabase,
+      connected,
+      allowed,
+    );
+    connected = connected.filter((item) => String(item.numero || "").trim());
   }
 
-  const cache = await loadEvoInstancesCache();
-  if (cache?.items?.length) {
-    const fromCache = await filterScoped(buildConnectedFromEvoCacheItems(cache.items));
-    if (fromCache.length > 0) {
-      return {
-        connected: fromCache,
-        source: "evo-cache",
-        evoDegraded: !evoList.ok,
-        evoError: evoList.ok ? undefined : evoList.detail,
-      };
-    }
-  }
-
-  if (evoList.ok) {
-    return {
-      connected: await filterScoped(buildConnectedFromEvoResponse(evoList.instances)),
-      source: "evo-live",
-      evoDegraded: false,
-    };
-  }
+  const usedCacheSupplement =
+    mergedEvo.cacheCount > 0 &&
+    connected.length > mergedEvo.liveCount &&
+    mergedEvo.liveCount > 0;
 
   return {
-    connected: [],
-    source: "evo-cache",
-    evoDegraded: true,
-    evoError: evoList.detail,
+    connected,
+    source: mergedEvo.evoOk && !usedCacheSupplement ? "evo-live" : "evo-cache",
+    evoDegraded: !mergedEvo.evoOk || usedCacheSupplement,
+    evoError: mergedEvo.evoError,
   };
 }
 
@@ -3050,36 +3159,29 @@ async function analyzeAquecedorInstances(ownerEmail: string | null): Promise<{
   eligible: Array<{ instancia: string; numero: string }>;
   excluded: AquecedorInstanceEligibilityRow[];
   evoConnectedKeys: string[];
-  evoSource?: "live" | "cache";
+  evoSource?: "live" | "cache" | "merged";
 }> {
   const email = String(ownerEmail || "")
     .trim()
     .toLowerCase();
   const ownedInstances = email ? await listAquecedorScopedInstanceNames(email) : [];
   const usageMap = await loadInstanceUsageMap();
-  let evoInstances: any[] = [];
-  let evoSource: "live" | "cache" = "live";
+  const aliasesMap = await loadInstanceAliasesMap();
+  const mergedEvo = await listMergedConnectedEvoInstancesUnscoped();
   const evoList = await fetchEvoInstancesList();
-  if (evoList.ok) {
-    evoInstances = evoList.instances;
-  } else {
-    const cache = await loadEvoInstancesCache();
-    if (cache?.items?.length) {
-      evoSource = "cache";
-      evoInstances = cache.items.map((item) => ({
-        instanceName: item.name,
-        connectionStatus: item.connectionStatus,
-        number: item.number,
-      }));
-    }
-  }
+  const cache = await loadEvoInstancesCache();
+  const evoSource: "live" | "cache" | "merged" =
+    mergedEvo.evoOk && mergedEvo.cacheCount === 0
+      ? "live"
+      : mergedEvo.evoOk && mergedEvo.liveCount > 0
+        ? "merged"
+        : "cache";
 
-  const evoByKey = new Map<string, any>();
-  for (const item of evoInstances) {
-    const inst = item?.instance ?? item;
-    const key = resolveEvoInstanceKey(inst);
-    if (key) evoByKey.set(key.toLowerCase(), inst);
-  }
+  const evoByKey = buildEvoInstanceLookupMap(
+    evoList.ok ? evoList.instances : [],
+    cache?.items || [],
+    aliasesMap,
+  );
 
   const eligible: Array<{ instancia: string; numero: string }> = [];
   const excluded: AquecedorInstanceEligibilityRow[] = [];
@@ -3119,16 +3221,29 @@ async function analyzeAquecedorInstances(ownerEmail: string | null): Promise<{
     };
 
     if (row.eligible && inst) {
-      eligible.push({
-        instancia: ownedName,
-        numero: extractInstanceNumber(inst),
-      });
+      const numero =
+        extractInstanceNumber(inst) ||
+        mergedEvo.rows.find((item) => item.instancia.toLowerCase() === ownedName.toLowerCase())
+          ?.numero ||
+        "";
+      if (numero) {
+        eligible.push({
+          instancia: ownedName,
+          numero,
+        });
+      } else {
+        excluded.push({
+          ...row,
+          eligible: false,
+          motivos: [...row.motivos, "sem_numero_whatsapp"],
+        });
+      }
     } else {
       excluded.push(row);
     }
   }
 
-  const evoConnectedKeys = buildConnectedFromEvoResponse(evoInstances).map((c) => c.instancia);
+  const evoConnectedKeys = mergedEvo.rows.map((c) => c.instancia);
   return {
     ownerEmail: email || null,
     ownedInstances,
