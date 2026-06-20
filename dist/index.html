@@ -16468,6 +16468,7 @@
         document.body.classList.toggle("waba-disparo-evo-mode", on && !isBaselineUi());
         if (on) {
           initDisparoEvoPanelLayout();
+          normalizeDisparosSectionFlow();
         }
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
@@ -16807,8 +16808,9 @@
         const activated = Math.max(0, Math.floor(Number(activatedInstanceCount) || 0));
         if (!planned || !activated) {
           return {
-            summaryLabel:
-              "Informe a quantidade de envios e ative ao menos 3 números para ver a projeção.",
+            summaryLabel: !planned
+              ? "Informe a quantidade de envios para ver a projeção."
+              : `Ative ao menos ${rules.minActivatedForSend} números para calcular a projeção.`,
             sendsPerDay: 0,
             workingDaysNeeded: 0,
           };
@@ -16898,7 +16900,7 @@
         const planned = Math.floor(Number(input?.value || 0));
         renderAlternativaProjectionElement(
           document.getElementById("dis-evo-campaign-projection"),
-          planned > 0 ? planned : maxAllowed
+          planned
         );
       }
 
@@ -24972,7 +24974,7 @@
         if (getDisCampaignWizardSelectedApiKind() === "alternativa") {
           renderAlternativaProjectionElement(
             document.getElementById("dis-wizard-alternativa-projection"),
-            planned > 0 ? planned : maxAllowed
+            planned
           );
         } else {
           const altProjection = document.getElementById("dis-wizard-alternativa-projection");
@@ -27023,6 +27025,45 @@
         void refreshDisparosActiveInstanceFromServer();
       }
 
+      function isDisparosSectionInWizardFlow(section) {
+        if (!section || section.hidden) return false;
+        const style = window.getComputedStyle(section);
+        return style.display !== "none" && style.visibility !== "hidden";
+      }
+
+      function getDisparosFlowSections() {
+        return Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        ).filter(isDisparosSectionInWizardFlow);
+      }
+
+      function normalizeDisparosSectionFlow() {
+        if (!disparosSectionLayoutInitialized) return;
+        const sections = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        );
+        const flowSections = getDisparosFlowSections();
+        if (!flowSections.length) return;
+
+        const openFlowCount = flowSections.filter((section) => {
+          const key = String(section.dataset.sectionKey || "");
+          return key && !disparosSectionCollapsedState[key];
+        }).length;
+        if (openFlowCount === 1) return;
+
+        const target =
+          flowSections.find((section) => {
+            const key = String(section.dataset.sectionKey || "");
+            return key && !disparosSectionSavedState[key];
+          }) || flowSections[0];
+
+        sections.forEach((section, idx) => {
+          const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
+          disparosSectionCollapsedState[sectionKey] = section !== target;
+        });
+        applyDisparosSectionLayout();
+      }
+
       function initDisparosSectionLayout() {
         if (disparosSectionLayoutInitialized) {
           applyDisparosSectionLayout();
@@ -27063,15 +27104,18 @@
           section.appendChild(header);
           section.appendChild(body);
 
-          disparosSectionCollapsedState[sectionKey] = idx !== 0;
+          disparosSectionCollapsedState[sectionKey] = getDisparosFlowSections().indexOf(section) !== 0;
           disparosSectionSavedState[sectionKey] = false;
 
           const editBtn = header.querySelector(".dis-section-edit-btn");
           if (editBtn) {
             editBtn.addEventListener("click", () => {
-              sections.forEach((sec, secIdx) => {
+              const allSections = Array.from(
+                document.querySelectorAll("#disparos-config-area .aquecedor-section")
+              );
+              allSections.forEach((sec, secIdx) => {
                 const key = String(sec.dataset.sectionKey || `section-${secIdx + 1}`);
-                disparosSectionCollapsedState[key] = key !== sectionKey;
+                disparosSectionCollapsedState[key] = sec !== section;
               });
               disparosActiveSectionIndex = idx;
               applyDisparosSectionLayout();
@@ -27097,17 +27141,19 @@
               saveBtn.textContent = original || "Salvar configurações";
               saveBtn.removeAttribute("disabled");
               if (!ok) return;
-              if (idx === 5) hideMessengerLibrarySavePanel();
+              if (/mensageiro/i.test(title)) hideMessengerLibrarySavePanel();
               disparosSectionSavedState[sectionKey] = true;
               disparosSectionCollapsedState[sectionKey] = true;
-              const nextIdx = idx + 1;
-              if (nextIdx < sections.length) {
-                const nextSection = sections[nextIdx];
+              const flowSections = getDisparosFlowSections();
+              const flowIdx = flowSections.indexOf(section);
+              if (flowIdx >= 0 && flowIdx + 1 < flowSections.length) {
+                const nextSection = flowSections[flowIdx + 1];
                 const nextKey = String(
-                  nextSection.dataset.sectionKey || `section-${nextIdx + 1}`
+                  nextSection.dataset.sectionKey ||
+                    `section-${sections.indexOf(nextSection) + 1}`
                 );
                 disparosSectionCollapsedState[nextKey] = false;
-                disparosActiveSectionIndex = nextIdx;
+                disparosActiveSectionIndex = sections.indexOf(nextSection);
               }
               applyDisparosSectionLayout();
             });
@@ -27139,10 +27185,13 @@
         const sections = Array.from(
           document.querySelectorAll("#disparos-config-area .aquecedor-section")
         );
+        const flowSections = getDisparosFlowSections();
         sections.forEach((section, idx) => {
           const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
           disparosSectionSavedState[sectionKey] = false;
-          disparosSectionCollapsedState[sectionKey] = idx !== 0;
+          const flowIdx = flowSections.indexOf(section);
+          disparosSectionCollapsedState[sectionKey] =
+            flowIdx >= 0 ? flowIdx !== 0 : true;
         });
         disparosActiveSectionIndex = 0;
         applyDisparosSectionLayout();
@@ -34710,6 +34759,9 @@
       if (disCampaignOpenMappingBtn) {
         disCampaignOpenMappingBtn.addEventListener("click", () => openDisCampaignMappingFlow());
       }
+      document.getElementById("dis-evo-planned-send-count")?.addEventListener("input", () => {
+        updateDisEvoCampaignSendUi();
+      });
 
       const disAddInstanceBtn = document.getElementById("dis-add-instance-btn");
       if (disAddInstanceBtn) {

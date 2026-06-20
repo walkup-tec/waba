@@ -39,7 +39,7 @@ function estimateAlternativaCampaignDuration(params) {
     const plannedSendCount = Math.max(0, Math.floor(Number(params.plannedSendCount) || 0));
     const activatedInstanceCount = Math.max(0, Math.floor(Number(params.activatedInstanceCount) || 0));
     const workingDaysPerWeek = Math.max(1, Math.min(7, Math.floor(Number(params.workingDaysPerWeek) || 5)));
-    if (!plannedSendCount || !activatedInstanceCount) {
+    if (!plannedSendCount) {
         return {
             plannedSendCount,
             activatedInstanceCount,
@@ -47,7 +47,18 @@ function estimateAlternativaCampaignDuration(params) {
             workingDaysNeeded: 0,
             calendarDaysEstimate: 0,
             hoursPerWindow: 0,
-            summaryLabel: "Informe a quantidade de envios e ative ao menos 3 números para ver a projeção.",
+            summaryLabel: "Informe a quantidade de envios para ver a projeção.",
+        };
+    }
+    if (!activatedInstanceCount) {
+        return {
+            plannedSendCount,
+            activatedInstanceCount,
+            sendsPerDay: 0,
+            workingDaysNeeded: 0,
+            calendarDaysEstimate: 0,
+            hoursPerWindow: 0,
+            summaryLabel: `Ative ao menos ${exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND} números para calcular a projeção.`,
         };
     }
     const sendsPerDay = activatedInstanceCount * exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER;
