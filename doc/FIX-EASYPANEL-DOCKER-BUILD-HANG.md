@@ -1,5 +1,13 @@
 # Easypanel — build WABA fica "processando" e não termina
 
+## Solução atual (2026-06-20)
+
+O Dockerfile **não compila mais TypeScript no VPS**. O `dist/` vai no Git; no Easypanel só roda `npm ci --omit=dev` (1–3 min).
+
+Antes de cada deploy: `npm run build` + commit `dist/` + `src/deploy-marker.ts`.
+
+Marker esperado: `DEPLOY-2026-06-20-docker-prebuilt-dist`.
+
 ## Sintomas
 
 - Deploy no Easypanel (`waba_disparador`) fica **Processando** por 10–30+ minutos sem sucesso nem erro claro.

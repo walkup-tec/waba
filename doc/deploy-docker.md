@@ -2,7 +2,8 @@
 
 ## Imagem
 
-- `Dockerfile` na raiz: build multi-stage (`npm run build` + `npm ci --omit=dev`).
+- `Dockerfile` na raiz: **runtime only** — copia `dist/` do Git + `npm ci --omit=dev` (sem `tsc` no VPS).
+- **Antes de cada push para produção:** `npm run build` e commit de `dist/` + `src/deploy-marker.ts`.
 - Base: `node:20.18-alpine`, usuário não-root `nodejs` (uid 1001).
 - **Porta:** `PORT` (padrão `3000`). Publicar com `-p 3000:3000` ou proxy reverso.
 - **Dados:** monte volume em **`/app/data`** (campanhas, estado local). Sem volume, dados somem ao recriar o container.

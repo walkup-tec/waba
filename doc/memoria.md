@@ -15,6 +15,12 @@ Como usar:
 ## Última atualização
 2026-06-20
 
+**WABA — V02 Atualizar QRCode não gera:** refresh usava timeout 12s + endpoint fraco; agora `registrar-qrcode` + 90s + fallback multi-URL EVO. Ver `doc/LOG-2026-06-20__v02-qrcode-refresh-not-generating-fix.md`.
+
+**WABA — V02 avatar WhatsApp corrompido:** proxy `/instancias/avatar` devolve SVG placeholder (200) em falha; frontend sanitiza URL e fallback ◎; cache local grava payload sanitizado. Build + restart V02. Ver `doc/LOG-2026-06-20__v02-whatsapp-avatar-corrupted-fix.md`.
+
+**WABA — Docker prebuilt dist (deploy Easypanel):** Dockerfile **sem tsc no VPS** — copia `dist/` do Git; só `npm ci --omit=dev`. Marker `DEPLOY-2026-06-20-docker-prebuilt-dist`. Antes do push: `npm run build`. Ver `doc/LOG-2026-06-20__docker-prebuilt-dist-no-tsc-vps.md`.
+
 **WABA — Easypanel build travado (processando infinito):** Dockerfile otimizado — um `npm ci`, `npm prune`, echo nos steps, `NODE_OPTIONS` no tsc; `.dockerignore` exclui doc/CSVs (~14 MB). Marker `DEPLOY-2026-06-20-docker-build-fast`. VPS: `docker builder prune -af`. Ver `doc/FIX-EASYPANEL-DOCKER-BUILD-HANG.md`.
 
 **WABA — simulação compra números Alternativa (V02):** `simulatePaidPurchase` + rota `POST /billing/alternativa-numbers/simulate-purchase` (só V02/dev); saldo por `ownerEmail`. Walkup: 30 slots simulados. Ver `doc/LOG-2026-06-20__simulate-walkup-30-alternativa-numbers.md`.

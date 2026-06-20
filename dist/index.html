@@ -14770,6 +14770,186 @@
         items: [],
       };
       let instancesLoadError = "";
+      const INSTANCES_LOCAL_CACHE_PREFIX = "waba.instances.cache.v1.";
+      let instancesFullRefreshTimer = null;
+      let instancesFullRefreshInFlight = false;
+      let instancesLastFullRefreshAt = 0;
+      const INSTANCES_FULL_REFRESH_INTERVAL_MS = 45000;
+
+      function instancesLocalCacheKey() {
+        return `${INSTANCES_LOCAL_CACHE_PREFIX}${wabaSessionEmail || "guest"}`;
+      }
+
+      function persistInstancesLocalCache(data) {
+        if (!data || !Array.isArray(data.items)) return;
+        try {
+          localStorage.setItem(
+            instancesLocalCacheKey(),
+            JSON.stringify({ savedAt: Date.now(), data })
+          );
+        } catch {
+          /* ignore quota */
+        }
+      }
+
+      function restoreInstancesLocalCache() {
+        try {
+          const raw = localStorage.getItem(instancesLocalCacheKey());
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          return parsed?.data && Array.isArray(parsed.data.items) ? parsed.data : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function sanitizeInstanceProfilePicUrl(raw) {
+        const url = String(raw || "").trim();
+        if (!url || url === "null" || url === "undefined") return "";
+        if (/^data:/i.test(url)) return "";
+        if (!/^https?:\/\//i.test(url)) return "";
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname.toLowerCase();
+          const allowed = ["whatsapp.net", "whatsapp.com", "fbcdn.net", "facebook.com", "cdninstagram.com"];
+          if (!allowed.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) return "";
+          return url;
+        } catch {
+          return "";
+        }
+      }
+
+      function sanitizeInstancesPayload(payload) {
+        if (!payload || !Array.isArray(payload.items)) return payload;
+        payload.items = payload.items.map((item) => ({
+          ...item,
+          profilePicUrl: sanitizeInstanceProfilePicUrl(item?.profilePicUrl),
+        }));
+        return payload;
+      }
+
+      function applyInstancesPayload(payload, opts = {}) {
+        if (!payload || !Array.isArray(payload.items)) return false;
+        const sanitized = sanitizeInstancesPayload({ ...payload, items: [...payload.items] });
+        instancesData = sanitized;
+        if (opts.persist !== false) persistInstancesLocalCache(sanitized);
+        updateInstancesIndicators();
+        if (opts.render !== false && activeTab === "instancias") {
+          renderInstancesList();
+        }
+        return true;
+      }
+
+      async function fetchInstancesSnapshot() {
+        const response = await fetchWithTimeout("/instancias/snapshot", {}, 8000);
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "Não foi possível carregar instâncias.");
+        }
+        return payload;
+      }
+
+      async function fetchInstancesFullRefresh() {
+        const response = await fetchWithTimeout("/instancias?refresh=1", {}, 50000);
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "Não foi possível atualizar instâncias.");
+        }
+        return payload;
+      }
+
+      function hydrateInstancesFromLocalCache() {
+        const cached = restoreInstancesLocalCache();
+        if (cached?.items?.length) {
+          applyInstancesPayload(cached, { persist: false, render: activeTab === "instancias" });
+          return true;
+        }
+        return false;
+      }
+
+      function scheduleInstancesFullRefresh(delayMs = 400) {
+        if (instancesFullRefreshInFlight) return;
+        if (Date.now() - instancesLastFullRefreshAt < INSTANCES_FULL_REFRESH_INTERVAL_MS) return;
+        if (instancesFullRefreshTimer) clearTimeout(instancesFullRefreshTimer);
+        instancesFullRefreshTimer = window.setTimeout(() => {
+          instancesFullRefreshTimer = null;
+          void refreshInstancesFullInBackground();
+        }, delayMs);
+      }
+
+      async function refreshInstancesFullInBackground() {
+        if (instancesFullRefreshInFlight) return;
+        if (Date.now() - instancesLastFullRefreshAt < INSTANCES_FULL_REFRESH_INTERVAL_MS) return;
+        instancesFullRefreshInFlight = true;
+        try {
+          const payload = await fetchInstancesFullRefresh();
+          instancesLastFullRefreshAt = Date.now();
+          instancesLoadError = payload?.degraded
+            ? summarizeInstancesLoadError(
+                String(
+                  payload.evolutionError ||
+                    "Evolution temporariamente indisponível — exibindo cache local."
+                )
+              )
+            : "";
+          applyInstancesPayload(payload);
+          await loadInstanceUsageConfig();
+          syncDisparadorNumberPicker();
+        } catch (error) {
+          if (!instancesData?.items?.length) {
+            instancesLoadError =
+              error?.message || "Não foi possível atualizar instâncias na Evolution.";
+          }
+        } finally {
+          instancesFullRefreshInFlight = false;
+        }
+      }
+
+      async function loadInstancesForInstanciasTab(options = {}) {
+        const fullRefresh = Boolean(options.fullRefresh);
+        const lastUpdateLabel = document.getElementById("last-update-label");
+
+        if (!instancesData?.items?.length) {
+          hydrateInstancesFromLocalCache();
+        } else if (activeTab === "instancias") {
+          renderInstancesList();
+          updateInstancesIndicators();
+        }
+
+        try {
+          const snapshot = await fetchInstancesSnapshot();
+          instancesLoadError = "";
+          applyInstancesPayload(snapshot);
+        } catch (error) {
+          if (!instancesData?.items?.length) {
+            instancesLoadError = error?.message || "Não foi possível carregar instâncias.";
+            if (activeTab === "instancias") renderInstancesList();
+          }
+        }
+
+        if (lastUpdateLabel && activeTab === "instancias") {
+          const count = Number(instancesData?.total || instancesData?.items?.length || 0);
+          lastUpdateLabel.textContent =
+            count > 0
+              ? `${count} instância(s) · cache`
+              : "Nenhuma instância no cache";
+        }
+
+        if (fullRefresh) {
+          await refreshInstancesFullInBackground();
+        } else {
+          scheduleInstancesFullRefresh(300);
+        }
+
+        if (lastUpdateLabel && activeTab === "instancias") {
+          const now = new Date();
+          lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}`;
+        }
+      }
 
       function summarizeInstancesLoadError(raw) {
         const text = String(raw || "").trim();
@@ -14845,6 +15025,7 @@
           wabaSessionEmail = String(session.email || "").trim().toLowerCase();
           wabaSubscriberProfile =
             session.subscriber && typeof session.subscriber === "object" ? session.subscriber : null;
+          hydrateInstancesFromLocalCache();
           wabaOperacionalDispatchesApi = String(
             session.operacionalDispatchesApi || session.systemUser?.operacionalDispatchesApi || ""
           ).trim();
@@ -15997,6 +16178,31 @@
       let alternativaNumbersCheckoutActive = false;
       let alternativaNumbersPendingActivation = false;
 
+      function isAlternativaNumbersCheckoutContext() {
+        return (
+          alternativaNumbersCheckoutActive ||
+          disparosSelectedPackage?.kind === "alternativa-numbers"
+        );
+      }
+
+      function resetAlternativaNumbersCheckoutState() {
+        alternativaNumbersCheckoutActive = false;
+        if (disparosSelectedPackage?.kind === "alternativa-numbers") {
+          disparosSelectedPackage = null;
+        }
+      }
+
+      function normalizeBrazilMobileWhatsappInput(raw) {
+        let digits = String(raw || "").replace(/\D/g, "");
+        if (digits.startsWith("55") && digits.length >= 12) {
+          digits = digits.slice(2);
+        }
+        if (digits.length !== 11 || digits.charAt(2) !== "9") {
+          throw new Error("Informe um celular válido com DDD (ex.: (11) 99999-9999).");
+        }
+        return digits;
+      }
+
       function resolveDisparosSelectedInstancesElement() {
         if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
           return document.getElementById("dis-selected-instances-comprar");
@@ -16061,7 +16267,9 @@
       async function loadAlternativaNumbersSummary() {
         if (!isDisparoEvoUi()) return null;
         try {
-          const response = await fetch("/billing/alternativa-numbers/summary");
+          const response = await fetch("/billing/alternativa-numbers/summary", {
+            credentials: "same-origin",
+          });
           if (!response.ok) return null;
           alternativaNumbersSummary = await response.json();
           renderAlternativaNumbersShop();
@@ -16097,6 +16305,10 @@
           showToast("Selecione a quantidade de números.", "warning");
           return;
         }
+        if (!wabaSessionEmail) {
+          showToast("Faça login para comprar números.", "warning", 4200);
+          return;
+        }
         alternativaNumbersCheckoutActive = true;
         disparosSelectedPackage = {
           shipments: qty,
@@ -16118,7 +16330,7 @@
             showToast("Configure ASAAS_API_KEY no servidor para gerar o PIX.", "info", 5200);
           }
         } catch (error) {
-          alternativaNumbersCheckoutActive = false;
+          resetAlternativaNumbersCheckoutState();
           showToast(error?.message || "Erro ao abrir pagamento.", "error", 4800);
         }
       }
@@ -16126,16 +16338,24 @@
       async function submitAlternativaNumbersCheckout() {
         const name = String(document.getElementById("disparos-billing-name")?.value || "").trim();
         const cpfCnpj = String(document.getElementById("disparos-billing-cpf")?.value || "").trim();
-        const whatsapp = String(document.getElementById("disparos-billing-whatsapp")?.value || "").trim();
+        const whatsappRaw = String(document.getElementById("disparos-billing-whatsapp")?.value || "").trim();
         const qty = alternativaNumbersSelectedQty;
-        if (!name || !cpfCnpj || !whatsapp) {
+        if (!name || !cpfCnpj || !whatsappRaw) {
           showToast("Preencha todos os campos obrigatórios.", "error", 4200);
+          return;
+        }
+        let whatsapp = "";
+        try {
+          whatsapp = normalizeBrazilMobileWhatsappInput(whatsappRaw);
+        } catch (error) {
+          showToast(error?.message || "WhatsApp inválido.", "error", 4200);
           return;
         }
         setDisparosBillingSubmitLoading(true);
         try {
           const response = await fetch("/billing/alternativa-numbers/checkout", {
             method: "POST",
+            credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               customerName: name,
@@ -16147,6 +16367,9 @@
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível gerar o PIX.");
+          }
+          if (!payload?.id) {
+            throw new Error("Resposta inválida do servidor ao gerar o PIX.");
           }
           closeDisparosOverlay("disparos-billing-overlay");
           showDisparosPixCheckout(payload);
@@ -16215,6 +16438,7 @@
         });
       }
 
+      function formatDisparosQty(value) {
         return Number(value || 0).toLocaleString("pt-BR");
       }
 
@@ -21878,7 +22102,7 @@
         if (payBody) payBody.classList.add("is-hidden");
         if (closeBtn) closeBtn.classList.remove("is-hidden");
         if (title) title.textContent = "Pagamento confirmado";
-        const isNumbersCheckout = alternativaNumbersCheckoutActive;
+        const isNumbersCheckout = isAlternativaNumbersCheckoutContext();
         showToast(
           isNumbersCheckout
             ? "Pagamento confirmado. Agora conecte seus números via QR Code."
@@ -21891,7 +22115,7 @@
         } catch {
           /* ignore */
         }
-        alternativaNumbersCheckoutActive = false;
+        resetAlternativaNumbersCheckoutState();
         if (isNumbersCheckout) {
           closeDisparosOverlay("disparos-pix-overlay");
           setDisNumberSourceTab("comprar");
@@ -22952,6 +23176,7 @@
           showToast("Selecione um pacote na tabela de preços.", "error", 4200);
           return;
         }
+        resetAlternativaNumbersCheckoutState();
         const label = disparosBillingSelectedKind === "oficial" ? "API Oficial" : "API Alternativa";
 
         try {
@@ -22988,7 +23213,7 @@
       }
 
       async function submitDisparosBillingCheckout() {
-        if (alternativaNumbersCheckoutActive) {
+        if (isAlternativaNumbersCheckoutContext()) {
           await submitAlternativaNumbersCheckout();
           return;
         }
@@ -23161,7 +23386,12 @@
         document
           .getElementById("disparos-billing-cancel-btn")
           ?.addEventListener("click", () => {
+            const wasNumbersCheckout = isAlternativaNumbersCheckoutContext();
             closeDisparosOverlay("disparos-billing-overlay");
+            if (wasNumbersCheckout) {
+              resetAlternativaNumbersCheckoutState();
+              return;
+            }
             openDisparosOverlay("disparos-pricing-overlay");
           });
         document
@@ -27941,7 +28171,7 @@
         }
 
         if (nextTab === "instancias") {
-          renderInstancesList();
+          void loadInstancesForInstanciasTab();
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
           stopDisparosDashboardPolling();
@@ -28612,7 +28842,7 @@
             instanceLabel,
             contacts,
             messages,
-            profilePicUrl: String(inst?.profilePicUrl || "").trim(),
+            profilePicUrl: sanitizeInstanceProfilePicUrl(inst?.profilePicUrl),
             avatarVersion: String(inst?.avatarVersion || "").trim(),
             createdAt: String(inst?.createdAt || "").trim(),
             updatedAt: String(inst?.updatedAt || inst?.avatarVersion || "").trim(),
@@ -28814,7 +29044,7 @@
       }
 
       function buildAvatarProxyUrl(rawUrl, version = "", refreshNonce = "") {
-        const safeUrl = String(rawUrl || "").trim();
+        const safeUrl = sanitizeInstanceProfilePicUrl(rawUrl);
         if (!safeUrl) return "";
         const qs = new URLSearchParams();
         qs.set("url", safeUrl);
@@ -28822,6 +29052,10 @@
         if (refreshNonce) qs.set("r", String(refreshNonce));
         const base = String(window.WABA_BASE_PATH || "").replace(/\/$/, "");
         return `${base}/instancias/avatar?${qs.toString()}`;
+      }
+
+      function buildInstanceAvatarFallbackMarkup(title = "Foto de perfil indisponível") {
+        return `<span class="instance-avatar" title="${escapeAdminHtml(title)}">◎</span>`;
       }
 
       function bindInstanceAvatarFallback(img) {
@@ -28833,7 +29067,7 @@
           fallback.textContent = "◎";
           fallback.title = "Foto de perfil indisponível";
           img.replaceWith(fallback);
-        });
+        }, { once: true });
       }
 
       function renderInstancesList() {
@@ -28913,18 +29147,19 @@
           const usage = getInstanceUsage(inst.instanceName);
           const isSafeNumber = !usage.useAquecedor && !usage.useDisparador;
           const tr = document.createElement("tr");
+          const safeProfilePicUrl = sanitizeInstanceProfilePicUrl(inst.profilePicUrl);
           const avatarSrc =
-            inst.profilePicUrl && inst.profilePicUrl.length > 0
+            safeProfilePicUrl
               ? buildAvatarProxyUrl(
-                  inst.profilePicUrl,
+                  safeProfilePicUrl,
                   inst.avatarVersion || "1",
                   avatarRefreshNonce
                 )
               : "";
 
           const avatarCell = avatarSrc
-            ? `<img class="instance-avatar-img" src="${avatarSrc}" alt="Foto de perfil" loading="lazy" referrerpolicy="no-referrer" />`
-            : `<span class="instance-avatar">◎</span>`;
+            ? `<img class="instance-avatar-img" src="${escapeAdminHtml(avatarSrc)}" alt="Foto de perfil" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
+            : buildInstanceAvatarFallbackMarkup();
 
           const isDisconnected = !inst.isOpen;
           const refreshClass = isDisconnected
@@ -29149,10 +29384,14 @@
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showToast(data?.error || "Falha ao excluir instância.", "error");
+            showToast(data?.error || data?.detail || "Falha ao excluir instância.", "error", 5200);
             return;
           }
-          showToast(data?.message || "Instância excluída com sucesso.", "success");
+          showToast(
+            data?.message || "Instância excluída com sucesso.",
+            data?.degraded ? "warning" : "success",
+            data?.degraded ? 6200 : 4200
+          );
           deleteConfirmInstanceName = "";
           setDeleteConfirmProcessing(false);
           const overlay = document.getElementById("confirm-delete-overlay");
@@ -29160,9 +29399,22 @@
             overlay.classList.remove("open", "is-processing");
             overlay.setAttribute("aria-hidden", "true");
           }
+          const inputEl = document.getElementById("confirm-instance-input");
+          if (inputEl) inputEl.value = "";
           const confirmBtn = document.getElementById("confirm-delete-btn");
           if (confirmBtn) confirmBtn.textContent = "Deletar";
           markInstanceDeleting(instanceName, false);
+          if (Array.isArray(instancesData?.items)) {
+            instancesData.items = instancesData.items.filter(
+              (item) =>
+                String(item?.name || item?.instanceName || "").trim().toLowerCase() !==
+                instanceName.trim().toLowerCase()
+            );
+            instancesData.total = instancesData.items.length;
+            persistInstancesLocalCache(instancesData);
+            if (activeTab === "instancias") renderInstancesList();
+            updateInstancesIndicators();
+          }
           await carregar();
         } catch (error) {
           showToast("Erro ao excluir instância.", "error");
@@ -29895,7 +30147,7 @@
               return;
             }
 
-            const response = await fetchWithTimeout("/instancias", {}, 10000);
+            const response = await fetchWithTimeout("/instancias?refresh=1", {}, 50000);
             if (!response.ok) return;
             const payload = await response.json().catch(() => null);
             const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -29976,6 +30228,7 @@
 
       async function refreshQrCodeInRegisterModal() {
         const nameInput = document.getElementById("register-name-input");
+        const tokenInput = document.getElementById("register-token-input");
         const numberInput = document.getElementById("register-number-input");
         const qrPreview = document.getElementById("register-qrcode-preview");
         const refreshBtn = document.getElementById("register-refresh-qrcode-btn");
@@ -29988,6 +30241,7 @@
         }
 
         const name = String(nameInput.value || "").trim();
+        const token = String(tokenInput?.value || "").trim() || generateTokenLike();
         const number = String(numberInput.value || "").trim();
         const normalizedName = normalizeInstanceRegisterName(name);
         if (!name) {
@@ -30006,44 +30260,67 @@
         if (normalizedName !== name.toLowerCase()) {
           nameInput.value = normalizedName;
         }
+        if (tokenInput && !String(tokenInput.value || "").trim()) {
+          tokenInput.value = token;
+        }
 
         const originalLabel = refreshBtn.textContent;
         refreshBtn.textContent = "Atualizando...";
         refreshBtn.classList.add("disabled");
         refreshBtn.setAttribute("disabled", "true");
+        setRegisterWizardStep(2);
         try {
           qrPreview.classList.add("open");
           qrPreview.innerHTML =
             '<span class="muted">Gerando novo QRCode de conexão...</span>';
+          setRegisterConnectStatus("loading", "Gerando QRCode…");
 
-          const url = `/instancias/${encodeURIComponent(
-            normalizedName
-          )}/qrcode${number ? `?number=${encodeURIComponent(number)}` : ""}`;
           const response = await fetchWithTimeout(
-            url,
-            { method: "POST", headers: { "Content-Type": "application/json" } },
-            12000
+            "/instancias/registrar-qrcode",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: normalizedName, token, number }),
+            },
+            90000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showToast(data?.error || "Falha ao atualizar QRCode.", "error");
+            const errMsg =
+              data?.error ||
+              data?.detail ||
+              (response.status === 502
+                ? "Evolution API indisponível. Verifique EVO_API_URL no servidor."
+                : "Falha ao atualizar QRCode.");
+            showToast(errMsg, "error");
+            setRegisterConnectStatus("error", errMsg);
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
             return;
           }
 
           const imgSrc = resolveQrImageSrcFromPayload(data);
           if (!imgSrc) {
-            qrPreview.innerHTML =
-              '<span class="muted">QRCode solicitado, mas a EVO não retornou imagem nesta resposta.</span>';
+            const warnMsg =
+              "QRCode solicitado, mas a Evolution não retornou imagem nesta resposta.";
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(warnMsg)}</span>`;
+            setRegisterConnectStatus("error", warnMsg);
           } else {
-            qrPreview.innerHTML = `<img src="${imgSrc}" alt="QRCode de conexão" />`;
+            qrPreview.innerHTML = `<img src="${escapeAdminHtml(imgSrc)}" alt="QRCode de conexão" />`;
+            setRegisterConnectStatus("loading", "Escaneie o QR Code no WhatsApp do celular.");
           }
 
-          setRegisterConnectStatus("loading", "Dispositivo sendo conectado...");
           startRegisterConnectPolling(normalizedName);
+          beginRegisterWizardHide(normalizedName);
         } catch (error) {
-          showToast("Erro ao atualizar QRCode da instância.", "error");
+          const errMsg =
+            error instanceof Error && error.message === "timeout"
+              ? "Tempo esgotado ao contactar a Evolution API. Tente novamente."
+              : "Erro ao atualizar QRCode da instância.";
+          showToast(errMsg, "error");
+          setRegisterConnectStatus("error", errMsg);
+          qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
         } finally {
-          refreshBtn.textContent = originalLabel || "Atualizar QRCode";
+          refreshBtn.textContent = originalLabel || "Atualizar QR";
           refreshBtn.classList.remove("disabled");
           refreshBtn.removeAttribute("disabled");
         }
@@ -30186,7 +30463,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: normalizedName, token, number }),
             },
-            20000
+            90000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -30198,6 +30475,7 @@
                 : "Falha ao gerar QRCode.");
             showToast(errMsg, "error");
             setRegisterConnectStatus("error", errMsg);
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
             return;
           }
 
@@ -30208,7 +30486,7 @@
               '<span class="muted">Dados salvos, mas não foi retornado QRCode nesta resposta.</span>';
           } else {
             qrPreview.classList.add("open");
-            qrPreview.innerHTML = `<img src="${imgSrc}" alt="QRCode de conexão" />`;
+            qrPreview.innerHTML = `<img src="${escapeAdminHtml(imgSrc)}" alt="QRCode de conexão" />`;
           }
 
           startRegisterConnectPolling(normalizedName);
@@ -30221,6 +30499,7 @@
               : "Erro ao registrar e gerar QRCode.";
           showToast(errMsg, "error");
           setRegisterConnectStatus("error", errMsg);
+          qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
         } finally {
           actionBtn.textContent = "Gerar QRCode";
           actionBtn.classList.remove("disabled");
@@ -30577,8 +30856,7 @@
               ? // dados podem demorar um pouco mais
                 fetchWithTimeout(dadosUrl, {}, 15000)
               : Promise.resolve({ ok: false }),
-            // instancias pode falhar sem travar o dashboard
-            fetchWithTimeout("/instancias", {}, 8000),
+            fetchWithTimeout("/instancias/snapshot", {}, 8000),
           ]);
 
           if (
@@ -30586,10 +30864,12 @@
             resInstancias.value.ok
           ) {
             try {
-              instancesData = await resInstancias.value.json();
+              const payload = await resInstancias.value.json();
+              applyInstancesPayload(payload, { render: activeTab === "instancias" });
               instancesLoadError = "";
+              scheduleInstancesFullRefresh(500);
             } catch (e) {
-              console.error("Falha ao ler JSON de /instancias", e);
+              console.error("Falha ao ler JSON de /instancias/snapshot", e);
               // mantém último cache
             }
           } else if (resInstancias.status === "fulfilled") {
@@ -30597,13 +30877,16 @@
               const payload = await resInstancias.value.json();
               instancesLoadError = summarizeInstancesLoadError(
                 String(payload?.error || "").trim() ||
-                  "Não foi possível carregar instâncias da Evolution API."
+                  "Não foi possível carregar instâncias."
               );
             } catch {
-              instancesLoadError = "Não foi possível carregar instâncias da Evolution API.";
+              instancesLoadError = "Não foi possível carregar instâncias.";
             }
-          } else {
-            instancesLoadError = "Não foi possível carregar instâncias da Evolution API.";
+          } else if (!instancesData?.items?.length) {
+            instancesLoadError =
+              resInstancias.reason?.message === "timeout"
+                ? "Tempo esgotado ao carregar instâncias."
+                : "Não foi possível carregar instâncias.";
           }
           await loadInstanceUsageConfig();
           syncDisparadorNumberPicker();
@@ -32487,7 +32770,8 @@
           instancesRefreshBtn.textContent = "Atualizando...";
           instancesRefreshBtn.setAttribute("disabled", "true");
           try {
-            await carregar();
+            instancesLastFullRefreshAt = 0;
+            await loadInstancesForInstanciasTab({ fullRefresh: true });
           } finally {
             instancesRefreshBtn.textContent = original || "Atualizar";
             instancesRefreshBtn.removeAttribute("disabled");

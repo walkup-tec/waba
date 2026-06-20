@@ -5,6 +5,7 @@ exports.buildWabaAsaasExternalReference = buildWabaAsaasExternalReference;
 exports.parseWabaOrderIdFromExternalReference = parseWabaOrderIdFromExternalReference;
 exports.isWabaAsaasExternalReference = isWabaAsaasExternalReference;
 exports.buildWabaPaymentDescription = buildWabaPaymentDescription;
+exports.buildAlternativaNumbersPaymentDescription = buildAlternativaNumbersPaymentDescription;
 /** Prefixo fixo para distinguir cobranças WABA na conta Asaas compartilhada. */
 exports.WABA_ASAAS_PRODUCT = "waba";
 /** Usado em externalReference (cliente, pagamento, webhook). */
@@ -26,4 +27,7 @@ function isWabaAsaasExternalReference(externalReference) {
 function buildWabaPaymentDescription(apiKind) {
     const label = apiKind === "oficial" ? "API Oficial" : "API Alternativa";
     return `WABA Disparos · ${label} · créditos`;
+}
+function buildAlternativaNumbersPaymentDescription(quantity) {
+    return `WABA API Alternativa · ${quantity.toLocaleString("pt-BR")} número(s) WhatsApp`;
 }

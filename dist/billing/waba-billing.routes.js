@@ -2,13 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaBillingRoutes = void 0;
 const waba_auth_service_1 = require("../auth/waba-auth.service");
+const load_env_1 = require("../load-env");
 const asaas_transfer_auth_service_1 = require("./asaas-transfer-auth.service");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 const waba_billing_service_1 = require("./waba-billing.service");
+const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.service");
 const waba_disparos_credits_service_1 = require("./waba-disparos-credits.service");
 const orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository();
 const billingService = new waba_billing_service_1.WabaBillingService(orderRepository);
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
+const alternativaNumbersService = new waba_alternativa_numbers_service_1.WabaAlternativaNumbersService();
 const transferAuthService = new asaas_transfer_auth_service_1.AsaasTransferAuthService();
 const resolveRequestAuth = (req) => {
     const token = (0, waba_auth_service_1.readWabaSessionCookie)(req.headers.cookie);
@@ -37,6 +40,10 @@ const isAuthorizedAsaasTransferWebhook = (req) => {
         return true;
     const received = String(req.header("asaas-access-token") ?? "").trim();
     return received.length > 0 && received === expected;
+};
+const isAlternativaNumbersSimulationEnabled = () => {
+    const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
+    return load_env_1.WABA_ENV === "v02" || runtime === "development";
 };
 const registerWabaBillingRoutes = (app) => {
     app.get("/billing/disparos/config", (_req, res) => {
@@ -107,6 +114,85 @@ const registerWabaBillingRoutes = (app) => {
         catch (error) {
             return res.status(400).json({
                 error: error instanceof Error ? error.message : "Não foi possível consultar o pedido.",
+            });
+        }
+    });
+    app.get("/billing/alternativa-numbers/config", (_req, res) => {
+        return res.status(200).json({
+            ...alternativaNumbersService.getPricing(),
+            paymentConfigured: billingService.getDisparosConfig().paymentConfigured,
+        });
+    });
+    app.get("/billing/alternativa-numbers/summary", (req, res) => {
+        const auth = resolveRequestAuth(req);
+        if (!auth.email) {
+            return res.status(401).json({ error: "Faça login para consultar seus números." });
+        }
+        return res.status(200).json(alternativaNumbersService.getSummary(auth.email));
+    });
+    app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para comprar números." });
+            }
+            const body = req.body;
+            const quantity = Math.round(Number(body.quantity ?? 0));
+            const checkout = await billingService.createAlternativaNumbersPixCheckout({
+                customerName: String(body.customerName ?? ""),
+                ownerEmail: auth.email,
+                cpfCnpj: String(body.cpfCnpj ?? ""),
+                whatsapp: String(body.whatsapp ?? ""),
+                quantity,
+                valueCents: quantity * 2000,
+            });
+            return res.status(201).json(checkout);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível iniciar o pagamento.",
+            });
+        }
+    });
+    app.post("/billing/alternativa-numbers/activate", (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para ativar um número." });
+            }
+            const instanceName = String(req.body?.instanceName ?? "").trim();
+            if (!instanceName) {
+                return res.status(400).json({ error: "Informe o nome da instância." });
+            }
+            const activation = alternativaNumbersService.registerActivation(auth.email, instanceName);
+            return res.status(200).json({
+                ok: true,
+                activation,
+                summary: alternativaNumbersService.getSummary(auth.email),
+            });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível ativar o número.",
+            });
+        }
+    });
+    app.post("/billing/alternativa-numbers/simulate-purchase", (req, res) => {
+        if (!isAlternativaNumbersSimulationEnabled()) {
+            return res.status(404).json({ error: "Simulação indisponível neste ambiente." });
+        }
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para simular a compra." });
+            }
+            const quantity = Math.round(Number(req.body?.quantity ?? 0));
+            const result = alternativaNumbersService.simulatePaidPurchase(auth.email, quantity);
+            return res.status(201).json(result);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível simular a compra.",
             });
         }
     });
