@@ -65,5 +65,17 @@ class AlternativaNumberActivationRepository {
         saveStore(store);
         return activation;
     }
+    findSubscriberEmailForInstance(instanceName) {
+        const target = String(instanceName ?? "").trim().toLowerCase();
+        if (!target)
+            return null;
+        const store = loadStore();
+        for (const [email, bucket] of Object.entries(store.byEmail)) {
+            if (bucket.activations.some((row) => row.instanceName.toLowerCase() === target)) {
+                return email;
+            }
+        }
+        return null;
+    }
 }
 exports.AlternativaNumberActivationRepository = AlternativaNumberActivationRepository;

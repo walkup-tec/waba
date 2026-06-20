@@ -8300,7 +8300,74 @@
       }
       .alt-numbers-shop {
         display: grid;
-        gap: 14px;
+        gap: 16px;
+      }
+      .alt-numbers-shop-body {
+        display: grid;
+        gap: 16px;
+        align-items: stretch;
+      }
+      @media (min-width: 960px) {
+        .alt-numbers-shop-body {
+          grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.08fr);
+        }
+        .alt-numbers-shop-body .alt-numbers-buy-card {
+          margin-bottom: 0;
+        }
+      }
+      .alt-numbers-picker-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 100%;
+        padding: 16px;
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+      }
+      .alt-numbers-picker-panel-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.02em;
+      }
+      .alt-numbers-picker-panel .dis-number-picker {
+        flex: 1;
+        align-items: stretch;
+        min-height: 240px;
+      }
+      .alt-numbers-picker-panel .aquecedor-field {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+      }
+      .alt-numbers-picker-panel .aquecedor-field label {
+        flex-shrink: 0;
+        margin-bottom: 8px;
+      }
+      #dis-available-instances-comprar,
+      #dis-selected-instances-comprar {
+        flex: 1;
+        width: 100%;
+        min-height: 220px;
+        height: 220px;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(2, 6, 23, 0.55);
+        color: #e2e8f0;
+        padding: 6px;
+      }
+      #dis-available-instances-comprar option,
+      #dis-selected-instances-comprar option {
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      .alt-numbers-picker-panel .dis-number-picker-actions {
+        align-self: center;
+        padding-top: 28px;
       }
       .alt-numbers-stats {
         display: grid;
@@ -8312,6 +8379,51 @@
         border-radius: 12px;
         background: rgba(15, 23, 42, 0.72);
         border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+      .alt-numbers-stat--purchased {
+        background: linear-gradient(145deg, rgba(30, 58, 138, 0.35), rgba(15, 23, 42, 0.82));
+        border-color: rgba(96, 165, 250, 0.42);
+      }
+      .alt-numbers-stat--purchased span {
+        color: #93c5fd;
+      }
+      .alt-numbers-stat--purchased strong {
+        color: #60a5fa;
+      }
+      .alt-numbers-stat--activated {
+        background: linear-gradient(145deg, rgba(120, 53, 15, 0.28), rgba(15, 23, 42, 0.82));
+        border-color: rgba(251, 191, 36, 0.35);
+      }
+      .alt-numbers-stat--activated span {
+        color: #fcd34d;
+      }
+      .alt-numbers-stat--activated strong {
+        color: #fbbf24;
+      }
+      .alt-numbers-stat--available {
+        background: linear-gradient(145deg, rgba(6, 78, 59, 0.42), rgba(15, 23, 42, 0.82));
+        border-color: rgba(52, 211, 153, 0.48);
+        box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.12);
+      }
+      .alt-numbers-stat--available span {
+        color: #6ee7b7;
+        font-weight: 600;
+      }
+      .alt-numbers-stat--available strong {
+        color: #34d399;
+        font-size: 26px;
+      }
+      .alt-numbers-stat--available.is-empty {
+        background: linear-gradient(145deg, rgba(67, 20, 7, 0.32), rgba(15, 23, 42, 0.82));
+        border-color: rgba(251, 146, 60, 0.45);
+        box-shadow: none;
+      }
+      .alt-numbers-stat--available.is-empty span {
+        color: #fdba74;
+      }
+      .alt-numbers-stat--available.is-empty strong {
+        color: #fb923c;
+        font-size: 22px;
       }
       .alt-numbers-stat span {
         display: block;
@@ -8446,6 +8558,17 @@
         }
         .alt-numbers-buy-head {
           flex-direction: column;
+        }
+        .alt-numbers-picker-panel .dis-number-picker {
+          min-height: 0;
+        }
+        #dis-available-instances-comprar,
+        #dis-selected-instances-comprar {
+          min-height: 180px;
+          height: 180px;
+        }
+        .alt-numbers-picker-panel .dis-number-picker-actions {
+          padding-top: 0;
         }
       }
 
@@ -12493,25 +12616,26 @@
 
                       <div id="dis-number-panel-comprar" class="alt-numbers-shop" hidden>
                         <div class="alt-numbers-stats">
-                          <div class="alt-numbers-stat">
+                          <div class="alt-numbers-stat alt-numbers-stat--purchased">
                             <span>Comprados</span>
                             <strong id="alt-numbers-purchased">0</strong>
                           </div>
-                          <div class="alt-numbers-stat">
+                          <div class="alt-numbers-stat alt-numbers-stat--activated">
                             <span>Ativados</span>
                             <strong id="alt-numbers-activated">0</strong>
                           </div>
-                          <div class="alt-numbers-stat">
+                          <div class="alt-numbers-stat alt-numbers-stat--available" id="alt-numbers-available-card">
                             <span>Disponíveis p/ conectar</span>
                             <strong id="alt-numbers-available">0</strong>
                           </div>
                         </div>
 
+                        <div class="alt-numbers-shop-body">
                         <div class="alt-numbers-buy-card">
                           <div class="alt-numbers-buy-head">
                             <div>
                               <h4>Adquira números para disparo</h4>
-                              <p>Cada número WhatsApp custa R$ 20,00. Após o pagamento PIX, conecte via QR Code.</p>
+                              <p>Cada número WhatsApp custa R$ 20,00. Após o pagamento PIX, escolha números da fazenda master (marcados como Fazenda).</p>
                             </div>
                             <div class="alt-numbers-unit-badge">R$ 20 / número</div>
                           </div>
@@ -12542,11 +12666,12 @@
                           <div id="alt-numbers-activated-list" class="alt-numbers-activated-list"></div>
                         </div>
 
-                        <div id="alt-numbers-picker-wrap" hidden>
-                          <div class="dis-number-picker" style="margin-top:4px;">
+                        <div id="alt-numbers-picker-wrap" class="alt-numbers-picker-panel" hidden>
+                          <h4 class="alt-numbers-picker-panel-title">Selecionar números da fazenda</h4>
+                          <div class="dis-number-picker">
                             <div class="aquecedor-field">
-                              <label for="dis-available-instances-comprar">Números comprados disponíveis</label>
-                              <select id="dis-available-instances-comprar" size="6"></select>
+                              <label for="dis-available-instances-comprar">Números da fazenda disponíveis</label>
+                              <select id="dis-available-instances-comprar" size="8"></select>
                             </div>
                             <div class="dis-number-picker-actions">
                               <button id="dis-add-instance-comprar-btn" type="button" class="instance-action-btn enabled">→</button>
@@ -12554,10 +12679,11 @@
                             </div>
                             <div class="aquecedor-field">
                               <label for="dis-selected-instances-comprar">Selecionados para disparo</label>
-                              <select id="dis-selected-instances-comprar" size="6"></select>
+                              <select id="dis-selected-instances-comprar" size="8"></select>
                             </div>
                           </div>
-                          <span class="aquecedor-hint">Selecione quais números comprados entram no disparador.</span>
+                          <span class="aquecedor-hint" style="margin:0;">Selecione números da fazenda master para usar no disparador (→ ativa o slot comprado).</span>
+                        </div>
                         </div>
 
                         <div id="alt-numbers-empty-hint" class="alt-numbers-empty" hidden>
@@ -16324,6 +16450,10 @@
         if (purchasedEl) purchasedEl.textContent = String(summary?.purchasedSlots ?? 0);
         if (activatedEl) activatedEl.textContent = String(summary?.activatedCount ?? 0);
         if (availableEl) availableEl.textContent = String(summary?.availableSlots ?? 0);
+        const availableCard = document.getElementById("alt-numbers-available-card");
+        if (availableCard) {
+          availableCard.classList.toggle("is-empty", !(summary?.availableSlots > 0));
+        }
         if (qtyOut) qtyOut.textContent = String(alternativaNumbersSelectedQty);
         if (totalEl) totalEl.textContent = formatAlternativaNumbersTotal(alternativaNumbersSelectedQty);
         if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= 1;
@@ -16331,22 +16461,33 @@
           plusBtn.disabled = alternativaNumbersSelectedQty >= (summary?.maxQuantity ?? ALTERNATIVA_NUMBER_MAX_QTY);
         }
         if (connectBtn) {
-          connectBtn.hidden = !(summary?.availableSlots > 0);
+          connectBtn.hidden = true;
         }
 
         const hasPurchased = (summary?.purchasedSlots ?? 0) > 0;
         const hasActivated = (summary?.activatedCount ?? 0) > 0;
+        const hasFazendaPool =
+          (summary?.fazendaPool?.availableToClaim?.length ?? 0) > 0 ||
+          (summary?.fazendaPool?.assignedToSubscriber?.length ?? 0) > 0;
         if (emptyHint) emptyHint.hidden = hasPurchased;
         if (activatedWrap) activatedWrap.hidden = !hasActivated;
-        if (pickerWrap) pickerWrap.hidden = !hasActivated;
+        if (pickerWrap) pickerWrap.hidden = !hasPurchased;
 
         if (activatedList && hasActivated) {
           activatedList.innerHTML = "";
           (summary?.activations || []).forEach((row) => {
             const item = document.createElement("div");
             item.className = "alt-numbers-activated-item";
-            const label = getDisparadorInstanceLabelByValue(row.instanceName) || row.instanceName;
-            item.innerHTML = `<span>${label}</span><span class="muted">Conectado</span>`;
+            const poolRow = (summary?.fazendaPool?.items || []).find(
+              (item) =>
+                String(item?.instanceName || "").toLowerCase() ===
+                String(row.instanceName || "").toLowerCase()
+            );
+            const label =
+              poolRow?.label ||
+              getDisparadorInstanceLabelByValue(row.instanceName) ||
+              row.instanceName;
+            item.innerHTML = `<span>${label}</span><span class="muted">Ativo na fazenda</span>`;
             activatedList.appendChild(item);
           });
         }
@@ -16518,7 +16659,22 @@
         document.getElementById("alt-numbers-connect-btn")?.addEventListener("click", () => {
           openAlternativaNumberConnectWizard();
         });
-        document.getElementById("dis-add-instance-comprar-btn")?.addEventListener("click", () => {
+        document.getElementById("dis-add-instance-comprar-btn")?.addEventListener("click", async () => {
+          const fromEl = document.getElementById("dis-available-instances-comprar");
+          if (!fromEl) return;
+          const selectedToMove = Array.from(fromEl.selectedOptions)
+            .map((opt) => String(opt.value || "").trim())
+            .filter(Boolean);
+          const activationNames = new Set(
+            (alternativaNumbersSummary?.activations || []).map((row) =>
+              String(row.instanceName || "").trim().toLowerCase()
+            )
+          );
+          for (const name of selectedToMove) {
+            if (!activationNames.has(name.toLowerCase())) {
+              await registerAlternativaNumberActivation(name);
+            }
+          }
           moveDisparadorNumbers("dis-available-instances-comprar", "dis-selected-instances-comprar");
         });
         document.getElementById("dis-remove-instance-comprar-btn")?.addEventListener("click", () => {
@@ -25881,24 +26037,30 @@
       }
 
       function syncDisparadorNumberPicker() {
-        const syncOnePicker = (availableId, selectedId, filterFn) => {
+        const syncOnePicker = (availableId, selectedId, filterFn, externalCandidates = null) => {
           const availableEl = document.getElementById(availableId);
           const selectedEl = document.getElementById(selectedId);
           if (!availableEl || !selectedEl) return;
 
-          const candidates = (Array.isArray(instancesData?.items) ? instancesData.items : [])
-            .map((inst) => ({
-              name: String(inst?.name || inst?.instanceName || "").trim(),
-              label: String(
-                inst?.instanceAlias ||
-                  inst?.instanceLabel ||
-                  inst?.name ||
-                  inst?.instanceName ||
-                  ""
-              ).trim(),
-              status: String(inst?.connectionStatus || "").toLowerCase(),
-            }))
-            .filter((row) => row.name && row.status.includes("open") && filterFn(row.name));
+          const candidates = (
+            Array.isArray(externalCandidates) && externalCandidates.length
+              ? externalCandidates
+              : (Array.isArray(instancesData?.items) ? instancesData.items : []).map((inst) => ({
+                  name: String(inst?.name || inst?.instanceName || "").trim(),
+                  label: String(
+                    inst?.instanceAlias ||
+                      inst?.instanceLabel ||
+                      inst?.name ||
+                      inst?.instanceName ||
+                      ""
+                  ).trim(),
+                  status: String(inst?.connectionStatus || "").toLowerCase(),
+                }))
+          ).filter((row) => {
+            if (!row.name || !filterFn(row.name)) return false;
+            if (Array.isArray(externalCandidates) && externalCandidates.length) return true;
+            return String(row.status || "").toLowerCase().includes("open");
+          });
 
           const currentSelected = new Set([
             ...pendingSelectedDisparadorInstances,
@@ -25930,6 +26092,16 @@
           )
         );
 
+        const pool = alternativaNumbersSummary?.fazendaPool;
+        const assignedRows = Array.isArray(pool?.assignedToSubscriber) ? pool.assignedToSubscriber : [];
+        const claimableRows = Array.isArray(pool?.availableToClaim)
+          ? pool.availableToClaim.slice(
+              0,
+              Math.max(0, Number(alternativaNumbersSummary?.availableSlots ?? 0))
+            )
+          : [];
+        const fazendaPickerRows = [...assignedRows, ...claimableRows];
+
         const aquecedorSelected = syncOnePicker(
           "dis-available-instances",
           "dis-selected-instances",
@@ -25939,7 +26111,20 @@
         const comprarSelected = syncOnePicker(
           "dis-available-instances-comprar",
           "dis-selected-instances-comprar",
-          (name) => activationNames.has(String(name || "").trim().toLowerCase())
+          (name) => {
+            const key = String(name || "").trim().toLowerCase();
+            if (activationNames.has(key)) return true;
+            return claimableRows.some(
+              (row) => String(row?.instanceName || "").trim().toLowerCase() === key
+            );
+          },
+          fazendaPickerRows.length
+            ? fazendaPickerRows.map((row) => ({
+                name: String(row?.instanceName || "").trim(),
+                label: String(row?.label || row?.instanceName || "").trim(),
+                status: String(row?.connectionStatus || "").toLowerCase(),
+              }))
+            : null
         );
 
         if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
@@ -29081,6 +29266,7 @@
         return {
           useAquecedor: current ? current.useAquecedor !== false : true,
           useDisparador: current ? current.useDisparador !== false : true,
+          useFazenda: current ? current.useFazenda === true : false,
         };
       }
 
@@ -29097,6 +29283,7 @@
             map[key] = {
               useAquecedor: row?.useAquecedor !== false,
               useDisparador: row?.useDisparador !== false,
+              useFazenda: row?.useFazenda === true,
               updatedAt: row?.updatedAt || "",
             };
           });
@@ -29113,22 +29300,25 @@
         instanceUsageByName[key] = {
           useAquecedor: nextUsage.useAquecedor !== false,
           useDisparador: nextUsage.useDisparador !== false,
+          useFazenda: nextUsage.useFazenda === true,
           updatedAt: new Date().toISOString(),
         };
         try {
+          const payloadItem = {
+            instanceName: key,
+            useAquecedor: instanceUsageByName[key].useAquecedor,
+            useDisparador: instanceUsageByName[key].useDisparador,
+          };
+          if (hasMasterAccess()) {
+            payloadItem.useFazenda = instanceUsageByName[key].useFazenda;
+          }
           const response = await fetchWithTimeout(
             "/instancias/uso-config",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                items: [
-                  {
-                    instanceName: key,
-                    useAquecedor: instanceUsageByName[key].useAquecedor,
-                    useDisparador: instanceUsageByName[key].useDisparador,
-                  },
-                ],
+                items: [payloadItem],
               }),
             },
             10000
@@ -29243,6 +29433,7 @@
           return;
         }
 
+        const showFazendaColumn = hasMasterAccess();
         const table = document.createElement("table");
         table.className = "instances-table";
         table.innerHTML = `
@@ -29256,6 +29447,7 @@
               <th>Mensagens</th>
               <th>Aquecedor</th>
               <th>Disparador</th>
+              ${showFazendaColumn ? "<th>Fazenda</th>" : ""}
               <th>Status</th>
               <th>Ações</th>
             </tr>
@@ -29354,6 +29546,15 @@
                 <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
               </label>
             </td>
+            ${
+              showFazendaColumn
+                ? `<td>
+              <label class="aquecedor-toggle" style="margin:0;">
+                <input type="checkbox" class="instance-role-toggle" data-role="fazenda" data-instance="${inst.instanceName}" ${usage.useFazenda ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+              </label>
+            </td>`
+                : ""
+            }
             <td><span class="status-text ${
               inst.isOpen ? "connected" : "disconnected"
             }">${isDeleting ? "Excluindo…" : inst.statusLabel}</span></td>
@@ -32866,9 +33067,11 @@
         const next = {
           useAquecedor: current.useAquecedor,
           useDisparador: current.useDisparador,
+          useFazenda: current.useFazenda === true,
         };
         if (role === "aquecedor") next.useAquecedor = target.checked;
         if (role === "disparador") next.useDisparador = target.checked;
+        if (role === "fazenda") next.useFazenda = target.checked;
         await saveInstanceUsageConfig(instanceName, next);
         updateInstancesIndicators();
       });
