@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.countEnabledMenus = exports.parseMenuPermissionsForUpdate = exports.parseMenuPermissionsForCreate = exports.isTabAllowedForUser = exports.isMenuAllowedForUser = exports.listAllowedMenuIds = exports.buildLegacyMigrationPermissions = exports.resolveEffectiveMenuPermissions = exports.buildNoMenusEnabled = exports.buildAllMenusEnabled = void 0;
+exports.countEnabledMenus = exports.parseMenuPermissionsForUpdate = exports.parseMenuPermissionsForCreate = exports.isTabAllowedForUser = exports.isMenuAllowedForUser = exports.listAllowedMenuIds = exports.buildDefaultOperacionalMenuPermissions = exports.buildLegacyMigrationPermissions = exports.resolveEffectiveMenuPermissions = exports.buildNoMenusEnabled = exports.buildAllMenusEnabled = void 0;
 const waba_menu_registry_1 = require("./waba-menu-registry");
 const normalizePermissionsInput = (input, allowedIds) => {
     const result = {};
@@ -46,6 +46,21 @@ exports.resolveEffectiveMenuPermissions = resolveEffectiveMenuPermissions;
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
 const buildLegacyMigrationPermissions = () => (0, exports.buildAllMenusEnabled)();
 exports.buildLegacyMigrationPermissions = buildLegacyMigrationPermissions;
+/** Padrão operacional: Aquecedor + Disparos (Dashboard, Créditos, API Alternativa, API Oficial). */
+const buildDefaultOperacionalMenuPermissions = () => {
+    const result = (0, exports.buildNoMenusEnabled)();
+    const defaults = new Set([
+        "dashboard",
+        "instancias",
+        "aquecedor",
+        ...waba_menu_registry_1.WABA_SUBSCRIBER_DISPAROS_MENU_IDS,
+    ]);
+    for (const id of (0, waba_menu_registry_1.listWabaMenuIds)()) {
+        result[id] = defaults.has(id);
+    }
+    return result;
+};
+exports.buildDefaultOperacionalMenuPermissions = buildDefaultOperacionalMenuPermissions;
 const listAllowedMenuIds = (user) => {
     const effective = (0, exports.resolveEffectiveMenuPermissions)(user);
     return Object.entries(effective)
@@ -75,6 +90,10 @@ const parseMenuPermissionsForCreate = (role, input) => {
     }
     const allowedIds = new Set((0, waba_menu_registry_1.listWabaMenuIds)());
     const parsed = normalizePermissionsInput(input, allowedIds);
+    const hasAnySelected = [...allowedIds].some((id) => parsed[id] === true);
+    if (!hasAnySelected && role === "operacional") {
+        return (0, exports.buildDefaultOperacionalMenuPermissions)();
+    }
     const result = (0, exports.buildNoMenusEnabled)();
     for (const id of allowedIds) {
         result[id] = parsed[id] === true;

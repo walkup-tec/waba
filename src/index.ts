@@ -21,10 +21,11 @@ import {
 } from "./base-path";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
 import { resolveWabaRequestAuth } from "./auth/waba-request-auth";
-import { isWabaAuthConfigured } from "./auth/waba-auth.service";
+import { isWabaAuthConfigured, isWabaMasterEmail } from "./auth/waba-auth.service";
 import { wabaInstanceOwnershipService } from "./instances/waba-instance-ownership.service";
 import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
+import { configureWabaFazendaPool } from "./instances/waba-fazenda-pool.service";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
@@ -553,6 +554,7 @@ function normalizeInstanceUsageRow(row: any): InstanceUsageConfig {
   return {
     useAquecedor: row?.use_aquecedor !== false,
     useDisparador: row?.use_disparador !== false,
+    useFazenda: row?.use_fazenda === true,
     updatedAt: String(row?.updated_at || new Date().toISOString()),
   };
 }
@@ -579,7 +581,7 @@ async function loadInstanceUsageMap(): Promise<Map<string, InstanceUsageConfig>>
     try {
       const { data, error } = await (supabase
         .from("instancias_uso_config" as any)
-        .select("instance_name, use_aquecedor, use_disparador, updated_at")
+        .select("instance_name, use_aquecedor, use_disparador, use_fazenda, updated_at")
         .limit(2000)) as any;
       if (!error && Array.isArray(data)) {
         for (const row of data) {
@@ -599,15 +601,20 @@ async function loadInstanceUsageMap(): Promise<Map<string, InstanceUsageConfig>>
 }
 
 async function persistInstanceUsage(
-  items: Array<{ instanceName: string; useAquecedor: boolean; useDisparador: boolean }>
+  items: Array<{ instanceName: string; useAquecedor: boolean; useDisparador: boolean; useFazenda?: boolean }>
 ) {
   const now = new Date().toISOString();
+  const usageMap = await loadInstanceUsageMap();
   for (const item of items) {
     const key = String(item.instanceName || "").trim();
     if (!key) continue;
+    const previous = instanceUsageMemory.get(key) || getInstanceUsageFromMap(usageMap, key);
+    const useFazenda =
+      item.useFazenda !== undefined ? item.useFazenda === true : previous?.useFazenda === true;
     instanceUsageMemory.set(key, {
       useAquecedor: item.useAquecedor !== false,
       useDisparador: item.useDisparador !== false,
+      useFazenda,
       updatedAt: now,
     });
   }
@@ -615,12 +622,17 @@ async function persistInstanceUsage(
   if (!supabase) return;
   try {
     const rows = items
-      .map((item) => ({
-        instance_name: String(item.instanceName || "").trim(),
-        use_aquecedor: item.useAquecedor !== false,
-        use_disparador: item.useDisparador !== false,
-        updated_at: now,
-      }))
+      .map((item) => {
+        const key = String(item.instanceName || "").trim();
+        const previous = instanceUsageMemory.get(key);
+        return {
+          instance_name: key,
+          use_aquecedor: item.useAquecedor !== false,
+          use_disparador: item.useDisparador !== false,
+          use_fazenda: previous?.useFazenda === true,
+          updated_at: now,
+        };
+      })
       .filter((r) => r.instance_name);
     if (!rows.length) return;
     await (supabase.from("instancias_uso_config" as any) as any).upsert(rows, {
@@ -2057,6 +2069,7 @@ type AquecedorConfig = typeof AQUECEDOR_DEFAULTS;
 type InstanceUsageConfig = {
   useAquecedor: boolean;
   useDisparador: boolean;
+  useFazenda: boolean;
   updatedAt: string;
 };
 
@@ -3106,19 +3119,35 @@ async function runAquecedorCycleTestBatch(
     : { number: numero, text: texto, textMessage: { text: texto } };
   const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
   const proximo = picked.index + 1;
+  const origemConnected = connected.find((item) => item.instancia === chosen.instancia_origem);
   if (sendResult.ok) {
-    await (supabase.from("logs_envios" as any) as any).insert({
-      instancia_origem: chosen.instancia_origem,
-      instancia_destino: chosen.instancia_destino,
-      data_envio: new Date().toISOString(),
-    });
-    await recordAquecedorEnvio({
-      instanciaOrigem: chosen.instancia_origem,
-      instanciaDestino: chosen.instancia_destino,
-      status: "Envio com Sucesso",
-    });
-    aquecedorRuntime.lastEvoError = null;
-    aquecedorRuntime.lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
+    const deliveryCheck = await verifyAquecedorMessageDelivered(
+      chosen.instancia_destino,
+      String(origemConnected?.numero || ""),
+      texto,
+    );
+    if (!deliveryCheck.ok) {
+      aquecedorRuntime.lastEvoError = {
+        status: sendResult.status,
+        body: deliveryCheck.detail.slice(0, 500),
+        instance: chosen.instancia_destino,
+        numeroLen: numero.length,
+      };
+      aquecedorRuntime.lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário.`;
+    } else {
+      await (supabase.from("logs_envios" as any) as any).insert({
+        instancia_origem: chosen.instancia_origem,
+        instancia_destino: chosen.instancia_destino,
+        data_envio: new Date().toISOString(),
+      });
+      await recordAquecedorEnvio({
+        instanciaOrigem: chosen.instancia_origem,
+        instanciaDestino: chosen.instancia_destino,
+        status: "Envio com Sucesso",
+      });
+      aquecedorRuntime.lastEvoError = null;
+      aquecedorRuntime.lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
+    }
   } else {
     aquecedorRuntime.lastEvoError = {
       status: sendResult.status,
@@ -3366,9 +3395,7 @@ async function runAquecedorCycle(forceTest = false) {
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
 
     if (!sendResult.ok) {
-      await (supabase.from("aquecedor" as any) as any)
-        .update({ status: "PENDENTE" })
-        .eq("id", pendingData.id);
+      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
       const evoDetail =
         sendResult.json?.message ||
         (Array.isArray(sendResult.json?.message) ? sendResult.json.message[0] : null) ||
@@ -3384,6 +3411,26 @@ async function runAquecedorCycle(forceTest = false) {
         numeroLen: numero.length,
       };
       console.error("[Aquecedor] sendText falhou:", aquecedorRuntime.lastEvoError);
+      return;
+    }
+
+    const origemConnected = connected.find((item) => item.instancia === chosen.instancia_origem);
+    const deliveryCheck = await verifyAquecedorMessageDelivered(
+      chosen.instancia_destino,
+      String(origemConnected?.numero || ""),
+      texto,
+    );
+    if (!deliveryCheck.ok) {
+      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
+      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 120_000).toISOString();
+      aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryCheck.detail}`;
+      aquecedorRuntime.lastEvoError = {
+        status: sendResult.status,
+        body: deliveryCheck.detail.slice(0, 500),
+        instance: chosen.instancia_destino,
+        numeroLen: numero.length,
+      };
+      console.warn("[Aquecedor] entrega não confirmada:", aquecedorRuntime.lastEvoError);
       return;
     }
     aquecedorRuntime.lastEvoError = null;
@@ -4061,8 +4108,11 @@ app.post("/instancias/uso-config", async (req, res) => {
         instanceName: String(row?.instanceName || "").trim(),
         useAquecedor: row?.useAquecedor !== false,
         useDisparador: row?.useDisparador !== false,
+        useFazenda: row?.useFazenda === true,
       }))
       .filter((row: any) => row.instanceName);
+    const auth = resolveWabaRequestAuth(req);
+    const isMaster = auth.role === "master" || isWabaMasterEmail(auth.email);
     const allowed = await rejectForeignInstanceNames(
       req,
       items.map((row: { instanceName: string }) => row.instanceName)
@@ -4071,11 +4121,16 @@ app.post("/instancias/uso-config", async (req, res) => {
     const filtered = items.filter((row: { instanceName: string }) =>
       allowedLower.has(row.instanceName.toLowerCase())
     );
-    if (!filtered.length) {
+    const sanitized = filtered.map((row: { instanceName: string; useAquecedor: boolean; useDisparador: boolean; useFazenda: boolean }) => {
+      if (isMaster) return row;
+      const { useFazenda: _ignored, ...rest } = row;
+      return rest;
+    });
+    if (!sanitized.length) {
       return res.status(400).json({ error: "Nenhuma instância válida foi informada." });
     }
-    await persistInstanceUsage(filtered);
-    return res.json({ ok: true, message: "Configuração de uso das instâncias salva.", items: filtered });
+    await persistInstanceUsage(sanitized);
+    return res.json({ ok: true, message: "Configuração de uso das instâncias salva.", items: sanitized });
   } catch {
     return res.status(500).json({ error: "Erro ao salvar configuração de uso das instâncias." });
   }
@@ -5037,14 +5092,25 @@ async function callEvoSendTextWithRetry(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const result = await callEvoAction(url, "POST", body);
     last = result;
-    if (result.ok) return result;
-    const bodyLc = String(result.body || "").toLowerCase();
+    const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
+    if (accepted) return result;
+    if (result.ok && !accepted) {
+      last = {
+        ...result,
+        ok: false,
+        body: `${result.body || ""} | EVO retornou HTTP OK, mas corpo indica falha no envio.`.slice(
+          0,
+          500,
+        ),
+      };
+    }
+    const bodyLc = String(last.body || "").toLowerCase();
     const isTransient =
-      result.status === 429 ||
-      result.status === 500 ||
-      result.status === 502 ||
-      result.status === 503 ||
-      result.status === 504 ||
+      last.status === 429 ||
+      last.status === 500 ||
+      last.status === 502 ||
+      last.status === 503 ||
+      last.status === 504 ||
       bodyLc.includes("connection closed") ||
       bodyLc.includes("timeout");
     if (!isTransient || attempt >= maxAttempts) break;
@@ -5059,6 +5125,127 @@ async function callEvoSendTextWithRetry(
       json: null,
     }
   );
+}
+
+function isEvoSendTextAccepted(json: unknown, body: string): boolean {
+  const rawBody = String(body || "").trim();
+  if (rawBody.toLowerCase().includes('"error"')) {
+    try {
+      const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+      if (parsed?.error) return false;
+    } catch {
+      /* */
+    }
+  }
+  if (!json || typeof json !== "object") return true;
+  const root = json as Record<string, unknown>;
+  if (root.error) return false;
+  const status = String(root.status ?? "").trim().toUpperCase();
+  if (status === "ERROR" || status === "FAILED") return false;
+  const message = root.message;
+  if (message && typeof message === "object") {
+    const msgStatus = String((message as Record<string, unknown>).status ?? "")
+      .trim()
+      .toUpperCase();
+    if (msgStatus === "ERROR" || msgStatus === "FAILED") return false;
+  }
+  return true;
+}
+
+function toAquecedorRemoteJid(num: string): string {
+  const digits = normalizeWhatsAppNumber(String(num || "").trim());
+  return digits ? `${digits}@s.whatsapp.net` : "";
+}
+
+function extractAquecedorMessageMarker(text: string): string {
+  const value = String(text || "").trim();
+  const suffix = value.match(/\b([a-z0-9]{5,8})\s*$/i);
+  if (suffix?.[1]) return suffix[1].toLowerCase();
+  return value.slice(-24).toLowerCase();
+}
+
+function collectEvoChatMessageTexts(node: unknown, out: string[], depth = 0): void {
+  if (depth > 10 || node == null) return;
+  if (typeof node === "string") return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectEvoChatMessageTexts(item, out, depth + 1);
+    return;
+  }
+  if (typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  if (typeof obj.conversation === "string" && obj.conversation.trim()) {
+    out.push(obj.conversation.trim());
+  }
+  const ext = obj.extendedTextMessage as Record<string, unknown> | undefined;
+  if (typeof ext?.text === "string" && ext.text.trim()) out.push(ext.text.trim());
+  if (typeof obj.text === "string" && obj.text.trim()) out.push(obj.text.trim());
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") collectEvoChatMessageTexts(value, out, depth + 1);
+  }
+}
+
+function evoChatTextsIncludeMarker(node: unknown, marker: string): boolean {
+  const texts: string[] = [];
+  collectEvoChatMessageTexts(node, texts);
+  const needle = String(marker || "").trim().toLowerCase();
+  if (!needle) return false;
+  return texts.some((text) => text.toLowerCase().includes(needle));
+}
+
+async function verifyAquecedorMessageDelivered(
+  instanciaDestino: string,
+  numeroOrigem: string,
+  messageText: string,
+  maxAttempts = 4,
+): Promise<{ ok: boolean; detail: string }> {
+  const destino = String(instanciaDestino || "").trim();
+  const remoteJid = toAquecedorRemoteJid(numeroOrigem);
+  if (!destino || !remoteJid) {
+    return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
+  }
+
+  const marker = extractAquecedorMessageMarker(messageText);
+  const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(destino)}`;
+  const bodies: Array<Record<string, unknown>> = [
+    { where: { key: { remoteJid } }, limit: 40 },
+    { where: { key: { remoteJid } }, take: 40 },
+    { limit: 60 },
+  ];
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (attempt > 1) await sleepMs(2000);
+    for (const body of bodies) {
+      const result = await callEvoAction(url, "POST", body, {
+        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 20000),
+        retries: 1,
+      });
+      if (!result.ok) continue;
+      if (evoChatTextsIncludeMarker(result.json, marker)) {
+        return { ok: true, detail: "" };
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    detail:
+      "EVO aceitou o envio, mas a mensagem não apareceu no WhatsApp do destinatário (conferência findMessages).",
+  };
+}
+
+async function revertAquecedorPendingAfterFailedSend(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  pendingId: string | number,
+): Promise<void> {
+  await (supabase.from("aquecedor" as any) as any)
+    .update({
+      status: "PENDENTE",
+      instancia: null,
+      numero_destino: null,
+      processing_at: null,
+      sent_at: null,
+    })
+    .eq("id", pendingId);
 }
 
 const META_GRAPH_BASE = String(process.env.META_GRAPH_BASE || "https://graph.facebook.com").replace(
@@ -9247,6 +9434,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
   }
 });
 
+configureWabaFazendaPool({ loadInstanceUsageMap });
 registerWabaBillingRoutes(app);
 registerWabaCampaignIntakeRoutes(app);
 registerWabaSupportRoutes(app);

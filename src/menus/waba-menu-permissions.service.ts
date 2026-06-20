@@ -1,5 +1,9 @@
 import type { WabaSystemUser, WabaSystemUserRole } from "../users/waba-system-user.repository";
-import { listWabaMenuDefinitions, listWabaMenuIds } from "./waba-menu-registry";
+import {
+  listWabaMenuDefinitions,
+  listWabaMenuIds,
+  WABA_SUBSCRIBER_DISPAROS_MENU_IDS,
+} from "./waba-menu-registry";
 
 export type MenuPermissionsMap = Record<string, boolean>;
 
@@ -55,6 +59,21 @@ export const resolveEffectiveMenuPermissions = (
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
 export const buildLegacyMigrationPermissions = (): MenuPermissionsMap => buildAllMenusEnabled();
 
+/** Padrão operacional: Aquecedor + Disparos (Dashboard, Créditos, API Alternativa, API Oficial). */
+export const buildDefaultOperacionalMenuPermissions = (): MenuPermissionsMap => {
+  const result = buildNoMenusEnabled();
+  const defaults = new Set<string>([
+    "dashboard",
+    "instancias",
+    "aquecedor",
+    ...WABA_SUBSCRIBER_DISPAROS_MENU_IDS,
+  ]);
+  for (const id of listWabaMenuIds()) {
+    result[id] = defaults.has(id);
+  }
+  return result;
+};
+
 export const listAllowedMenuIds = (
   user: Pick<WabaSystemUser, "role" | "menuPermissions">,
 ): string[] => {
@@ -93,6 +112,10 @@ export const parseMenuPermissionsForCreate = (
 
   const allowedIds = new Set(listWabaMenuIds());
   const parsed = normalizePermissionsInput(input, allowedIds);
+  const hasAnySelected = [...allowedIds].some((id) => parsed[id] === true);
+  if (!hasAnySelected && role === "operacional") {
+    return buildDefaultOperacionalMenuPermissions();
+  }
   const result = buildNoMenusEnabled();
   for (const id of allowedIds) {
     result[id] = parsed[id] === true;

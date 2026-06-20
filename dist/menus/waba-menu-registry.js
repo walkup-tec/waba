@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listWabaMenuIds = exports.getWabaMenusByTab = exports.getWabaMenuById = exports.listWabaMenuDefinitions = exports.WABA_MENU_REGISTRY = exports.WABA_MENU_SECTION_LABELS = void 0;
+exports.listWabaMenuIds = exports.getWabaMenusByTab = exports.getWabaMenuById = exports.listWabaMenuDefinitions = exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = exports.WABA_MENU_REGISTRY = exports.WABA_MENU_SECTION_LABELS = void 0;
 exports.WABA_MENU_SECTION_LABELS = {
     "nao-oficial": "Aquecedor",
     oficial: "Disparos",
@@ -150,6 +150,13 @@ exports.WABA_MENU_REGISTRY = [
         sectionLabel: SECTION_LABELS.suporte,
         profile: "all",
     },
+];
+/** Menus Disparos visíveis para assinantes (UI produção / V02). */
+exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
+    "disparos-dashboard",
+    "disparos-lancamento",
+    "disparo-evo",
+    "campanhas",
 ];
 const listWabaMenuDefinitions = () => exports.WABA_MENU_REGISTRY.map((item) => ({ ...item }));
 exports.listWabaMenuDefinitions = listWabaMenuDefinitions;
