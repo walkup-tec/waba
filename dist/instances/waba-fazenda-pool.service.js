@@ -87,10 +87,12 @@ class WabaFazendaPoolService {
             const cached = resolveCacheRow(cacheItems, instanceName);
             const connectionStatus = String(cached?.connectionStatus || "unknown");
             const label = String(cached?.displayName || cached?.instanceAlias || instanceName).trim() || instanceName;
+            const number = String(cached?.number || "").trim();
             const assignedToEmail = this.activationRepository.findSubscriberEmailForInstance(instanceName);
             return {
                 instanceName,
                 label,
+                number: number || undefined,
                 connectionStatus,
                 isOpen: connectionStatus.toLowerCase().includes("open"),
                 assignedToEmail,

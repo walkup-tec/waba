@@ -15,6 +15,7 @@ export type InstanceUsageSnapshot = {
 export type FazendaPoolItem = {
   instanceName: string;
   label: string;
+  number?: string;
   connectionStatus: string;
   isOpen: boolean;
   assignedToEmail: string | null;
@@ -123,10 +124,12 @@ export class WabaFazendaPoolService {
       const connectionStatus = String(cached?.connectionStatus || "unknown");
       const label =
         String(cached?.displayName || cached?.instanceAlias || instanceName).trim() || instanceName;
+      const number = String(cached?.number || "").trim();
       const assignedToEmail = this.activationRepository.findSubscriberEmailForInstance(instanceName);
       return {
         instanceName,
         label,
+        number: number || undefined,
         connectionStatus,
         isOpen: connectionStatus.toLowerCase().includes("open"),
         assignedToEmail,

@@ -8369,6 +8369,112 @@
         align-self: center;
         padding-top: 28px;
       }
+      .alt-numbers-flow-guide {
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      .alt-numbers-flow-steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        list-style: none;
+        margin: 0 0 8px;
+        padding: 0;
+      }
+      .alt-numbers-flow-step {
+        flex: 1;
+        min-width: 120px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-align: center;
+        color: rgba(148, 163, 184, 0.85);
+        background: rgba(2, 6, 23, 0.45);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+      }
+      .alt-numbers-flow-step.is-done {
+        color: #6ee7b7;
+        border-color: rgba(52, 211, 153, 0.35);
+        background: rgba(16, 185, 129, 0.12);
+      }
+      .alt-numbers-flow-step.is-active {
+        color: #ecfeff;
+        border-color: rgba(45, 212, 191, 0.45);
+        background: rgba(20, 184, 166, 0.2);
+      }
+      .alt-numbers-flow-hint {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: rgba(203, 213, 225, 0.88);
+      }
+      .alt-numbers-stats-caption {
+        margin: -8px 0 0;
+        font-size: 11px;
+        color: rgba(148, 163, 184, 0.75);
+        line-height: 1.4;
+      }
+      .alt-fazenda-card-list {
+        display: grid;
+        gap: 8px;
+        max-height: min(360px, 50vh);
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+      .alt-fazenda-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      .alt-fazenda-card.is-active {
+        border-color: rgba(52, 211, 153, 0.4);
+        background: rgba(16, 185, 129, 0.08);
+      }
+      .alt-fazenda-card.is-offline {
+        opacity: 0.72;
+      }
+      .alt-fazenda-card-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .alt-fazenda-card-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: #f8fafc;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .alt-fazenda-card-meta {
+        font-size: 11px;
+        color: rgba(148, 163, 184, 0.9);
+        line-height: 1.35;
+      }
+      .alt-fazenda-card .instance-action-btn {
+        flex-shrink: 0;
+        min-width: 88px;
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+      .alt-fazenda-card-list-empty {
+        margin: 0;
+        padding: 12px;
+        font-size: 12px;
+        color: rgba(148, 163, 184, 0.85);
+        text-align: center;
+        border: 1px dashed rgba(148, 163, 184, 0.2);
+        border-radius: 10px;
+      }
       .alt-numbers-stats {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -12625,9 +12731,23 @@
                             <strong id="alt-numbers-activated">0</strong>
                           </div>
                           <div class="alt-numbers-stat alt-numbers-stat--available" id="alt-numbers-available-card">
-                            <span>Disponíveis p/ conectar</span>
+                            <span>Slots restantes</span>
                             <strong id="alt-numbers-available">0</strong>
                           </div>
+                        </div>
+                        <p class="alt-numbers-stats-caption">
+                          Slots restantes = comprados − já ativados. Cada ativação usa 1 slot.
+                        </p>
+
+                        <div id="alt-numbers-flow-guide" class="alt-numbers-flow-guide">
+                          <ol class="alt-numbers-flow-steps">
+                            <li id="alt-flow-step-buy" class="alt-numbers-flow-step is-active">1 · Comprar slots</li>
+                            <li id="alt-flow-step-pick" class="alt-numbers-flow-step">2 · Ativar números</li>
+                            <li id="alt-flow-step-use" class="alt-numbers-flow-step">3 · Disparar</li>
+                          </ol>
+                          <p id="alt-numbers-flow-hint" class="alt-numbers-flow-hint">
+                            Escolha quantos números deseja e pague com PIX.
+                          </p>
                         </div>
 
                         <div class="alt-numbers-shop-body">
@@ -12635,7 +12755,7 @@
                           <div class="alt-numbers-buy-head">
                             <div>
                               <h4>Adquira números para disparo</h4>
-                              <p>Cada número WhatsApp custa R$ 20,00. Após o pagamento PIX, escolha números da fazenda master (marcados como Fazenda).</p>
+                              <p>Cada número WhatsApp custa R$ 20,00. Após o PIX, escolha quais números ativar — um clique por slot.</p>
                             </div>
                             <div class="alt-numbers-unit-badge">R$ 20 / número</div>
                           </div>
@@ -12667,22 +12787,13 @@
                         </div>
 
                         <div id="alt-numbers-picker-wrap" class="alt-numbers-picker-panel" hidden>
-                          <h4 class="alt-numbers-picker-panel-title">Selecionar números da fazenda</h4>
-                          <div class="dis-number-picker">
-                            <div class="aquecedor-field">
-                              <label for="dis-available-instances-comprar">Números da fazenda disponíveis</label>
-                              <select id="dis-available-instances-comprar" size="8"></select>
-                            </div>
-                            <div class="dis-number-picker-actions">
-                              <button id="dis-add-instance-comprar-btn" type="button" class="instance-action-btn enabled">→</button>
-                              <button id="dis-remove-instance-comprar-btn" type="button" class="instance-action-btn enabled">←</button>
-                            </div>
-                            <div class="aquecedor-field">
-                              <label for="dis-selected-instances-comprar">Selecionados para disparo</label>
-                              <select id="dis-selected-instances-comprar" size="8"></select>
-                            </div>
-                          </div>
-                          <span class="aquecedor-hint" style="margin:0;">Selecione números da fazenda master para usar no disparador (→ ativa o slot comprado).</span>
+                          <h4 class="alt-numbers-picker-panel-title">Seus números disponíveis</h4>
+                          <div id="alt-fazenda-card-list" class="alt-fazenda-card-list" role="list"></div>
+                          <span class="aquecedor-hint" style="margin:0;">
+                            Toque em <strong>Ativar</strong> para vincular o número a um slot comprado. Números já ativos aparecem com ✓.
+                          </span>
+                          <select id="dis-available-instances-comprar" multiple hidden aria-hidden="true"></select>
+                          <select id="dis-selected-instances-comprar" multiple hidden aria-hidden="true"></select>
                         </div>
                         </div>
 
@@ -16432,6 +16543,171 @@
         return formatDisparosMoneyFromCents(qty * ALTERNATIVA_NUMBER_UNIT_CENTS);
       }
 
+      function formatFazendaPhoneHint(raw) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (digits.length < 10) return "";
+        if (digits.length >= 12 && digits.startsWith("55")) {
+          const ddd = digits.slice(2, 4);
+          const rest = digits.slice(4);
+          if (rest.length === 9) {
+            return `+55 ${ddd} ${rest.slice(0, 1)} ${rest.slice(1, 5)}-${rest.slice(5)}`;
+          }
+          return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+        }
+        if (digits.length === 11) {
+          return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+        }
+        return digits;
+      }
+
+      function lookupInstancePhone(instanceName) {
+        const target = String(instanceName || "").trim().toLowerCase();
+        if (!target) return "";
+        const items = Array.isArray(instancesData?.items) ? instancesData.items : [];
+        const row = items.find((inst) => {
+          const name = String(inst?.name || inst?.instanceName || "").trim().toLowerCase();
+          return name === target;
+        });
+        return formatFazendaPhoneHint(row?.number || "");
+      }
+
+      function getFazendaRowDisplayLines(row) {
+        const instanceName = String(row?.instanceName || row?.name || "").trim();
+        const label = String(row?.label || instanceName).trim();
+        const phone = formatFazendaPhoneHint(row?.number) || lookupInstancePhone(instanceName);
+        const idHint =
+          instanceName && label.toLowerCase() !== instanceName.toLowerCase() ? instanceName : "";
+        const metaParts = [];
+        if (phone) metaParts.push(phone);
+        if (idHint) metaParts.push(idHint);
+        const status = String(row?.connectionStatus || "").toLowerCase();
+        if (!status.includes("open")) metaParts.push("desconectado");
+        return {
+          label,
+          meta: metaParts.length ? metaParts.join(" · ") : "Pronto para ativar",
+        };
+      }
+
+      function syncComprarHiddenPickerSelects(selectedNames, availableNames) {
+        const availableEl = document.getElementById("dis-available-instances-comprar");
+        const selectedEl = document.getElementById("dis-selected-instances-comprar");
+        if (availableEl) fillSelectWithValues(availableEl, availableNames);
+        if (selectedEl) fillSelectWithValues(selectedEl, selectedNames);
+      }
+
+      function updateAlternativaNumbersFlowGuide(summary) {
+        const purchased = Number(summary?.purchasedSlots ?? 0);
+        const activated = Number(summary?.activatedCount ?? 0);
+        const available = Number(summary?.availableSlots ?? 0);
+        const stepBuy = document.getElementById("alt-flow-step-buy");
+        const stepPick = document.getElementById("alt-flow-step-pick");
+        const stepUse = document.getElementById("alt-flow-step-use");
+        const hintEl = document.getElementById("alt-numbers-flow-hint");
+        const tabBtn = document.querySelector('.dis-number-source-tab[data-source="comprar"]');
+
+        if (tabBtn) {
+          tabBtn.textContent = purchased > 0 ? `Meus números (${purchased})` : "Comprar números";
+        }
+
+        [stepBuy, stepPick, stepUse].forEach((el) => {
+          if (el) el.classList.remove("is-active", "is-done");
+        });
+
+        let hint = "Escolha quantos números deseja e pague com PIX.";
+        if (purchased <= 0) {
+          stepBuy?.classList.add("is-active");
+        } else if (available > 0) {
+          stepBuy?.classList.add("is-done");
+          stepPick?.classList.add("is-active");
+          hint = `Você tem ${available} slot(s) para ativar. Clique em Ativar em cada número desejado abaixo.`;
+        } else if (activated > 0) {
+          stepBuy?.classList.add("is-done");
+          stepPick?.classList.add("is-done");
+          stepUse?.classList.add("is-active");
+          hint = `${activated} número(s) ativo(s). Configure o temporizador e inicie sua campanha.`;
+        } else {
+          stepBuy?.classList.add("is-active");
+        }
+        if (hintEl) hintEl.textContent = hint;
+      }
+
+      function renderFazendaCardList() {
+        const container = document.getElementById("alt-fazenda-card-list");
+        if (!container) return [];
+
+        const summary = alternativaNumbersSummary;
+        const activationNames = new Set(
+          (summary?.activations || []).map((row) =>
+            String(row.instanceName || "").trim().toLowerCase()
+          )
+        );
+        const pool = summary?.fazendaPool;
+        const assignedRows = Array.isArray(pool?.assignedToSubscriber) ? pool.assignedToSubscriber : [];
+        const claimableRows = Array.isArray(pool?.availableToClaim)
+          ? pool.availableToClaim.slice(0, Math.max(0, Number(summary?.availableSlots ?? 0)))
+          : [];
+        const rows = [...assignedRows, ...claimableRows];
+
+        container.innerHTML = "";
+        if (!rows.length) {
+          const empty = document.createElement("p");
+          empty.className = "alt-fazenda-card-list-empty";
+          empty.textContent =
+            (summary?.purchasedSlots ?? 0) > 0
+              ? "Nenhum número disponível no momento. Peça ao administrador para marcar instâncias como compartilhadas."
+              : "Compre slots com PIX para liberar números aqui.";
+          container.appendChild(empty);
+          syncComprarHiddenPickerSelects([], []);
+          return [];
+        }
+
+        const selectedNames = [];
+        const availableNames = [];
+
+        rows.forEach((row) => {
+          const instanceName = String(row?.instanceName || "").trim();
+          if (!instanceName) return;
+          const isActivated = activationNames.has(instanceName.toLowerCase());
+          const isOpen = row?.isOpen !== false && String(row?.connectionStatus || "").toLowerCase().includes("open");
+          const canActivate = !isActivated && isOpen && (summary?.availableSlots ?? 0) > 0;
+          const { label, meta } = getFazendaRowDisplayLines(row);
+
+          if (isActivated) selectedNames.push(instanceName);
+          else availableNames.push(instanceName);
+
+          const card = document.createElement("div");
+          card.className = "alt-fazenda-card";
+          card.setAttribute("role", "listitem");
+          if (isActivated) card.classList.add("is-active");
+          if (!isOpen) card.classList.add("is-offline");
+
+          const info = document.createElement("div");
+          info.className = "alt-fazenda-card-info";
+          info.innerHTML = `<span class="alt-fazenda-card-name">${escapeAdminHtml(label)}</span><span class="alt-fazenda-card-meta">${escapeAdminHtml(meta)}</span>`;
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "instance-action-btn" + (canActivate ? " enabled" : "");
+          btn.disabled = isActivated || !canActivate;
+          btn.textContent = isActivated ? "Ativo ✓" : !isOpen ? "Offline" : "Ativar";
+          btn.dataset.instance = instanceName;
+          if (canActivate) {
+            btn.addEventListener("click", async () => {
+              btn.disabled = true;
+              btn.textContent = "Ativando…";
+              await registerAlternativaNumberActivation(instanceName);
+            });
+          }
+
+          card.appendChild(info);
+          card.appendChild(btn);
+          container.appendChild(card);
+        });
+
+        syncComprarHiddenPickerSelects(selectedNames, availableNames);
+        return selectedNames;
+      }
+
       function renderAlternativaNumbersShop() {
         const summary = alternativaNumbersSummary;
         const purchasedEl = document.getElementById("alt-numbers-purchased");
@@ -16465,31 +16741,13 @@
         }
 
         const hasPurchased = (summary?.purchasedSlots ?? 0) > 0;
-        const hasActivated = (summary?.activatedCount ?? 0) > 0;
-        const hasFazendaPool =
-          (summary?.fazendaPool?.availableToClaim?.length ?? 0) > 0 ||
-          (summary?.fazendaPool?.assignedToSubscriber?.length ?? 0) > 0;
         if (emptyHint) emptyHint.hidden = hasPurchased;
-        if (activatedWrap) activatedWrap.hidden = !hasActivated;
+        if (activatedWrap) activatedWrap.hidden = true;
         if (pickerWrap) pickerWrap.hidden = !hasPurchased;
 
-        if (activatedList && hasActivated) {
-          activatedList.innerHTML = "";
-          (summary?.activations || []).forEach((row) => {
-            const item = document.createElement("div");
-            item.className = "alt-numbers-activated-item";
-            const poolRow = (summary?.fazendaPool?.items || []).find(
-              (item) =>
-                String(item?.instanceName || "").toLowerCase() ===
-                String(row.instanceName || "").toLowerCase()
-            );
-            const label =
-              poolRow?.label ||
-              getDisparadorInstanceLabelByValue(row.instanceName) ||
-              row.instanceName;
-            item.innerHTML = `<span>${label}</span><span class="muted">Ativo na fazenda</span>`;
-            activatedList.appendChild(item);
-          });
+        updateAlternativaNumbersFlowGuide(summary);
+        if (hasPurchased) {
+          renderFazendaCardList();
         }
       }
 
@@ -16658,27 +16916,6 @@
         });
         document.getElementById("alt-numbers-connect-btn")?.addEventListener("click", () => {
           openAlternativaNumberConnectWizard();
-        });
-        document.getElementById("dis-add-instance-comprar-btn")?.addEventListener("click", async () => {
-          const fromEl = document.getElementById("dis-available-instances-comprar");
-          if (!fromEl) return;
-          const selectedToMove = Array.from(fromEl.selectedOptions)
-            .map((opt) => String(opt.value || "").trim())
-            .filter(Boolean);
-          const activationNames = new Set(
-            (alternativaNumbersSummary?.activations || []).map((row) =>
-              String(row.instanceName || "").trim().toLowerCase()
-            )
-          );
-          for (const name of selectedToMove) {
-            if (!activationNames.has(name.toLowerCase())) {
-              await registerAlternativaNumberActivation(name);
-            }
-          }
-          moveDisparadorNumbers("dis-available-instances-comprar", "dis-selected-instances-comprar");
-        });
-        document.getElementById("dis-remove-instance-comprar-btn")?.addEventListener("click", () => {
-          moveDisparadorNumbers("dis-selected-instances-comprar", "dis-available-instances-comprar");
         });
       }
 
@@ -26108,24 +26345,29 @@
           (name) => getInstanceUsage(name).useDisparador
         );
 
-        const comprarSelected = syncOnePicker(
-          "dis-available-instances-comprar",
-          "dis-selected-instances-comprar",
-          (name) => {
-            const key = String(name || "").trim().toLowerCase();
-            if (activationNames.has(key)) return true;
-            return claimableRows.some(
-              (row) => String(row?.instanceName || "").trim().toLowerCase() === key
-            );
-          },
-          fazendaPickerRows.length
-            ? fazendaPickerRows.map((row) => ({
-                name: String(row?.instanceName || "").trim(),
-                label: String(row?.label || row?.instanceName || "").trim(),
-                status: String(row?.connectionStatus || "").toLowerCase(),
-              }))
-            : null
-        );
+        let comprarSelected = [];
+        if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
+          comprarSelected = renderFazendaCardList();
+        } else {
+          comprarSelected = syncOnePicker(
+            "dis-available-instances-comprar",
+            "dis-selected-instances-comprar",
+            (name) => {
+              const key = String(name || "").trim().toLowerCase();
+              if (activationNames.has(key)) return true;
+              return claimableRows.some(
+                (row) => String(row?.instanceName || "").trim().toLowerCase() === key
+              );
+            },
+            fazendaPickerRows.length
+              ? fazendaPickerRows.map((row) => ({
+                  name: String(row?.instanceName || "").trim(),
+                  label: String(row?.label || row?.instanceName || "").trim(),
+                  status: String(row?.connectionStatus || "").toLowerCase(),
+                }))
+              : null
+          );
+        }
 
         if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
           pendingSelectedDisparadorInstances = comprarSelected || [];
