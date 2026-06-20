@@ -8431,6 +8431,99 @@
         line-height: 1.45;
         color: rgba(203, 213, 225, 0.88);
       }
+      .alt-numbers-flow-hint.is-suppressed {
+        display: none;
+      }
+      .alt-numbers-purchase-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin: 0 0 14px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(248, 113, 113, 0.55);
+        background: linear-gradient(135deg, rgba(69, 10, 10, 0.55), rgba(127, 29, 29, 0.22));
+        box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.08) inset, 0 8px 24px rgba(127, 29, 29, 0.18);
+      }
+      .alt-numbers-purchase-alert[hidden] {
+        display: none !important;
+      }
+      .alt-numbers-purchase-alert-icon {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        color: #fecaca;
+        background: rgba(220, 38, 38, 0.28);
+        border: 1px solid rgba(248, 113, 113, 0.45);
+      }
+      .alt-numbers-purchase-alert-icon svg {
+        width: 20px;
+        height: 20px;
+      }
+      .alt-numbers-purchase-alert-body {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .alt-numbers-purchase-alert-tag {
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-start;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #fecaca;
+        background: rgba(220, 38, 38, 0.35);
+        border: 1px solid rgba(248, 113, 113, 0.55);
+      }
+      .alt-numbers-purchase-alert-tag::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #f87171;
+        box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.25);
+      }
+      .alt-numbers-purchase-alert-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: #fee2e2;
+      }
+      .alt-numbers-purchase-alert-text strong {
+        color: #fff;
+        font-weight: 700;
+      }
+      .alt-numbers-stat.is-below-minimum {
+        border-color: rgba(248, 113, 113, 0.55) !important;
+        background: rgba(127, 29, 29, 0.22) !important;
+      }
+      .alt-numbers-stat.is-below-minimum strong {
+        color: #fca5a5;
+      }
+      .alt-numbers-stat-badge {
+        display: inline-flex;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #fecaca;
+        background: rgba(220, 38, 38, 0.35);
+        border: 1px solid rgba(248, 113, 113, 0.45);
+      }
       .alt-numbers-stats-caption {
         margin: -8px 0 0;
         font-size: 11px;
@@ -9416,13 +9509,19 @@
         color: #99f6e4;
       }
       .alt-numbers-picker-locked {
-        padding: 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
         border-radius: 12px;
-        border: 1px dashed rgba(148, 163, 184, 0.35);
-        background: rgba(15, 23, 42, 0.45);
-        color: #cbd5e1;
+        border: 1px solid rgba(248, 113, 113, 0.45);
+        background: linear-gradient(135deg, rgba(69, 10, 10, 0.45), rgba(15, 23, 42, 0.55));
+        color: #fee2e2;
         font-size: 13px;
         line-height: 1.55;
+      }
+      .alt-numbers-picker-locked[hidden] {
+        display: none !important;
       }
       .dis-evo-campaign-projection {
         margin-top: 12px;
@@ -12816,9 +12915,10 @@
 
                       <div id="dis-number-panel-comprar" class="alt-numbers-shop" hidden>
                         <div class="alt-numbers-stats">
-                          <div class="alt-numbers-stat alt-numbers-stat--purchased">
+                          <div class="alt-numbers-stat alt-numbers-stat--purchased" id="alt-numbers-purchased-card">
                             <span>Comprados</span>
                             <strong id="alt-numbers-purchased">0</strong>
+                            <span id="alt-numbers-purchased-badge" class="alt-numbers-stat-badge" hidden>Falta comprar</span>
                           </div>
                           <div class="alt-numbers-stat alt-numbers-stat--activated">
                             <span>Ativados</span>
@@ -12835,13 +12935,33 @@
 
                         <div id="alt-numbers-flow-guide" class="alt-numbers-flow-guide">
                           <ol class="alt-numbers-flow-steps">
-                            <li id="alt-flow-step-buy" class="alt-numbers-flow-step is-active">1 · Comprar slots</li>
+                            <li id="alt-flow-step-buy" class="alt-numbers-flow-step is-active">1 · Comprar Números</li>
                             <li id="alt-flow-step-pick" class="alt-numbers-flow-step">2 · Ativar números</li>
                             <li id="alt-flow-step-use" class="alt-numbers-flow-step">3 · Disparar</li>
                           </ol>
                           <p id="alt-numbers-flow-hint" class="alt-numbers-flow-hint">
                             Escolha quantos números deseja e pague com PIX.
                           </p>
+                        </div>
+
+                        <div
+                          id="alt-numbers-purchase-alert"
+                          class="alt-numbers-purchase-alert"
+                          hidden
+                          role="alert"
+                          aria-live="polite"
+                        >
+                          <div class="alt-numbers-purchase-alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="12" y1="8" x2="12" y2="13" />
+                              <circle cx="12" cy="16.5" r="0.5" fill="currentColor" stroke="none" />
+                            </svg>
+                          </div>
+                          <div class="alt-numbers-purchase-alert-body">
+                            <span class="alt-numbers-purchase-alert-tag">Ativação bloqueada</span>
+                            <p id="alt-numbers-purchase-alert-text" class="alt-numbers-purchase-alert-text"></p>
+                          </div>
                         </div>
 
                         <div class="alt-numbers-shop-body">
@@ -12900,7 +13020,18 @@
                           Você ainda não possui números comprados. Escolha a quantidade acima e pague com PIX para liberar a conexão.
                         </div>
                         <div id="alt-numbers-picker-locked" class="alt-numbers-picker-locked" hidden>
-                          Compre pelo menos <strong id="alt-numbers-min-purchase-label">4</strong> números para liberar a ativação. O motor de envio exige no mínimo <strong id="alt-numbers-min-activated-label">3</strong> números ativados.
+                          <div class="alt-numbers-purchase-alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                              <rect x="5" y="11" width="14" height="10" rx="2" />
+                              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                            </svg>
+                          </div>
+                          <div class="alt-numbers-purchase-alert-body">
+                            <span class="alt-numbers-purchase-alert-tag">Seleção indisponível</span>
+                            <p id="alt-numbers-picker-locked-text" class="alt-numbers-purchase-alert-text">
+                              Compre pelo menos <strong id="alt-numbers-min-purchase-label">4</strong> números para liberar a ativação. O motor de envio exige no mínimo <strong id="alt-numbers-min-activated-label">3</strong> números ativados.
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -16736,10 +16867,12 @@
         const rulesPanel = document.getElementById("dis-alternativa-auto-rules");
         if (rulesPanel) rulesPanel.hidden = !on;
         const rules = resolveAlternativaDispatchRules();
-        const minPurchaseLabel = document.getElementById("alt-numbers-min-purchase-label");
-        const minActivatedLabel = document.getElementById("alt-numbers-min-activated-label");
-        if (minPurchaseLabel) minPurchaseLabel.textContent = String(rules.minPurchasedForPicker);
-        if (minActivatedLabel) minActivatedLabel.textContent = String(rules.minActivatedForSend);
+        document.querySelectorAll("#alt-numbers-min-purchase-label").forEach((el) => {
+          el.textContent = String(rules.minPurchasedForPicker);
+        });
+        document.querySelectorAll("#alt-numbers-min-activated-label").forEach((el) => {
+          el.textContent = String(rules.minActivatedForSend);
+        });
       }
 
       function updateDisEvoCampaignSendUi() {
@@ -16856,6 +16989,56 @@
         if (selectedEl) fillSelectWithValues(selectedEl, selectedNames);
       }
 
+      function formatAlternativaPurchaseBlockedMessage(purchased, minRequired) {
+        const qty = Math.max(0, Math.floor(Number(purchased) || 0));
+        const min = Math.max(1, Math.floor(Number(minRequired) || 4));
+        const missing = Math.max(0, min - qty);
+        const numberWord = qty === 1 ? "número" : "números";
+        const missingWord = missing === 1 ? "número" : "números";
+        return `Você possui <strong>${qty}</strong> ${numberWord} comprado(s). Compre pelo menos <strong>${min}</strong> para liberar a ativação${missing > 0 ? ` — faltam <strong>${missing}</strong> ${missingWord}` : ""}.`;
+      }
+
+      function updateAlternativaPurchaseAlert(summary) {
+        const rules = resolveAlternativaDispatchRules();
+        const purchased = Number(summary?.purchasedSlots ?? 0);
+        const needsMoreToPick = purchased > 0 && purchased < rules.minPurchasedForPicker;
+        const alertEl = document.getElementById("alt-numbers-purchase-alert");
+        const alertTextEl = document.getElementById("alt-numbers-purchase-alert-text");
+        const hintEl = document.getElementById("alt-numbers-flow-hint");
+        const purchasedCard = document.getElementById("alt-numbers-purchased-card");
+        const purchasedBadge = document.getElementById("alt-numbers-purchased-badge");
+        const pickerLockedText = document.getElementById("alt-numbers-picker-locked-text");
+        const minPurchaseLabels = document.querySelectorAll("#alt-numbers-min-purchase-label");
+        const minActivatedLabels = document.querySelectorAll("#alt-numbers-min-activated-label");
+
+        minPurchaseLabels.forEach((el) => {
+          el.textContent = String(rules.minPurchasedForPicker);
+        });
+        minActivatedLabels.forEach((el) => {
+          el.textContent = String(rules.minActivatedForSend);
+        });
+
+        const blockedMessage = formatAlternativaPurchaseBlockedMessage(
+          purchased,
+          rules.minPurchasedForPicker
+        );
+
+        if (alertEl) alertEl.hidden = !needsMoreToPick;
+        if (alertTextEl) alertTextEl.innerHTML = blockedMessage;
+        if (hintEl) hintEl.classList.toggle("is-suppressed", needsMoreToPick);
+        if (purchasedCard) purchasedCard.classList.toggle("is-below-minimum", needsMoreToPick);
+        if (purchasedBadge) {
+          purchasedBadge.hidden = !needsMoreToPick;
+          purchasedBadge.textContent =
+            purchased > 0
+              ? `Faltam ${Math.max(0, rules.minPurchasedForPicker - purchased)}`
+              : "Falta comprar";
+        }
+        if (pickerLockedText) {
+          pickerLockedText.innerHTML = `${blockedMessage} O motor de envio exige no mínimo <strong>${rules.minActivatedForSend}</strong> números ativados.`;
+        }
+      }
+
       function updateAlternativaNumbersFlowGuide(summary) {
         const purchased = Number(summary?.purchasedSlots ?? 0);
         const activated = Number(summary?.activatedCount ?? 0);
@@ -16880,7 +17063,7 @@
           stepBuy?.classList.add("is-active");
         } else if (purchased < rules.minPurchasedForPicker) {
           stepBuy?.classList.add("is-active");
-          hint = `Você possui ${purchased} número(s) comprado(s). Compre pelo menos ${rules.minPurchasedForPicker} para liberar a ativação.`;
+          hint = `Compre mais números para liberar a ativação (${purchased}/${rules.minPurchasedForPicker}).`;
         } else if (available > 0) {
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-active");
@@ -16900,6 +17083,7 @@
           hint = "Ative seus números comprados para começar a disparar.";
         }
         if (hintEl) hintEl.textContent = hint;
+        updateAlternativaPurchaseAlert(summary);
       }
 
       function renderFazendaCardList() {
@@ -17041,7 +17225,8 @@
         }
 
         updateAlternativaNumbersFlowGuide(summary);
-        if (hasPurchased) {
+        applyDisparoEvoAlternativaLayout();
+        if (canPickNumbers) {
           renderFazendaCardList();
         }
       }
@@ -24768,6 +24953,18 @@
         }
         const planned = getDisCampaignWizardPlannedSendCountValue();
         renderCampaignImportStatsElement(statsEl, imported, planned);
+        if (getDisCampaignWizardSelectedApiKind() === "alternativa") {
+          renderAlternativaProjectionElement(
+            document.getElementById("dis-wizard-alternativa-projection"),
+            planned > 0 ? planned : maxAllowed
+          );
+        } else {
+          const altProjection = document.getElementById("dis-wizard-alternativa-projection");
+          if (altProjection) {
+            altProjection.hidden = true;
+            altProjection.textContent = "";
+          }
+        }
       }
 
       async function setDisCampaignWizardLeadsFile(file) {
@@ -25221,6 +25418,7 @@
             label.textContent = `${file.name} · ${campaignSpreadsheetRowsCache.length} linha(s) · ${colCount} coluna(s)`;
           }
           renderDisCampaignPreviewTable(campaignSpreadsheetRowsCache);
+          updateDisEvoCampaignSendUi();
           const statusEl = document.getElementById("dis-campaign-create-status");
           if (statusEl) {
             statusEl.textContent =
@@ -26958,6 +27156,11 @@
           }
           const data = await response.json().catch(() => ({}));
           disparosConfigCache = data?.config || null;
+          if (data?.alternativaDispatch?.active && data?.alternativaDispatch?.throttle) {
+            disparosAlternativaThrottleCache = data.alternativaDispatch.throttle;
+          } else {
+            disparosAlternativaThrottleCache = null;
+          }
           setDisparosFormValues(data?.config || {});
           const shortenerSelect = document.getElementById("dis-shortener-provider");
           if (shortenerSelect) {
