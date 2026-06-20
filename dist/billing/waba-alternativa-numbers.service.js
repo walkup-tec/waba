@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaAlternativaNumbersService = exports.ALTERNATIVA_NUMBER_MAX_QUANTITY = exports.ALTERNATIVA_NUMBER_UNIT_CENTS = void 0;
 const node_crypto_1 = require("node:crypto");
+const waba_fazenda_pool_service_1 = require("../instances/waba-fazenda-pool.service");
 const alternativa_number_activation_repository_1 = require("./alternativa-number-activation.repository");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 exports.ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
@@ -31,11 +32,12 @@ class WabaAlternativaNumbersService {
             normalizeEmail(order.ownerEmail) === normalized)
             .reduce((sum, order) => sum + Math.max(0, Math.round(Number(order.shipmentCount ?? 0))), 0);
     }
-    getSummary(email) {
+    async getSummaryAsync(email) {
         const purchasedSlots = this.getPurchasedSlots(email);
         const activations = this.activationRepository.listForEmail(email);
         const activatedCount = activations.length;
         const availableSlots = Math.max(0, purchasedSlots - activatedCount);
+        const fazendaPool = await waba_fazenda_pool_service_1.wabaFazendaPoolService.buildPoolForSubscriber(email);
         return {
             ...this.getPricing(),
             purchasedSlots,
@@ -45,6 +47,11 @@ class WabaAlternativaNumbersService {
                 instanceName: row.instanceName,
                 activatedAt: row.activatedAt,
             })),
+            fazendaPool: {
+                items: fazendaPool.items,
+                availableToClaim: fazendaPool.availableToClaim,
+                assignedToSubscriber: fazendaPool.assignedToSubscriber,
+            },
         };
     }
     validateCheckout(quantity, valueCents) {
@@ -59,18 +66,19 @@ class WabaAlternativaNumbersService {
         }
         return { quantity: qty, valueCents: cents };
     }
-    registerActivation(email, instanceName) {
-        const summary = this.getSummary(email);
+    async registerActivation(email, instanceName) {
+        const summary = await this.getSummaryAsync(email);
         if (summary.availableSlots <= 0) {
             throw new Error("Você não possui números disponíveis para ativar. Compre novos números primeiro.");
         }
+        await waba_fazenda_pool_service_1.wabaFazendaPoolService.assertCanAssignToSubscriber(email, instanceName);
         if (this.activationRepository.hasInstance(email, instanceName)) {
             return this.activationRepository.listForEmail(email).find((row) => row.instanceName.toLowerCase() === instanceName.toLowerCase());
         }
         return this.activationRepository.register(email, instanceName, "slot");
     }
     /** Simula compra paga (somente dev/V02). Saldo fica atrelado ao ownerEmail. */
-    simulatePaidPurchase(email, quantity) {
+    async simulatePaidPurchase(email, quantity) {
         const normalized = normalizeEmail(email);
         if (!normalized.includes("@")) {
             throw new Error("Informe um e-mail válido.");
@@ -104,7 +112,7 @@ class WabaAlternativaNumbersService {
             orderId: order.id,
             ownerEmail: normalized,
             quantity: qty,
-            summary: this.getSummary(normalized),
+            summary: await this.getSummaryAsync(normalized),
         };
     }
 }

@@ -219,6 +219,19 @@ class WabaInstanceOwnershipService {
         }
         return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
     }
+    async listInstancesOwnedByEmails(ownerEmails) {
+        const allowed = new Set(ownerEmails.map((email) => normalizeEmail(email)).filter((email) => email.includes("@")));
+        if (!allowed.size)
+            return [];
+        const store = await this.loadStore();
+        const names = [];
+        for (const [instanceName, record] of Object.entries(store.instances)) {
+            if (allowed.has(normalizeEmail(record?.ownerEmail || ""))) {
+                names.push(instanceName);
+            }
+        }
+        return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
     async filterStringListForAuth(auth, names) {
         const allowed = await this.filterInstanceNamesForAuth(auth, names);
         const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));

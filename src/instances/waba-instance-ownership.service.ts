@@ -236,6 +236,21 @@ export class WabaInstanceOwnershipService {
     return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
   }
 
+  async listInstancesOwnedByEmails(ownerEmails: string[]): Promise<string[]> {
+    const allowed = new Set(
+      ownerEmails.map((email) => normalizeEmail(email)).filter((email) => email.includes("@")),
+    );
+    if (!allowed.size) return [];
+    const store = await this.loadStore();
+    const names: string[] = [];
+    for (const [instanceName, record] of Object.entries(store.instances)) {
+      if (allowed.has(normalizeEmail(record?.ownerEmail || ""))) {
+        names.push(instanceName);
+      }
+    }
+    return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+
   async filterStringListForAuth(auth: WabaRequestAuth, names: string[]): Promise<string[]> {
     const allowed = await this.filterInstanceNamesForAuth(auth, names);
     const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));

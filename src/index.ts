@@ -25,7 +25,7 @@ import { isWabaAuthConfigured, isWabaMasterEmail } from "./auth/waba-auth.servic
 import { wabaInstanceOwnershipService } from "./instances/waba-instance-ownership.service";
 import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
-import { configureWabaFazendaPool } from "./instances/waba-fazenda-pool.service";
+import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
@@ -7290,7 +7290,7 @@ app.get("/disparos/config", async (req, res) => {
   try {
     const config = await loadDisparosConfigFromDb();
     const auth = resolveWabaRequestAuth(req);
-    const selectedDisparadorInstances = await wabaInstanceOwnershipService.filterStringListForAuth(
+    const selectedDisparadorInstances = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
       auth,
       Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []
     );
@@ -7324,7 +7324,7 @@ app.post("/disparos/config", async (req, res) => {
     const auth = resolveWabaRequestAuth(req);
     config = {
       ...config,
-      selectedDisparadorInstances: await wabaInstanceOwnershipService.filterStringListForAuth(
+      selectedDisparadorInstances: await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
         auth,
         config.selectedDisparadorInstances
       ),
@@ -8772,7 +8772,7 @@ app.get("/disparos/campanhas", async (req, res) => {
     const evoRows = await fetchEvoInstanceTagRowsForRequest(req);
     const globalDisparos = await loadDisparosConfigFromDb();
     const auth = resolveWabaRequestAuth(req);
-    const globalSelected = await wabaInstanceOwnershipService.filterStringListForAuth(
+    const globalSelected = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
       auth,
       Array.isArray(globalDisparos.selectedDisparadorInstances)
         ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
@@ -9237,7 +9237,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
     }
     const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-    const incoming = await wabaInstanceOwnershipService.filterStringListForAuth(
+    const incoming = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
       resolveWabaRequestAuth(req),
       raw.map((n: any) => String(n || "").trim()).filter(Boolean)
     );

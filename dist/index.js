@@ -6314,7 +6314,7 @@ app.get("/disparos/config", async (req, res) => {
     try {
         const config = await loadDisparosConfigFromDb();
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const selectedDisparadorInstances = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth(auth, Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []);
+        const selectedDisparadorInstances = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []);
         const autoProviders = getAutoShortenerProviderOrder();
         const currentShortenerProvider = autoProviders[0];
         return res.json({
@@ -6346,7 +6346,7 @@ app.post("/disparos/config", async (req, res) => {
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
         config = {
             ...config,
-            selectedDisparadorInstances: await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth(auth, config.selectedDisparadorInstances),
+            selectedDisparadorInstances: await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, config.selectedDisparadorInstances),
         };
         await saveDisparosConfigToDb(config);
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
@@ -7684,7 +7684,7 @@ app.get("/disparos/campanhas", async (req, res) => {
         const evoRows = await fetchEvoInstanceTagRowsForRequest(req);
         const globalDisparos = await loadDisparosConfigFromDb();
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const globalSelected = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth(auth, Array.isArray(globalDisparos.selectedDisparadorInstances)
+        const globalSelected = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, Array.isArray(globalDisparos.selectedDisparadorInstances)
             ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : []);
         const nowSp = nowInSaoPaulo();
@@ -8120,7 +8120,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
         }
         const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-        const incoming = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), raw.map((n) => String(n || "").trim()).filter(Boolean));
+        const incoming = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), raw.map((n) => String(n || "").trim()).filter(Boolean));
         if (!incoming.length) {
             return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
         }

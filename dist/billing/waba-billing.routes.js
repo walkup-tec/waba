@@ -123,12 +123,19 @@ const registerWabaBillingRoutes = (app) => {
             paymentConfigured: billingService.getDisparosConfig().paymentConfigured,
         });
     });
-    app.get("/billing/alternativa-numbers/summary", (req, res) => {
+    app.get("/billing/alternativa-numbers/summary", async (req, res) => {
         const auth = resolveRequestAuth(req);
         if (!auth.email) {
             return res.status(401).json({ error: "Faça login para consultar seus números." });
         }
-        return res.status(200).json(alternativaNumbersService.getSummary(auth.email));
+        try {
+            return res.status(200).json(await alternativaNumbersService.getSummaryAsync(auth.email));
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Erro ao consultar números da fazenda.",
+            });
+        }
     });
     app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
         try {
@@ -154,7 +161,7 @@ const registerWabaBillingRoutes = (app) => {
             });
         }
     });
-    app.post("/billing/alternativa-numbers/activate", (req, res) => {
+    app.post("/billing/alternativa-numbers/activate", async (req, res) => {
         try {
             const auth = resolveRequestAuth(req);
             if (!auth.email) {
@@ -164,11 +171,11 @@ const registerWabaBillingRoutes = (app) => {
             if (!instanceName) {
                 return res.status(400).json({ error: "Informe o nome da instância." });
             }
-            const activation = alternativaNumbersService.registerActivation(auth.email, instanceName);
+            const activation = await alternativaNumbersService.registerActivation(auth.email, instanceName);
             return res.status(200).json({
                 ok: true,
                 activation,
-                summary: alternativaNumbersService.getSummary(auth.email),
+                summary: await alternativaNumbersService.getSummaryAsync(auth.email),
             });
         }
         catch (error) {
@@ -177,7 +184,7 @@ const registerWabaBillingRoutes = (app) => {
             });
         }
     });
-    app.post("/billing/alternativa-numbers/simulate-purchase", (req, res) => {
+    app.post("/billing/alternativa-numbers/simulate-purchase", async (req, res) => {
         if (!isAlternativaNumbersSimulationEnabled()) {
             return res.status(404).json({ error: "Simulação indisponível neste ambiente." });
         }
@@ -187,7 +194,7 @@ const registerWabaBillingRoutes = (app) => {
                 return res.status(401).json({ error: "Faça login para simular a compra." });
             }
             const quantity = Math.round(Number(req.body?.quantity ?? 0));
-            const result = alternativaNumbersService.simulatePaidPurchase(auth.email, quantity);
+            const result = await alternativaNumbersService.simulatePaidPurchase(auth.email, quantity);
             return res.status(201).json(result);
         }
         catch (error) {

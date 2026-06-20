@@ -12511,7 +12511,7 @@
                           <div class="alt-numbers-buy-head">
                             <div>
                               <h4>Adquira números para disparo</h4>
-                              <p>Cada número WhatsApp custa R$ 20,00. Após o pagamento PIX, conecte via QR Code.</p>
+                              <p>Cada número WhatsApp custa R$ 20,00. Após o pagamento PIX, escolha números da fazenda master (marcados como Fazenda).</p>
                             </div>
                             <div class="alt-numbers-unit-badge">R$ 20 / número</div>
                           </div>
@@ -12545,7 +12545,7 @@
                         <div id="alt-numbers-picker-wrap" hidden>
                           <div class="dis-number-picker" style="margin-top:4px;">
                             <div class="aquecedor-field">
-                              <label for="dis-available-instances-comprar">Números comprados disponíveis</label>
+                              <label for="dis-available-instances-comprar">Números da fazenda disponíveis</label>
                               <select id="dis-available-instances-comprar" size="6"></select>
                             </div>
                             <div class="dis-number-picker-actions">
@@ -12557,7 +12557,7 @@
                               <select id="dis-selected-instances-comprar" size="6"></select>
                             </div>
                           </div>
-                          <span class="aquecedor-hint">Selecione quais números comprados entram no disparador.</span>
+                          <span class="aquecedor-hint">Selecione números da fazenda master para usar no disparador (→ ativa o slot comprado).</span>
                         </div>
 
                         <div id="alt-numbers-empty-hint" class="alt-numbers-empty" hidden>
@@ -16331,22 +16331,34 @@
           plusBtn.disabled = alternativaNumbersSelectedQty >= (summary?.maxQuantity ?? ALTERNATIVA_NUMBER_MAX_QTY);
         }
         if (connectBtn) {
-          connectBtn.hidden = !(summary?.availableSlots > 0);
+          connectBtn.hidden = true;
         }
 
         const hasPurchased = (summary?.purchasedSlots ?? 0) > 0;
         const hasActivated = (summary?.activatedCount ?? 0) > 0;
+        const hasFazendaPool =
+          (summary?.fazendaPool?.availableToClaim?.length ?? 0) > 0 ||
+          (summary?.fazendaPool?.assignedToSubscriber?.length ?? 0) > 0;
         if (emptyHint) emptyHint.hidden = hasPurchased;
         if (activatedWrap) activatedWrap.hidden = !hasActivated;
-        if (pickerWrap) pickerWrap.hidden = !hasActivated;
+        if (pickerWrap) pickerWrap.hidden = !hasPurchased && !hasFazendaPool;
+        if (pickerWrap && hasPurchased && hasFazendaPool) pickerWrap.hidden = false;
 
         if (activatedList && hasActivated) {
           activatedList.innerHTML = "";
           (summary?.activations || []).forEach((row) => {
             const item = document.createElement("div");
             item.className = "alt-numbers-activated-item";
-            const label = getDisparadorInstanceLabelByValue(row.instanceName) || row.instanceName;
-            item.innerHTML = `<span>${label}</span><span class="muted">Conectado</span>`;
+            const poolRow = (summary?.fazendaPool?.items || []).find(
+              (item) =>
+                String(item?.instanceName || "").toLowerCase() ===
+                String(row.instanceName || "").toLowerCase()
+            );
+            const label =
+              poolRow?.label ||
+              getDisparadorInstanceLabelByValue(row.instanceName) ||
+              row.instanceName;
+            item.innerHTML = `<span>${label}</span><span class="muted">Ativo na fazenda</span>`;
             activatedList.appendChild(item);
           });
         }
@@ -16518,7 +16530,22 @@
         document.getElementById("alt-numbers-connect-btn")?.addEventListener("click", () => {
           openAlternativaNumberConnectWizard();
         });
-        document.getElementById("dis-add-instance-comprar-btn")?.addEventListener("click", () => {
+        document.getElementById("dis-add-instance-comprar-btn")?.addEventListener("click", async () => {
+          const fromEl = document.getElementById("dis-available-instances-comprar");
+          if (!fromEl) return;
+          const selectedToMove = Array.from(fromEl.selectedOptions)
+            .map((opt) => String(opt.value || "").trim())
+            .filter(Boolean);
+          const activationNames = new Set(
+            (alternativaNumbersSummary?.activations || []).map((row) =>
+              String(row.instanceName || "").trim().toLowerCase()
+            )
+          );
+          for (const name of selectedToMove) {
+            if (!activationNames.has(name.toLowerCase())) {
+              await registerAlternativaNumberActivation(name);
+            }
+          }
           moveDisparadorNumbers("dis-available-instances-comprar", "dis-selected-instances-comprar");
         });
         document.getElementById("dis-remove-instance-comprar-btn")?.addEventListener("click", () => {
@@ -25881,24 +25908,30 @@
       }
 
       function syncDisparadorNumberPicker() {
-        const syncOnePicker = (availableId, selectedId, filterFn) => {
+        const syncOnePicker = (availableId, selectedId, filterFn, externalCandidates = null) => {
           const availableEl = document.getElementById(availableId);
           const selectedEl = document.getElementById(selectedId);
           if (!availableEl || !selectedEl) return;
 
-          const candidates = (Array.isArray(instancesData?.items) ? instancesData.items : [])
-            .map((inst) => ({
-              name: String(inst?.name || inst?.instanceName || "").trim(),
-              label: String(
-                inst?.instanceAlias ||
-                  inst?.instanceLabel ||
-                  inst?.name ||
-                  inst?.instanceName ||
-                  ""
-              ).trim(),
-              status: String(inst?.connectionStatus || "").toLowerCase(),
-            }))
-            .filter((row) => row.name && row.status.includes("open") && filterFn(row.name));
+          const candidates = (
+            Array.isArray(externalCandidates) && externalCandidates.length
+              ? externalCandidates
+              : (Array.isArray(instancesData?.items) ? instancesData.items : []).map((inst) => ({
+                  name: String(inst?.name || inst?.instanceName || "").trim(),
+                  label: String(
+                    inst?.instanceAlias ||
+                      inst?.instanceLabel ||
+                      inst?.name ||
+                      inst?.instanceName ||
+                      ""
+                  ).trim(),
+                  status: String(inst?.connectionStatus || "").toLowerCase(),
+                }))
+          ).filter((row) => {
+            if (!row.name || !filterFn(row.name)) return false;
+            if (Array.isArray(externalCandidates) && externalCandidates.length) return true;
+            return String(row.status || "").toLowerCase().includes("open");
+          });
 
           const currentSelected = new Set([
             ...pendingSelectedDisparadorInstances,
@@ -25930,6 +25963,16 @@
           )
         );
 
+        const pool = alternativaNumbersSummary?.fazendaPool;
+        const assignedRows = Array.isArray(pool?.assignedToSubscriber) ? pool.assignedToSubscriber : [];
+        const claimableRows = Array.isArray(pool?.availableToClaim)
+          ? pool.availableToClaim.slice(
+              0,
+              Math.max(0, Number(alternativaNumbersSummary?.availableSlots ?? 0))
+            )
+          : [];
+        const fazendaPickerRows = [...assignedRows, ...claimableRows];
+
         const aquecedorSelected = syncOnePicker(
           "dis-available-instances",
           "dis-selected-instances",
@@ -25939,7 +25982,20 @@
         const comprarSelected = syncOnePicker(
           "dis-available-instances-comprar",
           "dis-selected-instances-comprar",
-          (name) => activationNames.has(String(name || "").trim().toLowerCase())
+          (name) => {
+            const key = String(name || "").trim().toLowerCase();
+            if (activationNames.has(key)) return true;
+            return claimableRows.some(
+              (row) => String(row?.instanceName || "").trim().toLowerCase() === key
+            );
+          },
+          fazendaPickerRows.length
+            ? fazendaPickerRows.map((row) => ({
+                name: String(row?.instanceName || "").trim(),
+                label: String(row?.label || row?.instanceName || "").trim(),
+                status: String(row?.connectionStatus || "").toLowerCase(),
+              }))
+            : null
         );
 
         if (isDisparoEvoUi() && disNumberSourceTab === "comprar") {
@@ -29081,6 +29137,7 @@
         return {
           useAquecedor: current ? current.useAquecedor !== false : true,
           useDisparador: current ? current.useDisparador !== false : true,
+          useFazenda: current ? current.useFazenda === true : false,
         };
       }
 
@@ -29097,6 +29154,7 @@
             map[key] = {
               useAquecedor: row?.useAquecedor !== false,
               useDisparador: row?.useDisparador !== false,
+              useFazenda: row?.useFazenda === true,
               updatedAt: row?.updatedAt || "",
             };
           });
@@ -29113,22 +29171,25 @@
         instanceUsageByName[key] = {
           useAquecedor: nextUsage.useAquecedor !== false,
           useDisparador: nextUsage.useDisparador !== false,
+          useFazenda: nextUsage.useFazenda === true,
           updatedAt: new Date().toISOString(),
         };
         try {
+          const payloadItem = {
+            instanceName: key,
+            useAquecedor: instanceUsageByName[key].useAquecedor,
+            useDisparador: instanceUsageByName[key].useDisparador,
+          };
+          if (hasMasterAccess()) {
+            payloadItem.useFazenda = instanceUsageByName[key].useFazenda;
+          }
           const response = await fetchWithTimeout(
             "/instancias/uso-config",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                items: [
-                  {
-                    instanceName: key,
-                    useAquecedor: instanceUsageByName[key].useAquecedor,
-                    useDisparador: instanceUsageByName[key].useDisparador,
-                  },
-                ],
+                items: [payloadItem],
               }),
             },
             10000
@@ -29243,6 +29304,7 @@
           return;
         }
 
+        const showFazendaColumn = hasMasterAccess();
         const table = document.createElement("table");
         table.className = "instances-table";
         table.innerHTML = `
@@ -29256,6 +29318,7 @@
               <th>Mensagens</th>
               <th>Aquecedor</th>
               <th>Disparador</th>
+              ${showFazendaColumn ? "<th>Fazenda</th>" : ""}
               <th>Status</th>
               <th>Ações</th>
             </tr>
@@ -29354,6 +29417,15 @@
                 <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
               </label>
             </td>
+            ${
+              showFazendaColumn
+                ? `<td>
+              <label class="aquecedor-toggle" style="margin:0;">
+                <input type="checkbox" class="instance-role-toggle" data-role="fazenda" data-instance="${inst.instanceName}" ${usage.useFazenda ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+              </label>
+            </td>`
+                : ""
+            }
             <td><span class="status-text ${
               inst.isOpen ? "connected" : "disconnected"
             }">${isDeleting ? "Excluindo…" : inst.statusLabel}</span></td>
@@ -32866,9 +32938,11 @@
         const next = {
           useAquecedor: current.useAquecedor,
           useDisparador: current.useDisparador,
+          useFazenda: current.useFazenda === true,
         };
         if (role === "aquecedor") next.useAquecedor = target.checked;
         if (role === "disparador") next.useDisparador = target.checked;
+        if (role === "fazenda") next.useFazenda = target.checked;
         await saveInstanceUsageConfig(instanceName, next);
         updateInstancesIndicators();
       });
