@@ -572,24 +572,32 @@ async function persistInstanceUsage(items) {
 (0, instance_integration_probe_1.setIntegrationProbeFinishedHandler)((status) => {
     if (!status.restrictionSuspected)
         return;
-    void persistInstanceUsage([
-        {
-            instanceName: status.sourceInstance,
-            useAquecedor: false,
-            useDisparador: false,
-        },
-    ]);
+    void (async () => {
+        const usageMap = await loadInstanceUsageMap();
+        const current = getInstanceUsageFromMap(usageMap, status.sourceInstance);
+        await persistInstanceUsage([
+            {
+                instanceName: status.sourceInstance,
+                useAquecedor: current?.useAquecedor !== false,
+                useDisparador: false,
+            },
+        ]);
+    })();
 });
 (0, instance_inbound_validation_service_1.setInboundValidationFinishedHandler)((status) => {
     if (!status.restrictionSuspected)
         return;
-    void persistInstanceUsage([
-        {
-            instanceName: status.instanceName,
-            useAquecedor: false,
-            useDisparador: false,
-        },
-    ]);
+    void (async () => {
+        const usageMap = await loadInstanceUsageMap();
+        const current = getInstanceUsageFromMap(usageMap, status.instanceName);
+        await persistInstanceUsage([
+            {
+                instanceName: status.instanceName,
+                useAquecedor: current?.useAquecedor !== false,
+                useDisparador: false,
+            },
+        ]);
+    })();
 });
 function parseDisparosConfig(input) {
     const readInt = (value, min, max, fallback) => {
@@ -881,6 +889,22 @@ function buildAquecedorNumberToInstanceMap(connected, canonicalMap) {
     }
     return map;
 }
+function resolveAquecedorInstanceByNumber(rawNumber, numberToInstance) {
+    const normalized = normalizeWhatsAppNumber(String(rawNumber || "").trim());
+    if (!normalized)
+        return "";
+    const direct = numberToInstance.get(normalized);
+    if (direct)
+        return direct;
+    const suffix = normalized.replace(/\D/g, "").slice(-10);
+    if (suffix.length < 10)
+        return "";
+    for (const [stored, inst] of numberToInstance.entries()) {
+        if (stored.replace(/\D/g, "").slice(-10) === suffix)
+            return inst;
+    }
+    return "";
+}
 function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
     const target = resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase();
     return (connected.find((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase() === target) || null);
@@ -888,22 +912,26 @@ function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
 async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance) {
     const events = [];
     const instanceNames = connected.map((item) => item.instancia);
+    const connectedCanonical = new Set(instanceNames.map((name) => resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase()));
     try {
         const { data, error } = await (supabase
             .from("aquecedor")
             .select("instancia, numero_destino, sent_at")
             .eq("status", "ENVIADO")
-            .in("instancia", instanceNames)
             .order("sent_at", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
             for (const row of data) {
                 const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-                const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
-                const toInst = numberToInstance.get(toNum) || "";
+                const toInst = resolveAquecedorInstanceByNumber(String(row?.numero_destino || ""), numberToInstance);
                 const at = String(row?.sent_at || "").trim();
-                if (fromInst && toInst && at)
+                if (fromInst &&
+                    toInst &&
+                    at &&
+                    connectedCanonical.has(fromInst.toLowerCase()) &&
+                    connectedCanonical.has(toInst.toLowerCase())) {
                     events.push({ at, fromInst, toInst });
+                }
             }
         }
     }
@@ -921,8 +949,13 @@ async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, nu
                 const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia_origem || ""), canonicalMap);
                 const toInst = resolveAquecedorCanonicalInstance(String(row?.instancia_destino || ""), canonicalMap);
                 const at = String(row?.data_envio || "").trim();
-                if (fromInst && toInst && at)
+                if (fromInst &&
+                    toInst &&
+                    at &&
+                    connectedCanonical.has(fromInst.toLowerCase()) &&
+                    connectedCanonical.has(toInst.toLowerCase())) {
                     events.push({ at, fromInst, toInst });
+                }
             }
         }
     }
@@ -972,6 +1005,18 @@ async function loadAquecedorTurnManager(supabase, connected) {
         toStats.lastReceivedFrom = ev.fromInst;
         pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
     }
+    const owesPairReply = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+            return false;
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const lastSender = pairLastSender.get(pairKey);
+        if (!lastSender || lastSender.toLowerCase() === origem.toLowerCase())
+            return false;
+        const stats = instanceStats.get(origem.toLowerCase());
+        return stats?.lastReceivedFrom?.toLowerCase() === destino.toLowerCase();
+    };
     const canSendDirected = (origemRaw, destinoRaw) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
         const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
@@ -981,6 +1026,9 @@ async function loadAquecedorTurnManager(supabase, connected) {
         const lastSender = pairLastSender.get(pairKey);
         if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
             return false;
+        }
+        if (owesPairReply(origemRaw, destinoRaw)) {
+            return true;
         }
         const stats = instanceStats.get(origem.toLowerCase());
         if (!stats?.lastSentAt)
@@ -1029,6 +1077,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
         canonicalMap,
         totalEvents: events.length,
         canSendDirected,
+        owesPairReply,
         describeBlockReason,
         scoreCombination,
     };
@@ -1054,9 +1103,11 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
     }
     if (!eligible.length)
         return null;
-    eligible.sort((a, b) => a.score - b.score);
-    const bestScore = eligible[0].score;
-    const ties = eligible.filter((item) => item.score === bestScore);
+    const replyDue = eligible.filter((item) => manager.owesPairReply(item.combo.instancia_origem, item.combo.instancia_destino));
+    const pool = replyDue.length ? replyDue : eligible;
+    pool.sort((a, b) => a.score - b.score);
+    const bestScore = pool[0].score;
+    const ties = pool.filter((item) => item.score === bestScore);
     const base = ((startIndex % ties.length) + ties.length) % ties.length;
     const picked = ties[base];
     return { chosen: picked.combo, index: picked.index };
@@ -1081,8 +1132,7 @@ async function loadRecentAquecedorPairLastSenders(supabase, connected) {
             return lastSenders;
         for (const row of data) {
             const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-            const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
-            const toInst = numberToInstance.get(toNum) || "";
+            const toInst = resolveAquecedorInstanceByNumber(String(row?.numero_destino || ""), numberToInstance);
             if (!fromInst || !toInst || fromInst.toLowerCase() === toInst.toLowerCase())
                 continue;
             const key = buildAquecedorPairKey(fromInst, toInst);
@@ -2193,6 +2243,41 @@ async function saveAquecedorConfigRecord(useRecommended, customConfig) {
     await writeAquecedorConfigToFile(record);
     return "local";
 }
+async function ensureAquecedorInstanceRegistered(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return;
+    const usageMap = await loadInstanceUsageMap();
+    if (getInstanceUsageFromMap(usageMap, name))
+        return;
+    await persistInstanceUsage([
+        {
+            instanceName: name,
+            useAquecedor: true,
+            useDisparador: true,
+        },
+    ]);
+}
+async function syncAquecedorConnectedInstances(supabase, connected) {
+    const usageMap = await loadInstanceUsageMap();
+    const toRegister = [];
+    for (const item of connected) {
+        await supabase.from("controle_instancia").upsert({
+            instancia: item.instancia,
+            numero_whatsapp: item.numero,
+        }, { onConflict: "instancia" });
+        if (!getInstanceUsageFromMap(usageMap, item.instancia)) {
+            toRegister.push({
+                instanceName: item.instancia,
+                useAquecedor: true,
+                useDisparador: true,
+            });
+        }
+    }
+    if (toRegister.length) {
+        await persistInstanceUsage(toRegister);
+    }
+}
 async function filterConnectedForAquecedorOwner(connected, ownerEmail) {
     const email = String(ownerEmail || "")
         .trim()
@@ -2559,12 +2644,7 @@ async function runAquecedorCycle(forceTest = false) {
             .update({ status: "PENDENTE" })
             .eq("status", "PROCESSANDO")
             .lt("processing_at", cutoffStuck));
-        for (const item of connected) {
-            await supabase.from("controle_instancia").upsert({
-                instancia: item.instancia,
-                numero_whatsapp: item.numero,
-            }, { onConflict: "instancia" });
-        }
+        await syncAquecedorConnectedInstances(supabase, connected);
         const combinations = [];
         for (const origem of connected) {
             for (const destino of connected) {
@@ -2629,6 +2709,12 @@ async function runAquecedorCycle(forceTest = false) {
         if (await hasRecentAquecedorSendBetween(supabase, connected, chosen.instancia_origem, chosen.instancia_destino, 90)) {
             aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90000).toISOString();
             aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`;
+            return;
+        }
+        const turnRecheck = await verifyAquecedorConversationTurn(supabase, connected, chosen.instancia_origem, chosen.instancia_destino);
+        if (!turnRecheck.ok) {
+            aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90000).toISOString();
+            aquecedorRuntime.lastResult = turnRecheck.reason;
             return;
         }
         await supabase.from("aquecedor")
@@ -4700,6 +4786,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             if (!reserve.ok) {
                 return res.status(409).json({ error: reserve.error });
             }
+            void ensureAquecedorInstanceRegistered(name);
         }
         // Regra de segurança operacional:
         // não permitir criar instância com nome já usado por outra instância ativa/conectada.
@@ -4793,6 +4880,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             if (!claim.ok) {
                 return res.status(409).json({ error: claim.error });
             }
+            void ensureAquecedorInstanceRegistered(name);
             return res.json({
                 ok: true,
                 message: createWarning
@@ -4815,6 +4903,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         if (!claim.ok) {
             return res.status(409).json({ error: claim.error });
         }
+        void ensureAquecedorInstanceRegistered(name);
         return res.json({
             ok: true,
             message: createWarning

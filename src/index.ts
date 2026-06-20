@@ -633,24 +633,32 @@ async function persistInstanceUsage(
 
 setIntegrationProbeFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
-  void persistInstanceUsage([
-    {
-      instanceName: status.sourceInstance,
-      useAquecedor: false,
-      useDisparador: false,
-    },
-  ]);
+  void (async () => {
+    const usageMap = await loadInstanceUsageMap();
+    const current = getInstanceUsageFromMap(usageMap, status.sourceInstance);
+    await persistInstanceUsage([
+      {
+        instanceName: status.sourceInstance,
+        useAquecedor: current?.useAquecedor !== false,
+        useDisparador: false,
+      },
+    ]);
+  })();
 });
 
 setInboundValidationFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
-  void persistInstanceUsage([
-    {
-      instanceName: status.instanceName,
-      useAquecedor: false,
-      useDisparador: false,
-    },
-  ]);
+  void (async () => {
+    const usageMap = await loadInstanceUsageMap();
+    const current = getInstanceUsageFromMap(usageMap, status.instanceName);
+    await persistInstanceUsage([
+      {
+        instanceName: status.instanceName,
+        useAquecedor: current?.useAquecedor !== false,
+        useDisparador: false,
+      },
+    ]);
+  })();
 });
 
 function parseDisparosConfig(input: any): DisparosConfig {
@@ -1017,6 +1025,22 @@ function buildAquecedorNumberToInstanceMap(
   return map;
 }
 
+function resolveAquecedorInstanceByNumber(
+  rawNumber: string,
+  numberToInstance: Map<string, string>,
+): string {
+  const normalized = normalizeWhatsAppNumber(String(rawNumber || "").trim());
+  if (!normalized) return "";
+  const direct = numberToInstance.get(normalized);
+  if (direct) return direct;
+  const suffix = normalized.replace(/\D/g, "").slice(-10);
+  if (suffix.length < 10) return "";
+  for (const [stored, inst] of numberToInstance.entries()) {
+    if (stored.replace(/\D/g, "").slice(-10) === suffix) return inst;
+  }
+  return "";
+}
+
 function resolveAquecedorConnectedByName(
   connected: Array<{ instancia: string; numero: string }>,
   canonicalMap: Map<string, string>,
@@ -1040,21 +1064,34 @@ async function loadAquecedorExchangeEvents(
   const events: Array<{ at: string; fromInst: string; toInst: string }> = [];
   const instanceNames = connected.map((item) => item.instancia);
 
+  const connectedCanonical = new Set(
+    instanceNames.map((name) => resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase()),
+  );
+
   try {
     const { data, error } = (await (supabase
       .from("aquecedor" as any)
       .select("instancia, numero_destino, sent_at")
       .eq("status", "ENVIADO")
-      .in("instancia", instanceNames)
       .order("sent_at", { ascending: false })
       .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK)) as any);
     if (!error && Array.isArray(data)) {
       for (const row of data) {
         const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-        const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
-        const toInst = numberToInstance.get(toNum) || "";
+        const toInst = resolveAquecedorInstanceByNumber(
+          String(row?.numero_destino || ""),
+          numberToInstance,
+        );
         const at = String(row?.sent_at || "").trim();
-        if (fromInst && toInst && at) events.push({ at, fromInst, toInst });
+        if (
+          fromInst &&
+          toInst &&
+          at &&
+          connectedCanonical.has(fromInst.toLowerCase()) &&
+          connectedCanonical.has(toInst.toLowerCase())
+        ) {
+          events.push({ at, fromInst, toInst });
+        }
       }
     }
   } catch {
@@ -1078,7 +1115,15 @@ async function loadAquecedorExchangeEvents(
           canonicalMap,
         );
         const at = String(row?.data_envio || "").trim();
-        if (fromInst && toInst && at) events.push({ at, fromInst, toInst });
+        if (
+          fromInst &&
+          toInst &&
+          at &&
+          connectedCanonical.has(fromInst.toLowerCase()) &&
+          connectedCanonical.has(toInst.toLowerCase())
+        ) {
+          events.push({ at, fromInst, toInst });
+        }
       }
     }
   } catch {
@@ -1111,6 +1156,7 @@ type AquecedorTurnManager = {
   canonicalMap: Map<string, string>;
   totalEvents: number;
   canSendDirected: (origemRaw: string, destinoRaw: string) => boolean;
+  owesPairReply: (origemRaw: string, destinoRaw: string) => boolean;
   describeBlockReason: (origemRaw: string, destinoRaw: string) => string;
   scoreCombination: (
     origemRaw: string,
@@ -1165,6 +1211,19 @@ async function loadAquecedorTurnManager(
     pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
   }
 
+  const owesPairReply = (origemRaw: string, destinoRaw: string): boolean => {
+    const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+    if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return false;
+
+    const pairKey = buildAquecedorPairKey(origem, destino);
+    const lastSender = pairLastSender.get(pairKey);
+    if (!lastSender || lastSender.toLowerCase() === origem.toLowerCase()) return false;
+
+    const stats = instanceStats.get(origem.toLowerCase());
+    return stats?.lastReceivedFrom?.toLowerCase() === destino.toLowerCase();
+  };
+
   const canSendDirected = (origemRaw: string, destinoRaw: string): boolean => {
     const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
@@ -1174,6 +1233,10 @@ async function loadAquecedorTurnManager(
     const lastSender = pairLastSender.get(pairKey);
     if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
       return false;
+    }
+
+    if (owesPairReply(origemRaw, destinoRaw)) {
+      return true;
     }
 
     const stats = instanceStats.get(origem.toLowerCase());
@@ -1236,6 +1299,7 @@ async function loadAquecedorTurnManager(
     canonicalMap,
     totalEvents: events.length,
     canSendDirected,
+    owesPairReply,
     describeBlockReason,
     scoreCombination,
   };
@@ -1279,9 +1343,14 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
 
   if (!eligible.length) return null;
 
-  eligible.sort((a, b) => a.score - b.score);
-  const bestScore = eligible[0].score;
-  const ties = eligible.filter((item) => item.score === bestScore);
+  const replyDue = eligible.filter((item) =>
+    manager.owesPairReply(item.combo.instancia_origem, item.combo.instancia_destino),
+  );
+  const pool = replyDue.length ? replyDue : eligible;
+
+  pool.sort((a, b) => a.score - b.score);
+  const bestScore = pool[0].score;
+  const ties = pool.filter((item) => item.score === bestScore);
   const base = ((startIndex % ties.length) + ties.length) % ties.length;
   const picked = ties[base];
   return { chosen: picked.combo, index: picked.index };
@@ -1310,8 +1379,10 @@ async function loadRecentAquecedorPairLastSenders(
 
     for (const row of data) {
       const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-      const toNum = normalizeWhatsAppNumber(String(row?.numero_destino || ""));
-      const toInst = numberToInstance.get(toNum) || "";
+      const toInst = resolveAquecedorInstanceByNumber(
+        String(row?.numero_destino || ""),
+        numberToInstance,
+      );
       if (!fromInst || !toInst || fromInst.toLowerCase() === toInst.toLowerCase()) continue;
       const key = buildAquecedorPairKey(fromInst, toInst);
       if (lastSenders.has(key)) continue;
@@ -2694,6 +2765,51 @@ async function saveAquecedorConfigRecord(
   return "local";
 }
 
+async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const usageMap = await loadInstanceUsageMap();
+  if (getInstanceUsageFromMap(usageMap, name)) return;
+  await persistInstanceUsage([
+    {
+      instanceName: name,
+      useAquecedor: true,
+      useDisparador: true,
+    },
+  ]);
+}
+
+async function syncAquecedorConnectedInstances(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+): Promise<void> {
+  const usageMap = await loadInstanceUsageMap();
+  const toRegister: Array<{ instanceName: string; useAquecedor: boolean; useDisparador: boolean }> =
+    [];
+
+  for (const item of connected) {
+    await (supabase.from("controle_instancia" as any) as any).upsert(
+      {
+        instancia: item.instancia,
+        numero_whatsapp: item.numero,
+      },
+      { onConflict: "instancia" },
+    );
+
+    if (!getInstanceUsageFromMap(usageMap, item.instancia)) {
+      toRegister.push({
+        instanceName: item.instancia,
+        useAquecedor: true,
+        useDisparador: true,
+      });
+    }
+  }
+
+  if (toRegister.length) {
+    await persistInstanceUsage(toRegister);
+  }
+}
+
 async function filterConnectedForAquecedorOwner(
   connected: Array<{ instancia: string; numero: string }>,
   ownerEmail: string | null
@@ -3114,15 +3230,7 @@ async function runAquecedorCycle(forceTest = false) {
       .eq("status", "PROCESSANDO")
       .lt("processing_at", cutoffStuck));
 
-    for (const item of connected) {
-      await (supabase.from("controle_instancia" as any) as any).upsert(
-        {
-          instancia: item.instancia,
-          numero_whatsapp: item.numero,
-        },
-        { onConflict: "instancia" }
-      );
-    }
+    await syncAquecedorConnectedInstances(supabase, connected);
 
     const combinations: Array<{
       instancia_origem: string;
@@ -3225,6 +3333,18 @@ async function runAquecedorCycle(forceTest = false) {
     ) {
       aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90_000).toISOString();
       aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`;
+      return;
+    }
+
+    const turnRecheck = await verifyAquecedorConversationTurn(
+      supabase,
+      connected,
+      chosen.instancia_origem,
+      chosen.instancia_destino,
+    );
+    if (!turnRecheck.ok) {
+      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90_000).toISOString();
+      aquecedorRuntime.lastResult = turnRecheck.reason;
       return;
     }
 
@@ -5544,6 +5664,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
       if (!reserve.ok) {
         return res.status(409).json({ error: reserve.error });
       }
+      void ensureAquecedorInstanceRegistered(name);
     }
 
     // Regra de segurança operacional:
@@ -5647,6 +5768,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
       if (!claim.ok) {
         return res.status(409).json({ error: claim.error });
       }
+      void ensureAquecedorInstanceRegistered(name);
       return res.json({
         ok: true,
         message: createWarning
@@ -5671,6 +5793,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     if (!claim.ok) {
       return res.status(409).json({ error: claim.error });
     }
+    void ensureAquecedorInstanceRegistered(name);
     return res.json({
       ok: true,
       message: createWarning
