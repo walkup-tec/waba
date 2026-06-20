@@ -8380,6 +8380,51 @@
         background: rgba(15, 23, 42, 0.72);
         border: 1px solid rgba(148, 163, 184, 0.12);
       }
+      .alt-numbers-stat--purchased {
+        background: linear-gradient(145deg, rgba(30, 58, 138, 0.35), rgba(15, 23, 42, 0.82));
+        border-color: rgba(96, 165, 250, 0.42);
+      }
+      .alt-numbers-stat--purchased span {
+        color: #93c5fd;
+      }
+      .alt-numbers-stat--purchased strong {
+        color: #60a5fa;
+      }
+      .alt-numbers-stat--activated {
+        background: linear-gradient(145deg, rgba(120, 53, 15, 0.28), rgba(15, 23, 42, 0.82));
+        border-color: rgba(251, 191, 36, 0.35);
+      }
+      .alt-numbers-stat--activated span {
+        color: #fcd34d;
+      }
+      .alt-numbers-stat--activated strong {
+        color: #fbbf24;
+      }
+      .alt-numbers-stat--available {
+        background: linear-gradient(145deg, rgba(6, 78, 59, 0.42), rgba(15, 23, 42, 0.82));
+        border-color: rgba(52, 211, 153, 0.48);
+        box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.12);
+      }
+      .alt-numbers-stat--available span {
+        color: #6ee7b7;
+        font-weight: 600;
+      }
+      .alt-numbers-stat--available strong {
+        color: #34d399;
+        font-size: 26px;
+      }
+      .alt-numbers-stat--available.is-empty {
+        background: linear-gradient(145deg, rgba(67, 20, 7, 0.32), rgba(15, 23, 42, 0.82));
+        border-color: rgba(251, 146, 60, 0.45);
+        box-shadow: none;
+      }
+      .alt-numbers-stat--available.is-empty span {
+        color: #fdba74;
+      }
+      .alt-numbers-stat--available.is-empty strong {
+        color: #fb923c;
+        font-size: 22px;
+      }
       .alt-numbers-stat span {
         display: block;
         font-size: 11px;
@@ -12571,15 +12616,15 @@
 
                       <div id="dis-number-panel-comprar" class="alt-numbers-shop" hidden>
                         <div class="alt-numbers-stats">
-                          <div class="alt-numbers-stat">
+                          <div class="alt-numbers-stat alt-numbers-stat--purchased">
                             <span>Comprados</span>
                             <strong id="alt-numbers-purchased">0</strong>
                           </div>
-                          <div class="alt-numbers-stat">
+                          <div class="alt-numbers-stat alt-numbers-stat--activated">
                             <span>Ativados</span>
                             <strong id="alt-numbers-activated">0</strong>
                           </div>
-                          <div class="alt-numbers-stat">
+                          <div class="alt-numbers-stat alt-numbers-stat--available" id="alt-numbers-available-card">
                             <span>Disponíveis p/ conectar</span>
                             <strong id="alt-numbers-available">0</strong>
                           </div>
@@ -16405,6 +16450,10 @@
         if (purchasedEl) purchasedEl.textContent = String(summary?.purchasedSlots ?? 0);
         if (activatedEl) activatedEl.textContent = String(summary?.activatedCount ?? 0);
         if (availableEl) availableEl.textContent = String(summary?.availableSlots ?? 0);
+        const availableCard = document.getElementById("alt-numbers-available-card");
+        if (availableCard) {
+          availableCard.classList.toggle("is-empty", !(summary?.availableSlots > 0));
+        }
         if (qtyOut) qtyOut.textContent = String(alternativaNumbersSelectedQty);
         if (totalEl) totalEl.textContent = formatAlternativaNumbersTotal(alternativaNumbersSelectedQty);
         if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= 1;
