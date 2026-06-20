@@ -7469,6 +7469,14 @@
       body.waba-ui-baseline .waba-prod-only {
         display: none !important;
       }
+      body.waba-subscriber-disparos-menus.waba-ui-baseline .menu-group-items .tab-button.waba-prod-only,
+      body.waba-subscriber-disparos-menus.waba-ui-baseline .mobile-tabs-drawer .tab-button.waba-prod-only {
+        display: inline-flex !important;
+      }
+      body.waba-subscriber-disparos-menus.waba-ui-baseline .mobile-tabs-drawer .tab-button.waba-prod-only {
+        display: block !important;
+        width: 100%;
+      }
       body.waba-ui-production .waba-full-only {
         display: none !important;
       }
@@ -9102,17 +9110,13 @@
       body.waba-ui-baseline #tab-disparos .disparos-layout,
       body.waba-disparo-evo-mode #tab-disparos .disparos-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-        gap: 16px;
-        align-items: start;
-      }
-      body.waba-ui-baseline #tab-disparos .disparos-side-campanhas,
-      body.waba-disparo-evo-mode #tab-disparos .disparos-side-campanhas {
-        order: 2;
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
+        gap: 20px;
+        align-items: stretch;
       }
       body.waba-ui-baseline #disparos-evo-baseline-left,
       body.waba-disparo-evo-mode #disparos-evo-baseline-left {
-        order: 1;
+        display: none !important;
       }
       body.waba-ui-baseline #disparos-config-legacy,
       body.waba-disparo-evo-mode #disparos-config-legacy {
@@ -12119,7 +12123,7 @@
                   </button>
                 </div>
               </div>
-              <div id="disparos-credits-top-nudge" class="disparos-credits-top-nudge disparos-saas-only" hidden>
+              <div id="disparos-credits-top-nudge" class="disparos-credits-top-nudge" hidden>
                 <div class="disparos-credits-top-nudge-text">
                   <strong>Saldo de envios esgotado</strong>
                   <span>Contrate mais créditos para voltar a gerar campanhas.</span>
@@ -12195,7 +12199,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="disparos-side disparos-side-resumo disparos-saas-only">
+                <div class="disparos-side disparos-side-resumo">
                   <div class="disparos-side-title">Resumo</div>
                   <div class="disparos-resumo-grid" aria-label="Resumo de envios">
                     <article class="disparos-resumo-stat">
@@ -15108,6 +15112,24 @@
         return role === "master" || role === "operacional" || role === "suporte";
       }
 
+      function isSubscriberAccount() {
+        return Boolean(wabaSessionEmail) && !isStaffRole(wabaAuthRole);
+      }
+
+      const SUBSCRIBER_DISPAROS_MENU_KEYS = new Set([
+        "disparos-dashboard",
+        "disparos-lancamento",
+        "disparo-evo",
+        "campanhas",
+      ]);
+
+      const DEFAULT_OPERACIONAL_MENU_KEYS = new Set([
+        "dashboard",
+        "instancias",
+        "aquecedor",
+        ...SUBSCRIBER_DISPAROS_MENU_KEYS,
+      ]);
+
       function hasAquecedorSectionMenuAccess() {
         if (wabaAuthRole === "master") return true;
         if (!isStaffRole(wabaAuthRole)) return true;
@@ -15379,6 +15401,9 @@
         if (isStaffRole(wabaAuthRole) && wabaAuthRole !== "master") {
           return hasStaffMenuAccess("campanhas");
         }
+        if (isSubscriberAccount() && (isProductionUi() || isBaselineUi())) {
+          return true;
+        }
         return Boolean(disparosCreditsCache?.hasCredits);
       }
 
@@ -15387,6 +15412,9 @@
           return hasStaffMenuAccess("disparos-lancamento");
         }
         if (wabaAuthRole === "master") return true;
+        if (isSubscriberAccount() && (isProductionUi() || isBaselineUi())) {
+          return true;
+        }
         return !Boolean(disparosCreditsCache?.hasCredits);
       }
 
@@ -15400,7 +15428,18 @@
 
       function shouldUseCampanhasSubscriberUi() {
         if (isBaselineUi()) return false;
+        if (isSubscriberAccount() && (isProductionUi() || isBaselineUi())) {
+          return false;
+        }
         return !isStaffRole(wabaAuthRole) && hasCampanhasMenuAccess();
+      }
+
+      function syncSubscriberDisparosMenuLayout() {
+        const enable = isSubscriberAccount();
+        document.body.classList.toggle("waba-subscriber-disparos-menus", enable);
+        if (enable && typeof setDesktopMenuGroupOpen === "function") {
+          setDesktopMenuGroupOpen("oficial", true);
+        }
       }
 
       function getCampanhasMenuSeenStorageKey() {
@@ -15456,6 +15495,7 @@
         }
         syncCampanhasMenuHighlight();
         syncOfficialSectionLabels();
+        syncSubscriberDisparosMenuLayout();
       }
 
       function getMenuSectionForTab(tabName) {
@@ -15523,6 +15563,9 @@
           if (shouldUseCampanhasSubscriberUi()) {
             return "disparos";
           }
+          if (isSubscriberAccount() && isProductionUi()) {
+            return "disparos-dashboard";
+          }
           return "disparos-lancamento";
         }
         return "disparos";
@@ -15531,10 +15574,13 @@
       function resolveSubscriberPostLoginTab(requestedTab) {
         const tab = String(requestedTab || "").trim();
         if (isBaselineUi()) {
+          if (isSubscriberAccount()) {
+            return tab || "disparos-dashboard";
+          }
           return tab || "dashboard";
         }
-        if (shouldUseCampanhasSubscriberUi()) {
-          return tab === "disparos-lancamento" ? "disparos" : tab || "disparos";
+        if (isSubscriberAccount()) {
+          return tab || "disparos-dashboard";
         }
         if (!tab || tab === "disparos") {
           return "disparos-lancamento";
@@ -15707,6 +15753,8 @@
         syncStaffNoMenusState();
 
         syncWabaSupportButtonVisibility();
+
+        syncCampanhasMenuVisibility();
 
         if (isTabBlockedByMenuPolicy(activeTab)) {
           const fallback = resolveFirstAllowedStaffTab();
@@ -15938,9 +15986,9 @@
 
       function initDisparoEvoPanelLayout() {
         const legacy = document.getElementById("disparos-config-legacy");
-        const left = document.getElementById("disparos-evo-baseline-left");
-        if (legacy && left && !left.contains(legacy)) {
-          left.appendChild(legacy);
+        const layout = document.querySelector("#tab-disparos .disparos-layout");
+        if (legacy && layout && legacy.previousElementSibling !== layout) {
+          layout.insertAdjacentElement("afterend", legacy);
         }
         if (legacy) legacy.removeAttribute("aria-hidden");
       }
@@ -19509,7 +19557,12 @@
         const defaults = {};
         if (!hasAny) {
           filterMenusForCurrentUiProfile(wabaMenuRegistryCache).forEach((menu) => {
-            defaults[menu.id] = false;
+            const menuId = String(menu?.id || "");
+            if (role === "operacional") {
+              defaults[menuId] = DEFAULT_OPERACIONAL_MENU_KEYS.has(menuId);
+            } else {
+              defaults[menuId] = false;
+            }
           });
         }
         renderAdminMenuChecklist(
@@ -25349,7 +25402,7 @@
 
       function refreshDisparosCampaignsAndResumo() {
         if (isDisparoEvoUi()) {
-          return loadDisparosEvoCampaigns();
+          return loadDisparosEvoCampaigns().then(() => loadDisparosCredits());
         }
         return loadDisparosTemplates().then(() => loadDisparosCredits());
       }
@@ -25372,7 +25425,7 @@
         if (disparosCampaignsPollTimer) clearInterval(disparosCampaignsPollTimer);
         const intervalMs = getDisparosCampaignsPollIntervalMs(items);
         disparosCampaignsPollTimer = setInterval(() => {
-          if (activeTab !== "disparos") return;
+          if (activeTab !== "disparos" && activeTab !== "disparo-evo") return;
           void loadDisparosTemplates({ silent: true });
         }, intervalMs);
       }
@@ -25390,7 +25443,7 @@
 
       function syncDisparosCampaignsOnVisibility() {
         if (document.visibilityState !== "visible") return;
-        if (activeTab === "disparos") {
+        if (activeTab === "disparos" || activeTab === "disparo-evo") {
           void loadDisparosTemplates({ silent: true });
         }
         if (activeTab === "disparos-dashboard") {
@@ -26439,7 +26492,8 @@
       function computeDisparosEnviadosFinalizados(items) {
         return (Array.isArray(items) ? items : []).reduce((acc, item) => {
           const status = String(item?.status || "").toLowerCase();
-          if (status !== "completed") return acc;
+          const isFinalized = status === "completed" || status === "finished";
+          if (!isFinalized) return acc;
           const sent = Math.max(0, Math.floor(Number(item?.sentCount ?? 0)));
           return acc + sent;
         }, 0);
@@ -26662,7 +26716,6 @@
       }
 
       function syncDisparosResumoSide(campaignItems) {
-        if (isDisparoEvoUi()) return;
         const enviadosEl = document.getElementById("disparos-resumo-enviados");
         const filaEl = document.getElementById("disparos-resumo-fila");
         const oficialDisponiveisEl = document.getElementById("disparos-resumo-oficial-disponiveis");
@@ -26716,8 +26769,6 @@
       async function loadDisparosEvoCampaigns(options = {}) {
         const silent = Boolean(options.silent);
         const list = document.getElementById("disparos-list");
-        const sent = document.getElementById("disparos-enviados-hoje");
-        const fila = document.getElementById("disparos-na-fila");
         if (!list) return;
         try {
           const response = await fetchWithTimeout("/disparos/campanhas", {}, 10000);
@@ -26725,25 +26776,55 @@
             if (!silent) {
               disparosHasRunningCampaign = false;
               applyDisparosActiveInstanceCardDisplay("");
+              disparosCampaignItemsCache = [];
+              syncDisparosResumoSide([]);
               list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
             }
             return;
           }
-                const data = await response.json().catch(() => ({}));
-                const items = Array.isArray(data?.items) ? data.items : [];
-                const totalSent = items.reduce((acc, item) => acc + Number(item?.sentCount || 0), 0);
-                const runningCount = items.filter((item) => String(item?.status || "").toLowerCase() === "running").length;
-                disparosHasRunningCampaign = runningCount > 0;
-                if (sent) sent.textContent = String(totalSent);
-                if (fila) fila.textContent = String(runningCount);
-                updateDisparosSelectedInstancesSummaryCard();
-                await refreshDisparosActiveInstanceFromServer();
-                if (!items.length) {
-                  list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
-                  return;
-                }
-                list.innerHTML = "";
-                items.slice(0, 80).forEach((item) => {
+          const data = await response.json().catch(() => ({}));
+          const items = Array.isArray(data?.items) ? data.items : [];
+          const prevById = new Map(
+            (Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : []).map(
+              (item) => [String(item?.id || ""), item]
+            )
+          );
+          const fingerprint = buildDisparosCampaignItemsFingerprint(items);
+          const campaignsChanged = fingerprint !== disparosCampaignItemsFingerprint;
+          const enviadosTotal = computeDisparosEnviadosFinalizados(items);
+          const enviadosChanged = enviadosTotal !== disparosEnviadosTotalCache;
+          const newlyCompleted = items.some((item) => {
+            const id = String(item?.id || "");
+            const prev = prevById.get(id);
+            const status = normalizeCampaignIntakeStatus(item?.status);
+            const prevStatus = prev ? normalizeCampaignIntakeStatus(prev?.status) : "";
+            return status === "completed" && prevStatus !== "completed";
+          });
+          const runningCount = items.filter(
+            (item) => String(item?.status || "").toLowerCase() === "running"
+          ).length;
+          disparosCampaignItemsCache = items;
+          disparosEnviadosTotalCache = enviadosTotal;
+          disparosHasRunningCampaign = runningCount > 0;
+          syncDisparosResumoSide(items);
+          if (activeTab === "disparo-evo" || isBaselineUi()) {
+            restartDisparosCampaignsPolling(items);
+          }
+          if (campaignsChanged || newlyCompleted || enviadosChanged) {
+            void loadDisparosCredits();
+          }
+          updateDisparosSelectedInstancesSummaryCard();
+          await refreshDisparosActiveInstanceFromServer();
+          if (silent && !campaignsChanged && !newlyCompleted && !enviadosChanged) {
+            return;
+          }
+          disparosCampaignItemsFingerprint = fingerprint;
+          if (!items.length) {
+            list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
+            return;
+          }
+          list.innerHTML = "";
+          items.slice(0, 80).forEach((item) => {
                   const row = document.createElement("div");
                   row.className = "aquecedor-envio-item disparos-campaign-item";
                   const createdAt = String(item?.createdAt || "").trim();
@@ -27014,7 +27095,7 @@
             (item) => normalizeCampaignIntakeStatus(item?.status) === "in_progress"
           );
           syncDisparosResumoSide(items);
-          if (activeTab === "disparos") {
+          if (activeTab === "disparos" || activeTab === "disparo-evo") {
             restartDisparosCampaignsPolling(items);
           }
           if (campaignsChanged || newlyCompleted || enviadosChanged) {
@@ -33735,6 +33816,8 @@
               ? resolveSubscriberPostLoginTab(postLoginTab)
               : postLoginTab;
             sessionStorage.removeItem("waba.postLoginTab");
+          } else if (isSubscriberAccount() && (isProductionUi() || isBaselineUi())) {
+            initialTab = "disparos-dashboard";
           } else if (shouldUseCampanhasSubscriberUi()) {
             initialTab = "disparos";
           }

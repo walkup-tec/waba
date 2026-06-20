@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-20
 
+**WABA — V02 merge master (aquecedor):** branch `v02` sincronizada com `master` (`9e64f14`); deploy serviço `waba_disparador_v02`. Marker `DEPLOY-2026-06-20-aquecedor-reply-turn-sync`. Ver `doc/LOG-2026-06-20__v02-merge-master-aquecedor-reply-turn.md`.
+
+**WABA — API Alternativa layout (campanhas | créditos | config):** tela `disparo-evo` alinhada à API Oficial — campanhas à esquerda, painel Resumo/Saldos à direita (mesmo comportamento de créditos/polling), config legacy embaixo. Ver `doc/LOG-2026-06-20__api-alternativa-layout-resumo-creditos.md`.
+
 **WABA — Aquecedor conversa bilateral + auto-instâncias:** turn manager prioriza resposta obrigatória (Soma→Drax após Drax→Soma); `owesPairReply` libera envio mesmo com bloqueio global; eventos aquecedor com match flexível de número; novas instâncias registradas entram no ciclo (`ensureAquecedorInstanceRegistered` + `syncAquecedorConnectedInstances`); probe inbound não desliga mais aquecedor. Marker `DEPLOY-2026-06-20-aquecedor-reply-turn-sync`. Ver `doc/LOG-2026-06-20__aquecedor-reply-turn-auto-instances.md`.
 
 **WABA — menus Disparos assinantes (V02 todos ambientes):** Dashboard, Créditos, API Alternativa, API Oficial sempre visíveis para assinantes; baseline incluído. Ver `doc/LOG-2026-06-20__subscriber-disparos-menus-v02-all-envs.md`.

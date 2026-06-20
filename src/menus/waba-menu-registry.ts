@@ -166,6 +166,14 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
   },
 ];
 
+/** Menus Disparos visíveis para assinantes (UI produção / V02). */
+export const WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
+  "disparos-dashboard",
+  "disparos-lancamento",
+  "disparo-evo",
+  "campanhas",
+] as const;
+
 export const listWabaMenuDefinitions = (): WabaMenuDefinition[] =>
   WABA_MENU_REGISTRY.map((item) => ({ ...item }));
 
