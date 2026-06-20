@@ -54,6 +54,7 @@ const base_path_1 = require("./base-path");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
 const waba_auth_service_1 = require("./auth/waba-auth.service");
+const alternativa_number_activation_repository_1 = require("./billing/alternativa-number-activation.repository");
 const waba_instance_ownership_service_1 = require("./instances/waba-instance-ownership.service");
 const evo_instance_key_1 = require("./instances/evo-instance-key");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
@@ -2289,16 +2290,87 @@ async function syncAquecedorConnectedInstances(supabase, connected) {
         await persistInstanceUsage(toRegister);
     }
 }
-async function filterConnectedForAquecedorOwner(connected, ownerEmail) {
+async function listAquecedorScopedInstanceNames(ownerEmail) {
     const email = String(ownerEmail || "")
         .trim()
         .toLowerCase();
-    if (!email)
+    if (!email.includes("@"))
         return [];
-    const auth = { email, role: "subscriber" };
-    const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, connected.map((c) => c.instancia));
-    const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+    const owned = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(email);
+    const activations = new alternativa_number_activation_repository_1.AlternativaNumberActivationRepository()
+        .listForEmail(email)
+        .map((row) => String(row.instanceName || "").trim())
+        .filter(Boolean);
+    const merged = new Set();
+    for (const name of [...owned, ...activations]) {
+        const normalized = String(name || "").trim();
+        if (normalized)
+            merged.add(normalized);
+    }
+    return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+async function filterConnectedForAquecedorOwner(connected, ownerEmail) {
+    const allowed = await listAquecedorScopedInstanceNames(String(ownerEmail || ""));
+    if (!allowed.length)
+        return [];
+    const allowedLower = new Set(allowed.map((n) => n.toLowerCase()));
     return connected.filter((c) => allowedLower.has(c.instancia.toLowerCase()));
+}
+function buildConnectedFromEvoCacheItems(items) {
+    return items
+        .map((item) => {
+        const status = String(item?.connectionStatus ?? "").toLowerCase();
+        if (!status.includes("open"))
+            return null;
+        const instancia = String(item?.name || "").trim();
+        const numero = normalizeWhatsAppNumber(String(item?.number || "").trim());
+        if (!instancia || !numero)
+            return null;
+        return { instancia, numero };
+    })
+        .filter((row) => row != null);
+}
+async function resolveAquecedorConnectedForOwner(ownerEmail) {
+    const usageMap = await loadInstanceUsageMap();
+    const filterScoped = async (connectedAll) => {
+        const scoped = await filterConnectedForAquecedorOwner(connectedAll, ownerEmail);
+        return scoped.filter((item) => {
+            const usage = getInstanceUsageFromMap(usageMap, item.instancia);
+            return usage ? usage.useAquecedor !== false : true;
+        });
+    };
+    const evoList = await fetchEvoInstancesList();
+    if (evoList.ok) {
+        const fromLive = await filterScoped(buildConnectedFromEvoResponse(evoList.instances));
+        if (fromLive.length >= 2) {
+            return { connected: fromLive, source: "evo-live", evoDegraded: false };
+        }
+    }
+    const cache = await loadEvoInstancesCache();
+    if (cache?.items?.length) {
+        const fromCache = await filterScoped(buildConnectedFromEvoCacheItems(cache.items));
+        if (fromCache.length > 0) {
+            return {
+                connected: fromCache,
+                source: "evo-cache",
+                evoDegraded: !evoList.ok,
+                evoError: evoList.ok ? undefined : evoList.detail,
+            };
+        }
+    }
+    if (evoList.ok) {
+        return {
+            connected: await filterScoped(buildConnectedFromEvoResponse(evoList.instances)),
+            source: "evo-live",
+            evoDegraded: false,
+        };
+    }
+    return {
+        connected: [],
+        source: "evo-cache",
+        evoDegraded: true,
+        evoError: evoList.detail,
+    };
 }
 async function buildAquecedorConnectedFromControleInstancia(supabase, ownerEmail) {
     const { data: instanciasData } = await (supabase
@@ -2336,12 +2408,25 @@ async function analyzeAquecedorInstances(ownerEmail) {
     const email = String(ownerEmail || "")
         .trim()
         .toLowerCase();
-    const ownedInstances = email
-        ? await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(email)
-        : [];
+    const ownedInstances = email ? await listAquecedorScopedInstanceNames(email) : [];
     const usageMap = await loadInstanceUsageMap();
+    let evoInstances = [];
+    let evoSource = "live";
     const evoList = await fetchEvoInstancesList();
-    const evoInstances = evoList.ok ? evoList.instances : [];
+    if (evoList.ok) {
+        evoInstances = evoList.instances;
+    }
+    else {
+        const cache = await loadEvoInstancesCache();
+        if (cache?.items?.length) {
+            evoSource = "cache";
+            evoInstances = cache.items.map((item) => ({
+                instanceName: item.name,
+                connectionStatus: item.connectionStatus,
+                number: item.number,
+            }));
+        }
+    }
     const evoByKey = new Map();
     for (const item of evoInstances) {
         const inst = item?.instance ?? item;
@@ -2396,7 +2481,14 @@ async function analyzeAquecedorInstances(ownerEmail) {
         }
     }
     const evoConnectedKeys = buildConnectedFromEvoResponse(evoInstances).map((c) => c.instancia);
-    return { ownerEmail: email || null, ownedInstances, eligible, excluded, evoConnectedKeys };
+    return {
+        ownerEmail: email || null,
+        ownedInstances,
+        eligible,
+        excluded,
+        evoConnectedKeys,
+        evoSource,
+    };
 }
 function parseAquecedorConfig(input) {
     const readInt = (key, min, max, fallback) => {
@@ -2603,60 +2695,32 @@ async function runAquecedorCycle(forceTest = false) {
                 : "Fora da janela humanizada.";
             return;
         }
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        let response;
-        try {
-            response = await fetch(EVO_INSTANCES_URL, {
-                headers: {
-                    apikey: EVO_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                signal: controller.signal,
-            });
-        }
-        catch (evoErr) {
-            const msg = evoErr instanceof Error ? evoErr.message : String(evoErr);
-            aquecedorRuntime.lastResult = `Falha ao buscar instâncias da EVO (${msg}).`;
-            return;
-        }
-        finally {
-            clearTimeout(timeoutId);
-        }
-        if (!response.ok) {
-            aquecedorRuntime.lastResult = "Falha ao buscar instâncias da EVO.";
-            return;
-        }
-        const rawInstances = await response.json();
-        const instances = Array.isArray(rawInstances)
-            ? rawInstances
-            : Array.isArray(rawInstances?.response)
-                ? rawInstances.response
-                : Array.isArray(rawInstances?.data)
-                    ? rawInstances.data
-                    : rawInstances ? [rawInstances] : [];
-        const connectedAll = buildConnectedFromEvoResponse(instances);
         if (!aquecedorRuntimeOwnerEmail) {
             aquecedorRuntime.lastResult =
                 "Aquecedor sem usuário vinculado. Pare e inicie novamente pela conta correta.";
             return;
         }
-        const connectedOwned = await filterConnectedForAquecedorOwner(connectedAll, aquecedorRuntimeOwnerEmail);
-        const usageMap = await loadInstanceUsageMap();
-        const connected = connectedOwned.filter((item) => {
-            const usage = getInstanceUsageFromMap(usageMap, item.instancia);
-            return usage ? usage.useAquecedor !== false : true;
-        });
+        const resolved = await resolveAquecedorConnectedForOwner(aquecedorRuntimeOwnerEmail);
+        const connected = resolved.connected;
         if (connected.length < 2) {
             const analysis = await analyzeAquecedorInstances(aquecedorRuntimeOwnerEmail);
             const hints = analysis.excluded
                 .map((row) => `${row.instancia} (${row.motivos.join(", ")})`)
-                .slice(0, 4)
+                .slice(0, 6)
                 .join("; ");
+            const scopedCount = analysis.ownedInstances.length;
+            const evoNote = resolved.evoDegraded
+                ? " Evolution indisponível — usando cache local."
+                : "";
             aquecedorRuntime.lastResult = hints
-                ? `Menos de 2 instâncias habilitadas (${connected.length}). Verifique: ${hints}`
-                : "Menos de 2 instâncias conectadas e habilitadas para Aquecedor (somente as suas).";
+                ? `Menos de 2 instâncias habilitadas (${connected.length} conectadas de ${scopedCount} no seu escopo). Verifique: ${hints}${evoNote}`
+                : scopedCount < 2
+                    ? `Menos de 2 instâncias no seu escopo (${scopedCount}). Vincule ou ative números na API Alternativa.${evoNote}`
+                    : `Menos de 2 instâncias conectadas e habilitadas para Aquecedor (${connected.length} de ${scopedCount}).${evoNote}`;
             return;
+        }
+        if (resolved.source === "evo-cache") {
+            console.warn(`[Aquecedor] Evolution degradada — ${connected.length} instância(s) via cache (${resolved.evoError || "sem detalhe"}).`);
         }
         const supabase = getSupabaseClient();
         if (!supabase) {
