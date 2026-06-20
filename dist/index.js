@@ -44,13 +44,34 @@ const XLSX = __importStar(require("xlsx"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = __importDefault(require("crypto"));
 const fs_1 = require("fs");
+const promises_1 = require("dns/promises");
+const os_1 = require("os");
 const supabase_js_1 = require("@supabase/supabase-js");
 const generated_brand_logo_1 = require("./generated-brand-logo");
 const load_env_1 = require("./load-env");
 const data_path_1 = require("./data-path");
 const base_path_1 = require("./base-path");
+const waba_auth_routes_1 = require("./auth/waba-auth.routes");
+const waba_request_auth_1 = require("./auth/waba-request-auth");
+const waba_auth_service_1 = require("./auth/waba-auth.service");
+const waba_instance_ownership_service_1 = require("./instances/waba-instance-ownership.service");
+const evo_instance_key_1 = require("./instances/evo-instance-key");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
+const waba_admin_routes_1 = require("./admin/waba-admin.routes");
+const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
+const evo_http_client_1 = require("./evo-http.client");
+const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
+const waba_system_user_service_1 = require("./users/waba-system-user.service");
+const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
+const waba_campaign_spreadsheet_util_1 = require("./disparos/waba-campaign-spreadsheet.util");
+const waba_disparos_credits_service_1 = require("./billing/waba-disparos-credits.service");
+const waba_entitlement_routes_1 = require("./entitlements/waba-entitlement.routes");
+const waba_entitlement_service_1 = require("./entitlements/waba-entitlement.service");
+const waba_cors_1 = require("./lib/waba-cors");
+const waba_subscriber_routes_1 = require("./subscribers/waba-subscriber.routes");
+const waba_support_routes_1 = require("./support/waba-support.routes");
 const instance_integration_probe_1 = require("./instance-integration-probe");
+const instance_inbound_validation_service_1 = require("./instance-inbound-validation.service");
 const deploy_marker_1 = require("./deploy-marker");
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
@@ -130,9 +151,89 @@ app.use((req, res, next) => {
     res.type("png");
     return res.send(buf);
 });
+/** Favicon na raiz do host — o navegador pede /favicon.ico antes do HTML (com ou sem BASE_PATH). */
+const sendBrandStaticFile = (res, candidates, contentType) => {
+    for (const filePath of candidates) {
+        if (!(0, fs_1.existsSync)(filePath))
+            continue;
+        try {
+            const buf = (0, fs_1.readFileSync)(filePath);
+            if (buf.length === 0)
+                continue;
+            res.setHeader("Cache-Control", "public, max-age=86400");
+            res.type(contentType);
+            res.send(buf);
+            return true;
+        }
+        catch {
+            /* tenta próximo */
+        }
+    }
+    return false;
+};
+app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD")
+        return next();
+    const p = String(req.path || "/").toLowerCase();
+    if (p === "/favicon.ico") {
+        if (sendBrandStaticFile(res, [
+            path_1.default.join(distPath, "favicon.ico"),
+            path_1.default.join(rootPath, "favicon.ico"),
+            path_1.default.join(distPath, "media", "favicon.ico"),
+            path_1.default.join(rootPath, "media", "favicon.ico"),
+        ], "image/x-icon")) {
+            return;
+        }
+    }
+    if (p === "/media/favcon.png" || p === "/media/favicon.png") {
+        const fileName = p === "/media/favcon.png" ? "favcon.png" : "favicon.png";
+        if (sendBrandStaticFile(res, [
+            path_1.default.join(distPath, "media", fileName),
+            path_1.default.join(rootPath, "media", fileName),
+        ], "image/png")) {
+            return;
+        }
+    }
+    return next();
+});
+/** Encurtador próprio — redirect público na raiz do host (/s/:slug). */
+app.get("/s/:slug", async (req, res) => {
+    try {
+        const target = await (0, waba_shortener_service_1.resolveWabaShortRedirect)(String(req.params.slug || ""));
+        if (!target)
+            return res.status(404).type("text/plain").send("Not Found");
+        return res.redirect(302, target);
+    }
+    catch (error) {
+        console.error("[shortener] redirect error:", error);
+        return res.status(500).type("text/plain").send("Erro ao redirecionar.");
+    }
+});
 const PORT = process.env.PORT || 3000;
 const RUNTIME_MODE = String(process.env.RUNTIME_MODE || "production").toLowerCase();
-const ENABLE_BACKGROUND_PROCESSING = ["1", "true", "yes", "on"].includes(String(process.env.ENABLE_BACKGROUND_PROCESSING || "true").toLowerCase());
+const parseEnvBoolean = (raw, defaultValue) => {
+    const value = String(raw ?? "")
+        .trim()
+        .toLowerCase();
+    if (!value)
+        return defaultValue;
+    if (["1", "true", "yes", "on"].includes(value))
+        return true;
+    if (["0", "false", "no", "off"].includes(value))
+        return false;
+    return defaultValue;
+};
+/** Disparador EVO (API não oficial): V01/V02 usam WABA_EVO_DISPARADOR; demais ambientes seguem ENABLE_BACKGROUND_PROCESSING. */
+const ENABLE_BACKGROUND_PROCESSING = load_env_1.WABA_ENV === "v01" || load_env_1.WABA_ENV === "v02"
+    ? parseEnvBoolean(process.env.WABA_EVO_DISPARADOR ?? process.env.ENABLE_BACKGROUND_PROCESSING, load_env_1.WABA_ENV === "v01")
+    : parseEnvBoolean(process.env.ENABLE_BACKGROUND_PROCESSING, true);
+/** Aquecedor pode rodar em dev (v02) mesmo com campanhas desligadas. Se omitido, segue ENABLE_BACKGROUND_PROCESSING. */
+const ENABLE_AQUECEDOR_PROCESSING = (() => {
+    const raw = String(process.env.ENABLE_AQUECEDOR_PROCESSING ?? "").trim().toLowerCase();
+    if (raw)
+        return ["1", "true", "yes", "on"].includes(raw);
+    return ENABLE_BACKGROUND_PROCESSING;
+})();
 /** Quando true, o processo responde só a probes e página de manutenção (útil no ambiente prod / porta 3000). */
 const MAINTENANCE_MODE = ["1", "true", "yes", "on"].includes(String(process.env.MAINTENANCE_MODE || "").toLowerCase());
 const MAINTENANCE_RETRY_AFTER_SEC = Math.max(30, Math.min(86400, Number(process.env.MAINTENANCE_RETRY_AFTER_SEC || 120) || 120));
@@ -236,6 +337,10 @@ app.get("/health", (_req, res) => {
         maintenanceMode: MAINTENANCE_MODE,
         runtimeMode: RUNTIME_MODE,
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+        aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+        evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
+        evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
+        evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
     });
 });
 app.get("/ready", (_req, res) => {
@@ -272,17 +377,114 @@ app.get("/maintenance", (_req, res) => {
     const safe = MAINTENANCE_MESSAGE.replace(/</g, "&lt;");
     res.status(503).type("html").send(maintenanceHtmlPage.replace("__MSG__", safe));
 });
+(0, waba_cors_1.registerWabaCors)(app);
+(0, waba_auth_routes_1.registerWabaAuthRoutes)(app);
+(0, waba_subscriber_routes_1.registerWabaSubscriberRoutes)(app);
+(0, waba_entitlement_routes_1.registerWabaEntitlementRoutes)(app);
+app.use(waba_auth_routes_1.wabaRequireAuthMiddleware);
+const wabaEntitlementService = new waba_entitlement_service_1.WabaEntitlementService();
+async function rejectForeignInstance(req, res, instanceName) {
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    if (!(await waba_instance_ownership_service_1.wabaInstanceOwnershipService.canAccessInstance(auth, instanceName))) {
+        res.status(403).json({
+            error: "Esta instância pertence a outro usuário ou você não tem permissão para acessá-la.",
+        });
+        return true;
+    }
+    return false;
+}
+function rejectForeignInstanceNames(req, instanceNames) {
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    return waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, instanceNames);
+}
+async function filterEvoTagRowsForRequest(req, rows) {
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, rows.map((r) => r.instanceKey));
+    const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+    return rows.filter((r) => allowedLower.has(r.instanceKey.toLowerCase()));
+}
+async function fetchEvoInstanceTagRowsForRequest(req) {
+    const rows = await fetchEvoInstanceTagRows();
+    return filterEvoTagRowsForRequest(req, rows);
+}
+async function filterConnectedInstanciasForRequest(req, connected) {
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, connected.map((c) => c.instancia));
+    const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+    return connected.filter((c) => allowedLower.has(c.instancia.toLowerCase()));
+}
+function rejectAquecedorWithoutEntitlement(req, res) {
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    const entitlement = wabaEntitlementService.getAquecedorEntitlement(auth.email, auth.role);
+    if (entitlement.active)
+        return false;
+    res.status(403).json({
+        error: entitlement.message,
+        code: entitlement.reason,
+        entitlement,
+    });
+    return true;
+}
 // Supabase (criado sob demanda para evitar travamentos quando faltar config)
 let supabaseClient = null;
+function resetSupabaseClient() {
+    supabaseClient = null;
+}
 function getSupabaseClient() {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !supabaseKey)
         return null;
     if (!supabaseClient) {
-        supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
+        supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+        });
     }
     return supabaseClient;
+}
+function isSupabaseTransientError(error) {
+    const msg = String(error?.message || error || "").toLowerCase();
+    return (msg.includes("fetch failed") ||
+        msg.includes("network") ||
+        msg.includes("timeout") ||
+        msg.includes("econnrefused") ||
+        msg.includes("enotfound") ||
+        msg.includes("econnreset") ||
+        msg.includes("socket hang up"));
+}
+function sleepMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function getSupabaseUrlHost() {
+    try {
+        const raw = String(process.env.SUPABASE_URL || "").trim();
+        if (!raw)
+            return null;
+        return new URL(raw).hostname;
+    }
+    catch {
+        return null;
+    }
+}
+async function describeSupabaseConnectivityFailure() {
+    const host = getSupabaseUrlHost();
+    if (!host) {
+        return "SUPABASE_URL inválida ou ausente no servidor (Easypanel → Environment).";
+    }
+    if (!String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim()) {
+        return "SUPABASE_SERVICE_ROLE_KEY ausente no servidor (Easypanel → Environment).";
+    }
+    try {
+        await (0, promises_1.lookup)(host);
+    }
+    catch (err) {
+        const code = String(err?.code || "");
+        if (code === "ENOTFOUND" || code === "ESERVFAIL") {
+            return `SUPABASE_URL incorreta: o host "${host}" não existe no DNS. Copie a Project URL no dashboard Supabase.`;
+        }
+        return `Supabase inacessível em "${host}" (${code || "erro de rede"}). Verifique SUPABASE_URL no Easypanel.`;
+    }
+    return `Conexão com Supabase em "${host}" falhou após 3 tentativas. Confira service_role key e se o projeto está ativo.`;
 }
 function normalizeInstanceUsageRow(row) {
     return {
@@ -290,6 +492,20 @@ function normalizeInstanceUsageRow(row) {
         useDisparador: row?.use_disparador !== false,
         updatedAt: String(row?.updated_at || new Date().toISOString()),
     };
+}
+function getInstanceUsageFromMap(map, instanceName) {
+    const key = String(instanceName || "").trim();
+    if (!key)
+        return undefined;
+    const direct = map.get(key);
+    if (direct)
+        return direct;
+    const target = key.toLowerCase();
+    for (const [mapKey, value] of map.entries()) {
+        if (mapKey.toLowerCase() === target)
+            return value;
+    }
+    return undefined;
 }
 async function loadInstanceUsageMap() {
     const result = new Map();
@@ -356,13 +572,32 @@ async function persistInstanceUsage(items) {
 (0, instance_integration_probe_1.setIntegrationProbeFinishedHandler)((status) => {
     if (!status.restrictionSuspected)
         return;
-    void persistInstanceUsage([
-        {
-            instanceName: status.sourceInstance,
-            useAquecedor: false,
-            useDisparador: false,
-        },
-    ]);
+    void (async () => {
+        const usageMap = await loadInstanceUsageMap();
+        const current = getInstanceUsageFromMap(usageMap, status.sourceInstance);
+        await persistInstanceUsage([
+            {
+                instanceName: status.sourceInstance,
+                useAquecedor: current?.useAquecedor !== false,
+                useDisparador: false,
+            },
+        ]);
+    })();
+});
+(0, instance_inbound_validation_service_1.setInboundValidationFinishedHandler)((status) => {
+    if (!status.restrictionSuspected)
+        return;
+    void (async () => {
+        const usageMap = await loadInstanceUsageMap();
+        const current = getInstanceUsageFromMap(usageMap, status.instanceName);
+        await persistInstanceUsage([
+            {
+                instanceName: status.instanceName,
+                useAquecedor: current?.useAquecedor !== false,
+                useDisparador: false,
+            },
+        ]);
+    })();
 });
 function parseDisparosConfig(input) {
     const readInt = (value, min, max, fallback) => {
@@ -380,9 +615,12 @@ function parseDisparosConfig(input) {
             .filter((d) => DAY_CODES.includes(d))
         : DISPAROS_DEFAULTS.workingDays;
     const provider = String(input?.shortenerProvider || DISPAROS_DEFAULTS.shortenerProvider).toLowerCase();
-    const safeProvider = provider === "encurtadorpro" || provider === "isgd" || provider === "tinyurl"
+    const safeProvider = provider === "encurtadorpro" ||
+        provider === "isgd" ||
+        provider === "tinyurl" ||
+        provider === "waba"
         ? provider
-        : "encurtadorpro";
+        : "waba";
     const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
     const safeMode = mode === "database" ? "database" : "ai";
     const selectedRaw = input?.selectedDisparadorInstances ?? input?.selected_disparador_instances;
@@ -544,6 +782,731 @@ const WHATSAPP_PROFILE_NAMES_FILE = (0, data_path_1.resolveDataFile)("whatsapp-p
 const DISPAROS_LOCAL_STATE_FILE = (0, data_path_1.resolveDataFile)("disparos-local-state.json");
 /** Última intenção explícita: aquecedor ligado/desligado (retoma após restart do processo na porta 3000). */
 const RUNTIME_INTENT_FILE = (0, data_path_1.resolveDataFile)("runtime-intent.json");
+const AQUECEDOR_CONFIG_FILE = (0, data_path_1.resolveDataFile)("aquecedor-config.json");
+const AQUECEDOR_ENVIOS_LOG_FILE = (0, data_path_1.resolveDataFile)("aquecedor-envios-log.json");
+async function readAquecedorEnviosLog() {
+    try {
+        const raw = await fs_1.promises.readFile(AQUECEDOR_ENVIOS_LOG_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed?.items) ? parsed.items : [];
+    }
+    catch {
+        return [];
+    }
+}
+async function appendAquecedorEnvioLog(row) {
+    const items = await readAquecedorEnviosLog();
+    items.unshift({ ...row, id: crypto_1.default.randomUUID() });
+    await fs_1.promises.mkdir(path_1.default.dirname(AQUECEDOR_ENVIOS_LOG_FILE), { recursive: true });
+    const tmp = `${AQUECEDOR_ENVIOS_LOG_FILE}.tmp`;
+    await fs_1.promises.writeFile(tmp, JSON.stringify({ items: items.slice(0, 500) }, null, 2), "utf-8");
+    await fs_1.promises.rename(tmp, AQUECEDOR_ENVIOS_LOG_FILE);
+}
+async function recordAquecedorEnvio(params) {
+    const ownerEmail = String(params.ownerEmail ?? aquecedorRuntimeOwnerEmail ?? "")
+        .trim()
+        .toLowerCase();
+    await appendAquecedorEnvioLog({
+        ownerEmail,
+        instanciaOrigem: params.instanciaOrigem,
+        instanciaDestino: params.instanciaDestino,
+        dataEnvio: params.dataEnvio || new Date().toISOString(),
+        status: params.status,
+    });
+}
+function aquecedorEnvioMatchesOwner(instanciaOrigem, instanciaDestino, allowed) {
+    if (!allowed)
+        return true;
+    const origin = String(instanciaOrigem || "").trim().toLowerCase();
+    const dest = String(instanciaDestino || "").trim().toLowerCase();
+    return ((origin.length > 0 && allowed.has(origin)) ||
+        (dest.length > 0 && allowed.has(dest)));
+}
+async function resolveAquecedorEnviosAllowedInstances(ownerEmail) {
+    if (!(0, waba_auth_service_1.isWabaAuthConfigured)())
+        return null;
+    const names = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(ownerEmail);
+    return new Set(names.map((name) => name.toLowerCase()));
+}
+const AQUECEDOR_FALLBACK_MESSAGE = "Olá! Tudo bem? Mensagem automática do aquecedor.";
+const AQUECEDOR_RECENT_SENT_LIMIT = 50;
+const AQUECEDOR_MESSAGE_BANK_LIMIT = 5000;
+const AQUECEDOR_PAIR_SENT_LIMIT = 500;
+function buildAquecedorPairContext(chosen, connected) {
+    const origem = connected.find((item) => item.instancia === chosen.instancia_origem);
+    return {
+        instanciaOrigem: chosen.instancia_origem,
+        instanciaDestino: chosen.instancia_destino,
+        numeroOrigem: String(origem?.numero || "").trim(),
+        numeroDestino: String(chosen.numero_whatsapp || "").trim(),
+    };
+}
+const AQUECEDOR_PAIR_SENDER_LOOKBACK = 500;
+function buildAquecedorInstanceCanonicalMap(connected, aliasesMap) {
+    const primaryByLower = new Map();
+    for (const item of connected) {
+        const name = String(item.instancia || "").trim();
+        if (name)
+            primaryByLower.set(name.toLowerCase(), name);
+    }
+    const canonical = new Map();
+    const bind = (raw, primary) => {
+        const key = String(raw || "").trim().toLowerCase();
+        const value = String(primary || "").trim();
+        if (key && value)
+            canonical.set(key, value);
+    };
+    for (const item of connected) {
+        bind(item.instancia, item.instancia);
+    }
+    for (const [technical, alias] of aliasesMap) {
+        const primary = primaryByLower.get(String(technical || "").trim().toLowerCase()) || String(technical || "").trim();
+        if (!primary)
+            continue;
+        bind(technical, primary);
+        bind(alias, primary);
+    }
+    return canonical;
+}
+function resolveAquecedorCanonicalInstance(name, canonicalMap) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key)
+        return "";
+    return canonicalMap.get(key) || String(name || "").trim();
+}
+function buildAquecedorPairKey(instanciaA, instanciaB) {
+    const a = String(instanciaA || "").trim();
+    const b = String(instanciaB || "").trim();
+    return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
+}
+function buildAquecedorNumberToInstanceMap(connected, canonicalMap) {
+    const map = new Map();
+    for (const item of connected) {
+        const num = normalizeWhatsAppNumber(String(item.numero || "").trim());
+        const inst = resolveAquecedorCanonicalInstance(item.instancia, canonicalMap);
+        if (num && inst)
+            map.set(num, inst);
+    }
+    return map;
+}
+function resolveAquecedorInstanceByNumber(rawNumber, numberToInstance) {
+    const normalized = normalizeWhatsAppNumber(String(rawNumber || "").trim());
+    if (!normalized)
+        return "";
+    const direct = numberToInstance.get(normalized);
+    if (direct)
+        return direct;
+    const suffix = normalized.replace(/\D/g, "").slice(-10);
+    if (suffix.length < 10)
+        return "";
+    for (const [stored, inst] of numberToInstance.entries()) {
+        if (stored.replace(/\D/g, "").slice(-10) === suffix)
+            return inst;
+    }
+    return "";
+}
+function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
+    const target = resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase();
+    return (connected.find((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase() === target) || null);
+}
+async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance) {
+    const events = [];
+    const instanceNames = connected.map((item) => item.instancia);
+    const connectedCanonical = new Set(instanceNames.map((name) => resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase()));
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("instancia, numero_destino, sent_at")
+            .eq("status", "ENVIADO")
+            .order("sent_at", { ascending: false })
+            .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
+        if (!error && Array.isArray(data)) {
+            for (const row of data) {
+                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
+                const toInst = resolveAquecedorInstanceByNumber(String(row?.numero_destino || ""), numberToInstance);
+                const at = String(row?.sent_at || "").trim();
+                if (fromInst &&
+                    toInst &&
+                    at &&
+                    connectedCanonical.has(fromInst.toLowerCase()) &&
+                    connectedCanonical.has(toInst.toLowerCase())) {
+                    events.push({ at, fromInst, toInst });
+                }
+            }
+        }
+    }
+    catch {
+        /* */
+    }
+    try {
+        const { data, error } = await (supabase
+            .from("logs_envios")
+            .select("instancia_origem, instancia_destino, data_envio")
+            .order("data_envio", { ascending: false })
+            .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
+        if (!error && Array.isArray(data)) {
+            for (const row of data) {
+                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia_origem || ""), canonicalMap);
+                const toInst = resolveAquecedorCanonicalInstance(String(row?.instancia_destino || ""), canonicalMap);
+                const at = String(row?.data_envio || "").trim();
+                if (fromInst &&
+                    toInst &&
+                    at &&
+                    connectedCanonical.has(fromInst.toLowerCase()) &&
+                    connectedCanonical.has(toInst.toLowerCase())) {
+                    events.push({ at, fromInst, toInst });
+                }
+            }
+        }
+    }
+    catch {
+        /* */
+    }
+    const dedup = new Map();
+    for (const ev of events) {
+        const atMs = new Date(ev.at).getTime();
+        const bucket = Number.isFinite(atMs) ? Math.floor(atMs / 1000) : ev.at;
+        const key = `${ev.fromInst.toLowerCase()}|${ev.toInst.toLowerCase()}|${bucket}`;
+        if (!dedup.has(key))
+            dedup.set(key, ev);
+    }
+    return Array.from(dedup.values()).sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+async function loadAquecedorTurnManager(supabase, connected) {
+    const aliasesMap = await loadInstanceAliasesMap();
+    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+    const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+    const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
+    const instanceStats = new Map();
+    const pairLastSender = new Map();
+    const ensureStats = (canonical) => {
+        const key = canonical.toLowerCase();
+        let stats = instanceStats.get(key);
+        if (!stats) {
+            stats = {
+                canonical,
+                lastSentAt: null,
+                lastReceivedAt: null,
+                lastReceivedFrom: null,
+                sendCount: 0,
+                receiveCount: 0,
+            };
+            instanceStats.set(key, stats);
+        }
+        return stats;
+    };
+    for (const ev of events) {
+        const fromStats = ensureStats(ev.fromInst);
+        const toStats = ensureStats(ev.toInst);
+        fromStats.sendCount += 1;
+        toStats.receiveCount += 1;
+        fromStats.lastSentAt = ev.at;
+        toStats.lastReceivedAt = ev.at;
+        toStats.lastReceivedFrom = ev.fromInst;
+        pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+    }
+    const owesPairReply = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+            return false;
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const lastSender = pairLastSender.get(pairKey);
+        if (!lastSender || lastSender.toLowerCase() === origem.toLowerCase())
+            return false;
+        const stats = instanceStats.get(origem.toLowerCase());
+        return stats?.lastReceivedFrom?.toLowerCase() === destino.toLowerCase();
+    };
+    const canSendDirected = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+            return false;
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const lastSender = pairLastSender.get(pairKey);
+        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+            return false;
+        }
+        if (owesPairReply(origemRaw, destinoRaw)) {
+            return true;
+        }
+        const stats = instanceStats.get(origem.toLowerCase());
+        if (!stats?.lastSentAt)
+            return true;
+        if (!stats.lastReceivedAt)
+            return false;
+        return stats.lastReceivedAt >= stats.lastSentAt;
+    };
+    const describeBlockReason = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const lastSender = pairLastSender.get(pairKey);
+        const stats = instanceStats.get(origem.toLowerCase());
+        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+            return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
+        }
+        if (stats?.lastSentAt && (!stats.lastReceivedAt || stats.lastReceivedAt < stats.lastSentAt)) {
+            const esperado = stats.lastReceivedFrom
+                ? ` Responder a ${stats.lastReceivedFrom} libera o turno.`
+                : "";
+            return `${origem} enviou ${stats.sendCount} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+        }
+        return `${origem} não pode enviar para ${destino} no turno atual.`;
+    };
+    const scoreCombination = (origemRaw, destinoRaw, comboIndex, startIndex) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const stats = instanceStats.get(origem.toLowerCase());
+        let score = 0;
+        if (stats?.lastReceivedAt &&
+            stats?.lastSentAt &&
+            stats.lastReceivedAt > stats.lastSentAt) {
+            score -= 1000000;
+            if (stats.lastReceivedFrom &&
+                stats.lastReceivedFrom.toLowerCase() === destino.toLowerCase()) {
+                score -= 500000;
+            }
+        }
+        score += (stats?.sendCount || 0) * 1000;
+        const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
+        score += rotation;
+        return score;
+    };
+    return {
+        canonicalMap,
+        totalEvents: events.length,
+        canSendDirected,
+        owesPairReply,
+        describeBlockReason,
+        scoreCombination,
+    };
+}
+async function canAquecedorOrigemSendDirected(supabase, connected, instanciaOrigem, instanciaDestino, manager) {
+    const turn = manager || (await loadAquecedorTurnManager(supabase, connected));
+    return turn.canSendDirected(instanciaOrigem, instanciaDestino);
+}
+async function pickAquecedorCombinationAsync(supabase, connected, combinations, startIndex) {
+    if (!combinations.length)
+        return null;
+    const manager = await loadAquecedorTurnManager(supabase, connected);
+    const eligible = [];
+    for (let index = 0; index < combinations.length; index += 1) {
+        const combo = combinations[index];
+        if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino))
+            continue;
+        eligible.push({
+            combo,
+            index,
+            score: manager.scoreCombination(combo.instancia_origem, combo.instancia_destino, index, startIndex),
+        });
+    }
+    if (!eligible.length)
+        return null;
+    const replyDue = eligible.filter((item) => manager.owesPairReply(item.combo.instancia_origem, item.combo.instancia_destino));
+    const pool = replyDue.length ? replyDue : eligible;
+    pool.sort((a, b) => a.score - b.score);
+    const bestScore = pool[0].score;
+    const ties = pool.filter((item) => item.score === bestScore);
+    const base = ((startIndex % ties.length) + ties.length) % ties.length;
+    const picked = ties[base];
+    return { chosen: picked.combo, index: picked.index };
+}
+async function loadRecentAquecedorPairLastSenders(supabase, connected) {
+    const aliasesMap = await loadInstanceAliasesMap();
+    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+    const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+    const lastSenders = new Map();
+    const instanceNames = connected.map((item) => item.instancia);
+    if (instanceNames.length < 2)
+        return lastSenders;
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("instancia, numero_destino, sent_at")
+            .eq("status", "ENVIADO")
+            .in("instancia", instanceNames)
+            .order("sent_at", { ascending: false })
+            .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
+        if (error || !Array.isArray(data))
+            return lastSenders;
+        for (const row of data) {
+            const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
+            const toInst = resolveAquecedorInstanceByNumber(String(row?.numero_destino || ""), numberToInstance);
+            if (!fromInst || !toInst || fromInst.toLowerCase() === toInst.toLowerCase())
+                continue;
+            const key = buildAquecedorPairKey(fromInst, toInst);
+            if (lastSenders.has(key))
+                continue;
+            lastSenders.set(key, fromInst);
+        }
+    }
+    catch {
+        /* */
+    }
+    return lastSenders;
+}
+async function verifyAquecedorConversationTurn(supabase, connected, instanciaOrigem, instanciaDestino) {
+    const manager = await loadAquecedorTurnManager(supabase, connected);
+    const origem = resolveAquecedorCanonicalInstance(instanciaOrigem, manager.canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(instanciaDestino, manager.canonicalMap);
+    if (!manager.canSendDirected(instanciaOrigem, instanciaDestino)) {
+        return {
+            ok: false,
+            reason: manager.describeBlockReason(instanciaOrigem, instanciaDestino),
+        };
+    }
+    return { ok: true, reason: "" };
+}
+function buildAquecedorEnvioDedupKey(item) {
+    if (item.status === "Envio com Sucesso") {
+        return `${item.instanciaOrigem}|${item.instanciaDestino}|${item.dataEnvioBr}|${item.status}`;
+    }
+    const ts = item.dataEnvio ? String(item.dataEnvio) : "";
+    return `${item.instanciaOrigem}|${item.instanciaDestino}|${ts}|${item.status}`;
+}
+async function hasRecentAquecedorSendBetween(supabase, connected, instanciaOrigem, instanciaDestino, withinSeconds) {
+    const aliasesMap = await loadInstanceAliasesMap();
+    const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+    const origem = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaOrigem);
+    const destino = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaDestino);
+    if (!origem || !destino)
+        return false;
+    const numDestino = normalizeWhatsAppNumber(destino.numero);
+    if (!numDestino)
+        return false;
+    const since = new Date(Date.now() - Math.max(30, withinSeconds) * 1000).toISOString();
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("id")
+            .eq("status", "ENVIADO")
+            .eq("instancia", origem.instancia)
+            .eq("numero_destino", numDestino)
+            .gte("sent_at", since)
+            .limit(1));
+        if (!error && Array.isArray(data) && data.length > 0)
+            return true;
+    }
+    catch {
+        /* */
+    }
+    try {
+        const { data, error } = await (supabase
+            .from("logs_envios")
+            .select("id")
+            .eq("instancia_origem", origem.instancia)
+            .eq("instancia_destino", destino.instancia)
+            .gte("data_envio", since)
+            .limit(1));
+        if (error)
+            return false;
+        return Array.isArray(data) && data.length > 0;
+    }
+    catch {
+        return false;
+    }
+}
+const isAquecedorSystemMessage = (text) => {
+    const value = String(text || "").trim().toLowerCase();
+    if (!value)
+        return true;
+    return (value === AQUECEDOR_FALLBACK_MESSAGE.toLowerCase() ||
+        value.includes("mensagem de teste do aquecedor") ||
+        value.includes("teste de integração waba"));
+};
+const collectAquecedorMessageTexts = (rows, fields) => {
+    const texts = [];
+    if (!Array.isArray(rows))
+        return texts;
+    for (const row of rows) {
+        if (!row || typeof row !== "object")
+            continue;
+        for (const field of fields) {
+            const text = String(row[field] || "").trim();
+            if (text && !isAquecedorSystemMessage(text)) {
+                texts.push(text);
+                break;
+            }
+        }
+    }
+    return texts;
+};
+async function loadAquecedorMessageBank(supabase) {
+    const unique = new Set();
+    const bankQueries = [
+        { table: "aquecedor_message_templates", fields: ["message_text"], activeOnly: true },
+        { table: "mensagens", fields: ["mensagem", "texto", "message_text", "conteudo"] },
+        { table: "disparos_message_templates", fields: ["message_text"], activeOnly: true },
+    ];
+    for (const query of bankQueries) {
+        try {
+            let request = supabase
+                .from(query.table)
+                .select(query.fields.join(", "))
+                .limit(AQUECEDOR_MESSAGE_BANK_LIMIT);
+            if (query.activeOnly) {
+                request = request.eq("active", true);
+            }
+            const { data, error } = (await request);
+            if (error)
+                continue;
+            for (const text of collectAquecedorMessageTexts(data, query.fields)) {
+                unique.add(text);
+            }
+        }
+        catch {
+            /* tabela pode não existir neste ambiente */
+        }
+        if (unique.size > 0)
+            break;
+    }
+    if (!unique.size) {
+        try {
+            const { data, error } = await (supabase
+                .from("aquecedor")
+                .select("mensagem")
+                .eq("status", "ENVIADO")
+                .order("sent_at", { ascending: false })
+                .limit(AQUECEDOR_MESSAGE_BANK_LIMIT));
+            if (!error) {
+                for (const text of collectAquecedorMessageTexts(data, ["mensagem"])) {
+                    unique.add(text);
+                }
+            }
+        }
+        catch {
+            /* */
+        }
+    }
+    return Array.from(unique);
+}
+async function loadRecentlySentAquecedorMessages(supabase) {
+    const recent = new Set();
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("mensagem")
+            .eq("status", "ENVIADO")
+            .order("sent_at", { ascending: false })
+            .limit(AQUECEDOR_RECENT_SENT_LIMIT));
+        if (error)
+            return recent;
+        for (const text of collectAquecedorMessageTexts(data, ["mensagem"])) {
+            recent.add(text);
+        }
+    }
+    catch {
+        /* */
+    }
+    return recent;
+}
+async function loadQueuedAquecedorMessages(supabase) {
+    const queued = new Set();
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("mensagem")
+            .in("status", ["PENDENTE", "PROCESSANDO"])
+            .limit(200));
+        if (error)
+            return queued;
+        for (const text of collectAquecedorMessageTexts(data, ["mensagem"])) {
+            queued.add(text);
+        }
+    }
+    catch {
+        /* */
+    }
+    return queued;
+}
+async function loadPairUsedAquecedorMessages(supabase, pair) {
+    const used = new Set();
+    const instanciaA = String(pair.instanciaOrigem || "").trim();
+    const instanciaB = String(pair.instanciaDestino || "").trim();
+    const numA = normalizeWhatsAppNumber(String(pair.numeroOrigem || "").trim());
+    const numB = normalizeWhatsAppNumber(String(pair.numeroDestino || "").trim());
+    if (!instanciaA || !instanciaB || !numA || !numB)
+        return used;
+    try {
+        const { data, error } = await (supabase
+            .from("aquecedor")
+            .select("mensagem, instancia, numero_destino")
+            .eq("status", "ENVIADO")
+            .in("instancia", [instanciaA, instanciaB])
+            .order("sent_at", { ascending: false })
+            .limit(AQUECEDOR_PAIR_SENT_LIMIT));
+        if (error)
+            return used;
+        if (!Array.isArray(data))
+            return used;
+        for (const row of data) {
+            const inst = String(row?.instancia || "").trim();
+            const numDest = normalizeWhatsAppNumber(String(row?.numero_destino || "").trim());
+            const isAB = inst === instanciaA && numDest === numB;
+            const isBA = inst === instanciaB && numDest === numA;
+            if (!isAB && !isBA)
+                continue;
+            const text = String(row?.mensagem || "").trim();
+            if (text && !isAquecedorSystemMessage(text))
+                used.add(text);
+        }
+    }
+    catch {
+        /* */
+    }
+    return used;
+}
+async function buildAquecedorExcludeSet(supabase, pair) {
+    const exclude = await loadRecentlySentAquecedorMessages(supabase);
+    const queued = await loadQueuedAquecedorMessages(supabase);
+    for (const text of queued)
+        exclude.add(text);
+    if (pair) {
+        const pairUsed = await loadPairUsedAquecedorMessages(supabase, pair);
+        for (const text of pairUsed)
+            exclude.add(text);
+    }
+    return exclude;
+}
+async function pickAquecedorMessageText(supabase, extraExclude) {
+    const bank = await loadAquecedorMessageBank(supabase);
+    if (!bank.length)
+        return AQUECEDOR_FALLBACK_MESSAGE;
+    const exclude = extraExclude ? new Set(extraExclude) : await buildAquecedorExcludeSet(supabase);
+    let candidates = bank.filter((text) => !exclude.has(text));
+    if (!candidates.length)
+        candidates = bank;
+    const index = Math.floor(Math.random() * candidates.length);
+    return candidates[index] || AQUECEDOR_FALLBACK_MESSAGE;
+}
+async function resolveAquecedorMessageForSend(supabase, pendingId, pendingText, pair) {
+    const exclude = await buildAquecedorExcludeSet(supabase, pair);
+    const current = String(pendingText || "").trim();
+    if (current && !isAquecedorSystemMessage(current) && !exclude.has(current))
+        return current;
+    const mensagem = await pickAquecedorMessageText(supabase, exclude);
+    await supabase.from("aquecedor")
+        .update({ mensagem })
+        .eq("id", pendingId);
+    return mensagem;
+}
+async function fetchProcessableAquecedorPending(supabase) {
+    const now = new Date().toISOString();
+    const { data } = (await (supabase
+        .from("aquecedor")
+        .select("id, mensagem, status, scheduled_at")
+        .eq("status", "PENDENTE")
+        .lte("scheduled_at", now)
+        .order("scheduled_at", { ascending: true })
+        .limit(1)
+        .maybeSingle()));
+    return data ?? null;
+}
+async function ensureAquecedorPendingMessageOnce(pair) {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+        return { ok: false, reason: "Supabase não configurado ao preparar fila do aquecedor." };
+    }
+    const now = new Date().toISOString();
+    const nowMs = Date.now();
+    const { count: processableCount, error: processableError } = (await (supabase
+        .from("aquecedor")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "PENDENTE")
+        .lte("scheduled_at", now)));
+    if (processableError) {
+        return {
+            ok: false,
+            reason: `Erro ao consultar fila processável: ${processableError.message || "desconhecido"}.`,
+        };
+    }
+    if (typeof processableCount === "number" && processableCount > 0) {
+        return { ok: true };
+    }
+    const { data: oldestPending, error: oldestError } = (await (supabase
+        .from("aquecedor")
+        .select("id, mensagem, scheduled_at")
+        .eq("status", "PENDENTE")
+        .order("scheduled_at", { ascending: true, nullsFirst: true })
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle()));
+    if (oldestError) {
+        return {
+            ok: false,
+            reason: `Erro ao consultar fila pendente: ${oldestError.message || "desconhecido"}.`,
+        };
+    }
+    if (oldestPending?.id) {
+        const schedMs = oldestPending.scheduled_at
+            ? new Date(String(oldestPending.scheduled_at)).getTime()
+            : Number.NaN;
+        const processableNow = Number.isFinite(schedMs) && schedMs <= nowMs;
+        let mensagem;
+        if (pair) {
+            const exclude = await buildAquecedorExcludeSet(supabase, pair);
+            const current = String(oldestPending.mensagem || "").trim();
+            if (!current || isAquecedorSystemMessage(current) || exclude.has(current)) {
+                mensagem = await pickAquecedorMessageText(supabase, exclude);
+            }
+        }
+        if (!processableNow || mensagem) {
+            const payload = { scheduled_at: now };
+            if (mensagem)
+                payload.mensagem = mensagem;
+            const { error: promoteError } = await supabase.from("aquecedor")
+                .update(payload)
+                .eq("id", oldestPending.id);
+            if (promoteError) {
+                return {
+                    ok: false,
+                    reason: `Erro ao liberar mensagem na fila: ${promoteError.message || "desconhecido"}.`,
+                };
+            }
+        }
+        return { ok: true, pendingId: oldestPending.id };
+    }
+    const exclude = pair ? await buildAquecedorExcludeSet(supabase, pair) : undefined;
+    const mensagem = await pickAquecedorMessageText(supabase, exclude);
+    const { data: inserted, error: insertError } = await supabase.from("aquecedor")
+        .insert({
+        mensagem,
+        status: "PENDENTE",
+        scheduled_at: now,
+    })
+        .select("id")
+        .single();
+    if (insertError) {
+        console.error("[Aquecedor] ensure insert falhou:", insertError);
+        return {
+            ok: false,
+            reason: `Erro ao inserir mensagem na fila aquecedor: ${insertError.message || "desconhecido"}.`,
+        };
+    }
+    return { ok: true, pendingId: inserted?.id };
+}
+async function ensureAquecedorPendingMessage(pair) {
+    let lastResult = {
+        ok: false,
+        reason: "Falha ao preparar fila do aquecedor.",
+    };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt > 0) {
+            resetSupabaseClient();
+            await sleepMs(600 * attempt);
+        }
+        lastResult = await ensureAquecedorPendingMessageOnce(pair);
+        if (lastResult.ok || !isSupabaseTransientError({ message: lastResult.reason })) {
+            return lastResult;
+        }
+        console.warn(`[Aquecedor] ensure fila tentativa ${attempt + 1}/3 falhou:`, lastResult.reason);
+    }
+    return {
+        ok: false,
+        reason: await describeSupabaseConnectivityFailure(),
+    };
+}
 /** Checkpoint em disco das campanhas mesmo sem evento (ms). Env: DISPAROS_CHECKPOINT_MS */
 const DISPAROS_CHECKPOINT_MS = Math.max(30000, Number.isFinite(Number(process.env.DISPAROS_CHECKPOINT_MS))
     ? Number(process.env.DISPAROS_CHECKPOINT_MS)
@@ -745,7 +1708,7 @@ const DISPAROS_DEFAULTS = {
     aiTone: "consultivo",
     aiCta: "Responda no link abaixo",
     aiAudience: "CORBAN",
-    shortenerProvider: "encurtadorpro",
+    shortenerProvider: "waba",
     shortenerDomain: "",
     whatsappTargetNumber: "",
     selectedDisparadorInstances: [],
@@ -831,6 +1794,7 @@ const instanceUsageMemory = new Map();
 const disparosTemplatesMemory = [];
 const disparosCampaignsMemory = [];
 const disparosCampaignLeadsMemory = [];
+const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 let disparosLocalPersistChain = Promise.resolve();
 function removeLeadsForCampaignFromMemory(campaignId) {
     const id = String(campaignId || "").trim();
@@ -855,6 +1819,7 @@ function queuePersistDisparosLocalState() {
                     status: c.status,
                     totalNumbers: c.totalNumbers,
                     sentCount: c.sentCount,
+                    ownerEmail: c.ownerEmail || "",
                     configSnapshot: c.configSnapshot,
                 })),
                 leads: disparosCampaignLeadsMemory.map((l) => ({
@@ -878,35 +1843,6 @@ function queuePersistDisparosLocalState() {
         }
     });
 }
-async function persistAquecedorRuntimeDesired(desired) {
-    try {
-        await fs_1.promises.mkdir(path_1.default.dirname(RUNTIME_INTENT_FILE), { recursive: true });
-        const payload = {
-            version: 1,
-            savedAt: new Date().toISOString(),
-            aquecedorRuntimeDesired: desired,
-        };
-        const tmp = `${RUNTIME_INTENT_FILE}.tmp`;
-        await fs_1.promises.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
-        await fs_1.promises.rename(tmp, RUNTIME_INTENT_FILE);
-        console.log(`[Runtime] runtime-intent: aquecedor desejado = ${desired ? "ligado" : "desligado"}.`);
-    }
-    catch (e) {
-        console.error("[Runtime] falha ao gravar runtime-intent.json:", e);
-    }
-}
-async function loadAquecedorRuntimeDesired() {
-    try {
-        const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
-        const p = JSON.parse(raw);
-        if (p?.version !== 1 || typeof p.aquecedorRuntimeDesired !== "boolean")
-            return null;
-        return p.aquecedorRuntimeDesired;
-    }
-    catch {
-        return null;
-    }
-}
 async function loadDisparosLocalState() {
     try {
         const raw = await fs_1.promises.readFile(DISPAROS_LOCAL_STATE_FILE, "utf-8");
@@ -929,6 +1865,7 @@ async function loadDisparosLocalState() {
                 status,
                 totalNumbers: Number(c?.totalNumbers || 0),
                 sentCount: Number(c?.sentCount || 0),
+                ownerEmail: String(c?.ownerEmail || "").trim() || undefined,
                 configSnapshot: parseDisparosConfig(c?.configSnapshot || {}),
             });
         }
@@ -968,14 +1905,27 @@ let disparosRoundRobinCounter = 0;
 let lastShortUrlIssued = "";
 const shortUrlClicksCache = new Map();
 function normalizeShortenerProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
+    const raw = String(value || process.env.SHORTENER_PROVIDER || "waba")
+        .trim()
+        .toLowerCase();
     if (raw === "encurtadorpro")
         return "encurtadorpro";
-    return "encurtadorpro";
+    if (raw === "isgd")
+        return "isgd";
+    if (raw === "tinyurl")
+        return "tinyurl";
+    return "waba";
 }
 function getAutoShortenerProviderOrder() {
-    // Regra operacional: usar apenas EncurtadorPro.
-    return ["encurtadorpro"];
+    const primary = normalizeShortenerProvider(process.env.SHORTENER_PROVIDER);
+    const order = [primary];
+    if (primary === "waba" && String(process.env.ENCURTADORPRO_API_KEY || "").trim()) {
+        order.push("encurtadorpro");
+    }
+    else if (primary === "encurtadorpro") {
+        order.push("waba");
+    }
+    return Array.from(new Set(order));
 }
 const aquecedorRuntime = {
     running: false,
@@ -986,6 +1936,457 @@ const aquecedorRuntime = {
     lastEvoError: null,
 };
 let aquecedorInterval = null;
+let aquecedorRuntimeOwnerEmail = null;
+const AQUECEDOR_WORKER_LEASE_MS = 90000;
+const AQUECEDOR_WORKER_SYNC_MS = 12000;
+const AQUECEDOR_PERSISTED_RELOAD_MS = 2000;
+const AQUECEDOR_WORKER_ID = `${(0, os_1.hostname)()}:${process.pid}`;
+function createDefaultAquecedorRuntimeSnapshot() {
+    return {
+        running: false,
+        isProcessing: false,
+        nextAllowedAt: null,
+        lastRunAt: null,
+        lastResult: null,
+        lastEvoError: null,
+        workerId: null,
+        workerHeartbeatAt: null,
+    };
+}
+let aquecedorPersistedBundle = {
+    desired: null,
+    ownerEmail: null,
+    snapshot: createDefaultAquecedorRuntimeSnapshot(),
+};
+let aquecedorPersistedBundleReloadedAt = 0;
+function getAquecedorWorkerId() {
+    return AQUECEDOR_WORKER_ID;
+}
+function isAquecedorWorkerLeaseValid(snapshot) {
+    if (!snapshot.workerHeartbeatAt)
+        return false;
+    const heartbeatMs = new Date(snapshot.workerHeartbeatAt).getTime();
+    if (!Number.isFinite(heartbeatMs))
+        return false;
+    return Date.now() - heartbeatMs <= AQUECEDOR_WORKER_LEASE_MS;
+}
+function shouldThisProcessLeadAquecedor(bundle) {
+    if (bundle.desired !== true || !bundle.snapshot.running)
+        return false;
+    const snapshot = bundle.snapshot;
+    if (snapshot.workerId === getAquecedorWorkerId())
+        return true;
+    if (!snapshot.workerId || !isAquecedorWorkerLeaseValid(snapshot))
+        return true;
+    return false;
+}
+function applyPersistedSnapshotToLocal(snapshot) {
+    aquecedorRuntime.running = snapshot.running === true;
+    aquecedorRuntime.isProcessing = snapshot.isProcessing === true;
+    aquecedorRuntime.nextAllowedAt = snapshot.nextAllowedAt;
+    aquecedorRuntime.lastRunAt = snapshot.lastRunAt;
+    aquecedorRuntime.lastResult = snapshot.lastResult;
+    aquecedorRuntime.lastEvoError = snapshot.lastEvoError;
+}
+function buildPersistedSnapshotFromLocal(overrides = {}) {
+    return {
+        running: aquecedorRuntime.running,
+        isProcessing: aquecedorRuntime.isProcessing,
+        nextAllowedAt: aquecedorRuntime.nextAllowedAt,
+        lastRunAt: aquecedorRuntime.lastRunAt,
+        lastResult: aquecedorRuntime.lastResult,
+        lastEvoError: aquecedorRuntime.lastEvoError,
+        workerId: aquecedorPersistedBundle.snapshot.workerId,
+        workerHeartbeatAt: aquecedorPersistedBundle.snapshot.workerHeartbeatAt,
+        ...overrides,
+    };
+}
+function parseAquecedorRuntimePersistedBundle(raw) {
+    const p = raw;
+    const version = Number(p?.version);
+    if (version !== 1 && version !== 2) {
+        return {
+            desired: null,
+            ownerEmail: null,
+            snapshot: createDefaultAquecedorRuntimeSnapshot(),
+        };
+    }
+    const desired = typeof p.aquecedorRuntimeDesired === "boolean" ? p.aquecedorRuntimeDesired : null;
+    const ownerEmail = typeof p.aquecedorOwnerEmail === "string" && p.aquecedorOwnerEmail.trim()
+        ? p.aquecedorOwnerEmail.trim().toLowerCase()
+        : null;
+    const snapRaw = (p.aquecedorRuntimeSnapshot || {});
+    const snapshot = {
+        running: snapRaw.running === true,
+        isProcessing: snapRaw.isProcessing === true,
+        nextAllowedAt: typeof snapRaw.nextAllowedAt === "string" ? snapRaw.nextAllowedAt : null,
+        lastRunAt: typeof snapRaw.lastRunAt === "string" ? snapRaw.lastRunAt : null,
+        lastResult: typeof snapRaw.lastResult === "string" ? snapRaw.lastResult : null,
+        lastEvoError: snapRaw.lastEvoError && typeof snapRaw.lastEvoError === "object"
+            ? snapRaw.lastEvoError
+            : null,
+        workerId: typeof snapRaw.workerId === "string" ? snapRaw.workerId : null,
+        workerHeartbeatAt: typeof snapRaw.workerHeartbeatAt === "string" ? snapRaw.workerHeartbeatAt : null,
+    };
+    if (version === 1) {
+        snapshot.running = desired === true;
+    }
+    return { desired, ownerEmail, snapshot };
+}
+async function reloadAquecedorPersistedBundleFromDisk(force = false) {
+    const now = Date.now();
+    if (!force && now - aquecedorPersistedBundleReloadedAt < AQUECEDOR_PERSISTED_RELOAD_MS) {
+        return aquecedorPersistedBundle;
+    }
+    aquecedorPersistedBundleReloadedAt = now;
+    try {
+        const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
+        aquecedorPersistedBundle = parseAquecedorRuntimePersistedBundle(JSON.parse(raw));
+    }
+    catch {
+        /* mantém cache em memória */
+    }
+    return aquecedorPersistedBundle;
+}
+function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
+    const running = bundle.desired === true && bundle.snapshot.running === true;
+    return {
+        ...bundle.snapshot,
+        running,
+        desiredRunning: bundle.desired === true,
+        persistedOwnerEmail: bundle.ownerEmail,
+        ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || bundle.ownerEmail),
+        workerId: bundle.snapshot.workerId,
+        workerHeartbeatAt: bundle.snapshot.workerHeartbeatAt,
+        workerLeaseValid: isAquecedorWorkerLeaseValid(bundle.snapshot),
+    };
+}
+async function withAquecedorTimeout(promise, ms, fallback) {
+    let timer = null;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((resolve) => {
+                timer = setTimeout(() => resolve(fallback), ms);
+            }),
+        ]);
+    }
+    finally {
+        if (timer)
+            clearTimeout(timer);
+    }
+}
+async function writeAquecedorPersistedBundleToDisk() {
+    try {
+        await fs_1.promises.mkdir(path_1.default.dirname(RUNTIME_INTENT_FILE), { recursive: true });
+        const payload = {
+            version: 2,
+            savedAt: new Date().toISOString(),
+            aquecedorRuntimeDesired: aquecedorPersistedBundle.desired === true,
+            aquecedorOwnerEmail: aquecedorPersistedBundle.ownerEmail,
+            aquecedorRuntimeSnapshot: aquecedorPersistedBundle.snapshot,
+        };
+        const tmp = `${RUNTIME_INTENT_FILE}.tmp`;
+        await fs_1.promises.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
+        await fs_1.promises.rename(tmp, RUNTIME_INTENT_FILE);
+    }
+    catch (e) {
+        console.error("[Runtime] falha ao gravar runtime-intent.json:", e);
+    }
+}
+async function persistAquecedorRuntimeSnapshot(overrides = {}) {
+    aquecedorPersistedBundle.snapshot = buildPersistedSnapshotFromLocal(overrides);
+    await writeAquecedorPersistedBundleToDisk();
+}
+async function persistAquecedorRuntimeIntent(desired, ownerEmail) {
+    const normalizedOwner = ownerEmail?.trim().toLowerCase() || null;
+    aquecedorPersistedBundle.desired = desired;
+    aquecedorPersistedBundle.ownerEmail = desired ? normalizedOwner : null;
+    aquecedorPersistedBundle.snapshot = buildPersistedSnapshotFromLocal({
+        running: desired,
+        workerId: desired ? getAquecedorWorkerId() : null,
+        workerHeartbeatAt: desired ? new Date().toISOString() : null,
+        isProcessing: desired ? aquecedorRuntime.isProcessing : false,
+    });
+    await writeAquecedorPersistedBundleToDisk();
+    console.log(`[Runtime] runtime-intent: aquecedor desejado = ${desired ? "ligado" : "desligado"}${normalizedOwner ? ` (${normalizedOwner})` : ""}.`);
+}
+async function loadAquecedorRuntimeIntent() {
+    await reloadAquecedorPersistedBundleFromDisk(true);
+    return {
+        desired: aquecedorPersistedBundle.desired,
+        ownerEmail: aquecedorPersistedBundle.ownerEmail,
+    };
+}
+function stopAquecedorRuntimeLocal() {
+    aquecedorRuntime.running = false;
+    if (aquecedorInterval) {
+        clearInterval(aquecedorInterval);
+        aquecedorInterval = null;
+    }
+}
+async function syncAquecedorWorkerLeadership() {
+    if (!ENABLE_AQUECEDOR_PROCESSING || MAINTENANCE_MODE)
+        return;
+    await reloadAquecedorPersistedBundleFromDisk(true);
+    const bundle = aquecedorPersistedBundle;
+    applyPersistedSnapshotToLocal(bundle.snapshot);
+    aquecedorRuntimeOwnerEmail = bundle.ownerEmail;
+    if (bundle.desired !== true || !bundle.snapshot.running) {
+        stopAquecedorRuntimeLocal();
+        return;
+    }
+    if (shouldThisProcessLeadAquecedor(bundle)) {
+        startAquecedorRuntimeLocal();
+        bundle.snapshot.workerId = getAquecedorWorkerId();
+        bundle.snapshot.workerHeartbeatAt = new Date().toISOString();
+        aquecedorPersistedBundle.snapshot = bundle.snapshot;
+        await writeAquecedorPersistedBundleToDisk();
+        return;
+    }
+    stopAquecedorRuntimeLocal();
+}
+async function readAquecedorConfigFromFile() {
+    try {
+        const raw = await fs_1.promises.readFile(AQUECEDOR_CONFIG_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        const useRecommended = parsed?.useRecommended !== false;
+        let customConfig = AQUECEDOR_DEFAULTS;
+        try {
+            customConfig = parseAquecedorConfig(parsed?.customConfig || AQUECEDOR_DEFAULTS);
+        }
+        catch {
+            customConfig = AQUECEDOR_DEFAULTS;
+        }
+        return {
+            useRecommended,
+            customConfig,
+            updatedAt: typeof parsed?.updatedAt === "string" && parsed.updatedAt.trim()
+                ? parsed.updatedAt
+                : new Date().toISOString(),
+        };
+    }
+    catch {
+        return null;
+    }
+}
+async function writeAquecedorConfigToFile(record) {
+    await fs_1.promises.mkdir(path_1.default.dirname(AQUECEDOR_CONFIG_FILE), { recursive: true });
+    const tmp = `${AQUECEDOR_CONFIG_FILE}.tmp`;
+    await fs_1.promises.writeFile(tmp, JSON.stringify(record, null, 2), "utf-8");
+    await fs_1.promises.rename(tmp, AQUECEDOR_CONFIG_FILE);
+}
+function parseStoredAquecedorCustomConfig(raw) {
+    try {
+        return parseAquecedorConfig(raw || AQUECEDOR_DEFAULTS);
+    }
+    catch {
+        return AQUECEDOR_DEFAULTS;
+    }
+}
+async function loadAquecedorConfigRecord() {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+        const { data, error } = await (supabase
+            .from("aquecedor_config")
+            .select("use_recommended, custom_config, updated_at")
+            .eq("id", 1)
+            .maybeSingle());
+        if (!error) {
+            const useRecommended = data?.use_recommended !== false;
+            const customConfig = parseStoredAquecedorCustomConfig(data?.custom_config);
+            return {
+                record: {
+                    useRecommended,
+                    customConfig,
+                    updatedAt: data?.updated_at ?? new Date().toISOString(),
+                },
+                storageSource: "supabase",
+            };
+        }
+        console.error("[Aquecedor] Supabase indisponível para config; usando arquivo local:", error);
+    }
+    const fromFile = await readAquecedorConfigFromFile();
+    if (fromFile) {
+        return { record: fromFile, storageSource: "local" };
+    }
+    return {
+        record: {
+            useRecommended: true,
+            customConfig: AQUECEDOR_DEFAULTS,
+            updatedAt: new Date().toISOString(),
+        },
+        storageSource: "local",
+    };
+}
+async function saveAquecedorConfigRecord(useRecommended, customConfig) {
+    const record = {
+        useRecommended,
+        customConfig,
+        updatedAt: new Date().toISOString(),
+    };
+    const supabase = getSupabaseClient();
+    if (supabase) {
+        const payload = {
+            id: 1,
+            use_recommended: useRecommended,
+            custom_config: customConfig,
+            updated_at: record.updatedAt,
+        };
+        const { error } = await supabase.from("aquecedor_config").upsert(payload, {
+            onConflict: "id",
+        });
+        if (!error)
+            return "supabase";
+        console.error("[Aquecedor] falha ao salvar no Supabase; gravando arquivo local:", error);
+    }
+    await writeAquecedorConfigToFile(record);
+    return "local";
+}
+async function ensureAquecedorInstanceRegistered(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return;
+    const usageMap = await loadInstanceUsageMap();
+    if (getInstanceUsageFromMap(usageMap, name))
+        return;
+    await persistInstanceUsage([
+        {
+            instanceName: name,
+            useAquecedor: true,
+            useDisparador: true,
+        },
+    ]);
+}
+async function syncAquecedorConnectedInstances(supabase, connected) {
+    const usageMap = await loadInstanceUsageMap();
+    const toRegister = [];
+    for (const item of connected) {
+        await supabase.from("controle_instancia").upsert({
+            instancia: item.instancia,
+            numero_whatsapp: item.numero,
+        }, { onConflict: "instancia" });
+        if (!getInstanceUsageFromMap(usageMap, item.instancia)) {
+            toRegister.push({
+                instanceName: item.instancia,
+                useAquecedor: true,
+                useDisparador: true,
+            });
+        }
+    }
+    if (toRegister.length) {
+        await persistInstanceUsage(toRegister);
+    }
+}
+async function filterConnectedForAquecedorOwner(connected, ownerEmail) {
+    const email = String(ownerEmail || "")
+        .trim()
+        .toLowerCase();
+    if (!email)
+        return [];
+    const auth = { email, role: "subscriber" };
+    const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, connected.map((c) => c.instancia));
+    const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+    return connected.filter((c) => allowedLower.has(c.instancia.toLowerCase()));
+}
+async function buildAquecedorConnectedFromControleInstancia(supabase, ownerEmail) {
+    const { data: instanciasData } = await (supabase
+        .from("controle_instancia")
+        .select("instancia, numero_whatsapp")
+        .limit(500));
+    const connectedAll = (Array.isArray(instanciasData) ? instanciasData : [])
+        .map((row) => ({
+        instancia: String(row?.instancia || "").trim(),
+        numero: String(row?.numero_whatsapp || "").trim(),
+    }))
+        .filter((item) => item.instancia && item.numero);
+    const connectedOwned = await filterConnectedForAquecedorOwner(connectedAll, ownerEmail);
+    const usageMap = await loadInstanceUsageMap();
+    return connectedOwned.filter((item) => {
+        const usage = getInstanceUsageFromMap(usageMap, item.instancia);
+        return usage ? usage.useAquecedor !== false : true;
+    });
+}
+async function buildControleInstanciaNumToNameMap(supabase) {
+    const map = new Map();
+    const { data: instanciasData } = await (supabase
+        .from("controle_instancia")
+        .select("instancia, numero_whatsapp")
+        .limit(500));
+    for (const row of Array.isArray(instanciasData) ? instanciasData : []) {
+        const num = normalizeWhatsAppNumber(String(row?.numero_whatsapp || "").trim());
+        const inst = String(row?.instancia || "").trim();
+        if (num && inst)
+            map.set(num, inst);
+    }
+    return map;
+}
+async function analyzeAquecedorInstances(ownerEmail) {
+    const email = String(ownerEmail || "")
+        .trim()
+        .toLowerCase();
+    const ownedInstances = email
+        ? await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(email)
+        : [];
+    const usageMap = await loadInstanceUsageMap();
+    const evoList = await fetchEvoInstancesList();
+    const evoInstances = evoList.ok ? evoList.instances : [];
+    const evoByKey = new Map();
+    for (const item of evoInstances) {
+        const inst = item?.instance ?? item;
+        const key = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
+        if (key)
+            evoByKey.set(key.toLowerCase(), inst);
+    }
+    const eligible = [];
+    const excluded = [];
+    for (const ownedName of ownedInstances) {
+        const inst = evoByKey.get(ownedName.toLowerCase());
+        const motivos = [];
+        let connected = false;
+        let hasNumber = false;
+        let evoKey;
+        if (!inst) {
+            motivos.push("nao_encontrada_na_evolution");
+        }
+        else {
+            evoKey = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
+            const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
+            connected = status.includes("open");
+            if (!connected)
+                motivos.push("desconectada");
+            const numero = extractInstanceNumber(inst);
+            hasNumber = Boolean(String(numero || "").trim());
+            if (!hasNumber)
+                motivos.push("sem_numero_whatsapp");
+        }
+        const usage = getInstanceUsageFromMap(usageMap, ownedName);
+        const aquecedorEnabled = usage ? usage.useAquecedor !== false : true;
+        if (!aquecedorEnabled)
+            motivos.push("aquecedor_desabilitado_no_painel");
+        const row = {
+            instancia: ownedName,
+            eligible: motivos.length === 0,
+            motivos,
+            connected,
+            hasNumber,
+            owned: true,
+            aquecedorEnabled,
+            evoKey,
+        };
+        if (row.eligible && inst) {
+            eligible.push({
+                instancia: ownedName,
+                numero: extractInstanceNumber(inst),
+            });
+        }
+        else {
+            excluded.push(row);
+        }
+    }
+    const evoConnectedKeys = buildConnectedFromEvoResponse(evoInstances).map((c) => c.instancia);
+    return { ownerEmail: email || null, ownedInstances, eligible, excluded, evoConnectedKeys };
+}
 function parseAquecedorConfig(input) {
     const readInt = (key, min, max, fallback) => {
         const raw = Number(input?.[key]);
@@ -1097,73 +2498,62 @@ function nextAquecedorWindowOpenAt(config, fromSp) {
     }
     return null;
 }
-async function loadAquecedorConfigFromDb() {
-    const supabase = getSupabaseClient();
-    if (!supabase)
-        throw new Error("Supabase não configurado.");
-    const { data, error } = await (supabase
-        .from("aquecedor_config")
-        .select("use_recommended, custom_config")
-        .eq("id", 1)
-        .maybeSingle());
-    if (error)
-        throw new Error("Falha ao buscar configuração do aquecedor.");
-    const useRecommended = data?.use_recommended !== false;
-    const customConfigRaw = data?.custom_config && typeof data.custom_config === "object"
-        ? data.custom_config
-        : AQUECEDOR_DEFAULTS;
-    let customConfig = AQUECEDOR_DEFAULTS;
-    try {
-        customConfig = parseAquecedorConfig(customConfigRaw);
-    }
-    catch {
-        customConfig = AQUECEDOR_DEFAULTS;
-    }
-    return useRecommended ? AQUECEDOR_DEFAULTS : customConfig;
+async function loadAquecedorEffectiveConfig() {
+    const { record } = await loadAquecedorConfigRecord();
+    return record.useRecommended !== false ? AQUECEDOR_DEFAULTS : record.customConfig;
 }
 async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _config) {
-    const originIdx = cicloGlobal % connected.length;
-    const origem = connected[originIdx];
-    const destinos = connected.filter((_, i) => i !== originIdx);
-    const texto = "Mensagem de teste do aquecedor.";
-    let ok = 0;
-    let fail = 0;
-    const delayMs = (ms) => new Promise((r) => setTimeout(r, ms));
-    for (const destino of destinos) {
-        const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, origem.instancia);
-        const numero = normalizeWhatsAppNumber(destino.numero);
-        const sendBody = EVO_SEND_TEXT_V1
-            ? { number: numero, textMessage: { text: texto } }
-            : { number: numero, text: texto, textMessage: { text: texto } };
-        const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
-        if (sendResult.ok) {
-            ok += 1;
-            await supabase.from("logs_envios").insert({
+    const combinations = [];
+    for (const origem of connected) {
+        for (const destino of connected) {
+            if (origem.instancia === destino.instancia)
+                continue;
+            combinations.push({
                 instancia_origem: origem.instancia,
                 instancia_destino: destino.instancia,
-                data_envio: new Date().toISOString(),
+                numero_whatsapp: destino.numero,
             });
-            aquecedorRuntime.lastEvoError = null;
-        }
-        else {
-            fail += 1;
-            aquecedorRuntime.lastEvoError = {
-                status: sendResult.status,
-                body: String(sendResult.body || "").slice(0, 500),
-                instance: origem.instancia,
-                numeroLen: numero.length,
-            };
-        }
-        if (destinos.indexOf(destino) < destinos.length - 1) {
-            await delayMs(3000);
         }
     }
-    const proximo = cicloGlobal + 1;
+    const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal);
+    if (!picked) {
+        aquecedorRuntime.lastResult =
+            "Teste: nenhum par disponível no momento (aguardando alternância entre instâncias).";
+        return;
+    }
+    const chosen = picked.chosen;
+    const texto = "Mensagem de teste do aquecedor.";
+    const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
+    const numero = normalizeWhatsAppNumber(chosen.numero_whatsapp);
+    const sendBody = EVO_SEND_TEXT_V1
+        ? { number: numero, textMessage: { text: texto } }
+        : { number: numero, text: texto, textMessage: { text: texto } };
+    const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
+    const proximo = picked.index + 1;
+    if (sendResult.ok) {
+        await supabase.from("logs_envios").insert({
+            instancia_origem: chosen.instancia_origem,
+            instancia_destino: chosen.instancia_destino,
+            data_envio: new Date().toISOString(),
+        });
+        await recordAquecedorEnvio({
+            instanciaOrigem: chosen.instancia_origem,
+            instanciaDestino: chosen.instancia_destino,
+            status: "Envio com Sucesso",
+        });
+        aquecedorRuntime.lastEvoError = null;
+        aquecedorRuntime.lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
+    }
+    else {
+        aquecedorRuntime.lastEvoError = {
+            status: sendResult.status,
+            body: String(sendResult.body || "").slice(0, 500),
+            instance: chosen.instancia_origem,
+            numeroLen: numero.length,
+        };
+        aquecedorRuntime.lastResult = `Ciclo teste falhou: ${chosen.instancia_origem} → ${chosen.instancia_destino}.`;
+    }
     await supabase.from("controle_ciclo").upsert({ id: 1, ciclo_global: proximo }, { onConflict: "id" });
-    aquecedorRuntime.lastResult =
-        ok > 0
-            ? `Ciclo teste concluído com sucesso: ${origem.instancia} enviou para ${destinos.length} destino(s). ${ok} ok, ${fail} falha(s).`
-            : `Ciclo teste falhou: ${origem.instancia} → ${destinos.length} destino(s). ${fail} falha(s). Motivo: ${String(aquecedorRuntime.lastEvoError?.body || "sem detalhe").slice(0, 120)}`;
 }
 async function runAquecedorCycle(forceTest = false) {
     if (aquecedorRuntime.isProcessing)
@@ -1179,7 +2569,7 @@ async function runAquecedorCycle(forceTest = false) {
                 return;
             }
         }
-        const config = await loadAquecedorConfigFromDb();
+        const config = await loadAquecedorEffectiveConfig();
         const nowSp = nowInSaoPaulo();
         if (!forceTest && !isAquecedorWindowOpen(config, nowSp)) {
             const nextOpen = nextAquecedorWindowOpenAt(config, nowSp);
@@ -1201,6 +2591,11 @@ async function runAquecedorCycle(forceTest = false) {
                 signal: controller.signal,
             });
         }
+        catch (evoErr) {
+            const msg = evoErr instanceof Error ? evoErr.message : String(evoErr);
+            aquecedorRuntime.lastResult = `Falha ao buscar instâncias da EVO (${msg}).`;
+            return;
+        }
         finally {
             clearTimeout(timeoutId);
         }
@@ -1217,15 +2612,26 @@ async function runAquecedorCycle(forceTest = false) {
                     ? rawInstances.data
                     : rawInstances ? [rawInstances] : [];
         const connectedAll = buildConnectedFromEvoResponse(instances);
+        if (!aquecedorRuntimeOwnerEmail) {
+            aquecedorRuntime.lastResult =
+                "Aquecedor sem usuário vinculado. Pare e inicie novamente pela conta correta.";
+            return;
+        }
+        const connectedOwned = await filterConnectedForAquecedorOwner(connectedAll, aquecedorRuntimeOwnerEmail);
         const usageMap = await loadInstanceUsageMap();
-        const connected = connectedAll.filter((item) => {
-            const usage = usageMap.get(item.instancia);
-            // padrão: ativo para não quebrar comportamento legado
+        const connected = connectedOwned.filter((item) => {
+            const usage = getInstanceUsageFromMap(usageMap, item.instancia);
             return usage ? usage.useAquecedor !== false : true;
         });
         if (connected.length < 2) {
-            aquecedorRuntime.lastResult =
-                "Menos de 2 instâncias conectadas e habilitadas para Aquecedor.";
+            const analysis = await analyzeAquecedorInstances(aquecedorRuntimeOwnerEmail);
+            const hints = analysis.excluded
+                .map((row) => `${row.instancia} (${row.motivos.join(", ")})`)
+                .slice(0, 4)
+                .join("; ");
+            aquecedorRuntime.lastResult = hints
+                ? `Menos de 2 instâncias habilitadas (${connected.length}). Verifique: ${hints}`
+                : "Menos de 2 instâncias conectadas e habilitadas para Aquecedor (somente as suas).";
             return;
         }
         const supabase = getSupabaseClient();
@@ -1238,12 +2644,7 @@ async function runAquecedorCycle(forceTest = false) {
             .update({ status: "PENDENTE" })
             .eq("status", "PROCESSANDO")
             .lt("processing_at", cutoffStuck));
-        for (const item of connected) {
-            await supabase.from("controle_instancia").upsert({
-                instancia: item.instancia,
-                numero_whatsapp: item.numero,
-            }, { onConflict: "instancia" });
-        }
+        await syncAquecedorConnectedInstances(supabase, connected);
         const combinations = [];
         for (const origem of connected) {
             for (const destino of connected) {
@@ -1260,6 +2661,7 @@ async function runAquecedorCycle(forceTest = false) {
             aquecedorRuntime.lastResult = "Sem combinações válidas.";
             return;
         }
+        await ensureAquecedorPendingMessage();
         const { data: cicloData } = await (supabase
             .from("controle_ciclo")
             .select("id, ciclo_global")
@@ -1271,18 +2673,48 @@ async function runAquecedorCycle(forceTest = false) {
             await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config);
             return;
         }
-        const chosen = combinations[cicloGlobal % combinations.length];
-        const proximo = cicloGlobal + 1;
-        const { data: pendingData } = await (supabase
-            .from("aquecedor")
-            .select("id, mensagem, status, scheduled_at")
-            .eq("status", "PENDENTE")
-            .lte("scheduled_at", new Date().toISOString())
-            .order("scheduled_at", { ascending: true })
-            .limit(1)
-            .maybeSingle());
+        const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal);
+        if (!picked) {
+            const retrySeconds = Math.max(60, Math.min(config.waitMinSeconds, 180));
+            aquecedorRuntime.nextAllowedAt = new Date(Date.now() + retrySeconds * 1000).toISOString();
+            aquecedorRuntime.lastResult =
+                "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.";
+            return;
+        }
+        const chosen = picked.chosen;
+        const proximo = picked.index + 1;
+        const pairContext = buildAquecedorPairContext(chosen, connected);
+        const ensured = await ensureAquecedorPendingMessage(pairContext);
+        const pendingData = await fetchProcessableAquecedorPending(supabase);
         if (!pendingData?.id) {
-            aquecedorRuntime.lastResult = "Sem mensagem pendente para envio.";
+            const reason = ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
+            if (!ensured.ok && isSupabaseTransientError({ message: reason })) {
+                aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 60000).toISOString();
+                aquecedorRuntime.lastResult = await describeSupabaseConnectivityFailure();
+            }
+            else {
+                aquecedorRuntime.lastResult = ensured.ok
+                    ? "Sem mensagem pendente para envio (fila vazia após preparação)."
+                    : reason;
+            }
+            return;
+        }
+        const texto = await resolveAquecedorMessageForSend(supabase, pendingData.id, String(pendingData.mensagem || ""), pairContext);
+        const turnCheck = await verifyAquecedorConversationTurn(supabase, connected, chosen.instancia_origem, chosen.instancia_destino);
+        if (!turnCheck.ok) {
+            aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90000).toISOString();
+            aquecedorRuntime.lastResult = turnCheck.reason;
+            return;
+        }
+        if (await hasRecentAquecedorSendBetween(supabase, connected, chosen.instancia_origem, chosen.instancia_destino, 90)) {
+            aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90000).toISOString();
+            aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`;
+            return;
+        }
+        const turnRecheck = await verifyAquecedorConversationTurn(supabase, connected, chosen.instancia_origem, chosen.instancia_destino);
+        if (!turnRecheck.ok) {
+            aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90000).toISOString();
+            aquecedorRuntime.lastResult = turnRecheck.reason;
             return;
         }
         await supabase.from("aquecedor")
@@ -1290,11 +2722,11 @@ async function runAquecedorCycle(forceTest = false) {
             status: "PROCESSANDO",
             processing_at: new Date().toISOString(),
             instancia: chosen.instancia_origem,
-            numero_destino: chosen.numero_whatsapp,
+            numero_destino: normalizeWhatsAppNumber(chosen.numero_whatsapp) || chosen.numero_whatsapp,
+            mensagem: texto,
         })
             .eq("id", pendingData.id);
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
-        const texto = String(pendingData.mensagem || "").trim() || " ";
         const numero = normalizeWhatsAppNumber(chosen.numero_whatsapp);
         const sendBody = EVO_SEND_TEXT_V1
             ? { number: numero, textMessage: { text: texto } }
@@ -1332,26 +2764,40 @@ async function runAquecedorCycle(forceTest = false) {
             instancia_destino: chosen.instancia_destino,
             data_envio: new Date().toISOString(),
         });
+        await recordAquecedorEnvio({
+            instanciaOrigem: chosen.instancia_origem,
+            instanciaDestino: chosen.instancia_destino,
+            status: "Envio com Sucesso",
+        });
+        const nextPick = await pickAquecedorCombinationAsync(supabase, connected, combinations, proximo);
+        await ensureAquecedorPendingMessage(nextPick ? buildAquecedorPairContext(nextPick.chosen, connected) : null);
         await supabase.from("controle_ciclo").upsert({ id: 1, ciclo_global: proximo }, { onConflict: "id" });
         const waitMin = config.waitMinSeconds;
         const waitMax = config.waitMaxSeconds;
         const waitSeconds = Math.floor(Math.random() * (waitMax - waitMin + 1)) + waitMin;
         aquecedorRuntime.nextAllowedAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
-        aquecedorRuntime.lastResult = `Envio realizado com sucesso. Próxima janela em ~${waitSeconds}s.`;
+        aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.`;
     }
     catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         console.error("Erro no ciclo do aquecedor:", error);
-        aquecedorRuntime.lastResult = "Erro inesperado no ciclo do aquecedor.";
+        aquecedorRuntime.lastResult = `Erro no ciclo do aquecedor: ${msg.slice(0, 200)}`;
     }
     finally {
         aquecedorRuntime.isProcessing = false;
+        if (shouldThisProcessLeadAquecedor(aquecedorPersistedBundle)) {
+            void persistAquecedorRuntimeSnapshot({
+                workerId: getAquecedorWorkerId(),
+                workerHeartbeatAt: new Date().toISOString(),
+            });
+        }
     }
 }
-function startAquecedorRuntime() {
-    if (!ENABLE_BACKGROUND_PROCESSING) {
+function startAquecedorRuntimeLocal() {
+    if (!ENABLE_AQUECEDOR_PROCESSING) {
         aquecedorRuntime.running = false;
         aquecedorRuntime.lastResult =
-            "Aquecedor desativado neste processo (ENABLE_BACKGROUND_PROCESSING=false).";
+            "Aquecedor desativado neste processo (ENABLE_AQUECEDOR_PROCESSING=false).";
         return;
     }
     if (aquecedorInterval)
@@ -1361,15 +2807,16 @@ function startAquecedorRuntime() {
         if (!aquecedorRuntime.running)
             return;
         runAquecedorCycle();
-    }, 60000);
+    }, 30000);
+    void ensureAquecedorPendingMessage();
     runAquecedorCycle();
 }
+function startAquecedorRuntime() {
+    startAquecedorRuntimeLocal();
+}
 function stopAquecedorRuntime() {
-    aquecedorRuntime.running = false;
-    if (aquecedorInterval) {
-        clearInterval(aquecedorInterval);
-        aquecedorInterval = null;
-    }
+    stopAquecedorRuntimeLocal();
+    aquecedorRuntimeOwnerEmail = null;
 }
 let indexHtmlTemplate = null;
 function resolveIndexHtmlPath() {
@@ -1397,9 +2844,9 @@ function resolveUiProfile() {
     if (explicit === "production" || explicit === "full") {
         return explicit;
     }
-    // V02 espelha a UI de produção; V01 mantém menu completo (baseline).
+    // V01 = UI pré-disparador comercial (08/06/2026): API não oficial + API Meta.
     if (load_env_1.WABA_ENV === "v01")
-        return "full";
+        return "baseline";
     return "production";
 }
 function sendIndexHtml(res) {
@@ -1419,6 +2866,25 @@ app.get("/", (req, res) => {
 app.get("/index.html", (_req, res) => {
     sendIndexHtml(res);
 });
+const sendVendasPage = (res) => {
+    const vendasPath = path_1.default.join(rootPath, "public-pages", "vendas.html");
+    const cadastroPath = path_1.default.join(rootPath, "public-pages", "cadastro.html");
+    const sourcePath = (0, fs_1.existsSync)(vendasPath)
+        ? vendasPath
+        : (0, fs_1.existsSync)(cadastroPath)
+            ? cadastroPath
+            : null;
+    if (!sourcePath) {
+        return res.status(404).type("html").send("<p>Página de vendas indisponível.</p>");
+    }
+    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(sourcePath, "utf8"), {
+        basePath: base_path_1.BASE_PATH,
+        uiProfile: "full",
+    });
+    return res.type("html").send(html);
+};
+app.get("/cadastro", (_req, res) => sendVendasPage(res));
+app.get("/vendas", (_req, res) => sendVendasPage(res));
 if (base_path_1.BASE_PATH) {
     // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
     app.use((req, res, next) => {
@@ -1543,33 +3009,47 @@ app.get("/dados", async (req, res) => {
     }
 });
 // Status das instancias (Evolution API)
+app.get("/instancias/snapshot", async (req, res) => {
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (!auth.email) {
+            return res.status(401).json({ error: "Faça login para consultar instâncias." });
+        }
+        const snapshot = await buildInstancesSnapshotForAuth(auth);
+        return res.status(200).json(snapshot);
+    }
+    catch (error) {
+        console.error("Erro ao carregar snapshot de instâncias:", error);
+        return res.status(500).json({ error: "Erro ao carregar instâncias do cache." });
+    }
+});
+// Status das instancias (Evolution API)
 app.get("/instancias", async (req, res) => {
     try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const forceRefresh = String(req.query.refresh ?? "").trim() === "1";
+        if (!forceRefresh) {
+            const snapshot = await buildInstancesSnapshotForAuth(auth);
+            return res.status(200).json(snapshot);
+        }
         const aliasesMap = await loadInstanceAliasesMap();
         const whatsappNamesMap = await loadWhatsappProfileNamesMap();
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        let response;
-        try {
-            response = await fetch(EVO_INSTANCES_URL, {
-                headers: {
-                    apikey: EVO_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                signal: controller.signal,
+        const evoList = await fetchEvoInstancesList();
+        if (!evoList.ok) {
+            const evolutionError = describeEvoInstancesFetchError(evoList.status, evoList.detail);
+            console.error("Erro Evolution API:", evoList.status, evoList.detail);
+            const fallback = await buildFallbackInstancesForAuth(auth, evolutionError);
+            if (fallback.items.length > 0) {
+                console.warn(`[instancias] Evolution indisponível — retornando ${fallback.items.length} instância(s) do cache/dono (${auth.email || "guest"}).`);
+                return res.status(200).json(fallback);
+            }
+            return res.status(500).json({
+                error: evolutionError,
+                evolutionStatus: evoList.status,
+                evolutionDetail: evoList.detail,
             });
         }
-        finally {
-            clearTimeout(timeoutId);
-        }
-        if (!response.ok) {
-            const bodyText = await response.text();
-            console.error("Erro Evolution API:", response.status, bodyText);
-            return res
-                .status(500)
-                .json({ error: "Erro ao buscar dados na Evolution API" });
-        }
-        const instances = await response.json();
+        const instances = evoList.instances;
         let ativas = 0;
         let desconectadas = 0;
         for (const inst of instances) {
@@ -1651,7 +3131,17 @@ app.get("/instancias", async (req, res) => {
                 };
             }));
         }
-        return res.json({ total, ativas, desconectadas, items });
+        const allNames = baseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
+        const reconciled = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(auth, allNames);
+        if (reconciled > 0) {
+            console.info(`[instancias] ${reconciled} instância(s) órfã(s) vinculada(s) ao master ${auth.email}.`);
+        }
+        items = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterItemsForAuth(auth, items, (row) => String(row?.name || ""));
+        ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open"))
+            .length;
+        desconectadas = items.length - ativas;
+        void saveEvoInstancesCache(baseItems.map((row) => ({ ...row })));
+        return res.json({ total: items.length, ativas, desconectadas, items });
     }
     catch (error) {
         console.error("Erro ao consultar Evolution API:", error);
@@ -1660,27 +3150,52 @@ app.get("/instancias", async (req, res) => {
             .json({ error: "Erro ao consultar Evolution API" });
     }
 });
+function isAllowedAvatarHost(hostname) {
+    const host = String(hostname || "").toLowerCase();
+    const allowedHosts = [
+        "whatsapp.net",
+        "whatsapp.com",
+        "fbcdn.net",
+        "facebook.com",
+        "cdninstagram.com",
+    ];
+    return allowedHosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+}
+const INSTANCE_AVATAR_PLACEHOLDER_SVG = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Sem foto">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="32" fill="url(#g)"/>
+  <text x="32" y="39" text-anchor="middle" fill="#ffffff" font-size="22" font-family="Segoe UI, sans-serif">◎</text>
+</svg>`, "utf-8");
+function sendInstanceAvatarPlaceholder(res) {
+    res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    return res.status(200).send(INSTANCE_AVATAR_PLACEHOLDER_SVG);
+}
 app.get("/instancias/avatar", async (req, res) => {
     try {
         const rawUrl = String(req.query.url || "").trim();
         if (!rawUrl) {
-            return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
+            return sendInstanceAvatarPlaceholder(res);
         }
         let parsed;
         try {
             parsed = new URL(rawUrl);
         }
         catch {
-            return res.status(400).json({ error: "URL de avatar inválida." });
+            return sendInstanceAvatarPlaceholder(res);
         }
         if (!/^https?:$/i.test(parsed.protocol)) {
-            return res.status(400).json({ error: "Protocolo de URL não suportado." });
+            return sendInstanceAvatarPlaceholder(res);
         }
-        const host = String(parsed.hostname || "").toLowerCase();
-        const allowedHosts = ["whatsapp.net", "fbcdn.net"];
-        const isAllowed = allowedHosts.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
-        if (!isAllowed) {
-            return res.status(400).json({ error: "Host de avatar não permitido." });
+        if (!isAllowedAvatarHost(parsed.hostname)) {
+            return sendInstanceAvatarPlaceholder(res);
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -1688,14 +3203,27 @@ app.get("/instancias/avatar", async (req, res) => {
             const response = await fetch(parsed.toString(), {
                 method: "GET",
                 signal: controller.signal,
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+                    Referer: "https://web.whatsapp.com/",
+                },
+                redirect: "follow",
             });
             if (!response.ok) {
-                return res.status(502).json({ error: "Falha ao buscar avatar remoto." });
+                return sendInstanceAvatarPlaceholder(res);
             }
-            const contentType = response.headers.get("content-type") || "image/jpeg";
+            const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+            if (contentType && !contentType.startsWith("image/")) {
+                return sendInstanceAvatarPlaceholder(res);
+            }
+            const resolvedType = contentType.startsWith("image/") ? contentType : "image/jpeg";
             const arrayBuffer = await response.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            res.setHeader("Content-Type", contentType);
+            if (buffer.length < 16) {
+                return sendInstanceAvatarPlaceholder(res);
+            }
+            res.setHeader("Content-Type", resolvedType);
             res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
             res.setHeader("Pragma", "no-cache");
             res.setHeader("Expires", "0");
@@ -1707,7 +3235,7 @@ app.get("/instancias/avatar", async (req, res) => {
     }
     catch (error) {
         console.error("Erro ao buscar avatar proxy:", error);
-        return res.status(500).json({ error: "Erro ao carregar avatar." });
+        return sendInstanceAvatarPlaceholder(res);
     }
 });
 app.post("/instancias/:name/alias", async (req, res) => {
@@ -1717,6 +3245,8 @@ app.post("/instancias/:name/alias", async (req, res) => {
         if (!instanceName) {
             return res.status(400).json({ error: "Nome da instância é obrigatório." });
         }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
         if (!alias) {
             return res.status(400).json({ error: "Alias é obrigatório." });
         }
@@ -1742,6 +3272,8 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
         if (!instanceName) {
             return res.status(400).json({ error: "Nome da instância é obrigatório." });
         }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
         if (!whatsappName) {
             return res.status(400).json({ error: "Nome (WhatsApp) é obrigatório." });
         }
@@ -1760,10 +3292,15 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
         return res.status(500).json({ error: "Erro ao salvar nome (WhatsApp)." });
     }
 });
-app.get("/instancias/uso-config", async (_req, res) => {
+app.get("/instancias/uso-config", async (req, res) => {
     try {
         const usageMap = await loadInstanceUsageMap();
-        const items = Array.from(usageMap.entries()).map(([instanceName, cfg]) => ({
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
+        const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+        const items = Array.from(usageMap.entries())
+            .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
+            .map(([instanceName, cfg]) => ({
             instanceName,
             ...cfg,
         }));
@@ -1783,11 +3320,14 @@ app.post("/instancias/uso-config", async (req, res) => {
             useDisparador: row?.useDisparador !== false,
         }))
             .filter((row) => row.instanceName);
-        if (!items.length) {
+        const allowed = await rejectForeignInstanceNames(req, items.map((row) => row.instanceName));
+        const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+        const filtered = items.filter((row) => allowedLower.has(row.instanceName.toLowerCase()));
+        if (!filtered.length) {
             return res.status(400).json({ error: "Nenhuma instância válida foi informada." });
         }
-        await persistInstanceUsage(items);
-        return res.json({ ok: true, message: "Configuração de uso das instâncias salva.", items });
+        await persistInstanceUsage(filtered);
+        return res.json({ ok: true, message: "Configuração de uso das instâncias salva.", items: filtered });
     }
     catch {
         return res.status(500).json({ error: "Erro ao salvar configuração de uso das instâncias." });
@@ -1796,6 +3336,7 @@ app.post("/instancias/uso-config", async (req, res) => {
 app.post("/webhooks/evolution", (req, res) => {
     try {
         (0, instance_integration_probe_1.handleEvolutionWebhookPayload)(req.body);
+        (0, instance_inbound_validation_service_1.handleInboundValidationWebhook)(req.body);
         return res.json({ ok: true });
     }
     catch (error) {
@@ -1806,10 +3347,17 @@ app.post("/webhooks/evolution", (req, res) => {
 app.post("/instancias/:name/probe-integracao", async (req, res) => {
     try {
         const name = String(req.params.name || "").trim();
+        if (await rejectForeignInstance(req, res, name))
+            return;
         const destinationInstanceName = String(req.body?.destinationInstanceName || "").trim() || undefined;
+        if (destinationInstanceName &&
+            (await rejectForeignInstance(req, res, destinationInstanceName))) {
+            return;
+        }
         const started = await (0, instance_integration_probe_1.startIntegrationProbe)({
             sourceInstanceName: name,
             destinationInstanceName,
+            allowMessageSend: req.body?.allowMessageSend === true,
         });
         if (started.error) {
             return res.status(400).json({ ok: false, error: started.error });
@@ -1830,6 +3378,35 @@ app.get("/instancias/probe-integracao/:probeId", (req, res) => {
     const status = (0, instance_integration_probe_1.getIntegrationProbeStatus)(probeId);
     if (!status) {
         return res.status(404).json({ error: "Teste de integração não encontrado ou expirado." });
+    }
+    return res.json({ ok: true, ...status });
+});
+app.post("/instancias/:name/validacao-inbound", async (req, res) => {
+    try {
+        const name = String(req.params.name || "").trim();
+        if (await rejectForeignInstance(req, res, name))
+            return;
+        const instanceNumberHint = String(req.body?.number || req.body?.instanceNumberHint || "").trim();
+        const started = await (0, instance_inbound_validation_service_1.startInboundValidation)({ instanceName: name, instanceNumberHint });
+        if (started.error) {
+            return res.status(400).json({ ok: false, error: started.error });
+        }
+        const status = started.status || (0, instance_inbound_validation_service_1.getInboundValidationStatus)(String(started.validationId || ""));
+        return res.json({ ok: true, validationId: started.validationId, ...status });
+    }
+    catch (error) {
+        console.error("POST /instancias/:name/validacao-inbound", error);
+        return res.status(500).json({ error: error?.message || "Erro ao iniciar validação inbound." });
+    }
+});
+app.get("/instancias/validacao-inbound/:validationId", (req, res) => {
+    const validationId = String(req.params.validationId || "").trim();
+    if (!validationId) {
+        return res.status(400).json({ error: "validationId é obrigatório." });
+    }
+    const status = (0, instance_inbound_validation_service_1.getInboundValidationStatus)(validationId);
+    if (!status) {
+        return res.status(404).json({ error: "Validação não encontrada ou expirada." });
     }
     return res.json({ ok: true, ...status });
 });
@@ -1918,7 +3495,8 @@ function extractNumbersFromXlsxBuffer(buffer, numberColumn) {
     return deduplicateCampaignDestinationPhones(bucket);
 }
 function extractInstanceNumber(inst) {
-    const raw = inst?.owner ??
+    const raw = inst?.ownerJid ??
+        inst?.owner ??
         inst?.number ??
         inst?.phone ??
         inst?.ownerNumber ??
@@ -2167,7 +3745,7 @@ function buildConnectedFromEvoResponse(instances) {
         const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
         if (!status.includes("open"))
             return null;
-        const instancia = String(inst?.name ?? inst?.instanceName ?? inst?.instance ?? "").trim();
+        const instancia = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
         const numero = extractInstanceNumber(inst);
         if (!instancia || !numero)
             return null;
@@ -2401,37 +3979,218 @@ function getCampaignInstanceHealth(config, evoRows) {
         shouldPauseByDisconnectedRatio,
     };
 }
-async function callEvoAction(url, method, body) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
-    try {
-        const response = await fetch(url, {
-            method,
-            headers: {
-                apikey: EVO_API_KEY,
-                "Content-Type": "application/json",
-            },
-            signal: controller.signal,
-            body: body ? JSON.stringify(body) : undefined,
-        });
-        const text = await response.text();
-        let json = null;
+function describeEvoQrFailure(createStatus, qrStatus, createDetail, qrDetail) {
+    const detail = String(qrDetail || createDetail || "").trim();
+    if (createStatus === 404 || qrStatus === 404 || /404 page not found/i.test(detail)) {
+        return "Evolution API indisponível (404). Verifique EVO_API_URL e se o serviço Evolution está no ar.";
+    }
+    if (createStatus === 0 || qrStatus === 0) {
+        if (/self-signed certificate|DEPTH_ZERO_SELF_SIGNED_CERT/i.test(detail)) {
+            return "Evolution API com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no ambiente de desenvolvimento.";
+        }
+        if (/timeout/i.test(detail)) {
+            return "Evolution API demorou para gerar o QRCode (timeout). Tente «Atualizar QR» ou aumente EVO_HTTP_TIMEOUT_MS no servidor.";
+        }
+        return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o serviço Evolution está no ar.`;
+    }
+    return "Dados salvos, mas falha ao gerar QRCode na EVO.";
+}
+function summarizeEvolutionErrorDetail(detail, status = 0) {
+    const raw = String(detail || "").trim();
+    if (!raw)
+        return "";
+    let parsed = null;
+    if (raw.startsWith("{")) {
         try {
-            json = text ? JSON.parse(text) : null;
+            parsed = JSON.parse(raw);
         }
         catch {
-            json = null;
+            /* mantém texto bruto */
         }
+    }
+    const response = parsed?.response;
+    const nested = (response && typeof response === "object"
+        ? response.message
+        : null) ??
+        parsed?.message ??
+        parsed?.error ??
+        raw;
+    const text = String(nested).trim();
+    if (/integrationSession|prismaRepository/i.test(text)) {
+        return "Evolution API com erro interno no banco (Prisma/integrationSession). Reinicie o serviço Evolution no Easypanel e confira o PostgreSQL da EVO.";
+    }
+    if (status === 500 || /internal server error/i.test(text)) {
+        const first = text
+            .split("\n")
+            .map((line) => line.trim())
+            .find((line) => line.length > 0) || text;
+        if (first.length > 220)
+            return `Evolution API erro 500: ${first.slice(0, 200)}…`;
+        return `Evolution API erro 500: ${first}`;
+    }
+    if (text.length > 400)
+        return `${text.slice(0, 380)}…`;
+    return text;
+}
+function describeEvoInstancesFetchError(status, detail) {
+    const normalized = summarizeEvolutionErrorDetail(detail, status);
+    if (status === 404 || /404 page not found/i.test(normalized)) {
+        return "Evolution API indisponível (404). Verifique EVO_API_URL / Traefik no VPS ou use Evolution local no .env.v02.";
+    }
+    if (status === 0 && /self-signed certificate|DEPTH_ZERO_SELF_SIGNED_CERT/i.test(normalized)) {
+        return "Evolution API com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no .env.v02.";
+    }
+    if (status === 0) {
+        return `Evolution API sem resposta (${normalized || "erro de rede ou timeout"}).`;
+    }
+    return normalized || "Erro ao buscar dados na Evolution API.";
+}
+async function callEvoAction(url, method, body, options) {
+    const result = await (0, evo_http_client_1.evoHttpRequest)(url, method, {
+        apiKey: EVO_API_KEY,
+        body,
+        timeoutMs: options?.timeoutMs ?? (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+        retries: options?.retries ?? 1,
+    });
+    const mergedBody = result.error
+        ? [result.error, result.body].filter(Boolean).join(" | ")
+        : result.body;
+    return {
+        ok: result.ok,
+        status: result.status,
+        body: mergedBody,
+        json: result.json,
+        error: result.error,
+    };
+}
+function parseEvoInstancesList(raw) {
+    if (Array.isArray(raw))
+        return raw;
+    if (raw && typeof raw === "object") {
+        const record = raw;
+        if (Array.isArray(record.response))
+            return record.response;
+        if (Array.isArray(record.data))
+            return record.data;
+    }
+    return raw ? [raw] : [];
+}
+async function fetchEvoInstancesList() {
+    const result = await callEvoAction(EVO_INSTANCES_URL, "GET", undefined, {
+        timeoutMs: 12000,
+        retries: 1,
+    });
+    if (!result.ok) {
+        const detail = summarizeEvolutionErrorDetail(String(result.body || result.error || "Erro ao buscar instâncias na Evolution API."), result.status);
+        return { ok: false, status: result.status, detail };
+    }
+    return { ok: true, instances: parseEvoInstancesList(result.json) };
+}
+const EVO_INSTANCES_CACHE_FILE = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
+async function loadEvoInstancesCache() {
+    try {
+        const raw = await fs_1.promises.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed?.items))
+            return null;
         return {
-            ok: response.ok,
-            status: response.status,
-            body: text,
-            json,
+            updatedAt: String(parsed.updatedAt || ""),
+            items: parsed.items,
         };
     }
-    finally {
-        clearTimeout(timeoutId);
+    catch {
+        return null;
     }
+}
+async function saveEvoInstancesCache(items) {
+    try {
+        const payload = {
+            updatedAt: new Date().toISOString(),
+            items,
+        };
+        await fs_1.promises.mkdir(path_1.default.dirname(EVO_INSTANCES_CACHE_FILE), { recursive: true });
+        await fs_1.promises.writeFile(EVO_INSTANCES_CACHE_FILE, JSON.stringify(payload, null, 2), "utf-8");
+    }
+    catch {
+        /* cache opcional */
+    }
+}
+async function removeInstanceFromEvoCache(instanceName) {
+    const normalized = String(instanceName || "").trim().toLowerCase();
+    if (!normalized)
+        return;
+    const cache = await loadEvoInstancesCache();
+    if (!cache?.items?.length)
+        return;
+    const nextItems = cache.items.filter((row) => String(row?.name || "").trim().toLowerCase() !== normalized);
+    if (nextItems.length === cache.items.length)
+        return;
+    await saveEvoInstancesCache(nextItems);
+}
+function canDeleteInstanceLocallyAfterEvoFailure(status, body) {
+    if (status === 0)
+        return true;
+    if (status === 404)
+        return true;
+    const normalized = String(body || "").toLowerCase();
+    return (normalized.includes("not found") ||
+        normalized.includes("não encontr") ||
+        normalized.includes("nao encontr"));
+}
+async function buildInstancesSnapshotForAuth(auth) {
+    const ownedNames = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(auth.email);
+    const cache = await loadEvoInstancesCache();
+    const cacheByName = new Map();
+    for (const row of cache?.items || []) {
+        const name = String(row?.name || "").trim();
+        if (name)
+            cacheByName.set(name.toLowerCase(), row);
+    }
+    const aliasesMap = await loadInstanceAliasesMap();
+    const whatsappNamesMap = await loadWhatsappProfileNamesMap();
+    const items = ownedNames.map((instanceName) => {
+        const cached = cacheByName.get(instanceName.toLowerCase());
+        if (cached) {
+            return {
+                ...cached,
+                name: instanceName,
+                displayName: String(cached.displayName || cached.name || instanceName).trim() || instanceName,
+                connectionStatus: String(cached.connectionStatus || "unknown"),
+            };
+        }
+        const instanceAlias = aliasesMap.get(instanceName) || "";
+        const whatsappNameOverride = whatsappNamesMap.get(instanceName) || "";
+        return {
+            name: instanceName,
+            displayName: whatsappNameOverride || instanceAlias || instanceName,
+            whatsappNameOverride,
+            instanceAlias,
+            connectionStatus: "unknown",
+            number: "",
+            contacts: 0,
+            messages: 0,
+            profilePicUrl: "",
+            avatarVersion: "",
+            createdAt: "",
+        };
+    });
+    const ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open")).length;
+    return {
+        total: items.length,
+        ativas,
+        desconectadas: items.length - ativas,
+        items,
+        fromCache: true,
+        cacheUpdatedAt: String(cache?.updatedAt || ""),
+    };
+}
+async function buildFallbackInstancesForAuth(auth, evolutionError) {
+    const snapshot = await buildInstancesSnapshotForAuth(auth);
+    return {
+        ...snapshot,
+        degraded: true,
+        evolutionError,
+    };
 }
 async function callEvoSendTextWithRetry(url, body, maxAttempts = 3) {
     let last = null;
@@ -2620,6 +4379,14 @@ function parseEncurtadorProClicks(payload) {
     }
     return 0;
 }
+async function fetchClicksForShortUrl(shortUrl) {
+    if ((0, waba_shortener_service_1.isWabaManagedShortUrl)(shortUrl)) {
+        const local = await (0, waba_shortener_service_1.fetchWabaShortUrlClicks)(shortUrl);
+        if (local != null)
+            return local;
+    }
+    return fetchClicksForShortUrlFromEncurtadorPro(shortUrl);
+}
 async function fetchClicksForShortUrlFromEncurtadorPro(shortUrl) {
     const safeShort = String(shortUrl || "").trim();
     if (!/^https?:\/\//i.test(safeShort))
@@ -2750,6 +4517,14 @@ async function shortenUrlWithProvider(longUrl, provider, customDomain = "") {
     if (!safeLongUrl) {
         throw new Error("URL original é obrigatória.");
     }
+    if (provider === "waba") {
+        try {
+            return await (0, waba_shortener_service_1.createWabaShortUrl)(safeLongUrl, { tenantId: "disparador" });
+        }
+        catch (error) {
+            throw new Error(String(error?.message || "Falha no encurtador WABA."));
+        }
+    }
     if (provider === "encurtadorpro") {
         const apiKey = String(process.env.ENCURTADORPRO_API_KEY || "").trim();
         if (!apiKey) {
@@ -2822,7 +4597,7 @@ async function shortenUrlWithProvider(longUrl, provider, customDomain = "") {
         }
         throw new Error(lastErrorMessage);
     }
-    throw new Error("Provedor de encurtador não suportado. Use apenas EncurtadorPro.");
+    throw new Error("Provedor de encurtador não suportado.");
 }
 function appendAntiRepeatParam(rawUrl, attempt) {
     try {
@@ -2895,12 +4670,43 @@ function tryExtractQrCode(payload) {
     };
     return visit(payload);
 }
+async function fetchInstanceQrCodeFromEvo(instanceName, number = "") {
+    const connectCandidates = [
+        { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" },
+        { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "GET" },
+        { url: `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(instanceName)}`, method: "GET" },
+        { url: `${EVO_API_BASE}/instance/qr/${encodeURIComponent(instanceName)}`, method: "GET" },
+        { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "POST" },
+    ].filter((candidate) => candidate.url);
+    let lastQrStatus = 0;
+    let lastQrDetail = "";
+    for (const candidate of connectCandidates) {
+        const targetUrl = number
+            ? `${candidate.url}${candidate.url.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
+            : candidate.url;
+        const result = await callEvoAction(targetUrl, candidate.method, undefined, {
+            timeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+            retries: 3,
+        });
+        lastQrStatus = result.status;
+        lastQrDetail = String(result.body || result.error || "").slice(0, 400);
+        if (!result.ok)
+            continue;
+        const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
+        if (qrCode) {
+            return { ok: true, qrCode, providerResponse: result.json ?? null };
+        }
+    }
+    return { ok: false, lastQrStatus, lastQrDetail };
+}
 app.post("/instancias/:name/atualizar", async (req, res) => {
     try {
         const instanceName = String(req.params.name || "").trim();
         if (!instanceName) {
             return res.status(400).json({ error: "Nome da instância é obrigatório." });
         }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
         const url = buildTemplateUrl(EVO_REFRESH_URL_TEMPLATE, instanceName);
         if (!url) {
             return res.status(501).json({
@@ -2927,6 +4733,8 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
         if (!instanceName) {
             return res.status(400).json({ error: "Nome da instância é obrigatório." });
         }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
         const url = buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName);
         if (!url) {
             return res.status(501).json({
@@ -2934,22 +4742,19 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
             });
         }
         const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
-        const urlWithQuery = number
-            ? `${url}${url.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
-            : url;
-        const result = await callEvoAction(urlWithQuery, "GET");
-        if (!result.ok) {
+        const qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number);
+        if (!qrFetch.ok) {
             return res.status(502).json({
-                error: "Falha ao solicitar QRCode na EVO.",
-                status: result.status,
+                error: describeEvoQrFailure(0, qrFetch.lastQrStatus, "", qrFetch.lastQrDetail),
+                evoQrStatus: qrFetch.lastQrStatus,
+                detail: qrFetch.lastQrDetail,
             });
         }
-        const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
         return res.json({
             ok: true,
             message: "QRCode solicitado com sucesso.",
-            qrCode,
-            providerResponse: result.json ?? null,
+            qrCode: qrFetch.qrCode,
+            providerResponse: qrFetch.providerResponse,
         });
     }
     catch (error) {
@@ -2959,6 +4764,7 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
 });
 app.post("/instancias/registrar-qrcode", async (req, res) => {
     try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
         const name = String(req.body?.name || "").trim();
         const rawToken = String(req.body?.token || "").trim();
         const number = String(req.body?.number || "").trim();
@@ -2971,27 +4777,44 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: "Campo 'name' é obrigatório." });
         }
+        if ((0, waba_auth_service_1.isWabaAuthConfigured)()) {
+            const ownerEmail = String(auth.email || "").trim().toLowerCase();
+            if (!ownerEmail.includes("@")) {
+                return res.status(401).json({ error: "Faça login para registrar uma instância." });
+            }
+            const reserve = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, ownerEmail);
+            if (!reserve.ok) {
+                return res.status(409).json({ error: reserve.error });
+            }
+            void ensureAquecedorInstanceRegistered(name);
+        }
         // Regra de segurança operacional:
         // não permitir criar instância com nome já usado por outra instância ativa/conectada.
         // Instâncias desconectadas são desconsideradas nesse comparativo.
         try {
-            const checkController = new AbortController();
-            const checkTimeout = setTimeout(() => checkController.abort(), 8000);
-            const checkResponse = await fetch(EVO_INSTANCES_URL, {
-                headers: {
-                    apikey: EVO_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                signal: checkController.signal,
-            }).finally(() => clearTimeout(checkTimeout));
-            if (checkResponse.ok) {
-                const rawInstances = await checkResponse.json().catch(() => []);
-                const list = Array.isArray(rawInstances)
-                    ? rawInstances
-                    : Array.isArray(rawInstances?.response)
-                        ? rawInstances.response
-                        : Array.isArray(rawInstances?.data)
-                            ? rawInstances.data
+            const checkResult = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", {
+                apiKey: EVO_API_KEY,
+                timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 15000),
+                retries: 2,
+            });
+            if (checkResult.ok) {
+                const rawInstances = checkResult.json ?? checkResult.body;
+                const parsed = typeof rawInstances === "string"
+                    ? (() => {
+                        try {
+                            return JSON.parse(rawInstances);
+                        }
+                        catch {
+                            return [];
+                        }
+                    })()
+                    : rawInstances;
+                const list = Array.isArray(parsed)
+                    ? parsed
+                    : Array.isArray(parsed?.response)
+                        ? parsed.response
+                        : Array.isArray(parsed?.data)
+                            ? parsed.data
                             : [];
                 const alreadyActive = list.some((item) => {
                     const inst = item?.instance ?? item;
@@ -3013,14 +4836,11 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         }
         // Payload aceito pela Evolution API v2 (sem channel/number vazio — causam HTTP 400).
         const createPayload = {
-            name,
             instanceName: name,
+            name,
             qrcode: true,
             integration: "WHATSAPP-BAILEYS",
         };
-        if (rawToken) {
-            createPayload.token = token;
-        }
         if (number) {
             createPayload.number = number;
         }
@@ -3032,12 +4852,22 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         ].filter(Boolean);
         let createOk = false;
         let lastCreateStatus = 0;
+        let lastCreateDetail = "";
+        let qrFromCreate = null;
         for (const createUrl of createUrls) {
-            const createResult = await callEvoAction(createUrl, "POST", createPayload);
+            const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+                timeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+                retries: 3,
+            });
             lastCreateStatus = createResult.status;
+            lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
             if (createResult.ok || createResult.status === 409) {
                 // 409 pode ocorrer quando instância já existe; seguimos para QRCode
                 createOk = true;
+                qrFromCreate =
+                    tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                if (qrFromCreate)
+                    break;
                 break;
             }
         }
@@ -3045,42 +4875,52 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         if (!createOk) {
             createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
         }
-        const connectCandidates = [
-            buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, name),
-            `${EVO_API_BASE}/instance/connect/${encodeURIComponent(name)}`,
-            `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(name)}`,
-            `${EVO_API_BASE}/instance/qr/${encodeURIComponent(name)}`,
-        ].filter(Boolean);
-        const qrcodeUrls = connectCandidates.map((candidate) => number
-            ? `${candidate}${candidate.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
-            : candidate);
-        let qrResult = null;
-        for (const qrcodeUrl of qrcodeUrls) {
-            const result = await callEvoAction(qrcodeUrl, "GET");
-            if (result.ok) {
-                qrResult = result;
-                break;
+        if (qrFromCreate) {
+            const claim = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, auth.email);
+            if (!claim.ok) {
+                return res.status(409).json({ error: claim.error });
             }
-        }
-        if (!qrResult || !qrResult.ok) {
-            return res.status(502).json({
-                error: "Dados salvos, mas falha ao gerar QRCode na EVO.",
+            void ensureAquecedorInstanceRegistered(name);
+            return res.json({
+                ok: true,
+                message: createWarning
+                    ? "QRCode gerado com sucesso para a instância existente."
+                    : "Dados salvos e QRCode gerado com sucesso.",
+                warning: createWarning,
+                qrCode: qrFromCreate,
             });
         }
-        const qrCode = tryExtractQrCode(qrResult.json);
+        const qrFetch = await fetchInstanceQrCodeFromEvo(name, number);
+        if (!qrFetch.ok) {
+            return res.status(502).json({
+                error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
+                evoCreateStatus: lastCreateStatus,
+                evoQrStatus: qrFetch.lastQrStatus,
+                detail: qrFetch.lastQrDetail || lastCreateDetail,
+            });
+        }
+        const claim = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, auth.email);
+        if (!claim.ok) {
+            return res.status(409).json({ error: claim.error });
+        }
+        void ensureAquecedorInstanceRegistered(name);
         return res.json({
             ok: true,
             message: createWarning
                 ? "QRCode gerado com sucesso para a instância existente."
                 : "Dados salvos e QRCode gerado com sucesso.",
             warning: createWarning,
-            qrCode,
-            providerResponse: qrResult.json ?? null,
+            qrCode: qrFetch.qrCode,
+            providerResponse: qrFetch.providerResponse,
         });
     }
     catch (error) {
         console.error("Erro ao registrar instância e gerar QRCode:", error);
-        return res.status(500).json({ error: "Erro ao gerar QRCode da instância." });
+        const detail = error instanceof Error ? error.message : String(error);
+        return res.status(500).json({
+            error: "Erro ao gerar QRCode da instância.",
+            detail,
+        });
     }
 });
 app.delete("/instancias/:name", async (req, res) => {
@@ -3089,20 +4929,39 @@ app.delete("/instancias/:name", async (req, res) => {
         if (!instanceName) {
             return res.status(400).json({ error: "Nome da instância é obrigatório." });
         }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
         const url = buildTemplateUrl(EVO_DELETE_URL_TEMPLATE, instanceName);
         if (!url) {
             return res.status(501).json({
                 error: "Ação deletar não configurada. Defina EVO_DELETE_URL_TEMPLATE no backend.",
             });
         }
-        const result = await callEvoAction(url, "DELETE");
-        if (!result.ok) {
+        const result = await callEvoAction(url, "DELETE", undefined, {
+            timeoutMs: 12000,
+            retries: 1,
+        });
+        const evoDeleted = result.ok;
+        const evoSoftDelete = !evoDeleted && canDeleteInstanceLocallyAfterEvoFailure(result.status, String(result.body || result.error || ""));
+        if (!evoDeleted && !evoSoftDelete) {
             return res.status(502).json({
-                error: "Falha ao deletar instância na EVO.",
+                error: "Falha ao deletar instância na Evolution API.",
                 status: result.status,
+                detail: summarizeEvolutionErrorDetail(String(result.body || result.error || ""), result.status),
             });
         }
-        return res.json({ ok: true, message: "Instância deletada com sucesso." });
+        await waba_instance_ownership_service_1.wabaInstanceOwnershipService.removeOwner(instanceName);
+        await removeInstanceFromEvoCache(instanceName);
+        const message = evoDeleted
+            ? "Instância deletada com sucesso."
+            : result.status === 404
+                ? "Instância removida do painel (não encontrada na Evolution)."
+                : "Instância removida do painel. A Evolution está offline — remova na EVO quando voltar, se ainda existir.";
+        return res.json({
+            ok: true,
+            message,
+            degraded: !evoDeleted,
+        });
     }
     catch (error) {
         console.error("Erro ao deletar instância:", error);
@@ -3119,6 +4978,8 @@ app.post("/instancias/:name/renomear", async (req, res) => {
         if (oldName === newName) {
             return res.status(400).json({ error: "O novo nome deve ser diferente do nome atual." });
         }
+        if (await rejectForeignInstance(req, res, oldName))
+            return;
         // Regra operacional: não permitir colisão com instância ativa/conectada.
         try {
             const checkController = new AbortController();
@@ -3182,6 +5043,7 @@ app.post("/instancias/:name/renomear", async (req, res) => {
             const result = await callEvoAction(candidate.url, candidate.method, candidate.body);
             lastStatus = result.status;
             if (result.ok) {
+                await waba_instance_ownership_service_1.wabaInstanceOwnershipService.renameInstance(oldName, newName);
                 return res.json({ ok: true, message: "Nome da instância alterado com sucesso." });
             }
         }
@@ -3197,39 +5059,17 @@ app.post("/instancias/:name/renomear", async (req, res) => {
 });
 app.get("/aquecedor/config", async (_req, res) => {
     try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-            return res.status(503).json({
-                error: "Supabase não configurado no servidor (verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY).",
-            });
-        }
-        const { data, error } = await (supabase
-            .from("aquecedor_config")
-            .select("use_recommended, custom_config, updated_at")
-            .eq("id", 1)
-            .maybeSingle());
-        if (error) {
-            console.error("Erro ao buscar configuração do aquecedor:", error);
-            return res.status(500).json({ error: "Erro ao buscar configuração do aquecedor." });
-        }
-        const useRecommended = data?.use_recommended !== false;
-        const customConfigRaw = data?.custom_config && typeof data.custom_config === "object"
-            ? data.custom_config
-            : AQUECEDOR_DEFAULTS;
-        let customConfig;
-        try {
-            customConfig = parseAquecedorConfig(customConfigRaw);
-        }
-        catch {
-            customConfig = AQUECEDOR_DEFAULTS;
-        }
+        const { record, storageSource } = await loadAquecedorConfigRecord();
+        const useRecommended = record.useRecommended !== false;
+        const customConfig = record.customConfig;
         const effectiveConfig = useRecommended ? AQUECEDOR_DEFAULTS : customConfig;
         return res.json({
             useRecommended,
             recommendedConfig: AQUECEDOR_DEFAULTS,
             customConfig,
             effectiveConfig,
-            updatedAt: data?.updated_at ?? null,
+            updatedAt: record.updatedAt,
+            storageSource,
         });
     }
     catch (error) {
@@ -3239,35 +5079,20 @@ app.get("/aquecedor/config", async (_req, res) => {
 });
 app.post("/aquecedor/config", async (req, res) => {
     try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-            return res.status(503).json({
-                error: "Supabase não configurado no servidor (verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY).",
-            });
-        }
         const useRecommended = req.body?.useRecommended !== false;
         const customConfig = parseAquecedorConfig(req.body?.customConfig || AQUECEDOR_DEFAULTS);
-        const payload = {
-            id: 1,
-            use_recommended: useRecommended,
-            custom_config: customConfig,
-            updated_at: new Date().toISOString(),
-        };
-        const { error } = await supabase.from("aquecedor_config").upsert(payload, {
-            onConflict: "id",
-        });
-        if (error) {
-            console.error("Erro ao salvar configuração do aquecedor:", error);
-            return res.status(500).json({ error: "Erro ao salvar configuração do aquecedor." });
-        }
+        const storageSource = await saveAquecedorConfigRecord(useRecommended, customConfig);
         const effectiveConfig = useRecommended ? AQUECEDOR_DEFAULTS : customConfig;
         return res.json({
             ok: true,
-            message: "Configuração do aquecedor salva com sucesso.",
+            message: storageSource === "local"
+                ? "Configuração salva localmente (Supabase indisponível)."
+                : "Configuração do aquecedor salva com sucesso.",
             useRecommended,
             recommendedConfig: AQUECEDOR_DEFAULTS,
             customConfig,
             effectiveConfig,
+            storageSource,
         });
     }
     catch (error) {
@@ -3275,24 +5100,27 @@ app.post("/aquecedor/config", async (req, res) => {
         return res.status(400).json({ error: message });
     }
 });
-app.get("/aquecedor/status", (_req, res) => {
-    return res.json({
-        ...aquecedorRuntime,
-    });
+app.get("/aquecedor/status", async (_req, res) => {
+    try {
+        await reloadAquecedorPersistedBundleFromDisk();
+        applyPersistedSnapshotToLocal(aquecedorPersistedBundle.snapshot);
+        return res.json(buildAquecedorStatusPayload());
+    }
+    catch (error) {
+        console.error("[Aquecedor] erro em GET /aquecedor/status:", error);
+        return res.json({
+            ...buildAquecedorStatusPayload(),
+            statusReadError: true,
+            statusReadMessage: "Falha ao ler estado persistido; exibindo último snapshot conhecido.",
+        });
+    }
 });
 app.get("/aquecedor/envios", async (req, res) => {
+    if (rejectAquecedorWithoutEntitlement(req, res))
+        return;
     try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-            return res.status(503).json({
-                error: "Supabase não configurado no servidor (verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY).",
-            });
-        }
-        const cutoffStuck = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        await (supabase.from("aquecedor")
-            .update({ status: "PENDENTE" })
-            .eq("status", "PROCESSANDO")
-            .lt("processing_at", cutoffStuck));
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const ownerEmail = auth.email?.trim().toLowerCase() || "";
         const rawLimit = Number(req.query.limit ?? 50);
         const limit = Number.isFinite(rawLimit)
             ? Math.max(1, Math.min(200, Math.floor(rawLimit)))
@@ -3305,71 +5133,76 @@ app.get("/aquecedor/envios", async (req, res) => {
                 return "—";
             return aliasesMap.get(key) || key;
         };
-        const { data: processandoData } = await (supabase
-            .from("aquecedor")
-            .select("instancia, numero_destino, scheduled_at, processing_at")
-            .eq("status", "PROCESSANDO")
-            .order("processing_at", { ascending: false })
-            .limit(5));
-        if (Array.isArray(processandoData) && processandoData.length > 0) {
-            const { data: instanciasData } = await (supabase
-                .from("controle_instancia")
-                .select("instancia, numero_whatsapp"));
-            const numToInst = new Map();
-            for (const r of instanciasData || []) {
-                const num = String(r?.numero_whatsapp || "").trim();
-                if (num)
-                    numToInst.set(num, String(r?.instancia || "").trim());
-            }
-            for (const row of processandoData) {
-                const origem = String(row?.instancia || "").trim() || "—";
-                const numDest = String(row?.numero_destino || "").trim();
-                const destino = numToInst.get(numDest) || numDest || "—";
-                const dataEnvio = String(row?.scheduled_at || row?.processing_at || "").trim() || null;
-                items.push({
-                    instanciaOrigem: withAlias(origem),
-                    instanciaDestino: withAlias(destino),
-                    dataEnvio,
-                    dataEnvioBr: formatDateBr(dataEnvio),
-                    status: "Em Fila",
-                });
-            }
+        const allowed = await resolveAquecedorEnviosAllowedInstances(ownerEmail);
+        const pushItem = (instanciaOrigem, instanciaDestino, dataEnvio, status) => {
+            if (!aquecedorEnvioMatchesOwner(instanciaOrigem, instanciaDestino, allowed))
+                return;
+            items.push({
+                instanciaOrigem: withAlias(instanciaOrigem),
+                instanciaDestino: withAlias(instanciaDestino),
+                dataEnvio,
+                dataEnvioBr: formatDateBr(dataEnvio),
+                status,
+            });
+        };
+        const supabase = getSupabaseClient();
+        const localRows = await readAquecedorEnviosLog();
+        for (const row of localRows) {
+            if (ownerEmail && row.ownerEmail && row.ownerEmail !== ownerEmail)
+                continue;
+            // Com Supabase, envios concluídos vêm só de logs_envios (evita linha duplicada no painel).
+            if (supabase && row.status === "Envio com Sucesso")
+                continue;
+            pushItem(row.instanciaOrigem, row.instanciaDestino, row.dataEnvio, row.status);
         }
-        const { data: pendingData, error: pendingErr } = await (supabase
-            .from("aquecedor")
-            .select("scheduled_at")
-            .eq("status", "PENDENTE")
-            .order("id", { ascending: false })
-            .limit(1)
-            .maybeSingle());
-        if (pendingData) {
-            let origem = "—";
-            let destino = "—";
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                const response = await fetch(EVO_INSTANCES_URL, {
-                    headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
-                    signal: controller.signal,
-                });
-                clearTimeout(timeoutId);
-                if (response.ok) {
-                    const instances = (await response.json().catch(() => [])) || [];
-                    const connectedAll = buildConnectedFromEvoResponse(instances);
-                    const usageMap = await loadInstanceUsageMap();
-                    const connected = connectedAll.filter((item) => {
-                        const usage = usageMap.get(item.instancia);
-                        return usage ? usage.useAquecedor !== false : true;
-                    });
+        let pendingCount = 0;
+        if (supabase) {
+            const numToInst = await buildControleInstanciaNumToNameMap(supabase);
+            const { data: processandoData } = await (supabase
+                .from("aquecedor")
+                .select("instancia, numero_destino, scheduled_at, processing_at")
+                .eq("status", "PROCESSANDO")
+                .order("processing_at", { ascending: false })
+                .limit(5));
+            if (Array.isArray(processandoData) && processandoData.length > 0) {
+                for (const row of processandoData) {
+                    const origem = String(row?.instancia || "").trim() || "—";
+                    const numDest = normalizeWhatsAppNumber(String(row?.numero_destino || "").trim());
+                    const destino = numToInst.get(numDest) || String(row?.numero_destino || "").trim() || "—";
+                    const dataEnvio = String(row?.scheduled_at || row?.processing_at || "").trim() || null;
+                    pushItem(origem, destino, dataEnvio, "Em Fila");
+                }
+            }
+            const { count: pendingTotal } = (await (supabase
+                .from("aquecedor")
+                .select("id", { count: "exact", head: true })
+                .eq("status", "PENDENTE")));
+            pendingCount = typeof pendingTotal === "number" ? pendingTotal : 0;
+            const { data: pendingData } = await (supabase
+                .from("aquecedor")
+                .select("scheduled_at, instancia, numero_destino")
+                .eq("status", "PENDENTE")
+                .order("scheduled_at", { ascending: true })
+                .limit(1)
+                .maybeSingle());
+            if (pendingData) {
+                let origem = String(pendingData?.instancia || "").trim();
+                let destino = "—";
+                const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
+                const numDest = normalizeWhatsAppNumber(String(pendingData?.numero_destino || "").trim());
+                if (numDest) {
+                    destino = numToInst.get(numDest) || "—";
+                }
+                if (!origem || destino === "—") {
+                    const connected = await buildAquecedorConnectedFromControleInstancia(supabase, ownerEmail);
                     if (connected.length >= 2) {
-                        const combinations = [];
-                        for (const o of connected) {
-                            for (const d of connected) {
-                                if (o.instancia === d.instancia)
-                                    continue;
-                                combinations.push({ origem: o.instancia, destino: d.instancia });
-                            }
-                        }
+                        const combinations = connected.flatMap((origemItem) => connected
+                            .filter((destinoItem) => destinoItem.instancia !== origemItem.instancia)
+                            .map((destinoItem) => ({
+                            instancia_origem: origemItem.instancia,
+                            instancia_destino: destinoItem.instancia,
+                            numero_whatsapp: destinoItem.numero,
+                        })));
                         const { data: cicloData } = await (supabase
                             .from("controle_ciclo")
                             .select("ciclo_global")
@@ -3379,87 +5212,142 @@ app.get("/aquecedor/envios", async (req, res) => {
                         const cicloGlobal = typeof cicloData?.ciclo_global === "number"
                             ? Math.floor(cicloData.ciclo_global)
                             : 0;
-                        const chosen = combinations[cicloGlobal % combinations.length];
-                        if (chosen) {
-                            origem = chosen.origem;
-                            destino = chosen.destino;
+                        const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal);
+                        if (picked) {
+                            origem = picked.chosen.instancia_origem;
+                            destino = picked.chosen.instancia_destino;
                         }
                     }
                 }
+                pushItem(origem || "—", destino, dataEnvio, "Em Fila");
             }
-            catch (_) {
-                // usar — quando não for possível obter origem/destino
-            }
-            const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
-            items.unshift({
-                instanciaOrigem: withAlias(origem),
-                instanciaDestino: withAlias(destino),
-                dataEnvio,
-                dataEnvioBr: formatDateBr(dataEnvio),
-                status: "Em Fila",
-            });
-        }
-        const { data: logsData, error } = await (supabase
-            .from("logs_envios")
-            .select("instancia_origem, instancia_destino, data_envio")
-            .order("data_envio", { ascending: false })
-            .limit(limit));
-        if (!error && Array.isArray(logsData)) {
-            for (const row of logsData) {
-                const dataEnvio = String(row?.data_envio || "").trim() || null;
-                items.push({
-                    instanciaOrigem: withAlias(String(row?.instancia_origem || "").trim() || "—"),
-                    instanciaDestino: withAlias(String(row?.instancia_destino || "").trim() || "—"),
-                    dataEnvio,
-                    dataEnvioBr: formatDateBr(dataEnvio),
-                    status: "Envio com Sucesso",
-                });
+            const { data: logsData, error } = await (supabase
+                .from("logs_envios")
+                .select("instancia_origem, instancia_destino, data_envio")
+                .order("data_envio", { ascending: false })
+                .limit(limit));
+            if (!error && Array.isArray(logsData)) {
+                for (const row of logsData) {
+                    const dataEnvio = String(row?.data_envio || "").trim() || null;
+                    pushItem(String(row?.instancia_origem || "").trim() || "—", String(row?.instancia_destino || "").trim() || "—", dataEnvio, "Envio com Sucesso");
+                }
             }
         }
-        items.sort((a, b) => {
+        const dedup = new Map();
+        for (const item of items) {
+            const key = buildAquecedorEnvioDedupKey(item);
+            if (!dedup.has(key))
+                dedup.set(key, item);
+        }
+        const merged = Array.from(dedup.values());
+        merged.sort((a, b) => {
             const tsA = a.dataEnvio ? new Date(a.dataEnvio).getTime() : 0;
             const tsB = b.dataEnvio ? new Date(b.dataEnvio).getTime() : 0;
             return tsB - tsA;
         });
-        return res.json({ items });
+        const sliced = merged.slice(0, limit);
+        let hint = "";
+        if (!sliced.length && aquecedorRuntime.running) {
+            hint =
+                pendingCount > 0
+                    ? "Motor ativo com mensagens na fila. O próximo envio aparecerá aqui."
+                    : "Motor ativo, mas sem mensagens na fila. Aguarde o próximo ciclo ou reinicie o aquecedor.";
+        }
+        return res.json({
+            items: sliced,
+            motorRunning: aquecedorRuntime.running,
+            pendingCount,
+            ownerEmail: ownerEmail || null,
+            hint,
+        });
     }
     catch (error) {
         console.error("Erro inesperado ao listar envios do aquecedor:", error);
         return res.status(500).json({ error: "Erro ao listar envios do aquecedor." });
     }
 });
-app.post("/aquecedor/start", (_req, res) => {
-    if (!ENABLE_BACKGROUND_PROCESSING) {
+app.post("/aquecedor/start", async (req, res) => {
+    if (rejectAquecedorWithoutEntitlement(req, res))
+        return;
+    if (!ENABLE_AQUECEDOR_PROCESSING) {
         return res.status(409).json({
             ok: false,
-            message: "Aquecedor desativado neste processo. Use o runtime de produção para processar envios.",
+            message: "Aquecedor desativado neste processo. Defina ENABLE_AQUECEDOR_PROCESSING=true ou use o runtime de produção.",
             status: aquecedorRuntime,
-            runtime: { mode: RUNTIME_MODE, backgroundProcessing: ENABLE_BACKGROUND_PROCESSING },
+            runtime: {
+                mode: RUNTIME_MODE,
+                backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+                aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+            },
         });
     }
-    startAquecedorRuntime();
-    void persistAquecedorRuntimeDesired(true);
-    return res.json({ ok: true, message: "Aquecedor iniciado.", status: aquecedorRuntime });
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    aquecedorRuntimeOwnerEmail = auth.email?.trim().toLowerCase() || null;
+    if (!aquecedorRuntimeOwnerEmail) {
+        return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
+    }
+    startAquecedorRuntimeLocal();
+    void ensureAquecedorPendingMessage();
+    await persistAquecedorRuntimeIntent(true, aquecedorRuntimeOwnerEmail);
+    await reloadAquecedorPersistedBundleFromDisk();
+    return res.json({
+        ok: true,
+        message: "Aquecedor iniciado.",
+        status: {
+            ...aquecedorPersistedBundle.snapshot,
+            running: true,
+            desiredRunning: true,
+        },
+        desiredRunning: true,
+    });
 });
-app.post("/aquecedor/stop", (_req, res) => {
+app.post("/aquecedor/stop", async (_req, res) => {
     stopAquecedorRuntime();
-    void persistAquecedorRuntimeDesired(false);
-    return res.json({ ok: true, message: "Aquecedor parado.", status: aquecedorRuntime });
+    aquecedorRuntime.lastResult = "Aquecedor parado.";
+    await persistAquecedorRuntimeIntent(false, null);
+    await reloadAquecedorPersistedBundleFromDisk();
+    return res.json({
+        ok: true,
+        message: "Aquecedor parado.",
+        status: {
+            ...aquecedorPersistedBundle.snapshot,
+            running: false,
+            desiredRunning: false,
+            isProcessing: false,
+            lastResult: "Aquecedor parado.",
+        },
+        desiredRunning: false,
+    });
 });
-app.post("/aquecedor/run-once", async (_req, res) => {
+app.post("/aquecedor/run-once", async (req, res) => {
+    if (rejectAquecedorWithoutEntitlement(req, res))
+        return;
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    aquecedorRuntimeOwnerEmail = auth.email?.trim().toLowerCase() || null;
+    if (!aquecedorRuntimeOwnerEmail) {
+        return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
+    }
     await runAquecedorCycle(true); // bypass janela e cooldown para teste
     stopAquecedorRuntime(); // execução única: para o motor ao finalizar
+    void persistAquecedorRuntimeIntent(false, null);
     return res.json({ ok: true, message: "Ciclo executado.", status: aquecedorRuntime });
 });
-app.post("/aquecedor/criar-mensagem-teste", async (_req, res) => {
+app.post("/aquecedor/criar-mensagem-teste", async (req, res) => {
+    if (rejectAquecedorWithoutEntitlement(req, res))
+        return;
     try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        aquecedorRuntimeOwnerEmail = auth.email?.trim().toLowerCase() || null;
+        if (!aquecedorRuntimeOwnerEmail) {
+            return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
+        }
         const supabase = getSupabaseClient();
         if (!supabase) {
             return res.status(503).json({
                 error: "Supabase não configurado no servidor.",
             });
         }
-        const mensagem = String(_req.body?.mensagem ?? "").trim() || "Mensagem de teste do aquecedor.";
+        const mensagem = String(req.body?.mensagem ?? "").trim() || "Mensagem de teste do aquecedor.";
         const scheduledAt = new Date().toISOString();
         const { data, error } = await supabase.from("aquecedor")
             .insert({
@@ -3483,6 +5371,7 @@ app.post("/aquecedor/criar-mensagem-teste", async (_req, res) => {
         };
         await runAquecedorCycle(true); // executa um ciclo para processar a mensagem criada
         stopAquecedorRuntime(); // execução única: para o motor ao finalizar
+        void persistAquecedorRuntimeIntent(false, null);
         return res.json({
             ok: true,
             message: "Mensagem de teste criada e ciclo executado.",
@@ -3536,11 +5425,18 @@ app.get("/aquecedor/fila-localizar", async (_req, res) => {
         return res.status(500).json({ error: "Erro ao localizar fila." });
     }
 });
-app.get("/aquecedor/diagnostico", async (_req, res) => {
+app.get("/aquecedor/diagnostico", async (req, res) => {
+    await reloadAquecedorPersistedBundleFromDisk();
+    const persistedStatus = buildAquecedorStatusPayload();
     const diag = {
-        runtime: { ...aquecedorRuntime },
+        runtime: {
+            ...aquecedorRuntime,
+            ...persistedStatus,
+            localRunning: aquecedorRuntime.running,
+            persistedRunning: persistedStatus.running,
+        },
         evo: { ok: false, connectedCount: 0, instances: [] },
-        supabase: { ok: false, pendingCount: 0 },
+        supabase: { ok: false, pendingCount: 0, messageBankCount: 0 },
         janela: { aberta: false, motivo: "" },
         proximaCombinacao: null,
         cicloGlobal: null,
@@ -3548,7 +5444,7 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
     let timeoutId = null;
     try {
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 8000);
+        timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(EVO_INSTANCES_URL, {
             headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
             signal: controller.signal,
@@ -3558,10 +5454,10 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
         timeoutId = null;
         if (response.ok) {
             const instances = (await response.json().catch(() => [])) || [];
-            const connectedAll = buildConnectedFromEvoResponse(instances);
+            const connectedAll = await filterConnectedInstanciasForRequest(req, buildConnectedFromEvoResponse(instances));
             const usageMap = await loadInstanceUsageMap();
             const connected = connectedAll.filter((item) => {
-                const usage = usageMap.get(item.instancia);
+                const usage = getInstanceUsageFromMap(usageMap, item.instancia);
                 return usage ? usage.useAquecedor !== false : true;
             });
             diag.evo.ok = true;
@@ -3576,6 +5472,7 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
                         combinations.push({
                             origem: origem.instancia,
                             destino: destino.instancia,
+                            numero_whatsapp: destino.numero,
                         });
                     }
                 }
@@ -3589,6 +5486,8 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
                             .lte("scheduled_at", new Date().toISOString()));
                         diag.supabase.ok = true;
                         diag.supabase.pendingCount = typeof count === "number" ? count : 0;
+                        const messageBank = await loadAquecedorMessageBank(supabase);
+                        diag.supabase.messageBankCount = messageBank.length;
                         const { data: cicloData } = await (supabase
                             .from("controle_ciclo")
                             .select("ciclo_global")
@@ -3600,8 +5499,22 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
                             : 0;
                         diag.cicloGlobal = cicloGlobal;
                         if (combinations.length) {
-                            const chosen = combinations[cicloGlobal % combinations.length];
-                            diag.proximaCombinacao = chosen;
+                            const comboRows = combinations.map((combo) => ({
+                                instancia_origem: combo.origem,
+                                instancia_destino: combo.destino,
+                                numero_whatsapp: combo.numero_whatsapp,
+                            }));
+                            const picked = await withAquecedorTimeout(pickAquecedorCombinationAsync(supabase, connected, comboRows, cicloGlobal), 4000, null);
+                            if (picked) {
+                                diag.proximaCombinacao = {
+                                    origem: picked.chosen.instancia_origem,
+                                    destino: picked.chosen.instancia_destino,
+                                };
+                            }
+                            else {
+                                diag.proximaCombinacao = null;
+                                diag.turnoBloqueado = true;
+                            }
                         }
                     }
                     catch (supErr) {
@@ -3613,7 +5526,7 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
                 }
             }
             try {
-                const config = await loadAquecedorConfigFromDb();
+                const config = await loadAquecedorEffectiveConfig();
                 const nowSp = nowInSaoPaulo();
                 diag.janela.aberta = isAquecedorWindowOpen(config, nowSp);
                 diag.janela.motivo = diag.janela.aberta
@@ -3650,6 +5563,21 @@ app.get("/aquecedor/diagnostico", async (_req, res) => {
             if (!diag.supabase.mensagem)
                 diag.supabase.mensagem = "Erro ao consultar fila.";
         }
+    }
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const motorOwner = aquecedorRuntimeOwnerEmail || auth.email?.trim().toLowerCase() || null;
+        const instAnalysis = await analyzeAquecedorInstances(motorOwner);
+        diag.instancias = instAnalysis;
+        if (instAnalysis.eligible.length) {
+            diag.evo.instances = instAnalysis.eligible.map((row) => row.instancia);
+            diag.evo.connectedCount = instAnalysis.eligible.length;
+        }
+    }
+    catch (instErr) {
+        diag.instancias = {
+            erro: instErr?.message || "Erro ao analisar instâncias do aquecedor.",
+        };
     }
     return res.status(200).json(diag);
 });
@@ -4209,16 +6137,19 @@ app.post("/meta-oficial/disparo/send-template", async (req, res) => {
         return res.status(500).json({ error: error?.message || "Erro ao disparar template." });
     }
 });
-app.get("/disparos/config", async (_req, res) => {
+app.get("/disparos/config", async (req, res) => {
     try {
         const config = await loadDisparosConfigFromDb();
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const selectedDisparadorInstances = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth(auth, Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []);
         const autoProviders = getAutoShortenerProviderOrder();
         const currentShortenerProvider = autoProviders[0];
         return res.json({
-            config,
+            config: { ...config, selectedDisparadorInstances },
             shortenerAuto: true,
             currentShortenerProvider,
             shortenerProviders: [
+                { id: "waba", label: "WABA (encurtador próprio)", auth: "interno" },
                 { id: "encurtadorpro", label: "EncurtadorPro", auth: "requer API key (Bearer)" },
             ],
         });
@@ -4238,7 +6169,12 @@ app.post("/disparos/config", async (req, res) => {
             if (validationError)
                 return res.status(400).json({ error: validationError });
         }
-        const config = parseDisparosConfig(mergedConfig);
+        let config = parseDisparosConfig(mergedConfig);
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        config = {
+            ...config,
+            selectedDisparadorInstances: await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth(auth, config.selectedDisparadorInstances),
+        };
         await saveDisparosConfigToDb(config);
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
     }
@@ -4291,7 +6227,7 @@ app.post("/disparos/messenger-products", async (req, res) => {
             .json({ error: "Erro ao gravar produto na biblioteca." });
     }
 });
-app.get("/disparos/diagnostico", async (_req, res) => {
+app.get("/disparos/diagnostico", async (req, res) => {
     try {
         const nowSp = nowInSaoPaulo();
         const fullConfig = await loadDisparosConfigFromDb();
@@ -4358,7 +6294,7 @@ app.get("/disparos/diagnostico", async (_req, res) => {
                         : Array.isArray(raw?.data)
                             ? raw.data
                             : [];
-                const connected = buildConnectedFromEvoResponse(list);
+                const connected = await filterConnectedInstanciasForRequest(req, buildConnectedFromEvoResponse(list));
                 const usageMap = await loadInstanceUsageMap();
                 const selectedSet = new Set(Array.isArray(fullConfig.selectedDisparadorInstances)
                     ? fullConfig.selectedDisparadorInstances
@@ -4467,7 +6403,7 @@ app.post("/disparos/shorten", async (req, res) => {
         }
         if (!shortUrl) {
             return res.status(502).json({
-                error: "Não foi possível gerar link curto no EncurtadorPro.",
+                error: "Não foi possível gerar link curto.",
             });
         }
         return res.json({
@@ -4623,7 +6559,7 @@ app.get("/disparos/next-instance", async (req, res) => {
                 : Array.isArray(raw?.data)
                     ? raw.data
                     : [];
-        const connected = buildConnectedFromEvoResponse(list);
+        const connected = await filterConnectedInstanciasForRequest(req, buildConnectedFromEvoResponse(list));
         const usageMap = await loadInstanceUsageMap();
         const fromQuery = parseInstancesQueryParam();
         const disparosConfig = await loadDisparosConfigFromDb();
@@ -5148,6 +7084,10 @@ async function processOneCampaignDispatch(campaignId) {
     lead.sentAt = sentIso;
     lead.shortUrl = outbound.shortUrl || undefined;
     campaign.sentCount += 1;
+    const ownerEmail = String(campaign.ownerEmail || "").trim();
+    if (ownerEmail) {
+        disparosCreditsService.recordShipmentConsumed(ownerEmail, 1);
+    }
     await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
         shortUrl: lead.shortUrl || null,
         messageText: lead.messageText || null,
@@ -5223,7 +7163,7 @@ async function stopAllDispatchActivityOnServer() {
         }
     }
     queuePersistDisparosLocalState();
-    void persistAquecedorRuntimeDesired(false);
+    void persistAquecedorRuntimeIntent(false, null);
     return { pausedCampaignIds: Array.from(pausedSet) };
 }
 function countCampaignLeadsProcessed(campaignId, sentFallback, totalNumbers) {
@@ -5309,6 +7249,32 @@ app.post("/disparos/campanhas", (req, res, next) => {
         if (!numbers.length) {
             return res.status(400).json({ error: "Nenhum número válido foi encontrado na planilha." });
         }
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const ownerEmail = String(auth.email || "").trim().toLowerCase() || undefined;
+        let importedLineCount = numbers.length;
+        if (ct.includes("multipart/form-data") && req.file) {
+            importedLineCount = (0, waba_campaign_spreadsheet_util_1.countSpreadsheetImportedRows)(req.file.buffer);
+        }
+        if (importedLineCount < 1) {
+            importedLineCount = numbers.length;
+        }
+        let plannedSendCount = importedLineCount;
+        if (ownerEmail && !disparosCreditsService.isMasterUnlimited(ownerEmail)) {
+            const remaining = disparosCreditsService.getCreditsSummary(ownerEmail).remainingShipments;
+            if (remaining <= 0) {
+                return res.status(400).json({
+                    error: "Você não possui envios contratados disponíveis. Contrate um pacote antes de criar a campanha.",
+                });
+            }
+            plannedSendCount = Math.min(importedLineCount, remaining);
+            numbers = numbers.slice(0, plannedSendCount);
+            if (!numbers.length) {
+                return res.status(400).json({
+                    error: "Não há números válidos suficientes na planilha para os envios disponíveis.",
+                });
+            }
+            disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length);
+        }
         const campaignInstances = Array.isArray(configSnapshot.selectedDisparadorInstances)
             ? configSnapshot.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
@@ -5326,6 +7292,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
             status: "paused",
             totalNumbers: numbers.length,
             sentCount: 0,
+            ownerEmail,
             configSnapshot,
         };
         const leads = numbers.map((phone) => ({
@@ -5369,10 +7336,16 @@ app.post("/disparos/campanhas", (req, res, next) => {
         const msgExtra = duplicatesRemoved > 0
             ? ` Foram ignoradas ${duplicatesRemoved} linha(s) com número duplicado (cada destino recebe no máximo uma mensagem).`
             : "";
+        const importSummary = plannedSendCount < importedLineCount
+            ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${numbers.length} envios (limite do seu pacote contratado).`
+            : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${numbers.length} envios.`;
         return res.json({
             ok: true,
             message: "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos." + msgExtra,
             duplicatesRemoved,
+            importedLineCount,
+            plannedSendCount: numbers.length,
+            importSummary,
             durability: {
                 /** Sempre que `queuePersistDisparosLocalState` rodou após criar. */
                 localStateFile: true,
@@ -5394,7 +7367,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
         return res.status(500).json({ error: error?.message || "Erro ao criar campanha." });
     }
 });
-app.get("/disparos/campanhas", async (_req, res) => {
+app.get("/disparos/campanhas", async (req, res) => {
     try {
         const buildCampaignRuntimeStage = (item, configSnapshot, nowSp) => {
             const st = String(item.status || "").toLowerCase();
@@ -5535,11 +7508,12 @@ app.get("/disparos/campanhas", async (_req, res) => {
             });
             configByCampaignId.set(c.id, c.configSnapshot);
         }
-        const evoRows = await fetchEvoInstanceTagRows();
+        const evoRows = await fetchEvoInstanceTagRowsForRequest(req);
         const globalDisparos = await loadDisparosConfigFromDb();
-        const globalSelected = Array.isArray(globalDisparos.selectedDisparadorInstances)
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const globalSelected = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth(auth, Array.isArray(globalDisparos.selectedDisparadorInstances)
             ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
-            : [];
+            : []);
         const nowSp = nowInSaoPaulo();
         const items = Array.from(byId.values())
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -5676,7 +7650,7 @@ app.get("/disparos/campanhas/:id/relatorio", async (req, res) => {
         const uniqueShortUrls = Array.from(new Set(sentLeadsWithShortUrl.map((l) => String(l.shortUrl)))).slice(0, 25);
         const cliqueChecksDisponiveis = uniqueShortUrls.length;
         for (const shortUrl of uniqueShortUrls) {
-            const clicks = await fetchClicksForShortUrlFromEncurtadorPro(String(shortUrl));
+            const clicks = await fetchClicksForShortUrl(String(shortUrl));
             totalCliques += clicks;
         }
         const cliqueChecksExecutados = uniqueShortUrls.length;
@@ -5973,11 +7947,9 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
         }
         const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-        const incoming = raw
-            .map((n) => String(n || "").trim())
-            .filter(Boolean);
+        const incoming = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterStringListForAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), raw.map((n) => String(n || "").trim()).filter(Boolean));
         if (!incoming.length) {
-            return res.status(400).json({ error: "Informe ao menos uma instância para adicionar." });
+            return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
         }
         let campaign = disparosCampaignsMemory.find((c) => c.id === id);
         if (!campaign) {
@@ -6009,7 +7981,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         queuePersistDisparosLocalState();
         let evoRows = [];
         try {
-            evoRows = await fetchEvoInstanceTagRows();
+            evoRows = await fetchEvoInstanceTagRowsForRequest(req);
         }
         catch {
             evoRows = [];
@@ -6168,6 +8140,11 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
     }
 });
 (0, waba_billing_routes_1.registerWabaBillingRoutes)(app);
+(0, waba_campaign_intake_routes_1.registerWabaCampaignIntakeRoutes)(app);
+(0, waba_support_routes_1.registerWabaSupportRoutes)(app);
+(0, waba_admin_routes_1.registerWabaAdminRoutes)(app);
+(0, waba_operacional_campanhas_routes_1.registerWabaOperacionalCampanhasRoutes)(app);
+new waba_system_user_service_1.WabaSystemUserService().ensureBootstrapFromEnvMaster();
 app.listen(PORT, () => {
     const publicRoot = base_path_1.BASE_PATH
         ? `http://localhost:${PORT}${base_path_1.BASE_PATH}/`
@@ -6179,7 +8156,11 @@ app.listen(PORT, () => {
     draxLogoBytes = undefined;
     const logoProbe = resolveDraxLogoPng();
     console.log(`[brand] logo PNG: ${logoProbe ? `${logoProbe.length} bytes (ok)` : "FALHOU — embed vazio ou ficheiros em falta"} | use GET /logo.png ou /media/Drax-logo-footer.png`);
-    console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING}`);
+    console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING} aquecedorProcessing=${ENABLE_AQUECEDOR_PROCESSING}`);
+    console.log(`[evo] base=${(0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE)} tlsInsecure=${(0, evo_http_client_1.isEvoTlsInsecure)()} timeoutMs=${(0, evo_http_client_1.defaultEvoHttpTimeoutMs)()}`);
+    if (/walkup[-_]evo|evo-walkup-api:8080/i.test(EVO_API_BASE)) {
+        console.warn("[evo] EVO_API_URL parece hostname interno Docker/Swarm. Se QRCode falhar em producao, use https://walkup-evo-walkup-api.achpyp.easypanel.host ou http://172.17.0.1:30181");
+    }
     console.log(`[campanhas] upload planilha até ${Math.round(CAMPAIGN_UPLOAD_MAX_BYTES / 1024 / 1024)}MB (multipart) | JSON legado=${CAMPAIGN_CREATE_JSON_LIMIT}`);
     if (MAINTENANCE_MODE) {
         console.log(`[maintenance] ativo — tráfego de API bloqueado; probes em /health, /ready, /service/maintenance (porta ${PORT})`);
@@ -6196,20 +8177,34 @@ app.listen(PORT, () => {
             queuePersistDisparosLocalState();
         }, DISPAROS_CHECKPOINT_MS);
         console.log(`[durabilidade] checkpoint campanhas a cada ${Math.round(DISPAROS_CHECKPOINT_MS / 1000)}s → data/disparos-local-state.json`);
-        const desiredHeater = await loadAquecedorRuntimeDesired();
-        if (desiredHeater === true &&
-            ENABLE_BACKGROUND_PROCESSING &&
+        const desiredHeater = await loadAquecedorRuntimeIntent();
+        if (desiredHeater.desired === true &&
+            ENABLE_AQUECEDOR_PROCESSING &&
             !MAINTENANCE_MODE) {
-            startAquecedorRuntime();
-            console.log("[Aquecedor] retomado após restart (data/runtime-intent.json — último «Iniciar» explícito).");
+            aquecedorRuntimeOwnerEmail = desiredHeater.ownerEmail;
+            if (!aquecedorRuntimeOwnerEmail) {
+                console.warn("[Aquecedor] runtime-intent pede motor ligado, mas sem aquecedorOwnerEmail — aguardando POST /aquecedor/start.");
+            }
+            else {
+                await syncAquecedorWorkerLeadership();
+                console.log("[Aquecedor] retomado após restart (data/runtime-intent.json — último «Iniciar» explícito).");
+            }
         }
+        setInterval(() => {
+            syncAquecedorWorkerLeadership().catch((err) => console.error("[Aquecedor] sync worker:", err));
+        }, AQUECEDOR_WORKER_SYNC_MS);
         if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
+            if (load_env_1.WABA_ENV === "v01") {
+                console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");
+            }
             setInterval(() => {
                 runCampaignDispatchTick().catch((err) => console.error("[Campanhas] tick:", err));
             }, 7000);
         }
         else if (!ENABLE_BACKGROUND_PROCESSING) {
-            console.log("[campanhas] processamento automático desativado neste processo (dev isolado).");
+            console.log(load_env_1.WABA_ENV === "v01"
+                ? "[campanhas] Disparador EVO desativado neste processo (WABA_EVO_DISPARADOR=false)."
+                : "[campanhas] processamento automático desativado neste processo (dev isolado).");
         }
     })();
 });

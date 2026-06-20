@@ -20,11 +20,11 @@ Traefik no VPS: ver **[TRAEFIK-WABA-VERSION-PATHS.md](TRAEFIK-WABA-VERSION-PATHS
 
 ## Visão geral
 
-| Ambiente | Papel | Branch Git | `WABA_BASE_PATH` | Dados |
-|----------|-------|------------|------------------|-------|
-| **Produção** | Clientes reais | `master` | (vazio) | volume `/app/data` |
-| **V01** | Baseline (= prod hoje) | `v01` | `/version-01` | `data/v01/` |
-| **V02** | Dev diário | `v02` | `/version-02` | `data/v02/` |
+| Ambiente | Papel | Branch Git | `WABA_BASE_PATH` | UI (`WABA_UI_PROFILE`) | Dados |
+|----------|-------|------------|------------------|------------------------|-------|
+| **Produção** | Clientes reais | `master` | (vazio) | `production` (padrão) | volume `/app/data` |
+| **V01** | Baseline técnico | `v01` | `/version-01` | `full` (menu completo) | `data/v01/` |
+| **V02** | Dev diário (= UI prod) | `v02` | `/version-02` | `production` (igual prod) | `data/v02/` |
 
 **Regra:** V01 e V02 **nunca** usam Evolution/Supabase de produção no PC local.
 
@@ -71,7 +71,7 @@ Fluxo: `v02` → `v01` → `master` → deploy produção.
 |---------|--------|------------|-----------------|
 | `waba_disparador` | `master` | 30180 | sem `WABA_BASE_PATH` |
 | `waba_disparador_v01` | `v01` | 30190 | `WABA_BASE_PATH=/version-01` `WABA_ENV=v01` |
-| `waba_disparador_v02` | `v02` | 30200 | `WABA_BASE_PATH=/version-02` `WABA_ENV=v02` |
+| `waba_disparador_v02` | `v02` | 30200 | `WABA_BASE_PATH=/version-02` `WABA_ENV=v02` `WABA_UI_PROFILE=production` |
 
 Detalhes Traefik e `docker service update`: **TRAEFIK-WABA-VERSION-PATHS.md**.
 

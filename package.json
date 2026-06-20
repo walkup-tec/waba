@@ -17,7 +17,9 @@
     "free:3000": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/free-port-3000.ps1",
     "start:win": "npm run free:3000 && node dist/index.js",
     "start:prod": "set PORT=3000&& set RUNTIME_MODE=production&& set ENABLE_BACKGROUND_PROCESSING=true&& node dist/index.js",
-    "start:prod:maintenance": "set PORT=3000&& set RUNTIME_MODE=production&& set ENABLE_BACKGROUND_PROCESSING=false&& set MAINTENANCE_MODE=true&& node dist/index.js"
+    "start:prod:maintenance": "set PORT=3000&& set RUNTIME_MODE=production&& set ENABLE_BACKGROUND_PROCESSING=false&& set MAINTENANCE_MODE=true&& node dist/index.js",
+    "import:aquecedor-messages": "node scripts/import-aquecedor-messages-from-csv.cjs",
+    "generate:aquecedor-import-sql": "node scripts/generate-aquecedor-import-sql.cjs"
   },
   "keywords": [
     "n8n",
@@ -30,6 +32,7 @@
     "@types/express": "^4.17.21",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.0.0",
+    "@types/nodemailer": "^8.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"
   },
@@ -38,6 +41,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "multer": "^2.1.1",
+    "nodemailer": "^9.0.1",
     "xlsx": "^0.18.5"
   }
 }

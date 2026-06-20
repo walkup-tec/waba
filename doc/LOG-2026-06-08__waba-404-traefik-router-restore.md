@@ -37,14 +37,14 @@ cp -a "$BAK" "$CFG"
 
 Script v2 no repo: restore = `cp` backup inteiro + patch backend + `traefik-permanent-waba run`.
 
-## Validação esperada
+## Validação — OK (usuário confirmou "sistema voltou")
+
+Restore completo do backup + `traefik-permanent-waba-vps.sh run` → produção **200**.
 
 ```bash
-grep -n 'waba.draxsistemas' /etc/easypanel/traefik/config/main.yaml | head -5
 curl -sS -o /dev/null -w "https:%{http_code}\n" https://waba.draxsistemas.com.br/health
+# https:200
 ```
-
-→ grep com linhas; https:200
 
 ## Fallback
 

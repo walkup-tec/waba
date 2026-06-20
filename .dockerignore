@@ -3,7 +3,6 @@ npm-debug.log
 .git
 .env
 .env.*
-dist
 ftp-bundle
 data
 coverage
@@ -13,3 +12,15 @@ shortener-waba
 shortener-waba.zip
 .cursor
 *.zip
+doc
+agent-tools
+media/*.csv
+media/sql-import
+scripts/*.ps1
+scripts/dev-*
+scripts/simulate-*
+src
+tsconfig.json
+index.html
+scripts/copy-index-html.mjs
+scripts/generate-brand-logo-module.mjs

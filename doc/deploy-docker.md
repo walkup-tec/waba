@@ -2,7 +2,8 @@
 
 ## Imagem
 
-- `Dockerfile` na raiz: build multi-stage (`npm run build` + `npm ci --omit=dev`).
+- `Dockerfile` na raiz: **runtime only** — copia `dist/` do Git + `npm ci --omit=dev` (sem `tsc` no VPS).
+- **Antes de cada push para produção:** `npm run build` e commit de `dist/` + `src/deploy-marker.ts`.
 - Base: `node:20.18-alpine`, usuário não-root `nodejs` (uid 1001).
 - **Porta:** `PORT` (padrão `3000`). Publicar com `-p 3000:3000` ou proxy reverso.
 - **Dados:** monte volume em **`/app/data`** (campanhas, estado local). Sem volume, dados somem ao recriar o container.
@@ -25,7 +26,8 @@ docker run -d --name waba -p 3000:3000 --env-file .env -v waba-data:/app/data wa
 - **Dockerfile path:** `Dockerfile`.
 - **Comando:** padrão da imagem (`node dist/index.js`).
 - **Volume:** host ou nomeado → ponto de montagem **`/app/data`**.
-- **502 Bad Gateway após redeploy:** script **deste repo** (não usar o do Typebot) — ver **[FIX-TRAEFIK-WABA.md](FIX-TRAEFIK-WABA.md)** → `scripts/traefik-permanent-waba-vps.sh`.
+- **502 Bad Gateway após redeploy:** script definitivo **WABA + Evolution** — ver **[FIX-TRAEFIK-DEFINITIVO.md](FIX-TRAEFIK-DEFINITIVO.md)** → `scripts/traefik-permanent-all-vps.sh`.
+- WABA isolado: [FIX-TRAEFIK-WABA.md](FIX-TRAEFIK-WABA.md) → `scripts/traefik-permanent-waba-vps.sh`.
 
 ## FTP vs Docker
 

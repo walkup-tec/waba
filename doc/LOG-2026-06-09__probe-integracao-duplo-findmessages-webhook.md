@@ -28,11 +28,20 @@
 
 - `WABA_PUBLIC_BASE_URL` — URL pública para webhook Evolution (ex. `https://waba.draxsistemas.com.br`).
 
-## Próximo passo deploy
+## Deploy marker
 
-1. Easypanel `waba_disparador`: definir `WABA_PUBLIC_BASE_URL`
-2. Redeploy + testar integração de instância com referência já conectada
+- `WABA_DEPLOY_MARKER` = `DEPLOY-2026-06-09-probe-integracao-duplo-v1`
+- Validar: `GET /health` → campo `deployMarker`
+- UI modal: badge `DEPLOY-2026-06-09-probe-integracao-duplo-v1` no painel Teste de conexão
+- Commit master: `cbcf674`
 
-## Validação local
+## Validação produção (09/06 — OK)
+
+- Redeploy `master` `cbcf674` concluído
+- `GET /health` → `deployMarker: DEPLOY-2026-06-09-probe-integracao-duplo-v1`
+- Teste manual no modal: **retornou conforme esperado** (usuário confirmou)
+- `WABA_PUBLIC_BASE_URL` em uso no Easypanel
+
+## Validação local (pré-deploy)
 
 - `npm run build` OK

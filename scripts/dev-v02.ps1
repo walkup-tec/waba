@@ -7,5 +7,11 @@ if (-not (Test-Path ".env.v02")) {
   exit 1
 }
 
+& (Join-Path $PSScriptRoot "free-port.ps1") -Port 3012
+
 $env:WABA_ENV = "v02"
+Write-Host ""
+Write-Host "V02 (UI igual producao): http://localhost:3012/version-02/" -ForegroundColor Cyan
+Write-Host "Health: http://localhost:3012/version-02/health  (uiProfile=production)" -ForegroundColor DarkGray
+Write-Host ""
 npm run dev:v02:run
