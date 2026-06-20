@@ -17,6 +17,10 @@
       integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
       crossorigin="anonymous"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
 
     <!-- Litepicker (range date picker sem dependências e com lang) -->
     <link
@@ -7264,6 +7268,14 @@
         font-size: 0.78rem;
         color: #cbd5e1;
       }
+      .aquecedor-runtime-instance-count {
+        display: inline-block;
+        margin-left: 0.55rem;
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: rgba(148, 163, 184, 0.88);
+        letter-spacing: 0.01em;
+      }
       @keyframes aqHeroPulse {
         0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
         70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
@@ -8332,6 +8344,18 @@
         color: #94a3b8;
         letter-spacing: 0.02em;
       }
+      .alt-numbers-picker-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .alt-numbers-picker-head .instance-action-btn {
+        font-size: 11px;
+        padding: 6px 10px;
+        min-width: auto;
+      }
       .alt-numbers-picker-panel .dis-number-picker {
         flex: 1;
         align-items: stretch;
@@ -8411,6 +8435,102 @@
         line-height: 1.45;
         color: rgba(203, 213, 225, 0.88);
       }
+      .alt-numbers-flow-hint.is-suppressed {
+        display: none;
+      }
+      .alt-meta-official-notice {
+        margin: 0 0 14px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(2, 6, 23, 0.55);
+        display: grid;
+        gap: 10px;
+      }
+      .alt-meta-official-notice[hidden] {
+        display: none !important;
+      }
+      .alt-meta-official-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .alt-meta-brand-icon {
+        font-size: 1.05rem;
+        color: #0081fb;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .alt-meta-brand-svg {
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+        color: #0081fb;
+        fill: currentColor;
+        shape-rendering: geometricPrecision;
+      }
+      .alt-meta-official-title {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: #0081fb;
+      }
+      .alt-meta-official-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .alt-meta-wa-icon {
+        font-size: 1.05rem;
+        color: var(--amber);
+        line-height: 1.45;
+        flex-shrink: 0;
+      }
+      .alt-meta-wa-icon--inline {
+        font-size: 0.95rem;
+        margin-top: 1px;
+      }
+      .alt-meta-official-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: rgba(203, 213, 225, 0.9);
+      }
+      .alt-meta-official-text strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .alt-meta-official-status {
+        margin: 8px 0 0;
+        padding-left: 10px;
+        border-left: 2px solid rgba(148, 163, 184, 0.28);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-soft);
+      }
+      .alt-meta-official-status[hidden] {
+        display: none !important;
+      }
+      .alt-numbers-stat.is-below-minimum {
+        border-color: rgba(34, 211, 238, 0.28) !important;
+        background: rgba(34, 211, 238, 0.06) !important;
+      }
+      .alt-numbers-stat.is-below-minimum strong {
+        color: var(--cyan);
+      }
+      .alt-numbers-stat-badge {
+        display: inline-flex;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.14);
+        border: 1px solid rgba(248, 113, 113, 0.42);
+      }
       .alt-numbers-stats-caption {
         margin: -8px 0 0;
         font-size: 11px;
@@ -8465,6 +8585,31 @@
         min-width: 88px;
         padding: 8px 12px;
         font-size: 12px;
+      }
+      .alt-fazenda-card-badge {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 88px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        border: 1px solid transparent;
+        user-select: none;
+        cursor: default;
+      }
+      .alt-fazenda-card-badge--active {
+        color: #6ee7b7;
+        background: rgba(16, 185, 129, 0.14);
+        border-color: rgba(52, 211, 153, 0.35);
+      }
+      .alt-fazenda-card-badge--offline {
+        color: rgba(248, 113, 113, 0.95);
+        background: rgba(127, 29, 29, 0.25);
+        border-color: rgba(248, 113, 113, 0.35);
       }
       .alt-fazenda-card-list-empty {
         margin: 0;
@@ -8580,6 +8725,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+        margin-top: 4px;
         margin-bottom: 14px;
       }
       .alt-numbers-stepper {
@@ -9346,6 +9492,50 @@
       body.waba-ui-baseline #disparos-evo-baseline-left,
       body.waba-disparo-evo-mode #disparos-evo-baseline-left {
         display: none !important;
+      }
+      body.waba-disparo-evo-mode #dis-section-timer,
+      body.waba-disparo-evo-mode #dis-section-security {
+        display: none !important;
+      }
+      .alt-dispatch-rules-panel {
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(45, 212, 191, 0.28);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(20, 83, 45, 0.12));
+      }
+      .alt-dispatch-rules-panel ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: #cbd5e1;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .alt-dispatch-rules-panel li + li {
+        margin-top: 6px;
+      }
+      .alt-dispatch-rules-panel strong {
+        color: #99f6e4;
+      }
+      .alt-numbers-picker-locked {
+        margin-top: 12px;
+      }
+      .alt-numbers-picker-locked[hidden] {
+        display: none !important;
+      }
+      .dis-evo-campaign-projection {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        background: rgba(8, 47, 73, 0.35);
+        font-size: 13px;
+        line-height: 1.5;
+        color: #e2e8f0;
+      }
+      .dis-evo-campaign-projection.is-warning {
+        border-color: rgba(251, 191, 36, 0.35);
+        background: rgba(69, 26, 3, 0.35);
+        color: #fde68a;
       }
       body.waba-ui-baseline #disparos-config-legacy,
       body.waba-disparo-evo-mode #disparos-config-legacy {
@@ -11964,6 +12154,7 @@
                       <div class="aquecedor-runtime-hero-row">
                         <span class="aquecedor-runtime-hero-dot"></span>
                         <span id="aquecedor-runtime-hero-title" class="aquecedor-runtime-hero-title">Aquecedor parado</span>
+                        <span id="aquecedor-runtime-instance-count" class="aquecedor-runtime-instance-count" aria-live="polite"></span>
                       </div>
                       <div id="aquecedor-runtime-hero-sub" class="aquecedor-runtime-hero-sub">
                         Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.
@@ -12652,6 +12843,7 @@
                           />
                           <p class="dis-wizard-leads-count-hint" id="dis-wizard-leads-count-hint"></p>
                           <p class="dis-wizard-leads-count-error hidden" id="dis-wizard-leads-count-error"></p>
+                          <div id="dis-wizard-alternativa-projection" class="dis-evo-campaign-projection" hidden></div>
                         </div>
                       </div>
                     </div>
@@ -12722,9 +12914,10 @@
 
                       <div id="dis-number-panel-comprar" class="alt-numbers-shop" hidden>
                         <div class="alt-numbers-stats">
-                          <div class="alt-numbers-stat alt-numbers-stat--purchased">
+                          <div class="alt-numbers-stat alt-numbers-stat--purchased" id="alt-numbers-purchased-card">
                             <span>Comprados</span>
                             <strong id="alt-numbers-purchased">0</strong>
+                            <span id="alt-numbers-purchased-badge" class="alt-numbers-stat-badge" hidden>Falta comprar</span>
                           </div>
                           <div class="alt-numbers-stat alt-numbers-stat--activated">
                             <span>Ativados</span>
@@ -12741,13 +12934,38 @@
 
                         <div id="alt-numbers-flow-guide" class="alt-numbers-flow-guide">
                           <ol class="alt-numbers-flow-steps">
-                            <li id="alt-flow-step-buy" class="alt-numbers-flow-step is-active">1 · Comprar slots</li>
+                            <li id="alt-flow-step-buy" class="alt-numbers-flow-step is-active">1 · Comprar Números</li>
                             <li id="alt-flow-step-pick" class="alt-numbers-flow-step">2 · Ativar números</li>
                             <li id="alt-flow-step-use" class="alt-numbers-flow-step">3 · Disparar</li>
                           </ol>
                           <p id="alt-numbers-flow-hint" class="alt-numbers-flow-hint">
                             Escolha quantos números deseja e pague com PIX.
                           </p>
+                        </div>
+
+                        <div
+                          id="alt-numbers-purchase-alert"
+                          class="alt-meta-official-notice"
+                          hidden
+                          role="alert"
+                          aria-live="polite"
+                        >
+                          <div class="alt-meta-official-head">
+                            <svg class="alt-meta-brand-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                              <path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z"/>
+                            </svg>
+                            <span class="alt-meta-official-title">Informe oficial</span>
+                          </div>
+                          <div class="alt-meta-official-content">
+                            <i class="bi bi-whatsapp alt-meta-wa-icon" aria-hidden="true"></i>
+                            <div>
+                              <p class="alt-meta-official-text" id="alt-numbers-purchase-alert-text">
+                                <strong>Alerta de segurança:</strong>
+                                Use pelo menos <strong id="alt-numbers-min-purchase-label">4</strong> números integrados na sua operação. Assim, os envios são distribuídos entre contas — o que reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis.
+                              </p>
+                              <p id="alt-numbers-purchase-alert-status" class="alt-meta-official-status" hidden></p>
+                            </div>
+                          </div>
                         </div>
 
                         <div class="alt-numbers-shop-body">
@@ -12760,16 +12978,16 @@
                             <div class="alt-numbers-unit-badge">R$ 20 / número</div>
                           </div>
                           <div class="alt-numbers-qty-row">
-                            <span class="aquecedor-hint" style="margin:0">Quantidade de números</span>
+                            <span class="aquecedor-hint" style="margin:0">Quantidade de números <span class="muted">(mín. 4)</span></span>
                             <div class="alt-numbers-stepper">
                               <button id="alt-numbers-qty-minus" type="button" aria-label="Diminuir quantidade">−</button>
-                              <output id="alt-numbers-qty-value" for="alt-numbers-qty-minus alt-numbers-qty-plus">1</output>
+                              <output id="alt-numbers-qty-value" for="alt-numbers-qty-minus alt-numbers-qty-plus">4</output>
                               <button id="alt-numbers-qty-plus" type="button" aria-label="Aumentar quantidade">+</button>
                             </div>
                           </div>
                           <div class="alt-numbers-total-box">
                             <span>Total a pagar</span>
-                            <strong id="alt-numbers-total-value">R$ 20,00</strong>
+                            <strong id="alt-numbers-total-value">R$ 80,00</strong>
                           </div>
                           <div class="alt-numbers-actions">
                             <button id="alt-numbers-pay-btn" type="button" class="instance-action-btn btn-qrcode enabled">
@@ -12787,10 +13005,15 @@
                         </div>
 
                         <div id="alt-numbers-picker-wrap" class="alt-numbers-picker-panel" hidden>
-                          <h4 class="alt-numbers-picker-panel-title">Seus números disponíveis</h4>
+                          <div class="alt-numbers-picker-head">
+                            <h4 class="alt-numbers-picker-panel-title">Seus números disponíveis</h4>
+                            <button id="alt-numbers-reset-selection-btn" type="button" class="instance-action-btn" hidden>
+                              Refazer seleção
+                            </button>
+                          </div>
                           <div id="alt-fazenda-card-list" class="alt-fazenda-card-list" role="list"></div>
                           <span class="aquecedor-hint" style="margin:0;">
-                            Toque em <strong>Ativar</strong> para vincular o número a um slot comprado. Números já ativos aparecem com ✓.
+                            Toque em <strong>Ativar</strong> para vincular o número comprado. O selo <strong>✓ Ativo</strong> indica que o número já está vinculado — não precisa clicar nele.
                           </span>
                           <select id="dis-available-instances-comprar" multiple hidden aria-hidden="true"></select>
                           <select id="dis-selected-instances-comprar" multiple hidden aria-hidden="true"></select>
@@ -12800,10 +13023,30 @@
                         <div id="alt-numbers-empty-hint" class="alt-numbers-empty" hidden>
                           Você ainda não possui números comprados. Escolha a quantidade acima e pague com PIX para liberar a conexão.
                         </div>
+                        <div id="alt-numbers-picker-locked" class="alt-numbers-picker-locked" hidden>
+                          <div class="alt-meta-official-notice">
+                            <div class="alt-meta-official-head">
+                              <svg class="alt-meta-brand-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z"/>
+                              </svg>
+                              <span class="alt-meta-official-title">Informe oficial</span>
+                            </div>
+                            <div class="alt-meta-official-content">
+                              <i class="bi bi-whatsapp alt-meta-wa-icon" aria-hidden="true"></i>
+                              <div>
+                                <p class="alt-meta-official-text" id="alt-numbers-picker-locked-text">
+                                  <strong>Alerta de segurança:</strong>
+                                  Use pelo menos <strong id="alt-numbers-min-purchase-label-2">4</strong> números integrados na sua operação. Assim, os envios são distribuídos entre contas — o que reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis.
+                                </p>
+                                <p id="alt-numbers-picker-locked-status" class="alt-meta-official-status" hidden></p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div class="aquecedor-section">
+                    <div id="dis-section-timer" class="aquecedor-section">
                       <div class="aquecedor-section-title">2) Temporizador</div>
                       <div class="disparos-grid disparos-grid-2">
                         <div class="aquecedor-field">
@@ -12817,7 +13060,7 @@
                       </div>
                     </div>
 
-                    <div class="aquecedor-section">
+                    <div id="dis-section-security" class="aquecedor-section">
                       <div class="aquecedor-section-title">3) Limite de segurança</div>
                       <div class="disparos-grid disparos-grid-2">
                         <div class="aquecedor-field">
@@ -13083,6 +13326,22 @@
                               </caption>
                             </table>
                           </div>
+                        </div>
+                        <div id="dis-evo-campaign-send-wrap" class="dis-wizard-leads-count-wrap" hidden>
+                          <div class="aquecedor-field">
+                            <label for="dis-evo-planned-send-count">Quantidade de envios desta campanha</label>
+                            <input
+                              id="dis-evo-planned-send-count"
+                              class="register-input"
+                              type="number"
+                              min="1"
+                              step="1"
+                              inputmode="numeric"
+                              placeholder="Ex.: 500"
+                            />
+                            <p class="dis-wizard-leads-count-hint" id="dis-evo-planned-send-hint"></p>
+                          </div>
+                          <div id="dis-evo-campaign-projection" class="dis-evo-campaign-projection" hidden></div>
                         </div>
                         <div class="disparos-inline-actions" style="margin-top: 12px;">
                           <button id="dis-campaign-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
@@ -16209,6 +16468,7 @@
         document.body.classList.toggle("waba-disparo-evo-mode", on && !isBaselineUi());
         if (on) {
           initDisparoEvoPanelLayout();
+          normalizeDisparosSectionFlow();
         }
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
@@ -16228,6 +16488,7 @@
           layout.insertAdjacentElement("afterend", legacy);
         }
         if (legacy) legacy.removeAttribute("aria-hidden");
+        applyDisparoEvoAlternativaLayout();
       }
 
       function normalizeIntegrationEnv(env) {
@@ -16497,8 +16758,14 @@
       let disparosSelectedPackage = null;
       const ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
       const ALTERNATIVA_NUMBER_MAX_QTY = 20;
+      const ALTERNATIVA_DISPATCH_RULES_FALLBACK = {
+        minActivatedForSend: 3,
+        minPurchasedForPicker: 4,
+        minPurchaseQuantity: 4,
+        maxSendsPerDayPerNumber: 300,
+      };
       let alternativaNumbersSummary = null;
-      let alternativaNumbersSelectedQty = 1;
+      let alternativaNumbersSelectedQty = 4;
       let disNumberSourceTab = "aquecedor";
       let alternativaNumbersCheckoutActive = false;
       let alternativaNumbersPendingActivation = false;
@@ -16526,6 +16793,133 @@
           throw new Error("Informe um celular válido com DDD (ex.: (11) 99999-9999).");
         }
         return digits;
+      }
+
+      function resolveAlternativaDispatchRules() {
+        return {
+          ...ALTERNATIVA_DISPATCH_RULES_FALLBACK,
+          ...(alternativaNumbersSummary?.dispatchRules || {}),
+        };
+      }
+
+      function computeClientAlternativaDurationEstimate(plannedSendCount, activatedInstanceCount) {
+        const rules = resolveAlternativaDispatchRules();
+        const planned = Math.max(0, Math.floor(Number(plannedSendCount) || 0));
+        const activated = Math.max(0, Math.floor(Number(activatedInstanceCount) || 0));
+        if (!planned || !activated) {
+          return {
+            summaryLabel: !planned
+              ? "Informe a quantidade de envios para ver a projeção."
+              : `Ative ao menos ${rules.minActivatedForSend} números para calcular a projeção.`,
+            sendsPerDay: 0,
+            workingDaysNeeded: 0,
+          };
+        }
+        const sendsPerDay = activated * rules.maxSendsPerDayPerNumber;
+        const workingDaysNeeded = Math.max(1, Math.ceil(planned / sendsPerDay));
+        const workingDaysPerWeek = Math.max(1, getDisparosWorkingDays().length || 5);
+        const calendarDays = Math.max(
+          workingDaysNeeded,
+          Math.ceil((workingDaysNeeded / workingDaysPerWeek) * 7)
+        );
+        const summaryLabel =
+          workingDaysNeeded <= 1
+            ? `Projeção: conclusão em até 1 dia útil (${formatDisparosQty(sendsPerDay)} envios/dia com ${activated} número(s)).`
+            : `Projeção: cerca de ${workingDaysNeeded} dia(s) úteis (~${calendarDays} dia(s) de calendário) para ${formatDisparosQty(planned)} envios (${formatDisparosQty(sendsPerDay)}/dia).`;
+        return { summaryLabel, sendsPerDay, workingDaysNeeded, calendarDays };
+      }
+
+      function renderAlternativaProjectionElement(el, plannedSendCount) {
+        if (!el) return;
+        const rules = resolveAlternativaDispatchRules();
+        const activated = Number(alternativaNumbersSummary?.activatedCount ?? 0);
+        const projection = computeClientAlternativaDurationEstimate(plannedSendCount, activated);
+        if (!plannedSendCount || plannedSendCount < 1) {
+          el.hidden = true;
+          el.textContent = "";
+          return;
+        }
+        el.hidden = false;
+        if (activated < rules.minActivatedForSend) {
+          el.classList.add("is-warning");
+          el.textContent = `Ative pelo menos ${rules.minActivatedForSend} números para disparar. Você possui ${activated} ativo(s). ${projection.summaryLabel}`;
+          return;
+        }
+        el.classList.remove("is-warning");
+        el.textContent = projection.summaryLabel;
+      }
+
+      async function refreshAlternativaCampaignEstimateFromApi(plannedSendCount) {
+        if (!isDisparoEvoUi() || !plannedSendCount) return null;
+        try {
+          const response = await fetch(
+            `/disparos/alternativa/estimate?plannedSendCount=${encodeURIComponent(String(plannedSendCount))}`,
+            { credentials: "same-origin" }
+          );
+          if (!response.ok) return null;
+          return await response.json();
+        } catch {
+          return null;
+        }
+      }
+
+      function applyDisparoEvoAlternativaLayout() {
+        const rules = resolveAlternativaDispatchRules();
+        document
+          .querySelectorAll(
+            "#alt-numbers-min-purchase-label, #alt-numbers-min-purchase-label-2"
+          )
+          .forEach((el) => {
+            el.textContent = String(rules.minPurchasedForPicker);
+          });
+        ensureAlternativaPurchaseQtyFloor();
+      }
+
+      function updateDisEvoCampaignSendUi() {
+        const wrap = document.getElementById("dis-evo-campaign-send-wrap");
+        const imported = Math.max(0, Math.floor(Number(campaignSpreadsheetRowsCache?.length) || 0));
+        const show = isDisparoEvoUi() && imported > 0;
+        if (wrap) wrap.hidden = !show;
+        const input = document.getElementById("dis-evo-planned-send-count");
+        const hint = document.getElementById("dis-evo-planned-send-hint");
+        if (!show) {
+          if (input) input.value = "";
+          const projection = document.getElementById("dis-evo-campaign-projection");
+          if (projection) {
+            projection.hidden = true;
+            projection.textContent = "";
+          }
+          return;
+        }
+        const remaining = getDisCampaignWizardRemainingShipments("alternativa");
+        const maxAllowed = hasMasterAccess() ? imported : Math.min(imported, remaining);
+        if (input) input.max = String(Math.max(1, maxAllowed));
+        if (hint) {
+          hint.textContent = `Até ${formatDisparosQty(imported)} contato(s) na planilha · ${formatDisparosQty(remaining)} envio(s) disponíveis no plano API Alternativa · máx. ${resolveAlternativaDispatchRules().maxSendsPerDayPerNumber} envios/dia por número.`;
+        }
+        const planned = Math.floor(Number(input?.value || 0));
+        renderAlternativaProjectionElement(
+          document.getElementById("dis-evo-campaign-projection"),
+          planned
+        );
+      }
+
+      function getDisEvoPlannedSendCountValue() {
+        const raw = String(document.getElementById("dis-evo-planned-send-count")?.value || "").trim();
+        if (!raw) return 0;
+        const n = Math.floor(Number(raw));
+        if (!Number.isFinite(n) || n < 1) return 0;
+        return n;
+      }
+
+      function assertAlternativaReadyForDispatch() {
+        const rules = resolveAlternativaDispatchRules();
+        const activated = Number(alternativaNumbersSummary?.activatedCount ?? 0);
+        if (activated < rules.minActivatedForSend) {
+          throw new Error(
+            `Para disparos pela API Alternativa são necessários ao menos ${rules.minActivatedForSend} números ativados. Você possui ${activated}. Ative mais números em «Comprar números».`
+          );
+        }
       }
 
       function resolveDisparosSelectedInstancesElement() {
@@ -16595,6 +16989,70 @@
         if (selectedEl) fillSelectWithValues(selectedEl, selectedNames);
       }
 
+      function getAlternativaMinPurchaseQty() {
+        const rules = resolveAlternativaDispatchRules();
+        return Math.max(1, Math.floor(Number(rules.minPurchaseQuantity ?? rules.minPurchasedForPicker) || 4));
+      }
+
+      function ensureAlternativaPurchaseQtyFloor() {
+        const minQty = getAlternativaMinPurchaseQty();
+        if (alternativaNumbersSelectedQty < minQty) {
+          alternativaNumbersSelectedQty = minQty;
+        }
+        return minQty;
+      }
+
+      function formatAlternativaPurchaseStatusMessage(purchased, minRequired) {
+        const qty = Math.max(0, Math.floor(Number(purchased) || 0));
+        const min = Math.max(1, Math.floor(Number(minRequired) || 4));
+        const missing = Math.max(0, min - qty);
+        if (!qty || missing <= 0) return "";
+        const numberWord = qty === 1 ? "número" : "números";
+        const missingWord = missing === 1 ? "número" : "números";
+        return `Você possui ${qty} ${numberWord} comprado(s). Para liberar a ativação, complete até ${min} — faltam ${missing} ${missingWord}.`;
+      }
+
+      function updateAlternativaPurchaseAlert(summary) {
+        const rules = resolveAlternativaDispatchRules();
+        const minRequired = rules.minPurchasedForPicker;
+        const purchased = Number(summary?.purchasedSlots ?? 0);
+        const needsMoreToPick = purchased > 0 && purchased < minRequired;
+        const alertEl = document.getElementById("alt-numbers-purchase-alert");
+        const alertStatusEl = document.getElementById("alt-numbers-purchase-alert-status");
+        const hintEl = document.getElementById("alt-numbers-flow-hint");
+        const purchasedCard = document.getElementById("alt-numbers-purchased-card");
+        const purchasedBadge = document.getElementById("alt-numbers-purchased-badge");
+        const pickerLockedStatus = document.getElementById("alt-numbers-picker-locked-status");
+        const minPurchaseLabels = document.querySelectorAll(
+          "#alt-numbers-min-purchase-label, #alt-numbers-min-purchase-label-2"
+        );
+
+        minPurchaseLabels.forEach((el) => {
+          el.textContent = String(minRequired);
+        });
+
+        const statusMessage = formatAlternativaPurchaseStatusMessage(purchased, minRequired);
+
+        if (alertEl) alertEl.hidden = !needsMoreToPick;
+        if (alertStatusEl) {
+          alertStatusEl.hidden = !statusMessage;
+          alertStatusEl.textContent = statusMessage;
+        }
+        if (hintEl) hintEl.classList.toggle("is-suppressed", needsMoreToPick);
+        if (purchasedCard) purchasedCard.classList.toggle("is-below-minimum", needsMoreToPick);
+        if (purchasedBadge) {
+          purchasedBadge.hidden = !needsMoreToPick;
+          purchasedBadge.textContent =
+            purchased > 0
+              ? `Faltam ${Math.max(0, minRequired - purchased)}`
+              : "Mín. 4";
+        }
+        if (pickerLockedStatus) {
+          pickerLockedStatus.hidden = !statusMessage;
+          pickerLockedStatus.textContent = statusMessage;
+        }
+      }
+
       function updateAlternativaNumbersFlowGuide(summary) {
         const purchased = Number(summary?.purchasedSlots ?? 0);
         const activated = Number(summary?.activatedCount ?? 0);
@@ -16613,22 +17071,34 @@
           if (el) el.classList.remove("is-active", "is-done");
         });
 
-        let hint = "Escolha quantos números deseja e pague com PIX.";
+        let hint = "Escolha a quantidade (mínimo 4) e pague com PIX.";
+        const rules = resolveAlternativaDispatchRules();
+        const minPurchase = getAlternativaMinPurchaseQty();
         if (purchased <= 0) {
           stepBuy?.classList.add("is-active");
+        } else if (purchased < rules.minPurchasedForPicker) {
+          stepBuy?.classList.add("is-active");
+          hint = `Complete ${minPurchase} números comprados para liberar a ativação (${purchased}/${rules.minPurchasedForPicker}).`;
         } else if (available > 0) {
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-active");
           hint = `Você tem ${available} slot(s) para ativar. Clique em Ativar em cada número desejado abaixo.`;
-        } else if (activated > 0) {
+        } else if (activated >= rules.minActivatedForSend) {
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-done");
           stepUse?.classList.add("is-active");
-          hint = `${activated} número(s) ativo(s). Configure o temporizador e inicie sua campanha.`;
+          hint = `${activated} número(s) ativo(s). Importe sua planilha na etapa Campanha e informe a quantidade de envios.`;
+        } else if (activated > 0) {
+          stepBuy?.classList.add("is-done");
+          stepPick?.classList.add("is-active");
+          hint = `Ative mais números: o motor exige no mínimo ${rules.minActivatedForSend} ativados para disparar (você tem ${activated}).`;
         } else {
-          stepBuy?.classList.add("is-active");
+          stepBuy?.classList.add("is-done");
+          stepPick?.classList.add("is-active");
+          hint = "Ative seus números comprados para começar a disparar.";
         }
         if (hintEl) hintEl.textContent = hint;
+        updateAlternativaPurchaseAlert(summary);
       }
 
       function renderFazendaCardList() {
@@ -16669,7 +17139,6 @@
           if (!instanceName) return;
           const isActivated = activationNames.has(instanceName.toLowerCase());
           const isOpen = row?.isOpen !== false && String(row?.connectionStatus || "").toLowerCase().includes("open");
-          const canActivate = !isActivated && isOpen && (summary?.availableSlots ?? 0) > 0;
           const { label, meta } = getFazendaRowDisplayLines(row);
 
           if (isActivated) selectedNames.push(instanceName);
@@ -16685,22 +17154,35 @@
           info.className = "alt-fazenda-card-info";
           info.innerHTML = `<span class="alt-fazenda-card-name">${escapeAdminHtml(label)}</span><span class="alt-fazenda-card-meta">${escapeAdminHtml(meta)}</span>`;
 
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "instance-action-btn" + (canActivate ? " enabled" : "");
-          btn.disabled = isActivated || !canActivate;
-          btn.textContent = isActivated ? "Ativo ✓" : !isOpen ? "Offline" : "Ativar";
-          btn.dataset.instance = instanceName;
-          if (canActivate) {
+          card.appendChild(info);
+
+          if (isActivated) {
+            const badge = document.createElement("span");
+            badge.className = "alt-fazenda-card-badge alt-fazenda-card-badge--active";
+            badge.setAttribute("role", "status");
+            badge.setAttribute("aria-label", `${label} já vinculado`);
+            badge.textContent = "✓ Ativo";
+            card.appendChild(badge);
+          } else if (!isOpen) {
+            const badge = document.createElement("span");
+            badge.className = "alt-fazenda-card-badge alt-fazenda-card-badge--offline";
+            badge.setAttribute("role", "status");
+            badge.textContent = "Offline";
+            card.appendChild(badge);
+          } else {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "instance-action-btn enabled";
+            btn.textContent = "Ativar";
+            btn.dataset.instance = instanceName;
             btn.addEventListener("click", async () => {
               btn.disabled = true;
               btn.textContent = "Ativando…";
               await registerAlternativaNumberActivation(instanceName);
             });
+            card.appendChild(btn);
           }
 
-          card.appendChild(info);
-          card.appendChild(btn);
           container.appendChild(card);
         });
 
@@ -16710,6 +17192,7 @@
 
       function renderAlternativaNumbersShop() {
         const summary = alternativaNumbersSummary;
+        const minQty = ensureAlternativaPurchaseQtyFloor();
         const purchasedEl = document.getElementById("alt-numbers-purchased");
         const activatedEl = document.getElementById("alt-numbers-activated");
         const availableEl = document.getElementById("alt-numbers-available");
@@ -16732,7 +17215,7 @@
         }
         if (qtyOut) qtyOut.textContent = String(alternativaNumbersSelectedQty);
         if (totalEl) totalEl.textContent = formatAlternativaNumbersTotal(alternativaNumbersSelectedQty);
-        if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= 1;
+        if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= minQty;
         if (plusBtn) {
           plusBtn.disabled = alternativaNumbersSelectedQty >= (summary?.maxQuantity ?? ALTERNATIVA_NUMBER_MAX_QTY);
         }
@@ -16741,12 +17224,25 @@
         }
 
         const hasPurchased = (summary?.purchasedSlots ?? 0) > 0;
+        const rules = resolveAlternativaDispatchRules();
+        const canPickNumbers =
+          summary?.canPickNumbers === true ||
+          (summary?.purchasedSlots ?? 0) >= rules.minPurchasedForPicker;
         if (emptyHint) emptyHint.hidden = hasPurchased;
         if (activatedWrap) activatedWrap.hidden = true;
-        if (pickerWrap) pickerWrap.hidden = !hasPurchased;
+        const pickerLocked = document.getElementById("alt-numbers-picker-locked");
+        if (pickerWrap) pickerWrap.hidden = !canPickNumbers;
+        if (pickerLocked) pickerLocked.hidden = canPickNumbers || !hasPurchased;
+
+        const resetBtn = document.getElementById("alt-numbers-reset-selection-btn");
+        if (resetBtn) {
+          const onV02 = String(window.location.pathname || "").includes("/version-02");
+          resetBtn.hidden = !onV02 || !(summary?.activatedCount > 0);
+        }
 
         updateAlternativaNumbersFlowGuide(summary);
-        if (hasPurchased) {
+        applyDisparoEvoAlternativaLayout();
+        if (canPickNumbers) {
           renderFazendaCardList();
         }
       }
@@ -16787,9 +17283,10 @@
       }
 
       async function openAlternativaNumbersBillingModal() {
+        const minQty = ensureAlternativaPurchaseQtyFloor();
         const qty = alternativaNumbersSelectedQty;
-        if (!qty || qty < 1) {
-          showToast("Selecione a quantidade de números.", "warning");
+        if (!qty || qty < minQty) {
+          showToast(`Compra mínima de ${minQty} números por transação.`, "warning");
           return;
         }
         if (!wabaSessionEmail) {
@@ -16903,7 +17400,8 @@
           });
         });
         document.getElementById("alt-numbers-qty-minus")?.addEventListener("click", () => {
-          alternativaNumbersSelectedQty = Math.max(1, alternativaNumbersSelectedQty - 1);
+          const minQty = getAlternativaMinPurchaseQty();
+          alternativaNumbersSelectedQty = Math.max(minQty, alternativaNumbersSelectedQty - 1);
           renderAlternativaNumbersShop();
         });
         document.getElementById("alt-numbers-qty-plus")?.addEventListener("click", () => {
@@ -16916,6 +17414,32 @@
         });
         document.getElementById("alt-numbers-connect-btn")?.addEventListener("click", () => {
           openAlternativaNumberConnectWizard();
+        });
+        document.getElementById("alt-numbers-reset-selection-btn")?.addEventListener("click", async () => {
+          if (
+            !window.confirm(
+              "Limpar as ativações e refazer a seleção?\n\nOs números comprados (slots) serão mantidos."
+            )
+          ) {
+            return;
+          }
+          try {
+            const response = await fetch("/billing/alternativa-numbers/reset-activations", {
+              method: "POST",
+              credentials: "same-origin",
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(payload.error || "Não foi possível refazer a seleção.");
+            }
+            alternativaNumbersSummary = payload.summary || alternativaNumbersSummary;
+            pendingSelectedDisparadorInstances = [];
+            renderAlternativaNumbersShop();
+            syncDisparadorNumberPicker();
+            showToast("Seleção resetada. Toque em Ativar em cada número.", "success", 5200);
+          } catch (error) {
+            showToast(error?.message || "Erro ao refazer seleção.", "error", 4800);
+          }
         });
       }
 
@@ -24447,6 +24971,18 @@
         }
         const planned = getDisCampaignWizardPlannedSendCountValue();
         renderCampaignImportStatsElement(statsEl, imported, planned);
+        if (getDisCampaignWizardSelectedApiKind() === "alternativa") {
+          renderAlternativaProjectionElement(
+            document.getElementById("dis-wizard-alternativa-projection"),
+            planned
+          );
+        } else {
+          const altProjection = document.getElementById("dis-wizard-alternativa-projection");
+          if (altProjection) {
+            altProjection.hidden = true;
+            altProjection.textContent = "";
+          }
+        }
       }
 
       async function setDisCampaignWizardLeadsFile(file) {
@@ -24748,6 +25284,7 @@
       let aquecedorExpedienteBatches = [];
       let instanceUsageByName = {};
       let disparosConfigCache = null;
+      let disparosAlternativaThrottleCache = null;
       let spreadsheetRowsCache = [];
       let campaignSpreadsheetRowsCache = [];
 
@@ -24899,6 +25436,7 @@
             label.textContent = `${file.name} · ${campaignSpreadsheetRowsCache.length} linha(s) · ${colCount} coluna(s)`;
           }
           renderDisCampaignPreviewTable(campaignSpreadsheetRowsCache);
+          updateDisEvoCampaignSendUi();
           const statusEl = document.getElementById("dis-campaign-create-status");
           if (statusEl) {
             statusEl.textContent =
@@ -25349,7 +25887,7 @@
           return null;
         };
         try {
-          const response = await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 10000);
+          const response = await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 18000);
           if (!response.ok) {
             const reason =
               response.status === 401
@@ -25379,7 +25917,7 @@
                 const resumeData = await resumeRes.json().catch(() => ({}));
                 data = resumeData?.status
                   ? { ...resumeData.status, desiredRunning: true, running: true }
-                  : await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 10000)
+                  : await fetchWithTimeout("/aquecedor/status", { credentials: "same-origin" }, 18000)
                       .then((r) => (r.ok ? r.json() : data))
                       .catch(() => data);
                 running = data?.running === true;
@@ -25471,11 +26009,24 @@
         const hero = document.getElementById("aquecedor-runtime-hero");
         const titleEl = document.getElementById("aquecedor-runtime-hero-title");
         const subEl = document.getElementById("aquecedor-runtime-hero-sub");
+        const countEl = document.getElementById("aquecedor-runtime-instance-count");
         if (!hero || !titleEl || !subEl) return;
         const running = status?.running === true;
         const processing = status?.isProcessing === true;
         const lastResult = String(status?.lastResult || "").trim();
+        const instanceCount = Number(status?.connectedInstanceCount ?? 0);
         hero.classList.remove("active", "processing");
+        if (countEl) {
+          if (running && instanceCount >= 2) {
+            countEl.textContent = `${instanceCount} instâncias no ciclo`;
+          } else if (running && instanceCount === 1) {
+            countEl.textContent = "1 instância (mín. 2)";
+          } else if (running) {
+            countEl.textContent = "instâncias: …";
+          } else {
+            countEl.textContent = "";
+          }
+        }
         if (processing) {
           hero.classList.add("processing");
           titleEl.textContent = "Aquecedor processando agora";
@@ -26118,14 +26669,32 @@
         const hiddenBriefing = document.getElementById("dis-ai-briefing");
         if (hiddenBriefing) hiddenBriefing.value = aiBriefing;
         const selectedInstances = getActiveDisSelectedInstanceValues();
+        const throttle = isDisparoEvoUi() ? disparosAlternativaThrottleCache : null;
+        const rules = resolveAlternativaDispatchRules();
+        const startHour = readInt("dis-start-hour", 8);
+        const endHour = readInt("dis-end-hour", 22);
+        const fallbackThrottle = (() => {
+          const hours = Math.max(1, endHour - startHour);
+          const maxPerDay = rules.maxSendsPerDayPerNumber;
+          const avg = Math.max(60, Math.floor((hours * 3600) / maxPerDay));
+          return {
+            delayMinSeconds: Math.max(10, avg - 24),
+            delayMaxSeconds: Math.min(3600, avg + 24),
+            maxPerHourPerInstance: Math.max(1, Math.ceil(maxPerDay / hours)),
+            maxPerDayPerInstance: maxPerDay,
+          };
+        })();
+        const activeThrottle = throttle || (isDisparoEvoUi() ? fallbackThrottle : null);
         return {
-          delayMinSeconds: readInt("dis-delay-min", 120),
-          delayMaxSeconds: readInt("dis-delay-max", 320),
-          maxPerHourPerInstance: readInt("dis-max-hour", 40),
-          maxPerDayPerInstance: readInt("dis-max-day", 130),
+          delayMinSeconds: activeThrottle?.delayMinSeconds ?? readInt("dis-delay-min", 120),
+          delayMaxSeconds: activeThrottle?.delayMaxSeconds ?? readInt("dis-delay-max", 320),
+          maxPerHourPerInstance:
+            activeThrottle?.maxPerHourPerInstance ?? readInt("dis-max-hour", 40),
+          maxPerDayPerInstance:
+            activeThrottle?.maxPerDayPerInstance ?? readInt("dis-max-day", 130),
           workingDays: getDisparosWorkingDays(),
-          startHour: readInt("dis-start-hour", 8),
-          endHour: readInt("dis-end-hour", 22),
+          startHour,
+          endHour,
           messageMode: document.getElementById("dis-mode-db")?.checked ? "database" : "ai",
           aiBriefing,
           aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
@@ -26456,6 +27025,45 @@
         void refreshDisparosActiveInstanceFromServer();
       }
 
+      function isDisparosSectionInWizardFlow(section) {
+        if (!section || section.hidden) return false;
+        const style = window.getComputedStyle(section);
+        return style.display !== "none" && style.visibility !== "hidden";
+      }
+
+      function getDisparosFlowSections() {
+        return Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        ).filter(isDisparosSectionInWizardFlow);
+      }
+
+      function normalizeDisparosSectionFlow() {
+        if (!disparosSectionLayoutInitialized) return;
+        const sections = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        );
+        const flowSections = getDisparosFlowSections();
+        if (!flowSections.length) return;
+
+        const openFlowCount = flowSections.filter((section) => {
+          const key = String(section.dataset.sectionKey || "");
+          return key && !disparosSectionCollapsedState[key];
+        }).length;
+        if (openFlowCount === 1) return;
+
+        const target =
+          flowSections.find((section) => {
+            const key = String(section.dataset.sectionKey || "");
+            return key && !disparosSectionSavedState[key];
+          }) || flowSections[0];
+
+        sections.forEach((section, idx) => {
+          const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
+          disparosSectionCollapsedState[sectionKey] = section !== target;
+        });
+        applyDisparosSectionLayout();
+      }
+
       function initDisparosSectionLayout() {
         if (disparosSectionLayoutInitialized) {
           applyDisparosSectionLayout();
@@ -26496,15 +27104,18 @@
           section.appendChild(header);
           section.appendChild(body);
 
-          disparosSectionCollapsedState[sectionKey] = idx !== 0;
+          disparosSectionCollapsedState[sectionKey] = getDisparosFlowSections().indexOf(section) !== 0;
           disparosSectionSavedState[sectionKey] = false;
 
           const editBtn = header.querySelector(".dis-section-edit-btn");
           if (editBtn) {
             editBtn.addEventListener("click", () => {
-              sections.forEach((sec, secIdx) => {
+              const allSections = Array.from(
+                document.querySelectorAll("#disparos-config-area .aquecedor-section")
+              );
+              allSections.forEach((sec, secIdx) => {
                 const key = String(sec.dataset.sectionKey || `section-${secIdx + 1}`);
-                disparosSectionCollapsedState[key] = key !== sectionKey;
+                disparosSectionCollapsedState[key] = sec !== section;
               });
               disparosActiveSectionIndex = idx;
               applyDisparosSectionLayout();
@@ -26530,17 +27141,19 @@
               saveBtn.textContent = original || "Salvar configurações";
               saveBtn.removeAttribute("disabled");
               if (!ok) return;
-              if (idx === 5) hideMessengerLibrarySavePanel();
+              if (/mensageiro/i.test(title)) hideMessengerLibrarySavePanel();
               disparosSectionSavedState[sectionKey] = true;
               disparosSectionCollapsedState[sectionKey] = true;
-              const nextIdx = idx + 1;
-              if (nextIdx < sections.length) {
-                const nextSection = sections[nextIdx];
+              const flowSections = getDisparosFlowSections();
+              const flowIdx = flowSections.indexOf(section);
+              if (flowIdx >= 0 && flowIdx + 1 < flowSections.length) {
+                const nextSection = flowSections[flowIdx + 1];
                 const nextKey = String(
-                  nextSection.dataset.sectionKey || `section-${nextIdx + 1}`
+                  nextSection.dataset.sectionKey ||
+                    `section-${sections.indexOf(nextSection) + 1}`
                 );
                 disparosSectionCollapsedState[nextKey] = false;
-                disparosActiveSectionIndex = nextIdx;
+                disparosActiveSectionIndex = sections.indexOf(nextSection);
               }
               applyDisparosSectionLayout();
             });
@@ -26572,10 +27185,13 @@
         const sections = Array.from(
           document.querySelectorAll("#disparos-config-area .aquecedor-section")
         );
+        const flowSections = getDisparosFlowSections();
         sections.forEach((section, idx) => {
           const sectionKey = String(section.dataset.sectionKey || `section-${idx + 1}`);
           disparosSectionSavedState[sectionKey] = false;
-          disparosSectionCollapsedState[sectionKey] = idx !== 0;
+          const flowIdx = flowSections.indexOf(section);
+          disparosSectionCollapsedState[sectionKey] =
+            flowIdx >= 0 ? flowIdx !== 0 : true;
         });
         disparosActiveSectionIndex = 0;
         applyDisparosSectionLayout();
@@ -26605,6 +27221,11 @@
           }
           const data = await response.json().catch(() => ({}));
           disparosConfigCache = data?.config || null;
+          if (data?.alternativaDispatch?.active && data?.alternativaDispatch?.throttle) {
+            disparosAlternativaThrottleCache = data.alternativaDispatch.throttle;
+          } else {
+            disparosAlternativaThrottleCache = null;
+          }
           setDisparosFormValues(data?.config || {});
           const shortenerSelect = document.getElementById("dis-shortener-provider");
           if (shortenerSelect) {
@@ -26644,10 +27265,14 @@
         const isAiMode = !document.getElementById("dis-mode-db")?.checked;
         if (!skipRequiredValidation) {
           const requiredFields = [
-            { id: "dis-delay-min", label: "Delay mínimo (segundos)" },
-            { id: "dis-delay-max", label: "Delay máximo (segundos)" },
-            { id: "dis-max-hour", label: "Máx/hora por instância" },
-            { id: "dis-max-day", label: "Máx/dia por instância" },
+            ...(isDisparoEvoUi()
+              ? []
+              : [
+                  { id: "dis-delay-min", label: "Delay mínimo (segundos)" },
+                  { id: "dis-delay-max", label: "Delay máximo (segundos)" },
+                  { id: "dis-max-hour", label: "Máx/hora por instância" },
+                  { id: "dis-max-day", label: "Máx/dia por instância" },
+                ]),
             { id: "dis-start-hour", label: "Início da janela (hora)" },
             { id: "dis-end-hour", label: "Fim da janela (hora)" },
             { id: "dis-whatsapp-target", label: "Número WhatsApp para links" },
@@ -34134,6 +34759,9 @@
       if (disCampaignOpenMappingBtn) {
         disCampaignOpenMappingBtn.addEventListener("click", () => openDisCampaignMappingFlow());
       }
+      document.getElementById("dis-evo-planned-send-count")?.addEventListener("input", () => {
+        updateDisEvoCampaignSendUi();
+      });
 
       const disAddInstanceBtn = document.getElementById("dis-add-instance-btn");
       if (disAddInstanceBtn) {
