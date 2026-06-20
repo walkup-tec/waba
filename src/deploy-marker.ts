@@ -1,2 +1,4 @@
-/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-20-fazenda-pool-alternativa-numbers";
+/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
+
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-20-comprar-numeros-picker-layout";
+

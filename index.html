@@ -8300,7 +8300,74 @@
       }
       .alt-numbers-shop {
         display: grid;
-        gap: 14px;
+        gap: 16px;
+      }
+      .alt-numbers-shop-body {
+        display: grid;
+        gap: 16px;
+        align-items: stretch;
+      }
+      @media (min-width: 960px) {
+        .alt-numbers-shop-body {
+          grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.08fr);
+        }
+        .alt-numbers-shop-body .alt-numbers-buy-card {
+          margin-bottom: 0;
+        }
+      }
+      .alt-numbers-picker-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 100%;
+        padding: 16px;
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+      }
+      .alt-numbers-picker-panel-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.02em;
+      }
+      .alt-numbers-picker-panel .dis-number-picker {
+        flex: 1;
+        align-items: stretch;
+        min-height: 240px;
+      }
+      .alt-numbers-picker-panel .aquecedor-field {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+      }
+      .alt-numbers-picker-panel .aquecedor-field label {
+        flex-shrink: 0;
+        margin-bottom: 8px;
+      }
+      #dis-available-instances-comprar,
+      #dis-selected-instances-comprar {
+        flex: 1;
+        width: 100%;
+        min-height: 220px;
+        height: 220px;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(2, 6, 23, 0.55);
+        color: #e2e8f0;
+        padding: 6px;
+      }
+      #dis-available-instances-comprar option,
+      #dis-selected-instances-comprar option {
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      .alt-numbers-picker-panel .dis-number-picker-actions {
+        align-self: center;
+        padding-top: 28px;
       }
       .alt-numbers-stats {
         display: grid;
@@ -8446,6 +8513,17 @@
         }
         .alt-numbers-buy-head {
           flex-direction: column;
+        }
+        .alt-numbers-picker-panel .dis-number-picker {
+          min-height: 0;
+        }
+        #dis-available-instances-comprar,
+        #dis-selected-instances-comprar {
+          min-height: 180px;
+          height: 180px;
+        }
+        .alt-numbers-picker-panel .dis-number-picker-actions {
+          padding-top: 0;
         }
       }
 
@@ -12507,6 +12585,7 @@
                           </div>
                         </div>
 
+                        <div class="alt-numbers-shop-body">
                         <div class="alt-numbers-buy-card">
                           <div class="alt-numbers-buy-head">
                             <div>
@@ -12542,11 +12621,12 @@
                           <div id="alt-numbers-activated-list" class="alt-numbers-activated-list"></div>
                         </div>
 
-                        <div id="alt-numbers-picker-wrap" hidden>
-                          <div class="dis-number-picker" style="margin-top:4px;">
+                        <div id="alt-numbers-picker-wrap" class="alt-numbers-picker-panel" hidden>
+                          <h4 class="alt-numbers-picker-panel-title">Selecionar números da fazenda</h4>
+                          <div class="dis-number-picker">
                             <div class="aquecedor-field">
                               <label for="dis-available-instances-comprar">Números da fazenda disponíveis</label>
-                              <select id="dis-available-instances-comprar" size="6"></select>
+                              <select id="dis-available-instances-comprar" size="8"></select>
                             </div>
                             <div class="dis-number-picker-actions">
                               <button id="dis-add-instance-comprar-btn" type="button" class="instance-action-btn enabled">→</button>
@@ -12554,10 +12634,11 @@
                             </div>
                             <div class="aquecedor-field">
                               <label for="dis-selected-instances-comprar">Selecionados para disparo</label>
-                              <select id="dis-selected-instances-comprar" size="6"></select>
+                              <select id="dis-selected-instances-comprar" size="8"></select>
                             </div>
                           </div>
-                          <span class="aquecedor-hint">Selecione números da fazenda master para usar no disparador (→ ativa o slot comprado).</span>
+                          <span class="aquecedor-hint" style="margin:0;">Selecione números da fazenda master para usar no disparador (→ ativa o slot comprado).</span>
+                        </div>
                         </div>
 
                         <div id="alt-numbers-empty-hint" class="alt-numbers-empty" hidden>
@@ -16341,8 +16422,7 @@
           (summary?.fazendaPool?.assignedToSubscriber?.length ?? 0) > 0;
         if (emptyHint) emptyHint.hidden = hasPurchased;
         if (activatedWrap) activatedWrap.hidden = !hasActivated;
-        if (pickerWrap) pickerWrap.hidden = !hasPurchased && !hasFazendaPool;
-        if (pickerWrap && hasPurchased && hasFazendaPool) pickerWrap.hidden = false;
+        if (pickerWrap) pickerWrap.hidden = !hasPurchased;
 
         if (activatedList && hasActivated) {
           activatedList.innerHTML = "";
