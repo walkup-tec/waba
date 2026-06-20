@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Imagem de produção: Express em dist/; estado em /app/data (monte volume).
 # Build: docker build -t waba:latest .
 # Run:  docker run -p 3000:3000 --env-file .env -v waba-data:/app/data waba:latest
