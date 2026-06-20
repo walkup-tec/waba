@@ -1,18 +1,20 @@
 "use strict";
 /** Regras do motor de envio API Alternativa (números da fazenda). */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
+exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
 exports.getAlternativaDispatchRulesMeta = getAlternativaDispatchRulesMeta;
 exports.computeAlternativaThrottle = computeAlternativaThrottle;
 exports.estimateAlternativaCampaignDuration = estimateAlternativaCampaignDuration;
 exports.assertAlternativaMinActivated = assertAlternativaMinActivated;
 exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 3;
 exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
+exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
 function getAlternativaDispatchRulesMeta() {
     return {
         minActivatedForSend: exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND,
         minPurchasedForPicker: exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER,
+        minPurchaseQuantity: exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY,
         maxSendsPerDayPerNumber: exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
     };
 }

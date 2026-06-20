@@ -3394,16 +3394,27 @@ async function assertAlternativaDispatchReady(email: string): Promise<void> {
   assertAlternativaMinActivated(activated);
 }
 
+function hasExplicitTimezone(value: string): boolean {
+  return /Z$/i.test(value) || /[+-]\d{2}:\d{2}$/.test(value) || /[+-]\d{4}$/.test(value);
+}
+
+/** Converte ISO/timestamp do Postgres/Supabase em instante absoluto (fuso SP para valores "naive"). */
+function parseWabaInstant(isoOrNull: string | null | undefined): Date | null {
+  if (!isoOrNull || typeof isoOrNull !== "string") return null;
+  let s = isoOrNull.trim();
+  if (!s) return null;
+  if (!hasExplicitTimezone(s)) {
+    // Postgres/Supabase às vezes devolve timestamptz sem offset; no WABA isso é horário de São Paulo.
+    s = s.replace(" ", "T") + "-03:00";
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function formatDateBr(isoOrNull: string | null | undefined): string {
-  if (!isoOrNull || typeof isoOrNull !== "string") return "sem data";
+  const d = parseWabaInstant(isoOrNull);
+  if (!d) return "sem data";
   try {
-    let s = isoOrNull.trim();
-    if (!s) return "sem data";
-    if (!/Z$|[+-]\d{2}:?\d{2}$/.test(s) && (s.includes("T") || /\d{4}-\d{2}-\d{2}\s+\d/.test(s))) {
-      s = s.replace(" ", "T") + "Z";
-    }
-    const d = new Date(s);
-    if (isNaN(d.getTime())) return "sem data";
     return d.toLocaleString("pt-BR", {
       timeZone: "America/Sao_Paulo",
       day: "2-digit",
@@ -6756,14 +6767,15 @@ app.get("/aquecedor/envios", async (req, res) => {
       }
 
       const { data: logsData, error } = await (supabase
-        .from("logs_envios" as any)
-        .select("instancia_origem, instancia_destino, data_envio")
-        .order("data_envio", { ascending: false })
+        .from("logs_envios_br" as any)
+        .select("instancia_origem, instancia_destino, data_envio_br")
+        .order("data_envio_br", { ascending: false })
         .limit(limit)) as any;
 
       if (!error && Array.isArray(logsData)) {
         for (const row of logsData) {
-          const dataEnvio = String(row?.data_envio || "").trim() || null;
+          const dataEnvio =
+            String(row?.data_envio_br || row?.data_envio || "").trim() || null;
           pushItem(
             String(row?.instancia_origem || "").trim() || "—",
             String(row?.instancia_destino || "").trim() || "—",
@@ -6781,8 +6793,8 @@ app.get("/aquecedor/envios", async (req, res) => {
     }
     const merged = Array.from(dedup.values());
     merged.sort((a, b) => {
-      const tsA = a.dataEnvio ? new Date(a.dataEnvio).getTime() : 0;
-      const tsB = b.dataEnvio ? new Date(b.dataEnvio).getTime() : 0;
+      const tsA = parseWabaInstant(a.dataEnvio)?.getTime() ?? 0;
+      const tsB = parseWabaInstant(b.dataEnvio)?.getTime() ?? 0;
       return tsB - tsA;
     });
 

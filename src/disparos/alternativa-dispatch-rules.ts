@@ -2,6 +2,7 @@
 
 export const ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 3;
 export const ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
+export const ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 export const ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
 
 export type AlternativaThrottleInput = {
@@ -30,6 +31,7 @@ export function getAlternativaDispatchRulesMeta() {
   return {
     minActivatedForSend: ALTERNATIVA_MIN_ACTIVATED_FOR_SEND,
     minPurchasedForPicker: ALTERNATIVA_MIN_PURCHASED_FOR_PICKER,
+    minPurchaseQuantity: ALTERNATIVA_MIN_PURCHASE_QUANTITY,
     maxSendsPerDayPerNumber: ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
   };
 }

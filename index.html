@@ -17,6 +17,10 @@
       integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
       crossorigin="anonymous"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
 
     <!-- Litepicker (range date picker sem dependências e com lang) -->
     <link
@@ -8434,82 +8438,85 @@
       .alt-numbers-flow-hint.is-suppressed {
         display: none;
       }
-      .alt-numbers-purchase-alert {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
+      .alt-meta-official-notice {
         margin: 0 0 14px;
         padding: 14px 16px;
         border-radius: 12px;
-        border: 1px solid rgba(248, 113, 113, 0.55);
-        background: linear-gradient(135deg, rgba(69, 10, 10, 0.55), rgba(127, 29, 29, 0.22));
-        box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.08) inset, 0 8px 24px rgba(127, 29, 29, 0.18);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(2, 6, 23, 0.55);
+        display: grid;
+        gap: 10px;
       }
-      .alt-numbers-purchase-alert[hidden] {
+      .alt-meta-official-notice[hidden] {
         display: none !important;
       }
-      .alt-numbers-purchase-alert-icon {
-        flex-shrink: 0;
-        width: 36px;
-        height: 36px;
+      .alt-meta-official-head {
         display: flex;
         align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        color: #fecaca;
-        background: rgba(220, 38, 38, 0.28);
-        border: 1px solid rgba(248, 113, 113, 0.45);
-      }
-      .alt-numbers-purchase-alert-icon svg {
-        width: 20px;
-        height: 20px;
-      }
-      .alt-numbers-purchase-alert-body {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
         gap: 8px;
       }
-      .alt-numbers-purchase-alert-tag {
-        display: inline-flex;
-        align-items: center;
-        align-self: flex-start;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 11px;
+      .alt-meta-brand-icon {
+        font-size: 1.05rem;
+        color: #0081fb;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .alt-meta-brand-svg {
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+        color: #0081fb;
+        fill: currentColor;
+        shape-rendering: geometricPrecision;
+      }
+      .alt-meta-official-title {
+        font-size: 13px;
         font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: #fecaca;
-        background: rgba(220, 38, 38, 0.35);
-        border: 1px solid rgba(248, 113, 113, 0.55);
+        letter-spacing: 0.01em;
+        color: #0081fb;
       }
-      .alt-numbers-purchase-alert-tag::before {
-        content: "";
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #f87171;
-        box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.25);
+      .alt-meta-official-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
       }
-      .alt-numbers-purchase-alert-text {
+      .alt-meta-wa-icon {
+        font-size: 1.05rem;
+        color: var(--amber);
+        line-height: 1.45;
+        flex-shrink: 0;
+      }
+      .alt-meta-wa-icon--inline {
+        font-size: 0.95rem;
+        margin-top: 1px;
+      }
+      .alt-meta-official-text {
         margin: 0;
         font-size: 13px;
         line-height: 1.55;
-        color: #fee2e2;
+        color: rgba(203, 213, 225, 0.9);
       }
-      .alt-numbers-purchase-alert-text strong {
-        color: #fff;
-        font-weight: 700;
+      .alt-meta-official-text strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .alt-meta-official-status {
+        margin: 8px 0 0;
+        padding-left: 10px;
+        border-left: 2px solid rgba(148, 163, 184, 0.28);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-soft);
+      }
+      .alt-meta-official-status[hidden] {
+        display: none !important;
       }
       .alt-numbers-stat.is-below-minimum {
-        border-color: rgba(248, 113, 113, 0.55) !important;
-        background: rgba(127, 29, 29, 0.22) !important;
+        border-color: rgba(34, 211, 238, 0.28) !important;
+        background: rgba(34, 211, 238, 0.06) !important;
       }
       .alt-numbers-stat.is-below-minimum strong {
-        color: #fca5a5;
+        color: var(--cyan);
       }
       .alt-numbers-stat-badge {
         display: inline-flex;
@@ -8520,9 +8527,9 @@
         font-weight: 700;
         letter-spacing: 0.03em;
         text-transform: uppercase;
-        color: #fecaca;
-        background: rgba(220, 38, 38, 0.35);
-        border: 1px solid rgba(248, 113, 113, 0.45);
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.14);
+        border: 1px solid rgba(248, 113, 113, 0.42);
       }
       .alt-numbers-stats-caption {
         margin: -8px 0 0;
@@ -8718,6 +8725,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+        margin-top: 4px;
         margin-bottom: 14px;
       }
       .alt-numbers-stepper {
@@ -9509,16 +9517,7 @@
         color: #99f6e4;
       }
       .alt-numbers-picker-locked {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 14px 16px;
-        border-radius: 12px;
-        border: 1px solid rgba(248, 113, 113, 0.45);
-        background: linear-gradient(135deg, rgba(69, 10, 10, 0.45), rgba(15, 23, 42, 0.55));
-        color: #fee2e2;
-        font-size: 13px;
-        line-height: 1.55;
+        margin-top: 12px;
       }
       .alt-numbers-picker-locked[hidden] {
         display: none !important;
@@ -12946,21 +12945,26 @@
 
                         <div
                           id="alt-numbers-purchase-alert"
-                          class="alt-numbers-purchase-alert"
+                          class="alt-meta-official-notice"
                           hidden
                           role="alert"
                           aria-live="polite"
                         >
-                          <div class="alt-numbers-purchase-alert-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                              <circle cx="12" cy="12" r="10" />
-                              <line x1="12" y1="8" x2="12" y2="13" />
-                              <circle cx="12" cy="16.5" r="0.5" fill="currentColor" stroke="none" />
+                          <div class="alt-meta-official-head">
+                            <svg class="alt-meta-brand-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                              <path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z"/>
                             </svg>
+                            <span class="alt-meta-official-title">Informe oficial</span>
                           </div>
-                          <div class="alt-numbers-purchase-alert-body">
-                            <span class="alt-numbers-purchase-alert-tag">Ativação bloqueada</span>
-                            <p id="alt-numbers-purchase-alert-text" class="alt-numbers-purchase-alert-text"></p>
+                          <div class="alt-meta-official-content">
+                            <i class="bi bi-whatsapp alt-meta-wa-icon" aria-hidden="true"></i>
+                            <div>
+                              <p class="alt-meta-official-text" id="alt-numbers-purchase-alert-text">
+                                <strong>Alerta de segurança:</strong>
+                                Use pelo menos <strong id="alt-numbers-min-purchase-label">4</strong> números integrados na sua operação. Assim, os envios são distribuídos entre contas — o que reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis.
+                              </p>
+                              <p id="alt-numbers-purchase-alert-status" class="alt-meta-official-status" hidden></p>
+                            </div>
                           </div>
                         </div>
 
@@ -12974,16 +12978,16 @@
                             <div class="alt-numbers-unit-badge">R$ 20 / número</div>
                           </div>
                           <div class="alt-numbers-qty-row">
-                            <span class="aquecedor-hint" style="margin:0">Quantidade de números</span>
+                            <span class="aquecedor-hint" style="margin:0">Quantidade de números <span class="muted">(mín. 4)</span></span>
                             <div class="alt-numbers-stepper">
                               <button id="alt-numbers-qty-minus" type="button" aria-label="Diminuir quantidade">−</button>
-                              <output id="alt-numbers-qty-value" for="alt-numbers-qty-minus alt-numbers-qty-plus">1</output>
+                              <output id="alt-numbers-qty-value" for="alt-numbers-qty-minus alt-numbers-qty-plus">4</output>
                               <button id="alt-numbers-qty-plus" type="button" aria-label="Aumentar quantidade">+</button>
                             </div>
                           </div>
                           <div class="alt-numbers-total-box">
                             <span>Total a pagar</span>
-                            <strong id="alt-numbers-total-value">R$ 20,00</strong>
+                            <strong id="alt-numbers-total-value">R$ 80,00</strong>
                           </div>
                           <div class="alt-numbers-actions">
                             <button id="alt-numbers-pay-btn" type="button" class="instance-action-btn btn-qrcode enabled">
@@ -13020,32 +13024,26 @@
                           Você ainda não possui números comprados. Escolha a quantidade acima e pague com PIX para liberar a conexão.
                         </div>
                         <div id="alt-numbers-picker-locked" class="alt-numbers-picker-locked" hidden>
-                          <div class="alt-numbers-purchase-alert-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                              <rect x="5" y="11" width="14" height="10" rx="2" />
-                              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                            </svg>
-                          </div>
-                          <div class="alt-numbers-purchase-alert-body">
-                            <span class="alt-numbers-purchase-alert-tag">Seleção indisponível</span>
-                            <p id="alt-numbers-picker-locked-text" class="alt-numbers-purchase-alert-text">
-                              Compre pelo menos <strong id="alt-numbers-min-purchase-label">4</strong> números para liberar a ativação. O motor de envio exige no mínimo <strong id="alt-numbers-min-activated-label">3</strong> números ativados.
-                            </p>
+                          <div class="alt-meta-official-notice">
+                            <div class="alt-meta-official-head">
+                              <svg class="alt-meta-brand-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327.737.871 1.234 1.579l-1.02 1.566c-.757 1.163-1.882 3.017-2.837 4.338-1.191 1.649-1.81 1.817-2.486 1.817-.524 0-1.038-.237-1.383-.794-.263-.426-.464-1.13-.464-2.046 0-2.221.63-4.535 1.66-6.088.454-.687.964-1.226 1.533-1.533a2.264 2.264 0 0 1 1.088-.285z"/>
+                              </svg>
+                              <span class="alt-meta-official-title">Informe oficial</span>
+                            </div>
+                            <div class="alt-meta-official-content">
+                              <i class="bi bi-whatsapp alt-meta-wa-icon" aria-hidden="true"></i>
+                              <div>
+                                <p class="alt-meta-official-text" id="alt-numbers-picker-locked-text">
+                                  <strong>Alerta de segurança:</strong>
+                                  Use pelo menos <strong id="alt-numbers-min-purchase-label-2">4</strong> números integrados na sua operação. Assim, os envios são distribuídos entre contas — o que reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis.
+                                </p>
+                                <p id="alt-numbers-picker-locked-status" class="alt-meta-official-status" hidden></p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-
-                    <div id="dis-alternativa-auto-rules" class="aquecedor-section alt-dispatch-rules-panel" hidden>
-                      <div class="aquecedor-section-title">Envio automático (API Alternativa)</div>
-                      <p class="aquecedor-hint" style="margin:0;">
-                        Temporizador e limites de segurança são calculados pelo sistema para proteger seus números.
-                      </p>
-                      <ul id="dis-alternativa-rules-list">
-                        <li>Até <strong>300 envios por dia</strong> por número ativo.</li>
-                        <li>Mínimo de <strong>3 números ativados</strong> para iniciar disparos.</li>
-                        <li>Intervalo entre mensagens ajustado automaticamente ao seu expediente.</li>
-                      </ul>
                     </div>
 
                     <div id="dis-section-timer" class="aquecedor-section">
@@ -16762,10 +16760,11 @@
       const ALTERNATIVA_DISPATCH_RULES_FALLBACK = {
         minActivatedForSend: 3,
         minPurchasedForPicker: 4,
+        minPurchaseQuantity: 4,
         maxSendsPerDayPerNumber: 300,
       };
       let alternativaNumbersSummary = null;
-      let alternativaNumbersSelectedQty = 1;
+      let alternativaNumbersSelectedQty = 4;
       let disNumberSourceTab = "aquecedor";
       let alternativaNumbersCheckoutActive = false;
       let alternativaNumbersPendingActivation = false;
@@ -16863,16 +16862,15 @@
       }
 
       function applyDisparoEvoAlternativaLayout() {
-        const on = isDisparoEvoUi();
-        const rulesPanel = document.getElementById("dis-alternativa-auto-rules");
-        if (rulesPanel) rulesPanel.hidden = !on;
         const rules = resolveAlternativaDispatchRules();
-        document.querySelectorAll("#alt-numbers-min-purchase-label").forEach((el) => {
-          el.textContent = String(rules.minPurchasedForPicker);
-        });
-        document.querySelectorAll("#alt-numbers-min-activated-label").forEach((el) => {
-          el.textContent = String(rules.minActivatedForSend);
-        });
+        document
+          .querySelectorAll(
+            "#alt-numbers-min-purchase-label, #alt-numbers-min-purchase-label-2"
+          )
+          .forEach((el) => {
+            el.textContent = String(rules.minPurchasedForPicker);
+          });
+        ensureAlternativaPurchaseQtyFloor();
       }
 
       function updateDisEvoCampaignSendUi() {
@@ -16989,53 +16987,67 @@
         if (selectedEl) fillSelectWithValues(selectedEl, selectedNames);
       }
 
-      function formatAlternativaPurchaseBlockedMessage(purchased, minRequired) {
+      function getAlternativaMinPurchaseQty() {
+        const rules = resolveAlternativaDispatchRules();
+        return Math.max(1, Math.floor(Number(rules.minPurchaseQuantity ?? rules.minPurchasedForPicker) || 4));
+      }
+
+      function ensureAlternativaPurchaseQtyFloor() {
+        const minQty = getAlternativaMinPurchaseQty();
+        if (alternativaNumbersSelectedQty < minQty) {
+          alternativaNumbersSelectedQty = minQty;
+        }
+        return minQty;
+      }
+
+      function formatAlternativaPurchaseStatusMessage(purchased, minRequired) {
         const qty = Math.max(0, Math.floor(Number(purchased) || 0));
         const min = Math.max(1, Math.floor(Number(minRequired) || 4));
         const missing = Math.max(0, min - qty);
+        if (!qty || missing <= 0) return "";
         const numberWord = qty === 1 ? "número" : "números";
         const missingWord = missing === 1 ? "número" : "números";
-        return `Você possui <strong>${qty}</strong> ${numberWord} comprado(s). Compre pelo menos <strong>${min}</strong> para liberar a ativação${missing > 0 ? ` — faltam <strong>${missing}</strong> ${missingWord}` : ""}.`;
+        return `Você possui ${qty} ${numberWord} comprado(s). Para liberar a ativação, complete até ${min} — faltam ${missing} ${missingWord}.`;
       }
 
       function updateAlternativaPurchaseAlert(summary) {
         const rules = resolveAlternativaDispatchRules();
+        const minRequired = rules.minPurchasedForPicker;
         const purchased = Number(summary?.purchasedSlots ?? 0);
-        const needsMoreToPick = purchased > 0 && purchased < rules.minPurchasedForPicker;
+        const needsMoreToPick = purchased > 0 && purchased < minRequired;
         const alertEl = document.getElementById("alt-numbers-purchase-alert");
-        const alertTextEl = document.getElementById("alt-numbers-purchase-alert-text");
+        const alertStatusEl = document.getElementById("alt-numbers-purchase-alert-status");
         const hintEl = document.getElementById("alt-numbers-flow-hint");
         const purchasedCard = document.getElementById("alt-numbers-purchased-card");
         const purchasedBadge = document.getElementById("alt-numbers-purchased-badge");
-        const pickerLockedText = document.getElementById("alt-numbers-picker-locked-text");
-        const minPurchaseLabels = document.querySelectorAll("#alt-numbers-min-purchase-label");
-        const minActivatedLabels = document.querySelectorAll("#alt-numbers-min-activated-label");
-
-        minPurchaseLabels.forEach((el) => {
-          el.textContent = String(rules.minPurchasedForPicker);
-        });
-        minActivatedLabels.forEach((el) => {
-          el.textContent = String(rules.minActivatedForSend);
-        });
-
-        const blockedMessage = formatAlternativaPurchaseBlockedMessage(
-          purchased,
-          rules.minPurchasedForPicker
+        const pickerLockedStatus = document.getElementById("alt-numbers-picker-locked-status");
+        const minPurchaseLabels = document.querySelectorAll(
+          "#alt-numbers-min-purchase-label, #alt-numbers-min-purchase-label-2"
         );
 
+        minPurchaseLabels.forEach((el) => {
+          el.textContent = String(minRequired);
+        });
+
+        const statusMessage = formatAlternativaPurchaseStatusMessage(purchased, minRequired);
+
         if (alertEl) alertEl.hidden = !needsMoreToPick;
-        if (alertTextEl) alertTextEl.innerHTML = blockedMessage;
+        if (alertStatusEl) {
+          alertStatusEl.hidden = !statusMessage;
+          alertStatusEl.textContent = statusMessage;
+        }
         if (hintEl) hintEl.classList.toggle("is-suppressed", needsMoreToPick);
         if (purchasedCard) purchasedCard.classList.toggle("is-below-minimum", needsMoreToPick);
         if (purchasedBadge) {
           purchasedBadge.hidden = !needsMoreToPick;
           purchasedBadge.textContent =
             purchased > 0
-              ? `Faltam ${Math.max(0, rules.minPurchasedForPicker - purchased)}`
-              : "Falta comprar";
+              ? `Faltam ${Math.max(0, minRequired - purchased)}`
+              : "Mín. 4";
         }
-        if (pickerLockedText) {
-          pickerLockedText.innerHTML = `${blockedMessage} O motor de envio exige no mínimo <strong>${rules.minActivatedForSend}</strong> números ativados.`;
+        if (pickerLockedStatus) {
+          pickerLockedStatus.hidden = !statusMessage;
+          pickerLockedStatus.textContent = statusMessage;
         }
       }
 
@@ -17057,13 +17069,14 @@
           if (el) el.classList.remove("is-active", "is-done");
         });
 
-        let hint = "Escolha quantos números deseja e pague com PIX.";
+        let hint = "Escolha a quantidade (mínimo 4) e pague com PIX.";
         const rules = resolveAlternativaDispatchRules();
+        const minPurchase = getAlternativaMinPurchaseQty();
         if (purchased <= 0) {
           stepBuy?.classList.add("is-active");
         } else if (purchased < rules.minPurchasedForPicker) {
           stepBuy?.classList.add("is-active");
-          hint = `Compre mais números para liberar a ativação (${purchased}/${rules.minPurchasedForPicker}).`;
+          hint = `Complete ${minPurchase} números comprados para liberar a ativação (${purchased}/${rules.minPurchasedForPicker}).`;
         } else if (available > 0) {
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-active");
@@ -17177,6 +17190,7 @@
 
       function renderAlternativaNumbersShop() {
         const summary = alternativaNumbersSummary;
+        const minQty = ensureAlternativaPurchaseQtyFloor();
         const purchasedEl = document.getElementById("alt-numbers-purchased");
         const activatedEl = document.getElementById("alt-numbers-activated");
         const availableEl = document.getElementById("alt-numbers-available");
@@ -17199,7 +17213,7 @@
         }
         if (qtyOut) qtyOut.textContent = String(alternativaNumbersSelectedQty);
         if (totalEl) totalEl.textContent = formatAlternativaNumbersTotal(alternativaNumbersSelectedQty);
-        if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= 1;
+        if (minusBtn) minusBtn.disabled = alternativaNumbersSelectedQty <= minQty;
         if (plusBtn) {
           plusBtn.disabled = alternativaNumbersSelectedQty >= (summary?.maxQuantity ?? ALTERNATIVA_NUMBER_MAX_QTY);
         }
@@ -17267,9 +17281,10 @@
       }
 
       async function openAlternativaNumbersBillingModal() {
+        const minQty = ensureAlternativaPurchaseQtyFloor();
         const qty = alternativaNumbersSelectedQty;
-        if (!qty || qty < 1) {
-          showToast("Selecione a quantidade de números.", "warning");
+        if (!qty || qty < minQty) {
+          showToast(`Compra mínima de ${minQty} números por transação.`, "warning");
           return;
         }
         if (!wabaSessionEmail) {
@@ -17383,7 +17398,8 @@
           });
         });
         document.getElementById("alt-numbers-qty-minus")?.addEventListener("click", () => {
-          alternativaNumbersSelectedQty = Math.max(1, alternativaNumbersSelectedQty - 1);
+          const minQty = getAlternativaMinPurchaseQty();
+          alternativaNumbersSelectedQty = Math.max(minQty, alternativaNumbersSelectedQty - 1);
           renderAlternativaNumbersShop();
         });
         document.getElementById("alt-numbers-qty-plus")?.addEventListener("click", () => {

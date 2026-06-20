@@ -5,6 +5,7 @@ const node_crypto_1 = require("node:crypto");
 const waba_fazenda_pool_service_1 = require("../instances/waba-fazenda-pool.service");
 const alternativa_number_activation_repository_1 = require("./alternativa-number-activation.repository");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
+const alternativa_dispatch_rules_1 = require("../disparos/alternativa-dispatch-rules");
 exports.ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
 exports.ALTERNATIVA_NUMBER_MAX_QUANTITY = 20;
 const normalizeEmail = (value) => String(value ?? "").trim().toLowerCase();
@@ -40,6 +41,9 @@ class WabaAlternativaNumbersService {
         const fazendaPool = await waba_fazenda_pool_service_1.wabaFazendaPoolService.buildPoolForSubscriber(email);
         return {
             ...this.getPricing(),
+            dispatchRules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)(),
+            canPickNumbers: purchasedSlots >= (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)().minPurchasedForPicker,
+            canSend: activatedCount >= (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)().minActivatedForSend,
             purchasedSlots,
             activatedCount,
             availableSlots,
@@ -56,8 +60,8 @@ class WabaAlternativaNumbersService {
     }
     validateCheckout(quantity, valueCents) {
         const qty = Math.round(Number(quantity));
-        if (!Number.isFinite(qty) || qty < 1 || qty > exports.ALTERNATIVA_NUMBER_MAX_QUANTITY) {
-            throw new Error(`Selecione entre 1 e ${exports.ALTERNATIVA_NUMBER_MAX_QUANTITY} números.`);
+        if (!Number.isFinite(qty) || qty < alternativa_dispatch_rules_1.ALTERNATIVA_MIN_PURCHASE_QUANTITY || qty > exports.ALTERNATIVA_NUMBER_MAX_QUANTITY) {
+            throw new Error(`Compra mínima de ${alternativa_dispatch_rules_1.ALTERNATIVA_MIN_PURCHASE_QUANTITY} números. Selecione entre ${alternativa_dispatch_rules_1.ALTERNATIVA_MIN_PURCHASE_QUANTITY} e ${exports.ALTERNATIVA_NUMBER_MAX_QUANTITY}.`);
         }
         const expected = qty * exports.ALTERNATIVA_NUMBER_UNIT_CENTS;
         const cents = Math.round(Number(valueCents));
@@ -84,8 +88,8 @@ class WabaAlternativaNumbersService {
             throw new Error("Informe um e-mail válido.");
         }
         const qty = Math.round(Number(quantity));
-        if (!Number.isFinite(qty) || qty < 1) {
-            throw new Error("Informe uma quantidade válida de números.");
+        if (!Number.isFinite(qty) || qty < alternativa_dispatch_rules_1.ALTERNATIVA_MIN_PURCHASE_QUANTITY) {
+            throw new Error(`Compra mínima de ${alternativa_dispatch_rules_1.ALTERNATIVA_MIN_PURCHASE_QUANTITY} números.`);
         }
         const now = new Date().toISOString();
         const orderId = (0, node_crypto_1.randomUUID)();

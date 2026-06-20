@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-20
 
+**WABA — UI remover painel Envio automático (API Alternativa):** seção `#dis-alternativa-auto-rules` removida de `index.html` e `dist/index.html`; JS de exibição limpo. Ver `doc/LOG-2026-06-20__remove-alternativa-auto-rules-panel.md`.
+
 **WABA — V02 merge master (aquecedor):** branch `v02` sincronizada com `master` (`9e64f14`); deploy serviço `waba_disparador_v02`. Marker `DEPLOY-2026-06-20-aquecedor-reply-turn-sync`. Ver `doc/LOG-2026-06-20__v02-merge-master-aquecedor-reply-turn.md`.
 
 **WABA — API Alternativa layout (campanhas | créditos | config):** tela `disparo-evo` alinhada à API Oficial — campanhas à esquerda, painel Resumo/Saldos à direita (mesmo comportamento de créditos/polling), config legacy embaixo. Ver `doc/LOG-2026-06-20__api-alternativa-layout-resumo-creditos.md`.
