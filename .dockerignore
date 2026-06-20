@@ -13,3 +13,10 @@ shortener-waba
 shortener-waba.zip
 .cursor
 *.zip
+doc
+agent-tools
+media/*.csv
+media/sql-import
+scripts/*.ps1
+scripts/dev-*
+scripts/simulate-*

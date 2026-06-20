@@ -13,7 +13,15 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-19
+2026-06-20
+
+**WABA — Easypanel build travado (processando infinito):** Dockerfile otimizado — um `npm ci`, `npm prune`, echo nos steps, `NODE_OPTIONS` no tsc; `.dockerignore` exclui doc/CSVs (~14 MB). Marker `DEPLOY-2026-06-20-docker-build-fast`. VPS: `docker builder prune -af`. Ver `doc/FIX-EASYPANEL-DOCKER-BUILD-HANG.md`.
+
+**WABA — simulação compra números Alternativa (V02):** `simulatePaidPurchase` + rota `POST /billing/alternativa-numbers/simulate-purchase` (só V02/dev); saldo por `ownerEmail`. Walkup: 30 slots simulados. Ver `doc/LOG-2026-06-20__simulate-walkup-30-alternativa-numbers.md`.
+
+**WABA — V02 modal PIX compra números:** roteamento checkout corrigido (`alternativa-numbers` vs créditos R$300); validação celular; cancel/estado limpos. Ver `doc/LOG-2026-06-19__fix-alternativa-numbers-pix-modal.md`.
+
+**WABA — V02 página não carregava (JS):** ao inserir fluxo "Comprar números" em `index.html`, a declaração `function formatDisparosQty` foi removida acidentalmente — `return` solto causava `Unexpected token 'function'`. Corrigido em `index.html` e `dist/index.html`. Ver `doc/LOG-2026-06-19__v02-page-load-js-syntax-fix.md`.
 
 **WABA — fix QRCode Aquecedor (EVO timeout):** timeout 45s + retry na Evolution; `registrar-qrcode` estável. Ver `doc/LOG-2026-06-19__fix-aquecedor-qrcode-evo-timeout.md`.
 
