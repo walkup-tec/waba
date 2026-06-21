@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Aquecedor mesh webhook verify v3:** confirmação via MESSAGES_UPSERT + findMessages global + envio multi-formato; service dedicado. Marker `DEPLOY-2026-06-21-aquecedor-mesh-webhook-verify-v3`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-webhook-verify-v3.md`.
+
 **WABA — Aquecedor mesh EVO digits + escala hub-spoke:** corrige normalização BR errada nos números da EVO (`resolveAquecedorInstanceDigits`); mesh hub-spoke a partir de 7 instâncias; verify bootstrap mais rápido; ETA na UI/API. Marker `DEPLOY-2026-06-21-aquecedor-mesh-evo-digits-scale`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-evo-digits-scale.md`.
 
 **WABA — Aquecedor mesh fail UI vermelho + msg simples:** card/barra vermelhos no teste falho; mensagem amigável ao usuário; detalhe técnico nos logs. Marker `DEPLOY-2026-06-21-aquecedor-mesh-fail-ui-red`.
