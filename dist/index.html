@@ -26048,12 +26048,18 @@
           if (String(mesh.phase || "") === "running") {
             const total = Math.max(1, Number(mesh.totalPairs || 1));
             const done = Number(mesh.completedPairs || 0);
+            const etaSec = Math.max(0, Number(mesh.estimatedDurationSeconds || 0));
             const pct = Math.max(8, Math.min(92, Math.round((done / total) * 100)));
             fillEl.style.width = `${pct}%`;
+            const modeHint =
+              String(mesh.mode || "") === "hub-spoke" && mesh.hubInstance
+                ? ` (hub ${mesh.hubInstance})`
+                : "";
+            const etaHint = etaSec > 0 ? ` · ~${etaSec}s no total` : "";
             captionEl.textContent =
               done > 0
-                ? `Validação mesh: ${done}/${total} pares processados…`
-                : `Validação mesh: ${total} envios simultâneos em andamento…`;
+                ? `Validação mesh: ${done}/${total} pares${modeHint}${etaHint}…`
+                : `Validação mesh: ${total} pares${modeHint}${etaHint}…`;
           } else {
             captionEl.textContent = "Processando envio agora...";
           }
@@ -26107,11 +26113,16 @@
           if (meshPhase === "running") {
             titleEl.textContent = "Validação inicial entre instâncias";
             const total = Number(mesh.totalPairs || 0);
+            const etaSec = Math.max(0, Number(mesh.estimatedDurationSeconds || 0));
+            const modeHint =
+              String(mesh.mode || "") === "hub-spoke" && mesh.hubInstance
+                ? ` via hub ${mesh.hubInstance}`
+                : " (todas↔todas)";
             subEl.textContent =
               lastResult ||
               (total > 0
-                ? `Enviando e confirmando ${total} pares simultaneamente…`
-                : "Validando comunicação EVO entre todas as instâncias…");
+                ? `Enviando e confirmando ${total} pares${modeHint}${etaSec > 0 ? ` · ~${etaSec}s estimados` : ""}…`
+                : "Validando comunicação EVO entre instâncias…");
           } else {
             titleEl.textContent = "Aquecedor processando agora";
             subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
