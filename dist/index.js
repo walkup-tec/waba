@@ -994,6 +994,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
     const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
     const instanceStats = new Map();
     const pairLastSender = new Map();
+    const pairStates = new Map();
     const ensureStats = (canonical) => {
         const key = canonical.toLowerCase();
         let stats = instanceStats.get(key);
@@ -1005,10 +1006,19 @@ async function loadAquecedorTurnManager(supabase, connected) {
                 lastReceivedFrom: null,
                 sendCount: 0,
                 receiveCount: 0,
+                outboundSinceInbound: 0,
             };
             instanceStats.set(key, stats);
         }
         return stats;
+    };
+    const ensurePairState = (pairKey) => {
+        let state = pairStates.get(pairKey);
+        if (!state) {
+            state = { pendingReplyFrom: null, exchangeCount: 0 };
+            pairStates.set(pairKey, state);
+        }
+        return state;
     };
     for (const ev of events) {
         const fromStats = ensureStats(ev.fromInst);
@@ -1018,7 +1028,18 @@ async function loadAquecedorTurnManager(supabase, connected) {
         fromStats.lastSentAt = ev.at;
         toStats.lastReceivedAt = ev.at;
         toStats.lastReceivedFrom = ev.fromInst;
+        fromStats.outboundSinceInbound += 1;
+        toStats.outboundSinceInbound = 0;
         pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+        const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
+        const pairState = ensurePairState(pairKey);
+        pairState.exchangeCount += 1;
+        if (pairState.pendingReplyFrom?.toLowerCase() === ev.fromInst.toLowerCase()) {
+            pairState.pendingReplyFrom = null;
+        }
+        else {
+            pairState.pendingReplyFrom = ev.toInst;
+        }
     }
     const owesPairReply = (origemRaw, destinoRaw) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
@@ -1026,11 +1047,8 @@ async function loadAquecedorTurnManager(supabase, connected) {
         if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
             return false;
         const pairKey = buildAquecedorPairKey(origem, destino);
-        const lastSender = pairLastSender.get(pairKey);
-        if (!lastSender || lastSender.toLowerCase() === origem.toLowerCase())
-            return false;
-        const stats = instanceStats.get(origem.toLowerCase());
-        return stats?.lastReceivedFrom?.toLowerCase() === destino.toLowerCase();
+        const pairState = pairStates.get(pairKey);
+        return pairState?.pendingReplyFrom?.toLowerCase() === origem.toLowerCase();
     };
     const canSendDirected = (origemRaw, destinoRaw) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
@@ -1046,11 +1064,9 @@ async function loadAquecedorTurnManager(supabase, connected) {
             return true;
         }
         const stats = instanceStats.get(origem.toLowerCase());
-        if (!stats?.lastSentAt)
+        if (!stats?.lastSentAt || stats.outboundSinceInbound === 0)
             return true;
-        if (!stats.lastReceivedAt)
-            return false;
-        return stats.lastReceivedAt >= stats.lastSentAt;
+        return false;
     };
     const describeBlockReason = (origemRaw, destinoRaw) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
@@ -1061,11 +1077,14 @@ async function loadAquecedorTurnManager(supabase, connected) {
         if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
             return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
         }
-        if (stats?.lastSentAt && (!stats.lastReceivedAt || stats.lastReceivedAt < stats.lastSentAt)) {
+        if (owesPairReply(origemRaw, destinoRaw)) {
+            return `${origem} deve responder ${destino} neste par antes de outras combinações.`;
+        }
+        if (stats && stats.outboundSinceInbound > 0) {
             const esperado = stats.lastReceivedFrom
-                ? ` Responder a ${stats.lastReceivedFrom} libera o turno.`
+                ? ` Responder a ${stats.lastReceivedFrom} libera o turno global.`
                 : "";
-            return `${origem} enviou ${stats.sendCount} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+            return `${origem} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
         }
         return `${origem} não pode enviar para ${destino} no turno atual.`;
     };
@@ -1074,16 +1093,20 @@ async function loadAquecedorTurnManager(supabase, connected) {
         const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
         const stats = instanceStats.get(origem.toLowerCase());
         let score = 0;
-        if (stats?.lastReceivedAt &&
-            stats?.lastSentAt &&
-            stats.lastReceivedAt > stats.lastSentAt) {
-            score -= 1000000;
-            if (stats.lastReceivedFrom &&
-                stats.lastReceivedFrom.toLowerCase() === destino.toLowerCase()) {
-                score -= 500000;
-            }
+        if (owesPairReply(origemRaw, destinoRaw)) {
+            score -= 5000000;
         }
-        score += (stats?.sendCount || 0) * 1000;
+        score += (stats?.sendCount || 0) * 10000;
+        const pairKey = buildAquecedorPairKey(origem, destino);
+        const pairState = pairStates.get(pairKey);
+        if (pairState) {
+            score += pairState.exchangeCount * 2000;
+        }
+        else {
+            score -= 100000;
+        }
+        const destStats = instanceStats.get(destino.toLowerCase());
+        score += (destStats?.sendCount || 0) * 1000;
         const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
         score += rotation;
         return score;

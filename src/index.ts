@@ -1171,6 +1171,14 @@ type AquecedorInstanceTurnStats = {
   lastReceivedFrom: string | null;
   sendCount: number;
   receiveCount: number;
+  /** Envios desde o último inbound (0 = liberado para novo envio). */
+  outboundSinceInbound: number;
+};
+
+type AquecedorPairConversationState = {
+  /** Instância canônica que deve enviar a próxima mensagem neste par (A→B aguardando B→A). */
+  pendingReplyFrom: string | null;
+  exchangeCount: number;
 };
 
 type AquecedorTurnManager = {
@@ -1203,6 +1211,7 @@ async function loadAquecedorTurnManager(
 
   const instanceStats = new Map<string, AquecedorInstanceTurnStats>();
   const pairLastSender = new Map<string, string>();
+  const pairStates = new Map<string, AquecedorPairConversationState>();
 
   const ensureStats = (canonical: string): AquecedorInstanceTurnStats => {
     const key = canonical.toLowerCase();
@@ -1215,10 +1224,20 @@ async function loadAquecedorTurnManager(
         lastReceivedFrom: null,
         sendCount: 0,
         receiveCount: 0,
+        outboundSinceInbound: 0,
       };
       instanceStats.set(key, stats);
     }
     return stats;
+  };
+
+  const ensurePairState = (pairKey: string): AquecedorPairConversationState => {
+    let state = pairStates.get(pairKey);
+    if (!state) {
+      state = { pendingReplyFrom: null, exchangeCount: 0 };
+      pairStates.set(pairKey, state);
+    }
+    return state;
   };
 
   for (const ev of events) {
@@ -1229,7 +1248,18 @@ async function loadAquecedorTurnManager(
     fromStats.lastSentAt = ev.at;
     toStats.lastReceivedAt = ev.at;
     toStats.lastReceivedFrom = ev.fromInst;
+    fromStats.outboundSinceInbound += 1;
+    toStats.outboundSinceInbound = 0;
     pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+
+    const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
+    const pairState = ensurePairState(pairKey);
+    pairState.exchangeCount += 1;
+    if (pairState.pendingReplyFrom?.toLowerCase() === ev.fromInst.toLowerCase()) {
+      pairState.pendingReplyFrom = null;
+    } else {
+      pairState.pendingReplyFrom = ev.toInst;
+    }
   }
 
   const owesPairReply = (origemRaw: string, destinoRaw: string): boolean => {
@@ -1238,11 +1268,8 @@ async function loadAquecedorTurnManager(
     if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return false;
 
     const pairKey = buildAquecedorPairKey(origem, destino);
-    const lastSender = pairLastSender.get(pairKey);
-    if (!lastSender || lastSender.toLowerCase() === origem.toLowerCase()) return false;
-
-    const stats = instanceStats.get(origem.toLowerCase());
-    return stats?.lastReceivedFrom?.toLowerCase() === destino.toLowerCase();
+    const pairState = pairStates.get(pairKey);
+    return pairState?.pendingReplyFrom?.toLowerCase() === origem.toLowerCase();
   };
 
   const canSendDirected = (origemRaw: string, destinoRaw: string): boolean => {
@@ -1261,9 +1288,8 @@ async function loadAquecedorTurnManager(
     }
 
     const stats = instanceStats.get(origem.toLowerCase());
-    if (!stats?.lastSentAt) return true;
-    if (!stats.lastReceivedAt) return false;
-    return stats.lastReceivedAt >= stats.lastSentAt;
+    if (!stats?.lastSentAt || stats.outboundSinceInbound === 0) return true;
+    return false;
   };
 
   const describeBlockReason = (origemRaw: string, destinoRaw: string): string => {
@@ -1276,11 +1302,14 @@ async function loadAquecedorTurnManager(
     if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
       return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
     }
-    if (stats?.lastSentAt && (!stats.lastReceivedAt || stats.lastReceivedAt < stats.lastSentAt)) {
+    if (owesPairReply(origemRaw, destinoRaw)) {
+      return `${origem} deve responder ${destino} neste par antes de outras combinações.`;
+    }
+    if (stats && stats.outboundSinceInbound > 0) {
       const esperado = stats.lastReceivedFrom
-        ? ` Responder a ${stats.lastReceivedFrom} libera o turno.`
+        ? ` Responder a ${stats.lastReceivedFrom} libera o turno global.`
         : "";
-      return `${origem} enviou ${stats.sendCount} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+      return `${origem} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
     }
     return `${origem} não pode enviar para ${destino} no turno atual.`;
   };
@@ -1296,21 +1325,23 @@ async function loadAquecedorTurnManager(
     const stats = instanceStats.get(origem.toLowerCase());
     let score = 0;
 
-    if (
-      stats?.lastReceivedAt &&
-      stats?.lastSentAt &&
-      stats.lastReceivedAt > stats.lastSentAt
-    ) {
-      score -= 1_000_000;
-      if (
-        stats.lastReceivedFrom &&
-        stats.lastReceivedFrom.toLowerCase() === destino.toLowerCase()
-      ) {
-        score -= 500_000;
-      }
+    if (owesPairReply(origemRaw, destinoRaw)) {
+      score -= 5_000_000;
     }
 
-    score += (stats?.sendCount || 0) * 1_000;
+    score += (stats?.sendCount || 0) * 10_000;
+
+    const pairKey = buildAquecedorPairKey(origem, destino);
+    const pairState = pairStates.get(pairKey);
+    if (pairState) {
+      score += pairState.exchangeCount * 2_000;
+    } else {
+      score -= 100_000;
+    }
+
+    const destStats = instanceStats.get(destino.toLowerCase());
+    score += (destStats?.sendCount || 0) * 1_000;
+
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
     score += rotation;
     return score;

@@ -13,6 +13,10 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-21
+
+**WABA — Aquecedor fila multi-instância (5 no ciclo, só 2 conversando):** state machine por par (`pendingReplyFrom` idle após A→B + B→A); `outboundSinceInbound` global; fairness no score. Marker `DEPLOY-2026-06-21-aquecedor-fila-multi-instancia`. Ver `doc/LOG-2026-06-21__aquecedor-fila-multi-instancia-fix.md`.
+
 2026-06-20
 
 **WABA — UI remover painel Envio automático (API Alternativa):** seção `#dis-alternativa-auto-rules` removida de `index.html` e `dist/index.html`; JS de exibição limpo. Ver `doc/LOG-2026-06-20__remove-alternativa-auto-rules-panel.md`.
