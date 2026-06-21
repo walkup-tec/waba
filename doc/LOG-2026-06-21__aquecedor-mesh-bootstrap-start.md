@@ -20,6 +20,16 @@ Ao **iniciar** o aquecedor, todas as instâncias devem enviar mensagens para **t
 
 **UI:** `index.html` — hero e barra de progresso durante validação mesh.
 
+## Correção mesh falso negativo (2026-06-21 tarde)
+
+**Sintoma:** 3 instâncias conectadas na EVO, validação falha só em `soma→drax`, `soma→walkup`.
+
+**Causa:** envio+findMessages **todos em paralelo** — mesma origem (`soma`) disparava 2 sendText ao mesmo tempo; EVO/WhatsApp e findMessages saturados → falso negativo (HTTP 201 mas «não apareceu no destinatário»).
+
+**Fix:** fases separadas — (1) envio por origem em sequência (900ms gap), origens diferentes em paralelo; (2) pausa 5s; (3) verify em paralelo + 1 retry; números refresh live EVO; alias técnico no sendText.
+
+Marker: `DEPLOY-2026-06-21-aquecedor-mesh-send-verify-phases`
+
 ## Validar
 
 1. Deploy produção + marker no `/health`.

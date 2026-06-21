@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Aquecedor mesh fail UI vermelho + msg simples:** card/barra vermelhos no teste falho; mensagem amigável ao usuário; detalhe técnico nos logs. Marker `DEPLOY-2026-06-21-aquecedor-mesh-fail-ui-red`.
+
+**WABA — Aquecedor mesh send/verify fases:** envio sequencial por origem, verify em lote + retry; refresh números EVO live. Marker `DEPLOY-2026-06-21-aquecedor-mesh-send-verify-phases`.
+
 **WABA — Aquecedor mesh bootstrap no start:** ao iniciar, N×(N−1) envios paralelos + findMessages; ciclo só após `passed`. Marker `DEPLOY-2026-06-21-aquecedor-mesh-bootstrap-start`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-bootstrap-start.md`.
 
 **WABA — Aquecedor delivery verify v2 (walkup HTTP 201):** findMessages com alias EVO, timestamp, fromMe, 12×3s; detecta mensagem só na origem. Marker `DEPLOY-2026-06-21-aquecedor-delivery-verify-v2`. Ver `doc/LOG-2026-06-21__aquecedor-delivery-verify-walkup-v2.md`.

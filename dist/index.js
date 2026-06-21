@@ -1980,6 +1980,7 @@ function createIdleAquecedorMeshBootstrap() {
         failCount: 0,
         failures: [],
         userLogMessage: null,
+        technicalSummary: null,
     };
 }
 const aquecedorRuntime = {
@@ -2890,62 +2891,135 @@ function buildAquecedorMeshPairs(connected) {
     }
     return pairs;
 }
-async function executeAquecedorMeshPairSend(input) {
+async function refreshAquecedorConnectedNumbersFromEvoLive(connected) {
+    const evoList = await fetchEvoInstancesList();
+    if (!evoList.ok)
+        return connected;
+    const liveRows = buildConnectedFromEvoResponse(evoList.instances);
+    const liveByKey = new Map(liveRows.map((row) => [row.instancia.toLowerCase(), row.numero]));
+    return connected.map((row) => {
+        const liveNum = liveByKey.get(row.instancia.toLowerCase());
+        return liveNum ? { ...row, numero: liveNum } : row;
+    });
+}
+const AQUECEDOR_MESH_SEND_GAP_MS = 900;
+const AQUECEDOR_MESH_VERIFY_SETTLE_MS = 5000;
+const AQUECEDOR_MESH_VERIFY_RETRY_GAP_MS = 4000;
+async function sendAquecedorMeshPairOnly(input) {
     const { origem, destino } = input;
     const deliveryTag = buildAquecedorDeliveryTag();
     const texto = appendAquecedorDeliveryTag(`Validação aquecedor ${origem.instancia}→${destino.instancia}.`, deliveryTag);
-    const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, origem.instancia);
-    const numero = normalizeWhatsAppNumber(destino.numero);
-    if (!numero) {
-        return { ok: false, detail: "Número destino inválido.", status: 0 };
+    const evoOrigemCandidates = await resolveEvoInstanceNameCandidates(origem.instancia);
+    const numeroDestino = normalizeWhatsAppNumber(destino.numero);
+    const numeroOrigem = normalizeWhatsAppNumber(origem.numero);
+    const base = {
+        origem: origem.instancia,
+        destino: destino.instancia,
+        sendOk: false,
+        verifyOk: false,
+        ok: false,
+        detail: "",
+        status: 0,
+        texto,
+        sendStartedAtMs: Date.now(),
+        numeroDestino,
+        numeroOrigem,
+    };
+    if (!numeroDestino) {
+        return { ...base, detail: "Número destino inválido." };
     }
-    const sendStartedAtMs = Date.now();
-    const sendBody = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text: texto } }
-        : { number: numero, text: texto, textMessage: { text: texto } };
-    const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
-    if (!sendResult.ok) {
-        const evoDetail = sendResult.json?.message ||
-            (Array.isArray(sendResult.json?.message) ? sendResult.json.message[0] : null) ||
-            sendResult.json?.error ||
-            (typeof sendResult.json?.detail === "string" ? sendResult.json.detail : null) ||
-            (sendResult.body && sendResult.body.length < 160 ? sendResult.body : null);
-        const detail = evoDetail ? String(evoDetail).slice(0, 140) : `HTTP ${sendResult.status}`;
-        return { ok: false, detail, status: sendResult.status };
+    if (!numeroOrigem) {
+        return { ...base, detail: "Número origem inválido." };
     }
-    const deliveryCheck = await verifyAquecedorMessageDelivered(destino.instancia, origem.numero, texto, {
-        instanciaOrigem: origem.instancia,
-        numeroDestino: numero,
-        sendStartedAtMs,
-        maxAttempts: 8,
+    let sendResult = null;
+    for (const evoOrigem of evoOrigemCandidates) {
+        const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, evoOrigem);
+        const sendBody = EVO_SEND_TEXT_V1
+            ? { number: numeroDestino, textMessage: { text: texto } }
+            : { number: numeroDestino, text: texto, textMessage: { text: texto } };
+        base.sendStartedAtMs = Date.now();
+        sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
+        if (sendResult.ok)
+            break;
+    }
+    if (!sendResult?.ok) {
+        const evoDetail = sendResult?.json?.message ||
+            (Array.isArray(sendResult?.json?.message) ? sendResult?.json.message[0] : null) ||
+            sendResult?.json?.error ||
+            (typeof sendResult?.json?.detail === "string" ? sendResult?.json.detail : null) ||
+            (sendResult?.body && sendResult.body.length < 160 ? sendResult.body : null);
+        const detail = evoDetail ? String(evoDetail).slice(0, 140) : `HTTP ${sendResult?.status || 0}`;
+        return { ...base, detail, status: sendResult?.status || 0 };
+    }
+    return {
+        ...base,
+        sendOk: true,
+        status: sendResult.status,
+        detail: "",
+    };
+}
+async function verifyAquecedorMeshPairSent(work, maxAttempts = 10) {
+    if (!work.sendOk) {
+        return { ok: false, detail: work.detail || "Envio não realizado." };
+    }
+    return verifyAquecedorMessageDelivered(work.destino, work.numeroOrigem, work.texto, {
+        instanciaOrigem: work.origem,
+        numeroDestino: work.numeroDestino,
+        sendStartedAtMs: work.sendStartedAtMs,
+        maxAttempts,
+        timestampGraceMs: 20000,
     });
-    if (!deliveryCheck.ok) {
-        return { ok: false, detail: deliveryCheck.detail, status: sendResult.status };
+}
+function groupAquecedorMeshPairsByOrigin(pairs) {
+    const byOrigin = new Map();
+    for (const pair of pairs) {
+        const key = pair.origem.instancia.toLowerCase();
+        const bucket = byOrigin.get(key);
+        if (bucket)
+            bucket.push(pair);
+        else
+            byOrigin.set(key, [pair]);
     }
-    return { ok: true, detail: "", status: sendResult.status };
+    return Array.from(byOrigin.values());
+}
+async function executeAquecedorMeshPairSend(input) {
+    const sent = await sendAquecedorMeshPairOnly(input);
+    if (!sent.sendOk) {
+        return { ok: false, detail: sent.detail, status: sent.status };
+    }
+    const deliveryCheck = await verifyAquecedorMeshPairSent(sent, 8);
+    if (!deliveryCheck.ok) {
+        return { ok: false, detail: deliveryCheck.detail, status: sent.status };
+    }
+    return { ok: true, detail: "", status: sent.status };
 }
 function buildAquecedorMeshSuccessUserMessage(instanceCount) {
     const n = Math.max(1, Math.floor(instanceCount));
     const instLabel = n === 1 ? "1 instância" : `${n} instâncias`;
     return `Todas as ${instLabel} estão funcionando perfeitamente bem. Ciclo iniciando.`;
 }
-function buildAquecedorMeshFailureUserMessage(instanceCount, failures) {
+function buildAquecedorMeshFailureUserMessage(_instanceCount, _failures) {
+    return "Teste falhou. Verifique se as instâncias estão integradas corretamente e pause o Aquecedor. Após isso, inicie o Aquecedor novamente.";
+}
+function buildAquecedorMeshFailureTechnicalSummary(instanceCount, failures) {
     const n = Math.max(1, Math.floor(instanceCount));
     const instLabel = n === 1 ? "1 instância" : `${n} instâncias`;
     if (!failures.length) {
-        return `A validação falhou: nem todas as ${instLabel} confirmaram envio e recebimento via EVO. Pare o aquecedor, corrija as instâncias e inicie novamente.`;
+        return `Validação técnica: nem todas as ${instLabel} confirmaram envio e recebimento via EVO.`;
     }
     const sample = failures
         .slice(0, 5)
         .map((row) => `${row.origem}→${row.destino}`)
         .join(", ");
     const extra = failures.length > 5 ? ` (+${failures.length - 5} pares)` : "";
-    return `A validação falhou: nem todas as ${instLabel} confirmaram envio e recebimento via EVO. Pares com erro: ${sample}${extra}. Pare o aquecedor, corrija as instâncias e inicie novamente.`;
+    return `Validação técnica: pares com erro (${instLabel} no ciclo): ${sample}${extra}.`;
 }
 function summarizeAquecedorMeshFailures(instanceCount, failures) {
     return buildAquecedorMeshFailureUserMessage(instanceCount, failures);
 }
-async function runAquecedorStartupMeshValidation(connected) {
+async function runAquecedorStartupMeshValidation(connectedInput) {
+    const connected = await refreshAquecedorConnectedNumbersFromEvoLive(connectedInput);
+    updateAquecedorConnectedSummary(connected);
     const pairs = buildAquecedorMeshPairs(connected);
     if (pairs.length === 0) {
         const userLogMessage = buildAquecedorMeshSuccessUserMessage(connected.length);
@@ -2970,16 +3044,16 @@ async function runAquecedorStartupMeshValidation(connected) {
         failCount: 0,
         failures: [],
         userLogMessage: null,
+        technicalSummary: null,
     };
-    aquecedorRuntime.lastResult = `Validação inicial: ${pairs.length} envios simultâneos entre ${connected.length} instâncias…`;
+    aquecedorRuntime.lastResult = `Validação inicial: ${pairs.length} envios entre ${connected.length} instâncias (uma origem por vez, destinos em sequência)…`;
     aquecedorRuntime.lastEvoError = null;
-    const settled = await Promise.all(pairs.map(async (pair) => {
-        const result = await executeAquecedorMeshPairSend(pair);
+    const bumpMeshProgress = (deltaOk, deltaFail) => {
         aquecedorMeshBootstrap = {
             ...aquecedorMeshBootstrap,
             completedPairs: aquecedorMeshBootstrap.completedPairs + 1,
-            okCount: aquecedorMeshBootstrap.okCount + (result.ok ? 1 : 0),
-            failCount: aquecedorMeshBootstrap.failCount + (result.ok ? 0 : 1),
+            okCount: aquecedorMeshBootstrap.okCount + deltaOk,
+            failCount: aquecedorMeshBootstrap.failCount + deltaFail,
         };
         if (shouldThisProcessLeadAquecedor(aquecedorPersistedBundle)) {
             void persistAquecedorRuntimeSnapshot({
@@ -2987,33 +3061,76 @@ async function runAquecedorStartupMeshValidation(connected) {
                 workerHeartbeatAt: new Date().toISOString(),
             });
         }
+    };
+    const originGroups = groupAquecedorMeshPairsByOrigin(pairs);
+    const sentWorks = [];
+    await Promise.all(originGroups.map(async (originPairs) => {
+        for (let index = 0; index < originPairs.length; index += 1) {
+            const work = await sendAquecedorMeshPairOnly(originPairs[index]);
+            sentWorks.push(work);
+            bumpMeshProgress(0, 0);
+            if (index < originPairs.length - 1) {
+                await sleepMs(AQUECEDOR_MESH_SEND_GAP_MS);
+            }
+        }
+    }));
+    aquecedorRuntime.lastResult = `Validação inicial: confirmando entrega de ${sentWorks.filter((row) => row.sendOk).length}/${pairs.length} envios…`;
+    await sleepMs(AQUECEDOR_MESH_VERIFY_SETTLE_MS);
+    const verifiedWorks = await Promise.all(sentWorks.map(async (work) => {
+        if (!work.sendOk)
+            return work;
+        const deliveryCheck = await verifyAquecedorMeshPairSent(work, 10);
         return {
-            origem: pair.origem.instancia,
-            destino: pair.destino.instancia,
-            ...result,
+            ...work,
+            verifyOk: deliveryCheck.ok,
+            ok: deliveryCheck.ok,
+            detail: deliveryCheck.ok ? "" : deliveryCheck.detail,
         };
     }));
+    for (const work of verifiedWorks) {
+        if (work.ok || !work.sendOk)
+            continue;
+        await sleepMs(AQUECEDOR_MESH_VERIFY_RETRY_GAP_MS);
+        const retry = await verifyAquecedorMeshPairSent(work, 8);
+        if (retry.ok) {
+            work.verifyOk = true;
+            work.ok = true;
+            work.detail = "";
+        }
+    }
     const failures = [];
     let okCount = 0;
-    for (const row of settled) {
-        if (row.ok) {
+    aquecedorMeshBootstrap = {
+        ...aquecedorMeshBootstrap,
+        completedPairs: pairs.length,
+        okCount: 0,
+        failCount: 0,
+    };
+    for (const work of verifiedWorks) {
+        if (work.ok) {
             okCount += 1;
+            aquecedorMeshBootstrap = { ...aquecedorMeshBootstrap, okCount };
             await recordAquecedorEnvio({
-                instanciaOrigem: row.origem,
-                instanciaDestino: row.destino,
+                instanciaOrigem: work.origem,
+                instanciaDestino: work.destino,
                 status: "Envio com Sucesso",
             });
         }
         else {
             failures.push({
-                origem: row.origem,
-                destino: row.destino,
-                detail: row.detail || "Falha desconhecida.",
+                origem: work.origem,
+                destino: work.destino,
+                detail: work.detail || (work.sendOk ? "Entrega não confirmada no destino." : "Falha no envio EVO."),
             });
+            aquecedorMeshBootstrap = {
+                ...aquecedorMeshBootstrap,
+                failCount: aquecedorMeshBootstrap.failCount + 1,
+            };
         }
     }
     if (failures.length) {
         const userLogMessage = buildAquecedorMeshFailureUserMessage(connected.length, failures);
+        const technicalSummary = buildAquecedorMeshFailureTechnicalSummary(connected.length, failures);
         const first = failures[0];
         aquecedorRuntime.lastEvoError = {
             status: 0,
@@ -3032,6 +3149,7 @@ async function runAquecedorStartupMeshValidation(connected) {
             failCount: failures.length,
             failures: failures.slice(0, 30),
             userLogMessage,
+            technicalSummary,
         };
         aquecedorRuntime.lastResult = userLogMessage;
         return false;
@@ -3048,6 +3166,7 @@ async function runAquecedorStartupMeshValidation(connected) {
         failCount: 0,
         failures: [],
         userLogMessage,
+        technicalSummary: null,
     };
     aquecedorRuntime.lastEvoError = null;
     aquecedorRuntime.lastResult = userLogMessage;
@@ -4966,7 +5085,7 @@ function evoPayloadIncludesNeedle(node, needles, options, depth = 0) {
     if (normalizedNeedles.length && texts.length) {
         const minTs = options?.minTimestampMs;
         const ts = extractAquecedorMessageTimestampMs(obj);
-        const tsOk = minTs == null || ts == null || ts >= minTs - 5000;
+        const tsOk = minTs == null || ts == null || ts >= minTs;
         const fromMeOk = options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
         if (tsOk && fromMeOk) {
             const matched = texts.some((text) => {
@@ -5037,7 +5156,8 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     if (fullText.length >= 12)
         needles.add(fullText.slice(0, 48));
     const needleList = Array.from(needles);
-    const minTimestampMs = options?.sendStartedAtMs ?? Date.now();
+    const timestampGraceMs = options?.timestampGraceMs ?? 5000;
+    const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
     const maxAttempts = Math.max(4, options?.maxAttempts ?? 12);
     const destinoCandidates = await resolveEvoInstanceNameCandidates(destino);
     await sleepMs(3000);

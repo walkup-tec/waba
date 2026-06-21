@@ -7259,6 +7259,18 @@
         background: #0ea5e9;
         animation: aqHeroPulseBlue 1s infinite;
       }
+      .aquecedor-runtime-hero.failed {
+        border-color: rgba(239, 68, 68, 0.85);
+        background: rgba(69, 10, 10, 0.28);
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+      }
+      .aquecedor-runtime-hero.failed .aquecedor-runtime-hero-dot {
+        background: #ef4444;
+        animation: aqHeroPulseRed 1.2s infinite;
+      }
+      .aquecedor-runtime-hero.failed .aquecedor-runtime-hero-title {
+        color: #fecaca;
+      }
       .aquecedor-runtime-hero-title {
         font-weight: 700;
         font-size: 0.92rem;
@@ -7286,6 +7298,11 @@
         70% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
         100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
       }
+      @keyframes aqHeroPulseRed {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+        70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
       .aquecedor-runtime-progress {
         margin-top: 10px;
       }
@@ -7307,6 +7324,10 @@
         width: 35%;
         animation: aqRuntimeProcessing 1.2s ease-in-out infinite;
         background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+      }
+      .aquecedor-runtime-progress-fill.failed {
+        width: 100%;
+        background: linear-gradient(90deg, #f87171, #dc2626);
       }
       .aquecedor-runtime-progress-caption {
         margin-top: 6px;
@@ -25944,6 +25965,10 @@
             if (meshLogKey !== aquecedorLastMeshLogKey) {
               aquecedorLastMeshLogKey = meshLogKey;
               addAquecedorCommandLog(meshUserLog);
+              if (meshPhase === "failed") {
+                const tech = String(meshBootstrap.technicalSummary || "").trim();
+                if (tech) addAquecedorCommandLog(tech);
+              }
               if (meshPhase === "failed" && Array.isArray(meshBootstrap.failures)) {
                 meshBootstrap.failures.slice(0, 3).forEach((row) => {
                   const detail = String(row?.detail || "").trim();
@@ -26001,10 +26026,20 @@
         const nextAllowedAtMs = status?.nextAllowedAt ? new Date(status.nextAllowedAt).getTime() : 0;
         const nowMs = Date.now();
 
-        fillEl.classList.remove("processing");
+        fillEl.classList.remove("processing", "failed");
         if (!running) {
           fillEl.style.width = "0%";
           captionEl.textContent = "Motor parado. Clique em \"Iniciar Aquecedor\" para começar.";
+          return;
+        }
+        const mesh = status?.meshBootstrap || {};
+        const meshPhase = String(mesh.phase || "idle");
+        const meshFailMsg =
+          String(mesh.userLogMessage || "").trim() ||
+          "Teste falhou. Verifique se as instâncias estão integradas corretamente e pause o Aquecedor. Após isso, inicie o Aquecedor novamente.";
+        if (meshPhase === "failed") {
+          fillEl.classList.add("failed");
+          captionEl.textContent = meshFailMsg;
           return;
         }
         if (isProcessing) {
@@ -26055,7 +26090,7 @@
         const mesh = status?.meshBootstrap || {};
         const meshPhase = String(mesh.phase || "idle");
         const meshUserLog = String(mesh.userLogMessage || "").trim();
-        hero.classList.remove("active", "processing");
+        hero.classList.remove("active", "processing", "failed");
         if (countEl) {
           if (running && instanceCount >= 2) {
             countEl.textContent = `${instanceCount} instâncias no ciclo`;
@@ -26084,12 +26119,11 @@
           return;
         }
         if (running && meshPhase === "failed") {
-          hero.classList.add("active");
-          titleEl.textContent = "Validação inicial falhou";
+          hero.classList.add("failed");
+          titleEl.textContent = "Teste falhou";
           subEl.textContent =
-            String(mesh.userLogMessage || "").trim() ||
-            lastResult ||
-            "Corrija as instâncias e inicie novamente.";
+            meshUserLog ||
+            "Teste falhou. Verifique se as instâncias estão integradas corretamente e pause o Aquecedor. Após isso, inicie o Aquecedor novamente.";
           return;
         }
         if (running && meshPhase === "passed" && meshUserLog) {
