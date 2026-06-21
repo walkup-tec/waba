@@ -2889,11 +2889,16 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
     const sendBody = EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text: texto } }
         : { number: numero, text: texto, textMessage: { text: texto } };
+    const sendStartedAtMs = Date.now();
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
     const proximo = picked.index + 1;
     const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
     if (sendResult.ok) {
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), texto);
+        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), texto, {
+            instanciaOrigem: chosen.instancia_origem,
+            numeroDestino: numero,
+            sendStartedAtMs,
+        });
         if (!deliveryCheck.ok) {
             aquecedorRuntime.lastEvoError = {
                 status: sendResult.status,
@@ -3080,6 +3085,7 @@ async function runAquecedorCycle(forceTest = false) {
         const sendBody = EVO_SEND_TEXT_V1
             ? { number: numero, textMessage: { text: textoEnvio } }
             : { number: numero, text: textoEnvio, textMessage: { text: textoEnvio } };
+        const sendStartedAtMs = Date.now();
         const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
         if (!sendResult.ok) {
             await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
@@ -3100,7 +3106,11 @@ async function runAquecedorCycle(forceTest = false) {
             return;
         }
         const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), textoEnvio);
+        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, String(origemConnected?.numero || ""), textoEnvio, {
+            instanciaOrigem: chosen.instancia_origem,
+            numeroDestino: numero,
+            sendStartedAtMs,
+        });
         if (!deliveryCheck.ok) {
             await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
             aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 120000).toISOString();
@@ -4645,7 +4655,26 @@ function buildAquecedorRemoteJidCandidates(num) {
     if (rawDigits && rawDigits !== digits) {
         out.add(`${rawDigits}@s.whatsapp.net`);
     }
+    const suffix = digits.replace(/\D/g, "").slice(-10);
+    if (suffix.length === 10) {
+        out.add(`${suffix}@s.whatsapp.net`);
+        out.add(`55${suffix}@s.whatsapp.net`);
+    }
     return Array.from(out);
+}
+async function resolveEvoInstanceNameCandidates(displayName) {
+    const raw = String(displayName || "").trim();
+    if (!raw)
+        return [];
+    const aliasesMap = await loadInstanceAliasesMap();
+    const candidates = new Set([raw]);
+    for (const [technical, alias] of aliasesMap.entries()) {
+        if (technical.toLowerCase() === raw.toLowerCase())
+            candidates.add(technical);
+        if (alias.toLowerCase() === raw.toLowerCase())
+            candidates.add(technical);
+    }
+    return Array.from(candidates);
 }
 function buildAquecedorDeliveryTag() {
     const raw = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -4666,6 +4695,27 @@ function extractAquecedorMessageMarker(text) {
     if (suffix?.[1])
         return suffix[1].toLowerCase();
     return value.slice(-24).toLowerCase();
+}
+function extractAquecedorMessageTimestampMs(node) {
+    const key = node.key;
+    const raw = key?.messageTimestamp ?? node.messageTimestamp ?? node.timestamp;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+        return raw > 1000000000000 ? raw : raw * 1000;
+    }
+    if (typeof raw === "string" && raw.trim()) {
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed))
+            return parsed > 1000000000000 ? parsed : parsed * 1000;
+    }
+    return null;
+}
+function extractAquecedorFromMe(node) {
+    const key = node.key;
+    if (typeof key?.fromMe === "boolean")
+        return key.fromMe;
+    if (typeof node.fromMe === "boolean")
+        return node.fromMe;
+    return null;
 }
 function collectEvoChatMessageTexts(node, out, depth = 0) {
     if (depth > 10 || node == null)
@@ -4693,23 +4743,80 @@ function collectEvoChatMessageTexts(node, out, depth = 0) {
             collectEvoChatMessageTexts(value, out, depth + 1);
     }
 }
+function evoPayloadIncludesNeedle(node, needles, options, depth = 0) {
+    if (depth > 14 || node == null)
+        return false;
+    if (Array.isArray(node)) {
+        return node.some((item) => evoPayloadIncludesNeedle(item, needles, options, depth + 1));
+    }
+    if (typeof node !== "object")
+        return false;
+    const obj = node;
+    const fromMe = extractAquecedorFromMe(obj);
+    const texts = [];
+    collectEvoChatMessageTexts(obj.message ?? obj, texts);
+    const normalizedNeedles = needles
+        .map((needle) => String(needle || "").trim().toLowerCase())
+        .filter(Boolean);
+    if (normalizedNeedles.length && texts.length) {
+        const minTs = options?.minTimestampMs;
+        const ts = extractAquecedorMessageTimestampMs(obj);
+        const tsOk = minTs == null || ts == null || ts >= minTs - 5000;
+        const fromMeOk = options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
+        if (tsOk && fromMeOk) {
+            const matched = texts.some((text) => {
+                const lowered = text.toLowerCase();
+                return normalizedNeedles.some((needle) => lowered.includes(needle));
+            });
+            if (matched)
+                return true;
+        }
+    }
+    for (const value of Object.values(obj)) {
+        if (value && typeof value === "object") {
+            if (evoPayloadIncludesNeedle(value, needles, options, depth + 1))
+                return true;
+        }
+    }
+    return false;
+}
 function evoChatTextsIncludeMarker(node, marker) {
     return evoChatTextsIncludeNeedle(node, [marker]);
 }
 function evoChatTextsIncludeNeedle(node, needles) {
-    const texts = [];
-    collectEvoChatMessageTexts(node, texts);
-    const normalizedNeedles = needles
-        .map((needle) => String(needle || "").trim().toLowerCase())
-        .filter(Boolean);
-    if (!normalizedNeedles.length)
-        return false;
-    return texts.some((text) => {
-        const lowered = text.toLowerCase();
-        return normalizedNeedles.some((needle) => lowered.includes(needle));
-    });
+    return evoPayloadIncludesNeedle(node, needles);
 }
-async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, maxAttempts = 8) {
+async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJids, needles, minTimestampMs, fromMe) {
+    for (const instanceName of instanceCandidates) {
+        const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
+        for (const remoteJid of remoteJids) {
+            const whereKey = { remoteJid };
+            if (fromMe != null)
+                whereKey.fromMe = fromMe;
+            const bodies = [
+                { where: { key: whereKey }, limit: 50 },
+                { where: { key: { remoteJid } }, limit: 50 },
+                { where: { key: { remoteJid } }, take: 50 },
+                { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
+                { limit: 80 },
+                {},
+            ];
+            for (const body of bodies) {
+                const result = await callEvoAction(url, "POST", body, {
+                    timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
+                    retries: 1,
+                });
+                if (!result.ok)
+                    continue;
+                if (evoPayloadIncludesNeedle(result.json, needles, { minTimestampMs, fromMe })) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, options) {
     const destino = String(instanciaDestino || "").trim();
     const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
     if (!destino || !remoteJids.length) {
@@ -4724,30 +4831,30 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         needles.add(fullText);
     if (fullText.length >= 12)
         needles.add(fullText.slice(0, 48));
-    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(destino)}`;
-    await sleepMs(2500);
+    const needleList = Array.from(needles);
+    const minTimestampMs = options?.sendStartedAtMs ?? Date.now();
+    const maxAttempts = Math.max(4, options?.maxAttempts ?? 12);
+    const destinoCandidates = await resolveEvoInstanceNameCandidates(destino);
+    await sleepMs(3000);
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         if (attempt > 1)
-            await sleepMs(2500);
-        for (const remoteJid of remoteJids) {
-            const bodies = [
-                { where: { key: { remoteJid } }, limit: 50 },
-                { where: { key: { remoteJid } }, take: 50 },
-                { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
-                { limit: 80 },
-                {},
-            ];
-            for (const body of bodies) {
-                const result = await callEvoAction(url, "POST", body, {
-                    timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
-                    retries: 1,
-                });
-                if (!result.ok)
-                    continue;
-                if (evoChatTextsIncludeNeedle(result.json, Array.from(needles))) {
-                    return { ok: true, detail: "" };
-                }
-            }
+            await sleepMs(3000);
+        const foundOnDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, minTimestampMs, false);
+        if (foundOnDestino) {
+            return { ok: true, detail: "" };
+        }
+    }
+    const origem = String(options?.instanciaOrigem || "").trim();
+    const numeroDestino = String(options?.numeroDestino || "").trim();
+    if (origem && numeroDestino) {
+        const origemCandidates = await resolveEvoInstanceNameCandidates(origem);
+        const destJids = buildAquecedorRemoteJidCandidates(numeroDestino);
+        const foundOnOrigem = await probeAquecedorDeliveryViaFindMessages(origemCandidates, destJids, needleList, minTimestampMs, true);
+        if (foundOnOrigem) {
+            return {
+                ok: false,
+                detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
+            };
         }
     }
     return {
