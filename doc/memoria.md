@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Aquecedor mesh bootstrap no start:** ao iniciar, N×(N−1) envios paralelos + findMessages; ciclo só após `passed`. Marker `DEPLOY-2026-06-21-aquecedor-mesh-bootstrap-start`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-bootstrap-start.md`.
+
 **WABA — Aquecedor delivery verify v2 (walkup HTTP 201):** findMessages com alias EVO, timestamp, fromMe, 12×3s; detecta mensagem só na origem. Marker `DEPLOY-2026-06-21-aquecedor-delivery-verify-v2`. Ver `doc/LOG-2026-06-21__aquecedor-delivery-verify-walkup-v2.md`.
 
 **WABA — Aquecedor fila multi-instância (5 no ciclo, só 2 conversando):** state machine por par (`pendingReplyFrom` idle após A→B + B→A); `outboundSinceInbound` global; fairness no score. Marker `DEPLOY-2026-06-21-aquecedor-fila-multi-instancia`. Ver `doc/LOG-2026-06-21__aquecedor-fila-multi-instancia-fix.md`.
