@@ -4,7 +4,8 @@ import { resolveDataFile } from "../data-path";
 
 const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
-const STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
+export const AQUECEDOR_STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
+const STAGGER_PROMOTE_MS = AQUECEDOR_STAGGER_PROMOTE_MS;
 
 export type AquecedorInstancePhase = "preparing" | "active" | "restricted_wait";
 
@@ -270,6 +271,21 @@ export async function tickAquecedorStaggerPromotions(): Promise<string | null> {
   return pick.key;
 }
 
+export function computePreparingPromoteAtMs(
+  row: AquecedorInstanceLifecycleRow,
+  queueIndex: number,
+  lastStaggerPromotionAt: string | null,
+): number {
+  const preparingSinceMs = new Date(row.preparingSince || 0).getTime();
+  if (!Number.isFinite(preparingSinceMs)) return Date.now() + STAGGER_PROMOTE_MS;
+  const personalReadyMs = preparingSinceMs + STAGGER_PROMOTE_MS;
+  const lastStaggerMs = lastStaggerPromotionAt
+    ? new Date(lastStaggerPromotionAt).getTime()
+    : 0;
+  const staggerReadyMs = lastStaggerMs + STAGGER_PROMOTE_MS * (queueIndex + 1);
+  return Math.max(personalReadyMs, staggerReadyMs);
+}
+
 export function formatAquecedorLifecycleStatusLabel(
   row: AquecedorInstanceLifecycleRow | null,
 ): string | null {
@@ -285,19 +301,54 @@ export function formatAquecedorLifecycleStatusLabel(
 }
 
 export async function getAquecedorLifecycleStatusMap(): Promise<
-  Record<string, { phase: AquecedorInstancePhase; statusLabel: string | null; restrictedUntil: string | null }>
+  Record<
+    string,
+    {
+      phase: AquecedorInstancePhase;
+      statusLabel: string | null;
+      restrictedUntil: string | null;
+      promoteAt: string | null;
+    }
+  >
 > {
   const store = await loadStore();
+  const preparingList = Object.entries(store.instances)
+    .map(([key, row]) => ({ key, row }))
+    .filter(({ row }) => {
+      refreshRestrictionPhase(row);
+      return row.phase === "preparing";
+    })
+    .sort((a, b) => {
+      const aMs = new Date(a.row.preparingSince || 0).getTime();
+      const bMs = new Date(b.row.preparingSince || 0).getTime();
+      return aMs - bMs;
+    });
+  const queueIndexByKey = new Map<string, number>();
+  preparingList.forEach(({ key }, index) => queueIndexByKey.set(key, index));
+
   const out: Record<
     string,
-    { phase: AquecedorInstancePhase; statusLabel: string | null; restrictedUntil: string | null }
+    {
+      phase: AquecedorInstancePhase;
+      statusLabel: string | null;
+      restrictedUntil: string | null;
+      promoteAt: string | null;
+    }
   > = {};
   for (const [key, row] of Object.entries(store.instances)) {
     refreshRestrictionPhase(row);
+    let promoteAt: string | null = null;
+    if (row.phase === "preparing") {
+      const queueIndex = queueIndexByKey.get(key) ?? 0;
+      promoteAt = new Date(
+        computePreparingPromoteAtMs(row, queueIndex, store.lastStaggerPromotionAt),
+      ).toISOString();
+    }
     out[key] = {
       phase: row.phase,
       statusLabel: formatAquecedorLifecycleStatusLabel(row),
       restrictedUntil: row.restrictedUntil,
+      promoteAt,
     };
   }
   return out;

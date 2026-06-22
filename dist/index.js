@@ -3705,6 +3705,7 @@ app.get("/instancias/uso-config", async (req, res) => {
                 aquecedorPhase: lifecycle?.phase ?? null,
                 aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
                 aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
+                aquecedorPromoteAt: lifecycle?.promoteAt ?? null,
             };
         });
         return res.json({ items });

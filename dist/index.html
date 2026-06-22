@@ -5670,6 +5670,26 @@
         color: #fbbf24;
       }
 
+      .status-text.status-with-countdown {
+        display: inline-flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.4em;
+      }
+
+      .preparing-countdown {
+        display: inline-block;
+        font-size: 0.9em;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: #fcd34d;
+        letter-spacing: 0.04em;
+        padding: 0.1em 0.45em;
+        border-radius: 4px;
+        background: rgba(251, 191, 36, 0.12);
+        border: 1px solid rgba(251, 191, 36, 0.22);
+      }
+
       .status-text.restricted-wait {
         color: #f87171;
       }
@@ -25313,6 +25333,7 @@
       };
       let aquecedorExpedienteBatches = [];
       let instanceUsageByName = {};
+      let preparingCountdownTimer = null;
       let disparosConfigCache = null;
       let disparosAlternativaThrottleCache = null;
       let spreadsheetRowsCache = [];
@@ -30158,6 +30179,55 @@
         updateTabAccessRules();
       }
 
+      function formatPreparingCountdown(promoteAtIso) {
+        const promoteMs = Date.parse(String(promoteAtIso || ""));
+        if (!Number.isFinite(promoteMs)) return "";
+        const remainingMs = Math.max(0, promoteMs - Date.now());
+        if (remainingMs <= 0) return "em breve";
+        const totalSec = Math.ceil(remainingMs / 1000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        if (h > 0) {
+          return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+        }
+        return `${m}m ${String(s).padStart(2, "0")}s`;
+      }
+
+      function buildInstanceStatusHtml(statusLabel, statusClass, promoteAt) {
+        let countdownHtml = "";
+        if (statusLabel === "Preparando" && promoteAt) {
+          const text = formatPreparingCountdown(promoteAt);
+          countdownHtml = `<span class="preparing-countdown" data-promote-at="${promoteAt}" title="Tempo estimado até entrar no ciclo do aquecedor">${text}</span>`;
+        }
+        if (!countdownHtml) {
+          return `<span class="status-text ${statusClass}">${statusLabel}</span>`;
+        }
+        return `<span class="status-text ${statusClass} status-with-countdown"><span>${statusLabel}</span>${countdownHtml}</span>`;
+      }
+
+      function tickPreparingCountdowns() {
+        const nodes = document.querySelectorAll(".preparing-countdown[data-promote-at]");
+        if (!nodes.length) return;
+        let anyExpired = false;
+        nodes.forEach((node) => {
+          const iso = node.getAttribute("data-promote-at");
+          const text = formatPreparingCountdown(iso);
+          if (text === "em breve") anyExpired = true;
+          node.textContent = text;
+        });
+        if (anyExpired) {
+          void loadInstanceUsageConfig().then(() => {
+            if (activeTab === "instancias") renderInstancesList();
+          });
+        }
+      }
+
+      function ensurePreparingCountdownTimer() {
+        if (preparingCountdownTimer) return;
+        preparingCountdownTimer = setInterval(tickPreparingCountdowns, 1000);
+      }
+
       function getInstanceUsage(instanceName) {
         const key = String(instanceName || "").trim();
         const current = instanceUsageByName[key];
@@ -30167,6 +30237,7 @@
           useFazenda: current ? current.useFazenda === true : false,
           aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
           aquecedorPhase: current?.aquecedorPhase || null,
+          aquecedorPromoteAt: current?.aquecedorPromoteAt || null,
         };
       }
 
@@ -30202,6 +30273,7 @@
               updatedAt: row?.updatedAt || "",
               aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
               aquecedorPhase: row?.aquecedorPhase || null,
+              aquecedorPromoteAt: row?.aquecedorPromoteAt || null,
             };
           });
           instanceUsageByName = map;
@@ -30427,6 +30499,9 @@
           );
           const statusLabel = isDeleting ? "Excluindo…" : resolveInstanceAquecedorStatusLabel(inst);
           const statusClass = isDeleting ? "disconnected" : resolveInstanceStatusClass(inst, statusLabel);
+          const statusHtml = isDeleting
+            ? `<span class="status-text ${statusClass}">${statusLabel}</span>`
+            : buildInstanceStatusHtml(statusLabel, statusClass, usage.aquecedorPromoteAt);
           if (isDeleting) tr.classList.add("instance-row-deleting");
 
           const actionsHtml = isDeleting
@@ -30474,7 +30549,7 @@
             </td>`
                 : ""
             }
-            <td><span class="status-text ${statusClass}">${statusLabel}</span></td>
+            <td>${statusHtml}</td>
             <td>${actionsHtml}</td>
           `;
           const inlineEditBtn = tr.querySelector(".instance-inline-edit-btn");
@@ -30547,6 +30622,9 @@
         });
 
         container.appendChild(table);
+        if (document.querySelector(".preparing-countdown[data-promote-at]")) {
+          ensurePreparingCountdownTimer();
+        }
       }
 
       function setDeleteConfirmProcessing(processing) {
