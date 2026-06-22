@@ -1,0 +1,383 @@
+import { promises as fs } from "fs";
+import path from "path";
+import { resolveDataFile } from "../data-path";
+
+const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
+const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
+const STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
+
+export type AquecedorInstancePhase = "preparing" | "active" | "restricted_wait";
+
+export type AquecedorInstanceLifecycleRow = {
+  phase: AquecedorInstancePhase;
+  preparingSince: string | null;
+  activatedAt: string | null;
+  restrictedUntil: string | null;
+  restrictedReason: string | null;
+  dailyDate: string | null;
+  dailySendCount: number;
+  dailyCap: number | null;
+};
+
+type LifecycleStore = {
+  version: 1;
+  updatedAt: string;
+  lastStaggerPromotionAt: string | null;
+  instances: Record<string, AquecedorInstanceLifecycleRow>;
+};
+
+let cache: LifecycleStore | null = null;
+
+function normalizeKey(instanceName: string): string {
+  return String(instanceName || "").trim().toLowerCase();
+}
+
+function emptyRow(phase: AquecedorInstancePhase): AquecedorInstanceLifecycleRow {
+  const now = new Date().toISOString();
+  return {
+    phase,
+    preparingSince: phase === "preparing" ? now : null,
+    activatedAt: phase === "active" ? now : null,
+    restrictedUntil: null,
+    restrictedReason: null,
+    dailyDate: null,
+    dailySendCount: 0,
+    dailyCap: null,
+  };
+}
+
+function defaultStore(): LifecycleStore {
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    lastStaggerPromotionAt: null,
+    instances: {},
+  };
+}
+
+async function loadStore(): Promise<LifecycleStore> {
+  if (cache) return cache;
+  try {
+    const raw = await fs.readFile(LIFECYCLE_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as Partial<LifecycleStore>;
+    if (parsed?.version === 1 && parsed.instances && typeof parsed.instances === "object") {
+      cache = {
+        version: 1,
+        updatedAt: String(parsed.updatedAt || new Date().toISOString()),
+        lastStaggerPromotionAt:
+          typeof parsed.lastStaggerPromotionAt === "string" ? parsed.lastStaggerPromotionAt : null,
+        instances: parsed.instances as Record<string, AquecedorInstanceLifecycleRow>,
+      };
+      return cache;
+    }
+  } catch {
+    /* primeiro uso */
+  }
+  cache = defaultStore();
+  return cache;
+}
+
+async function saveStore(store: LifecycleStore): Promise<void> {
+  store.updatedAt = new Date().toISOString();
+  cache = store;
+  await fs.mkdir(path.dirname(LIFECYCLE_FILE), { recursive: true });
+  const tmp = `${LIFECYCLE_FILE}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf-8");
+  await fs.rename(tmp, LIFECYCLE_FILE);
+}
+
+function todayKeySp(): string {
+  try {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function stableWeeklyHash(instanceName: string, weekIndex: number): number {
+  const seed = `${instanceName.toLowerCase()}|w${weekIndex}`;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+/** Semana 1: 8–16/dia; sobe ~40% por semana (teto 48). */
+export function computeDailyCapForInstance(
+  instanceName: string,
+  activatedAt: string | null,
+): number {
+  const activatedMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
+  const weekIndex = Math.max(
+    0,
+    Math.floor((Date.now() - activatedMs) / (7 * 24 * 60 * 60 * 1000)),
+  );
+  const baseMin = 8;
+  const baseMax = 16;
+  const growth = 1 + weekIndex * 0.4;
+  const min = Math.min(40, Math.round(baseMin * growth));
+  const max = Math.min(48, Math.round(baseMax * growth));
+  const span = Math.max(1, max - min + 1);
+  const hash = stableWeeklyHash(instanceName, weekIndex);
+  return min + (hash % span);
+}
+
+export function isLikelyWhatsAppRestriction(detail: string, httpStatus?: number): boolean {
+  const d = String(detail || "").toLowerCase();
+  const patterns = [
+    "ban",
+    "banned",
+    "blocked",
+    "blocklist",
+    "restricted",
+    "restriction",
+    "restringid",
+    "suspended",
+    "suspend",
+    "not authorized",
+    "forbidden",
+    "rate-overlimit",
+    "spam",
+    "integrity",
+    "logged out",
+    "logout",
+    "automáticas",
+    "automaticas",
+    "em massa",
+  ];
+  if (patterns.some((p) => d.includes(p))) return true;
+  return httpStatus === 403;
+}
+
+function refreshRestrictionPhase(row: AquecedorInstanceLifecycleRow): void {
+  if (row.phase !== "restricted_wait" || !row.restrictedUntil) return;
+  if (Date.now() >= new Date(row.restrictedUntil).getTime()) {
+    row.phase = row.activatedAt ? "active" : "preparing";
+    row.restrictedUntil = null;
+    row.restrictedReason = null;
+    if (row.phase === "preparing" && !row.preparingSince) {
+      row.preparingSince = new Date().toISOString();
+    }
+  }
+}
+
+function ensureDailyCap(row: AquecedorInstanceLifecycleRow, instanceName: string): void {
+  const today = todayKeySp();
+  if (row.dailyDate !== today) {
+    row.dailyDate = today;
+    row.dailySendCount = 0;
+    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
+  } else if (row.dailyCap == null) {
+    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
+  }
+}
+
+export async function getAquecedorLifecycleRow(
+  instanceName: string,
+): Promise<AquecedorInstanceLifecycleRow | null> {
+  const store = await loadStore();
+  const key = normalizeKey(instanceName);
+  const row = store.instances[key];
+  if (!row) return null;
+  refreshRestrictionPhase(row);
+  return { ...row };
+}
+
+export async function registerAquecedorInstancePreparing(instanceName: string): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const store = await loadStore();
+  const key = normalizeKey(name);
+  const existing = store.instances[key];
+  if (existing) {
+    refreshRestrictionPhase(existing);
+    if (existing.phase === "restricted_wait") return;
+    if (existing.phase === "active") return;
+    return;
+  }
+  store.instances[key] = emptyRow("preparing");
+  await saveStore(store);
+}
+
+export async function grandfatherAquecedorInstanceActive(instanceName: string): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const store = await loadStore();
+  const key = normalizeKey(name);
+  if (store.instances[key]) return;
+  const row = emptyRow("active");
+  row.preparingSince = null;
+  row.activatedAt = new Date().toISOString();
+  store.instances[key] = row;
+  await saveStore(store);
+}
+
+export async function markAquecedorInstanceRestricted(
+  instanceName: string,
+  detail: string,
+): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const store = await loadStore();
+  const key = normalizeKey(name);
+  const row = store.instances[key] || emptyRow("active");
+  const until = new Date(Date.now() + RESTRICTION_WAIT_MS).toISOString();
+  row.phase = "restricted_wait";
+  row.restrictedUntil = until;
+  row.restrictedReason = String(detail || "Restrição temporária WhatsApp.").slice(0, 240);
+  store.instances[key] = row;
+  await saveStore(store);
+  console.warn(
+    `[Aquecedor] instância ${name} em espera de 6h por restrição: ${row.restrictedReason}`,
+  );
+}
+
+export async function tickAquecedorStaggerPromotions(): Promise<string | null> {
+  const store = await loadStore();
+  const now = Date.now();
+  const lastMs = store.lastStaggerPromotionAt
+    ? new Date(store.lastStaggerPromotionAt).getTime()
+    : 0;
+  if (lastMs && now - lastMs < STAGGER_PROMOTE_MS) return null;
+
+  const preparing = Object.entries(store.instances)
+    .map(([key, row]) => ({ key, row }))
+    .filter((item) => {
+      refreshRestrictionPhase(item.row);
+      return item.row.phase === "preparing";
+    })
+    .sort((a, b) => {
+      const aMs = new Date(a.row.preparingSince || 0).getTime();
+      const bMs = new Date(b.row.preparingSince || 0).getTime();
+      return aMs - bMs;
+    });
+
+  if (!preparing.length) return null;
+
+  const pick = preparing[0];
+  const preparingSinceMs = new Date(pick.row.preparingSince || 0).getTime();
+  if (!Number.isFinite(preparingSinceMs) || now - preparingSinceMs < STAGGER_PROMOTE_MS) {
+    return null;
+  }
+  if (lastMs && now - lastMs < STAGGER_PROMOTE_MS) return null;
+
+  pick.row.phase = "active";
+  pick.row.activatedAt = new Date().toISOString();
+  pick.row.preparingSince = null;
+  store.lastStaggerPromotionAt = new Date().toISOString();
+  await saveStore(store);
+  return pick.key;
+}
+
+export function formatAquecedorLifecycleStatusLabel(
+  row: AquecedorInstanceLifecycleRow | null,
+): string | null {
+  if (!row) return null;
+  refreshRestrictionPhase(row);
+  if (row.phase === "preparing") return "Preparando";
+  if (row.phase === "restricted_wait" && row.restrictedUntil) {
+    const remainingMs = new Date(row.restrictedUntil).getTime() - Date.now();
+    if (remainingMs > 0) return "6 horas de espera";
+    return null;
+  }
+  return null;
+}
+
+export async function getAquecedorLifecycleStatusMap(): Promise<
+  Record<string, { phase: AquecedorInstancePhase; statusLabel: string | null; restrictedUntil: string | null }>
+> {
+  const store = await loadStore();
+  const out: Record<
+    string,
+    { phase: AquecedorInstancePhase; statusLabel: string | null; restrictedUntil: string | null }
+  > = {};
+  for (const [key, row] of Object.entries(store.instances)) {
+    refreshRestrictionPhase(row);
+    out[key] = {
+      phase: row.phase,
+      statusLabel: formatAquecedorLifecycleStatusLabel(row),
+      restrictedUntil: row.restrictedUntil,
+    };
+  }
+  return out;
+}
+
+export async function filterAquecedorCycleConnected<T extends { instancia: string }>(
+  connected: T[],
+): Promise<T[]> {
+  await tickAquecedorStaggerPromotions();
+  const store = await loadStore();
+  const out: T[] = [];
+  for (const item of connected) {
+    const key = normalizeKey(item.instancia);
+    const row = store.instances[key];
+    if (!row) {
+      await grandfatherAquecedorInstanceActive(item.instancia);
+      out.push(item);
+      continue;
+    }
+    refreshRestrictionPhase(row);
+    if (row.phase === "active") out.push(item);
+  }
+  return out;
+}
+
+export async function canAquecedorInstanceSendToday(instanceName: string): Promise<{
+  ok: boolean;
+  reason: string;
+  dailyCap: number;
+  dailyCount: number;
+}> {
+  const store = await loadStore();
+  const key = normalizeKey(instanceName);
+  const row = store.instances[key];
+  if (!row) {
+    return { ok: true, reason: "", dailyCap: 16, dailyCount: 0 };
+  }
+  refreshRestrictionPhase(row);
+  if (row.phase !== "active") {
+    return {
+      ok: false,
+      reason:
+        row.phase === "preparing"
+          ? "Instância em preparação."
+          : "Instância em espera por restrição (6h).",
+      dailyCap: 0,
+      dailyCount: 0,
+    };
+  }
+  ensureDailyCap(row, instanceName);
+  const cap = row.dailyCap ?? 16;
+  if (row.dailySendCount >= cap) {
+    return {
+      ok: false,
+      reason: `Limite diário de aquecimento atingido (${row.dailySendCount}/${cap}).`,
+      dailyCap: cap,
+      dailyCount: row.dailySendCount,
+    };
+  }
+  return { ok: true, reason: "", dailyCap: cap, dailyCount: row.dailySendCount };
+}
+
+export async function recordAquecedorInstanceDailySend(instanceName: string): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const store = await loadStore();
+  const key = normalizeKey(name);
+  const row = store.instances[key] || emptyRow("active");
+  ensureDailyCap(row, name);
+  row.dailySendCount += 1;
+  store.instances[key] = row;
+  await saveStore(store);
+}
+
+export async function detectAndMarkRestrictionFromSend(
+  instanceName: string,
+  status: number,
+  body: string,
+): Promise<boolean> {
+  if (!isLikelyWhatsAppRestriction(body, status)) return false;
+  await markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
+  return true;
+}

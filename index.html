@@ -5666,6 +5666,14 @@
         color: #fca5a5;
       }
 
+      .status-text.preparing {
+        color: #fbbf24;
+      }
+
+      .status-text.restricted-wait {
+        color: #f87171;
+      }
+
       .instance-actions {
         display: inline-flex;
         gap: 6px;
@@ -24539,7 +24547,6 @@
       let adminCampanhasPollTimer = null;
       const ADMIN_CAMPANHAS_POLL_MS = 15 * 60 * 1000;
       let aquecedorRuntimeStatusCache = null;
-      let aquecedorLastMeshLogKey = "";
       let aquecedorRuntimeResumeInFlight = false;
       let aquecedorChatEvents = [];
       const aquecedorChatSeen = new Set();
@@ -25953,34 +25960,6 @@
           }
 
           aquecedorRuntimeStatusCache = data || null;
-          const meshBootstrap = data?.meshBootstrap || {};
-          const meshUserLog = String(meshBootstrap.userLogMessage || "").trim();
-          const meshPhase = String(meshBootstrap.phase || "idle");
-          if (
-            meshUserLog &&
-            (meshPhase === "passed" || meshPhase === "failed") &&
-            meshBootstrap.finishedAt
-          ) {
-            const meshLogKey = `${meshPhase}:${meshBootstrap.finishedAt}:${meshUserLog}`;
-            if (meshLogKey !== aquecedorLastMeshLogKey) {
-              aquecedorLastMeshLogKey = meshLogKey;
-              addAquecedorCommandLog(meshUserLog);
-              if (meshPhase === "failed") {
-                const tech = String(meshBootstrap.technicalSummary || "").trim();
-                if (tech) addAquecedorCommandLog(tech);
-              }
-              if (meshPhase === "failed" && Array.isArray(meshBootstrap.failures)) {
-                meshBootstrap.failures.slice(0, 3).forEach((row) => {
-                  const detail = String(row?.detail || "").trim();
-                  if (detail) {
-                    addAquecedorCommandLog(
-                      `Detalhe ${row.origem || "—"}→${row.destino || "—"}: ${detail.slice(0, 180)}`
-                    );
-                  }
-                });
-              }
-            }
-          }
           const isProcessing = data?.isProcessing === true;
           if (running || desiredRunning) {
             showAquecedorStartStopButtons();
@@ -26032,37 +26011,10 @@
           captionEl.textContent = "Motor parado. Clique em \"Iniciar Aquecedor\" para começar.";
           return;
         }
-        const mesh = status?.meshBootstrap || {};
-        const meshPhase = String(mesh.phase || "idle");
-        const meshFailMsg =
-          String(mesh.userLogMessage || "").trim() ||
-          "Teste falhou. Verifique se as instâncias estão integradas corretamente e pause o Aquecedor. Após isso, inicie o Aquecedor novamente.";
-        if (meshPhase === "failed") {
-          fillEl.classList.add("failed");
-          captionEl.textContent = meshFailMsg;
-          return;
-        }
         if (isProcessing) {
           fillEl.classList.add("processing");
-          const mesh = status?.meshBootstrap || {};
-          if (String(mesh.phase || "") === "running") {
-            const total = Math.max(1, Number(mesh.totalPairs || 1));
-            const done = Number(mesh.completedPairs || 0);
-            const etaSec = Math.max(0, Number(mesh.estimatedDurationSeconds || 0));
-            const pct = Math.max(8, Math.min(92, Math.round((done / total) * 100)));
-            fillEl.style.width = `${pct}%`;
-            const modeHint =
-              String(mesh.mode || "") === "hub-spoke" && mesh.hubInstance
-                ? ` (hub ${mesh.hubInstance})`
-                : "";
-            const etaHint = etaSec > 0 ? ` · ~${etaSec}s no total` : "";
-            captionEl.textContent =
-              done > 0
-                ? `Validação mesh: ${done}/${total} pares${modeHint}${etaHint}…`
-                : `Validação mesh: ${total} pares${modeHint}${etaHint}…`;
-          } else {
-            captionEl.textContent = "Processando envio agora...";
-          }
+          fillEl.style.width = "45%";
+          captionEl.textContent = "Processando envio agora...";
           return;
         }
         if (nextAllowedAtMs > nowMs) {
@@ -26093,9 +26045,6 @@
         const processing = status?.isProcessing === true;
         const lastResult = String(status?.lastResult || "").trim();
         const instanceCount = Number(status?.connectedInstanceCount ?? 0);
-        const mesh = status?.meshBootstrap || {};
-        const meshPhase = String(mesh.phase || "idle");
-        const meshUserLog = String(mesh.userLogMessage || "").trim();
         hero.classList.remove("active", "processing", "failed");
         if (countEl) {
           if (running && instanceCount >= 2) {
@@ -26110,37 +26059,8 @@
         }
         if (processing) {
           hero.classList.add("processing");
-          if (meshPhase === "running") {
-            titleEl.textContent = "Validação inicial entre instâncias";
-            const total = Number(mesh.totalPairs || 0);
-            const etaSec = Math.max(0, Number(mesh.estimatedDurationSeconds || 0));
-            const modeHint =
-              String(mesh.mode || "") === "hub-spoke" && mesh.hubInstance
-                ? ` via hub ${mesh.hubInstance}`
-                : " (todas↔todas)";
-            subEl.textContent =
-              lastResult ||
-              (total > 0
-                ? `Enviando e confirmando ${total} pares${modeHint}${etaSec > 0 ? ` · ~${etaSec}s estimados` : ""}…`
-                : "Validando comunicação EVO entre instâncias…");
-          } else {
-            titleEl.textContent = "Aquecedor processando agora";
-            subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
-          }
-          return;
-        }
-        if (running && meshPhase === "failed") {
-          hero.classList.add("failed");
-          titleEl.textContent = "Teste falhou";
-          subEl.textContent =
-            meshUserLog ||
-            "Teste falhou. Verifique se as instâncias estão integradas corretamente e pause o Aquecedor. Após isso, inicie o Aquecedor novamente.";
-          return;
-        }
-        if (running && meshPhase === "passed" && meshUserLog) {
-          hero.classList.add("active");
-          titleEl.textContent = "Aquecedor ativo";
-          subEl.textContent = meshUserLog;
+          titleEl.textContent = "Aquecedor processando agora";
+          subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
           return;
         }
         if (running) {
@@ -29134,7 +29054,6 @@
           showToast(data?.message || "Ação executada com sucesso.", "success");
           addAquecedorCommandLog(data?.message || `Ação concluída: ${action}.`);
           if (action === "start") {
-            aquecedorLastMeshLogKey = "";
             aquecedorRuntimeStatusCache = {
               ...(data?.status || {}),
               running: true,
@@ -29159,7 +29078,6 @@
             updateAquecedorStartStopVisibility(true);
           }
           if (action === "stop") {
-            aquecedorLastMeshLogKey = "";
             showAquecedorStartStopButtons();
             updateAquecedorStartStopVisibility(false);
             aquecedorRuntimeStatusCache = {
@@ -30246,7 +30164,24 @@
           useAquecedor: current ? current.useAquecedor !== false : true,
           useDisparador: current ? current.useDisparador !== false : true,
           useFazenda: current ? current.useFazenda === true : false,
+          aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
+          aquecedorPhase: current?.aquecedorPhase || null,
         };
+      }
+
+      function resolveInstanceAquecedorStatusLabel(inst) {
+        const usage = getInstanceUsage(inst.instanceName);
+        if (usage.useAquecedor && usage.aquecedorStatusLabel) {
+          return usage.aquecedorStatusLabel;
+        }
+        if (!inst.isOpen) return "desconectado";
+        return "conectado";
+      }
+
+      function resolveInstanceStatusClass(inst, statusLabel) {
+        if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
+        if (statusLabel === "Preparando") return "processing preparing";
+        return inst.isOpen ? "connected" : "disconnected";
       }
 
       async function loadInstanceUsageConfig() {
@@ -30264,6 +30199,8 @@
               useDisparador: row?.useDisparador !== false,
               useFazenda: row?.useFazenda === true,
               updatedAt: row?.updatedAt || "",
+              aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
+              aquecedorPhase: row?.aquecedorPhase || null,
             };
           });
           instanceUsageByName = map;
@@ -30487,6 +30424,8 @@
           const isDeleting = instancesDeleting.has(
             String(inst.instanceName || "").trim().toLowerCase()
           );
+          const statusLabel = isDeleting ? "Excluindo…" : resolveInstanceAquecedorStatusLabel(inst);
+          const statusClass = isDeleting ? "disconnected" : resolveInstanceStatusClass(inst, statusLabel);
           if (isDeleting) tr.classList.add("instance-row-deleting");
 
           const actionsHtml = isDeleting
@@ -30534,9 +30473,7 @@
             </td>`
                 : ""
             }
-            <td><span class="status-text ${
-              inst.isOpen ? "connected" : "disconnected"
-            }">${isDeleting ? "Excluindo…" : inst.statusLabel}</span></td>
+            <td><span class="status-text ${statusClass}">${statusLabel}</span></td>
             <td>${actionsHtml}</td>
           `;
           const inlineEditBtn = tr.querySelector(".instance-inline-edit-btn");
