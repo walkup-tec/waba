@@ -28,9 +28,53 @@ const VALIDATION_TIMEOUT_MS = Math.max(60000, Math.min(600000, Number(process.en
 const VALIDATION_POLL_MS = Math.max(2000, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 3000) || 3000));
 const REPLY_DELAY_MS = Math.max(2000, Math.min(30000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 4000) || 4000));
 const validations = new Map();
+/** Uma validação ativa por instância — evita loops órfãos após novo POST. */
+const activeValidationByInstance = new Map();
+/** Uma resposta por conversa (instância + chat) dentro da janela. */
+const recentReplyByConversation = new Map();
+const REPLY_DEDUPE_MS = 15 * 60 * 1000;
+const replyInFlight = new Set();
 let onValidationFinished = null;
 function setInboundValidationFinishedHandler(handler) {
     onValidationFinished = handler;
+}
+function isRecordActive(record) {
+    return !record.finished && !record.cancelled;
+}
+function cancelValidationRecord(record) {
+    if (record.cancelled || record.finished)
+        return;
+    record.cancelled = true;
+}
+function getActiveValidationForInstance(instanceName) {
+    const id = activeValidationByInstance.get(instanceName);
+    if (!id)
+        return null;
+    const record = validations.get(id);
+    if (!record || !isRecordActive(record)) {
+        activeValidationByInstance.delete(instanceName);
+        return null;
+    }
+    return record;
+}
+function stopValidationsForInstance(instanceName, exceptValidationId) {
+    for (const [id, record] of validations.entries()) {
+        if (record.instanceName !== instanceName)
+            continue;
+        if (exceptValidationId && id === exceptValidationId)
+            continue;
+        cancelValidationRecord(record);
+        validations.delete(id);
+    }
+    if (!exceptValidationId || activeValidationByInstance.get(instanceName) !== exceptValidationId) {
+        activeValidationByInstance.delete(instanceName);
+    }
+}
+function conversationReplyKey(record) {
+    const target = resolveSendTarget(record.referenceJid, record.referenceNumber);
+    if (!target)
+        return null;
+    return `${record.instanceName}:${target}`;
 }
 function notifyFinished(record) {
     if (!onValidationFinished)
@@ -392,14 +436,35 @@ function markInboundReceived(record, hit, via) {
     };
 }
 async function sendContextualReply(record) {
-    if (!record.referenceNumber || record.sendAttempted)
+    if (record.cancelled || record.finished || !record.referenceNumber || record.sendAttempted)
         return;
+    const convKey = conversationReplyKey(record);
+    if (convKey) {
+        const lastSentAt = recentReplyByConversation.get(convKey);
+        if (lastSentAt != null && Date.now() - lastSentAt < REPLY_DEDUPE_MS) {
+            record.phase = "sending_reply";
+            record.sendAttempted = true;
+            record.sendHttpOk = true;
+            record.sendDetail = "dedupe";
+            record.sendTest = {
+                success: true,
+                detail: "Resposta já enviada nesta conversa (validação única).",
+            };
+            tryFinalize(record);
+            return;
+        }
+        if (replyInFlight.has(convKey))
+            return;
+        replyInFlight.add(convKey);
+    }
     record.phase = "sending_reply";
     record.sendAttempted = true;
     const text = `Validação WABA concluída. ${record.replyMarker}`;
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
     const numero = resolveSendTarget(record.referenceJid, record.referenceNumber);
     if (!numero) {
+        if (convKey)
+            replyInFlight.delete(convKey);
         record.sendHttpOk = false;
         record.sendDetail = "Destino da resposta não identificado.";
         record.sendTest = {
@@ -412,30 +477,38 @@ async function sendContextualReply(record) {
     const sendBody = EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text } }
         : { number: numero, text, textMessage: { text } };
-    const result = await callEvo(sendUrl, "POST", sendBody);
-    record.sendHttpOk = result.ok;
-    if (!result.ok) {
-        const detail = result.json?.message ||
-            result.json?.error ||
-            result.body.slice(0, 180) ||
-            `HTTP ${result.status}`;
-        record.sendDetail = String(detail);
-        const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
+    try {
+        const result = await callEvo(sendUrl, "POST", sendBody);
+        record.sendHttpOk = result.ok;
+        if (!result.ok) {
+            const detail = result.json?.message ||
+                result.json?.error ||
+                result.body.slice(0, 180) ||
+                `HTTP ${result.status}`;
+            record.sendDetail = String(detail);
+            const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
+            record.sendTest = {
+                success: false,
+                detail: restricted
+                    ? `Evolution recusou a resposta: ${record.sendDetail}`
+                    : `Falha técnica ao responder: ${record.sendDetail}`,
+            };
+            tryFinalize(record);
+            return;
+        }
+        if (convKey)
+            recentReplyByConversation.set(convKey, Date.now());
+        record.sendDetail = "sendText OK";
         record.sendTest = {
-            success: false,
-            detail: restricted
-                ? `Evolution recusou a resposta: ${record.sendDetail}`
-                : `Falha técnica ao responder: ${record.sendDetail}`,
+            success: true,
+            detail: "Resposta enviada na mesma conversa (após mensagem recebida).",
         };
         tryFinalize(record);
-        return;
     }
-    record.sendDetail = "sendText OK";
-    record.sendTest = {
-        success: true,
-        detail: "Resposta enviada na mesma conversa (após mensagem recebida).",
-    };
-    tryFinalize(record);
+    finally {
+        if (convKey)
+            replyInFlight.delete(convKey);
+    }
 }
 async function runValidationLoop(record) {
     if (record.loopRunning)
@@ -443,7 +516,7 @@ async function runValidationLoop(record) {
     record.loopRunning = true;
     const deadline = Date.now() + VALIDATION_TIMEOUT_MS;
     try {
-        while (Date.now() < deadline && !record.finished) {
+        while (Date.now() < deadline && !record.finished && !record.cancelled) {
             if (record.receiveTest.success !== true) {
                 try {
                     const hit = await findInboundViaApi(record.instanceName, record.keyword, record.validationStartedAtMs);
@@ -492,9 +565,11 @@ function handleInboundValidationWebhook(body) {
     const event = String(payload.event || "").toUpperCase();
     if (event && event !== "MESSAGES_UPSERT" && event !== "MESSAGES.UPSERT")
         return;
-    for (const record of validations.values()) {
-        if (record.finished)
-            continue;
+    const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
+    const candidates = active
+        ? [active]
+        : [...validations.values()].filter((record) => isRecordActive(record));
+    for (const record of candidates) {
         if (instanceName && instanceName !== record.instanceName)
             continue;
         const hit = findInboundInPayload(payload, record.keyword, {
@@ -527,11 +602,11 @@ async function startInboundValidation(input) {
             error: `Instância "${instanceName}" não está conectada (status open) na Evolution.`,
         };
     }
-    for (const [existingId, existing] of validations.entries()) {
-        if (existing.instanceName === instanceName && !existing.finished) {
-            validations.delete(existingId);
-        }
+    const existing = getActiveValidationForInstance(connected.instancia);
+    if (existing) {
+        return { validationId: existing.validationId, status: publicStatus(existing) };
     }
+    stopValidationsForInstance(connected.instancia);
     const validationId = crypto_1.default.randomUUID();
     const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
     const validationStartedAtMs = Date.now();
@@ -565,10 +640,12 @@ async function startInboundValidation(input) {
         sendHttpOk: false,
         sendDetail: "",
         loopRunning: false,
+        cancelled: false,
         startedAt,
         finishedAt: null,
     };
     validations.set(validationId, record);
+    activeValidationByInstance.set(connected.instancia, validationId);
     void runValidationLoop(record);
     return { validationId, status: publicStatus(record) };
 }
@@ -576,8 +653,18 @@ function pruneInboundValidations() {
     const cutoff = Date.now() - 2 * 60 * 60 * 1000;
     for (const [id, record] of validations.entries()) {
         const started = new Date(record.startedAt).getTime();
-        if (started < cutoff)
+        if (started < cutoff) {
+            cancelValidationRecord(record);
             validations.delete(id);
+            if (activeValidationByInstance.get(record.instanceName) === id) {
+                activeValidationByInstance.delete(record.instanceName);
+            }
+        }
+    }
+    const replyCutoff = Date.now() - REPLY_DEDUPE_MS;
+    for (const [key, at] of recentReplyByConversation.entries()) {
+        if (at < replyCutoff)
+            recentReplyByConversation.delete(key);
     }
 }
 setInterval(() => pruneInboundValidations(), 30 * 60 * 1000).unref?.();
