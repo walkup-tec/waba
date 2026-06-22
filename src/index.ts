@@ -65,6 +65,15 @@ import {
   setInboundValidationFinishedHandler,
   startInboundValidation,
 } from "./instance-inbound-validation.service";
+import {
+  detectAndMarkRestrictionFromSend,
+  filterAquecedorCycleConnected,
+  canAquecedorInstanceSendToday,
+  getAquecedorLifecycleStatusMap,
+  markAquecedorInstanceRestricted,
+  recordAquecedorInstanceDailySend,
+  registerAquecedorInstancePreparing,
+} from "./services/aquecedor-instance-lifecycle.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 
 const app = express();
@@ -655,6 +664,10 @@ async function persistInstanceUsage(
 setIntegrationProbeFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
+    await markAquecedorInstanceRestricted(
+      status.sourceInstance,
+      status.apiTest.detail || "Restrição detectada no teste de integração.",
+    );
     const usageMap = await loadInstanceUsageMap();
     const current = getInstanceUsageFromMap(usageMap, status.sourceInstance);
     await persistInstanceUsage([
@@ -670,6 +683,10 @@ setIntegrationProbeFinishedHandler((status) => {
 setInboundValidationFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
+    await markAquecedorInstanceRestricted(
+      status.instanceName,
+      status.sendTest.detail || "Restrição detectada na validação inbound.",
+    );
     const usageMap = await loadInstanceUsageMap();
     const current = getInstanceUsageFromMap(usageMap, status.instanceName);
     await persistInstanceUsage([
@@ -1171,6 +1188,14 @@ type AquecedorInstanceTurnStats = {
   lastReceivedFrom: string | null;
   sendCount: number;
   receiveCount: number;
+  /** Envios desde o último inbound (0 = liberado para novo envio). */
+  outboundSinceInbound: number;
+};
+
+type AquecedorPairConversationState = {
+  /** Instância canônica que deve enviar a próxima mensagem neste par (A→B aguardando B→A). */
+  pendingReplyFrom: string | null;
+  exchangeCount: number;
 };
 
 type AquecedorTurnManager = {
@@ -1203,6 +1228,7 @@ async function loadAquecedorTurnManager(
 
   const instanceStats = new Map<string, AquecedorInstanceTurnStats>();
   const pairLastSender = new Map<string, string>();
+  const pairStates = new Map<string, AquecedorPairConversationState>();
 
   const ensureStats = (canonical: string): AquecedorInstanceTurnStats => {
     const key = canonical.toLowerCase();
@@ -1215,10 +1241,20 @@ async function loadAquecedorTurnManager(
         lastReceivedFrom: null,
         sendCount: 0,
         receiveCount: 0,
+        outboundSinceInbound: 0,
       };
       instanceStats.set(key, stats);
     }
     return stats;
+  };
+
+  const ensurePairState = (pairKey: string): AquecedorPairConversationState => {
+    let state = pairStates.get(pairKey);
+    if (!state) {
+      state = { pendingReplyFrom: null, exchangeCount: 0 };
+      pairStates.set(pairKey, state);
+    }
+    return state;
   };
 
   for (const ev of events) {
@@ -1229,7 +1265,18 @@ async function loadAquecedorTurnManager(
     fromStats.lastSentAt = ev.at;
     toStats.lastReceivedAt = ev.at;
     toStats.lastReceivedFrom = ev.fromInst;
+    fromStats.outboundSinceInbound += 1;
+    toStats.outboundSinceInbound = 0;
     pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+
+    const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
+    const pairState = ensurePairState(pairKey);
+    pairState.exchangeCount += 1;
+    if (pairState.pendingReplyFrom?.toLowerCase() === ev.fromInst.toLowerCase()) {
+      pairState.pendingReplyFrom = null;
+    } else {
+      pairState.pendingReplyFrom = ev.toInst;
+    }
   }
 
   const owesPairReply = (origemRaw: string, destinoRaw: string): boolean => {
@@ -1238,11 +1285,8 @@ async function loadAquecedorTurnManager(
     if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return false;
 
     const pairKey = buildAquecedorPairKey(origem, destino);
-    const lastSender = pairLastSender.get(pairKey);
-    if (!lastSender || lastSender.toLowerCase() === origem.toLowerCase()) return false;
-
-    const stats = instanceStats.get(origem.toLowerCase());
-    return stats?.lastReceivedFrom?.toLowerCase() === destino.toLowerCase();
+    const pairState = pairStates.get(pairKey);
+    return pairState?.pendingReplyFrom?.toLowerCase() === origem.toLowerCase();
   };
 
   const canSendDirected = (origemRaw: string, destinoRaw: string): boolean => {
@@ -1261,9 +1305,8 @@ async function loadAquecedorTurnManager(
     }
 
     const stats = instanceStats.get(origem.toLowerCase());
-    if (!stats?.lastSentAt) return true;
-    if (!stats.lastReceivedAt) return false;
-    return stats.lastReceivedAt >= stats.lastSentAt;
+    if (!stats?.lastSentAt || stats.outboundSinceInbound === 0) return true;
+    return false;
   };
 
   const describeBlockReason = (origemRaw: string, destinoRaw: string): string => {
@@ -1276,11 +1319,14 @@ async function loadAquecedorTurnManager(
     if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
       return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
     }
-    if (stats?.lastSentAt && (!stats.lastReceivedAt || stats.lastReceivedAt < stats.lastSentAt)) {
+    if (owesPairReply(origemRaw, destinoRaw)) {
+      return `${origem} deve responder ${destino} neste par antes de outras combinações.`;
+    }
+    if (stats && stats.outboundSinceInbound > 0) {
       const esperado = stats.lastReceivedFrom
-        ? ` Responder a ${stats.lastReceivedFrom} libera o turno.`
+        ? ` Responder a ${stats.lastReceivedFrom} libera o turno global.`
         : "";
-      return `${origem} enviou ${stats.sendCount} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+      return `${origem} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
     }
     return `${origem} não pode enviar para ${destino} no turno atual.`;
   };
@@ -1296,21 +1342,23 @@ async function loadAquecedorTurnManager(
     const stats = instanceStats.get(origem.toLowerCase());
     let score = 0;
 
-    if (
-      stats?.lastReceivedAt &&
-      stats?.lastSentAt &&
-      stats.lastReceivedAt > stats.lastSentAt
-    ) {
-      score -= 1_000_000;
-      if (
-        stats.lastReceivedFrom &&
-        stats.lastReceivedFrom.toLowerCase() === destino.toLowerCase()
-      ) {
-        score -= 500_000;
-      }
+    if (owesPairReply(origemRaw, destinoRaw)) {
+      score -= 5_000_000;
     }
 
-    score += (stats?.sendCount || 0) * 1_000;
+    score += (stats?.sendCount || 0) * 10_000;
+
+    const pairKey = buildAquecedorPairKey(origem, destino);
+    const pairState = pairStates.get(pairKey);
+    if (pairState) {
+      score += pairState.exchangeCount * 2_000;
+    } else {
+      score -= 100_000;
+    }
+
+    const destStats = instanceStats.get(destino.toLowerCase());
+    score += (destStats?.sendCount || 0) * 1_000;
+
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
     score += rotation;
     return score;
@@ -1469,7 +1517,7 @@ async function hasRecentAquecedorSendBetween(
   const destino = resolveAquecedorConnectedByName(connected, canonicalMap, instanciaDestino);
   if (!origem || !destino) return false;
 
-  const numDestino = normalizeWhatsAppNumber(destino.numero);
+  const numDestino = resolveAquecedorInstanceDigits(destino.numero);
   if (!numDestino) return false;
   const since = new Date(Date.now() - Math.max(30, withinSeconds) * 1000).toISOString();
 
@@ -1628,8 +1676,8 @@ async function loadPairUsedAquecedorMessages(
   const used = new Set<string>();
   const instanciaA = String(pair.instanciaOrigem || "").trim();
   const instanciaB = String(pair.instanciaDestino || "").trim();
-  const numA = normalizeWhatsAppNumber(String(pair.numeroOrigem || "").trim());
-  const numB = normalizeWhatsAppNumber(String(pair.numeroDestino || "").trim());
+  const numA = resolveAquecedorInstanceDigits(String(pair.numeroOrigem || "").trim());
+  const numB = resolveAquecedorInstanceDigits(String(pair.numeroDestino || "").trim());
   if (!instanciaA || !instanciaB || !numA || !numB) return used;
 
   try {
@@ -1644,7 +1692,7 @@ async function loadPairUsedAquecedorMessages(
     if (!Array.isArray(data)) return used;
     for (const row of data) {
       const inst = String(row?.instancia || "").trim();
-      const numDest = normalizeWhatsAppNumber(String(row?.numero_destino || "").trim());
+      const numDest = resolveAquecedorInstanceDigits(String(row?.numero_destino || "").trim());
       const isAB = inst === instanciaA && numDest === numB;
       const isBA = inst === instanciaB && numDest === numA;
       if (!isAB && !isBA) continue;
@@ -2069,8 +2117,8 @@ const AQUECEDOR_DEFAULTS = {
   ] as Array<{ days: string[]; startHour: number; endHour: number }>,
   janelaAtivaMinutos: 60,
   pausaMinutos: 14,
-  waitMinSeconds: 180,
-  waitMaxSeconds: 480,
+  waitMinSeconds: 300,
+  waitMaxSeconds: 900,
 };
 
 type AquecedorConfig = typeof AQUECEDOR_DEFAULTS;
@@ -2823,6 +2871,7 @@ async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<
       useDisparador: true,
     },
   ]);
+  await registerAquecedorInstancePreparing(name);
 }
 
 async function syncAquecedorConnectedInstances(
@@ -2853,6 +2902,11 @@ async function syncAquecedorConnectedInstances(
 
   if (toRegister.length) {
     await persistInstanceUsage(toRegister);
+    for (const row of toRegister) {
+      if (row.useAquecedor) {
+        await registerAquecedorInstancePreparing(row.instanceName);
+      }
+    }
   }
 }
 
@@ -3009,7 +3063,7 @@ function buildConnectedFromEvoCacheItems(
       const status = String(item?.connectionStatus ?? "").toLowerCase();
       if (!status.includes("open")) return null;
       const instancia = String(item?.name || "").trim();
-      const numero = normalizeWhatsAppNumber(String(item?.number || "").trim());
+      const numero = resolveAquecedorInstanceDigits(String(item?.number || "").trim());
       if (!instancia || !numero) return null;
       return { instancia, numero };
     })
@@ -3467,6 +3521,7 @@ async function loadAquecedorEffectiveConfig(): Promise<AquecedorConfig> {
   return record.useRecommended !== false ? AQUECEDOR_DEFAULTS : record.customConfig;
 }
 
+
 async function runAquecedorCycleTestBatch(
   connected: Array<{ instancia: string; numero: string }>,
   cicloGlobal: number,
@@ -3503,10 +3558,11 @@ async function runAquecedorCycleTestBatch(
   const deliveryTag = buildAquecedorDeliveryTag();
   const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
-  const numero = normalizeWhatsAppNumber(chosen.numero_whatsapp);
+  const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
   const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
     ? { number: numero, textMessage: { text: texto } }
     : { number: numero, text: texto, textMessage: { text: texto } };
+  const sendStartedAtMs = Date.now();
   const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
   const proximo = picked.index + 1;
   const origemConnected = connected.find(
@@ -3515,8 +3571,13 @@ async function runAquecedorCycleTestBatch(
   if (sendResult.ok) {
     const deliveryCheck = await verifyAquecedorMessageDelivered(
       chosen.instancia_destino,
-      String(origemConnected?.numero || ""),
+      resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")),
       texto,
+      {
+        instanciaOrigem: chosen.instancia_origem,
+        numeroDestino: numero,
+        sendStartedAtMs,
+      },
     );
     if (!deliveryCheck.ok) {
       aquecedorRuntime.lastEvoError = {
@@ -3588,8 +3649,15 @@ async function runAquecedorCycle(forceTest = false) {
     }
 
     const resolved = await resolveAquecedorConnectedForOwner(aquecedorRuntimeOwnerEmail);
-    const connected = resolved.connected;
+    const connectedAll = resolved.connected;
+    const connected = await filterAquecedorCycleConnected(connectedAll);
     updateAquecedorConnectedSummary(connected);
+
+    const preparingCount = Math.max(0, connectedAll.length - connected.length);
+    if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
+      aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação ou espera (6h). Aquecedor ativo em ${connected.length}; liberação gradual a cada 12h.`;
+      return;
+    }
 
     if (connected.length < 2) {
       const analysis = await analyzeAquecedorInstances(aquecedorRuntimeOwnerEmail);
@@ -3681,6 +3749,16 @@ async function runAquecedorCycle(forceTest = false) {
     }
 
     const chosen = picked.chosen;
+
+    const dailyQuota = await canAquecedorInstanceSendToday(chosen.instancia_origem);
+    if (!dailyQuota.ok) {
+      aquecedorRuntime.nextAllowedAt = new Date(
+        Date.now() + config.waitMaxSeconds * 1000,
+      ).toISOString();
+      aquecedorRuntime.lastResult = `${chosen.instancia_origem}: ${dailyQuota.reason}`;
+      return;
+    }
+
     const proximo = picked.index + 1;
     const pairContext = buildAquecedorPairContext(chosen, connected);
 
@@ -3753,16 +3831,17 @@ async function runAquecedorCycle(forceTest = false) {
         status: "PROCESSANDO",
         processing_at: new Date().toISOString(),
         instancia: chosen.instancia_origem,
-        numero_destino: normalizeWhatsAppNumber(chosen.numero_whatsapp) || chosen.numero_whatsapp,
+        numero_destino: resolveAquecedorInstanceDigits(chosen.numero_whatsapp) || chosen.numero_whatsapp,
         mensagem: textoEnvio,
       })
       .eq("id", pendingData.id);
 
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
-    const numero = normalizeWhatsAppNumber(chosen.numero_whatsapp);
+    const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
     const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
       ? { number: numero, textMessage: { text: textoEnvio } }
       : { number: numero, text: textoEnvio, textMessage: { text: textoEnvio } };
+    const sendStartedAtMs = Date.now();
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
 
     if (!sendResult.ok) {
@@ -3773,6 +3852,12 @@ async function runAquecedorCycle(forceTest = false) {
         sendResult.json?.error ||
         (typeof sendResult.json?.detail === "string" ? sendResult.json.detail : null) ||
         (sendResult.body && sendResult.body.length < 200 ? sendResult.body : null);
+      const detailStr = evoDetail ? String(evoDetail) : String(sendResult.body || "");
+      await detectAndMarkRestrictionFromSend(
+        chosen.instancia_origem,
+        sendResult.status,
+        detailStr,
+      );
       const detail = evoDetail ? ` (${String(evoDetail).slice(0, 120)})` : "";
       aquecedorRuntime.lastResult = `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`;
       aquecedorRuntime.lastEvoError = {
@@ -3790,8 +3875,13 @@ async function runAquecedorCycle(forceTest = false) {
     );
     const deliveryCheck = await verifyAquecedorMessageDelivered(
       chosen.instancia_destino,
-      String(origemConnected?.numero || ""),
+      resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")),
       textoEnvio,
+      {
+        instanciaOrigem: chosen.instancia_origem,
+        numeroDestino: numero,
+        sendStartedAtMs,
+      },
     );
     if (!deliveryCheck.ok) {
       await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
@@ -3825,6 +3915,7 @@ async function runAquecedorCycle(forceTest = false) {
       instanciaDestino: chosen.instancia_destino,
       status: "Envio com Sucesso",
     });
+    await recordAquecedorInstanceDailySend(chosen.instancia_origem);
 
     const nextPick = await pickAquecedorCombinationAsync(
       supabase,
@@ -4455,6 +4546,7 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
 app.get("/instancias/uso-config", async (req, res) => {
   try {
     const usageMap = await loadInstanceUsageMap();
+    const lifecycleMap = await getAquecedorLifecycleStatusMap();
     const auth = resolveWabaRequestAuth(req);
     const allowed = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(
       auth,
@@ -4463,10 +4555,16 @@ app.get("/instancias/uso-config", async (req, res) => {
     const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
     const items = Array.from(usageMap.entries())
       .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
-      .map(([instanceName, cfg]) => ({
-        instanceName,
-        ...cfg,
-      }));
+      .map(([instanceName, cfg]) => {
+        const lifecycle = lifecycleMap[instanceName.toLowerCase()];
+        return {
+          instanceName,
+          ...cfg,
+          aquecedorPhase: lifecycle?.phase ?? null,
+          aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
+          aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
+        };
+      });
     return res.json({ items });
   } catch (error) {
     return res.status(500).json({ error: "Erro ao buscar configuração de uso das instâncias." });
@@ -4502,7 +4600,16 @@ app.post("/instancias/uso-config", async (req, res) => {
     if (!sanitized.length) {
       return res.status(400).json({ error: "Nenhuma instância válida foi informada." });
     }
+    const usageMapBefore = await loadInstanceUsageMap();
     await persistInstanceUsage(sanitized);
+    for (const row of sanitized) {
+      if (row.useAquecedor !== false) {
+        const prev = getInstanceUsageFromMap(usageMapBefore, row.instanceName);
+        if (!prev || prev.useAquecedor === false) {
+          await registerAquecedorInstancePreparing(row.instanceName);
+        }
+      }
+    }
     return res.json({ ok: true, message: "Configuração de uso das instâncias salva.", items: sanitized });
   } catch {
     return res.status(500).json({ error: "Erro ao salvar configuração de uso das instâncias." });
@@ -5525,24 +5632,61 @@ function isEvoSendTextAccepted(json: unknown, body: string): boolean {
   return true;
 }
 
+function resolveAquecedorInstanceDigits(raw: string): string {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const prefix = text.includes("@") ? text.split("@")[0] : text;
+  return prefix.replace(/\D/g, "");
+}
+
 function toAquecedorRemoteJid(num: string): string {
-  const digits = normalizeWhatsAppNumber(String(num || "").trim());
+  const digits = resolveAquecedorInstanceDigits(String(num || "").trim());
   return digits ? `${digits}@s.whatsapp.net` : "";
 }
 
 function buildAquecedorRemoteJidCandidates(num: string): string[] {
-  const digits = normalizeWhatsAppNumber(String(num || "").trim());
-  if (!digits) return [];
+  const rawDigits = resolveAquecedorInstanceDigits(num);
+  if (!rawDigits) return [];
   const out = new Set<string>();
-  out.add(`${digits}@s.whatsapp.net`);
-  if (digits.startsWith("55") && digits.length > 11) {
-    out.add(`${digits.slice(2)}@s.whatsapp.net`);
+  const add = (digits: string) => {
+    const d = String(digits || "").replace(/\D/g, "");
+    if (d) out.add(`${d}@s.whatsapp.net`);
+  };
+  add(rawDigits);
+  if (rawDigits.length === 10) {
+    add(`1${rawDigits}`);
+    add(`55${rawDigits}`);
   }
-  const rawDigits = String(num || "").replace(/\D/g, "");
-  if (rawDigits && rawDigits !== digits) {
-    out.add(`${rawDigits}@s.whatsapp.net`);
+  if (rawDigits.length === 11 && !rawDigits.startsWith("1")) {
+    add(`55${rawDigits}`);
   }
+  if (rawDigits.startsWith("55") && rawDigits.length > 11) {
+    add(rawDigits.slice(2));
+  }
+  if (rawDigits.startsWith("1") && rawDigits.length >= 11) {
+    add(rawDigits.slice(1));
+  }
+  const suffix10 = rawDigits.slice(-10);
+  if (suffix10.length === 10) {
+    add(suffix10);
+    add(`1${suffix10}`);
+    add(`55${suffix10}`);
+  }
+  const legacyBr = normalizeWhatsAppNumber(num);
+  if (legacyBr && legacyBr !== rawDigits) add(legacyBr);
   return Array.from(out);
+}
+
+async function resolveEvoInstanceNameCandidates(displayName: string): Promise<string[]> {
+  const raw = String(displayName || "").trim();
+  if (!raw) return [];
+  const aliasesMap = await loadInstanceAliasesMap();
+  const candidates = new Set<string>([raw]);
+  for (const [technical, alias] of aliasesMap.entries()) {
+    if (technical.toLowerCase() === raw.toLowerCase()) candidates.add(technical);
+    if (alias.toLowerCase() === raw.toLowerCase()) candidates.add(technical);
+  }
+  return Array.from(candidates);
 }
 
 function buildAquecedorDeliveryTag(): string {
@@ -5565,6 +5709,26 @@ function extractAquecedorMessageMarker(text: string): string {
   return value.slice(-24).toLowerCase();
 }
 
+function extractAquecedorMessageTimestampMs(node: Record<string, unknown>): number | null {
+  const key = node.key as Record<string, unknown> | undefined;
+  const raw = key?.messageTimestamp ?? node.messageTimestamp ?? node.timestamp;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw > 1_000_000_000_000 ? raw : raw * 1000;
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) return parsed > 1_000_000_000_000 ? parsed : parsed * 1000;
+  }
+  return null;
+}
+
+function extractAquecedorFromMe(node: Record<string, unknown>): boolean | null {
+  const key = node.key as Record<string, unknown> | undefined;
+  if (typeof key?.fromMe === "boolean") return key.fromMe;
+  if (typeof node.fromMe === "boolean") return node.fromMe;
+  return null;
+}
+
 function collectEvoChatMessageTexts(node: unknown, out: string[], depth = 0): void {
   if (depth > 10 || node == null) return;
   if (typeof node === "string") return;
@@ -5585,28 +5749,104 @@ function collectEvoChatMessageTexts(node: unknown, out: string[], depth = 0): vo
   }
 }
 
+function evoPayloadIncludesNeedle(
+  node: unknown,
+  needles: string[],
+  options?: { minTimestampMs?: number; fromMe?: boolean | null },
+  depth = 0,
+): boolean {
+  if (depth > 14 || node == null) return false;
+  if (Array.isArray(node)) {
+    return node.some((item) => evoPayloadIncludesNeedle(item, needles, options, depth + 1));
+  }
+  if (typeof node !== "object") return false;
+  const obj = node as Record<string, unknown>;
+  const fromMe = extractAquecedorFromMe(obj);
+  const texts: string[] = [];
+  collectEvoChatMessageTexts(obj.message ?? obj, texts);
+  const normalizedNeedles = needles
+    .map((needle) => String(needle || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (normalizedNeedles.length && texts.length) {
+    const minTs = options?.minTimestampMs;
+    const ts = extractAquecedorMessageTimestampMs(obj);
+    const tsOk = minTs == null || ts == null || ts >= minTs;
+    const fromMeOk =
+      options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
+    if (tsOk && fromMeOk) {
+      const matched = texts.some((text) => {
+        const lowered = text.toLowerCase();
+        return normalizedNeedles.some((needle) => lowered.includes(needle));
+      });
+      if (matched) return true;
+    }
+  }
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") {
+      if (evoPayloadIncludesNeedle(value, needles, options, depth + 1)) return true;
+    }
+  }
+  return false;
+}
+
 function evoChatTextsIncludeMarker(node: unknown, marker: string): boolean {
   return evoChatTextsIncludeNeedle(node, [marker]);
 }
 
 function evoChatTextsIncludeNeedle(node: unknown, needles: string[]): boolean {
-  const texts: string[] = [];
-  collectEvoChatMessageTexts(node, texts);
-  const normalizedNeedles = needles
-    .map((needle) => String(needle || "").trim().toLowerCase())
-    .filter(Boolean);
-  if (!normalizedNeedles.length) return false;
-  return texts.some((text) => {
-    const lowered = text.toLowerCase();
-    return normalizedNeedles.some((needle) => lowered.includes(needle));
-  });
+  return evoPayloadIncludesNeedle(node, needles);
+}
+
+async function probeAquecedorDeliveryViaFindMessages(
+  instanceCandidates: string[],
+  remoteJids: string[],
+  needles: string[],
+  minTimestampMs?: number,
+  fromMe: boolean | null = null,
+): Promise<boolean> {
+  for (const instanceName of instanceCandidates) {
+    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
+    for (const remoteJid of remoteJids) {
+      const whereKey: Record<string, unknown> = { remoteJid };
+      if (fromMe != null) whereKey.fromMe = fromMe;
+      const bodies: Array<Record<string, unknown>> = [
+        { where: { key: whereKey }, limit: 50 },
+        { where: { key: { remoteJid } }, limit: 50 },
+        { where: { key: { remoteJid } }, take: 50 },
+        { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
+        { limit: 80 },
+        {},
+      ];
+      for (const body of bodies) {
+        const result = await callEvoAction(url, "POST", body, {
+          timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 25000),
+          retries: 1,
+        });
+        if (!result.ok) continue;
+        if (evoPayloadIncludesNeedle(result.json, needles, { minTimestampMs, fromMe })) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 async function verifyAquecedorMessageDelivered(
   instanciaDestino: string,
   numeroOrigem: string,
   messageText: string,
-  maxAttempts = 8,
+  options?: {
+    instanciaOrigem?: string;
+    numeroDestino?: string;
+    sendStartedAtMs?: number;
+    maxAttempts?: number;
+    /** Margem extra antes do envio ao filtrar timestamp (relógio EVO). */
+    timestampGraceMs?: number;
+    skipInitialDelay?: boolean;
+    attemptIntervalMs?: number;
+    relaxTimestampOnLastAttempt?: boolean;
+  },
 ): Promise<{ ok: boolean; detail: string }> {
   const destino = String(instanciaDestino || "").trim();
   const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
@@ -5620,31 +5860,52 @@ async function verifyAquecedorMessageDelivered(
   if (marker) needles.add(marker);
   if (fullText.length >= 6) needles.add(fullText);
   if (fullText.length >= 12) needles.add(fullText.slice(0, 48));
+  const needleList = Array.from(needles);
+  const timestampGraceMs = options?.timestampGraceMs ?? 5000;
+  const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
+  const maxAttempts = Math.max(3, options?.maxAttempts ?? 12);
+  const attemptIntervalMs = Math.max(1000, options?.attemptIntervalMs ?? 3000);
+  const skipInitialDelay = options?.skipInitialDelay === true;
+  const relaxTimestampOnLastAttempt = options?.relaxTimestampOnLastAttempt === true;
+  const destinoCandidates = await resolveEvoInstanceNameCandidates(destino);
 
-  const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(destino)}`;
-
-  await sleepMs(2500);
+  if (!skipInitialDelay) {
+    await sleepMs(3000);
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    if (attempt > 1) await sleepMs(2500);
-    for (const remoteJid of remoteJids) {
-      const bodies: Array<Record<string, unknown>> = [
-        { where: { key: { remoteJid } }, limit: 50 },
-        { where: { key: { remoteJid } }, take: 50 },
-        { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
-        { limit: 80 },
-        {},
-      ];
-      for (const body of bodies) {
-        const result = await callEvoAction(url, "POST", body, {
-          timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 25000),
-          retries: 1,
-        });
-        if (!result.ok) continue;
-        if (evoChatTextsIncludeNeedle(result.json, Array.from(needles))) {
-          return { ok: true, detail: "" };
-        }
-      }
+    if (attempt > 1) await sleepMs(attemptIntervalMs);
+    const tsFilter =
+      relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
+    const foundOnDestino = await probeAquecedorDeliveryViaFindMessages(
+      destinoCandidates,
+      remoteJids,
+      needleList,
+      tsFilter,
+      false,
+    );
+    if (foundOnDestino) {
+      return { ok: true, detail: "" };
+    }
+  }
+
+  const origem = String(options?.instanciaOrigem || "").trim();
+  const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
+  if (origem && numeroDestino) {
+    const origemCandidates = await resolveEvoInstanceNameCandidates(origem);
+    const destJids = buildAquecedorRemoteJidCandidates(numeroDestino);
+    const foundOnOrigem = await probeAquecedorDeliveryViaFindMessages(
+      origemCandidates,
+      destJids,
+      needleList,
+      minTimestampMs,
+      true,
+    );
+    if (foundOnOrigem) {
+      return {
+        ok: false,
+        detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
+      };
     }
   }
 
@@ -6700,7 +6961,7 @@ app.get("/aquecedor/envios", async (req, res) => {
       if (Array.isArray(processandoData) && processandoData.length > 0) {
         for (const row of processandoData) {
           const origem = String(row?.instancia || "").trim() || "—";
-          const numDest = normalizeWhatsAppNumber(String(row?.numero_destino || "").trim());
+          const numDest = resolveAquecedorInstanceDigits(String(row?.numero_destino || "").trim());
           const destino = numToInst.get(numDest) || String(row?.numero_destino || "").trim() || "—";
           const dataEnvio = String(row?.scheduled_at || row?.processing_at || "").trim() || null;
           pushItem(origem, destino, dataEnvio, "Em Fila");

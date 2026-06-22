@@ -13,6 +13,28 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-22
+
+**WABA — Aquecedor: remoção do teste mesh inicial:** validação N×(N−1) no start removida (causava restrição WhatsApp em contas novas). Ciclo normal + lifecycle (Preparando, 6h, limites) mantidos. Marker `DEPLOY-2026-06-22-aquecedor-remove-mesh-test`. Ver `doc/LOG-2026-06-22__aquecedor-remove-mesh-test.md`.
+
+**WABA — Aquecedor modo seguro (lifecycle):** pausa automática 6h por restrição; fila Preparando + liberação 12h; intervalo 5–15 min; limite 8–16 msgs/dia semana 1 com ramp-up. Marker `DEPLOY-2026-06-22-aquecedor-safe-lifecycle`. Ver `doc/LOG-2026-06-22__aquecedor-safe-lifecycle.md`.
+
+2026-06-21
+
+**WABA — Aquecedor mesh webhook verify v3:** confirmação via MESSAGES_UPSERT + findMessages global + envio multi-formato; service dedicado. Marker `DEPLOY-2026-06-21-aquecedor-mesh-webhook-verify-v3`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-webhook-verify-v3.md`.
+
+**WABA — Aquecedor mesh EVO digits + escala hub-spoke:** corrige normalização BR errada nos números da EVO (`resolveAquecedorInstanceDigits`); mesh hub-spoke a partir de 7 instâncias; verify bootstrap mais rápido; ETA na UI/API. Marker `DEPLOY-2026-06-21-aquecedor-mesh-evo-digits-scale`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-evo-digits-scale.md`.
+
+**WABA — Aquecedor mesh fail UI vermelho + msg simples:** card/barra vermelhos no teste falho; mensagem amigável ao usuário; detalhe técnico nos logs. Marker `DEPLOY-2026-06-21-aquecedor-mesh-fail-ui-red`.
+
+**WABA — Aquecedor mesh send/verify fases:** envio sequencial por origem, verify em lote + retry; refresh números EVO live. Marker `DEPLOY-2026-06-21-aquecedor-mesh-send-verify-phases`.
+
+**WABA — Aquecedor mesh bootstrap no start:** ao iniciar, N×(N−1) envios paralelos + findMessages; ciclo só após `passed`. Marker `DEPLOY-2026-06-21-aquecedor-mesh-bootstrap-start`. Ver `doc/LOG-2026-06-21__aquecedor-mesh-bootstrap-start.md`.
+
+**WABA — Aquecedor delivery verify v2 (walkup HTTP 201):** findMessages com alias EVO, timestamp, fromMe, 12×3s; detecta mensagem só na origem. Marker `DEPLOY-2026-06-21-aquecedor-delivery-verify-v2`. Ver `doc/LOG-2026-06-21__aquecedor-delivery-verify-walkup-v2.md`.
+
+**WABA — Aquecedor fila multi-instância (5 no ciclo, só 2 conversando):** state machine por par (`pendingReplyFrom` idle após A→B + B→A); `outboundSinceInbound` global; fairness no score. Marker `DEPLOY-2026-06-21-aquecedor-fila-multi-instancia`. Ver `doc/LOG-2026-06-21__aquecedor-fila-multi-instancia-fix.md`.
+
 2026-06-20
 
 **WABA — UI remover painel Envio automático (API Alternativa):** seção `#dis-alternativa-auto-rules` removida de `index.html` e `dist/index.html`; JS de exibição limpo. Ver `doc/LOG-2026-06-20__remove-alternativa-auto-rules-panel.md`.

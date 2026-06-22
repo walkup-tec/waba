@@ -5666,6 +5666,14 @@
         color: #fca5a5;
       }
 
+      .status-text.preparing {
+        color: #fbbf24;
+      }
+
+      .status-text.restricted-wait {
+        color: #f87171;
+      }
+
       .instance-actions {
         display: inline-flex;
         gap: 6px;
@@ -7259,6 +7267,18 @@
         background: #0ea5e9;
         animation: aqHeroPulseBlue 1s infinite;
       }
+      .aquecedor-runtime-hero.failed {
+        border-color: rgba(239, 68, 68, 0.85);
+        background: rgba(69, 10, 10, 0.28);
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+      }
+      .aquecedor-runtime-hero.failed .aquecedor-runtime-hero-dot {
+        background: #ef4444;
+        animation: aqHeroPulseRed 1.2s infinite;
+      }
+      .aquecedor-runtime-hero.failed .aquecedor-runtime-hero-title {
+        color: #fecaca;
+      }
       .aquecedor-runtime-hero-title {
         font-weight: 700;
         font-size: 0.92rem;
@@ -7286,6 +7306,11 @@
         70% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
         100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
       }
+      @keyframes aqHeroPulseRed {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+        70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
       .aquecedor-runtime-progress {
         margin-top: 10px;
       }
@@ -7307,6 +7332,10 @@
         width: 35%;
         animation: aqRuntimeProcessing 1.2s ease-in-out infinite;
         background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+      }
+      .aquecedor-runtime-progress-fill.failed {
+        width: 100%;
+        background: linear-gradient(90deg, #f87171, #dc2626);
       }
       .aquecedor-runtime-progress-caption {
         margin-top: 6px;
@@ -25976,7 +26005,7 @@
         const nextAllowedAtMs = status?.nextAllowedAt ? new Date(status.nextAllowedAt).getTime() : 0;
         const nowMs = Date.now();
 
-        fillEl.classList.remove("processing");
+        fillEl.classList.remove("processing", "failed");
         if (!running) {
           fillEl.style.width = "0%";
           captionEl.textContent = "Motor parado. Clique em \"Iniciar Aquecedor\" para começar.";
@@ -25984,6 +26013,7 @@
         }
         if (isProcessing) {
           fillEl.classList.add("processing");
+          fillEl.style.width = "45%";
           captionEl.textContent = "Processando envio agora...";
           return;
         }
@@ -26015,7 +26045,7 @@
         const processing = status?.isProcessing === true;
         const lastResult = String(status?.lastResult || "").trim();
         const instanceCount = Number(status?.connectedInstanceCount ?? 0);
-        hero.classList.remove("active", "processing");
+        hero.classList.remove("active", "processing", "failed");
         if (countEl) {
           if (running && instanceCount >= 2) {
             countEl.textContent = `${instanceCount} instâncias no ciclo`;
@@ -30134,7 +30164,24 @@
           useAquecedor: current ? current.useAquecedor !== false : true,
           useDisparador: current ? current.useDisparador !== false : true,
           useFazenda: current ? current.useFazenda === true : false,
+          aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
+          aquecedorPhase: current?.aquecedorPhase || null,
         };
+      }
+
+      function resolveInstanceAquecedorStatusLabel(inst) {
+        const usage = getInstanceUsage(inst.instanceName);
+        if (usage.useAquecedor && usage.aquecedorStatusLabel) {
+          return usage.aquecedorStatusLabel;
+        }
+        if (!inst.isOpen) return "desconectado";
+        return "conectado";
+      }
+
+      function resolveInstanceStatusClass(inst, statusLabel) {
+        if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
+        if (statusLabel === "Preparando") return "processing preparing";
+        return inst.isOpen ? "connected" : "disconnected";
       }
 
       async function loadInstanceUsageConfig() {
@@ -30152,6 +30199,8 @@
               useDisparador: row?.useDisparador !== false,
               useFazenda: row?.useFazenda === true,
               updatedAt: row?.updatedAt || "",
+              aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
+              aquecedorPhase: row?.aquecedorPhase || null,
             };
           });
           instanceUsageByName = map;
@@ -30375,6 +30424,8 @@
           const isDeleting = instancesDeleting.has(
             String(inst.instanceName || "").trim().toLowerCase()
           );
+          const statusLabel = isDeleting ? "Excluindo…" : resolveInstanceAquecedorStatusLabel(inst);
+          const statusClass = isDeleting ? "disconnected" : resolveInstanceStatusClass(inst, statusLabel);
           if (isDeleting) tr.classList.add("instance-row-deleting");
 
           const actionsHtml = isDeleting
@@ -30422,9 +30473,7 @@
             </td>`
                 : ""
             }
-            <td><span class="status-text ${
-              inst.isOpen ? "connected" : "disconnected"
-            }">${isDeleting ? "Excluindo…" : inst.statusLabel}</span></td>
+            <td><span class="status-text ${statusClass}">${statusLabel}</span></td>
             <td>${actionsHtml}</td>
           `;
           const inlineEditBtn = tr.querySelector(".instance-inline-edit-btn");
