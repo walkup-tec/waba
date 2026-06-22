@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-22
 
+**WABA — Filtro Preparando na aba Instâncias:** chip para listar só números em preparação do aquecedor. Ver `doc/LOG-2026-06-22__instancias-filtro-preparando.md`.
+
 **WABA — Preparando: fix grandfather instância 5182008906:** `atendimento-906` integrada 22/06 ~14:50 BRT ficava "conectado" por grandfather indevido; cutoff 22/06 + `preparingSince` do EVO cache. Ver `doc/LOG-2026-06-22__aquecedor-preparando-grandfather-fix.md`.
 
 **WABA — Validação inbound: uma resposta por integração:** corrige 6 mensagens `WABA-VAL` no mesmo CONFIRMAR (loops órfãos + dedupe por conversa). Marker `DEPLOY-2026-06-22-validacao-inbound-reply-dedupe`. Ver `doc/LOG-2026-06-22__validacao-inbound-reply-dedupe.md`.

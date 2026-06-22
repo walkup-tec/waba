@@ -5397,6 +5397,12 @@
         background: rgba(46, 228, 160, 0.12);
       }
 
+      .instances-chip.active[data-status="preparing"] {
+        border-color: rgba(251, 191, 36, 0.55);
+        color: #fbbf24;
+        background: rgba(251, 191, 36, 0.12);
+      }
+
       #instances-refresh-btn {
         margin-left: auto;
       }
@@ -12035,6 +12041,9 @@
                   </button>
                   <button class="instances-chip" type="button" data-status="closed">
                     Desconectadas
+                  </button>
+                  <button class="instances-chip" type="button" data-status="preparing">
+                    Preparando
                   </button>
                 </div>
                 <button id="instances-refresh-btn" class="instances-chip" type="button">
@@ -30250,6 +30259,18 @@
         return "conectado";
       }
 
+      function isInstancePreparing(inst) {
+        return resolveInstanceAquecedorStatusLabel(inst) === "Preparando";
+      }
+
+      function isInstanceConnectedFilter(inst) {
+        return resolveInstanceAquecedorStatusLabel(inst) === "conectado";
+      }
+
+      function isInstanceDisconnectedFilter(inst) {
+        return resolveInstanceAquecedorStatusLabel(inst) === "desconectado";
+      }
+
       function resolveInstanceStatusClass(inst, statusLabel) {
         if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
         if (statusLabel === "Preparando") return "processing preparing";
@@ -30379,9 +30400,11 @@
         updateInstancesIndicators();
         let filtered = base;
         if (instancesStatusFilter === "open") {
-          filtered = filtered.filter((i) => i.isOpen);
+          filtered = filtered.filter((i) => isInstanceConnectedFilter(i));
         } else if (instancesStatusFilter === "closed") {
-          filtered = filtered.filter((i) => !i.isOpen);
+          filtered = filtered.filter((i) => isInstanceDisconnectedFilter(i));
+        } else if (instancesStatusFilter === "preparing") {
+          filtered = filtered.filter((i) => isInstancePreparing(i));
         }
 
         if (instancesSearchTerm) {
