@@ -2301,23 +2301,28 @@ async function saveAquecedorConfigRecord(useRecommended, customConfig) {
     return "local";
 }
 async function ensureAquecedorInstanceRegistered(instanceName) {
-    const name = String(instanceName || "").trim();
-    if (!name)
-        return;
-    const usageMap = await loadInstanceUsageMap();
-    if (!getInstanceUsageFromMap(usageMap, name)) {
-        await persistInstanceUsage([
-            {
-                instanceName: name,
-                useAquecedor: true,
-                useDisparador: true,
-            },
-        ]);
+    try {
+        const name = String(instanceName || "").trim();
+        if (!name)
+            return;
+        const usageMap = await loadInstanceUsageMap();
+        if (!getInstanceUsageFromMap(usageMap, name)) {
+            await persistInstanceUsage([
+                {
+                    instanceName: name,
+                    useAquecedor: true,
+                    useDisparador: true,
+                },
+            ]);
+        }
+        const cache = await loadEvoInstancesCache();
+        const cacheRow = (cache?.items || []).find((row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase());
+        const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
+        await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, preparingSince);
     }
-    const cache = await loadEvoInstancesCache();
-    const cacheRow = (cache?.items || []).find((row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase());
-    const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
-    await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, preparingSince);
+    catch (error) {
+        console.warn("[Aquecedor] ensureAquecedorInstanceRegistered:", error);
+    }
 }
 async function syncAquecedorConnectedInstances(supabase, connected) {
     const usageMap = await loadInstanceUsageMap();
@@ -5402,13 +5407,33 @@ function tryExtractQrCode(payload) {
     };
     return visit(payload);
 }
-async function fetchInstanceQrCodeFromEvo(instanceName, number = "") {
+async function prepareEvoInstanceForQrConnect(instanceName) {
+    const enc = encodeURIComponent(String(instanceName || "").trim());
+    if (!enc)
+        return;
+    const steps = [
+        { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
+        { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
+    ];
+    for (const step of steps) {
+        await callEvoAction(step.url, step.method, undefined, {
+            timeoutMs: 12000,
+            retries: 1,
+        });
+    }
+}
+async function fetchInstanceQrCodeFromEvo(instanceName, number = "", options = {}) {
+    const timeoutMs = options.timeoutMs ?? (0, evo_http_client_1.defaultEvoHttpTimeoutMs)();
+    const retries = options.retries ?? 3;
+    if (options.prepareSession !== false) {
+        await prepareEvoInstanceForQrConnect(instanceName);
+    }
+    const enc = encodeURIComponent(instanceName);
     const connectCandidates = [
+        { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "GET" },
         { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" },
-        { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "GET" },
-        { url: `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(instanceName)}`, method: "GET" },
-        { url: `${EVO_API_BASE}/instance/qr/${encodeURIComponent(instanceName)}`, method: "GET" },
-        { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "POST" },
+        { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "POST" },
+        { url: `${EVO_API_BASE}/instance/qrcode/${enc}`, method: "GET" },
     ].filter((candidate) => candidate.url);
     let lastQrStatus = 0;
     let lastQrDetail = "";
@@ -5417,8 +5442,8 @@ async function fetchInstanceQrCodeFromEvo(instanceName, number = "") {
             ? `${candidate.url}${candidate.url.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
             : candidate.url;
         const result = await callEvoAction(targetUrl, candidate.method, undefined, {
-            timeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
-            retries: 3,
+            timeoutMs,
+            retries,
         });
         lastQrStatus = result.status;
         lastQrDetail = String(result.body || result.error || "").slice(0, 400);
@@ -5588,8 +5613,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         let qrFromCreate = null;
         for (const createUrl of createUrls) {
             const createResult = await callEvoAction(createUrl, "POST", createPayload, {
-                timeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
-                retries: 3,
+                timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
+                retries: 2,
             });
             lastCreateStatus = createResult.status;
             lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
@@ -5622,7 +5647,11 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                 qrCode: qrFromCreate,
             });
         }
-        const qrFetch = await fetchInstanceQrCodeFromEvo(name, number);
+        const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+            timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
+            retries: 2,
+            prepareSession: true,
+        });
         if (!qrFetch.ok) {
             return res.status(502).json({
                 error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),

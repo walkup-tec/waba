@@ -31658,7 +31658,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: normalizedName, token, number }),
             },
-            90000
+            120000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -31688,10 +31688,18 @@
           startRegisterConnectPolling(normalizedName);
           beginRegisterWizardHide(normalizedName);
         } catch (error) {
-          const errMsg =
-            error instanceof Error && error.message === "timeout"
-              ? "Tempo esgotado ao contactar a Evolution API. Tente novamente."
-              : "Erro ao atualizar QRCode da instância.";
+          let errMsg = "Erro ao atualizar QRCode da instância.";
+          if (error instanceof Error) {
+            if (error.message === "timeout") {
+              errMsg =
+                "Tempo esgotado ao gerar o QRCode (Evolution API lenta). Tente «Atualizar QR» novamente.";
+            } else if (/failed to fetch|network|load failed|aborted/i.test(error.message)) {
+              errMsg =
+                "Conexão com o servidor interrompida durante a geração do QRCode. Aguarde alguns segundos e clique em «Atualizar QR».";
+            } else if (error.message.trim()) {
+              errMsg = error.message.trim();
+            }
+          }
           showToast(errMsg, "error");
           setRegisterConnectStatus("error", errMsg);
           qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
@@ -31839,7 +31847,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: normalizedName, token, number }),
             },
-            90000
+            120000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {

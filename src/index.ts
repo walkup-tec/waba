@@ -2860,24 +2860,28 @@ async function saveAquecedorConfigRecord(
 }
 
 async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<void> {
-  const name = String(instanceName || "").trim();
-  if (!name) return;
-  const usageMap = await loadInstanceUsageMap();
-  if (!getInstanceUsageFromMap(usageMap, name)) {
-    await persistInstanceUsage([
-      {
-        instanceName: name,
-        useAquecedor: true,
-        useDisparador: true,
-      },
-    ]);
+  try {
+    const name = String(instanceName || "").trim();
+    if (!name) return;
+    const usageMap = await loadInstanceUsageMap();
+    if (!getInstanceUsageFromMap(usageMap, name)) {
+      await persistInstanceUsage([
+        {
+          instanceName: name,
+          useAquecedor: true,
+          useDisparador: true,
+        },
+      ]);
+    }
+    const cache = await loadEvoInstancesCache();
+    const cacheRow = (cache?.items || []).find(
+      (row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase(),
+    );
+    const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
+    await registerAquecedorInstancePreparing(name, preparingSince);
+  } catch (error) {
+    console.warn("[Aquecedor] ensureAquecedorInstanceRegistered:", error);
   }
-  const cache = await loadEvoInstancesCache();
-  const cacheRow = (cache?.items || []).find(
-    (row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase(),
-  );
-  const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
-  await registerAquecedorInstancePreparing(name, preparingSince);
 }
 
 async function syncAquecedorConnectedInstances(
@@ -6410,19 +6414,48 @@ function tryExtractQrCode(payload: any): string | null {
   return visit(payload);
 }
 
+type EvoQrFetchOptions = {
+  timeoutMs?: number;
+  retries?: number;
+  /** Logout/restart na EVO antes do connect (instância já existente desconectada). */
+  prepareSession?: boolean;
+};
+
+async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<void> {
+  const enc = encodeURIComponent(String(instanceName || "").trim());
+  if (!enc) return;
+  const steps: Array<{ url: string; method: "DELETE" | "POST" }> = [
+    { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
+    { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
+  ];
+  for (const step of steps) {
+    await callEvoAction(step.url, step.method, undefined, {
+      timeoutMs: 12000,
+      retries: 1,
+    });
+  }
+}
+
 async function fetchInstanceQrCodeFromEvo(
   instanceName: string,
   number = "",
+  options: EvoQrFetchOptions = {},
 ): Promise<
   | { ok: true; qrCode: string; providerResponse: unknown }
   | { ok: false; lastQrStatus: number; lastQrDetail: string }
 > {
+  const timeoutMs = options.timeoutMs ?? defaultEvoHttpTimeoutMs();
+  const retries = options.retries ?? 3;
+  if (options.prepareSession !== false) {
+    await prepareEvoInstanceForQrConnect(instanceName);
+  }
+
+  const enc = encodeURIComponent(instanceName);
   const connectCandidates: Array<{ url: string; method: "GET" | "POST" }> = [
+    { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "GET" as const },
     { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" as const },
-    { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "GET" as const },
-    { url: `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(instanceName)}`, method: "GET" as const },
-    { url: `${EVO_API_BASE}/instance/qr/${encodeURIComponent(instanceName)}`, method: "GET" as const },
-    { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "POST" as const },
+    { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "POST" as const },
+    { url: `${EVO_API_BASE}/instance/qrcode/${enc}`, method: "GET" as const },
   ].filter((candidate) => candidate.url);
 
   let lastQrStatus = 0;
@@ -6434,8 +6467,8 @@ async function fetchInstanceQrCodeFromEvo(
       : candidate.url;
 
     const result = await callEvoAction(targetUrl, candidate.method, undefined, {
-      timeoutMs: defaultEvoHttpTimeoutMs(),
-      retries: 3,
+      timeoutMs,
+      retries,
     });
     lastQrStatus = result.status;
     lastQrDetail = String(result.body || result.error || "").slice(0, 400);
@@ -6625,8 +6658,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     let qrFromCreate: string | null = null;
     for (const createUrl of createUrls) {
       const createResult = await callEvoAction(createUrl, "POST", createPayload, {
-        timeoutMs: defaultEvoHttpTimeoutMs(),
-        retries: 3,
+        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 25000),
+        retries: 2,
       });
       lastCreateStatus = createResult.status;
       lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
@@ -6661,7 +6694,11 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
       });
     }
 
-    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number);
+    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+      timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000),
+      retries: 2,
+      prepareSession: true,
+    });
     if (!qrFetch.ok) {
       return res.status(502).json({
         error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
