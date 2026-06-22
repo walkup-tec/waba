@@ -24528,6 +24528,7 @@
       let registerConnectedInstanceName = "";
       let registerInboundPollTimer = null;
       let registerInboundValidationId = "";
+      let registerInboundStartInFlight = false;
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
       let registerWizardValidationComplete = false;
@@ -31010,6 +31011,9 @@
       }
 
       async function startRegisterInboundValidation(instanceName) {
+        if (registerInboundStartInFlight) return;
+        if (registerInboundValidationId && registerInboundPollTimer) return;
+        registerInboundStartInFlight = true;
         setRegisterWizardStep(3);
         resetRegisterInboundPanel();
 
@@ -31065,6 +31069,8 @@
           const receiveDetail = document.getElementById("register-inbound-receive-detail");
           if (receiveDetail) receiveDetail.textContent = "Erro ao iniciar validação. Tente novamente.";
           return;
+        } finally {
+          registerInboundStartInFlight = false;
         }
 
         if (!validationId) return;

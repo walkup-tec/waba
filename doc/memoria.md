@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-22
 
+**WABA — Validação inbound: uma resposta por integração:** corrige 6 mensagens `WABA-VAL` no mesmo CONFIRMAR (loops órfãos + dedupe por conversa). Marker `DEPLOY-2026-06-22-validacao-inbound-reply-dedupe`. Ver `doc/LOG-2026-06-22__validacao-inbound-reply-dedupe.md`.
+
 **WABA — Aquecedor: remoção do teste mesh inicial:** validação N×(N−1) no start removida (causava restrição WhatsApp em contas novas). Ciclo normal + lifecycle (Preparando, 6h, limites) mantidos. Marker `DEPLOY-2026-06-22-aquecedor-remove-mesh-test`. Ver `doc/LOG-2026-06-22__aquecedor-remove-mesh-test.md`.
 
 **WABA — Aquecedor modo seguro (lifecycle):** pausa automática 6h por restrição; fila Preparando + liberação 12h; intervalo 5–15 min; limite 8–16 msgs/dia semana 1 com ramp-up. Marker `DEPLOY-2026-06-22-aquecedor-safe-lifecycle`. Ver `doc/LOG-2026-06-22__aquecedor-safe-lifecycle.md`.
