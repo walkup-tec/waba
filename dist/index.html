@@ -14529,21 +14529,12 @@
                   autocomplete="off"
                 />
               </div>
-              <div class="reg-field">
+              <div class="reg-field reg-field-full">
                 <label class="register-label" for="register-number-input">Número</label>
                 <input id="register-number-input" class="register-input" type="tel" inputmode="tel" placeholder="Opcional" />
               </div>
-              <div class="reg-field">
-                <label class="register-label" for="register-token-input">Token</label>
-                <input
-                  id="register-token-input"
-                  class="register-input"
-                  type="text"
-                  readonly
-                  title="Gerado automaticamente"
-                />
-              </div>
             </div>
+            <input id="register-token-input" type="hidden" value="" aria-hidden="true" />
           </div>
 
           <!-- Passo 2: QR Code -->
@@ -30908,12 +30899,12 @@
         const qrPreview = document.getElementById("register-qrcode-preview");
         const refreshQrBtn = document.getElementById("register-refresh-qrcode-btn");
         const statusEl = document.getElementById("register-connect-status");
-        if (!overlay || !nameInput || !tokenInput || !numberInput || !qrPreview) return;
+        if (!overlay || !nameInput || !numberInput || !qrPreview) return;
         const safeNumber = String(number || "").trim();
         const showRefreshQr = options?.showRefreshQr !== false;
         const startAtQr = Boolean(instanceName && options?.showRefreshQr !== false);
         nameInput.value = instanceName || "";
-        tokenInput.value = generateTokenLike();
+        if (tokenInput) tokenInput.value = generateTokenLike();
         numberInput.value = safeNumber === "—" ? "" : safeNumber;
         qrPreview.classList.remove("open");
         qrPreview.innerHTML = "";
@@ -31766,7 +31757,6 @@
 
         if (
           !nameInput ||
-          !tokenInput ||
           !numberInput ||
           !qrPreview ||
           !actionBtn
@@ -31775,7 +31765,6 @@
             "Modal de registro incompleto no DOM. Recarregue a página (Ctrl+F5).";
           console.warn("[Waba] registerAndGenerateQrCode:", msg, {
             nameInput: !!nameInput,
-            tokenInput: !!tokenInput,
             numberInput: !!numberInput,
             qrPreview: !!qrPreview,
             actionBtn: !!actionBtn,
@@ -31785,7 +31774,11 @@
         }
 
         const name = String(nameInput.value || "").trim();
-        const token = String(tokenInput.value || "").trim();
+        let token = String(tokenInput?.value || "").trim();
+        if (!token) {
+          token = generateTokenLike();
+          if (tokenInput) tokenInput.value = token;
+        }
         const number = String(numberInput.value || "").trim();
         const normalizedName = normalizeInstanceRegisterName(name);
 
@@ -31823,11 +31816,6 @@
             "warning"
           );
           nameInput.focus();
-          return;
-        }
-        if (!token) {
-          showToast("Informe o Token da instância.", "warning");
-          tokenInput.focus();
           return;
         }
 

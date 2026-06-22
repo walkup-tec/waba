@@ -1,4 +1,4 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-22-qrcode-evo-logout-prepare";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-22-modal-registro-sem-token-ui";
 
