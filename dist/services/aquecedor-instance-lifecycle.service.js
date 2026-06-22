@@ -24,7 +24,7 @@ const data_path_1 = require("../data-path");
 const LIFECYCLE_FILE = (0, data_path_1.resolveDataFile)("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
-exports.AQUECEDOR_STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
+exports.AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 const STAGGER_PROMOTE_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";

@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-22
 
+**WABA — Preparando intervalo 6h (era 12h):** `AQUECEDOR_STAGGER_PROMOTE_MS` e fila de promoção. Ver `doc/LOG-2026-06-22__aquecedor-preparando-6h-interval.md`.
+
 **WABA — QRCode produção logout/restart EVO:** prepare session antes do connect; timeouts ajustados; UI 120s. Ver `doc/LOG-2026-06-22__qrcode-producao-evo-logout-prepare.md`.
 
 **WABA — Filtro Preparando na aba Instâncias:** chip para listar só números em preparação do aquecedor. Ver `doc/LOG-2026-06-22__instancias-filtro-preparando.md`.

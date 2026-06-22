@@ -2986,7 +2986,7 @@ async function runAquecedorCycle(forceTest = false) {
         updateAquecedorConnectedSummary(connected);
         const preparingCount = Math.max(0, connectedAll.length - connected.length);
         if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
-            aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação ou espera (6h). Aquecedor ativo em ${connected.length}; liberação gradual a cada 12h.`;
+            aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação ou espera (6h). Aquecedor ativo em ${connected.length}; liberação gradual a cada 6h.`;
             return;
         }
         if (connected.length < 2) {

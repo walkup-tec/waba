@@ -5,7 +5,7 @@ import { resolveDataFile } from "../data-path";
 const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = resolveDataFile("evo-instances-cache.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
-export const AQUECEDOR_STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
+export const AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 const STAGGER_PROMOTE_MS = AQUECEDOR_STAGGER_PROMOTE_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 export const AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
