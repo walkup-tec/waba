@@ -2863,15 +2863,21 @@ async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<
   const name = String(instanceName || "").trim();
   if (!name) return;
   const usageMap = await loadInstanceUsageMap();
-  if (getInstanceUsageFromMap(usageMap, name)) return;
-  await persistInstanceUsage([
-    {
-      instanceName: name,
-      useAquecedor: true,
-      useDisparador: true,
-    },
-  ]);
-  await registerAquecedorInstancePreparing(name);
+  if (!getInstanceUsageFromMap(usageMap, name)) {
+    await persistInstanceUsage([
+      {
+        instanceName: name,
+        useAquecedor: true,
+        useDisparador: true,
+      },
+    ]);
+  }
+  const cache = await loadEvoInstancesCache();
+  const cacheRow = (cache?.items || []).find(
+    (row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase(),
+  );
+  const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
+  await registerAquecedorInstancePreparing(name, preparingSince);
 }
 
 async function syncAquecedorConnectedInstances(
@@ -4546,6 +4552,11 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
 app.get("/instancias/uso-config", async (req, res) => {
   try {
     const usageMap = await loadInstanceUsageMap();
+    for (const [instanceName, cfg] of usageMap.entries()) {
+      if (cfg.useAquecedor !== false) {
+        await registerAquecedorInstancePreparing(instanceName);
+      }
+    }
     const lifecycleMap = await getAquecedorLifecycleStatusMap();
     const auth = resolveWabaRequestAuth(req);
     const allowed = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(

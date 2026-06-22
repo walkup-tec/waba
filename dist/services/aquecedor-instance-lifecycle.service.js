@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
@@ -22,18 +22,21 @@ const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../data-path");
 const LIFECYCLE_FILE = (0, data_path_1.resolveDataFile)("aquecedor-instance-lifecycle.json");
+const EVO_INSTANCES_CACHE_FILE = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
 exports.AQUECEDOR_STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
 const STAGGER_PROMOTE_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS;
+/** Instâncias integradas antes desta data entram direto como ativas (legado). */
+exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
 let cache = null;
 function normalizeKey(instanceName) {
     return String(instanceName || "").trim().toLowerCase();
 }
-function emptyRow(phase) {
+function emptyRow(phase, preparingSince) {
     const now = new Date().toISOString();
     return {
         phase,
-        preparingSince: phase === "preparing" ? now : null,
+        preparingSince: phase === "preparing" ? preparingSince || now : null,
         activatedAt: phase === "active" ? now : null,
         restrictedUntil: null,
         restrictedReason: null,
@@ -41,6 +44,49 @@ function emptyRow(phase) {
         dailySendCount: 0,
         dailyCap: null,
     };
+}
+async function readEvoInstanceCreatedAt(instanceName) {
+    try {
+        const raw = await fs_1.promises.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        const key = normalizeKey(instanceName);
+        for (const item of parsed?.items || []) {
+            if (normalizeKey(String(item?.name || "")) !== key)
+                continue;
+            const createdAt = String(item?.createdAt || "").trim();
+            return createdAt || null;
+        }
+    }
+    catch {
+        /* cache opcional */
+    }
+    return null;
+}
+function isGrandfatherEligible(createdAt) {
+    if (!createdAt)
+        return true;
+    const createdMs = new Date(createdAt).getTime();
+    const cutoffMs = new Date(exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO).getTime();
+    return !Number.isFinite(createdMs) || createdMs < cutoffMs;
+}
+function shouldRevertGrandfatherToPreparing(row, createdAt) {
+    if (row.phase !== "active" || row.preparingSince)
+        return false;
+    if (isGrandfatherEligible(createdAt))
+        return false;
+    const createdMs = new Date(createdAt || 0).getTime();
+    if (!Number.isFinite(createdMs))
+        return false;
+    return Date.now() - createdMs < STAGGER_PROMOTE_MS;
+}
+async function reconcileGrandfatheredActiveRow(instanceName, row) {
+    const createdAt = await readEvoInstanceCreatedAt(instanceName);
+    if (!shouldRevertGrandfatherToPreparing(row, createdAt))
+        return false;
+    row.phase = "preparing";
+    row.preparingSince = createdAt;
+    row.activatedAt = null;
+    return true;
 }
 function defaultStore() {
     return {
@@ -168,7 +214,7 @@ async function getAquecedorLifecycleRow(instanceName) {
     refreshRestrictionPhase(row);
     return { ...row };
 }
-async function registerAquecedorInstancePreparing(instanceName) {
+async function registerAquecedorInstancePreparing(instanceName, preparingSince) {
     const name = String(instanceName || "").trim();
     if (!name)
         return;
@@ -179,11 +225,22 @@ async function registerAquecedorInstancePreparing(instanceName) {
         refreshRestrictionPhase(existing);
         if (existing.phase === "restricted_wait")
             return;
-        if (existing.phase === "active")
+        if (existing.phase === "active") {
+            if (await reconcileGrandfatheredActiveRow(name, existing)) {
+                await saveStore(store);
+            }
             return;
+        }
         return;
     }
-    store.instances[key] = emptyRow("preparing");
+    const createdAt = preparingSince ||
+        (await readEvoInstanceCreatedAt(name)) ||
+        null;
+    if (isGrandfatherEligible(createdAt)) {
+        await grandfatherAquecedorInstanceActive(name);
+        return;
+    }
+    store.instances[key] = emptyRow("preparing", createdAt || new Date().toISOString());
     await saveStore(store);
 }
 async function grandfatherAquecedorInstanceActive(instanceName) {
@@ -277,6 +334,13 @@ function formatAquecedorLifecycleStatusLabel(row) {
 }
 async function getAquecedorLifecycleStatusMap() {
     const store = await loadStore();
+    let storeDirty = false;
+    for (const [key, row] of Object.entries(store.instances)) {
+        if (await reconcileGrandfatheredActiveRow(key, row))
+            storeDirty = true;
+    }
+    if (storeDirty)
+        await saveStore(store);
     const preparingList = Object.entries(store.instances)
         .map(([key, row]) => ({ key, row }))
         .filter(({ row }) => {
@@ -311,18 +375,32 @@ async function filterAquecedorCycleConnected(connected) {
     await tickAquecedorStaggerPromotions();
     const store = await loadStore();
     const out = [];
+    let storeDirty = false;
     for (const item of connected) {
         const key = normalizeKey(item.instancia);
-        const row = store.instances[key];
+        let row = store.instances[key];
         if (!row) {
-            await grandfatherAquecedorInstanceActive(item.instancia);
-            out.push(item);
-            continue;
+            const createdAt = await readEvoInstanceCreatedAt(item.instancia);
+            if (isGrandfatherEligible(createdAt)) {
+                await grandfatherAquecedorInstanceActive(item.instancia);
+                row = (await loadStore()).instances[key];
+            }
+            else {
+                await registerAquecedorInstancePreparing(item.instancia, createdAt);
+                row = (await loadStore()).instances[key];
+            }
         }
+        else if (await reconcileGrandfatheredActiveRow(item.instancia, row)) {
+            storeDirty = true;
+        }
+        if (!row)
+            continue;
         refreshRestrictionPhase(row);
         if (row.phase === "active")
             out.push(item);
     }
+    if (storeDirty)
+        await saveStore(store);
     return out;
 }
 async function canAquecedorInstanceSendToday(instanceName) {

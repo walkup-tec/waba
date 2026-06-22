@@ -2305,16 +2305,19 @@ async function ensureAquecedorInstanceRegistered(instanceName) {
     if (!name)
         return;
     const usageMap = await loadInstanceUsageMap();
-    if (getInstanceUsageFromMap(usageMap, name))
-        return;
-    await persistInstanceUsage([
-        {
-            instanceName: name,
-            useAquecedor: true,
-            useDisparador: true,
-        },
-    ]);
-    await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name);
+    if (!getInstanceUsageFromMap(usageMap, name)) {
+        await persistInstanceUsage([
+            {
+                instanceName: name,
+                useAquecedor: true,
+                useDisparador: true,
+            },
+        ]);
+    }
+    const cache = await loadEvoInstancesCache();
+    const cacheRow = (cache?.items || []).find((row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase());
+    const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
+    await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, preparingSince);
 }
 async function syncAquecedorConnectedInstances(supabase, connected) {
     const usageMap = await loadInstanceUsageMap();
@@ -3691,6 +3694,11 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
 app.get("/instancias/uso-config", async (req, res) => {
     try {
         const usageMap = await loadInstanceUsageMap();
+        for (const [instanceName, cfg] of usageMap.entries()) {
+            if (cfg.useAquecedor !== false) {
+                await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(instanceName);
+            }
+        }
         const lifecycleMap = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusMap)();
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
         const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));

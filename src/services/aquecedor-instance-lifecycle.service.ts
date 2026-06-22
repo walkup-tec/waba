@@ -3,9 +3,12 @@ import path from "path";
 import { resolveDataFile } from "../data-path";
 
 const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
+const EVO_INSTANCES_CACHE_FILE = resolveDataFile("evo-instances-cache.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
 export const AQUECEDOR_STAGGER_PROMOTE_MS = 12 * 60 * 60 * 1000;
 const STAGGER_PROMOTE_MS = AQUECEDOR_STAGGER_PROMOTE_MS;
+/** Instâncias integradas antes desta data entram direto como ativas (legado). */
+export const AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
 
 export type AquecedorInstancePhase = "preparing" | "active" | "restricted_wait";
 
@@ -33,11 +36,14 @@ function normalizeKey(instanceName: string): string {
   return String(instanceName || "").trim().toLowerCase();
 }
 
-function emptyRow(phase: AquecedorInstancePhase): AquecedorInstanceLifecycleRow {
+function emptyRow(
+  phase: AquecedorInstancePhase,
+  preparingSince?: string | null,
+): AquecedorInstanceLifecycleRow {
   const now = new Date().toISOString();
   return {
     phase,
-    preparingSince: phase === "preparing" ? now : null,
+    preparingSince: phase === "preparing" ? preparingSince || now : null,
     activatedAt: phase === "active" ? now : null,
     restrictedUntil: null,
     restrictedReason: null,
@@ -45,6 +51,52 @@ function emptyRow(phase: AquecedorInstancePhase): AquecedorInstanceLifecycleRow 
     dailySendCount: 0,
     dailyCap: null,
   };
+}
+
+async function readEvoInstanceCreatedAt(instanceName: string): Promise<string | null> {
+  try {
+    const raw = await fs.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as { items?: Array<{ name?: string; createdAt?: string }> };
+    const key = normalizeKey(instanceName);
+    for (const item of parsed?.items || []) {
+      if (normalizeKey(String(item?.name || "")) !== key) continue;
+      const createdAt = String(item?.createdAt || "").trim();
+      return createdAt || null;
+    }
+  } catch {
+    /* cache opcional */
+  }
+  return null;
+}
+
+function isGrandfatherEligible(createdAt: string | null): boolean {
+  if (!createdAt) return true;
+  const createdMs = new Date(createdAt).getTime();
+  const cutoffMs = new Date(AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO).getTime();
+  return !Number.isFinite(createdMs) || createdMs < cutoffMs;
+}
+
+function shouldRevertGrandfatherToPreparing(
+  row: AquecedorInstanceLifecycleRow,
+  createdAt: string | null,
+): boolean {
+  if (row.phase !== "active" || row.preparingSince) return false;
+  if (isGrandfatherEligible(createdAt)) return false;
+  const createdMs = new Date(createdAt || 0).getTime();
+  if (!Number.isFinite(createdMs)) return false;
+  return Date.now() - createdMs < STAGGER_PROMOTE_MS;
+}
+
+async function reconcileGrandfatheredActiveRow(
+  instanceName: string,
+  row: AquecedorInstanceLifecycleRow,
+): Promise<boolean> {
+  const createdAt = await readEvoInstanceCreatedAt(instanceName);
+  if (!shouldRevertGrandfatherToPreparing(row, createdAt)) return false;
+  row.phase = "preparing";
+  row.preparingSince = createdAt;
+  row.activatedAt = null;
+  return true;
 }
 
 function defaultStore(): LifecycleStore {
@@ -185,7 +237,10 @@ export async function getAquecedorLifecycleRow(
   return { ...row };
 }
 
-export async function registerAquecedorInstancePreparing(instanceName: string): Promise<void> {
+export async function registerAquecedorInstancePreparing(
+  instanceName: string,
+  preparingSince?: string | null,
+): Promise<void> {
   const name = String(instanceName || "").trim();
   if (!name) return;
   const store = await loadStore();
@@ -194,10 +249,26 @@ export async function registerAquecedorInstancePreparing(instanceName: string): 
   if (existing) {
     refreshRestrictionPhase(existing);
     if (existing.phase === "restricted_wait") return;
-    if (existing.phase === "active") return;
+    if (existing.phase === "active") {
+      if (await reconcileGrandfatheredActiveRow(name, existing)) {
+        await saveStore(store);
+      }
+      return;
+    }
     return;
   }
-  store.instances[key] = emptyRow("preparing");
+  const createdAt =
+    preparingSince ||
+    (await readEvoInstanceCreatedAt(name)) ||
+    null;
+  if (isGrandfatherEligible(createdAt)) {
+    await grandfatherAquecedorInstanceActive(name);
+    return;
+  }
+  store.instances[key] = emptyRow(
+    "preparing",
+    createdAt || new Date().toISOString(),
+  );
   await saveStore(store);
 }
 
@@ -312,6 +383,12 @@ export async function getAquecedorLifecycleStatusMap(): Promise<
   >
 > {
   const store = await loadStore();
+  let storeDirty = false;
+  for (const [key, row] of Object.entries(store.instances)) {
+    if (await reconcileGrandfatheredActiveRow(key, row)) storeDirty = true;
+  }
+  if (storeDirty) await saveStore(store);
+
   const preparingList = Object.entries(store.instances)
     .map(([key, row]) => ({ key, row }))
     .filter(({ row }) => {
@@ -360,17 +437,27 @@ export async function filterAquecedorCycleConnected<T extends { instancia: strin
   await tickAquecedorStaggerPromotions();
   const store = await loadStore();
   const out: T[] = [];
+  let storeDirty = false;
   for (const item of connected) {
     const key = normalizeKey(item.instancia);
-    const row = store.instances[key];
+    let row = store.instances[key];
     if (!row) {
-      await grandfatherAquecedorInstanceActive(item.instancia);
-      out.push(item);
-      continue;
+      const createdAt = await readEvoInstanceCreatedAt(item.instancia);
+      if (isGrandfatherEligible(createdAt)) {
+        await grandfatherAquecedorInstanceActive(item.instancia);
+        row = (await loadStore()).instances[key];
+      } else {
+        await registerAquecedorInstancePreparing(item.instancia, createdAt);
+        row = (await loadStore()).instances[key];
+      }
+    } else if (await reconcileGrandfatheredActiveRow(item.instancia, row)) {
+      storeDirty = true;
     }
+    if (!row) continue;
     refreshRestrictionPhase(row);
     if (row.phase === "active") out.push(item);
   }
+  if (storeDirty) await saveStore(store);
   return out;
 }
 
