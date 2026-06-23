@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-22
 
+**WABA — Mozart 3 números Alternativa (V02):** pedido paid `waba-alternativa-numbers` shipmentCount=3. Ver `doc/LOG-2026-06-22__mozart-compra-3-numeros-alternativa-v02.md`.
+
 **WABA — Preparando intervalo 6h (era 12h):** `AQUECEDOR_STAGGER_PROMOTE_MS` e fila de promoção. Ver `doc/LOG-2026-06-22__aquecedor-preparando-6h-interval.md`.
 
 **WABA — QRCode produção logout/restart EVO:** prepare session antes do connect; timeouts ajustados; UI 120s. Ver `doc/LOG-2026-06-22__qrcode-producao-evo-logout-prepare.md`.
@@ -1598,3 +1600,19 @@ Palavras-chave para buscar:
 - Doc: `doc/AMBIENTES-V01-V02.md`.
 - **Pendente:** serviços Easypanel `waba_disparador_v01`/`_v02` + Traefik PathPrefix; Evolution/Supabase separados por ambiente.
 - **2026-06-08 (subpastas):** V01/V02 em `/version-01` e `/version-02` no mesmo domínio (`WABA_BASE_PATH`, `src/base-path.ts`). Doc Traefik: `doc/TRAEFIK-WABA-VERSION-PATHS.md`.
+
+## 2026-06-21 — Campanha: mínimo 4 instâncias + «+ Instâncias» automático
+
+- Regra: mínimo **4 números conectados** por campanha (`DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES`).
+- Backend: `resolveAutoInstancesForCampaign`, `POST .../instancias { auto: true }`, `409 buy_numbers_required`.
+- UI: alerta + botão «+ Instâncias» **somente** quando `instanceHealth.needsMoreInstancesForMinimum`; redireciona para aba Comprar se faltar estoque.
+- Log: `doc/LOG-2026-06-21__campanha-min-instancias-auto-comprar.md`.
+- **Pendente:** commit/push para produção quando usuário solicitar.
+
+## 2026-06-21 — Regra 50% instâncias ativas (pausa por saúde)
+
+- Mantida/restaurada na UI: campanha pausa quando **menos de 50%** das instâncias selecionadas estão ativas (`shouldPauseByDisconnectedRatio`, `>= 0.5` desconectadas).
+- Status: «Pausada · Pausa manual ou automática por regra de saúde.» quando pausada por regra de saúde (50% ou mínimo 4).
+- Alerta vermelho na lista: «Menos de 50% das instâncias selecionadas estão ativas (X de Y).»
+- «Ativar campanha» bloqueado enquanto 50% ou mínimo 4 violados; «+ Instâncias» continua só para mínimo 4.
+- Log: `doc/LOG-2026-06-21__campanha-pausa-50-porcento-saude.md`.

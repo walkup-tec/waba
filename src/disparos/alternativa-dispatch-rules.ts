@@ -3,6 +3,7 @@
 export const ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 3;
 export const ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
 export const ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
+export const DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 4;
 export const ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
 
 export type AlternativaThrottleInput = {
@@ -32,6 +33,7 @@ export function getAlternativaDispatchRulesMeta() {
     minActivatedForSend: ALTERNATIVA_MIN_ACTIVATED_FOR_SEND,
     minPurchasedForPicker: ALTERNATIVA_MIN_PURCHASED_FOR_PICKER,
     minPurchaseQuantity: ALTERNATIVA_MIN_PURCHASE_QUANTITY,
+    minConnectedForCampaign: DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
     maxSendsPerDayPerNumber: ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
   };
 }

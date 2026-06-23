@@ -17331,6 +17331,12 @@
         }
       }
 
+      function goToDisparosBuyNumbersPanel() {
+        setDisNumberSourceTab("comprar");
+        const comprarTab = document.querySelector('.dis-number-source-tab[data-source="comprar"]');
+        comprarTab?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
       async function openAlternativaNumbersBillingModal() {
         const minQty = ensureAlternativaPurchaseQtyFloor();
         const qty = alternativaNumbersSelectedQty;
@@ -28009,8 +28015,18 @@
                   const health = item?.instanceHealth && typeof item.instanceHealth === "object"
                     ? item.instanceHealth
                     : {};
+                  const needsMoreInstancesForMinimum =
+                    health?.needsMoreInstancesForMinimum === true;
                   const shouldPauseByDisconnectedRatio =
                     health?.shouldPauseByDisconnectedRatio === true;
+                  const campaignBlockedByHealth =
+                    needsMoreInstancesForMinimum || shouldPauseByDisconnectedRatio;
+                  const minConnectedRequired = Math.max(
+                    1,
+                    Math.floor(Number(health?.minConnectedRequired) || 4)
+                  );
+                  const connectedCount = Math.max(0, Math.floor(Number(health?.connectedCount) || 0));
+                  const selectedCount = Math.max(0, Math.floor(Number(health?.selectedCount) || 0));
                   const btnLabel = isFinished ? "Campanha finalizada" : isRunning ? "Pausar" : "Ativar campanha";
                   const safeName = campaignName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       
@@ -28029,21 +28045,24 @@
                         ? "dis-campaign-instance-tag dis-campaign-instance-tag--connected"
                         : "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected";
                       const title = ok
-                        ? "Inst·ncia conectada na EVO"
-                        : "Desconectada ou indispon·vel na EVO neste momento";
-                      return `<span class="${cls}" title="${title}">${safe || "·?"}</span>`;
+                        ? "Instância conectada na EVO"
+                        : "Desconectada ou indisponível na EVO neste momento";
+                      return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
-                    tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Inst·ncias desta campanha">${parts.join("")}</div>`;
+                    tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Instâncias desta campanha">${parts.join("")}</div>`;
                     if (item?.disparadorInstancesFromGlobalFallback) {
                       tagsBlock +=
-                        '<div class="aquecedor-envio-time muted" style="margin-top:4px;font-size:0.7rem;">Etiquetas pela sele··o atual (Se··o 1): o snapshot desta campanha n·o guardou a lista de inst·ncias.</div>';
+                        '<div class="aquecedor-envio-time muted" style="margin-top:4px;font-size:0.7rem;">Etiquetas pela seleção atual (Seção 1): o snapshot desta campanha não guardou a lista de instâncias.</div>';
                     }
                   } else if (isRunning) {
                     tagsBlock =
-                      '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Inst·ncias: nenhuma definida no snapshot ·? selecione na Se··o 1.</div>';
+                      '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
                   }
                   if (shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade m·nima de inst·ncias atingida.</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}).</div>`;
+                  }
+                  if (needsMoreInstancesForMinimum) {
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
                   }
       
                   const body = document.createElement("div");
@@ -28075,15 +28094,15 @@
                     toggleBtn.dataset.campaignId = campaignId;
                     toggleBtn.dataset.campaignRunning = isRunning ? "1" : "0";
                     toggleBtn.dataset.campaignFinished = isFinished ? "1" : "0";
-                    toggleBtn.dataset.campaignBlockedByInstances = shouldPauseByDisconnectedRatio ? "1" : "0";
+                    toggleBtn.dataset.campaignBlockedByInstances = campaignBlockedByHealth ? "1" : "0";
                     toggleBtn.textContent = btnLabel;
-                    if (isFinished || (!isRunning && shouldPauseByDisconnectedRatio)) toggleBtn.disabled = true;
+                    if (isFinished || (!isRunning && campaignBlockedByHealth)) toggleBtn.disabled = true;
       
                     const addInstancesBtn = document.createElement("button");
                     addInstancesBtn.type = "button";
                     addInstancesBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-add-instances";
                     addInstancesBtn.dataset.campaignId = campaignId;
-                    addInstancesBtn.textContent = "+ Inst·ncias";
+                    addInstancesBtn.textContent = "+ Instâncias";
       
                     const secondary = document.createElement("div");
                     secondary.className = "disparos-campaign-secondary-actions";
@@ -28094,7 +28113,7 @@
                       "instance-action-btn enabled btn-campaign-secondary btn-campaign-report";
                     reportBtn.dataset.campaignId = campaignId;
                     reportBtn.dataset.campaignName = campaignName;
-                    reportBtn.textContent = "Relat·rio";
+                    reportBtn.textContent = "Relatório";
       
                     const editBtn = document.createElement("button");
                     editBtn.type = "button";
@@ -28111,7 +28130,7 @@
                     delBtn.textContent = "Excluir";
       
                     if (isFinished) secondary.appendChild(reportBtn);
-                    if (shouldPauseByDisconnectedRatio) secondary.appendChild(addInstancesBtn);
+                    if (needsMoreInstancesForMinimum) secondary.appendChild(addInstancesBtn);
                     secondary.appendChild(editBtn);
                     secondary.appendChild(delBtn);
                     actions.appendChild(toggleBtn);
@@ -28124,8 +28143,8 @@
                     messageBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-last-message";
                     messageBtn.dataset.campaignId = campaignId;
                     messageBtn.dataset.campaignName = campaignName;
-                    messageBtn.title = "Ver ·ltima mensagem disparada";
-                    messageBtn.setAttribute("aria-label", "Ver ·ltima mensagem disparada");
+                    messageBtn.title = "Ver última mensagem disparada";
+                    messageBtn.setAttribute("aria-label", "Ver última mensagem disparada");
                     messageBtn.innerHTML =
                       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-8.5 8.5H7l-4 3v-5.5A8.5 8.5 0 1 1 21 12Z"></path></svg>';
       
@@ -28134,8 +28153,8 @@
                     urlBtn.className = "instance-action-btn disparos-campaign-icon-btn btn-campaign-last-url";
                     urlBtn.dataset.campaignId = campaignId;
                     urlBtn.dataset.campaignName = campaignName;
-                    urlBtn.title = "Abrir ·ltima URL utilizada";
-                    urlBtn.setAttribute("aria-label", "Abrir ·ltima URL utilizada");
+                    urlBtn.title = "Abrir última URL utilizada";
+                    urlBtn.setAttribute("aria-label", "Abrir última URL utilizada");
                     urlBtn.innerHTML =
                       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5"></path><path d="M10 14 19 5"></path><path d="M19 14v4a1 1 0 0 1-1 1h-4"></path><path d="M10 19H6a1 1 0 0 1-1-1v-4"></path></svg>';
       
@@ -28247,33 +28266,51 @@
       async function addInstancesToCampaign(campaignId) {
         const id = String(campaignId || "").trim();
         if (!id) return false;
-        const selected = getActiveDisSelectedInstanceValues();
-        if (!selected.length) {
-          showToast("Selecione instâncias na Seção 1 antes de usar '+ Instâncias'.", "warning");
-          return false;
-        }
         const response = await fetchWithTimeout(
           `/disparos/campanhas/${encodeURIComponent(id)}/instancias`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ instanceNames: selected }),
+            body: JSON.stringify({ auto: true }),
           },
-          15000
+          20000
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
+          const code = String(data?.code || "").trim();
+          if (response.status === 409 && code === "buy_numbers_required") {
+            showToast(
+              String(
+                data?.error ||
+                  "Não há números disponíveis. Compre mais números para continuar a campanha."
+              ),
+              "warning",
+              6200
+            );
+            goToDisparosBuyNumbersPanel();
+            return false;
+          }
           showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error");
           return false;
         }
+        const stillNeedsMore = data?.stillNeedsMore === true;
+        const needsPurchase = data?.needsPurchase === true;
         showToast(
           String(
             data?.message ||
               "Instâncias adicionadas. Se a saúde da campanha estiver boa, ative novamente."
           ),
-          "success"
+          stillNeedsMore || needsPurchase ? "warning" : "success",
+          stillNeedsMore || needsPurchase ? 6200 : 4200
         );
-        await loadDisparosTemplates();
+        if (needsPurchase) {
+          goToDisparosBuyNumbersPanel();
+        }
+        if (isDisparoEvoUi()) {
+          await loadDisparosEvoCampaigns();
+        } else {
+          await loadDisparosTemplates();
+        }
         return true;
       }
 
@@ -34644,19 +34681,18 @@
             if (id) openDisCampaignDeleteModal(id, nm);
             return;
           }
-          const addInstancesBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-add-instances") : null;
-          if (addInstancesBtn && disparosListEl.contains(addInstancesBtn)) {
+          const addInstBtn =
+            e.target && e.target.closest ? e.target.closest(".btn-campaign-add-instances") : null;
+          if (addInstBtn && disparosListEl.contains(addInstBtn)) {
             e.preventDefault();
             e.stopPropagation();
-            const id =
-              addInstancesBtn.dataset.campaignId ||
-              addInstancesBtn.getAttribute("data-campaign-id");
-            if (!id) return;
-            addInstancesBtn.setAttribute("disabled", "true");
+            const id = addInstBtn.dataset.campaignId || addInstBtn.getAttribute("data-campaign-id");
+            if (!id || addInstBtn.disabled) return;
+            addInstBtn.setAttribute("disabled", "true");
             try {
               await addInstancesToCampaign(id);
             } finally {
-              addInstancesBtn.removeAttribute("disabled");
+              addInstBtn.removeAttribute("disabled");
             }
             return;
           }

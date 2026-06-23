@@ -28,6 +28,7 @@ import { WabaAlternativaNumbersService } from "./billing/waba-alternativa-number
 import {
   assertAlternativaMinActivated,
   computeAlternativaThrottle,
+  DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
   estimateAlternativaCampaignDuration,
   getAlternativaDispatchRulesMeta,
 } from "./disparos/alternativa-dispatch-rules";
@@ -2177,6 +2178,9 @@ type CampaignInstanceHealth = {
   disconnectedCount: number;
   disconnectedPercent: number;
   shouldPauseByDisconnectedRatio: boolean;
+  minConnectedRequired: number;
+  needsMoreInstancesForMinimum: boolean;
+  missingConnectedForMinimum: number;
 };
 
 type LeadFailureKind = "invalid_phone" | "destination_error" | "send_error";
@@ -5304,13 +5308,91 @@ function getCampaignInstanceHealth(
     selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
   const shouldPauseByDisconnectedRatio =
     selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
+  const minConnectedRequired = DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES;
+  const needsMoreInstancesForMinimum = connectedCount < minConnectedRequired;
+  const missingConnectedForMinimum = Math.max(0, minConnectedRequired - connectedCount);
   return {
     selectedCount,
     connectedCount,
     disconnectedCount,
     disconnectedPercent,
     shouldPauseByDisconnectedRatio,
+    minConnectedRequired,
+    needsMoreInstancesForMinimum,
+    missingConnectedForMinimum,
   };
+}
+
+function resolveUsageFromMap(
+  usageMap: Map<string, InstanceUsageConfig>,
+  instanceName: string
+): InstanceUsageConfig | undefined {
+  const key = String(instanceName || "").trim();
+  if (!key) return undefined;
+  const direct = usageMap.get(key);
+  if (direct) return direct;
+  const target = key.toLowerCase();
+  for (const [mapKey, value] of usageMap.entries()) {
+    if (mapKey.toLowerCase() === target) return value;
+  }
+  return undefined;
+}
+
+async function resolveAutoInstancesForCampaign(
+  auth: ReturnType<typeof resolveWabaRequestAuth>,
+  config: DisparosConfig | undefined | null,
+  evoRows: EvoInstanceTagRow[],
+  maxToAdd: number
+): Promise<string[]> {
+  if (maxToAdd <= 0) return [];
+
+  const prevSelected = new Set(
+    (Array.isArray(config?.selectedDisparadorInstances) ? config.selectedDisparadorInstances : [])
+      .map((n) => String(n || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const connectedByKey = new Map<string, EvoInstanceTagRow>();
+  for (const row of evoRows) {
+    const key = String(row.instanceKey || "").trim().toLowerCase();
+    if (key && row.connected === true) {
+      connectedByKey.set(key, row);
+    }
+  }
+
+  const usageMap = await loadInstanceUsageMap();
+  const activationRepository = new AlternativaNumberActivationRepository();
+  const email = String(auth.email || "").trim().toLowerCase();
+  const activations = email.includes("@") ? activationRepository.listForEmail(email) : [];
+  const activationKeys = new Set(
+    activations.map((row) => String(row.instanceName || "").trim().toLowerCase()).filter(Boolean)
+  );
+
+  const purchasedConnected: string[] = [];
+  const aquecedorConnected: string[] = [];
+
+  for (const row of activations) {
+    const name = String(row.instanceName || "").trim();
+    const key = name.toLowerCase();
+    if (!name || prevSelected.has(key) || !connectedByKey.has(key)) continue;
+    purchasedConnected.push(name);
+  }
+
+  const ownedCandidates = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(
+    auth,
+    Array.from(connectedByKey.values()).map((row) => row.instanceKey)
+  );
+  for (const name of ownedCandidates) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key || prevSelected.has(key) || activationKeys.has(key)) continue;
+    const usage = resolveUsageFromMap(usageMap, name);
+    if (usage?.useAquecedor === false) continue;
+    aquecedorConnected.push(String(name).trim());
+  }
+
+  const ordered = Array.from(new Set([...purchasedConnected, ...aquecedorConnected]));
+  const allowed = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, ordered);
+  return allowed.slice(0, maxToAdd);
 }
 
 function describeEvoQrFailure(
@@ -9095,7 +9177,7 @@ async function runCampaignDispatchTick(): Promise<void> {
   const running = disparosCampaignsMemory.filter((c) => c.status === "running");
   for (const c of running) {
     const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
-    if (health.shouldPauseByDisconnectedRatio) {
+    if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
       c.status = "paused";
       const supabase = getSupabaseClient();
       if (supabase) {
@@ -9406,7 +9488,8 @@ app.get("/disparos/campanhas", async (req, res) => {
     const buildCampaignRuntimeStage = (
       item: { id: string; status: string },
       configSnapshot: DisparosConfig | undefined,
-      nowSp: Date
+      nowSp: Date,
+      instanceHealth?: CampaignInstanceHealth
     ): CampaignRuntimeStage => {
       const st = String(item.status || "").toLowerCase();
       if (st === "finished") {
@@ -9418,10 +9501,15 @@ app.get("/disparos/campanhas", async (req, res) => {
         };
       }
       if (st === "paused") {
+        const pausedByHealthRule =
+          instanceHealth?.shouldPauseByDisconnectedRatio === true ||
+          instanceHealth?.needsMoreInstancesForMinimum === true;
         return {
           phase: "paused",
           label: "Pausada",
-          detail: "Pausa manual ou automática por regra de saúde.",
+          detail: pausedByHealthRule
+            ? "Pausa manual ou automática por regra de saúde."
+            : "Campanha pausada manualmente.",
           fillPercent: 100,
         };
       }
@@ -9590,29 +9678,23 @@ app.get("/disparos/campanhas", async (req, res) => {
               evoRows
             )
           : snapshotTags;
-        const selectedCount = tags.length;
-        const connectedCount = tags.filter((t) => t.connected === true).length;
-        const disconnectedCount = Math.max(0, selectedCount - connectedCount);
-        const disconnectedPercent =
-          selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
-        const shouldPauseByDisconnectedRatio =
-          selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
+        const instanceHealth = getCampaignInstanceHealth(
+          useGlobal
+            ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
+            : configByCampaignId.get(item.id),
+          evoRows
+        );
         const runtimeStage = buildCampaignRuntimeStage(
           item,
           configByCampaignId.get(item.id),
-          nowSp
+          nowSp,
+          instanceHealth
         );
         return {
           ...item,
           disparadorInstances: tags,
           disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
-          instanceHealth: {
-            selectedCount,
-            connectedCount,
-            disconnectedCount,
-            disconnectedPercent,
-            shouldPauseByDisconnectedRatio,
-          },
+          instanceHealth,
           runtimeStage,
         };
       });
@@ -9944,10 +10026,17 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
         evoRows = [];
       }
       const health = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+      if (health.needsMoreInstancesForMinimum) {
+        return res.status(409).json({
+          error: `Campanha bloqueada: são necessários ao menos ${health.minConnectedRequired} números conectados. Você possui ${health.connectedCount}. Use «+ Instâncias» ou compre mais números.`,
+          instanceHealth: health,
+          code: "campaign_min_instances",
+        });
+      }
       if (health.shouldPauseByDisconnectedRatio) {
         return res.status(409).json({
           error:
-            "Campanha bloqueada para ativação: 50% ou mais das instâncias selecionadas estão desconectadas. Use o botão '+ Instâncias' para ampliar a base conectada.",
+            "Campanha bloqueada: 50% ou mais das instâncias selecionadas estão desconectadas. Reconecte as instâncias ou use «+ Instâncias».",
           instanceHealth: health,
         });
       }
@@ -10040,14 +10129,8 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
     if (!id) {
       return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
     }
-    const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-    const incoming = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
-      resolveWabaRequestAuth(req),
-      raw.map((n: any) => String(n || "").trim()).filter(Boolean)
-    );
-    if (!incoming.length) {
-      return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
-    }
+    const auth = resolveWabaRequestAuth(req);
+    const auto = req.body?.auto === true;
 
     let campaign = disparosCampaignsMemory.find((c) => c.id === id);
     if (!campaign) {
@@ -10057,7 +10140,50 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
 
+    let evoRows: EvoInstanceTagRow[] = [];
+    try {
+      evoRows = await fetchEvoInstanceTagRowsForRequest(req);
+    } catch {
+      evoRows = [];
+    }
+
     const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
+    const healthBefore = getCampaignInstanceHealth(prev, evoRows);
+
+    let incoming: string[] = [];
+    if (auto) {
+      if (!healthBefore.needsMoreInstancesForMinimum) {
+        return res.status(400).json({
+          error: "A campanha já possui números conectados suficientes.",
+          instanceHealth: healthBefore,
+        });
+      }
+      incoming = await resolveAutoInstancesForCampaign(
+        auth,
+        prev,
+        evoRows,
+        healthBefore.missingConnectedForMinimum
+      );
+      if (!incoming.length) {
+        return res.status(409).json({
+          error:
+            "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
+          instanceHealth: healthBefore,
+          code: "buy_numbers_required",
+          needsPurchase: true,
+        });
+      }
+    } else {
+      const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
+      incoming = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
+        auth,
+        raw.map((n: any) => String(n || "").trim()).filter(Boolean)
+      );
+      if (!incoming.length) {
+        return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
+      }
+    }
+
     const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
       ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
       : [];
@@ -10080,21 +10206,21 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
 
     queuePersistDisparosLocalState();
 
-    let evoRows: EvoInstanceTagRow[] = [];
-    try {
-      evoRows = await fetchEvoInstanceTagRowsForRequest(req);
-    } catch {
-      evoRows = [];
-    }
     const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+    const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
 
     return res.json({
       ok: true,
       id,
+      auto,
       selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
       addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
       instanceHealth,
-      message: "Instâncias adicionadas à campanha.",
+      stillNeedsMore,
+      needsPurchase: stillNeedsMore && incoming.length < healthBefore.missingConnectedForMinimum,
+      message: stillNeedsMore
+        ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda faltam ${instanceHealth.missingConnectedForMinimum} conectado(s). Compre mais números para concluir a campanha.`
+        : "Instâncias adicionadas à campanha. Você já pode ativar novamente.",
     });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Erro ao adicionar instâncias na campanha." });
