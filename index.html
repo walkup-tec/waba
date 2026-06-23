@@ -26969,7 +26969,7 @@
         const aquecedorSelected = syncOnePicker(
           "dis-available-instances",
           "dis-selected-instances",
-          (name) => getInstanceUsage(name).useDisparador
+          (name) => getInstanceUsage(name).useDisparador && !isInstanceLifecyclePreparing(name)
         );
 
         let comprarSelected = [];
@@ -30235,7 +30235,7 @@
         let countdownHtml = "";
         if (statusLabel === "Preparando" && promoteAt) {
           const text = formatPreparingCountdown(promoteAt);
-          countdownHtml = `<span class="preparing-countdown" data-promote-at="${promoteAt}" title="Tempo estimado até entrar no ciclo do aquecedor">${text}</span>`;
+          countdownHtml = `<span class="preparing-countdown" data-promote-at="${promoteAt}" title="Tempo restante das 6 horas de preparação desde a integração">${text}</span>`;
         }
         if (!countdownHtml) {
           return `<span class="status-text ${statusClass}">${statusLabel}</span>`;
@@ -30285,6 +30285,12 @@
         }
         if (!inst.isOpen) return "desconectado";
         return "conectado";
+      }
+
+      function isInstanceLifecyclePreparing(instanceName) {
+        const usage = getInstanceUsage(instanceName);
+        if (usage.aquecedorPhase === "preparing") return true;
+        return String(usage.aquecedorStatusLabel || "").trim() === "Preparando";
       }
 
       function isInstancePreparing(inst) {

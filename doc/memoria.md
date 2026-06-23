@@ -1618,3 +1618,5 @@ Palavras-chave para buscar:
 - Log: `doc/LOG-2026-06-21__campanha-pausa-50-porcento-saude.md`.
 - **Deploy 2026-06-23:** commit `2bf3269` em `master` + `v02`; V02 local reiniciado; Actions Deploy FTP disparado.
 - **Preparando → conectado imediato (2026-06-23):** promoção desacoplada do motor do aquecedor; timer 15s + ao carregar `/instancias/uso-config`. Ver `doc/LOG-2026-06-23__preparando-promocao-imediata-sem-aquecedor.md`.
+- **Deploy 2026-06-23 (2):** commit `e61ae81` em `master` + `v02` — preparando promoção imediata.
+- **Preparando 6h fixas (2026-06-23):** removida fila escalonada (contadores 23h–35h); 6h desde integração; bloqueio disparo+aquecedor; promoção em lote. Ver `doc/LOG-2026-06-23__preparando-6h-sem-fila-escalonada.md`.

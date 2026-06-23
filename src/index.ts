@@ -70,6 +70,7 @@ import {
   detectAndMarkRestrictionFromSend,
   filterAquecedorCycleConnected,
   canAquecedorInstanceSendToday,
+  filterInstancesLifecycleReady,
   getAquecedorLifecycleStatusMap,
   markAquecedorInstanceRestricted,
   recordAquecedorInstanceDailySend,
@@ -3670,7 +3671,7 @@ async function runAquecedorCycle(forceTest = false) {
 
     const preparingCount = Math.max(0, connectedAll.length - connected.length);
     if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
-      aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação ou espera (6h). Aquecedor ativo em ${connected.length}; liberação gradual a cada 6h.`;
+      aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
       return;
     }
 
@@ -5339,6 +5340,14 @@ function resolveUsageFromMap(
   return undefined;
 }
 
+async function filterDisparadorInstancesReadyForAuth(
+  auth: ReturnType<typeof resolveWabaRequestAuth>,
+  names: string[]
+): Promise<string[]> {
+  const allowed = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, names);
+  return filterInstancesLifecycleReady(allowed);
+}
+
 async function resolveAutoInstancesForCampaign(
   auth: ReturnType<typeof resolveWabaRequestAuth>,
   config: DisparosConfig | undefined | null,
@@ -5392,7 +5401,7 @@ async function resolveAutoInstancesForCampaign(
   }
 
   const ordered = Array.from(new Set([...purchasedConnected, ...aquecedorConnected]));
-  const allowed = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, ordered);
+  const allowed = await filterDisparadorInstancesReadyForAuth(auth, ordered);
   return allowed.slice(0, maxToAdd);
 }
 
@@ -8106,7 +8115,7 @@ app.get("/disparos/config", async (req, res) => {
   try {
     const config = await loadDisparosConfigFromDb();
     const auth = resolveWabaRequestAuth(req);
-    const selectedDisparadorInstances = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
+    const selectedDisparadorInstances = await filterDisparadorInstancesReadyForAuth(
       auth,
       Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []
     );
@@ -8154,7 +8163,7 @@ app.post("/disparos/config", async (req, res) => {
     }
     config = {
       ...config,
-      selectedDisparadorInstances: await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
+      selectedDisparadorInstances: await filterDisparadorInstancesReadyForAuth(
         auth,
         config.selectedDisparadorInstances
       ),
@@ -9655,7 +9664,7 @@ app.get("/disparos/campanhas", async (req, res) => {
     const evoRows = await fetchEvoInstanceTagRowsForRequest(req);
     const globalDisparos = await loadDisparosConfigFromDb();
     const auth = resolveWabaRequestAuth(req);
-    const globalSelected = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
+    const globalSelected = await filterDisparadorInstancesReadyForAuth(
       auth,
       Array.isArray(globalDisparos.selectedDisparadorInstances)
         ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
@@ -10176,7 +10185,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       }
     } else {
       const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-      incoming = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
+      incoming = await filterDisparadorInstancesReadyForAuth(
         auth,
         raw.map((n: any) => String(n || "").trim()).filter(Boolean)
       );
