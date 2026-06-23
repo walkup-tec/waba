@@ -1620,3 +1620,5 @@ Palavras-chave para buscar:
 - **Preparando → conectado imediato (2026-06-23):** promoção desacoplada do motor do aquecedor; timer 15s + ao carregar `/instancias/uso-config`. Ver `doc/LOG-2026-06-23__preparando-promocao-imediata-sem-aquecedor.md`.
 - **Deploy 2026-06-23 (2):** commit `e61ae81` em `master` + `v02` — preparando promoção imediata.
 - **Preparando 6h fixas (2026-06-23):** removida fila escalonada (contadores 23h–35h); 6h desde integração; bloqueio disparo+aquecedor; promoção em lote. Ver `doc/LOG-2026-06-23__preparando-6h-sem-fila-escalonada.md`.
+- **Deploy 2026-06-23 (3):** commit `250a080` — preparando 6h fixas.
+- **Aquecedor rotação pares (2026-06-23):** `recentDirectedEdges` + score dinâmico para variar A→B, C→A, B→C. Ver `doc/LOG-2026-06-23__aquecedor-rotacao-pares-dinamica.md`.

@@ -1053,6 +1053,12 @@ function buildAquecedorPairKey(instanciaA: string, instanciaB: string): string {
   return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
 }
 
+function buildAquecedorDirectedKey(instanciaOrigem: string, instanciaDestino: string): string {
+  const origem = String(instanciaOrigem || "").trim().toLowerCase();
+  const destino = String(instanciaDestino || "").trim().toLowerCase();
+  return `${origem}→${destino}`;
+}
+
 function buildAquecedorNumberToInstanceMap(
   connected: Array<{ instancia: string; numero: string }>,
   canonicalMap: Map<string, string>,
@@ -1204,6 +1210,8 @@ type AquecedorPairConversationState = {
 type AquecedorTurnManager = {
   canonicalMap: Map<string, string>;
   totalEvents: number;
+  /** Últimos envios direcionados (mais recente primeiro): origem→destino */
+  recentDirectedEdges: string[];
   canSendDirected: (origemRaw: string, destinoRaw: string) => boolean;
   owesPairReply: (origemRaw: string, destinoRaw: string) => boolean;
   describeBlockReason: (origemRaw: string, destinoRaw: string) => string;
@@ -1280,6 +1288,12 @@ async function loadAquecedorTurnManager(
     } else {
       pairState.pendingReplyFrom = ev.toInst;
     }
+  }
+
+  const recentDirectedEdges: string[] = [];
+  for (let i = events.length - 1; i >= 0 && recentDirectedEdges.length < 32; i -= 1) {
+    const ev = events[i];
+    recentDirectedEdges.push(buildAquecedorDirectedKey(ev.fromInst, ev.toInst));
   }
 
   const owesPairReply = (origemRaw: string, destinoRaw: string): boolean => {
@@ -1362,6 +1376,32 @@ async function loadAquecedorTurnManager(
     const destStats = instanceStats.get(destino.toLowerCase());
     score += (destStats?.sendCount || 0) * 1_000;
 
+    const directedKey = buildAquecedorDirectedKey(origem, destino);
+    const recentIdx = recentDirectedEdges.indexOf(directedKey);
+    if (recentIdx >= 0) {
+      score += (recentIdx + 1) * 750_000;
+    }
+    if (recentDirectedEdges.length > 0) {
+      const lastDirected = recentDirectedEdges[0];
+      const lastParts = lastDirected.split("→");
+      const lastOrig = lastParts[0] || "";
+      const lastDest = lastParts[1] || "";
+      if (origem.toLowerCase() === lastOrig) {
+        score += 250_000;
+      }
+      if (destino.toLowerCase() === lastDest) {
+        score += 120_000;
+      }
+    }
+
+    const sentAtMs = stats?.lastSentAt ? new Date(stats.lastSentAt).getTime() : 0;
+    if (sentAtMs > 0) {
+      const idleMinutes = Math.max(0, (Date.now() - sentAtMs) / 60_000);
+      score -= Math.min(80_000, Math.floor(idleMinutes * 2_000));
+    } else {
+      score -= 90_000;
+    }
+
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
     score += rotation;
     return score;
@@ -1370,6 +1410,7 @@ async function loadAquecedorTurnManager(
   return {
     canonicalMap,
     totalEvents: events.length,
+    recentDirectedEdges,
     canSendDirected,
     owesPairReply,
     describeBlockReason,
