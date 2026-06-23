@@ -74,6 +74,7 @@ import {
   markAquecedorInstanceRestricted,
   recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
+  syncAquecedorPreparingPromotions,
 } from "./services/aquecedor-instance-lifecycle.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 
@@ -10445,6 +10446,23 @@ app.listen(PORT, () => {
         console.error("[Aquecedor] sync worker:", err),
       );
     }, AQUECEDOR_WORKER_SYNC_MS);
+
+    const AQUECEDOR_PREPARE_PROMOTE_MS = 15_000;
+    setInterval(() => {
+      syncAquecedorPreparingPromotions()
+        .then((promoted) => {
+          if (promoted.length) {
+            console.log(
+              `[Aquecedor] ${promoted.length} instância(s) promovida(s) de Preparando → ativo: ${promoted.join(", ")}`,
+            );
+          }
+        })
+        .catch((err) => console.error("[Aquecedor] promoção Preparando:", err));
+    }, AQUECEDOR_PREPARE_PROMOTE_MS);
+    void syncAquecedorPreparingPromotions();
+    console.log(
+      `[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`,
+    );
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
       if (WABA_ENV === "v01") {

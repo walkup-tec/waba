@@ -308,10 +308,6 @@ export async function markAquecedorInstanceRestricted(
 export async function tickAquecedorStaggerPromotions(): Promise<string | null> {
   const store = await loadStore();
   const now = Date.now();
-  const lastMs = store.lastStaggerPromotionAt
-    ? new Date(store.lastStaggerPromotionAt).getTime()
-    : 0;
-  if (lastMs && now - lastMs < STAGGER_PROMOTE_MS) return null;
 
   const preparing = Object.entries(store.instances)
     .map(([key, row]) => ({ key, row }))
@@ -327,19 +323,35 @@ export async function tickAquecedorStaggerPromotions(): Promise<string | null> {
 
   if (!preparing.length) return null;
 
-  const pick = preparing[0];
-  const preparingSinceMs = new Date(pick.row.preparingSince || 0).getTime();
-  if (!Number.isFinite(preparingSinceMs) || now - preparingSinceMs < STAGGER_PROMOTE_MS) {
-    return null;
-  }
-  if (lastMs && now - lastMs < STAGGER_PROMOTE_MS) return null;
+  for (let queueIndex = 0; queueIndex < preparing.length; queueIndex += 1) {
+    const { key, row } = preparing[queueIndex];
+    const readyMs = computePreparingPromoteAtMs(
+      row,
+      queueIndex,
+      store.lastStaggerPromotionAt,
+    );
+    if (now < readyMs) continue;
 
-  pick.row.phase = "active";
-  pick.row.activatedAt = new Date().toISOString();
-  pick.row.preparingSince = null;
-  store.lastStaggerPromotionAt = new Date().toISOString();
-  await saveStore(store);
-  return pick.key;
+    row.phase = "active";
+    row.activatedAt = new Date().toISOString();
+    row.preparingSince = null;
+    store.lastStaggerPromotionAt = new Date().toISOString();
+    await saveStore(store);
+    return key;
+  }
+
+  return null;
+}
+
+/** Promove todas as instâncias cuja janela (6h + fila) já venceu — independente do aquecedor estar ligado. */
+export async function syncAquecedorPreparingPromotions(): Promise<string[]> {
+  const promoted: string[] = [];
+  for (let guard = 0; guard < 64; guard += 1) {
+    const key = await tickAquecedorStaggerPromotions();
+    if (!key) break;
+    promoted.push(key);
+  }
+  return promoted;
 }
 
 export function computePreparingPromoteAtMs(
@@ -382,6 +394,7 @@ export async function getAquecedorLifecycleStatusMap(): Promise<
     }
   >
 > {
+  await syncAquecedorPreparingPromotions();
   const store = await loadStore();
   let storeDirty = false;
   for (const [key, row] of Object.entries(store.instances)) {
@@ -434,7 +447,7 @@ export async function getAquecedorLifecycleStatusMap(): Promise<
 export async function filterAquecedorCycleConnected<T extends { instancia: string }>(
   connected: T[],
 ): Promise<T[]> {
-  await tickAquecedorStaggerPromotions();
+  await syncAquecedorPreparingPromotions();
   const store = await loadStore();
   const out: T[] = [];
   let storeDirty = false;

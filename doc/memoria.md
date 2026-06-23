@@ -1616,3 +1616,5 @@ Palavras-chave para buscar:
 - Alerta vermelho na lista: «Menos de 50% das instâncias selecionadas estão ativas (X de Y).»
 - «Ativar campanha» bloqueado enquanto 50% ou mínimo 4 violados; «+ Instâncias» continua só para mínimo 4.
 - Log: `doc/LOG-2026-06-21__campanha-pausa-50-porcento-saude.md`.
+- **Deploy 2026-06-23:** commit `2bf3269` em `master` + `v02`; V02 local reiniciado; Actions Deploy FTP disparado.
+- **Preparando → conectado imediato (2026-06-23):** promoção desacoplada do motor do aquecedor; timer 15s + ao carregar `/instancias/uso-config`. Ver `doc/LOG-2026-06-23__preparando-promocao-imediata-sem-aquecedor.md`.
