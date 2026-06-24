@@ -17,6 +17,8 @@ Como usar:
 
 **WABA — Produção assinantes (sem compra números Alternativa):** flag `WABA_ALTERNATIVA_NUMBERS_PURCHASE_ENABLED` (padrão false); mantém foguinhos, motor e débito 1/envio Alternativa. Ver `doc/LOG-2026-06-23__producao-assinantes-sem-compra-numeros-alternativa.md`.
 
+**WABA — Mozart V02 → assinante produção:** script `promote-subscriber-v02-to-production.cjs` + `POST /admin/subscribers/promote-from-v02`. Ver `doc/LOG-2026-06-24__mozart-promote-v02-assinante-producao.md`.
+
 **WABA — Restart V02 Mozart (dados preservados):** `dev-v02.ps1` na porta 3012; backup `data/v02/_backup-mozart-20260624-100039/`. Ver `doc/LOG-2026-06-24__restart-v02-mozart-dados-preservados.md`.
 
 2026-06-22
