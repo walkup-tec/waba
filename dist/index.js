@@ -4677,38 +4677,11 @@ async function loadEvoInstancesCache() {
         return null;
     }
 }
-async function loadManualActiveOverrideInstanceKeys() {
-    try {
-        const raw = await fs_1.promises.readFile((0, data_path_1.resolveDataFile)("aquecedor-instance-lifecycle.json"), "utf-8");
-        const parsed = JSON.parse(raw);
-        const keys = new Set();
-        for (const [key, row] of Object.entries(parsed?.instances || {})) {
-            if (row?.manualActiveOverride === true)
-                keys.add(String(key).trim().toLowerCase());
-        }
-        return keys;
-    }
-    catch {
-        return new Set();
-    }
-}
 async function saveEvoInstancesCache(items) {
     try {
-        const manualOverrideKeys = await loadManualActiveOverrideInstanceKeys();
-        const previous = await loadEvoInstancesCache();
-        const mergedItems = items.map((item) => {
-            const key = String(item?.name || "").trim().toLowerCase();
-            if (!key || !manualOverrideKeys.has(key))
-                return item;
-            const prevRow = previous?.items?.find((row) => String(row?.name || "").trim().toLowerCase() === key);
-            const createdAt = typeof prevRow?.createdAt === "string" && String(prevRow.createdAt).trim()
-                ? String(prevRow.createdAt).trim()
-                : "2026-06-01T12:00:00.000Z";
-            return { ...item, createdAt };
-        });
         const payload = {
             updatedAt: new Date().toISOString(),
-            items: mergedItems,
+            items,
         };
         await fs_1.promises.mkdir(path_1.default.dirname(EVO_INSTANCES_CACHE_FILE), { recursive: true });
         await fs_1.promises.writeFile(EVO_INSTANCES_CACHE_FILE, JSON.stringify(payload, null, 2), "utf-8");

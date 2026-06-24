@@ -13,12 +13,6 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-21
-
-**WABA — Preparando persiste (refresh EVO):** patch JSON insuficiente; refresh=1 apaga evo cache. Fix v2: patch JS in-place + JSON + verify. Ver `doc/LOG-2026-06-21__preparando-persiste-refresh-evo-v2-fix.md`.
-
-**WABA — Preparando revert Mozart (5182006011):** reconcile + EVO cache recente revertia active→preparing a cada refresh UI. Ver `doc/LOG-2026-06-21__fix-preparando-revert-evo-cache-mozart.md`.
-
 2026-06-24
 
 **WABA — Login Mozart produção:** conta só no V02; promote pendente no Easypanel. Ver `doc/LOG-2026-06-24__mozart-login-producao-assinante-nao-migrado.md`.
