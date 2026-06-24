@@ -61,12 +61,6 @@ if (fs.existsSync(scriptsSrc)) {
   copyDir(scriptsSrc, scriptsDest);
 }
 
-const v02DataSrc = path.join(root, "data", "v02");
-const v02DataDest = path.join(out, "data", "v02");
-if (fs.existsSync(v02DataSrc)) {
-  copyDir(v02DataSrc, v02DataDest);
-}
-
 const dataSrc = path.join(root, "data");
 const dataDest = path.join(out, "data");
 if (fs.existsSync(dataSrc)) {
