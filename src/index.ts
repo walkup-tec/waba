@@ -38,6 +38,7 @@ import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
+import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integration-monitor.service";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
 import {
   createWabaShortUrl,
@@ -336,7 +337,9 @@ app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
   const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
-  if (p === "/webhooks/asaas" || p === "/webhooks/evolution") return true;
+  if (p === "/webhooks/asaas" || p.startsWith("/webhooks/asaas/") || p === "/webhooks/evolution") {
+    return true;
+  }
   if (method !== "GET" && method !== "HEAD") return false;
   return (
     p === "/health" ||
@@ -10599,6 +10602,8 @@ app.listen(PORT, () => {
           : "[campanhas] processamento automático desativado neste processo (dev isolado)."
       );
     }
+
+    startAsaasIntegrationMonitorScheduler();
   })();
 });
 

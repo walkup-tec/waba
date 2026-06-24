@@ -64,6 +64,7 @@ const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
 const waba_admin_routes_1 = require("./admin/waba-admin.routes");
 const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
+const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
 const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_system_user_service_1 = require("./users/waba-system-user.service");
@@ -291,8 +292,9 @@ app.use((req, res, next) => {
 app.use(express_1.default.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 function isMaintenanceBypassPath(method, reqPath) {
     const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
-    if (p === "/webhooks/asaas" || p === "/webhooks/evolution")
+    if (p === "/webhooks/asaas" || p.startsWith("/webhooks/asaas/") || p === "/webhooks/evolution") {
         return true;
+    }
     if (method !== "GET" && method !== "HEAD")
         return false;
     return (p === "/health" ||
@@ -9242,5 +9244,6 @@ app.listen(PORT, () => {
                 ? "[campanhas] Disparador EVO desativado neste processo (WABA_EVO_DISPARADOR=false)."
                 : "[campanhas] processamento automático desativado neste processo (dev isolado).");
         }
+        (0, asaas_integration_monitor_service_1.startAsaasIntegrationMonitorScheduler)();
     })();
 });

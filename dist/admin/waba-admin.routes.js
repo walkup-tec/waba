@@ -15,6 +15,7 @@ const waba_admin_subscriber_promote_service_1 = require("./waba-admin-subscriber
 const waba_admin_support_service_1 = require("./waba-admin-support.service");
 const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-menu-badges.service");
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
+const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integration-monitor.service");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
@@ -74,6 +75,40 @@ const registerWabaAdminRoutes = (app) => {
         if (!rejectNonMaster(req, res))
             return;
         return res.status(200).json(await adminFinanceiroService.getOverview());
+    });
+    app.get("/admin/financeiro/asaas-monitor/status", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            return res.status(200).json(await (0, asaas_integration_monitor_service_1.getAsaasIntegrationMonitorStatus)());
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível consultar o monitor Asaas.",
+            });
+        }
+    });
+    app.post("/admin/financeiro/asaas-monitor/run", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const forceAlert = String(req.query.forceAlert ?? req.body?.forceAlert ?? "")
+                .trim()
+                .toLowerCase() === "1" ||
+                String(req.query.forceAlert ?? req.body?.forceAlert ?? "")
+                    .trim()
+                    .toLowerCase() === "true";
+            const result = await (0, asaas_integration_monitor_service_1.runAsaasIntegrationMonitorCheck)({
+                forceAlert,
+                skipState: forceAlert,
+            });
+            return res.status(200).json(result);
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível executar o monitor Asaas.",
+            });
+        }
     });
     app.get("/admin/financeiro/orders", (req, res) => {
         if (!rejectNonMaster(req, res))

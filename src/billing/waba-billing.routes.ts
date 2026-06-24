@@ -34,18 +34,32 @@ const resolveAsaasTransferWebhookToken = (): string =>
       "",
   ).trim();
 
+const parseAsaasWebhookTokens = (raw: string): string[] =>
+  String(raw ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+const readAsaasWebhookHeaderToken = (req: Request): string =>
+  String(
+    req.header("asaas-access-token") ??
+      req.header("Asaas-Access-Token") ??
+      req.header("ASAAS-ACCESS-TOKEN") ??
+      "",
+  ).trim();
+
 const isAuthorizedAsaasWebhook = (req: Request): boolean => {
-  const expected = resolveAsaasWebhookToken();
-  if (!expected) return true;
-  const received = String(req.header("asaas-access-token") ?? "").trim();
-  return received.length > 0 && received === expected;
+  const expectedTokens = parseAsaasWebhookTokens(resolveAsaasWebhookToken());
+  if (!expectedTokens.length) return true;
+  const received = readAsaasWebhookHeaderToken(req);
+  return received.length > 0 && expectedTokens.includes(received);
 };
 
 const isAuthorizedAsaasTransferWebhook = (req: Request): boolean => {
-  const expected = resolveAsaasTransferWebhookToken();
-  if (!expected) return true;
-  const received = String(req.header("asaas-access-token") ?? "").trim();
-  return received.length > 0 && received === expected;
+  const expectedTokens = parseAsaasWebhookTokens(resolveAsaasTransferWebhookToken());
+  if (!expectedTokens.length) return true;
+  const received = readAsaasWebhookHeaderToken(req);
+  return received.length > 0 && expectedTokens.includes(received);
 };
 
 const isAlternativaNumbersSimulationEnabled = (): boolean => {
@@ -239,30 +253,48 @@ export const registerWabaBillingRoutes = (app: Express) => {
     }
   });
 
-  app.post("/webhooks/asaas", async (req, res) => {
+  app.post("/webhooks/asaas", (req, res) => {
     if (!isAuthorizedAsaasWebhook(req)) {
+      console.warn(
+        "[AsaasWebhook] rejeitado — header asaas-access-token ausente ou diferente do env ASAAS_WEBHOOK_ACCESS_TOKEN",
+      );
       return res.status(401).json({ error: "Webhook Asaas não autorizado." });
     }
 
-    try {
-      const body = req.body as {
-        event?: string;
-        payment?: { id?: string; externalReference?: string; status?: string };
-      };
-      const result = await billingService.handleAsaasWebhook(
-        String(body.event ?? ""),
-        body.payment ?? {},
-      );
-      return res.status(200).json(result);
-    } catch (error) {
-      return res.status(400).json({
-        error: error instanceof Error ? error.message : "Webhook inválido.",
-      });
-    }
+    const body = req.body as {
+      event?: string;
+      payment?: { id?: string; externalReference?: string; status?: string };
+    };
+    const event = String(body.event ?? "");
+    const payment = body.payment ?? {};
+
+    // Asaas só considera entrega OK com HTTP 200 — responder rápido e processar depois.
+    res.status(200).json({ ok: true, accepted: true });
+
+    setImmediate(() => {
+      billingService
+        .handleAsaasWebhook(event, payment)
+        .then((result) => {
+          if (result?.ignored) {
+            console.info("[AsaasWebhook] ignorado:", result.reason ?? event);
+            return;
+          }
+          console.info("[AsaasWebhook] processado:", JSON.stringify(result));
+        })
+        .catch((error) => {
+          console.error(
+            "[AsaasWebhook] erro ao processar (já respondido 200):",
+            error instanceof Error ? error.message : error,
+          );
+        });
+    });
   });
 
   app.post("/webhooks/asaas/transfer-authorization", (req, res) => {
     if (!isAuthorizedAsaasTransferWebhook(req)) {
+      console.warn(
+        "[AsaasTransferWebhook] rejeitado — header asaas-access-token ausente ou diferente do env",
+      );
       return res.status(401).json({ error: "Webhook de autorização de transferência não autorizado." });
     }
 
@@ -270,7 +302,11 @@ export const registerWabaBillingRoutes = (app: Express) => {
       const result = transferAuthService.resolveTransferAuthorization(req.body);
       return res.status(200).json(result);
     } catch (error) {
-      return res.status(400).json({
+      console.error(
+        "[AsaasTransferWebhook] erro:",
+        error instanceof Error ? error.message : error,
+      );
+      return res.status(200).json({
         status: "REFUSED",
         refuseReason: error instanceof Error ? error.message : "Falha ao validar transferência.",
       });

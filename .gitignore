@@ -2,6 +2,7 @@ node_modules
 .env
 .env.v01
 .env.v02
+env.easypanel-producao-asaas.snippet
 data/
 ftp-bundle/
 .DS_Store

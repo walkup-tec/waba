@@ -15,7 +15,13 @@ Como usar:
 ## Última atualização
 2026-06-21
 
-**WABA — Revert fix Preparando:** pedido usuário; `git revert cd9de58` (a90a466). Lifecycle voltou ao comportamento original. Ver `doc/LOG-2026-06-21__revert-lifecycle-preparando-fix.md`.
+**WABA — Monitor Asaas diário:** 2 verificações/dia (08:00 e 20:00 SP), alerta WhatsApp instância 5197462102 + e-mail walkup@walkuptec.com.br. Ver `doc/LOG-2026-06-21__asaas-monitor-verificacao-diaria.md`.
+
+**WABA — Env Asaas completo (Easypanel):** bloco produção em `.env`, `.env.v02` e `env.easypanel-producao-asaas.snippet` (gitignored). Inclui `ASAAS_TRANSFER_API_KEY`, `ASAAS_TRANSFER_WEBHOOK_ACCESS_TOKEN`, split payout. Ver `doc/LOG-2026-06-21__env-asaas-completo-easypanel.md`.
+
+**WABA — Webhooks Asaas fila pausada:** HTTP 200 async, token multi-header, bypass manutenção transfer-auth. Ver `doc/LOG-2026-06-21__fix-asaas-webhook-fila-pausada.md`.
+
+2026-06-21 pedido usuário; `git revert cd9de58` (a90a466). Lifecycle voltou ao comportamento original. Ver `doc/LOG-2026-06-21__revert-lifecycle-preparando-fix.md`.
 
 2026-06-24
 

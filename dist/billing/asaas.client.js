@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAsaasTransfer = exports.createAsaasPixTransfer = exports.resolveAsaasPaymentUrl = exports.getAsaasPixQrCode = exports.getAsaasPayment = exports.createAsaasPayment = exports.createAsaasCustomer = exports.asaasRequest = exports.probeAsaasTransferPermission = exports.usesDedicatedAsaasTransferKey = exports.isAsaasTransferConfigured = exports.isAsaasConfigured = void 0;
+exports.getAsaasTransfer = exports.createAsaasPixTransfer = exports.resolveAsaasPaymentUrl = exports.getAsaasPixQrCode = exports.getAsaasPayment = exports.createAsaasPayment = exports.createAsaasCustomer = exports.asaasRequest = exports.probeAsaasTransferPermission = exports.probeAsaasPaymentApi = exports.usesDedicatedAsaasTransferKey = exports.isAsaasTransferConfigured = exports.isAsaasConfigured = void 0;
 const DEFAULT_ASAAS_API_BASE_URL = "https://api-sandbox.asaas.com/v3";
 const resolveAsaasApiBaseUrl = () => String(process.env.ASAAS_API_BASE_URL ?? DEFAULT_ASAAS_API_BASE_URL).trim().replace(/\/$/, "");
 const resolveAsaasApiKey = () => String(process.env.ASAAS_API_KEY ?? "").trim();
@@ -20,6 +20,49 @@ const readAsaasErrorMessage = (payload, status) => {
     return `Falha na integração Asaas (${status}).`;
 };
 const readAsaasErrorCode = (payload) => String(payload.errors?.[0]?.code ?? "").trim();
+const probeAsaasPaymentApi = async () => {
+    if (!(0, exports.isAsaasConfigured)()) {
+        return {
+            ok: false,
+            httpStatus: 0,
+            code: "missing_key",
+            message: "Defina ASAAS_API_KEY no servidor.",
+        };
+    }
+    const response = await fetch(`${resolveAsaasApiBaseUrl()}/finance/balance`, {
+        method: "GET",
+        headers: { access_token: resolveAsaasApiKey() },
+    });
+    const payload = (await response.json().catch(() => ({})));
+    const code = readAsaasErrorCode(payload);
+    const message = readAsaasErrorMessage(payload, response.status);
+    if (response.ok) {
+        return { ok: true, httpStatus: response.status, code: "ok", message: "API de cobrança Asaas acessível." };
+    }
+    if (response.status === 401 || code === "invalid_access_token") {
+        return {
+            ok: false,
+            httpStatus: response.status,
+            code: code || "invalid_access_token",
+            message: "ASAAS_API_KEY inválida ou revogada no painel Asaas.",
+        };
+    }
+    if (response.status === 403 && message.toLowerCase().includes("ip")) {
+        return {
+            ok: false,
+            httpStatus: response.status,
+            code: code || "ip_forbidden",
+            message: `${message} Adicione o IP do servidor na whitelist do Asaas.`,
+        };
+    }
+    return {
+        ok: false,
+        httpStatus: response.status,
+        code: code || "api_error",
+        message,
+    };
+};
+exports.probeAsaasPaymentApi = probeAsaasPaymentApi;
 const probeAsaasTransferPermission = async () => {
     const usesDedicatedKey = (0, exports.usesDedicatedAsaasTransferKey)();
     if (!(0, exports.isAsaasTransferConfigured)()) {

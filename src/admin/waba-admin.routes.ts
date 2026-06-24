@@ -10,6 +10,10 @@ import { WabaAdminSubscriberPromoteService } from "./waba-admin-subscriber-promo
 import { WabaAdminSupportService } from "./waba-admin-support.service";
 import { WabaAdminMasterMenuBadgesService } from "./waba-admin-master-menu-badges.service";
 import { MASTER_MENU_BADGE_KEYS, type MasterMenuBadgeKey } from "./waba-admin-master-menu-badges.repository";
+import {
+  getAsaasIntegrationMonitorStatus,
+  runAsaasIntegrationMonitorCheck,
+} from "../monitoring/asaas-integration-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
@@ -72,6 +76,39 @@ export const registerWabaAdminRoutes = (app: Express) => {
   app.get("/admin/financeiro/overview", async (req, res) => {
     if (!rejectNonMaster(req, res)) return;
     return res.status(200).json(await adminFinanceiroService.getOverview());
+  });
+
+  app.get("/admin/financeiro/asaas-monitor/status", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      return res.status(200).json(await getAsaasIntegrationMonitorStatus());
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível consultar o monitor Asaas.",
+      });
+    }
+  });
+
+  app.post("/admin/financeiro/asaas-monitor/run", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const forceAlert =
+        String(req.query.forceAlert ?? req.body?.forceAlert ?? "")
+          .trim()
+          .toLowerCase() === "1" ||
+        String(req.query.forceAlert ?? req.body?.forceAlert ?? "")
+          .trim()
+          .toLowerCase() === "true";
+      const result = await runAsaasIntegrationMonitorCheck({
+        forceAlert,
+        skipState: forceAlert,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível executar o monitor Asaas.",
+      });
+    }
   });
 
   app.get("/admin/financeiro/orders", (req, res) => {
