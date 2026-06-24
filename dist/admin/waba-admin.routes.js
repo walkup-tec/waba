@@ -16,6 +16,7 @@ const waba_admin_support_service_1 = require("./waba-admin-support.service");
 const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-menu-badges.service");
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
+const aquecedor_instance_lifecycle_service_1 = require("../services/aquecedor-instance-lifecycle.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
 const adminSubscriberPromoteService = new waba_admin_subscriber_promote_service_1.WabaAdminSubscriberPromoteService();
@@ -362,6 +363,31 @@ const registerWabaAdminRoutes = (app) => {
         res.type(resolved.attachment.mimeType);
         res.setHeader("Content-Disposition", `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`);
         return res.sendFile(node_path_1.default.resolve(resolved.absolutePath));
+    });
+    app.post("/admin/aquecedor/force-instance-active", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        const instanceName = String(req.body?.instanceName || req.body?.instance || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "instanceName é obrigatório." });
+        }
+        try {
+            await (0, aquecedor_instance_lifecycle_service_1.forceAquecedorInstanceActive)(instanceName);
+            const lifecycleMap = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusMap)();
+            const row = lifecycleMap[instanceName.toLowerCase()];
+            return res.status(200).json({
+                ok: true,
+                instanceName,
+                phase: row?.phase ?? "active",
+                statusLabel: row?.statusLabel ?? null,
+                manualActiveOverride: true,
+            });
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível forçar instância ativa.",
+            });
+        }
     });
 };
 exports.registerWabaAdminRoutes = registerWabaAdminRoutes;

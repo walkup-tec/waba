@@ -11,6 +11,10 @@ import { WabaAdminSupportService } from "./waba-admin-support.service";
 import { WabaAdminMasterMenuBadgesService } from "./waba-admin-master-menu-badges.service";
 import { MASTER_MENU_BADGE_KEYS, type MasterMenuBadgeKey } from "./waba-admin-master-menu-badges.repository";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
+import {
+  forceAquecedorInstanceActive,
+  getAquecedorLifecycleStatusMap,
+} from "../services/aquecedor-instance-lifecycle.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
@@ -374,5 +378,29 @@ export const registerWabaAdminRoutes = (app: Express) => {
       `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`,
     );
     return res.sendFile(path.resolve(resolved.absolutePath));
+  });
+
+  app.post("/admin/aquecedor/force-instance-active", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const instanceName = String(req.body?.instanceName || req.body?.instance || "").trim();
+    if (!instanceName) {
+      return res.status(400).json({ error: "instanceName é obrigatório." });
+    }
+    try {
+      await forceAquecedorInstanceActive(instanceName);
+      const lifecycleMap = await getAquecedorLifecycleStatusMap();
+      const row = lifecycleMap[instanceName.toLowerCase()];
+      return res.status(200).json({
+        ok: true,
+        instanceName,
+        phase: row?.phase ?? "active",
+        statusLabel: row?.statusLabel ?? null,
+        manualActiveOverride: true,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível forçar instância ativa.",
+      });
+    }
   });
 };

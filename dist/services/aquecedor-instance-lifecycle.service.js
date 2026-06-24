@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.invalidateAquecedorLifecycleCache = invalidateAquecedorLifecycleCache;
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
@@ -11,6 +12,7 @@ exports.registerAquecedorInstancePreparing = registerAquecedorInstancePreparing;
 exports.grandfatherAquecedorInstanceActive = grandfatherAquecedorInstanceActive;
 exports.markAquecedorInstanceRestricted = markAquecedorInstanceRestricted;
 exports.syncAquecedorPreparingPromotions = syncAquecedorPreparingPromotions;
+exports.forceAquecedorInstanceActive = forceAquecedorInstanceActive;
 exports.tickAquecedorStaggerPromotions = tickAquecedorStaggerPromotions;
 exports.computePreparingPromoteAtMs = computePreparingPromoteAtMs;
 exports.filterInstancesLifecycleReady = filterInstancesLifecycleReady;
@@ -33,6 +35,10 @@ const PREPARING_DURATION_MS = exports.AQUECEDOR_PREPARING_DURATION_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
 let cache = null;
+/** Ops/script externo gravou JSON — invalidar cache em memória do processo Node. */
+function invalidateAquecedorLifecycleCache() {
+    cache = null;
+}
 function normalizeKey(instanceName) {
     return String(instanceName || "").trim().toLowerCase();
 }
@@ -49,7 +55,18 @@ function emptyRow(phase, preparingSince) {
         dailyCap: null,
     };
 }
+const OPS_GRANDFATHER_CREATED_AT = "2026-06-01T12:00:00.000Z";
 async function readEvoInstanceCreatedAt(instanceName) {
+    const key = normalizeKey(instanceName);
+    try {
+        const store = await loadStore();
+        if (store.instances[key]?.manualActiveOverride === true) {
+            return OPS_GRANDFATHER_CREATED_AT;
+        }
+    }
+    catch {
+        /* lifecycle opcional */
+    }
     try {
         const raw = await fs_1.promises.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
         const parsed = JSON.parse(raw);
@@ -66,6 +83,38 @@ async function readEvoInstanceCreatedAt(instanceName) {
     }
     return null;
 }
+/** Evita reconcile revertendo active→preparando quando EVO devolve createdAt recente (refresh/migração). */
+async function patchEvoInstanceCreatedAtForOps(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return;
+    const key = normalizeKey(name);
+    const grandfatherCreatedAt = OPS_GRANDFATHER_CREATED_AT;
+    let parsed;
+    try {
+        const raw = await fs_1.promises.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
+        parsed = JSON.parse(raw);
+    }
+    catch {
+        parsed = { items: [] };
+    }
+    if (!Array.isArray(parsed.items))
+        parsed.items = [];
+    let found = false;
+    for (const item of parsed.items) {
+        if (normalizeKey(String(item?.name || "")) !== key)
+            continue;
+        item.createdAt = grandfatherCreatedAt;
+        found = true;
+        break;
+    }
+    if (!found)
+        parsed.items.push({ name, createdAt: grandfatherCreatedAt });
+    await fs_1.promises.mkdir(path_1.default.dirname(EVO_INSTANCES_CACHE_FILE), { recursive: true });
+    const tmp = `${EVO_INSTANCES_CACHE_FILE}.tmp`;
+    await fs_1.promises.writeFile(tmp, JSON.stringify(parsed, null, 2), "utf-8");
+    await fs_1.promises.rename(tmp, EVO_INSTANCES_CACHE_FILE);
+}
 function isGrandfatherEligible(createdAt) {
     if (!createdAt)
         return true;
@@ -74,6 +123,8 @@ function isGrandfatherEligible(createdAt) {
     return !Number.isFinite(createdMs) || createdMs < cutoffMs;
 }
 function shouldRevertGrandfatherToPreparing(row, createdAt) {
+    if (row.manualActiveOverride === true)
+        return false;
     if (row.phase !== "active" || row.preparingSince)
         return false;
     if (isGrandfatherEligible(createdAt))
@@ -82,6 +133,19 @@ function shouldRevertGrandfatherToPreparing(row, createdAt) {
     if (!Number.isFinite(createdMs))
         return false;
     return Date.now() - createdMs < PREPARING_DURATION_MS;
+}
+/** Corrige linha revertida indevidamente quando há promoção manual (ops/migração). */
+function enforceManualActiveOverride(row) {
+    if (row.manualActiveOverride !== true)
+        return false;
+    if (row.phase === "active" && !row.preparingSince)
+        return false;
+    row.phase = "active";
+    row.preparingSince = null;
+    row.activatedAt = row.activatedAt || new Date().toISOString();
+    row.restrictedUntil = null;
+    row.restrictedReason = null;
+    return true;
 }
 async function reconcileGrandfatheredActiveRow(instanceName, row) {
     const createdAt = await readEvoInstanceCreatedAt(instanceName);
@@ -227,10 +291,22 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince) 
     const existing = store.instances[key];
     if (existing) {
         refreshRestrictionPhase(existing);
+        if (existing.manualActiveOverride === true) {
+            if (enforceManualActiveOverride(existing))
+                await saveStore(store);
+            return;
+        }
         if (existing.phase === "restricted_wait")
             return;
         if (existing.phase === "active") {
-            if (await reconcileGrandfatheredActiveRow(name, existing)) {
+            return;
+        }
+        if (existing.phase === "preparing") {
+            const createdAt = await readEvoInstanceCreatedAt(name);
+            if (isGrandfatherEligible(createdAt)) {
+                existing.phase = "active";
+                existing.activatedAt = existing.activatedAt || new Date().toISOString();
+                existing.preparingSince = null;
                 await saveStore(store);
             }
             return;
@@ -298,6 +374,28 @@ async function syncAquecedorPreparingPromotions() {
         await saveStore(store);
     return promoted;
 }
+/** Força instância ativa no aquecedor (ops) — ignora janela Preparando de 6h. */
+async function forceAquecedorInstanceActive(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return;
+    const store = await loadStore();
+    const key = normalizeKey(name);
+    const now = new Date().toISOString();
+    store.instances[key] = {
+        phase: "active",
+        preparingSince: null,
+        activatedAt: now,
+        restrictedUntil: null,
+        restrictedReason: null,
+        dailyDate: null,
+        dailySendCount: 0,
+        dailyCap: null,
+        manualActiveOverride: true,
+    };
+    await saveStore(store);
+    await patchEvoInstanceCreatedAtForOps(name);
+}
 async function tickAquecedorStaggerPromotions() {
     const promoted = await syncAquecedorPreparingPromotions();
     return promoted[0] ?? null;
@@ -350,8 +448,8 @@ async function getAquecedorLifecycleStatusMap() {
     await syncAquecedorPreparingPromotions();
     const store = await loadStore();
     let storeDirty = false;
-    for (const [key, row] of Object.entries(store.instances)) {
-        if (await reconcileGrandfatheredActiveRow(key, row))
+    for (const [, row] of Object.entries(store.instances)) {
+        if (enforceManualActiveOverride(row))
             storeDirty = true;
     }
     if (storeDirty)
@@ -391,8 +489,9 @@ async function filterAquecedorCycleConnected(connected) {
                 row = (await loadStore()).instances[key];
             }
         }
-        else if (await reconcileGrandfatheredActiveRow(item.instancia, row)) {
-            storeDirty = true;
+        else if (row.manualActiveOverride === true) {
+            if (enforceManualActiveOverride(row))
+                storeDirty = true;
         }
         if (!row)
             continue;

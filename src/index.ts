@@ -5640,11 +5640,41 @@ async function loadEvoInstancesCache(): Promise<EvoInstancesCacheStore | null> {
   }
 }
 
+async function loadManualActiveOverrideInstanceKeys(): Promise<Set<string>> {
+  try {
+    const raw = await fs.readFile(resolveDataFile("aquecedor-instance-lifecycle.json"), "utf-8");
+    const parsed = JSON.parse(raw) as {
+      instances?: Record<string, { manualActiveOverride?: boolean }>;
+    };
+    const keys = new Set<string>();
+    for (const [key, row] of Object.entries(parsed?.instances || {})) {
+      if (row?.manualActiveOverride === true) keys.add(String(key).trim().toLowerCase());
+    }
+    return keys;
+  } catch {
+    return new Set();
+  }
+}
+
 async function saveEvoInstancesCache(items: Array<Record<string, unknown>>): Promise<void> {
   try {
+    const manualOverrideKeys = await loadManualActiveOverrideInstanceKeys();
+    const previous = await loadEvoInstancesCache();
+    const mergedItems = items.map((item) => {
+      const key = String(item?.name || "").trim().toLowerCase();
+      if (!key || !manualOverrideKeys.has(key)) return item;
+      const prevRow = previous?.items?.find(
+        (row) => String(row?.name || "").trim().toLowerCase() === key,
+      );
+      const createdAt =
+        typeof prevRow?.createdAt === "string" && String(prevRow.createdAt).trim()
+          ? String(prevRow.createdAt).trim()
+          : "2026-06-01T12:00:00.000Z";
+      return { ...item, createdAt };
+    });
     const payload: EvoInstancesCacheStore = {
       updatedAt: new Date().toISOString(),
-      items,
+      items: mergedItems,
     };
     await fs.mkdir(path.dirname(EVO_INSTANCES_CACHE_FILE), { recursive: true });
     await fs.writeFile(EVO_INSTANCES_CACHE_FILE, JSON.stringify(payload, null, 2), "utf-8");
