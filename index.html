@@ -5507,6 +5507,29 @@
         background: rgba(15, 23, 42, 0.72);
       }
 
+      .instance-warmth {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        min-width: 54px;
+      }
+
+      .instance-warmth-fire {
+        font-size: 0.95rem;
+        line-height: 1;
+        color: #64748b;
+        opacity: 0.45;
+        filter: grayscale(1);
+        user-select: none;
+      }
+
+      .instance-warmth-fire.active {
+        color: #f97316;
+        opacity: 1;
+        filter: none;
+        text-shadow: 0 0 6px rgba(249, 115, 22, 0.45);
+      }
+
       .admin-subscribers-toolbar {
         display: flex;
         align-items: center;
@@ -9769,6 +9792,107 @@
       #dis-selected-instances {
         min-height: 172px;
       }
+
+      .dis-picker-field-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+
+      .dis-picker-field-head > label {
+        margin-bottom: 0;
+      }
+
+      .dis-picker-count {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: #94a3b8;
+      }
+
+      .dis-warmth-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+
+      .dis-warmth-chip {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+        color: #cbd5e1;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 0.72rem;
+        line-height: 1.3;
+        cursor: pointer;
+      }
+
+      .dis-warmth-chip:hover {
+        border-color: rgba(249, 115, 22, 0.55);
+        color: #f8fafc;
+      }
+
+      .dis-warmth-chip.active {
+        border-color: rgba(249, 115, 22, 0.85);
+        background: rgba(249, 115, 22, 0.18);
+        color: #fdba74;
+      }
+
+      .dis-picker-list {
+        min-height: 172px;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.55);
+        padding: 4px;
+      }
+
+      .dis-picker-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none;
+        color: #e2e8f0;
+        font-size: 0.84rem;
+      }
+
+      .dis-picker-item:hover {
+        background: rgba(30, 64, 102, 0.55);
+      }
+
+      .dis-picker-item.is-selected {
+        background: rgba(46, 228, 160, 0.14);
+        outline: 1px solid rgba(46, 228, 160, 0.45);
+      }
+
+      .dis-picker-item .instance-warmth {
+        min-width: 48px;
+        flex-shrink: 0;
+      }
+
+      .dis-picker-item-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dis-picker-list:empty::before {
+        content: "Nenhum número nesta lista.";
+        display: block;
+        padding: 10px;
+        color: #94a3b8;
+        font-size: 0.8rem;
+      }
+
       @media (max-width: 992px) {
         .dis-number-picker {
           grid-template-columns: 1fr;
@@ -12955,16 +13079,32 @@
                       <div id="dis-number-panel-aquecedor">
                         <div class="dis-number-picker">
                           <div class="aquecedor-field">
-                            <label for="dis-available-instances">Números disponíveis</label>
-                            <select id="dis-available-instances" size="8"></select>
+                            <div class="dis-picker-field-head">
+                              <label for="dis-available-instances">
+                                Números disponíveis
+                                <span id="dis-available-instances-count" class="dis-picker-count">0 disponíveis</span>
+                              </label>
+                              <div class="dis-warmth-filter" id="dis-available-warmth-filter" role="group" aria-label="Filtrar por aquecimento">
+                                <button type="button" class="dis-warmth-chip active" data-warmth-level="0">Todos</button>
+                                <button type="button" class="dis-warmth-chip" data-warmth-level="1" title="Pouco aquecido (1 fogo)">1 🔥</button>
+                                <button type="button" class="dis-warmth-chip" data-warmth-level="2" title="Aquecimento médio (2 fogos)">2 🔥</button>
+                                <button type="button" class="dis-warmth-chip" data-warmth-level="3" title="Totalmente aquecido (3 fogos)">3 🔥</button>
+                              </div>
+                            </div>
+                            <div id="dis-available-instances" class="dis-picker-list" role="listbox" tabindex="0" aria-label="Números disponíveis"></div>
                           </div>
                           <div class="dis-number-picker-actions">
                             <button id="dis-add-instance-btn" type="button" class="instance-action-btn enabled">→</button>
                             <button id="dis-remove-instance-btn" type="button" class="instance-action-btn enabled">←</button>
                           </div>
                           <div class="aquecedor-field">
-                            <label for="dis-selected-instances">Números selecionados para disparo</label>
-                            <select id="dis-selected-instances" size="8"></select>
+                            <div class="dis-picker-field-head">
+                              <label for="dis-selected-instances">
+                                Números selecionados para disparo
+                                <span id="dis-selected-instances-count" class="dis-picker-count">0 selecionados</span>
+                              </label>
+                            </div>
+                            <div id="dis-selected-instances" class="dis-picker-list" role="listbox" tabindex="0" aria-label="Números selecionados para disparo"></div>
                           </div>
                         </div>
                         <span class="aquecedor-hint">Clique no número para mover entre disponíveis e selecionados.</span>
@@ -25564,6 +25704,7 @@
         }
       }
       let pendingSelectedDisparadorInstances = [];
+      let disPickerWarmthFilterLevel = 0;
       let renameInstanceCurrentName = "";
       let avatarRefreshNonce = Date.now();
       let inlineRenameEditingInstance = "";
@@ -26852,9 +26993,74 @@
 
       function getSelectOptionValues(selectEl) {
         if (!selectEl) return [];
+        if (selectEl.classList?.contains("dis-picker-list")) {
+          return getDisPickerValues(selectEl);
+        }
         return Array.from(selectEl.options)
           .map((opt) => String(opt.value || "").trim())
           .filter(Boolean);
+      }
+
+      function getDisPickerValues(listEl) {
+        if (!listEl) return [];
+        return Array.from(listEl.querySelectorAll(".dis-picker-item"))
+          .map((item) => String(item.dataset.value || "").trim())
+          .filter(Boolean);
+      }
+
+      function getDisPickerSelectedValues(listEl) {
+        if (!listEl) return [];
+        if (listEl.classList?.contains("dis-picker-list")) {
+          const selected = Array.from(listEl.querySelectorAll(".dis-picker-item.is-selected"))
+            .map((item) => String(item.dataset.value || "").trim())
+            .filter(Boolean);
+          if (selected.length) return selected;
+          const last = listEl.querySelector(".dis-picker-item.is-last-clicked");
+          if (last) {
+            const value = String(last.dataset.value || "").trim();
+            return value ? [value] : [];
+          }
+          return [];
+        }
+        return Array.from(listEl.selectedOptions || [])
+          .map((opt) => String(opt.value || "").trim())
+          .filter(Boolean);
+      }
+
+      function updateDisPickerCountLabel(elementId, count, kind) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const n = Math.max(0, Number(count) || 0);
+        const word =
+          kind === "selected"
+            ? n === 1
+              ? "selecionado"
+              : "selecionados"
+            : n === 1
+              ? "disponível"
+              : "disponíveis";
+        el.textContent = `${n} ${word}`;
+      }
+
+      function fillDisPickerList(listEl, rows) {
+        if (!listEl) return;
+        if (!listEl.classList?.contains("dis-picker-list")) {
+          fillSelectWithValues(
+            listEl,
+            rows.map((row) => row.name)
+          );
+          return;
+        }
+        listEl.innerHTML = "";
+        rows.forEach((row) => {
+          const usage = getInstanceUsage(row.name);
+          const item = document.createElement("div");
+          item.className = "dis-picker-item";
+          item.dataset.value = row.name;
+          item.setAttribute("role", "option");
+          item.innerHTML = `${buildInstanceWarmthCell(usage.warmthLevel, usage.warmthLabel)}<span class="dis-picker-item-label">${escapeAdminHtml(row.label || row.name)}</span>`;
+          listEl.appendChild(item);
+        });
       }
 
       function fillSelectWithValues(selectEl, values) {
@@ -26973,16 +27179,30 @@
             return String(row.status || "").toLowerCase().includes("open");
           });
 
-          const currentSelected = new Set([
-            ...pendingSelectedDisparadorInstances,
-            ...getSelectOptionValues(selectedEl),
-          ]);
+          const isAquecedorPicker =
+            availableId === "dis-available-instances" && selectedId === "dis-selected-instances";
+          const currentSelected = new Set(
+            isAquecedorPicker
+              ? pendingSelectedDisparadorInstances
+              : [...pendingSelectedDisparadorInstances, ...getSelectOptionValues(selectedEl)]
+          );
 
           const selected = candidates.filter((row) => currentSelected.has(row.name));
-          const available = candidates.filter((row) => !currentSelected.has(row.name));
+          let available = candidates.filter((row) => !currentSelected.has(row.name));
+
+          if (availableId === "dis-available-instances" && disPickerWarmthFilterLevel > 0) {
+            available = available.filter((row) => {
+              const warmth = getInstanceUsage(row.name).warmthLevel || 0;
+              return warmth === disPickerWarmthFilterLevel;
+            });
+          }
 
           const fillSelectWithRows = (selectEl, rows) => {
             if (!selectEl) return;
+            if (selectEl.classList?.contains("dis-picker-list")) {
+              fillDisPickerList(selectEl, rows);
+              return;
+            }
             selectEl.innerHTML = "";
             rows.forEach((row) => {
               const opt = document.createElement("option");
@@ -26994,6 +27214,12 @@
 
           fillSelectWithRows(availableEl, available);
           fillSelectWithRows(selectedEl, selected);
+
+          if (isAquecedorPicker) {
+            updateDisPickerCountLabel("dis-available-instances-count", available.length, "available");
+            updateDisPickerCountLabel("dis-selected-instances-count", selected.length, "selected");
+          }
+
           return selected.map((row) => row.name);
         };
 
@@ -27076,58 +27302,91 @@
         const fromEl = document.getElementById(fromId);
         const toEl = document.getElementById(toId);
         if (!fromEl || !toEl) return;
-        const fromValues = getSelectOptionValues(fromEl);
-        const toValues = getSelectOptionValues(toEl);
-        const selectedToMove = Array.from(fromEl.selectedOptions).map((opt) => String(opt.value || "").trim()).filter(Boolean);
+        const selectedToMove = getDisPickerSelectedValues(fromEl);
         if (!selectedToMove.length) return;
-        const newFrom = fromValues.filter((v) => !selectedToMove.includes(v));
-        const newTo = Array.from(new Set([...toValues, ...selectedToMove]));
-        fillSelectWithValues(fromEl, newFrom);
-        fillSelectWithValues(toEl, newTo);
-        pendingSelectedDisparadorInstances = getSelectOptionValues(
-          resolveDisparosSelectedInstancesElement()
-        );
+        const next = new Set(pendingSelectedDisparadorInstances);
+        const movingToSelected = String(toId || "").includes("selected");
+        selectedToMove.forEach((value) => {
+          if (movingToSelected) next.add(value);
+          else {
+            next.delete(value);
+            ensureWarmthFilterShowsInstance(value);
+          }
+        });
+        pendingSelectedDisparadorInstances = Array.from(next);
+        syncDisparadorNumberPicker();
         updateDisparosSelectedInstancesSummaryCard();
         void refreshDisparosActiveInstanceFromServer();
       }
 
-      function moveSingleDisparadorNumberByClick(fromId, toId) {
-        const fromEl = document.getElementById(fromId);
-        const toEl = document.getElementById(toId);
-        if (!fromEl || !toEl) return;
-        const selected = fromEl.selectedOptions?.[0];
-        if (!selected) return;
-        const value = String(selected.value || "").trim();
+      function resetDisPickerWarmthFilterToAll() {
+        disPickerWarmthFilterLevel = 0;
+        const filterEl = document.getElementById("dis-available-warmth-filter");
+        if (!filterEl) return;
+        filterEl.querySelectorAll(".dis-warmth-chip").forEach((btn) => {
+          btn.classList.toggle("active", Number(btn.dataset.warmthLevel) === 0);
+        });
+      }
+
+      function ensureWarmthFilterShowsInstance(instanceName) {
+        const warmth = getInstanceUsage(instanceName).warmthLevel || 0;
+        if (disPickerWarmthFilterLevel > 0 && warmth !== disPickerWarmthFilterLevel) {
+          resetDisPickerWarmthFilterToAll();
+        }
+      }
+
+      function moveSingleDisparadorNumberByClick(fromId, toId, clickedValue) {
+        const value = String(clickedValue || "").trim();
         if (!value) return;
-
-        const fromValues = getSelectOptionValues(fromEl).filter((v) => v !== value);
-        const toValues = getSelectOptionValues(toEl);
-        if (!toValues.includes(value)) toValues.push(value);
-
-        const rebuildWithLabels = (selectEl, values) => {
-          const labelsByValue = new Map(
-            Array.from(selectEl.options || []).map((opt) => [
-              String(opt.value || "").trim(),
-              String(opt.textContent || opt.value || "").trim(),
-            ])
-          );
-          selectEl.innerHTML = "";
-          values.forEach((v) => {
-            const opt = document.createElement("option");
-            opt.value = v;
-            opt.textContent = labelsByValue.get(v) || getDisparadorInstanceLabelByValue(v) || v;
-            selectEl.appendChild(opt);
-          });
-        };
-
-        rebuildWithLabels(fromEl, fromValues);
-        rebuildWithLabels(toEl, toValues);
-
-        pendingSelectedDisparadorInstances = getSelectOptionValues(
-          resolveDisparosSelectedInstancesElement()
-        );
+        const next = new Set(pendingSelectedDisparadorInstances);
+        const movingToSelected = String(toId || "").includes("selected");
+        if (movingToSelected) next.add(value);
+        else {
+          next.delete(value);
+          ensureWarmthFilterShowsInstance(value);
+        }
+        pendingSelectedDisparadorInstances = Array.from(next);
+        syncDisparadorNumberPicker();
         updateDisparosSelectedInstancesSummaryCard();
         void refreshDisparosActiveInstanceFromServer();
+      }
+
+      function handleDisPickerItemClick(event, fromId, toId) {
+        const item = event.target.closest(".dis-picker-item");
+        if (!item) return;
+        const listEl = document.getElementById(fromId);
+        if (!listEl) return;
+        const value = String(item.dataset.value || "").trim();
+        if (!value) return;
+        listEl.querySelectorAll(".dis-picker-item").forEach((node) => {
+          node.classList.remove("is-last-clicked");
+        });
+        item.classList.add("is-last-clicked");
+        if (event.ctrlKey || event.metaKey) {
+          item.classList.toggle("is-selected");
+          return;
+        }
+        if (event.shiftKey) {
+          item.classList.add("is-selected");
+          return;
+        }
+        moveSingleDisparadorNumberByClick(fromId, toId, value);
+      }
+
+      function initDisPickerWarmthFilter() {
+        const filterEl = document.getElementById("dis-available-warmth-filter");
+        if (!filterEl || filterEl.dataset.bound === "1") return;
+        filterEl.dataset.bound = "1";
+        filterEl.addEventListener("click", (event) => {
+          const chip = event.target.closest(".dis-warmth-chip");
+          if (!chip) return;
+          const level = Number(chip.dataset.warmthLevel);
+          disPickerWarmthFilterLevel = Number.isFinite(level) ? Math.max(0, Math.min(3, level)) : 0;
+          filterEl.querySelectorAll(".dis-warmth-chip").forEach((btn) => {
+            btn.classList.toggle("active", btn === chip);
+          });
+          syncDisparadorNumberPicker();
+        });
       }
 
       function isDisparosSectionInWizardFlow(section) {
@@ -30322,7 +30581,21 @@
           aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
           aquecedorPhase: current?.aquecedorPhase || null,
           aquecedorPromoteAt: current?.aquecedorPromoteAt || null,
+          warmthLevel: Number.isFinite(Number(current?.warmthLevel))
+            ? Math.max(0, Math.min(3, Number(current.warmthLevel)))
+            : 0,
+          warmthLabel: current?.warmthLabel || "Não aquecido",
         };
+      }
+
+      function buildInstanceWarmthCell(level, label) {
+        const safeLevel = Math.max(0, Math.min(3, Number(level) || 0));
+        const safeLabel = String(label || "Não aquecido").trim() || "Não aquecido";
+        const fires = [0, 1, 2].map((idx) => {
+          const active = idx < safeLevel ? " active" : "";
+          return `<span class="instance-warmth-fire${active}" aria-hidden="true">🔥</span>`;
+        });
+        return `<span class="instance-warmth" title="${escapeAdminHtml(safeLabel)}" aria-label="${escapeAdminHtml(safeLabel)}">${fires.join("")}</span>`;
       }
 
       function resolveInstanceAquecedorStatusLabel(inst) {
@@ -30376,6 +30649,10 @@
               aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
               aquecedorPhase: row?.aquecedorPhase || null,
               aquecedorPromoteAt: row?.aquecedorPromoteAt || null,
+              warmthLevel: Number.isFinite(Number(row?.warmthLevel))
+                ? Math.max(0, Math.min(3, Number(row.warmthLevel)))
+                : 0,
+              warmthLabel: row?.warmthLabel || "Não aquecido",
             };
           });
           instanceUsageByName = map;
@@ -30538,6 +30815,7 @@
               <th>Nome da Instância</th>
               <th>Contatos</th>
               <th>Mensagens</th>
+              <th style="width:72px" title="Nível de aquecimento da instância">Quente</th>
               <th>Aquecedor</th>
               <th>Disparador</th>
               ${showFazendaColumn ? "<th>Fazenda</th>" : ""}
@@ -30634,6 +30912,7 @@
             <td>${instanceNameCell}</td>
             <td>${inst.contacts.toLocaleString("pt-BR")}</td>
             <td>${inst.messages.toLocaleString("pt-BR")}</td>
+            <td>${buildInstanceWarmthCell(usage.warmthLevel, usage.warmthLabel)}</td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
                 <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
@@ -35018,8 +35297,9 @@
       }
       const disAvailableInstances = document.getElementById("dis-available-instances");
       if (disAvailableInstances) {
-        disAvailableInstances.addEventListener("click", () => {
-          moveSingleDisparadorNumberByClick(
+        disAvailableInstances.addEventListener("click", (event) => {
+          handleDisPickerItemClick(
+            event,
             "dis-available-instances",
             "dis-selected-instances"
           );
@@ -35027,13 +35307,15 @@
       }
       const disSelectedInstances = document.getElementById("dis-selected-instances");
       if (disSelectedInstances) {
-        disSelectedInstances.addEventListener("click", () => {
-          moveSingleDisparadorNumberByClick(
+        disSelectedInstances.addEventListener("click", (event) => {
+          handleDisPickerItemClick(
+            event,
             "dis-selected-instances",
             "dis-available-instances"
           );
         });
       }
+      initDisPickerWarmthFilter();
       initDisNumberSourceTabs();
 
       const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");

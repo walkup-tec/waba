@@ -85,6 +85,7 @@ import {
   registerAquecedorInstancePreparing,
   syncAquecedorPreparingPromotions,
 } from "./services/aquecedor-instance-lifecycle.service";
+import { getAquecedorWarmthMapForInstances } from "./services/aquecedor-instance-warmth.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 
 const app = express();
@@ -4648,6 +4649,10 @@ app.get("/instancias/uso-config", async (req, res) => {
       }
     }
     const lifecycleMap = await getAquecedorLifecycleStatusMap();
+    const warmthMap = await getAquecedorWarmthMapForInstances(
+      Array.from(usageMap.keys()),
+      getSupabaseClient()
+    );
     const auth = resolveWabaRequestAuth(req);
     const allowed = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(
       auth,
@@ -4658,6 +4663,7 @@ app.get("/instancias/uso-config", async (req, res) => {
       .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
       .map(([instanceName, cfg]) => {
         const lifecycle = lifecycleMap[instanceName.toLowerCase()];
+        const warmth = warmthMap[instanceName.toLowerCase()];
         return {
           instanceName,
           ...cfg,
@@ -4665,6 +4671,8 @@ app.get("/instancias/uso-config", async (req, res) => {
           aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
           aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
           aquecedorPromoteAt: lifecycle?.promoteAt ?? null,
+          warmthLevel: warmth?.level ?? 0,
+          warmthLabel: warmth?.label ?? "Não aquecido",
         };
       });
     return res.json({ items });

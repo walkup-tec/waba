@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-24
 
+**WABA — Foguinhos aquecimento em produção:** coluna Quente (Instâncias), picker Disparos com filtro 1–3🔥, API `warmthLevel`/`warmthLabel` em `/instancias/uso-config`. Marker `DEPLOY-2026-06-24-instancias-foguinhos-aquecimento`. Ver `doc/LOG-2026-06-24__instancias-foguinhos-aquecimento-producao.md`.
+
 **WABA — Produção assinantes (sem compra números Alternativa):** flag `WABA_ALTERNATIVA_NUMBERS_PURCHASE_ENABLED` (padrão false); mantém foguinhos, motor e débito 1/envio Alternativa. Ver `doc/LOG-2026-06-23__producao-assinantes-sem-compra-numeros-alternativa.md`.
 
 **WABA — Mozart V02 → assinante produção:** script `promote-subscriber-v02-to-production.cjs` + `POST /admin/subscribers/promote-from-v02`. Ver `doc/LOG-2026-06-24__mozart-promote-v02-assinante-producao.md`.
