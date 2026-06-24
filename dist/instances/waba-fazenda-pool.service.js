@@ -70,6 +70,18 @@ class WabaFazendaPoolService {
     async listMasterFazendaInstanceNames() {
         const deps = this.requireDeps();
         const usageMap = await deps.loadInstanceUsageMap();
+        const fazendaMarked = [];
+        for (const [instanceName, usage] of usageMap.entries()) {
+            if (usage?.useFazenda === true) {
+                fazendaMarked.push(normalizeInstanceName(instanceName));
+            }
+        }
+        const uniqueMarked = Array.from(new Set(fazendaMarked.map((name) => name.toLowerCase()).filter(Boolean)))
+            .map((key) => fazendaMarked.find((name) => name.toLowerCase() === key) || key)
+            .filter(Boolean);
+        if (uniqueMarked.length > 0) {
+            return uniqueMarked.sort((a, b) => a.localeCompare(b, "pt-BR"));
+        }
         const masterEmails = listMasterOwnerEmails();
         const owned = await this.ownershipService.listInstancesOwnedByEmails(masterEmails);
         return owned.filter((instanceName) => resolveUsage(usageMap, instanceName)?.useFazenda === true);

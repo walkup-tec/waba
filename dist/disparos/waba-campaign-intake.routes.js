@@ -274,7 +274,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             createdAt: now,
             updatedAt: now,
         });
-        if (!isMaster && plannedSendCount > 0) {
+        if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
             disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
         }
         const importSummary = plannedSendCount < importedLineCount

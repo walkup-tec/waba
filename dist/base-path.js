@@ -49,9 +49,11 @@ window.WABA_BASE_PATH="${safe}";
 </script>`;
 }
 function injectRuntimeIntoIndexHtml(html, opts) {
+    const featureFlagsJson = JSON.stringify(opts.featureFlags ?? { alternativaNumbersPurchase: false });
     const injection = [
         opts.basePath ? buildBasePathScript(opts.basePath) : "",
         `<script>window.WABA_UI_PROFILE="${opts.uiProfile}";</script>`,
+        `<script>window.WABA_FEATURE_FLAGS=${featureFlagsJson};</script>`,
     ]
         .filter(Boolean)
         .join("\n");

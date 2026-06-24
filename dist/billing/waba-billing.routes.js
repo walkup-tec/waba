@@ -3,11 +3,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaBillingRoutes = void 0;
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const load_env_1 = require("../load-env");
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const asaas_transfer_auth_service_1 = require("./asaas-transfer-auth.service");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 const waba_billing_service_1 = require("./waba-billing.service");
 const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.service");
 const waba_disparos_credits_service_1 = require("./waba-disparos-credits.service");
+const alternativa_dispatch_rules_1 = require("../disparos/alternativa-dispatch-rules");
 const orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository();
 const billingService = new waba_billing_service_1.WabaBillingService(orderRepository);
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
@@ -118,9 +120,12 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.get("/billing/alternativa-numbers/config", (_req, res) => {
+        const purchaseEnabled = (0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)();
         return res.status(200).json({
             ...alternativaNumbersService.getPricing(),
             paymentConfigured: billingService.getDisparosConfig().paymentConfigured,
+            purchaseEnabled,
+            featureFlags: { alternativaNumbersPurchase: purchaseEnabled },
         });
     });
     app.get("/billing/alternativa-numbers/summary", async (req, res) => {
@@ -128,8 +133,23 @@ const registerWabaBillingRoutes = (app) => {
         if (!auth.email) {
             return res.status(401).json({ error: "Faça login para consultar seus números." });
         }
+        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+            return res.status(200).json({
+                purchaseEnabled: false,
+                ...alternativaNumbersService.getPricing(),
+                dispatchRules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)(),
+                purchasedSlots: 0,
+                activatedCount: 0,
+                availableSlots: 0,
+                activations: [],
+                fazendaPool: { items: [], availableToClaim: [], assignedToSubscriber: [] },
+                canPickNumbers: false,
+                canSend: false,
+            });
+        }
         try {
-            return res.status(200).json(await alternativaNumbersService.getSummaryAsync(auth.email));
+            const summary = await alternativaNumbersService.getSummaryAsync(auth.email);
+            return res.status(200).json({ ...summary, purchaseEnabled: true });
         }
         catch (error) {
             return res.status(500).json({
@@ -138,6 +158,9 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
+        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+            return res.status(403).json({ error: "Compra de números indisponível neste ambiente." });
+        }
         try {
             const auth = resolveRequestAuth(req);
             if (!auth.email) {
@@ -162,6 +185,9 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.post("/billing/alternativa-numbers/activate", async (req, res) => {
+        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+            return res.status(403).json({ error: "Ativação de números da fazenda indisponível neste ambiente." });
+        }
         try {
             const auth = resolveRequestAuth(req);
             if (!auth.email) {
