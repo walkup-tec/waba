@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-24
 
+**WABA — Produção foguinhos (dist publicado):** causa: `dist/` não estava no Git; Easypanel servia build 22/06. Marker `DEPLOY-2026-06-24-instancias-foguinhos-producao-dist`. Ver `doc/LOG-2026-06-24__producao-foguinhos-dist-nao-publicado.md`.
+
 **WABA — Fix ordem coluna Quente:** primeira coluna da tabela Instâncias (antes do avatar). Marker `DEPLOY-2026-06-24-instancias-quente-coluna-ordem`. Ver `doc/LOG-2026-06-24__instancias-quente-coluna-ordem-fix.md`.
 
 **WABA — Foguinhos aquecimento em produção:** coluna Quente (Instâncias), picker Disparos com filtro 1–3🔥, API `warmthLevel`/`warmthLabel` em `/instancias/uso-config`. Marker `DEPLOY-2026-06-24-instancias-foguinhos-aquecimento`. Ver `doc/LOG-2026-06-24__instancias-foguinhos-aquecimento-producao.md`.

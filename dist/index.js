@@ -68,8 +68,10 @@ const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
+const waba_dispatches_api_kind_1 = require("./disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./disparos/waba-campaign-spreadsheet.util");
 const waba_disparos_credits_service_1 = require("./billing/waba-disparos-credits.service");
+const waba_feature_flags_1 = require("./config/waba-feature-flags");
 const waba_entitlement_routes_1 = require("./entitlements/waba-entitlement.routes");
 const waba_entitlement_service_1 = require("./entitlements/waba-entitlement.service");
 const waba_cors_1 = require("./lib/waba-cors");
@@ -78,6 +80,7 @@ const waba_support_routes_1 = require("./support/waba-support.routes");
 const instance_integration_probe_1 = require("./instance-integration-probe");
 const instance_inbound_validation_service_1 = require("./instance-inbound-validation.service");
 const aquecedor_instance_lifecycle_service_1 = require("./services/aquecedor-instance-lifecycle.service");
+const aquecedor_instance_warmth_service_1 = require("./services/aquecedor-instance-warmth.service");
 const deploy_marker_1 = require("./deploy-marker");
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
@@ -338,6 +341,7 @@ app.get("/health", (_req, res) => {
         deployMarker: deploy_marker_1.WABA_DEPLOY_MARKER,
         wabaEnv: load_env_1.WABA_ENV,
         uiProfile: resolveUiProfile(),
+        featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
         basePath: base_path_1.BASE_PATH || "/",
         port: PORT,
         maintenanceMode: MAINTENANCE_MODE,
@@ -897,6 +901,11 @@ function buildAquecedorPairKey(instanciaA, instanciaB) {
     const b = String(instanciaB || "").trim();
     return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
 }
+function buildAquecedorDirectedKey(instanciaOrigem, instanciaDestino) {
+    const origem = String(instanciaOrigem || "").trim().toLowerCase();
+    const destino = String(instanciaDestino || "").trim().toLowerCase();
+    return `${origem}→${destino}`;
+}
 function buildAquecedorNumberToInstanceMap(connected, canonicalMap) {
     const map = new Map();
     for (const item of connected) {
@@ -1044,6 +1053,11 @@ async function loadAquecedorTurnManager(supabase, connected) {
             pairState.pendingReplyFrom = ev.toInst;
         }
     }
+    const recentDirectedEdges = [];
+    for (let i = events.length - 1; i >= 0 && recentDirectedEdges.length < 32; i -= 1) {
+        const ev = events[i];
+        recentDirectedEdges.push(buildAquecedorDirectedKey(ev.fromInst, ev.toInst));
+    }
     const owesPairReply = (origemRaw, destinoRaw) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
         const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
@@ -1110,6 +1124,31 @@ async function loadAquecedorTurnManager(supabase, connected) {
         }
         const destStats = instanceStats.get(destino.toLowerCase());
         score += (destStats?.sendCount || 0) * 1000;
+        const directedKey = buildAquecedorDirectedKey(origem, destino);
+        const recentIdx = recentDirectedEdges.indexOf(directedKey);
+        if (recentIdx >= 0) {
+            score += (recentIdx + 1) * 750000;
+        }
+        if (recentDirectedEdges.length > 0) {
+            const lastDirected = recentDirectedEdges[0];
+            const lastParts = lastDirected.split("→");
+            const lastOrig = lastParts[0] || "";
+            const lastDest = lastParts[1] || "";
+            if (origem.toLowerCase() === lastOrig) {
+                score += 250000;
+            }
+            if (destino.toLowerCase() === lastDest) {
+                score += 120000;
+            }
+        }
+        const sentAtMs = stats?.lastSentAt ? new Date(stats.lastSentAt).getTime() : 0;
+        if (sentAtMs > 0) {
+            const idleMinutes = Math.max(0, (Date.now() - sentAtMs) / 60000);
+            score -= Math.min(80000, Math.floor(idleMinutes * 2000));
+        }
+        else {
+            score -= 90000;
+        }
         const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
         score += rotation;
         return score;
@@ -1117,6 +1156,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
     return {
         canonicalMap,
         totalEvents: events.length,
+        recentDirectedEdges,
         canSendDirected,
         owesPairReply,
         describeBlockReason,
@@ -2790,15 +2830,45 @@ function applyAlternativaDispatchProfile(config) {
         lockTtlSeconds: Math.max(180, Math.min(1800, throttle.delayMaxSeconds * 3)),
     };
 }
+async function resolveDispatchCreditsApiKindForOwner(ownerEmail) {
+    const normalized = String(ownerEmail || "").trim().toLowerCase();
+    if (!normalized.includes("@"))
+        return "oficial";
+    const summary = disparosCreditsService.getCreditsSummary(normalized);
+    if (summary.activeApiKind === "alternativa")
+        return "alternativa";
+    if (summary.byApi.alternativa.remainingShipments > 0)
+        return "alternativa";
+    if ((0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+        const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+        const activated = alternativaActivationRepository.listForEmail(normalized).length;
+        if (purchased > 0 || activated > 0)
+            return "alternativa";
+    }
+    return (0, waba_dispatches_api_kind_1.resolveSubscriberDispatchesApiKindFromOrders)(normalized);
+}
+function debitsDisparosCreditsOnCampaignCreate(apiKind) {
+    return apiKind === "oficial";
+}
+function debitsDisparosCreditsPerSuccessfulSend(apiKind) {
+    return apiKind === "alternativa";
+}
 async function shouldApplyAlternativaDispatchProfile(email) {
     const normalized = String(email || "").trim().toLowerCase();
     if (!normalized.includes("@"))
         return false;
-    const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
-    const activated = alternativaActivationRepository.listForEmail(normalized).length;
-    return purchased > 0 || activated > 0;
+    if ((0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+        const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+        const activated = alternativaActivationRepository.listForEmail(normalized).length;
+        if (purchased > 0 || activated > 0)
+            return true;
+    }
+    const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(normalized);
+    return creditsApiKind === "alternativa";
 }
 async function assertAlternativaDispatchReady(email) {
+    if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)())
+        return;
     const normalized = String(email || "").trim().toLowerCase();
     if (!(await shouldApplyAlternativaDispatchProfile(normalized)))
         return;
@@ -2986,7 +3056,7 @@ async function runAquecedorCycle(forceTest = false) {
         updateAquecedorConnectedSummary(connected);
         const preparingCount = Math.max(0, connectedAll.length - connected.length);
         if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
-            aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação ou espera (6h). Aquecedor ativo em ${connected.length}; liberação gradual a cada 6h.`;
+            aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
             return;
         }
         if (connected.length < 2) {
@@ -3257,6 +3327,7 @@ function sendIndexHtml(res) {
     const html = (0, base_path_1.injectRuntimeIntoIndexHtml)(loadIndexHtmlTemplate(), {
         basePath: base_path_1.BASE_PATH,
         uiProfile: resolveUiProfile(),
+        featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
     });
     res.type("html").send(html);
 }
@@ -3705,6 +3776,7 @@ app.get("/instancias/uso-config", async (req, res) => {
             }
         }
         const lifecycleMap = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusMap)();
+        const warmthMap = await (0, aquecedor_instance_warmth_service_1.getAquecedorWarmthMapForInstances)(Array.from(usageMap.keys()), getSupabaseClient());
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
         const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
         const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
@@ -3712,6 +3784,7 @@ app.get("/instancias/uso-config", async (req, res) => {
             .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
             .map(([instanceName, cfg]) => {
             const lifecycle = lifecycleMap[instanceName.toLowerCase()];
+            const warmth = warmthMap[instanceName.toLowerCase()];
             return {
                 instanceName,
                 ...cfg,
@@ -3719,6 +3792,8 @@ app.get("/instancias/uso-config", async (req, res) => {
                 aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
                 aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
                 aquecedorPromoteAt: lifecycle?.promoteAt ?? null,
+                warmthLevel: warmth?.level ?? 0,
+                warmthLabel: warmth?.label ?? "Não aquecido",
             };
         });
         return res.json({ items });
@@ -4406,13 +4481,78 @@ function getCampaignInstanceHealth(config, evoRows) {
     const disconnectedCount = Math.max(0, selectedCount - connectedCount);
     const disconnectedPercent = selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
     const shouldPauseByDisconnectedRatio = selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
+    const minConnectedRequired = alternativa_dispatch_rules_1.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES;
+    const needsMoreInstancesForMinimum = connectedCount < minConnectedRequired;
+    const missingConnectedForMinimum = Math.max(0, minConnectedRequired - connectedCount);
     return {
         selectedCount,
         connectedCount,
         disconnectedCount,
         disconnectedPercent,
         shouldPauseByDisconnectedRatio,
+        minConnectedRequired,
+        needsMoreInstancesForMinimum,
+        missingConnectedForMinimum,
     };
+}
+function resolveUsageFromMap(usageMap, instanceName) {
+    const key = String(instanceName || "").trim();
+    if (!key)
+        return undefined;
+    const direct = usageMap.get(key);
+    if (direct)
+        return direct;
+    const target = key.toLowerCase();
+    for (const [mapKey, value] of usageMap.entries()) {
+        if (mapKey.toLowerCase() === target)
+            return value;
+    }
+    return undefined;
+}
+async function filterDisparadorInstancesReadyForAuth(auth, names) {
+    const allowed = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, names);
+    return (0, aquecedor_instance_lifecycle_service_1.filterInstancesLifecycleReady)(allowed);
+}
+async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd) {
+    if (maxToAdd <= 0)
+        return [];
+    const prevSelected = new Set((Array.isArray(config?.selectedDisparadorInstances) ? config.selectedDisparadorInstances : [])
+        .map((n) => String(n || "").trim().toLowerCase())
+        .filter(Boolean));
+    const connectedByKey = new Map();
+    for (const row of evoRows) {
+        const key = String(row.instanceKey || "").trim().toLowerCase();
+        if (key && row.connected === true) {
+            connectedByKey.set(key, row);
+        }
+    }
+    const usageMap = await loadInstanceUsageMap();
+    const activationRepository = new alternativa_number_activation_repository_1.AlternativaNumberActivationRepository();
+    const email = String(auth.email || "").trim().toLowerCase();
+    const activations = email.includes("@") ? activationRepository.listForEmail(email) : [];
+    const activationKeys = new Set(activations.map((row) => String(row.instanceName || "").trim().toLowerCase()).filter(Boolean));
+    const purchasedConnected = [];
+    const aquecedorConnected = [];
+    for (const row of activations) {
+        const name = String(row.instanceName || "").trim();
+        const key = name.toLowerCase();
+        if (!name || prevSelected.has(key) || !connectedByKey.has(key))
+            continue;
+        purchasedConnected.push(name);
+    }
+    const ownedCandidates = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(connectedByKey.values()).map((row) => row.instanceKey));
+    for (const name of ownedCandidates) {
+        const key = String(name || "").trim().toLowerCase();
+        if (!key || prevSelected.has(key) || activationKeys.has(key))
+            continue;
+        const usage = resolveUsageFromMap(usageMap, name);
+        if (usage?.useAquecedor === false)
+            continue;
+        aquecedorConnected.push(String(name).trim());
+    }
+    const ordered = Array.from(new Set([...purchasedConnected, ...aquecedorConnected]));
+    const allowed = await filterDisparadorInstancesReadyForAuth(auth, ordered);
+    return allowed.slice(0, maxToAdd);
 }
 function describeEvoQrFailure(createStatus, qrStatus, createDetail, qrDetail) {
     const detail = String(qrDetail || createDetail || "").trim();
@@ -6902,7 +7042,7 @@ app.get("/disparos/config", async (req, res) => {
     try {
         const config = await loadDisparosConfigFromDb();
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const selectedDisparadorInstances = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []);
+        const selectedDisparadorInstances = await filterDisparadorInstancesReadyForAuth(auth, Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []);
         const autoProviders = getAutoShortenerProviderOrder();
         const currentShortenerProvider = autoProviders[0];
         return res.json({
@@ -6947,7 +7087,7 @@ app.post("/disparos/config", async (req, res) => {
         }
         config = {
             ...config,
-            selectedDisparadorInstances: await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, config.selectedDisparadorInstances),
+            selectedDisparadorInstances: await filterDisparadorInstancesReadyForAuth(auth, config.selectedDisparadorInstances),
         };
         await saveDisparosConfigToDb(config);
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
@@ -7892,7 +8032,26 @@ async function processOneCampaignDispatch(campaignId) {
     recordInstanceDailySend(instancePick.instancia);
     const ownerEmail = String(campaign.ownerEmail || "").trim();
     if (ownerEmail) {
-        disparosCreditsService.recordShipmentConsumed(ownerEmail, 1);
+        const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+        if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
+            disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
+            if (!disparosCreditsService.isMasterUnlimited(ownerEmail) &&
+                disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0) {
+                campaign.status = "paused";
+                const supabase = getSupabaseClient();
+                if (supabase) {
+                    try {
+                        await supabase.from("disparos_campaigns")
+                            .update({ status: "paused" })
+                            .eq("id", campaign.id);
+                    }
+                    catch {
+                        /* */
+                    }
+                }
+                queuePersistDisparosLocalState();
+            }
+        }
     }
     await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
         shortUrl: lead.shortUrl || null,
@@ -7912,7 +8071,7 @@ async function runCampaignDispatchTick() {
     const running = disparosCampaignsMemory.filter((c) => c.status === "running");
     for (const c of running) {
         const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
-        if (health.shouldPauseByDisconnectedRatio) {
+        if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
             c.status = "paused";
             const supabase = getSupabaseClient();
             if (supabase) {
@@ -8065,8 +8224,10 @@ app.post("/disparos/campanhas", (req, res, next) => {
             importedLineCount = numbers.length;
         }
         let plannedSendCount = importedLineCount;
+        let creditsApiKind = "oficial";
         if (ownerEmail && !disparosCreditsService.isMasterUnlimited(ownerEmail)) {
-            const remaining = disparosCreditsService.getCreditsSummary(ownerEmail).remainingShipments;
+            creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+            const remaining = disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind);
             if (remaining <= 0) {
                 return res.status(400).json({
                     error: "Você não possui envios contratados disponíveis. Contrate um pacote antes de criar a campanha.",
@@ -8079,7 +8240,9 @@ app.post("/disparos/campanhas", (req, res, next) => {
                     error: "Não há números válidos suficientes na planilha para os envios disponíveis.",
                 });
             }
-            disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length);
+            if (debitsDisparosCreditsOnCampaignCreate(creditsApiKind)) {
+                disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length, creditsApiKind);
+            }
         }
         if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
             try {
@@ -8186,7 +8349,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
 });
 app.get("/disparos/campanhas", async (req, res) => {
     try {
-        const buildCampaignRuntimeStage = (item, configSnapshot, nowSp) => {
+        const buildCampaignRuntimeStage = (item, configSnapshot, nowSp, instanceHealth) => {
             const st = String(item.status || "").toLowerCase();
             if (st === "finished") {
                 return {
@@ -8197,10 +8360,14 @@ app.get("/disparos/campanhas", async (req, res) => {
                 };
             }
             if (st === "paused") {
+                const pausedByHealthRule = instanceHealth?.shouldPauseByDisconnectedRatio === true ||
+                    instanceHealth?.needsMoreInstancesForMinimum === true;
                 return {
                     phase: "paused",
                     label: "Pausada",
-                    detail: "Pausa manual ou automática por regra de saúde.",
+                    detail: pausedByHealthRule
+                        ? "Pausa manual ou automática por regra de saúde."
+                        : "Campanha pausada manualmente.",
                     fillPercent: 100,
                 };
             }
@@ -8328,7 +8495,7 @@ app.get("/disparos/campanhas", async (req, res) => {
         const evoRows = await fetchEvoInstanceTagRowsForRequest(req);
         const globalDisparos = await loadDisparosConfigFromDb();
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const globalSelected = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, Array.isArray(globalDisparos.selectedDisparadorInstances)
+        const globalSelected = await filterDisparadorInstancesReadyForAuth(auth, Array.isArray(globalDisparos.selectedDisparadorInstances)
             ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : []);
         const nowSp = nowInSaoPaulo();
@@ -8341,23 +8508,15 @@ app.get("/disparos/campanhas", async (req, res) => {
             const tags = useGlobal
                 ? disparadorInstanceTagsForCampaign({ ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }, evoRows)
                 : snapshotTags;
-            const selectedCount = tags.length;
-            const connectedCount = tags.filter((t) => t.connected === true).length;
-            const disconnectedCount = Math.max(0, selectedCount - connectedCount);
-            const disconnectedPercent = selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
-            const shouldPauseByDisconnectedRatio = selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
-            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp);
+            const instanceHealth = getCampaignInstanceHealth(useGlobal
+                ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
+                : configByCampaignId.get(item.id), evoRows);
+            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp, instanceHealth);
             return {
                 ...item,
                 disparadorInstances: tags,
                 disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
-                instanceHealth: {
-                    selectedCount,
-                    connectedCount,
-                    disconnectedCount,
-                    disconnectedPercent,
-                    shouldPauseByDisconnectedRatio,
-                },
+                instanceHealth,
                 runtimeStage,
             };
         });
@@ -8683,9 +8842,16 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                 evoRows = [];
             }
             const health = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+            if (health.needsMoreInstancesForMinimum) {
+                return res.status(409).json({
+                    error: `Campanha bloqueada: são necessários ao menos ${health.minConnectedRequired} números conectados. Você possui ${health.connectedCount}. Use «+ Instâncias» ou compre mais números.`,
+                    instanceHealth: health,
+                    code: "campaign_min_instances",
+                });
+            }
             if (health.shouldPauseByDisconnectedRatio) {
                 return res.status(409).json({
-                    error: "Campanha bloqueada para ativação: 50% ou mais das instâncias selecionadas estão desconectadas. Use o botão '+ Instâncias' para ampliar a base conectada.",
+                    error: "Campanha bloqueada: 50% ou mais das instâncias selecionadas estão desconectadas. Reconecte as instâncias ou use «+ Instâncias».",
                     instanceHealth: health,
                 });
             }
@@ -8774,11 +8940,8 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         if (!id) {
             return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
         }
-        const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-        const incoming = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth((0, waba_request_auth_1.resolveWabaRequestAuth)(req), raw.map((n) => String(n || "").trim()).filter(Boolean));
-        if (!incoming.length) {
-            return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
-        }
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const auto = req.body?.auto === true;
         let campaign = disparosCampaignsMemory.find((c) => c.id === id);
         if (!campaign) {
             campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
@@ -8786,7 +8949,40 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         if (!campaign) {
             return res.status(404).json({ error: "Campanha não encontrada." });
         }
+        let evoRows = [];
+        try {
+            evoRows = await fetchEvoInstanceTagRowsForRequest(req);
+        }
+        catch {
+            evoRows = [];
+        }
         const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
+        const healthBefore = getCampaignInstanceHealth(prev, evoRows);
+        let incoming = [];
+        if (auto) {
+            if (!healthBefore.needsMoreInstancesForMinimum) {
+                return res.status(400).json({
+                    error: "A campanha já possui números conectados suficientes.",
+                    instanceHealth: healthBefore,
+                });
+            }
+            incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, healthBefore.missingConnectedForMinimum);
+            if (!incoming.length) {
+                return res.status(409).json({
+                    error: "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
+                    instanceHealth: healthBefore,
+                    code: "buy_numbers_required",
+                    needsPurchase: true,
+                });
+            }
+        }
+        else {
+            const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
+            incoming = await filterDisparadorInstancesReadyForAuth(auth, raw.map((n) => String(n || "").trim()).filter(Boolean));
+            if (!incoming.length) {
+                return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
+            }
+        }
         const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
             ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
@@ -8807,21 +9003,20 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             }
         }
         queuePersistDisparosLocalState();
-        let evoRows = [];
-        try {
-            evoRows = await fetchEvoInstanceTagRowsForRequest(req);
-        }
-        catch {
-            evoRows = [];
-        }
         const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+        const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
         return res.json({
             ok: true,
             id,
+            auto,
             selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
             addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
             instanceHealth,
-            message: "Instâncias adicionadas à campanha.",
+            stillNeedsMore,
+            needsPurchase: stillNeedsMore && incoming.length < healthBefore.missingConnectedForMinimum,
+            message: stillNeedsMore
+                ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda faltam ${instanceHealth.missingConnectedForMinimum} conectado(s). Compre mais números para concluir a campanha.`
+                : "Instâncias adicionadas à campanha. Você já pode ativar novamente.",
         });
     }
     catch (error) {
@@ -9022,6 +9217,18 @@ app.listen(PORT, () => {
         setInterval(() => {
             syncAquecedorWorkerLeadership().catch((err) => console.error("[Aquecedor] sync worker:", err));
         }, AQUECEDOR_WORKER_SYNC_MS);
+        const AQUECEDOR_PREPARE_PROMOTE_MS = 15000;
+        setInterval(() => {
+            (0, aquecedor_instance_lifecycle_service_1.syncAquecedorPreparingPromotions)()
+                .then((promoted) => {
+                if (promoted.length) {
+                    console.log(`[Aquecedor] ${promoted.length} instância(s) promovida(s) de Preparando → ativo: ${promoted.join(", ")}`);
+                }
+            })
+                .catch((err) => console.error("[Aquecedor] promoção Preparando:", err));
+        }, AQUECEDOR_PREPARE_PROMOTE_MS);
+        void (0, aquecedor_instance_lifecycle_service_1.syncAquecedorPreparingPromotions)();
+        console.log(`[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`);
         if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
             if (load_env_1.WABA_ENV === "v01") {
                 console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");
