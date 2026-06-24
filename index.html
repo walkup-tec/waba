@@ -30809,13 +30809,13 @@
         table.innerHTML = `
           <thead>
             <tr>
+              <th style="width:72px" title="Nível de aquecimento da instância">Quente</th>
               <th style="width:38px"></th>
               <th>Número</th>
               <th>Nome (WhatsApp)</th>
               <th>Nome da Instância</th>
               <th>Contatos</th>
               <th>Mensagens</th>
-              <th style="width:72px" title="Nível de aquecimento da instância">Quente</th>
               <th>Aquecedor</th>
               <th>Disparador</th>
               ${showFazendaColumn ? "<th>Fazenda</th>" : ""}
@@ -30906,13 +30906,13 @@
               </div>`;
 
           tr.innerHTML = `
+            <td>${buildInstanceWarmthCell(usage.warmthLevel, usage.warmthLabel)}</td>
             <td>${avatarCell}</td>
             <td>${inst.displayNumber}</td>
             <td>${whatsappNameCell}</td>
             <td>${instanceNameCell}</td>
             <td>${inst.contacts.toLocaleString("pt-BR")}</td>
             <td>${inst.messages.toLocaleString("pt-BR")}</td>
-            <td>${buildInstanceWarmthCell(usage.warmthLevel, usage.warmthLabel)}</td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
                 <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
