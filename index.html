@@ -16503,6 +16503,30 @@
         return String(window.WABA_UI_PROFILE || "full") === "production";
       }
 
+      function isAlternativaNumbersPurchaseEnabled() {
+        return window.WABA_FEATURE_FLAGS?.alternativaNumbersPurchase === true;
+      }
+
+      function applyAlternativaNumbersPurchaseUi() {
+        const enabled = isAlternativaNumbersPurchaseEnabled();
+        const comprarTab = document.querySelector('.dis-number-source-tab[data-source="comprar"]');
+        const comprarPanel = document.getElementById("dis-number-panel-comprar");
+        const tabs = document.getElementById("dis-number-source-tabs");
+        if (comprarTab) comprarTab.hidden = !enabled;
+        if (comprarPanel) comprarPanel.hidden = !enabled;
+        if (tabs) tabs.classList.toggle("alt-numbers-tabs-single", !enabled);
+        if (!enabled && disNumberSourceTab === "comprar") {
+          setDisNumberSourceTab("aquecedor");
+        }
+      }
+
+      function resolveAlternativaActiveInstanceCountForProjection() {
+        if (!isAlternativaNumbersPurchaseEnabled()) {
+          return getActiveDisSelectedInstanceValues().length;
+        }
+        return Number(alternativaNumbersSummary?.activatedCount ?? 0);
+      }
+
       function isBaselineUi() {
         return String(window.WABA_UI_PROFILE || "full") === "baseline";
       }
@@ -16881,7 +16905,7 @@
       function renderAlternativaProjectionElement(el, plannedSendCount) {
         if (!el) return;
         const rules = resolveAlternativaDispatchRules();
-        const activated = Number(alternativaNumbersSummary?.activatedCount ?? 0);
+        const activated = resolveAlternativaActiveInstanceCountForProjection();
         const projection = computeClientAlternativaDurationEstimate(plannedSendCount, activated);
         if (!plannedSendCount || plannedSendCount < 1) {
           el.hidden = true;
@@ -16962,6 +16986,15 @@
       }
 
       function assertAlternativaReadyForDispatch() {
+        if (!isAlternativaNumbersPurchaseEnabled()) {
+          const selected = getActiveDisSelectedInstanceValues();
+          if (!selected.length) {
+            throw new Error(
+              "Selecione ao menos uma instância do Aquecedor com Disparador ativo antes de enviar."
+            );
+          }
+          return;
+        }
         const rules = resolveAlternativaDispatchRules();
         const activated = Number(alternativaNumbersSummary?.activatedCount ?? 0);
         if (activated < rules.minActivatedForSend) {
@@ -17297,6 +17330,20 @@
       }
 
       async function loadAlternativaNumbersSummary() {
+        if (!isAlternativaNumbersPurchaseEnabled()) {
+          alternativaNumbersSummary = {
+            purchaseEnabled: false,
+            purchasedSlots: 0,
+            activatedCount: 0,
+            availableSlots: 0,
+            activations: [],
+            fazendaPool: { items: [], availableToClaim: [], assignedToSubscriber: [] },
+            canPickNumbers: false,
+            canSend: false,
+          };
+          applyAlternativaNumbersPurchaseUi();
+          return alternativaNumbersSummary;
+        }
         if (!isDisparoEvoUi()) return null;
         try {
           const response = await fetch("/billing/alternativa-numbers/summary", {
@@ -30479,7 +30526,7 @@
           return;
         }
 
-        const showFazendaColumn = hasMasterAccess();
+        const showFazendaColumn = hasMasterAccess() && isAlternativaNumbersPurchaseEnabled();
         const table = document.createElement("table");
         table.className = "instances-table";
         table.innerHTML = `
@@ -35062,6 +35109,7 @@
       }
 
       initWabaAuthUi();
+      applyAlternativaNumbersPurchaseUi();
       initAdminSubscribersUi();
       initAdminFinanceiroUi();
       initAdminCampanhasUi();

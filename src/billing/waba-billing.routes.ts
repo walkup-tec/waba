@@ -1,11 +1,13 @@
 import type { Express, Request } from "express";
 import { readWabaSessionCookie, resolveSessionRole, verifyWabaSessionToken } from "../auth/waba-auth.service";
 import { WABA_ENV } from "../load-env";
+import { isAlternativaNumbersPurchaseEnabled } from "../config/waba-feature-flags";
 import { AsaasTransferAuthService } from "./asaas-transfer-auth.service";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaBillingService } from "./waba-billing.service";
 import { WabaAlternativaNumbersService } from "./waba-alternativa-numbers.service";
 import { WabaDisparosCreditsService } from "./waba-disparos-credits.service";
+import { getAlternativaDispatchRulesMeta } from "../disparos/alternativa-dispatch-rules";
 
 const orderRepository = new WabaBillingOrderRepository();
 const billingService = new WabaBillingService(orderRepository);
@@ -127,9 +129,12 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.get("/billing/alternativa-numbers/config", (_req, res) => {
+    const purchaseEnabled = isAlternativaNumbersPurchaseEnabled();
     return res.status(200).json({
       ...alternativaNumbersService.getPricing(),
       paymentConfigured: billingService.getDisparosConfig().paymentConfigured,
+      purchaseEnabled,
+      featureFlags: { alternativaNumbersPurchase: purchaseEnabled },
     });
   });
 
@@ -138,8 +143,23 @@ export const registerWabaBillingRoutes = (app: Express) => {
     if (!auth.email) {
       return res.status(401).json({ error: "Faça login para consultar seus números." });
     }
+    if (!isAlternativaNumbersPurchaseEnabled()) {
+      return res.status(200).json({
+        purchaseEnabled: false,
+        ...alternativaNumbersService.getPricing(),
+        dispatchRules: getAlternativaDispatchRulesMeta(),
+        purchasedSlots: 0,
+        activatedCount: 0,
+        availableSlots: 0,
+        activations: [],
+        fazendaPool: { items: [], availableToClaim: [], assignedToSubscriber: [] },
+        canPickNumbers: false,
+        canSend: false,
+      });
+    }
     try {
-      return res.status(200).json(await alternativaNumbersService.getSummaryAsync(auth.email));
+      const summary = await alternativaNumbersService.getSummaryAsync(auth.email);
+      return res.status(200).json({ ...summary, purchaseEnabled: true });
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Erro ao consultar números da fazenda.",
@@ -148,6 +168,9 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
+    if (!isAlternativaNumbersPurchaseEnabled()) {
+      return res.status(403).json({ error: "Compra de números indisponível neste ambiente." });
+    }
     try {
       const auth = resolveRequestAuth(req);
       if (!auth.email) {
@@ -172,6 +195,9 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.post("/billing/alternativa-numbers/activate", async (req, res) => {
+    if (!isAlternativaNumbersPurchaseEnabled()) {
+      return res.status(403).json({ error: "Ativação de números da fazenda indisponível neste ambiente." });
+    }
     try {
       const auth = resolveRequestAuth(req);
       if (!auth.email) {

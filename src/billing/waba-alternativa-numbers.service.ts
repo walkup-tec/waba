@@ -17,6 +17,25 @@ export const ALTERNATIVA_NUMBER_MAX_QUANTITY = 20;
 
 const normalizeEmail = (value: string): string => String(value ?? "").trim().toLowerCase();
 
+let alternativaSummaryReplenishHook: ((email: string) => Promise<void>) | null = null;
+let alternativaSummaryPostProcessHook:
+  | ((summary: Record<string, unknown>, email: string) => Promise<Record<string, unknown>>)
+  | null = null;
+
+export function configureAlternativaNumbersSummaryReplenish(
+  hook: ((email: string) => Promise<void>) | null
+): void {
+  alternativaSummaryReplenishHook = hook;
+}
+
+export function configureAlternativaSummaryPostProcess(
+  hook:
+    | ((summary: Record<string, unknown>, email: string) => Promise<Record<string, unknown>>)
+    | null
+): void {
+  alternativaSummaryPostProcessHook = hook;
+}
+
 
 
 export class WabaAlternativaNumbersService {
@@ -79,17 +98,26 @@ export class WabaAlternativaNumbersService {
 
   async getSummaryAsync(email: string) {
 
+    const normalized = normalizeEmail(email);
+    if (alternativaSummaryReplenishHook && normalized.includes("@")) {
+      try {
+        await alternativaSummaryReplenishHook(normalized);
+      } catch {
+        /* segue com snapshot atual */
+      }
+    }
+
     const purchasedSlots = this.getPurchasedSlots(email);
 
     const activations = this.activationRepository.listForEmail(email);
 
-    const activatedCount = activations.length;
+    const activatedCount = this.activationRepository.countForEmail(email);
 
     const availableSlots = Math.max(0, purchasedSlots - activatedCount);
 
     const fazendaPool = await wabaFazendaPoolService.buildPoolForSubscriber(email);
 
-    return {
+    const summary = {
 
       ...this.getPricing(),
 
@@ -106,11 +134,13 @@ export class WabaAlternativaNumbersService {
       availableSlots,
 
       activations: activations.map((row) => ({
-
         instanceName: row.instanceName,
-
         activatedAt: row.activatedAt,
-
+        status: row.status === "blocked" ? "blocked" : "active",
+        blockedAt: row.blockedAt ?? null,
+        replacedByInstanceName: row.replacedByInstanceName ?? null,
+        replacesInstanceName: row.replacesInstanceName ?? null,
+        replacementScope: row.replacementScope ?? null,
       })),
 
       fazendaPool: {
@@ -125,6 +155,11 @@ export class WabaAlternativaNumbersService {
 
     };
 
+    if (alternativaSummaryPostProcessHook) {
+      return (await alternativaSummaryPostProcessHook(summary, normalized)) as typeof summary;
+    }
+
+    return summary;
   }
 
 

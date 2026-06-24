@@ -335,7 +335,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         updatedAt: now,
       });
 
-      if (!isMaster && plannedSendCount > 0) {
+      if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
         disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
       }
 

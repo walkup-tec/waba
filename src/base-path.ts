@@ -28,6 +28,10 @@ export function requestUnderBasePath(req: Request): boolean {
 
 export type WabaUiProfile = "production" | "full" | "baseline";
 
+export type WabaClientFeatureFlags = {
+  alternativaNumbersPurchase: boolean;
+};
+
 function buildBasePathScript(basePath: string): string {
   const safe = basePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   return `<meta name="waba-base-path" content="${basePath}" />
@@ -49,11 +53,13 @@ window.WABA_BASE_PATH="${safe}";
 
 export function injectRuntimeIntoIndexHtml(
   html: string,
-  opts: { basePath: string; uiProfile: WabaUiProfile }
+  opts: { basePath: string; uiProfile: WabaUiProfile; featureFlags?: WabaClientFeatureFlags }
 ): string {
+  const featureFlagsJson = JSON.stringify(opts.featureFlags ?? { alternativaNumbersPurchase: false });
   const injection = [
     opts.basePath ? buildBasePathScript(opts.basePath) : "",
     `<script>window.WABA_UI_PROFILE="${opts.uiProfile}";</script>`,
+    `<script>window.WABA_FEATURE_FLAGS=${featureFlagsJson};</script>`,
   ]
     .filter(Boolean)
     .join("\n");

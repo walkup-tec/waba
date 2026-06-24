@@ -47,8 +47,16 @@ import {
 } from "./shortener/waba-shortener.service";
 import { WabaSystemUserService } from "./users/waba-system-user.service";
 import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intake.routes";
+import {
+  resolveSubscriberDispatchesApiKindFromOrders,
+  type WabaDispatchesApiKind,
+} from "./disparos/waba-dispatches-api-kind";
 import { countSpreadsheetImportedRows } from "./disparos/waba-campaign-spreadsheet.util";
 import { WabaDisparosCreditsService } from "./billing/waba-disparos-credits.service";
+import {
+  getWabaFeatureFlagsForClient,
+  isAlternativaNumbersPurchaseEnabled,
+} from "./config/waba-feature-flags";
 import { registerWabaEntitlementRoutes } from "./entitlements/waba-entitlement.routes";
 import { WabaEntitlementService } from "./entitlements/waba-entitlement.service";
 import { registerWabaCors } from "./lib/waba-cors";
@@ -387,6 +395,7 @@ app.get("/health", (_req, res) => {
     deployMarker: WABA_DEPLOY_MARKER,
     wabaEnv: WABA_ENV,
     uiProfile: resolveUiProfile(),
+    featureFlags: getWabaFeatureFlagsForClient(),
     basePath: BASE_PATH || "/",
     port: PORT,
     maintenanceMode: MAINTENANCE_MODE,
@@ -3490,15 +3499,44 @@ function applyAlternativaDispatchProfile(config: DisparosConfig): DisparosConfig
   };
 }
 
+async function resolveDispatchCreditsApiKindForOwner(
+  ownerEmail: string
+): Promise<WabaDispatchesApiKind> {
+  const normalized = String(ownerEmail || "").trim().toLowerCase();
+  if (!normalized.includes("@")) return "oficial";
+  const summary = disparosCreditsService.getCreditsSummary(normalized);
+  if (summary.activeApiKind === "alternativa") return "alternativa";
+  if (summary.byApi.alternativa.remainingShipments > 0) return "alternativa";
+  if (isAlternativaNumbersPurchaseEnabled()) {
+    const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+    const activated = alternativaActivationRepository.listForEmail(normalized).length;
+    if (purchased > 0 || activated > 0) return "alternativa";
+  }
+  return resolveSubscriberDispatchesApiKindFromOrders(normalized);
+}
+
+function debitsDisparosCreditsOnCampaignCreate(apiKind: WabaDispatchesApiKind): boolean {
+  return apiKind === "oficial";
+}
+
+function debitsDisparosCreditsPerSuccessfulSend(apiKind: WabaDispatchesApiKind): boolean {
+  return apiKind === "alternativa";
+}
+
 async function shouldApplyAlternativaDispatchProfile(email: string): Promise<boolean> {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized.includes("@")) return false;
-  const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
-  const activated = alternativaActivationRepository.listForEmail(normalized).length;
-  return purchased > 0 || activated > 0;
+  if (isAlternativaNumbersPurchaseEnabled()) {
+    const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+    const activated = alternativaActivationRepository.listForEmail(normalized).length;
+    if (purchased > 0 || activated > 0) return true;
+  }
+  const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(normalized);
+  return creditsApiKind === "alternativa";
 }
 
 async function assertAlternativaDispatchReady(email: string): Promise<void> {
+  if (!isAlternativaNumbersPurchaseEnabled()) return;
   const normalized = String(email || "").trim().toLowerCase();
   if (!(await shouldApplyAlternativaDispatchProfile(normalized))) return;
   const activated = alternativaActivationRepository.listForEmail(normalized).length;
@@ -4072,6 +4110,7 @@ function sendIndexHtml(res: express.Response) {
   const html = injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
     basePath: BASE_PATH,
     uiProfile: resolveUiProfile(),
+    featureFlags: getWabaFeatureFlagsForClient(),
   });
   res.type("html").send(html);
 }
@@ -9207,7 +9246,27 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   recordInstanceDailySend(instancePick.instancia);
   const ownerEmail = String(campaign.ownerEmail || "").trim();
   if (ownerEmail) {
-    disparosCreditsService.recordShipmentConsumed(ownerEmail, 1);
+    const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+    if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
+      disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
+      if (
+        !disparosCreditsService.isMasterUnlimited(ownerEmail) &&
+        disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0
+      ) {
+        campaign.status = "paused";
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          try {
+            await (supabase.from("disparos_campaigns" as any) as any)
+              .update({ status: "paused" })
+              .eq("id", campaign.id);
+          } catch {
+            /* */
+          }
+        }
+        queuePersistDisparosLocalState();
+      }
+    }
   }
   await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
     shortUrl: lead.shortUrl || null,
@@ -9392,8 +9451,10 @@ app.post(
     }
 
     let plannedSendCount = importedLineCount;
+    let creditsApiKind: WabaDispatchesApiKind = "oficial";
     if (ownerEmail && !disparosCreditsService.isMasterUnlimited(ownerEmail)) {
-      const remaining = disparosCreditsService.getCreditsSummary(ownerEmail).remainingShipments;
+      creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+      const remaining = disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind);
       if (remaining <= 0) {
         return res.status(400).json({
           error:
@@ -9407,7 +9468,9 @@ app.post(
           error: "Não há números válidos suficientes na planilha para os envios disponíveis.",
         });
       }
-      disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length);
+      if (debitsDisparosCreditsOnCampaignCreate(creditsApiKind)) {
+        disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length, creditsApiKind);
+      }
     }
 
     if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
