@@ -13,6 +13,10 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-21
+
+**WABA — Revert fix Preparando:** pedido usuário; `git revert cd9de58` (a90a466). Lifecycle voltou ao comportamento original. Ver `doc/LOG-2026-06-21__revert-lifecycle-preparando-fix.md`.
+
 2026-06-24
 
 **WABA — Login Mozart produção:** conta só no V02; promote pendente no Easypanel. Ver `doc/LOG-2026-06-24__mozart-login-producao-assinante-nao-migrado.md`.
