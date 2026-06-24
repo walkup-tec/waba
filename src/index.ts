@@ -28,7 +28,6 @@ import { WabaAlternativaNumbersService } from "./billing/waba-alternativa-number
 import {
   assertAlternativaMinActivated,
   computeAlternativaThrottle,
-  DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
   estimateAlternativaCampaignDuration,
   getAlternativaDispatchRulesMeta,
 } from "./disparos/alternativa-dispatch-rules";
@@ -47,8 +46,16 @@ import {
 } from "./shortener/waba-shortener.service";
 import { WabaSystemUserService } from "./users/waba-system-user.service";
 import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intake.routes";
+import {
+  resolveSubscriberDispatchesApiKindFromOrders,
+  type WabaDispatchesApiKind,
+} from "./disparos/waba-dispatches-api-kind";
 import { countSpreadsheetImportedRows } from "./disparos/waba-campaign-spreadsheet.util";
 import { WabaDisparosCreditsService } from "./billing/waba-disparos-credits.service";
+import {
+  getWabaFeatureFlagsForClient,
+  isAlternativaNumbersPurchaseEnabled,
+} from "./config/waba-feature-flags";
 import { registerWabaEntitlementRoutes } from "./entitlements/waba-entitlement.routes";
 import { WabaEntitlementService } from "./entitlements/waba-entitlement.service";
 import { registerWabaCors } from "./lib/waba-cors";
@@ -67,16 +74,18 @@ import {
   startInboundValidation,
 } from "./instance-inbound-validation.service";
 import {
-  detectAndMarkRestrictionFromSend,
-  filterAquecedorCycleConnected,
-  canAquecedorInstanceSendToday,
-  filterInstancesLifecycleReady,
+  beginAquecedorMeshSession,
+  endAquecedorMeshSession,
+  getAquecedorMeshConfirmDetail,
+  handleAquecedorMeshWebhook,
+  isAquecedorMeshPairConfirmed,
+  registerAquecedorMeshPending,
+} from "./services/aquecedor-mesh-validation.service";
+import {
   getAquecedorLifecycleStatusMap,
-  markAquecedorInstanceRestricted,
-  recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
-  syncAquecedorPreparingPromotions,
 } from "./services/aquecedor-instance-lifecycle.service";
+import { getAquecedorWarmthMapForInstances } from "./services/aquecedor-instance-warmth.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 
 const app = express();
@@ -387,6 +396,7 @@ app.get("/health", (_req, res) => {
     deployMarker: WABA_DEPLOY_MARKER,
     wabaEnv: WABA_ENV,
     uiProfile: resolveUiProfile(),
+    featureFlags: getWabaFeatureFlagsForClient(),
     basePath: BASE_PATH || "/",
     port: PORT,
     maintenanceMode: MAINTENANCE_MODE,
@@ -667,10 +677,6 @@ async function persistInstanceUsage(
 setIntegrationProbeFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
-    await markAquecedorInstanceRestricted(
-      status.sourceInstance,
-      status.apiTest.detail || "Restrição detectada no teste de integração.",
-    );
     const usageMap = await loadInstanceUsageMap();
     const current = getInstanceUsageFromMap(usageMap, status.sourceInstance);
     await persistInstanceUsage([
@@ -686,10 +692,6 @@ setIntegrationProbeFinishedHandler((status) => {
 setInboundValidationFinishedHandler((status) => {
   if (!status.restrictionSuspected) return;
   void (async () => {
-    await markAquecedorInstanceRestricted(
-      status.instanceName,
-      status.sendTest.detail || "Restrição detectada na validação inbound.",
-    );
     const usageMap = await loadInstanceUsageMap();
     const current = getInstanceUsageFromMap(usageMap, status.instanceName);
     await persistInstanceUsage([
@@ -1053,12 +1055,6 @@ function buildAquecedorPairKey(instanciaA: string, instanciaB: string): string {
   return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
 }
 
-function buildAquecedorDirectedKey(instanciaOrigem: string, instanciaDestino: string): string {
-  const origem = String(instanciaOrigem || "").trim().toLowerCase();
-  const destino = String(instanciaDestino || "").trim().toLowerCase();
-  return `${origem}→${destino}`;
-}
-
 function buildAquecedorNumberToInstanceMap(
   connected: Array<{ instancia: string; numero: string }>,
   canonicalMap: Map<string, string>,
@@ -1210,8 +1206,6 @@ type AquecedorPairConversationState = {
 type AquecedorTurnManager = {
   canonicalMap: Map<string, string>;
   totalEvents: number;
-  /** Últimos envios direcionados (mais recente primeiro): origem→destino */
-  recentDirectedEdges: string[];
   canSendDirected: (origemRaw: string, destinoRaw: string) => boolean;
   owesPairReply: (origemRaw: string, destinoRaw: string) => boolean;
   describeBlockReason: (origemRaw: string, destinoRaw: string) => string;
@@ -1288,12 +1282,6 @@ async function loadAquecedorTurnManager(
     } else {
       pairState.pendingReplyFrom = ev.toInst;
     }
-  }
-
-  const recentDirectedEdges: string[] = [];
-  for (let i = events.length - 1; i >= 0 && recentDirectedEdges.length < 32; i -= 1) {
-    const ev = events[i];
-    recentDirectedEdges.push(buildAquecedorDirectedKey(ev.fromInst, ev.toInst));
   }
 
   const owesPairReply = (origemRaw: string, destinoRaw: string): boolean => {
@@ -1376,32 +1364,6 @@ async function loadAquecedorTurnManager(
     const destStats = instanceStats.get(destino.toLowerCase());
     score += (destStats?.sendCount || 0) * 1_000;
 
-    const directedKey = buildAquecedorDirectedKey(origem, destino);
-    const recentIdx = recentDirectedEdges.indexOf(directedKey);
-    if (recentIdx >= 0) {
-      score += (recentIdx + 1) * 750_000;
-    }
-    if (recentDirectedEdges.length > 0) {
-      const lastDirected = recentDirectedEdges[0];
-      const lastParts = lastDirected.split("→");
-      const lastOrig = lastParts[0] || "";
-      const lastDest = lastParts[1] || "";
-      if (origem.toLowerCase() === lastOrig) {
-        score += 250_000;
-      }
-      if (destino.toLowerCase() === lastDest) {
-        score += 120_000;
-      }
-    }
-
-    const sentAtMs = stats?.lastSentAt ? new Date(stats.lastSentAt).getTime() : 0;
-    if (sentAtMs > 0) {
-      const idleMinutes = Math.max(0, (Date.now() - sentAtMs) / 60_000);
-      score -= Math.min(80_000, Math.floor(idleMinutes * 2_000));
-    } else {
-      score -= 90_000;
-    }
-
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
     score += rotation;
     return score;
@@ -1410,7 +1372,6 @@ async function loadAquecedorTurnManager(
   return {
     canonicalMap,
     totalEvents: events.length,
-    recentDirectedEdges,
     canSendDirected,
     owesPairReply,
     describeBlockReason,
@@ -2161,8 +2122,8 @@ const AQUECEDOR_DEFAULTS = {
   ] as Array<{ days: string[]; startHour: number; endHour: number }>,
   janelaAtivaMinutos: 60,
   pausaMinutos: 14,
-  waitMinSeconds: 300,
-  waitMaxSeconds: 900,
+  waitMinSeconds: 180,
+  waitMaxSeconds: 480,
 };
 
 type AquecedorConfig = typeof AQUECEDOR_DEFAULTS;
@@ -2221,9 +2182,6 @@ type CampaignInstanceHealth = {
   disconnectedCount: number;
   disconnectedPercent: number;
   shouldPauseByDisconnectedRatio: boolean;
-  minConnectedRequired: number;
-  needsMoreInstancesForMinimum: boolean;
-  missingConnectedForMinimum: number;
 };
 
 type LeadFailureKind = "invalid_phone" | "destination_error" | "send_error";
@@ -2506,6 +2464,46 @@ type AquecedorRuntimeStatus = {
   lastEvoError: { status: number; body: string; instance: string; numeroLen: number } | null;
 };
 
+type AquecedorMeshBootstrapPhase = "idle" | "running" | "passed" | "failed";
+
+type AquecedorMeshBootstrapMode = "full" | "hub-spoke";
+
+type AquecedorMeshBootstrapStatus = {
+  phase: AquecedorMeshBootstrapPhase;
+  startedAt: string | null;
+  finishedAt: string | null;
+  instanceCount: number;
+  totalPairs: number;
+  completedPairs: number;
+  okCount: number;
+  failCount: number;
+  failures: Array<{ origem: string; destino: string; detail: string }>;
+  userLogMessage: string | null;
+  technicalSummary: string | null;
+  mode: AquecedorMeshBootstrapMode | null;
+  hubInstance: string | null;
+  estimatedDurationSeconds: number;
+};
+
+function createIdleAquecedorMeshBootstrap(): AquecedorMeshBootstrapStatus {
+  return {
+    phase: "idle",
+    startedAt: null,
+    finishedAt: null,
+    instanceCount: 0,
+    totalPairs: 0,
+    completedPairs: 0,
+    okCount: 0,
+    failCount: 0,
+    failures: [],
+    userLogMessage: null,
+    technicalSummary: null,
+    mode: null,
+    hubInstance: null,
+    estimatedDurationSeconds: 0,
+  };
+}
+
 const aquecedorRuntime: AquecedorRuntimeStatus = {
   running: false,
   isProcessing: false,
@@ -2514,6 +2512,8 @@ const aquecedorRuntime: AquecedorRuntimeStatus = {
   lastResult: null,
   lastEvoError: null,
 };
+
+let aquecedorMeshBootstrap: AquecedorMeshBootstrapStatus = createIdleAquecedorMeshBootstrap();
 
 let aquecedorInterval: NodeJS.Timeout | null = null;
 let aquecedorRuntimeOwnerEmail: string | null = null;
@@ -2687,6 +2687,7 @@ function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
     connectedSummaryAt: aquecedorConnectedSummaryCache.at
       ? new Date(aquecedorConnectedSummaryCache.at).toISOString()
       : null,
+    meshBootstrap: aquecedorMeshBootstrap,
   };
 }
 
@@ -2762,6 +2763,7 @@ async function loadAquecedorRuntimeIntent(): Promise<AquecedorRuntimeIntent> {
 
 function stopAquecedorRuntimeLocal(): void {
   aquecedorRuntime.running = false;
+  aquecedorMeshBootstrap = createIdleAquecedorMeshBootstrap();
   if (aquecedorInterval) {
     clearInterval(aquecedorInterval);
     aquecedorInterval = null;
@@ -2907,28 +2909,17 @@ async function saveAquecedorConfigRecord(
 }
 
 async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<void> {
-  try {
-    const name = String(instanceName || "").trim();
-    if (!name) return;
-    const usageMap = await loadInstanceUsageMap();
-    if (!getInstanceUsageFromMap(usageMap, name)) {
-      await persistInstanceUsage([
-        {
-          instanceName: name,
-          useAquecedor: true,
-          useDisparador: true,
-        },
-      ]);
-    }
-    const cache = await loadEvoInstancesCache();
-    const cacheRow = (cache?.items || []).find(
-      (row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase(),
-    );
-    const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
-    await registerAquecedorInstancePreparing(name, preparingSince);
-  } catch (error) {
-    console.warn("[Aquecedor] ensureAquecedorInstanceRegistered:", error);
-  }
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  const usageMap = await loadInstanceUsageMap();
+  if (getInstanceUsageFromMap(usageMap, name)) return;
+  await persistInstanceUsage([
+    {
+      instanceName: name,
+      useAquecedor: true,
+      useDisparador: true,
+    },
+  ]);
 }
 
 async function syncAquecedorConnectedInstances(
@@ -2959,11 +2950,6 @@ async function syncAquecedorConnectedInstances(
 
   if (toRegister.length) {
     await persistInstanceUsage(toRegister);
-    for (const row of toRegister) {
-      if (row.useAquecedor) {
-        await registerAquecedorInstancePreparing(row.instanceName);
-      }
-    }
   }
 }
 
@@ -3490,15 +3476,44 @@ function applyAlternativaDispatchProfile(config: DisparosConfig): DisparosConfig
   };
 }
 
+async function resolveDispatchCreditsApiKindForOwner(
+  ownerEmail: string
+): Promise<WabaDispatchesApiKind> {
+  const normalized = String(ownerEmail || "").trim().toLowerCase();
+  if (!normalized.includes("@")) return "oficial";
+  const summary = disparosCreditsService.getCreditsSummary(normalized);
+  if (summary.activeApiKind === "alternativa") return "alternativa";
+  if (summary.byApi.alternativa.remainingShipments > 0) return "alternativa";
+  if (isAlternativaNumbersPurchaseEnabled()) {
+    const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+    const activated = alternativaActivationRepository.listForEmail(normalized).length;
+    if (purchased > 0 || activated > 0) return "alternativa";
+  }
+  return resolveSubscriberDispatchesApiKindFromOrders(normalized);
+}
+
+function debitsDisparosCreditsOnCampaignCreate(apiKind: WabaDispatchesApiKind): boolean {
+  return apiKind === "oficial";
+}
+
+function debitsDisparosCreditsPerSuccessfulSend(apiKind: WabaDispatchesApiKind): boolean {
+  return apiKind === "alternativa";
+}
+
 async function shouldApplyAlternativaDispatchProfile(email: string): Promise<boolean> {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized.includes("@")) return false;
-  const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
-  const activated = alternativaActivationRepository.listForEmail(normalized).length;
-  return purchased > 0 || activated > 0;
+  if (isAlternativaNumbersPurchaseEnabled()) {
+    const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
+    const activated = alternativaActivationRepository.listForEmail(normalized).length;
+    if (purchased > 0 || activated > 0) return true;
+  }
+  const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(normalized);
+  return creditsApiKind === "alternativa";
 }
 
 async function assertAlternativaDispatchReady(email: string): Promise<void> {
+  if (!isAlternativaNumbersPurchaseEnabled()) return;
   const normalized = String(email || "").trim().toLowerCase();
   if (!(await shouldApplyAlternativaDispatchProfile(normalized))) return;
   const activated = alternativaActivationRepository.listForEmail(normalized).length;
@@ -3578,6 +3593,540 @@ async function loadAquecedorEffectiveConfig(): Promise<AquecedorConfig> {
   return record.useRecommended !== false ? AQUECEDOR_DEFAULTS : record.customConfig;
 }
 
+const AQUECEDOR_MESH_HUB_SPOKE_MIN_INSTANCES = 7;
+const AQUECEDOR_MESH_SEND_GAP_MS = 700;
+const AQUECEDOR_MESH_VERIFY_SETTLE_MS = 5000;
+const AQUECEDOR_MESH_VERIFY_RETRY_GAP_MS = 3000;
+const AQUECEDOR_MESH_VERIFY_ATTEMPTS = 6;
+const AQUECEDOR_MESH_VERIFY_RETRY_ATTEMPTS = 4;
+const AQUECEDOR_MESH_VERIFY_CONCURRENCY = 2;
+
+type AquecedorMeshPlan = {
+  pairs: Array<{
+    origem: { instancia: string; numero: string };
+    destino: { instancia: string; numero: string };
+  }>;
+  mode: AquecedorMeshBootstrapMode;
+  hubInstance: string | null;
+  estimatedDurationSeconds: number;
+};
+
+function estimateAquecedorMeshDurationSeconds(
+  instanceCount: number,
+  pairCount: number,
+  mode: AquecedorMeshBootstrapMode,
+): number {
+  const n = Math.max(2, instanceCount);
+  const gapSec = AQUECEDOR_MESH_SEND_GAP_MS / 1000;
+  const sendPerMsgSec = 2;
+  const maxSequentialFromOneOrigin =
+    mode === "hub-spoke" ? n - 1 : Math.max(1, n - 1);
+  const sendPhaseSec = Math.ceil(maxSequentialFromOneOrigin * (sendPerMsgSec + gapSec)) + 2;
+  const settleSec = AQUECEDOR_MESH_VERIFY_SETTLE_MS / 1000;
+  const verifySec = 4 + AQUECEDOR_MESH_VERIFY_ATTEMPTS * 2;
+  const retryBuffer = pairCount > 12 ? 6 : 4;
+  return sendPhaseSec + settleSec + verifySec + retryBuffer;
+}
+
+function buildAquecedorMeshPlan(
+  connected: Array<{ instancia: string; numero: string }>,
+): AquecedorMeshPlan {
+  const sorted = [...connected].sort((a, b) =>
+    a.instancia.localeCompare(b.instancia, "pt-BR"),
+  );
+  const n = sorted.length;
+  const empty: AquecedorMeshPlan = {
+    pairs: [],
+    mode: "full",
+    hubInstance: null,
+    estimatedDurationSeconds: 0,
+  };
+  if (n < 2) return empty;
+
+  const useHubSpoke = n >= AQUECEDOR_MESH_HUB_SPOKE_MIN_INSTANCES;
+  const pairs: AquecedorMeshPlan["pairs"] = [];
+
+  if (useHubSpoke) {
+    const hub = sorted[0];
+    for (const other of sorted) {
+      if (other.instancia.toLowerCase() === hub.instancia.toLowerCase()) continue;
+      pairs.push({ origem: other, destino: hub });
+      pairs.push({ origem: hub, destino: other });
+    }
+    return {
+      pairs,
+      mode: "hub-spoke",
+      hubInstance: hub.instancia,
+      estimatedDurationSeconds: estimateAquecedorMeshDurationSeconds(n, pairs.length, "hub-spoke"),
+    };
+  }
+
+  for (const origem of sorted) {
+    for (const destino of sorted) {
+      if (origem.instancia.toLowerCase() === destino.instancia.toLowerCase()) continue;
+      pairs.push({ origem, destino });
+    }
+  }
+  return {
+    pairs,
+    mode: "full",
+    hubInstance: null,
+    estimatedDurationSeconds: estimateAquecedorMeshDurationSeconds(n, pairs.length, "full"),
+  };
+}
+
+async function mapAquecedorPool<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!items.length) return [];
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, limit), items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+async function refreshAquecedorConnectedNumbersFromEvoLive(
+  connected: Array<{ instancia: string; numero: string }>,
+): Promise<Array<{ instancia: string; numero: string }>> {
+  const evoList = await fetchEvoInstancesList();
+  if (!evoList.ok) return connected;
+  const liveRows = buildConnectedFromEvoResponse(evoList.instances);
+  const aliasesMap = await loadInstanceAliasesMap();
+  const liveByKey = new Map<string, string>();
+  for (const row of liveRows) {
+    liveByKey.set(row.instancia.toLowerCase(), row.numero);
+    const alias = mapGetInsensitive(aliasesMap, row.instancia);
+    if (alias) liveByKey.set(alias.toLowerCase(), row.numero);
+    for (const [technical, aliasName] of aliasesMap.entries()) {
+      if (aliasName.toLowerCase() === row.instancia.toLowerCase()) {
+        liveByKey.set(technical.toLowerCase(), row.numero);
+      }
+    }
+  }
+  return connected.map((row) => {
+    const liveNum = liveByKey.get(row.instancia.toLowerCase());
+    return liveNum ? { ...row, numero: liveNum } : row;
+  });
+}
+
+type AquecedorMeshPairWork = {
+  origem: string;
+  destino: string;
+  sendOk: boolean;
+  verifyOk: boolean;
+  ok: boolean;
+  detail: string;
+  status: number;
+  texto: string;
+  sendStartedAtMs: number;
+  numeroDestino: string;
+  numeroOrigem: string;
+};
+
+async function sendAquecedorMeshPairOnly(input: {
+  origem: { instancia: string; numero: string };
+  destino: { instancia: string; numero: string };
+}): Promise<AquecedorMeshPairWork> {
+  const { origem, destino } = input;
+  const deliveryTag = buildAquecedorDeliveryTag();
+  const texto = appendAquecedorDeliveryTag(
+    `Validação aquecedor ${origem.instancia}→${destino.instancia}.`,
+    deliveryTag,
+  );
+  const evoOrigemCandidates = await resolveEvoInstanceNameCandidates(origem.instancia);
+  const numeroDestino = resolveAquecedorInstanceDigits(destino.numero);
+  const numeroOrigem = resolveAquecedorInstanceDigits(origem.numero);
+  const base: AquecedorMeshPairWork = {
+    origem: origem.instancia,
+    destino: destino.instancia,
+    sendOk: false,
+    verifyOk: false,
+    ok: false,
+    detail: "",
+    status: 0,
+    texto,
+    sendStartedAtMs: Date.now(),
+    numeroDestino,
+    numeroOrigem,
+  };
+  if (!numeroDestino) {
+    return { ...base, detail: "Número destino inválido." };
+  }
+  if (!numeroOrigem) {
+    return { ...base, detail: "Número origem inválido." };
+  }
+
+  let sendResult: Awaited<ReturnType<typeof callEvoSendTextWithRetry>> | null = null;
+  let usedDestinoNumber = numeroDestino;
+  const sendTargets = buildAquecedorSendNumberCandidates(destino.numero);
+  for (const evoOrigem of evoOrigemCandidates) {
+    const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, evoOrigem);
+    for (const targetNumber of sendTargets) {
+      const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
+        ? { number: targetNumber, textMessage: { text: texto } }
+        : { number: targetNumber, text: texto, textMessage: { text: texto } };
+      base.sendStartedAtMs = Date.now();
+      sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
+      if (sendResult.ok) {
+        usedDestinoNumber = resolveAquecedorInstanceDigits(targetNumber);
+        break;
+      }
+    }
+    if (sendResult?.ok) break;
+  }
+
+  const meshMarker = extractAquecedorMessageMarker(texto);
+  registerAquecedorMeshPending({
+    marker: meshMarker,
+    destInstance: destino.instancia,
+    origInstance: origem.instancia,
+    origDigits: numeroOrigem,
+    sendStartedAtMs: base.sendStartedAtMs,
+  });
+
+  if (!sendResult?.ok) {
+    const evoDetail =
+      sendResult?.json?.message ||
+      (Array.isArray(sendResult?.json?.message) ? sendResult?.json.message[0] : null) ||
+      sendResult?.json?.error ||
+      (typeof sendResult?.json?.detail === "string" ? sendResult?.json.detail : null) ||
+      (sendResult?.body && sendResult.body.length < 160 ? sendResult.body : null);
+    const detail = evoDetail ? String(evoDetail).slice(0, 140) : `HTTP ${sendResult?.status || 0}`;
+    return { ...base, detail, status: sendResult?.status || 0 };
+  }
+
+  return {
+    ...base,
+    sendOk: true,
+    status: sendResult.status,
+    detail: "",
+    numeroDestino: usedDestinoNumber,
+  };
+}
+
+async function verifyAquecedorMeshPairSent(
+  work: AquecedorMeshPairWork,
+  maxAttempts = AQUECEDOR_MESH_VERIFY_ATTEMPTS,
+): Promise<{ ok: boolean; detail: string }> {
+  if (!work.sendOk) {
+    return { ok: false, detail: work.detail || "Envio não realizado." };
+  }
+  const marker = extractAquecedorMessageMarker(work.texto);
+  const origDigitKeys = buildAquecedorComparableDigitKeys(work.numeroOrigem);
+  const minTimestampMs = work.sendStartedAtMs - 30_000;
+  const destinoCandidates = await resolveEvoInstanceNameCandidates(work.destino);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (attempt > 1) await sleepMs(2000);
+    if (isAquecedorMeshPairConfirmed(marker)) {
+      return { ok: true, detail: getAquecedorMeshConfirmDetail(marker) };
+    }
+    const tsFilter = attempt === maxAttempts ? undefined : minTimestampMs;
+    const globalHit = await probeAquecedorDeliveryGlobalSearch(
+      destinoCandidates,
+      marker,
+      origDigitKeys,
+      tsFilter,
+    );
+    if (globalHit) {
+      return { ok: true, detail: "" };
+    }
+  }
+
+  return verifyAquecedorMessageDelivered(work.destino, work.numeroOrigem, work.texto, {
+    instanciaOrigem: work.origem,
+    numeroDestino: work.numeroDestino,
+    sendStartedAtMs: work.sendStartedAtMs,
+    maxAttempts: 3,
+    timestampGraceMs: 30_000,
+    skipInitialDelay: true,
+    attemptIntervalMs: 2000,
+    relaxTimestampOnLastAttempt: true,
+  });
+}
+
+function groupAquecedorMeshPairsByOrigin(
+  pairs: Array<{
+    origem: { instancia: string; numero: string };
+    destino: { instancia: string; numero: string };
+  }>,
+): Array<typeof pairs> {
+  const byOrigin = new Map<string, typeof pairs>();
+  for (const pair of pairs) {
+    const key = pair.origem.instancia.toLowerCase();
+    const bucket = byOrigin.get(key);
+    if (bucket) bucket.push(pair);
+    else byOrigin.set(key, [pair]);
+  }
+  return Array.from(byOrigin.values());
+}
+
+async function executeAquecedorMeshPairSend(input: {
+  origem: { instancia: string; numero: string };
+  destino: { instancia: string; numero: string };
+}): Promise<{ ok: boolean; detail: string; status: number }> {
+  const sent = await sendAquecedorMeshPairOnly(input);
+  if (!sent.sendOk) {
+    return { ok: false, detail: sent.detail, status: sent.status };
+  }
+  const deliveryCheck = await verifyAquecedorMeshPairSent(sent, 8);
+  if (!deliveryCheck.ok) {
+    return { ok: false, detail: deliveryCheck.detail, status: sent.status };
+  }
+  return { ok: true, detail: "", status: sent.status };
+}
+
+function buildAquecedorMeshSuccessUserMessage(instanceCount: number): string {
+  const n = Math.max(1, Math.floor(instanceCount));
+  const instLabel = n === 1 ? "1 instância" : `${n} instâncias`;
+  return `Todas as ${instLabel} estão funcionando perfeitamente bem. Ciclo iniciando.`;
+}
+
+function buildAquecedorMeshFailureUserMessage(
+  _instanceCount: number,
+  _failures: Array<{ origem: string; destino: string; detail: string }>,
+): string {
+  return "Teste falhou. Verifique se as instâncias estão integradas corretamente e pause o Aquecedor. Após isso, inicie o Aquecedor novamente.";
+}
+
+function buildAquecedorMeshFailureTechnicalSummary(
+  instanceCount: number,
+  failures: Array<{ origem: string; destino: string; detail: string }>,
+): string {
+  const n = Math.max(1, Math.floor(instanceCount));
+  const instLabel = n === 1 ? "1 instância" : `${n} instâncias`;
+  if (!failures.length) {
+    return `Validação técnica: nem todas as ${instLabel} confirmaram envio e recebimento via EVO.`;
+  }
+  const sample = failures
+    .slice(0, 5)
+    .map((row) => `${row.origem}→${row.destino} (${row.detail.slice(0, 80)})`)
+    .join("; ");
+  const extra = failures.length > 5 ? ` (+${failures.length - 5} pares)` : "";
+  return `Validação técnica: pares com erro (${instLabel} no ciclo): ${sample}${extra}.`;
+}
+
+function summarizeAquecedorMeshFailures(
+  instanceCount: number,
+  failures: Array<{ origem: string; destino: string; detail: string }>,
+): string {
+  return buildAquecedorMeshFailureUserMessage(instanceCount, failures);
+}
+
+async function runAquecedorStartupMeshValidation(
+  connectedInput: Array<{ instancia: string; numero: string }>,
+): Promise<boolean> {
+  const connected = await refreshAquecedorConnectedNumbersFromEvoLive(connectedInput);
+  updateAquecedorConnectedSummary(connected);
+  const meshPlan = buildAquecedorMeshPlan(connected);
+  const { pairs, mode, hubInstance, estimatedDurationSeconds } = meshPlan;
+  if (pairs.length === 0) {
+    const userLogMessage = buildAquecedorMeshSuccessUserMessage(connected.length);
+    aquecedorMeshBootstrap = {
+      ...createIdleAquecedorMeshBootstrap(),
+      phase: "passed",
+      finishedAt: new Date().toISOString(),
+      instanceCount: connected.length,
+      userLogMessage,
+      mode,
+      hubInstance,
+      estimatedDurationSeconds,
+    };
+    aquecedorRuntime.lastResult = userLogMessage;
+    return true;
+  }
+
+  const modeLabel =
+    mode === "hub-spoke" && hubInstance
+      ? `hub ${hubInstance} (escala ${connected.length} inst.)`
+      : "todas↔todas";
+
+  aquecedorMeshBootstrap = {
+    phase: "running",
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    instanceCount: connected.length,
+    totalPairs: pairs.length,
+    completedPairs: 0,
+    okCount: 0,
+    failCount: 0,
+    failures: [],
+    userLogMessage: null,
+    technicalSummary: null,
+    mode,
+    hubInstance,
+    estimatedDurationSeconds,
+  };
+  aquecedorRuntime.lastResult = `Validação inicial (${modeLabel}): ${pairs.length} pares, ~${estimatedDurationSeconds}s estimados…`;
+  aquecedorRuntime.lastEvoError = null;
+  beginAquecedorMeshSession();
+  try {
+  const bumpMeshProgress = () => {
+    aquecedorMeshBootstrap = {
+      ...aquecedorMeshBootstrap,
+      completedPairs: aquecedorMeshBootstrap.completedPairs + 1,
+    };
+    if (shouldThisProcessLeadAquecedor(aquecedorPersistedBundle)) {
+      void persistAquecedorRuntimeSnapshot({
+        workerId: getAquecedorWorkerId(),
+        workerHeartbeatAt: new Date().toISOString(),
+      });
+    }
+  };
+
+  const originGroups = groupAquecedorMeshPairsByOrigin(pairs);
+  const sentWorks: AquecedorMeshPairWork[] = [];
+
+  await Promise.all(
+    originGroups.map(async (originPairs) => {
+      for (let index = 0; index < originPairs.length; index += 1) {
+        const work = await sendAquecedorMeshPairOnly(originPairs[index]);
+        sentWorks.push(work);
+        bumpMeshProgress();
+        if (index < originPairs.length - 1) {
+          await sleepMs(AQUECEDOR_MESH_SEND_GAP_MS);
+        }
+      }
+    }),
+  );
+
+  const sentOk = sentWorks.filter((row) => row.sendOk).length;
+  aquecedorRuntime.lastResult = `Validação inicial: confirmando entrega de ${sentOk}/${pairs.length} envios (~${Math.max(5, estimatedDurationSeconds - Math.round((Date.now() - new Date(aquecedorMeshBootstrap.startedAt || Date.now()).getTime()) / 1000))}s restantes)…`;
+  await sleepMs(AQUECEDOR_MESH_VERIFY_SETTLE_MS);
+
+  aquecedorMeshBootstrap = {
+    ...aquecedorMeshBootstrap,
+    completedPairs: 0,
+  };
+
+  const verifiedWorks: AquecedorMeshPairWork[] = await mapAquecedorPool(
+    sentWorks,
+    AQUECEDOR_MESH_VERIFY_CONCURRENCY,
+    async (work) => {
+      if (!work.sendOk) return work;
+      const deliveryCheck = await verifyAquecedorMeshPairSent(work, AQUECEDOR_MESH_VERIFY_ATTEMPTS);
+      bumpMeshProgress();
+      return {
+        ...work,
+        verifyOk: deliveryCheck.ok,
+        ok: deliveryCheck.ok,
+        detail: deliveryCheck.ok ? "" : deliveryCheck.detail,
+      };
+    },
+  );
+
+  for (const work of verifiedWorks) {
+    if (work.ok || !work.sendOk) continue;
+    await sleepMs(AQUECEDOR_MESH_VERIFY_RETRY_GAP_MS);
+    const retry = await verifyAquecedorMeshPairSent(work, AQUECEDOR_MESH_VERIFY_RETRY_ATTEMPTS);
+    if (retry.ok) {
+      work.verifyOk = true;
+      work.ok = true;
+      work.detail = "";
+    }
+  }
+
+  const failures: Array<{ origem: string; destino: string; detail: string }> = [];
+  let okCount = 0;
+  aquecedorMeshBootstrap = {
+    ...aquecedorMeshBootstrap,
+    completedPairs: pairs.length,
+    okCount: 0,
+    failCount: 0,
+  };
+
+  for (const work of verifiedWorks) {
+    if (work.ok) {
+      okCount += 1;
+      aquecedorMeshBootstrap = { ...aquecedorMeshBootstrap, okCount };
+      await recordAquecedorEnvio({
+        instanciaOrigem: work.origem,
+        instanciaDestino: work.destino,
+        status: "Envio com Sucesso",
+      });
+    } else {
+      failures.push({
+        origem: work.origem,
+        destino: work.destino,
+        detail: work.detail || (work.sendOk ? "Entrega não confirmada no destino." : "Falha no envio EVO."),
+      });
+      aquecedorMeshBootstrap = {
+        ...aquecedorMeshBootstrap,
+        failCount: aquecedorMeshBootstrap.failCount + 1,
+      };
+    }
+  }
+
+  if (failures.length) {
+    const userLogMessage = buildAquecedorMeshFailureUserMessage(connected.length, failures);
+    const technicalSummary = buildAquecedorMeshFailureTechnicalSummary(connected.length, failures);
+    const first = failures[0];
+    console.warn(
+      "[Aquecedor] mesh bootstrap falhou:",
+      failures.slice(0, 6).map((row) => `${row.origem}→${row.destino}: ${row.detail}`).join(" | "),
+    );
+    aquecedorRuntime.lastEvoError = {
+      status: 0,
+      body: first.detail.slice(0, 500),
+      instance: first.destino,
+      numeroLen: resolveAquecedorInstanceDigits(
+        connected.find((c) => c.instancia === first.destino)?.numero || "",
+      ).length,
+    };
+    aquecedorMeshBootstrap = {
+      phase: "failed",
+      startedAt: aquecedorMeshBootstrap.startedAt,
+      finishedAt: new Date().toISOString(),
+      instanceCount: connected.length,
+      totalPairs: pairs.length,
+      completedPairs: pairs.length,
+      okCount,
+      failCount: failures.length,
+      failures: failures.slice(0, 30),
+      userLogMessage,
+      technicalSummary,
+      mode,
+      hubInstance,
+      estimatedDurationSeconds,
+    };
+    aquecedorRuntime.lastResult = userLogMessage;
+    return false;
+  }
+
+  const userLogMessage = buildAquecedorMeshSuccessUserMessage(connected.length);
+  aquecedorMeshBootstrap = {
+    phase: "passed",
+    startedAt: aquecedorMeshBootstrap.startedAt,
+    finishedAt: new Date().toISOString(),
+    instanceCount: connected.length,
+    totalPairs: pairs.length,
+    completedPairs: pairs.length,
+    okCount,
+    failCount: 0,
+    failures: [],
+    userLogMessage,
+    technicalSummary: null,
+    mode,
+    hubInstance,
+    estimatedDurationSeconds,
+  };
+
+  aquecedorRuntime.lastEvoError = null;
+  aquecedorRuntime.lastResult = userLogMessage;
+  return true;
+  } finally {
+    endAquecedorMeshSession();
+  }
+}
 
 async function runAquecedorCycleTestBatch(
   connected: Array<{ instancia: string; numero: string }>,
@@ -3706,15 +4255,8 @@ async function runAquecedorCycle(forceTest = false) {
     }
 
     const resolved = await resolveAquecedorConnectedForOwner(aquecedorRuntimeOwnerEmail);
-    const connectedAll = resolved.connected;
-    const connected = await filterAquecedorCycleConnected(connectedAll);
+    const connected = resolved.connected;
     updateAquecedorConnectedSummary(connected);
-
-    const preparingCount = Math.max(0, connectedAll.length - connected.length);
-    if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
-      aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
-      return;
-    }
 
     if (connected.length < 2) {
       const analysis = await analyzeAquecedorInstances(aquecedorRuntimeOwnerEmail);
@@ -3753,6 +4295,22 @@ async function runAquecedorCycle(forceTest = false) {
       .lt("processing_at", cutoffStuck));
 
     await syncAquecedorConnectedInstances(supabase, connected);
+
+    if (!forceTest) {
+      if (aquecedorMeshBootstrap.phase === "failed") {
+        aquecedorRuntime.lastResult =
+          aquecedorMeshBootstrap.userLogMessage ||
+          summarizeAquecedorMeshFailures(
+            aquecedorMeshBootstrap.instanceCount,
+            aquecedorMeshBootstrap.failures,
+          );
+        return;
+      }
+      if (aquecedorMeshBootstrap.phase !== "passed") {
+        const passed = await runAquecedorStartupMeshValidation(connected);
+        if (!passed) return;
+      }
+    }
 
     const combinations: Array<{
       instancia_origem: string;
@@ -3806,16 +4364,6 @@ async function runAquecedorCycle(forceTest = false) {
     }
 
     const chosen = picked.chosen;
-
-    const dailyQuota = await canAquecedorInstanceSendToday(chosen.instancia_origem);
-    if (!dailyQuota.ok) {
-      aquecedorRuntime.nextAllowedAt = new Date(
-        Date.now() + config.waitMaxSeconds * 1000,
-      ).toISOString();
-      aquecedorRuntime.lastResult = `${chosen.instancia_origem}: ${dailyQuota.reason}`;
-      return;
-    }
-
     const proximo = picked.index + 1;
     const pairContext = buildAquecedorPairContext(chosen, connected);
 
@@ -3909,12 +4457,6 @@ async function runAquecedorCycle(forceTest = false) {
         sendResult.json?.error ||
         (typeof sendResult.json?.detail === "string" ? sendResult.json.detail : null) ||
         (sendResult.body && sendResult.body.length < 200 ? sendResult.body : null);
-      const detailStr = evoDetail ? String(evoDetail) : String(sendResult.body || "");
-      await detectAndMarkRestrictionFromSend(
-        chosen.instancia_origem,
-        sendResult.status,
-        detailStr,
-      );
       const detail = evoDetail ? ` (${String(evoDetail).slice(0, 120)})` : "";
       aquecedorRuntime.lastResult = `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`;
       aquecedorRuntime.lastEvoError = {
@@ -3972,7 +4514,6 @@ async function runAquecedorCycle(forceTest = false) {
       instanciaDestino: chosen.instancia_destino,
       status: "Envio com Sucesso",
     });
-    await recordAquecedorInstanceDailySend(chosen.instancia_origem);
 
     const nextPick = await pickAquecedorCombinationAsync(
       supabase,
@@ -4018,6 +4559,7 @@ function startAquecedorRuntimeLocal(): void {
     return;
   }
   if (aquecedorInterval) return;
+  aquecedorMeshBootstrap = createIdleAquecedorMeshBootstrap();
   aquecedorRuntime.running = true;
   aquecedorInterval = setInterval(() => {
     if (!aquecedorRuntime.running) return;
@@ -4072,6 +4614,7 @@ function sendIndexHtml(res: express.Response) {
   const html = injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
     basePath: BASE_PATH,
     uiProfile: resolveUiProfile(),
+    featureFlags: getWabaFeatureFlagsForClient(),
   });
   res.type("html").send(html);
 }
@@ -4609,6 +5152,10 @@ app.get("/instancias/uso-config", async (req, res) => {
       }
     }
     const lifecycleMap = await getAquecedorLifecycleStatusMap();
+    const warmthMap = await getAquecedorWarmthMapForInstances(
+      Array.from(usageMap.keys()),
+      getSupabaseClient()
+    );
     const auth = resolveWabaRequestAuth(req);
     const allowed = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(
       auth,
@@ -4619,6 +5166,7 @@ app.get("/instancias/uso-config", async (req, res) => {
       .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
       .map(([instanceName, cfg]) => {
         const lifecycle = lifecycleMap[instanceName.toLowerCase()];
+        const warmth = warmthMap[instanceName.toLowerCase()];
         return {
           instanceName,
           ...cfg,
@@ -4626,6 +5174,8 @@ app.get("/instancias/uso-config", async (req, res) => {
           aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
           aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
           aquecedorPromoteAt: lifecycle?.promoteAt ?? null,
+          warmthLevel: warmth?.level ?? 0,
+          warmthLabel: warmth?.label ?? "Não aquecido",
         };
       });
     return res.json({ items });
@@ -4663,16 +5213,7 @@ app.post("/instancias/uso-config", async (req, res) => {
     if (!sanitized.length) {
       return res.status(400).json({ error: "Nenhuma instância válida foi informada." });
     }
-    const usageMapBefore = await loadInstanceUsageMap();
     await persistInstanceUsage(sanitized);
-    for (const row of sanitized) {
-      if (row.useAquecedor !== false) {
-        const prev = getInstanceUsageFromMap(usageMapBefore, row.instanceName);
-        if (!prev || prev.useAquecedor === false) {
-          await registerAquecedorInstancePreparing(row.instanceName);
-        }
-      }
-    }
     return res.json({ ok: true, message: "Configuração de uso das instâncias salva.", items: sanitized });
   } catch {
     return res.status(500).json({ error: "Erro ao salvar configuração de uso das instâncias." });
@@ -4682,6 +5223,7 @@ app.post("/instancias/uso-config", async (req, res) => {
 app.post("/webhooks/evolution", (req, res) => {
   try {
     handleEvolutionWebhookPayload(req.body);
+    handleAquecedorMeshWebhook(req.body);
     handleInboundValidationWebhook(req.body);
     return res.json({ ok: true });
   } catch (error) {
@@ -5351,99 +5893,13 @@ function getCampaignInstanceHealth(
     selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
   const shouldPauseByDisconnectedRatio =
     selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
-  const minConnectedRequired = DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES;
-  const needsMoreInstancesForMinimum = connectedCount < minConnectedRequired;
-  const missingConnectedForMinimum = Math.max(0, minConnectedRequired - connectedCount);
   return {
     selectedCount,
     connectedCount,
     disconnectedCount,
     disconnectedPercent,
     shouldPauseByDisconnectedRatio,
-    minConnectedRequired,
-    needsMoreInstancesForMinimum,
-    missingConnectedForMinimum,
   };
-}
-
-function resolveUsageFromMap(
-  usageMap: Map<string, InstanceUsageConfig>,
-  instanceName: string
-): InstanceUsageConfig | undefined {
-  const key = String(instanceName || "").trim();
-  if (!key) return undefined;
-  const direct = usageMap.get(key);
-  if (direct) return direct;
-  const target = key.toLowerCase();
-  for (const [mapKey, value] of usageMap.entries()) {
-    if (mapKey.toLowerCase() === target) return value;
-  }
-  return undefined;
-}
-
-async function filterDisparadorInstancesReadyForAuth(
-  auth: ReturnType<typeof resolveWabaRequestAuth>,
-  names: string[]
-): Promise<string[]> {
-  const allowed = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, names);
-  return filterInstancesLifecycleReady(allowed);
-}
-
-async function resolveAutoInstancesForCampaign(
-  auth: ReturnType<typeof resolveWabaRequestAuth>,
-  config: DisparosConfig | undefined | null,
-  evoRows: EvoInstanceTagRow[],
-  maxToAdd: number
-): Promise<string[]> {
-  if (maxToAdd <= 0) return [];
-
-  const prevSelected = new Set(
-    (Array.isArray(config?.selectedDisparadorInstances) ? config.selectedDisparadorInstances : [])
-      .map((n) => String(n || "").trim().toLowerCase())
-      .filter(Boolean)
-  );
-
-  const connectedByKey = new Map<string, EvoInstanceTagRow>();
-  for (const row of evoRows) {
-    const key = String(row.instanceKey || "").trim().toLowerCase();
-    if (key && row.connected === true) {
-      connectedByKey.set(key, row);
-    }
-  }
-
-  const usageMap = await loadInstanceUsageMap();
-  const activationRepository = new AlternativaNumberActivationRepository();
-  const email = String(auth.email || "").trim().toLowerCase();
-  const activations = email.includes("@") ? activationRepository.listForEmail(email) : [];
-  const activationKeys = new Set(
-    activations.map((row) => String(row.instanceName || "").trim().toLowerCase()).filter(Boolean)
-  );
-
-  const purchasedConnected: string[] = [];
-  const aquecedorConnected: string[] = [];
-
-  for (const row of activations) {
-    const name = String(row.instanceName || "").trim();
-    const key = name.toLowerCase();
-    if (!name || prevSelected.has(key) || !connectedByKey.has(key)) continue;
-    purchasedConnected.push(name);
-  }
-
-  const ownedCandidates = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(
-    auth,
-    Array.from(connectedByKey.values()).map((row) => row.instanceKey)
-  );
-  for (const name of ownedCandidates) {
-    const key = String(name || "").trim().toLowerCase();
-    if (!key || prevSelected.has(key) || activationKeys.has(key)) continue;
-    const usage = resolveUsageFromMap(usageMap, name);
-    if (usage?.useAquecedor === false) continue;
-    aquecedorConnected.push(String(name).trim());
-  }
-
-  const ordered = Array.from(new Set([...purchasedConnected, ...aquecedorConnected]));
-  const allowed = await filterDisparadorInstancesReadyForAuth(auth, ordered);
-  return allowed.slice(0, maxToAdd);
 }
 
 function describeEvoQrFailure(
@@ -5788,6 +6244,137 @@ function resolveAquecedorInstanceDigits(raw: string): string {
   return prefix.replace(/\D/g, "");
 }
 
+function buildAquecedorComparableDigitKeys(raw: string): Set<string> {
+  const digits = resolveAquecedorInstanceDigits(raw);
+  const out = new Set<string>();
+  if (!digits) return out;
+  out.add(digits);
+  if (digits.startsWith("55") && digits.length > 11) out.add(digits.slice(2));
+  if (digits.startsWith("1") && digits.length >= 11) out.add(digits.slice(1));
+  if (digits.length > 10) out.add(digits.slice(-10));
+  if (digits.length > 11) out.add(digits.slice(-11));
+  const brLegacy = normalizeWhatsAppNumber(raw);
+  if (brLegacy && brLegacy !== digits) out.add(brLegacy);
+  return out;
+}
+
+function buildAquecedorSendNumberCandidates(raw: string): string[] {
+  const digits = resolveAquecedorInstanceDigits(raw);
+  if (!digits) return [];
+  const out: string[] = [];
+  const push = (value: string) => {
+    const v = String(value || "").trim();
+    if (v && !out.includes(v)) out.push(v);
+  };
+  push(digits);
+  push(`${digits}@s.whatsapp.net`);
+  if (digits.length === 10) {
+    push(`1${digits}`);
+    push(`55${digits}`);
+    push(`1${digits}@s.whatsapp.net`);
+    push(`55${digits}@s.whatsapp.net`);
+  }
+  if (digits.length === 11 && !digits.startsWith("1")) {
+    push(`55${digits}`);
+    push(`55${digits}@s.whatsapp.net`);
+  }
+  if (digits.startsWith("55") && digits.length > 11) {
+    push(digits.slice(2));
+    push(`${digits.slice(2)}@s.whatsapp.net`);
+  }
+  if (digits.startsWith("1") && digits.length >= 11) {
+    push(digits.slice(1));
+    push(`${digits.slice(1)}@s.whatsapp.net`);
+  }
+  const brLegacy = normalizeWhatsAppNumber(raw);
+  if (brLegacy && brLegacy !== digits) {
+    push(brLegacy);
+    push(`${brLegacy}@s.whatsapp.net`);
+  }
+  return out;
+}
+
+function aquecedorRemoteJidMatchesDigitKeys(remoteJid: string, digitKeys: Set<string>): boolean {
+  const jidDigits = String(remoteJid || "").split("@")[0].replace(/\D/g, "");
+  if (!jidDigits) return false;
+  if (digitKeys.has(jidDigits)) return true;
+  for (const key of buildAquecedorComparableDigitKeys(jidDigits)) {
+    if (digitKeys.has(key)) return true;
+  }
+  return false;
+}
+
+function findAquecedorInboundDeliveryHit(
+  payload: unknown,
+  marker: string,
+  origDigitKeys: Set<string>,
+  minTimestampMs?: number,
+): boolean {
+  const hits: Array<{ remoteJid: string; ts: number | null }> = [];
+  const walk = (node: unknown, depth = 0): void => {
+    if (depth > 14 || node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    const fromMe = extractAquecedorFromMe(obj);
+    const key = obj.key as Record<string, unknown> | undefined;
+    const remoteJid = String(
+      key?.remoteJid || key?.remoteJidAlt || obj.remoteJid || obj.chatId || "",
+    ).trim();
+    const texts: string[] = [];
+    collectEvoChatMessageTexts(obj.message ?? obj, texts);
+    const needle = marker.toLowerCase();
+    const textOk = texts.some((text) => text.toLowerCase().includes(needle));
+    if (
+      fromMe === false &&
+      textOk &&
+      remoteJid &&
+      !remoteJid.includes("@g.us") &&
+      aquecedorRemoteJidMatchesDigitKeys(remoteJid, origDigitKeys)
+    ) {
+      hits.push({ remoteJid, ts: extractAquecedorMessageTimestampMs(obj) });
+    }
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === "object") walk(value, depth + 1);
+    }
+  };
+  walk(payload);
+  if (!hits.length) return false;
+  if (minTimestampMs == null) return true;
+  return hits.some((hit) => hit.ts == null || hit.ts >= minTimestampMs);
+}
+
+async function probeAquecedorDeliveryGlobalSearch(
+  instanceCandidates: string[],
+  marker: string,
+  origDigitKeys: Set<string>,
+  minTimestampMs?: number,
+): Promise<boolean> {
+  for (const instanceName of instanceCandidates) {
+    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
+    const bodies: Array<Record<string, unknown>> = [
+      { limit: 50 },
+      { take: 50 },
+      { limit: 80 },
+      {},
+    ];
+    for (const body of bodies) {
+      const result = await callEvoAction(url, "POST", body, {
+        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 25000),
+        retries: 1,
+      });
+      if (!result.ok) continue;
+      if (findAquecedorInboundDeliveryHit(result.json, marker, origDigitKeys, minTimestampMs)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function toAquecedorRemoteJid(num: string): string {
   const digits = resolveAquecedorInstanceDigits(String(num || "").trim());
   return digits ? `${digits}@s.whatsapp.net` : "";
@@ -5990,7 +6577,7 @@ async function verifyAquecedorMessageDelivered(
     numeroDestino?: string;
     sendStartedAtMs?: number;
     maxAttempts?: number;
-    /** Margem extra antes do envio ao filtrar timestamp (relógio EVO). */
+    /** Margem extra antes do envio ao filtrar timestamp (mesh / relógio EVO). */
     timestampGraceMs?: number;
     skipInitialDelay?: boolean;
     attemptIntervalMs?: number;
@@ -6547,48 +7134,19 @@ function tryExtractQrCode(payload: any): string | null {
   return visit(payload);
 }
 
-type EvoQrFetchOptions = {
-  timeoutMs?: number;
-  retries?: number;
-  /** Logout/restart na EVO antes do connect (instância já existente desconectada). */
-  prepareSession?: boolean;
-};
-
-async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<void> {
-  const enc = encodeURIComponent(String(instanceName || "").trim());
-  if (!enc) return;
-  const steps: Array<{ url: string; method: "DELETE" | "POST" }> = [
-    { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
-    { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
-  ];
-  for (const step of steps) {
-    await callEvoAction(step.url, step.method, undefined, {
-      timeoutMs: 12000,
-      retries: 1,
-    });
-  }
-}
-
 async function fetchInstanceQrCodeFromEvo(
   instanceName: string,
   number = "",
-  options: EvoQrFetchOptions = {},
 ): Promise<
   | { ok: true; qrCode: string; providerResponse: unknown }
   | { ok: false; lastQrStatus: number; lastQrDetail: string }
 > {
-  const timeoutMs = options.timeoutMs ?? defaultEvoHttpTimeoutMs();
-  const retries = options.retries ?? 3;
-  if (options.prepareSession !== false) {
-    await prepareEvoInstanceForQrConnect(instanceName);
-  }
-
-  const enc = encodeURIComponent(instanceName);
   const connectCandidates: Array<{ url: string; method: "GET" | "POST" }> = [
-    { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "GET" as const },
     { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" as const },
-    { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "POST" as const },
-    { url: `${EVO_API_BASE}/instance/qrcode/${enc}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/qrcode/${encodeURIComponent(instanceName)}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/qr/${encodeURIComponent(instanceName)}`, method: "GET" as const },
+    { url: `${EVO_API_BASE}/instance/connect/${encodeURIComponent(instanceName)}`, method: "POST" as const },
   ].filter((candidate) => candidate.url);
 
   let lastQrStatus = 0;
@@ -6600,8 +7158,8 @@ async function fetchInstanceQrCodeFromEvo(
       : candidate.url;
 
     const result = await callEvoAction(targetUrl, candidate.method, undefined, {
-      timeoutMs,
-      retries,
+      timeoutMs: defaultEvoHttpTimeoutMs(),
+      retries: 3,
     });
     lastQrStatus = result.status;
     lastQrDetail = String(result.body || result.error || "").slice(0, 400);
@@ -6791,8 +7349,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     let qrFromCreate: string | null = null;
     for (const createUrl of createUrls) {
       const createResult = await callEvoAction(createUrl, "POST", createPayload, {
-        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 25000),
-        retries: 2,
+        timeoutMs: defaultEvoHttpTimeoutMs(),
+        retries: 3,
       });
       lastCreateStatus = createResult.status;
       lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
@@ -6827,11 +7385,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
       });
     }
 
-    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
-      timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000),
-      retries: 2,
-      prepareSession: true,
-    });
+    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number);
     if (!qrFetch.ok) {
       return res.status(502).json({
         error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
@@ -8156,7 +8710,7 @@ app.get("/disparos/config", async (req, res) => {
   try {
     const config = await loadDisparosConfigFromDb();
     const auth = resolveWabaRequestAuth(req);
-    const selectedDisparadorInstances = await filterDisparadorInstancesReadyForAuth(
+    const selectedDisparadorInstances = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
       auth,
       Array.isArray(config.selectedDisparadorInstances) ? config.selectedDisparadorInstances : []
     );
@@ -8204,7 +8758,7 @@ app.post("/disparos/config", async (req, res) => {
     }
     config = {
       ...config,
-      selectedDisparadorInstances: await filterDisparadorInstancesReadyForAuth(
+      selectedDisparadorInstances: await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
         auth,
         config.selectedDisparadorInstances
       ),
@@ -9207,7 +9761,27 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   recordInstanceDailySend(instancePick.instancia);
   const ownerEmail = String(campaign.ownerEmail || "").trim();
   if (ownerEmail) {
-    disparosCreditsService.recordShipmentConsumed(ownerEmail, 1);
+    const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+    if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
+      disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
+      if (
+        !disparosCreditsService.isMasterUnlimited(ownerEmail) &&
+        disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0
+      ) {
+        campaign.status = "paused";
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          try {
+            await (supabase.from("disparos_campaigns" as any) as any)
+              .update({ status: "paused" })
+              .eq("id", campaign.id);
+          } catch {
+            /* */
+          }
+        }
+        queuePersistDisparosLocalState();
+      }
+    }
   }
   await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
     shortUrl: lead.shortUrl || null,
@@ -9228,7 +9802,7 @@ async function runCampaignDispatchTick(): Promise<void> {
   const running = disparosCampaignsMemory.filter((c) => c.status === "running");
   for (const c of running) {
     const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
-    if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
+    if (health.shouldPauseByDisconnectedRatio) {
       c.status = "paused";
       const supabase = getSupabaseClient();
       if (supabase) {
@@ -9392,8 +9966,10 @@ app.post(
     }
 
     let plannedSendCount = importedLineCount;
+    let creditsApiKind: WabaDispatchesApiKind = "oficial";
     if (ownerEmail && !disparosCreditsService.isMasterUnlimited(ownerEmail)) {
-      const remaining = disparosCreditsService.getCreditsSummary(ownerEmail).remainingShipments;
+      creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+      const remaining = disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind);
       if (remaining <= 0) {
         return res.status(400).json({
           error:
@@ -9407,7 +9983,9 @@ app.post(
           error: "Não há números válidos suficientes na planilha para os envios disponíveis.",
         });
       }
-      disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length);
+      if (debitsDisparosCreditsOnCampaignCreate(creditsApiKind)) {
+        disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length, creditsApiKind);
+      }
     }
 
     if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
@@ -9539,8 +10117,7 @@ app.get("/disparos/campanhas", async (req, res) => {
     const buildCampaignRuntimeStage = (
       item: { id: string; status: string },
       configSnapshot: DisparosConfig | undefined,
-      nowSp: Date,
-      instanceHealth?: CampaignInstanceHealth
+      nowSp: Date
     ): CampaignRuntimeStage => {
       const st = String(item.status || "").toLowerCase();
       if (st === "finished") {
@@ -9552,15 +10129,10 @@ app.get("/disparos/campanhas", async (req, res) => {
         };
       }
       if (st === "paused") {
-        const pausedByHealthRule =
-          instanceHealth?.shouldPauseByDisconnectedRatio === true ||
-          instanceHealth?.needsMoreInstancesForMinimum === true;
         return {
           phase: "paused",
           label: "Pausada",
-          detail: pausedByHealthRule
-            ? "Pausa manual ou automática por regra de saúde."
-            : "Campanha pausada manualmente.",
+          detail: "Pausa manual ou automática por regra de saúde.",
           fillPercent: 100,
         };
       }
@@ -9705,7 +10277,7 @@ app.get("/disparos/campanhas", async (req, res) => {
     const evoRows = await fetchEvoInstanceTagRowsForRequest(req);
     const globalDisparos = await loadDisparosConfigFromDb();
     const auth = resolveWabaRequestAuth(req);
-    const globalSelected = await filterDisparadorInstancesReadyForAuth(
+    const globalSelected = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
       auth,
       Array.isArray(globalDisparos.selectedDisparadorInstances)
         ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
@@ -9729,23 +10301,29 @@ app.get("/disparos/campanhas", async (req, res) => {
               evoRows
             )
           : snapshotTags;
-        const instanceHealth = getCampaignInstanceHealth(
-          useGlobal
-            ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
-            : configByCampaignId.get(item.id),
-          evoRows
-        );
+        const selectedCount = tags.length;
+        const connectedCount = tags.filter((t) => t.connected === true).length;
+        const disconnectedCount = Math.max(0, selectedCount - connectedCount);
+        const disconnectedPercent =
+          selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
+        const shouldPauseByDisconnectedRatio =
+          selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
         const runtimeStage = buildCampaignRuntimeStage(
           item,
           configByCampaignId.get(item.id),
-          nowSp,
-          instanceHealth
+          nowSp
         );
         return {
           ...item,
           disparadorInstances: tags,
           disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
-          instanceHealth,
+          instanceHealth: {
+            selectedCount,
+            connectedCount,
+            disconnectedCount,
+            disconnectedPercent,
+            shouldPauseByDisconnectedRatio,
+          },
           runtimeStage,
         };
       });
@@ -10077,17 +10655,10 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
         evoRows = [];
       }
       const health = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
-      if (health.needsMoreInstancesForMinimum) {
-        return res.status(409).json({
-          error: `Campanha bloqueada: são necessários ao menos ${health.minConnectedRequired} números conectados. Você possui ${health.connectedCount}. Use «+ Instâncias» ou compre mais números.`,
-          instanceHealth: health,
-          code: "campaign_min_instances",
-        });
-      }
       if (health.shouldPauseByDisconnectedRatio) {
         return res.status(409).json({
           error:
-            "Campanha bloqueada: 50% ou mais das instâncias selecionadas estão desconectadas. Reconecte as instâncias ou use «+ Instâncias».",
+            "Campanha bloqueada para ativação: 50% ou mais das instâncias selecionadas estão desconectadas. Use o botão '+ Instâncias' para ampliar a base conectada.",
           instanceHealth: health,
         });
       }
@@ -10180,8 +10751,14 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
     if (!id) {
       return res.status(400).json({ error: "Identificador da campanha é obrigatório." });
     }
-    const auth = resolveWabaRequestAuth(req);
-    const auto = req.body?.auto === true;
+    const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
+    const incoming = await wabaFazendaPoolService.filterDisparadorInstancesForAuth(
+      resolveWabaRequestAuth(req),
+      raw.map((n: any) => String(n || "").trim()).filter(Boolean)
+    );
+    if (!incoming.length) {
+      return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
+    }
 
     let campaign = disparosCampaignsMemory.find((c) => c.id === id);
     if (!campaign) {
@@ -10191,50 +10768,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
 
-    let evoRows: EvoInstanceTagRow[] = [];
-    try {
-      evoRows = await fetchEvoInstanceTagRowsForRequest(req);
-    } catch {
-      evoRows = [];
-    }
-
     const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
-    const healthBefore = getCampaignInstanceHealth(prev, evoRows);
-
-    let incoming: string[] = [];
-    if (auto) {
-      if (!healthBefore.needsMoreInstancesForMinimum) {
-        return res.status(400).json({
-          error: "A campanha já possui números conectados suficientes.",
-          instanceHealth: healthBefore,
-        });
-      }
-      incoming = await resolveAutoInstancesForCampaign(
-        auth,
-        prev,
-        evoRows,
-        healthBefore.missingConnectedForMinimum
-      );
-      if (!incoming.length) {
-        return res.status(409).json({
-          error:
-            "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
-          instanceHealth: healthBefore,
-          code: "buy_numbers_required",
-          needsPurchase: true,
-        });
-      }
-    } else {
-      const raw = Array.isArray(req.body?.instanceNames) ? req.body.instanceNames : [];
-      incoming = await filterDisparadorInstancesReadyForAuth(
-        auth,
-        raw.map((n: any) => String(n || "").trim()).filter(Boolean)
-      );
-      if (!incoming.length) {
-        return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
-      }
-    }
-
     const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
       ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
       : [];
@@ -10257,21 +10791,21 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
 
     queuePersistDisparosLocalState();
 
+    let evoRows: EvoInstanceTagRow[] = [];
+    try {
+      evoRows = await fetchEvoInstanceTagRowsForRequest(req);
+    } catch {
+      evoRows = [];
+    }
     const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
-    const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
 
     return res.json({
       ok: true,
       id,
-      auto,
       selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
       addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
       instanceHealth,
-      stillNeedsMore,
-      needsPurchase: stillNeedsMore && incoming.length < healthBefore.missingConnectedForMinimum,
-      message: stillNeedsMore
-        ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda faltam ${instanceHealth.missingConnectedForMinimum} conectado(s). Compre mais números para concluir a campanha.`
-        : "Instâncias adicionadas à campanha. Você já pode ativar novamente.",
+      message: "Instâncias adicionadas à campanha.",
     });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Erro ao adicionar instâncias na campanha." });
@@ -10496,23 +11030,6 @@ app.listen(PORT, () => {
         console.error("[Aquecedor] sync worker:", err),
       );
     }, AQUECEDOR_WORKER_SYNC_MS);
-
-    const AQUECEDOR_PREPARE_PROMOTE_MS = 15_000;
-    setInterval(() => {
-      syncAquecedorPreparingPromotions()
-        .then((promoted) => {
-          if (promoted.length) {
-            console.log(
-              `[Aquecedor] ${promoted.length} instância(s) promovida(s) de Preparando → ativo: ${promoted.join(", ")}`,
-            );
-          }
-        })
-        .catch((err) => console.error("[Aquecedor] promoção Preparando:", err));
-    }, AQUECEDOR_PREPARE_PROMOTE_MS);
-    void syncAquecedorPreparingPromotions();
-    console.log(
-      `[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`,
-    );
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
       if (WABA_ENV === "v01") {

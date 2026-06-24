@@ -13,6 +13,13 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-24
+
+**WABA V02 — Coluna Quente ordem:** primeira coluna Instâncias (paridade produção). Marker `DEPLOY-2026-06-24-instancias-quente-coluna-ordem`. Ver `doc/LOG-2026-06-24__v02-instancias-quente-coluna-ordem.md`.
+2026-06-23
+
+**WABA — Coluna Quente + picker Disparos (2026-06-23):** fogos 0–3 na lista de instâncias e seletor de disparo; filtro 1+/2+/3+; overrides teste V02 em `data/v02/aquecedor-instance-warmth-overrides.json`. Marker `DEPLOY-2026-06-23-instancias-coluna-quente`.
+
 2026-06-22
 
 **WABA — Mozart 3 números Alternativa (V02):** pedido paid `waba-alternativa-numbers` shipmentCount=3. Ver `doc/LOG-2026-06-22__mozart-compra-3-numeros-alternativa-v02.md`.
@@ -1622,3 +1629,4 @@ Palavras-chave para buscar:
 - **Preparando 6h fixas (2026-06-23):** removida fila escalonada (contadores 23h–35h); 6h desde integração; bloqueio disparo+aquecedor; promoção em lote. Ver `doc/LOG-2026-06-23__preparando-6h-sem-fila-escalonada.md`.
 - **Deploy 2026-06-23 (3):** commit `250a080` — preparando 6h fixas.
 - **Aquecedor rotação pares (2026-06-23):** `recentDirectedEdges` + score dinâmico para variar A→B, C→A, B→C. Ver `doc/LOG-2026-06-23__aquecedor-rotacao-pares-dinamica.md`.
+- **Deploy 2026-06-23 (4):** commit `05d6bd3` — aquecedor rotação pares; marker `DEPLOY-2026-06-23-aquecedor-rotacao-pares`. V02 `http://localhost:3012/version-02/`.

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -5507,6 +5507,29 @@
         background: rgba(15, 23, 42, 0.72);
       }
 
+      .instance-warmth {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        min-width: 54px;
+      }
+
+      .instance-warmth-fire {
+        font-size: 0.95rem;
+        line-height: 1;
+        color: #64748b;
+        opacity: 0.45;
+        filter: grayscale(1);
+        user-select: none;
+      }
+
+      .instance-warmth-fire.active {
+        color: #f97316;
+        opacity: 1;
+        filter: none;
+        text-shadow: 0 0 6px rgba(249, 115, 22, 0.45);
+      }
+
       .admin-subscribers-toolbar {
         display: flex;
         align-items: center;
@@ -6508,7 +6531,8 @@
       /* Acima do overlay de “processando planilha” (1300) e demais modais */
       #dis-campaign-rename-overlay,
       #dis-campaign-delete-overlay,
-      #dis-campaign-report-overlay {
+      #dis-campaign-report-overlay,
+      #waba-confirm-overlay {
         z-index: 2200;
       }
 
@@ -6632,6 +6656,11 @@
         font-size: 0.84rem;
         color: #cbd5e1;
         margin-bottom: 10px;
+      }
+
+      .waba-confirm-message {
+        white-space: pre-line;
+        line-height: 1.45;
       }
 
       .confirm-input {
@@ -8666,6 +8695,71 @@
         background: rgba(127, 29, 29, 0.25);
         border-color: rgba(248, 113, 113, 0.35);
       }
+      .alt-fazenda-card.is-blocked {
+        border-color: rgba(248, 113, 113, 0.55);
+        background: rgba(127, 29, 29, 0.22);
+        opacity: 1;
+      }
+      .alt-fazenda-card.is-replacement {
+        border-color: rgba(74, 222, 128, 0.55);
+        background: rgba(6, 78, 59, 0.22);
+      }
+      .alt-fazenda-card.is-replacement-standby {
+        border-color: rgba(96, 165, 250, 0.55);
+        background: rgba(30, 58, 138, 0.28);
+      }
+      .alt-fazenda-card-status-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        flex-shrink: 0;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .alt-fazenda-card-status-icon--blocked {
+        color: #fecaca;
+        background: rgba(239, 68, 68, 0.25);
+        border: 1px solid rgba(248, 113, 113, 0.45);
+      }
+      .alt-fazenda-card-status-icon--replacement {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, 0.2);
+        border: 1px solid rgba(74, 222, 128, 0.45);
+        animation: alt-fazenda-replacement-pulse 1.8s ease-in-out infinite;
+      }
+      .alt-fazenda-card-status-icon--standby {
+        color: #bfdbfe;
+        background: rgba(59, 130, 246, 0.22);
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        animation: alt-fazenda-replacement-pulse 1.8s ease-in-out infinite;
+      }
+      @keyframes alt-fazenda-replacement-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.25);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.08);
+        }
+      }
+      .alt-fazenda-card-badge--blocked {
+        color: #fecaca;
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(248, 113, 113, 0.35);
+      }
+      .alt-fazenda-card-badge--replacement {
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, 0.18);
+        border-color: rgba(74, 222, 128, 0.35);
+      }
+      .alt-fazenda-card-badge--standby {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.18);
+        border-color: rgba(96, 165, 250, 0.35);
+      }
       .alt-fazenda-card-list-empty {
         margin: 0;
         padding: 12px;
@@ -8674,6 +8768,20 @@
         text-align: center;
         border: 1px dashed rgba(148, 163, 184, 0.2);
         border-radius: 10px;
+      }
+      .alt-fazenda-replacement-hint {
+        margin: 0 0 10px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #cbd5e1;
+        background: rgba(30, 64, 102, 0.35);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 10px;
+      }
+      .alt-fazenda-replacement-hint strong {
+        color: #e2e8f0;
+        font-weight: 600;
       }
       .alt-numbers-stats {
         display: grid;
@@ -9769,6 +9877,107 @@
       #dis-selected-instances {
         min-height: 172px;
       }
+
+      .dis-picker-field-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+
+      .dis-picker-field-head > label {
+        margin-bottom: 0;
+      }
+
+      .dis-picker-count {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: #94a3b8;
+      }
+
+      .dis-warmth-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+
+      .dis-warmth-chip {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.55);
+        color: #cbd5e1;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 0.72rem;
+        line-height: 1.3;
+        cursor: pointer;
+      }
+
+      .dis-warmth-chip:hover {
+        border-color: rgba(249, 115, 22, 0.55);
+        color: #f8fafc;
+      }
+
+      .dis-warmth-chip.active {
+        border-color: rgba(249, 115, 22, 0.85);
+        background: rgba(249, 115, 22, 0.18);
+        color: #fdba74;
+      }
+
+      .dis-picker-list {
+        min-height: 172px;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.55);
+        padding: 4px;
+      }
+
+      .dis-picker-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none;
+        color: #e2e8f0;
+        font-size: 0.84rem;
+      }
+
+      .dis-picker-item:hover {
+        background: rgba(30, 64, 102, 0.55);
+      }
+
+      .dis-picker-item.is-selected {
+        background: rgba(46, 228, 160, 0.14);
+        outline: 1px solid rgba(46, 228, 160, 0.45);
+      }
+
+      .dis-picker-item .instance-warmth {
+        min-width: 48px;
+        flex-shrink: 0;
+      }
+
+      .dis-picker-item-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dis-picker-list:empty::before {
+        content: "Nenhum número nesta lista.";
+        display: block;
+        padding: 10px;
+        color: #94a3b8;
+        font-size: 0.8rem;
+      }
+
       @media (max-width: 992px) {
         .dis-number-picker {
           grid-template-columns: 1fr;
@@ -11969,7 +12178,6 @@
             <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Instâncias</div>
-                <span id="instancias-count-label">—</span>
               </div>
 
               <div class="summary-grid">
@@ -12008,10 +12216,6 @@
                     <span class="label">Nova<br />Instância</span>
                   </button>
                 </div>
-              </div>
-
-              <div style="margin-top: 14px" class="muted">
-                Lista (top 100) com o status atual das instâncias.
               </div>
 
               <div class="instances-toolbar">
@@ -12955,16 +13159,32 @@
                       <div id="dis-number-panel-aquecedor">
                         <div class="dis-number-picker">
                           <div class="aquecedor-field">
-                            <label for="dis-available-instances">Números disponíveis</label>
-                            <select id="dis-available-instances" size="8"></select>
+                            <div class="dis-picker-field-head">
+                              <label for="dis-available-instances">
+                                Números disponíveis
+                                <span id="dis-available-instances-count" class="dis-picker-count">0 disponíveis</span>
+                              </label>
+                              <div class="dis-warmth-filter" id="dis-available-warmth-filter" role="group" aria-label="Filtrar por aquecimento">
+                                <button type="button" class="dis-warmth-chip active" data-warmth-level="0">Todos</button>
+                                <button type="button" class="dis-warmth-chip" data-warmth-level="1" title="Pouco aquecido (1 fogo)">1 🔥</button>
+                                <button type="button" class="dis-warmth-chip" data-warmth-level="2" title="Aquecimento médio (2 fogos)">2 🔥</button>
+                                <button type="button" class="dis-warmth-chip" data-warmth-level="3" title="Totalmente aquecido (3 fogos)">3 🔥</button>
+                              </div>
+                            </div>
+                            <div id="dis-available-instances" class="dis-picker-list" role="listbox" tabindex="0" aria-label="Números disponíveis"></div>
                           </div>
                           <div class="dis-number-picker-actions">
                             <button id="dis-add-instance-btn" type="button" class="instance-action-btn enabled">→</button>
                             <button id="dis-remove-instance-btn" type="button" class="instance-action-btn enabled">←</button>
                           </div>
                           <div class="aquecedor-field">
-                            <label for="dis-selected-instances">Números selecionados para disparo</label>
-                            <select id="dis-selected-instances" size="8"></select>
+                            <div class="dis-picker-field-head">
+                              <label for="dis-selected-instances">
+                                Números selecionados para disparo
+                                <span id="dis-selected-instances-count" class="dis-picker-count">0 selecionados</span>
+                              </label>
+                            </div>
+                            <div id="dis-selected-instances" class="dis-picker-list" role="listbox" tabindex="0" aria-label="Números selecionados para disparo"></div>
                           </div>
                         </div>
                         <span class="aquecedor-hint">Clique no número para mover entre disponíveis e selecionados.</span>
@@ -13069,6 +13289,10 @@
                               Refazer seleção
                             </button>
                           </div>
+                          <p class="alt-fazenda-replacement-hint">
+                            <strong>Substituição automática:</strong> offline na campanha → trocado pelo mais aquecido da Fazenda e segue enviando.
+                            Offline fora da campanha → também é reposto, mas só fica vinculado (não entra nos envios).
+                          </p>
                           <div id="alt-fazenda-card-list" class="alt-fazenda-card-list" role="list"></div>
                           <span class="aquecedor-hint" style="margin:0;">
                             Toque em <strong>Ativar</strong> para vincular o número comprado. O selo <strong>✓ Ativo</strong> indica que o número já está vinculado — não precisa clicar nele.
@@ -15244,6 +15468,19 @@
       </div>
     </div>
 
+    </div>
+
+    <div id="waba-confirm-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="waba-confirm-title" style="max-width: 520px">
+        <div class="confirm-title" id="waba-confirm-title">Confirmar</div>
+        <div class="confirm-text waba-confirm-message" id="waba-confirm-message"></div>
+        <div class="confirm-actions">
+          <button id="waba-confirm-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="waba-confirm-ok-btn" class="instance-action-btn btn-qrcode enabled" type="button">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <button
@@ -17150,22 +17387,97 @@
         updateAlternativaPurchaseAlert(summary);
       }
 
+      function resolveFazendaClaimableRows(summary) {
+        const slotsLeft = Math.max(0, Number(summary?.availableSlots ?? 0));
+        const pool = summary?.fazendaPool;
+        const fromApi = Array.isArray(pool?.availableToClaim) ? pool.availableToClaim : [];
+        if (fromApi.length) return fromApi.slice(0, slotsLeft);
+        const allItems = Array.isArray(pool?.items) ? pool.items : [];
+        return allItems
+          .filter((row) => !String(row?.assignedToEmail || "").trim())
+          .filter(
+            (row) =>
+              row?.isOpen !== false &&
+              String(row?.connectionStatus || "").toLowerCase().includes("open")
+          )
+          .slice(0, slotsLeft);
+      }
+
+      function resolveAlternativaCampaignSelectedKeys() {
+        const keys = new Set(
+          (pendingSelectedDisparadorInstances || [])
+            .map((name) => String(name || "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+        const campaigns = Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : [];
+        campaigns.forEach((camp) => {
+          const snapshot = camp?.configSnapshot || camp?.config || {};
+          const selected = Array.isArray(snapshot?.selectedDisparadorInstances)
+            ? snapshot.selectedDisparadorInstances
+            : [];
+          selected.forEach((name) => {
+            const key = String(name || "").trim().toLowerCase();
+            if (key) keys.add(key);
+          });
+        });
+        return keys;
+      }
+
       function renderFazendaCardList() {
         const container = document.getElementById("alt-fazenda-card-list");
         if (!container) return [];
 
         const summary = alternativaNumbersSummary;
-        const activationNames = new Set(
-          (summary?.activations || []).map((row) =>
-            String(row.instanceName || "").trim().toLowerCase()
-          )
+        const activationMap = new Map(
+          (summary?.activations || []).map((row) => [
+            String(row.instanceName || "").trim().toLowerCase(),
+            row,
+          ])
         );
+        const activationNames = new Set(activationMap.keys());
         const pool = summary?.fazendaPool;
-        const assignedRows = Array.isArray(pool?.assignedToSubscriber) ? pool.assignedToSubscriber : [];
-        const claimableRows = Array.isArray(pool?.availableToClaim)
-          ? pool.availableToClaim.slice(0, Math.max(0, Number(summary?.availableSlots ?? 0)))
-          : [];
+        const allItems = Array.isArray(pool?.items) ? pool.items : [];
+        const assignedRows = Array.isArray(pool?.assignedToSubscriber)
+          ? pool.assignedToSubscriber
+          : allItems.filter((row) => {
+              const assigned = String(row?.assignedToEmail || "").trim().toLowerCase();
+              return assigned && activationNames.has(String(row?.instanceName || "").trim().toLowerCase());
+            });
+        const claimableRows = resolveFazendaClaimableRows(summary);
         const rows = [...assignedRows, ...claimableRows];
+        const rowKeys = new Set(
+          rows.map((row) => String(row?.instanceName || "").trim().toLowerCase()).filter(Boolean)
+        );
+        for (const act of summary?.activations || []) {
+          const key = String(act?.instanceName || "").trim().toLowerCase();
+          if (!key || rowKeys.has(key)) continue;
+          if (act?.status === "active") {
+            const poolItem = allItems.find(
+              (row) => String(row?.instanceName || "").trim().toLowerCase() === key
+            );
+            rows.push(
+              poolItem || {
+                instanceName: act.instanceName,
+                label: getDisparadorInstanceLabelByValue(act.instanceName) || act.instanceName,
+                connectionStatus: "close",
+                isOpen: false,
+              }
+            );
+            rowKeys.add(key);
+            continue;
+          }
+          if (act?.status === "blocked" || act?.replacesInstanceName || act?.replacementScope) {
+            rows.push({
+              instanceName: act.instanceName,
+              label: getDisparadorInstanceLabelByValue(act.instanceName) || act.instanceName,
+              connectionStatus: act?.status === "blocked" ? "blocked" : "open",
+              isOpen: act?.status !== "blocked",
+            });
+            rowKeys.add(key);
+          }
+        }
+
+        const campaignSelectedKeys = resolveAlternativaCampaignSelectedKeys();
 
         container.innerHTML = "";
         if (!rows.length) {
@@ -17186,26 +17498,87 @@
         rows.forEach((row) => {
           const instanceName = String(row?.instanceName || "").trim();
           if (!instanceName) return;
-          const isActivated = activationNames.has(instanceName.toLowerCase());
-          const isOpen = row?.isOpen !== false && String(row?.connectionStatus || "").toLowerCase().includes("open");
+          const act = activationMap.get(instanceName.toLowerCase()) || null;
+          const isBlocked = act?.status === "blocked";
+          const isReplacement = Boolean(act?.replacesInstanceName);
+          const replacementScope = String(act?.replacementScope || "").trim().toLowerCase();
+          const instanceKey = instanceName.toLowerCase();
+          const isCampaignReplacement =
+            isReplacement &&
+            !isBlocked &&
+            (replacementScope === "campaign" ||
+              (replacementScope !== "standby" && campaignSelectedKeys.has(instanceKey)));
+          const isStandbyReplacement =
+            isReplacement && !isBlocked && !isCampaignReplacement;
+          const isActivated =
+            !isBlocked &&
+            (activationNames.has(instanceKey) || isReplacement);
+          const isOpen =
+            !isBlocked &&
+            row?.isOpen !== false &&
+            String(row?.connectionStatus || "").toLowerCase().includes("open");
           const { label, meta } = getFazendaRowDisplayLines(row);
 
           if (isActivated) selectedNames.push(instanceName);
-          else availableNames.push(instanceName);
+          else if (!isBlocked) availableNames.push(instanceName);
 
           const card = document.createElement("div");
           card.className = "alt-fazenda-card";
           card.setAttribute("role", "listitem");
-          if (isActivated) card.classList.add("is-active");
-          if (!isOpen) card.classList.add("is-offline");
+          if (isBlocked) card.classList.add("is-blocked");
+          else if (isCampaignReplacement) card.classList.add("is-replacement");
+          else if (isStandbyReplacement) card.classList.add("is-replacement-standby");
+          else if (isActivated) card.classList.add("is-active");
+          if (!isOpen && !isBlocked && !isReplacement) card.classList.add("is-offline");
+
+          if (isBlocked || isReplacement) {
+            const icon = document.createElement("span");
+            icon.className = `alt-fazenda-card-status-icon ${
+              isBlocked
+                ? "alt-fazenda-card-status-icon--blocked"
+                : isStandbyReplacement
+                ? "alt-fazenda-card-status-icon--standby"
+                : "alt-fazenda-card-status-icon--replacement"
+            }`;
+            icon.setAttribute("aria-hidden", "true");
+            icon.textContent = isBlocked ? "✕" : "↻";
+            card.appendChild(icon);
+          }
 
           const info = document.createElement("div");
           info.className = "alt-fazenda-card-info";
-          info.innerHTML = `<span class="alt-fazenda-card-name">${escapeAdminHtml(label)}</span><span class="alt-fazenda-card-meta">${escapeAdminHtml(meta)}</span>`;
+          const metaLine = isBlocked
+            ? act?.replacedByInstanceName
+              ? `Substituído por ${getDisparadorInstanceLabelByValue(act.replacedByInstanceName) || act.replacedByInstanceName}`
+              : "Número bloqueado — substituído automaticamente"
+            : isCampaignReplacement
+            ? `Substituto ativo na campanha · antes: ${act?.replacesInstanceName || "número anterior"}`
+            : isStandbyReplacement
+            ? `Reserva vinculada · substitui ${act?.replacesInstanceName || "número offline"}`
+            : meta;
+          info.innerHTML = `<span class="alt-fazenda-card-name">${escapeAdminHtml(label)}</span><span class="alt-fazenda-card-meta">${escapeAdminHtml(metaLine)}</span>`;
 
           card.appendChild(info);
 
-          if (isActivated) {
+          if (isBlocked) {
+            const badge = document.createElement("span");
+            badge.className = "alt-fazenda-card-badge alt-fazenda-card-badge--blocked";
+            badge.setAttribute("role", "status");
+            badge.textContent = "Bloqueado";
+            card.appendChild(badge);
+          } else if (isCampaignReplacement) {
+            const badge = document.createElement("span");
+            badge.className = "alt-fazenda-card-badge alt-fazenda-card-badge--replacement";
+            badge.setAttribute("role", "status");
+            badge.textContent = "↻ Substituto";
+            card.appendChild(badge);
+          } else if (isStandbyReplacement) {
+            const badge = document.createElement("span");
+            badge.className = "alt-fazenda-card-badge alt-fazenda-card-badge--standby";
+            badge.setAttribute("role", "status");
+            badge.textContent = "↻ Reserva";
+            card.appendChild(badge);
+          } else if (isActivated && isOpen) {
             const badge = document.createElement("span");
             badge.className = "alt-fazenda-card-badge alt-fazenda-card-badge--active";
             badge.setAttribute("role", "status");
@@ -17296,6 +17669,24 @@
         }
       }
 
+      let alternativaSummaryPollTimer = null;
+
+      function stopAlternativaSummaryPolling() {
+        if (alternativaSummaryPollTimer) {
+          clearInterval(alternativaSummaryPollTimer);
+          alternativaSummaryPollTimer = null;
+        }
+      }
+
+      function startAlternativaSummaryPolling() {
+        stopAlternativaSummaryPolling();
+        alternativaSummaryPollTimer = setInterval(() => {
+          if (disNumberSourceTab === "comprar" && isDisparoEvoUi()) {
+            void loadAlternativaNumbersSummary();
+          }
+        }, 15000);
+      }
+
       async function loadAlternativaNumbersSummary() {
         if (!isDisparoEvoUi()) return null;
         try {
@@ -17326,7 +17717,9 @@
         if (comprarPanel) comprarPanel.hidden = normalized !== "comprar";
         if (normalized === "comprar") {
           void loadAlternativaNumbersSummary();
+          startAlternativaSummaryPolling();
         } else {
+          stopAlternativaSummaryPolling();
           syncDisparadorNumberPicker();
         }
       }
@@ -17471,13 +17864,15 @@
           openAlternativaNumberConnectWizard();
         });
         document.getElementById("alt-numbers-reset-selection-btn")?.addEventListener("click", async () => {
-          if (
-            !window.confirm(
-              "Limpar as ativações e refazer a seleção?\n\nOs números comprados (slots) serão mantidos."
-            )
-          ) {
-            return;
-          }
+          const confirmed = await showWabaConfirm({
+            title: "Refazer seleção",
+            message:
+              "Limpar as ativações e refazer a seleção?\n\nOs números comprados (slots) serão mantidos.",
+            confirmLabel: "Sim, refazer",
+            cancelLabel: "Cancelar",
+            danger: true,
+          });
+          if (!confirmed) return;
           try {
             const response = await fetch("/billing/alternativa-numbers/reset-activations", {
               method: "POST",
@@ -25517,6 +25912,7 @@
         }
       }
       let pendingSelectedDisparadorInstances = [];
+      let disPickerWarmthFilterLevel = 0;
       let renameInstanceCurrentName = "";
       let avatarRefreshNonce = Date.now();
       let inlineRenameEditingInstance = "";
@@ -25539,6 +25935,60 @@
         window.setTimeout(() => {
           toast.remove();
         }, Math.max(1200, timeoutMs));
+      }
+
+      let wabaConfirmResolver = null;
+
+      function closeWabaConfirm(confirmed = false) {
+        const overlay = document.getElementById("waba-confirm-overlay");
+        if (overlay) {
+          blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+        const resolve = wabaConfirmResolver;
+        wabaConfirmResolver = null;
+        if (resolve) resolve(Boolean(confirmed));
+      }
+
+      function showWabaConfirm(options = {}) {
+        const {
+          title = "Confirmar",
+          message = "",
+          confirmLabel = "Confirmar",
+          cancelLabel = "Cancelar",
+          danger = false,
+        } = options;
+
+        return new Promise((resolve) => {
+          if (wabaConfirmResolver) {
+            wabaConfirmResolver(false);
+          }
+          wabaConfirmResolver = resolve;
+
+          blurFocusTrappedInClosedOverlays();
+          const titleEl = document.getElementById("waba-confirm-title");
+          const messageEl = document.getElementById("waba-confirm-message");
+          const okBtn = document.getElementById("waba-confirm-ok-btn");
+          const cancelBtn = document.getElementById("waba-confirm-cancel-btn");
+          if (titleEl) titleEl.textContent = String(title || "Confirmar");
+          if (messageEl) messageEl.textContent = String(message || "");
+          if (okBtn) {
+            okBtn.textContent = String(confirmLabel || "Confirmar");
+            okBtn.classList.toggle("btn-delete", Boolean(danger));
+            okBtn.classList.toggle("btn-qrcode", !danger);
+            okBtn.classList.add("enabled");
+            okBtn.removeAttribute("disabled");
+          }
+          if (cancelBtn) cancelBtn.textContent = String(cancelLabel || "Cancelar");
+
+          const overlay = document.getElementById("waba-confirm-overlay");
+          if (overlay) {
+            overlay.classList.add("open");
+            overlay.setAttribute("aria-hidden", "false");
+          }
+          cancelBtn?.focus();
+        });
       }
 
       function renderAquecedorCommandLogs() {
@@ -26805,9 +27255,74 @@
 
       function getSelectOptionValues(selectEl) {
         if (!selectEl) return [];
+        if (selectEl.classList?.contains("dis-picker-list")) {
+          return getDisPickerValues(selectEl);
+        }
         return Array.from(selectEl.options)
           .map((opt) => String(opt.value || "").trim())
           .filter(Boolean);
+      }
+
+      function getDisPickerValues(listEl) {
+        if (!listEl) return [];
+        return Array.from(listEl.querySelectorAll(".dis-picker-item"))
+          .map((item) => String(item.dataset.value || "").trim())
+          .filter(Boolean);
+      }
+
+      function getDisPickerSelectedValues(listEl) {
+        if (!listEl) return [];
+        if (listEl.classList?.contains("dis-picker-list")) {
+          const selected = Array.from(listEl.querySelectorAll(".dis-picker-item.is-selected"))
+            .map((item) => String(item.dataset.value || "").trim())
+            .filter(Boolean);
+          if (selected.length) return selected;
+          const last = listEl.querySelector(".dis-picker-item.is-last-clicked");
+          if (last) {
+            const value = String(last.dataset.value || "").trim();
+            return value ? [value] : [];
+          }
+          return [];
+        }
+        return Array.from(listEl.selectedOptions || [])
+          .map((opt) => String(opt.value || "").trim())
+          .filter(Boolean);
+      }
+
+      function updateDisPickerCountLabel(elementId, count, kind) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const n = Math.max(0, Number(count) || 0);
+        const word =
+          kind === "selected"
+            ? n === 1
+              ? "selecionado"
+              : "selecionados"
+            : n === 1
+              ? "disponível"
+              : "disponíveis";
+        el.textContent = `${n} ${word}`;
+      }
+
+      function fillDisPickerList(listEl, rows) {
+        if (!listEl) return;
+        if (!listEl.classList?.contains("dis-picker-list")) {
+          fillSelectWithValues(
+            listEl,
+            rows.map((row) => row.name)
+          );
+          return;
+        }
+        listEl.innerHTML = "";
+        rows.forEach((row) => {
+          const usage = getInstanceUsage(row.name);
+          const item = document.createElement("div");
+          item.className = "dis-picker-item";
+          item.dataset.value = row.name;
+          item.setAttribute("role", "option");
+          item.innerHTML = `${buildInstanceWarmthCell(usage.warmthLevel, usage.warmthLabel)}<span class="dis-picker-item-label">${escapeAdminHtml(row.label || row.name)}</span>`;
+          listEl.appendChild(item);
+        });
       }
 
       function fillSelectWithValues(selectEl, values) {
@@ -26926,16 +27441,30 @@
             return String(row.status || "").toLowerCase().includes("open");
           });
 
-          const currentSelected = new Set([
-            ...pendingSelectedDisparadorInstances,
-            ...getSelectOptionValues(selectedEl),
-          ]);
+          const isAquecedorPicker =
+            availableId === "dis-available-instances" && selectedId === "dis-selected-instances";
+          const currentSelected = new Set(
+            isAquecedorPicker
+              ? pendingSelectedDisparadorInstances
+              : [...pendingSelectedDisparadorInstances, ...getSelectOptionValues(selectedEl)]
+          );
 
           const selected = candidates.filter((row) => currentSelected.has(row.name));
-          const available = candidates.filter((row) => !currentSelected.has(row.name));
+          let available = candidates.filter((row) => !currentSelected.has(row.name));
+
+          if (availableId === "dis-available-instances" && disPickerWarmthFilterLevel > 0) {
+            available = available.filter((row) => {
+              const warmth = getInstanceUsage(row.name).warmthLevel || 0;
+              return warmth === disPickerWarmthFilterLevel;
+            });
+          }
 
           const fillSelectWithRows = (selectEl, rows) => {
             if (!selectEl) return;
+            if (selectEl.classList?.contains("dis-picker-list")) {
+              fillDisPickerList(selectEl, rows);
+              return;
+            }
             selectEl.innerHTML = "";
             rows.forEach((row) => {
               const opt = document.createElement("option");
@@ -26947,6 +27476,12 @@
 
           fillSelectWithRows(availableEl, available);
           fillSelectWithRows(selectedEl, selected);
+
+          if (isAquecedorPicker) {
+            updateDisPickerCountLabel("dis-available-instances-count", available.length, "available");
+            updateDisPickerCountLabel("dis-selected-instances-count", selected.length, "selected");
+          }
+
           return selected.map((row) => row.name);
         };
 
@@ -26957,13 +27492,10 @@
         );
 
         const pool = alternativaNumbersSummary?.fazendaPool;
+        const allItems = Array.isArray(pool?.items) ? pool.items : [];
         const assignedRows = Array.isArray(pool?.assignedToSubscriber) ? pool.assignedToSubscriber : [];
-        const claimableRows = Array.isArray(pool?.availableToClaim)
-          ? pool.availableToClaim.slice(
-              0,
-              Math.max(0, Number(alternativaNumbersSummary?.availableSlots ?? 0))
-            )
-          : [];
+        const slotsLeft = Math.max(0, Number(alternativaNumbersSummary?.availableSlots ?? 0));
+        const claimableRows = resolveFazendaClaimableRows(alternativaNumbersSummary);
         const fazendaPickerRows = [...assignedRows, ...claimableRows];
 
         const aquecedorSelected = syncOnePicker(
@@ -27029,58 +27561,91 @@
         const fromEl = document.getElementById(fromId);
         const toEl = document.getElementById(toId);
         if (!fromEl || !toEl) return;
-        const fromValues = getSelectOptionValues(fromEl);
-        const toValues = getSelectOptionValues(toEl);
-        const selectedToMove = Array.from(fromEl.selectedOptions).map((opt) => String(opt.value || "").trim()).filter(Boolean);
+        const selectedToMove = getDisPickerSelectedValues(fromEl);
         if (!selectedToMove.length) return;
-        const newFrom = fromValues.filter((v) => !selectedToMove.includes(v));
-        const newTo = Array.from(new Set([...toValues, ...selectedToMove]));
-        fillSelectWithValues(fromEl, newFrom);
-        fillSelectWithValues(toEl, newTo);
-        pendingSelectedDisparadorInstances = getSelectOptionValues(
-          resolveDisparosSelectedInstancesElement()
-        );
+        const next = new Set(pendingSelectedDisparadorInstances);
+        const movingToSelected = String(toId || "").includes("selected");
+        selectedToMove.forEach((value) => {
+          if (movingToSelected) next.add(value);
+          else {
+            next.delete(value);
+            ensureWarmthFilterShowsInstance(value);
+          }
+        });
+        pendingSelectedDisparadorInstances = Array.from(next);
+        syncDisparadorNumberPicker();
         updateDisparosSelectedInstancesSummaryCard();
         void refreshDisparosActiveInstanceFromServer();
       }
 
-      function moveSingleDisparadorNumberByClick(fromId, toId) {
-        const fromEl = document.getElementById(fromId);
-        const toEl = document.getElementById(toId);
-        if (!fromEl || !toEl) return;
-        const selected = fromEl.selectedOptions?.[0];
-        if (!selected) return;
-        const value = String(selected.value || "").trim();
+      function resetDisPickerWarmthFilterToAll() {
+        disPickerWarmthFilterLevel = 0;
+        const filterEl = document.getElementById("dis-available-warmth-filter");
+        if (!filterEl) return;
+        filterEl.querySelectorAll(".dis-warmth-chip").forEach((btn) => {
+          btn.classList.toggle("active", Number(btn.dataset.warmthLevel) === 0);
+        });
+      }
+
+      function ensureWarmthFilterShowsInstance(instanceName) {
+        const warmth = getInstanceUsage(instanceName).warmthLevel || 0;
+        if (disPickerWarmthFilterLevel > 0 && warmth !== disPickerWarmthFilterLevel) {
+          resetDisPickerWarmthFilterToAll();
+        }
+      }
+
+      function moveSingleDisparadorNumberByClick(fromId, toId, clickedValue) {
+        const value = String(clickedValue || "").trim();
         if (!value) return;
-
-        const fromValues = getSelectOptionValues(fromEl).filter((v) => v !== value);
-        const toValues = getSelectOptionValues(toEl);
-        if (!toValues.includes(value)) toValues.push(value);
-
-        const rebuildWithLabels = (selectEl, values) => {
-          const labelsByValue = new Map(
-            Array.from(selectEl.options || []).map((opt) => [
-              String(opt.value || "").trim(),
-              String(opt.textContent || opt.value || "").trim(),
-            ])
-          );
-          selectEl.innerHTML = "";
-          values.forEach((v) => {
-            const opt = document.createElement("option");
-            opt.value = v;
-            opt.textContent = labelsByValue.get(v) || getDisparadorInstanceLabelByValue(v) || v;
-            selectEl.appendChild(opt);
-          });
-        };
-
-        rebuildWithLabels(fromEl, fromValues);
-        rebuildWithLabels(toEl, toValues);
-
-        pendingSelectedDisparadorInstances = getSelectOptionValues(
-          resolveDisparosSelectedInstancesElement()
-        );
+        const next = new Set(pendingSelectedDisparadorInstances);
+        const movingToSelected = String(toId || "").includes("selected");
+        if (movingToSelected) next.add(value);
+        else {
+          next.delete(value);
+          ensureWarmthFilterShowsInstance(value);
+        }
+        pendingSelectedDisparadorInstances = Array.from(next);
+        syncDisparadorNumberPicker();
         updateDisparosSelectedInstancesSummaryCard();
         void refreshDisparosActiveInstanceFromServer();
+      }
+
+      function handleDisPickerItemClick(event, fromId, toId) {
+        const item = event.target.closest(".dis-picker-item");
+        if (!item) return;
+        const listEl = document.getElementById(fromId);
+        if (!listEl) return;
+        const value = String(item.dataset.value || "").trim();
+        if (!value) return;
+        listEl.querySelectorAll(".dis-picker-item").forEach((node) => {
+          node.classList.remove("is-last-clicked");
+        });
+        item.classList.add("is-last-clicked");
+        if (event.ctrlKey || event.metaKey) {
+          item.classList.toggle("is-selected");
+          return;
+        }
+        if (event.shiftKey) {
+          item.classList.add("is-selected");
+          return;
+        }
+        moveSingleDisparadorNumberByClick(fromId, toId, value);
+      }
+
+      function initDisPickerWarmthFilter() {
+        const filterEl = document.getElementById("dis-available-warmth-filter");
+        if (!filterEl || filterEl.dataset.bound === "1") return;
+        filterEl.dataset.bound = "1";
+        filterEl.addEventListener("click", (event) => {
+          const chip = event.target.closest(".dis-warmth-chip");
+          if (!chip) return;
+          const level = Number(chip.dataset.warmthLevel);
+          disPickerWarmthFilterLevel = Number.isFinite(level) ? Math.max(0, Math.min(3, level)) : 0;
+          filterEl.querySelectorAll(".dis-warmth-chip").forEach((btn) => {
+            btn.classList.toggle("active", btn === chip);
+          });
+          syncDisparadorNumberPicker();
+        });
       }
 
       function isDisparosSectionInWizardFlow(section) {
@@ -27881,17 +28446,31 @@
         const list = document.getElementById("disparos-list");
         if (!list) return;
         try {
-          const response = await fetchWithTimeout("/disparos/campanhas", {}, 10000);
+          const response = await fetchWithTimeout("/disparos/campanhas", {}, 25000);
           if (!response.ok) {
             if (!silent) {
-              disparosHasRunningCampaign = false;
-              applyDisparosActiveInstanceCardDisplay("");
-              disparosCampaignItemsCache = [];
-              syncDisparosResumoSide([]);
-              list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
+              if (!disparosCampaignItemsCache.length) {
+                disparosHasRunningCampaign = false;
+                applyDisparosActiveInstanceCardDisplay("");
+                list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
+              } else {
+                const warnId = "disparos-campaigns-load-warn";
+                let warn = document.getElementById(warnId);
+                if (!warn) {
+                  warn = document.createElement("div");
+                  warn.id = warnId;
+                  warn.className = "muted";
+                  warn.style.cssText = "margin-bottom:8px;color:#fbbf24;";
+                  list.insertBefore(warn, list.firstChild);
+                }
+                warn.textContent =
+                  "Não foi possível atualizar agora — exibindo a última lista conhecida.";
+              }
             }
             return;
           }
+          const staleWarn = document.getElementById("disparos-campaigns-load-warn");
+          if (staleWarn) staleWarn.remove();
           const data = await response.json().catch(() => ({}));
           const items = Array.isArray(data?.items) ? data.items : [];
           const prevById = new Map(
@@ -28059,10 +28638,10 @@
                       '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
                   }
                   if (shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}).</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fbbf24;">Substituindo números desconectados automaticamente (${connectedCount} de ${selectedCount} ativos).</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fbbf24;">Ingressando números mais aquecidos automaticamente (mínimo ${minConnectedRequired}, conectados ${connectedCount}).</div>`;
                   }
       
                   const body = document.createElement("div");
@@ -28096,14 +28675,8 @@
                     toggleBtn.dataset.campaignFinished = isFinished ? "1" : "0";
                     toggleBtn.dataset.campaignBlockedByInstances = campaignBlockedByHealth ? "1" : "0";
                     toggleBtn.textContent = btnLabel;
-                    if (isFinished || (!isRunning && campaignBlockedByHealth)) toggleBtn.disabled = true;
-      
-                    const addInstancesBtn = document.createElement("button");
-                    addInstancesBtn.type = "button";
-                    addInstancesBtn.className = "instance-action-btn enabled btn-campaign-secondary btn-campaign-add-instances";
-                    addInstancesBtn.dataset.campaignId = campaignId;
-                    addInstancesBtn.textContent = "+ Instâncias";
-      
+                    if (isFinished) toggleBtn.disabled = true;
+
                     const secondary = document.createElement("div");
                     secondary.className = "disparos-campaign-secondary-actions";
       
@@ -28130,7 +28703,6 @@
                     delBtn.textContent = "Excluir";
       
                     if (isFinished) secondary.appendChild(reportBtn);
-                    if (needsMoreInstancesForMinimum) secondary.appendChild(addInstancesBtn);
                     secondary.appendChild(editBtn);
                     secondary.appendChild(delBtn);
                     actions.appendChild(toggleBtn);
@@ -28165,11 +28737,27 @@
                   }
                   list.appendChild(row);
                 });
-              } catch {
-                disparosHasRunningCampaign = false;
-                applyDisparosActiveInstanceCardDisplay("");
-                list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
-              }
+        } catch (error) {
+          console.error("loadDisparosEvoCampaigns", error);
+          if (silent) return;
+          if (disparosCampaignItemsCache.length) {
+            const warnId = "disparos-campaigns-load-warn";
+            let warn = document.getElementById(warnId);
+            if (!warn) {
+              warn = document.createElement("div");
+              warn.id = warnId;
+              warn.className = "muted";
+              warn.style.cssText = "margin-bottom:8px;color:#fbbf24;";
+              list.insertBefore(warn, list.firstChild);
+            }
+            warn.textContent =
+              "Não foi possível atualizar agora — exibindo a última lista conhecida.";
+            return;
+          }
+          disparosHasRunningCampaign = false;
+          applyDisparosActiveInstanceCardDisplay("");
+          list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
+        }
       }
 
       async function loadDisparosTemplates(options = {}) {
@@ -28255,57 +28843,6 @@
           return false;
         }
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
-        if (isDisparoEvoUi()) {
-          await loadDisparosEvoCampaigns();
-        } else {
-          await loadDisparosTemplates();
-        }
-        return true;
-      }
-
-      async function addInstancesToCampaign(campaignId) {
-        const id = String(campaignId || "").trim();
-        if (!id) return false;
-        const response = await fetchWithTimeout(
-          `/disparos/campanhas/${encodeURIComponent(id)}/instancias`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ auto: true }),
-          },
-          20000
-        );
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const code = String(data?.code || "").trim();
-          if (response.status === 409 && code === "buy_numbers_required") {
-            showToast(
-              String(
-                data?.error ||
-                  "Não há números disponíveis. Compre mais números para continuar a campanha."
-              ),
-              "warning",
-              6200
-            );
-            goToDisparosBuyNumbersPanel();
-            return false;
-          }
-          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error");
-          return false;
-        }
-        const stillNeedsMore = data?.stillNeedsMore === true;
-        const needsPurchase = data?.needsPurchase === true;
-        showToast(
-          String(
-            data?.message ||
-              "Instâncias adicionadas. Se a saúde da campanha estiver boa, ative novamente."
-          ),
-          stillNeedsMore || needsPurchase ? "warning" : "success",
-          stillNeedsMore || needsPurchase ? 6200 : 4200
-        );
-        if (needsPurchase) {
-          goToDisparosBuyNumbersPanel();
-        }
         if (isDisparoEvoUi()) {
           await loadDisparosEvoCampaigns();
         } else {
@@ -30275,7 +30812,21 @@
           aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
           aquecedorPhase: current?.aquecedorPhase || null,
           aquecedorPromoteAt: current?.aquecedorPromoteAt || null,
+          warmthLevel: Number.isFinite(Number(current?.warmthLevel))
+            ? Math.max(0, Math.min(3, Number(current.warmthLevel)))
+            : 0,
+          warmthLabel: current?.warmthLabel || "Não aquecido",
         };
+      }
+
+      function buildInstanceWarmthCell(level, label) {
+        const safeLevel = Math.max(0, Math.min(3, Number(level) || 0));
+        const safeLabel = String(label || "Não aquecido").trim() || "Não aquecido";
+        const fires = [0, 1, 2].map((idx) => {
+          const active = idx < safeLevel ? " active" : "";
+          return `<span class="instance-warmth-fire${active}" aria-hidden="true">🔥</span>`;
+        });
+        return `<span class="instance-warmth" title="${escapeAdminHtml(safeLabel)}" aria-label="${escapeAdminHtml(safeLabel)}">${fires.join("")}</span>`;
       }
 
       function resolveInstanceAquecedorStatusLabel(inst) {
@@ -30329,6 +30880,10 @@
               aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
               aquecedorPhase: row?.aquecedorPhase || null,
               aquecedorPromoteAt: row?.aquecedorPromoteAt || null,
+              warmthLevel: Number.isFinite(Number(row?.warmthLevel))
+                ? Math.max(0, Math.min(3, Number(row.warmthLevel)))
+                : 0,
+              warmthLabel: row?.warmthLabel || "Não aquecido",
             };
           });
           instanceUsageByName = map;
@@ -30461,11 +31016,6 @@
           });
         }
 
-        const countLabel = document.getElementById("instancias-count-label");
-        if (countLabel) {
-          countLabel.textContent = `${filtered.length} exibidas`;
-        }
-
         if (!filtered.length) {
           const errorHint = instancesLoadError
             ? `<span class="muted">${escapeAdminHtml(instancesLoadError)}</span>`
@@ -30485,6 +31035,7 @@
         table.innerHTML = `
           <thead>
             <tr>
+              <th style="width:72px" title="Nível de aquecimento da instância">Quente</th>
               <th style="width:38px"></th>
               <th>Número</th>
               <th>Nome (WhatsApp)</th>
@@ -30581,6 +31132,7 @@
               </div>`;
 
           tr.innerHTML = `
+            <td>${buildInstanceWarmthCell(usage.warmthLevel, usage.warmthLabel)}</td>
             <td>${avatarCell}</td>
             <td>${inst.displayNumber}</td>
             <td>${whatsappNameCell}</td>
@@ -30850,16 +31402,18 @@
         const inboundSkipBtn = document.getElementById("register-inbound-skip-btn");
         if (inboundSkipBtn && inboundSkipBtn.dataset.boundRegisterQr !== "1") {
           inboundSkipBtn.dataset.boundRegisterQr = "1";
-          inboundSkipBtn.addEventListener("click", (event) => {
+          inboundSkipBtn.addEventListener("click", async (event) => {
             event.preventDefault();
             event.stopPropagation();
-            if (
-              !window.confirm(
-                "Pular a validação significa integrar sem confirmar envio/recepção.\n\nIsso aumenta o risco de usar um número com problema.\n\nDeseja pular mesmo assim?"
-              )
-            ) {
-              return;
-            }
+            const confirmed = await showWabaConfirm({
+              title: "Pular validação",
+              message:
+                "Pular a validação significa integrar sem confirmar envio/recepção.\n\nIsso aumenta o risco de usar um número com problema.\n\nDeseja pular mesmo assim?",
+              confirmLabel: "Sim, pular",
+              cancelLabel: "Voltar",
+              danger: true,
+            });
+            if (!confirmed) return;
             closeRegisterModal();
           });
         }
@@ -34687,21 +35241,6 @@
             if (id) openDisCampaignDeleteModal(id, nm);
             return;
           }
-          const addInstBtn =
-            e.target && e.target.closest ? e.target.closest(".btn-campaign-add-instances") : null;
-          if (addInstBtn && disparosListEl.contains(addInstBtn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            const id = addInstBtn.dataset.campaignId || addInstBtn.getAttribute("data-campaign-id");
-            if (!id || addInstBtn.disabled) return;
-            addInstBtn.setAttribute("disabled", "true");
-            try {
-              await addInstancesToCampaign(id);
-            } finally {
-              addInstBtn.removeAttribute("disabled");
-            }
-            return;
-          }
           const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
           if (!btn || !disparosListEl.contains(btn)) return;
           if (btn.disabled || (btn.dataset.campaignFinished || "") === "1") return;
@@ -34737,6 +35276,15 @@
       }
       document.getElementById("dis-campaign-delete-cancel-btn")?.addEventListener("click", () => closeDisCampaignDeleteModal());
       document.getElementById("dis-campaign-delete-confirm-btn")?.addEventListener("click", () => void confirmDisCampaignDelete());
+
+      const wabaConfirmOverlay = document.getElementById("waba-confirm-overlay");
+      if (wabaConfirmOverlay) {
+        wabaConfirmOverlay.addEventListener("click", (e) => {
+          if (e.target === wabaConfirmOverlay) closeWabaConfirm(false);
+        });
+      }
+      document.getElementById("waba-confirm-cancel-btn")?.addEventListener("click", () => closeWabaConfirm(false));
+      document.getElementById("waba-confirm-ok-btn")?.addEventListener("click", () => closeWabaConfirm(true));
 
       const disCampaignReportOverlay = document.getElementById("dis-campaign-report-overlay");
       if (disCampaignReportOverlay) {
@@ -34971,8 +35519,9 @@
       }
       const disAvailableInstances = document.getElementById("dis-available-instances");
       if (disAvailableInstances) {
-        disAvailableInstances.addEventListener("click", () => {
-          moveSingleDisparadorNumberByClick(
+        disAvailableInstances.addEventListener("click", (event) => {
+          handleDisPickerItemClick(
+            event,
             "dis-available-instances",
             "dis-selected-instances"
           );
@@ -34980,13 +35529,15 @@
       }
       const disSelectedInstances = document.getElementById("dis-selected-instances");
       if (disSelectedInstances) {
-        disSelectedInstances.addEventListener("click", () => {
-          moveSingleDisparadorNumberByClick(
+        disSelectedInstances.addEventListener("click", (event) => {
+          handleDisPickerItemClick(
+            event,
             "dis-selected-instances",
             "dis-available-instances"
           );
         });
       }
+      initDisPickerWarmthFilter();
       initDisNumberSourceTabs();
 
       const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");
