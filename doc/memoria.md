@@ -1693,3 +1693,4 @@ Palavras-chave para buscar:
 - Botões `data-disparos-contratar` preservam `openDisparosPricingModal`.
 - Log: `doc/LOG-2026-06-21__creditos-tela-compra-referencia-hexagonal.md`.
 - **Palavras-chave:** `disparos-pricing-benefits`, `disparos-pricing-lane-action`, mock compra créditos.
+- **2026-06-21 (hex overlap):** cluster favo com hex 178–194px sobrepostos; ver `doc/LOG-2026-06-21__creditos-hex-cluster-overlap-fix.md`.

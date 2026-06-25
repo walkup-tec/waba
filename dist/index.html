@@ -8165,53 +8165,59 @@
       }
       .disparos-pricing-board {
         display: grid;
-        grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
-        gap: 12px 20px;
-        align-items: stretch;
+        grid-template-columns: minmax(292px, 300px) minmax(0, 1fr);
+        gap: 16px 28px;
+        align-items: center;
         padding: 12px 0 8px;
       }
       .disparos-pricing-hex-cluster {
         position: relative;
-        min-height: 420px;
-        width: 100%;
-        max-width: 320px;
-        margin: 0 auto;
-        --disp-hex-size: 148px;
+        width: 292px;
+        height: 312px;
+        max-width: none;
+        min-height: 0;
+        margin: 0;
+        flex-shrink: 0;
+        --disp-hex-lg: 178px;
+        --disp-hex-md: 142px;
+        --disp-hex-badge: 58px;
       }
       .disparos-pricing-hex-cluster .disparos-api-hex--intro {
         position: absolute;
-        left: -4px;
+        left: 0;
         top: 50%;
         transform: translateY(-50%);
         z-index: 2;
-        --disp-hex-size: 132px;
+        --disp-hex-size: var(--disp-hex-md);
       }
       .disparos-pricing-hex-cluster .disparos-api-hex--oficial {
         position: absolute;
-        right: 0;
-        top: 4px;
+        left: 98px;
+        top: 0;
         z-index: 3;
+        --disp-hex-size: var(--disp-hex-lg);
       }
       .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
         position: absolute;
-        right: 6px;
-        bottom: 4px;
+        left: 98px;
+        bottom: 0;
         z-index: 3;
+        --disp-hex-size: var(--disp-hex-lg);
       }
       .disparos-pricing-hex-cluster .disparos-api-hex--badge {
-        --disp-hex-size: 54px;
-        z-index: 4;
+        --disp-hex-size: var(--disp-hex-badge);
+        z-index: 5;
         filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.45));
       }
       .disparos-pricing-hex-cluster .disparos-api-hex--badge-oficial {
         position: absolute;
-        right: 88px;
-        top: -10px;
+        left: 156px;
+        top: -8px;
       }
       .disparos-pricing-hex-cluster .disparos-api-hex--badge-alternativa {
         position: absolute;
-        right: 24px;
-        bottom: -8px;
+        left: 192px;
+        bottom: -6px;
       }
       .disparos-api-hex--badge::before {
         border-width: 1px;
@@ -8227,9 +8233,19 @@
       }
       .disparos-api-hex--badge .wa-icon,
       .disparos-api-hex--badge .rocket-icon {
-        width: 24px;
-        height: 24px;
+        width: 26px;
+        height: 26px;
         color: #fff;
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--oficial,
+      .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
+        filter: drop-shadow(0 0 28px rgba(140, 198, 63, 0.42));
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
+        filter: drop-shadow(0 0 28px rgba(0, 177, 240, 0.42));
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--intro {
+        filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.28));
       }
       .disparos-api-hex {
         width: var(--disp-hex-size);
@@ -8282,8 +8298,11 @@
         align-items: center;
         justify-content: center;
         gap: 6px;
-        padding: 24px 12px;
+        padding: 20px 14px;
         text-align: center;
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--intro .disparos-api-hex-content {
+        padding: 18px 12px;
       }
       .disparos-api-hex-content .disparos-api-card-title {
         flex-direction: column;
@@ -8295,17 +8314,18 @@
         text-transform: uppercase;
       }
       .disparos-api-hex--intro .disparos-api-hex-content strong {
-        font-size: 0.92rem;
+        font-size: 0.82rem;
         font-weight: 800;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
         color: #1e293b;
+        line-height: 1.2;
       }
       .disparos-api-hex--intro .disparos-api-hex-content span {
-        font-size: 0.62rem;
-        line-height: 1.45;
+        font-size: 0.64rem;
+        line-height: 1.4;
         color: #64748b;
-        max-width: 118px;
+        max-width: 108px;
         font-weight: 500;
         text-transform: none;
         letter-spacing: 0;
@@ -8317,16 +8337,17 @@
       .disparos-api-hex--oficial .disparos-api-card-title,
       .disparos-api-hex--alternativa .disparos-api-card-title {
         color: #fff;
-        font-size: 0.9rem;
-        letter-spacing: 0.08em;
+        font-size: 0.98rem;
+        letter-spacing: 0.07em;
+        line-height: 1.1;
       }
       .disparos-pricing-lanes {
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
-        gap: 48px;
-        padding: 18px 0 12px;
-        min-height: 420px;
+        justify-content: center;
+        gap: 40px;
+        padding: 0;
+        min-height: 312px;
       }
       .disparos-pricing-lane {
         display: grid;
@@ -8513,19 +8534,54 @@
         color: #94a3b8;
         max-width: 280px;
       }
+      @media (min-width: 1100px) {
+        .disparos-pricing-board {
+          grid-template-columns: 318px minmax(0, 1fr);
+          gap: 16px 36px;
+        }
+        .disparos-pricing-hex-cluster {
+          width: 318px;
+          height: 340px;
+          --disp-hex-lg: 194px;
+          --disp-hex-md: 154px;
+          --disp-hex-badge: 62px;
+        }
+        .disparos-pricing-hex-cluster .disparos-api-hex--oficial,
+        .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
+          left: 108px;
+        }
+        .disparos-pricing-hex-cluster .disparos-api-hex--badge-oficial {
+          left: 172px;
+          top: -10px;
+        }
+        .disparos-pricing-hex-cluster .disparos-api-hex--badge-alternativa {
+          left: 210px;
+          bottom: -8px;
+        }
+        .disparos-api-hex--oficial .disparos-api-card-title,
+        .disparos-api-hex--alternativa .disparos-api-card-title {
+          font-size: 1.05rem;
+        }
+        .disparos-pricing-lanes {
+          min-height: 340px;
+        }
+      }
       @media (max-width: 960px) {
         .disparos-pricing-board {
           grid-template-columns: 1fr;
-          gap: 24px;
+          gap: 20px;
+          justify-items: center;
         }
         .disparos-pricing-hex-cluster {
-          min-height: 340px;
-          max-width: 300px;
+          transform: scale(0.94);
+          transform-origin: center top;
+          margin: 0 auto 4px;
         }
         .disparos-pricing-lanes {
           min-height: 0;
           gap: 32px;
           padding: 0;
+          width: 100%;
         }
         .disparos-pricing-lane {
           grid-template-columns: 1fr;
