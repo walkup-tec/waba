@@ -334,13 +334,19 @@ const registerWabaCampaignIntakeRoutes = (app) => {
         }
     });
     app.get("/disparos/campanhas/intake", (req, res) => {
-        const auth = resolveRequestAuth(req);
-        if (!auth.email) {
-            return res.status(401).json({ error: "Faça login para listar suas campanhas." });
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para listar suas campanhas." });
+            }
+            const items = intakeRepository.listByEmail(auth.email).map(toPublicIntake);
+            res.setHeader("Cache-Control", "no-store");
+            return res.status(200).json({ items });
         }
-        const items = intakeRepository.listByEmail(auth.email).map(toPublicIntake);
-        res.setHeader("Cache-Control", "no-store");
-        return res.status(200).json({ items });
+        catch (error) {
+            console.error("[disparos/campanhas/intake] list erro:", error);
+            return res.status(500).json({ error: "Erro ao carregar campanhas geradas. Tente novamente." });
+        }
     });
     app.get("/disparos/campanhas/intake/:id/relatorio", (req, res) => {
         const auth = resolveRequestAuth(req);
