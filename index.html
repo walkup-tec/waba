@@ -8165,181 +8165,48 @@
       }
       .disparos-pricing-board {
         display: grid;
-        grid-template-columns: minmax(292px, 300px) minmax(0, 1fr);
-        gap: 16px 28px;
+        grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+        gap: 16px 32px;
         align-items: center;
         padding: 12px 0 8px;
       }
       .disparos-pricing-hex-cluster {
         position: relative;
-        width: 292px;
-        height: 312px;
+        width: 360px;
+        height: 392px;
         max-width: none;
         min-height: 0;
         margin: 0;
         flex-shrink: 0;
-        --disp-hex-lg: 178px;
-        --disp-hex-md: 142px;
-        --disp-hex-badge: 58px;
       }
-      .disparos-pricing-hex-cluster .disparos-api-hex--intro {
+      .disparos-hex-art {
         position: absolute;
+        display: block;
+        width: auto;
+        height: auto;
+        max-width: none;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      .disparos-hex-art--intro {
+        width: 188px;
         left: 0;
         top: 50%;
         transform: translateY(-50%);
         z-index: 2;
-        --disp-hex-size: var(--disp-hex-md);
       }
-      .disparos-pricing-hex-cluster .disparos-api-hex--oficial {
-        position: absolute;
-        left: 98px;
-        top: 0;
-        z-index: 3;
-        --disp-hex-size: var(--disp-hex-lg);
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
-        position: absolute;
-        left: 98px;
-        bottom: 0;
-        z-index: 3;
-        --disp-hex-size: var(--disp-hex-lg);
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--badge {
-        --disp-hex-size: var(--disp-hex-badge);
-        z-index: 5;
-        filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.45));
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--badge-oficial {
-        position: absolute;
-        left: 156px;
+      .disparos-hex-art--oficial {
+        width: 252px;
+        left: 104px;
         top: -8px;
+        z-index: 3;
       }
-      .disparos-pricing-hex-cluster .disparos-api-hex--badge-alternativa {
-        position: absolute;
-        left: 192px;
-        bottom: -6px;
-      }
-      .disparos-api-hex--badge::before {
-        border-width: 1px;
-      }
-      .disparos-api-hex--badge-oficial::before {
-        background: linear-gradient(145deg, #9ae048, #6bb828);
-      }
-      .disparos-api-hex--badge-alternativa::before {
-        background: linear-gradient(145deg, #00a8f0, #006aa3);
-      }
-      .disparos-api-hex--badge .disparos-api-hex-content {
-        padding: 10px;
-      }
-      .disparos-api-hex--badge .wa-icon,
-      .disparos-api-hex--badge .rocket-icon {
-        width: 26px;
-        height: 26px;
-        color: #fff;
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--oficial,
-      .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
-        filter: drop-shadow(0 0 28px rgba(140, 198, 63, 0.42));
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
-        filter: drop-shadow(0 0 28px rgba(0, 177, 240, 0.42));
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--intro {
-        filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.28));
-      }
-      .disparos-api-hex {
-        width: var(--disp-hex-size);
-        height: calc(var(--disp-hex-size) * 1.1547);
-        position: relative;
-        flex-shrink: 0;
-        filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.35));
-      }
-      .disparos-api-hex::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-        background: linear-gradient(145deg, #1e293b, #0f172a);
-        border: 2px solid rgba(255, 255, 255, 0.12);
-      }
-      .disparos-api-hex::after {
-        content: "";
-        position: absolute;
-        inset: 5px;
-        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-        box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.22);
-        pointer-events: none;
-      }
-      .disparos-api-hex--intro::before {
-        background: linear-gradient(160deg, #ffffff, #e8edf4);
-        border-color: rgba(255, 255, 255, 0.9);
-      }
-      .disparos-api-hex--oficial::before {
-        background: linear-gradient(145deg, #9ae048, #6bb828 55%, #4d8f18);
-        border-color: rgba(180, 255, 90, 0.55);
-      }
-      .disparos-api-hex--alternativa::before {
-        background: linear-gradient(145deg, #00b4f0, #0081c6 55%, #005f94);
-        border-color: rgba(120, 220, 255, 0.5);
-      }
-      .disparos-api-hex--oficial,
-      .disparos-api-hex--alternativa {
-        filter: drop-shadow(0 0 22px rgba(140, 198, 63, 0.35));
-      }
-      .disparos-api-hex--alternativa {
-        filter: drop-shadow(0 0 22px rgba(0, 177, 240, 0.35));
-      }
-      .disparos-api-hex-content {
-        position: relative;
-        z-index: 1;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 20px 14px;
-        text-align: center;
-      }
-      .disparos-pricing-hex-cluster .disparos-api-hex--intro .disparos-api-hex-content {
-        padding: 18px 12px;
-      }
-      .disparos-api-hex-content .disparos-api-card-title {
-        flex-direction: column;
-        gap: 6px;
-        font-size: 0.82rem;
-        line-height: 1.15;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-      }
-      .disparos-api-hex--intro .disparos-api-hex-content strong {
-        font-size: 0.82rem;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: #1e293b;
-        line-height: 1.2;
-      }
-      .disparos-api-hex--intro .disparos-api-hex-content span {
-        font-size: 0.64rem;
-        line-height: 1.4;
-        color: #64748b;
-        max-width: 108px;
-        font-weight: 500;
-        text-transform: none;
-        letter-spacing: 0;
-      }
-      .disparos-api-hex--oficial .disparos-api-hex-content,
-      .disparos-api-hex--alternativa .disparos-api-hex-content {
-        color: #fff;
-      }
-      .disparos-api-hex--oficial .disparos-api-card-title,
-      .disparos-api-hex--alternativa .disparos-api-card-title {
-        color: #fff;
-        font-size: 0.98rem;
-        letter-spacing: 0.07em;
-        line-height: 1.1;
+      .disparos-hex-art--alternativa {
+        width: 252px;
+        left: 104px;
+        bottom: -8px;
+        z-index: 3;
       }
       .disparos-pricing-lanes {
         display: flex;
@@ -8347,7 +8214,7 @@
         justify-content: center;
         gap: 40px;
         padding: 0;
-        min-height: 312px;
+        min-height: 392px;
       }
       .disparos-pricing-lane {
         display: grid;
@@ -8536,34 +8403,30 @@
       }
       @media (min-width: 1100px) {
         .disparos-pricing-board {
-          grid-template-columns: 318px minmax(0, 1fr);
-          gap: 16px 36px;
+          grid-template-columns: 400px minmax(0, 1fr);
+          gap: 20px 40px;
         }
         .disparos-pricing-hex-cluster {
-          width: 318px;
-          height: 340px;
-          --disp-hex-lg: 194px;
-          --disp-hex-md: 154px;
-          --disp-hex-badge: 62px;
+          width: 400px;
+          height: 432px;
         }
-        .disparos-pricing-hex-cluster .disparos-api-hex--oficial,
-        .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
-          left: 108px;
+        .disparos-hex-art--intro {
+          width: 208px;
+          left: 2px;
         }
-        .disparos-pricing-hex-cluster .disparos-api-hex--badge-oficial {
-          left: 172px;
+        .disparos-hex-art--oficial,
+        .disparos-hex-art--alternativa {
+          width: 278px;
+          left: 118px;
+        }
+        .disparos-hex-art--oficial {
           top: -10px;
         }
-        .disparos-pricing-hex-cluster .disparos-api-hex--badge-alternativa {
-          left: 210px;
-          bottom: -8px;
-        }
-        .disparos-api-hex--oficial .disparos-api-card-title,
-        .disparos-api-hex--alternativa .disparos-api-card-title {
-          font-size: 1.05rem;
+        .disparos-hex-art--alternativa {
+          bottom: -10px;
         }
         .disparos-pricing-lanes {
-          min-height: 340px;
+          min-height: 432px;
         }
       }
       @media (max-width: 960px) {
@@ -8573,9 +8436,9 @@
           justify-items: center;
         }
         .disparos-pricing-hex-cluster {
-          transform: scale(0.94);
+          transform: scale(0.9);
           transform-origin: center top;
-          margin: 0 auto 4px;
+          margin: 0 auto 0;
         }
         .disparos-pricing-lanes {
           min-height: 0;
@@ -13297,43 +13160,32 @@
             <div class="disparos-choice-grid">
               <div class="disparos-pricing-board">
                 <div class="disparos-pricing-hex-cluster" aria-label="Pacotes e serviços">
-                  <div class="disparos-api-hex disparos-api-hex--badge disparos-api-hex--badge-oficial" aria-hidden="true">
-                    <div class="disparos-api-hex-content">
-                      <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          fill="currentColor"
-                          d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                  <div class="disparos-api-hex disparos-api-hex--oficial" id="disparos-hex-oficial">
-                    <div class="disparos-api-hex-content">
-                      <span class="disparos-api-card-title">API Oficial</span>
-                    </div>
-                  </div>
-                  <div class="disparos-api-hex disparos-api-hex--intro">
-                    <div class="disparos-api-hex-content">
-                      <strong>Pacotes e serviços</strong>
-                      <span>São diversas possibilidades para diversas necessidades.</span>
-                    </div>
-                  </div>
-                  <div class="disparos-api-hex disparos-api-hex--alternativa" id="disparos-hex-alternativa">
-                    <div class="disparos-api-hex-content">
-                      <span class="disparos-api-card-title">API Alternativa</span>
-                    </div>
-                  </div>
-                  <div class="disparos-api-hex disparos-api-hex--badge disparos-api-hex--badge-alternativa" aria-hidden="true">
-                    <div class="disparos-api-hex-content">
-                      <svg class="rocket-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
-                        <circle cx="12" cy="9" r="1.2"></circle>
-                        <path d="M9 12l-3 3h3"></path>
-                        <path d="M15 12l3 3h-3"></path>
-                        <path d="M12 15v4"></path>
-                      </svg>
-                    </div>
-                  </div>
+                  <img
+                    class="disparos-hex-art disparos-hex-art--intro"
+                    src="/media/disparos-hex-pacotes-servicos.png"
+                    alt="Pacotes e serviços — diversas possibilidades para diversas necessidades"
+                    width="1024"
+                    height="1024"
+                    decoding="async"
+                  />
+                  <img
+                    class="disparos-hex-art disparos-hex-art--oficial"
+                    id="disparos-hex-oficial"
+                    src="/media/disparos-hex-api-oficial.png"
+                    alt="API Oficial"
+                    width="1024"
+                    height="1024"
+                    decoding="async"
+                  />
+                  <img
+                    class="disparos-hex-art disparos-hex-art--alternativa"
+                    id="disparos-hex-alternativa"
+                    src="/media/disparos-hex-api-alternativa.png"
+                    alt="API Alternativa"
+                    width="1024"
+                    height="1024"
+                    decoding="async"
+                  />
                 </div>
 
                 <div class="disparos-pricing-lanes">

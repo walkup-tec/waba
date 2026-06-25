@@ -1694,3 +1694,4 @@ Palavras-chave para buscar:
 - Log: `doc/LOG-2026-06-21__creditos-tela-compra-referencia-hexagonal.md`.
 - **Palavras-chave:** `disparos-pricing-benefits`, `disparos-pricing-lane-action`, mock compra créditos.
 - **2026-06-21 (hex overlap):** cluster favo com hex 178–194px sobrepostos; ver `doc/LOG-2026-06-21__creditos-hex-cluster-overlap-fix.md`.
+- **2026-06-21 (hex PNG):** artes PNG do usuário em `/media/disparos-hex-*.png`; ver `doc/LOG-2026-06-21__creditos-hex-png-assets-mock.md`.
