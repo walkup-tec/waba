@@ -8165,27 +8165,113 @@
       }
       .disparos-pricing-board {
         display: grid;
-        grid-template-columns: minmax(338px, 442px) minmax(0, 1fr);
+        grid-template-columns: minmax(406px, 530px) minmax(0, 1fr);
         gap: 16px 32px;
         align-items: center;
         padding: 12px 0 8px;
       }
       .disparos-pricing-hex-cluster {
+        position: relative;
         width: 100%;
-        max-width: 416px;
+        max-width: 500px;
         margin: 0;
         flex-shrink: 0;
         line-height: 0;
+        padding: 10px 6px;
+        isolation: isolate;
+      }
+      .disparos-pricing-hex-cluster::before {
+        content: "";
+        position: absolute;
+        inset: 4% 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse 58% 36% at 74% 20%, rgba(154, 224, 72, 0.2) 0%, transparent 68%),
+          radial-gradient(ellipse 58% 36% at 74% 80%, rgba(0, 196, 255, 0.18) 0%, transparent 68%),
+          radial-gradient(ellipse 42% 28% at 18% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 72%);
+      }
+      .disparos-hex-cluster-stage {
+        position: absolute;
+        inset: -6% -4%;
+        z-index: 0;
+        pointer-events: none;
+        overflow: visible;
+      }
+      .disparos-hex-cluster-glow {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(36px);
+        opacity: 0.58;
+        animation: disparos-hex-glow-pulse 5s ease-in-out infinite;
+      }
+      .disparos-hex-cluster-glow--green {
+        width: 54%;
+        height: 40%;
+        top: 0;
+        right: 2%;
+        background: radial-gradient(
+          circle,
+          rgba(168, 255, 90, 0.95) 0%,
+          rgba(120, 220, 50, 0.42) 38%,
+          transparent 72%
+        );
+      }
+      .disparos-hex-cluster-glow--blue {
+        width: 54%;
+        height: 40%;
+        bottom: 0;
+        right: 2%;
+        background: radial-gradient(
+          circle,
+          rgba(56, 220, 255, 0.92) 0%,
+          rgba(0, 160, 240, 0.4) 38%,
+          transparent 72%
+        );
+        animation-delay: -2.5s;
+      }
+      .disparos-hex-cluster-glow--center {
+        width: 44%;
+        height: 30%;
+        left: -2%;
+        top: 50%;
+        transform: translateY(-50%);
+        filter: blur(28px);
+        opacity: 0.45;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, transparent 70%);
+        animation: none;
+      }
+      @keyframes disparos-hex-glow-pulse {
+        0%,
+        100% {
+          opacity: 0.5;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.78;
+          transform: scale(1.07);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .disparos-hex-cluster-glow {
+          animation: none;
+        }
       }
       .disparos-hex-cluster-art {
+        position: relative;
+        z-index: 1;
         display: block;
         width: 100%;
         height: auto;
-        max-width: 416px;
+        max-width: 500px;
         margin: 0;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
+        filter:
+          drop-shadow(0 0 22px rgba(154, 224, 72, 0.42))
+          drop-shadow(0 0 36px rgba(0, 196, 255, 0.32))
+          drop-shadow(0 16px 48px rgba(0, 0, 0, 0.5));
       }
       .disparos-pricing-lanes {
         display: flex;
@@ -8382,12 +8468,12 @@
       }
       @media (min-width: 1100px) {
         .disparos-pricing-board {
-          grid-template-columns: minmax(390px, 494px) minmax(0, 1fr);
+          grid-template-columns: minmax(468px, 593px) minmax(0, 1fr);
           gap: 20px 40px;
         }
         .disparos-pricing-hex-cluster,
         .disparos-hex-cluster-art {
-          max-width: 494px;
+          max-width: 593px;
         }
       }
       @media (max-width: 960px) {
@@ -8398,7 +8484,7 @@
         }
         .disparos-pricing-hex-cluster,
         .disparos-hex-cluster-art {
-          max-width: min(390px, 96vw);
+          max-width: min(468px, 96vw);
           margin: 0 auto;
         }
         .disparos-pricing-lanes {
@@ -13121,9 +13207,14 @@
             <div class="disparos-choice-grid">
               <div class="disparos-pricing-board">
                 <div class="disparos-pricing-hex-cluster" aria-label="Pacotes e serviços">
+                  <div class="disparos-hex-cluster-stage" aria-hidden="true">
+                    <span class="disparos-hex-cluster-glow disparos-hex-cluster-glow--green"></span>
+                    <span class="disparos-hex-cluster-glow disparos-hex-cluster-glow--blue"></span>
+                    <span class="disparos-hex-cluster-glow disparos-hex-cluster-glow--center"></span>
+                  </div>
                   <img
                     class="disparos-hex-cluster-art"
-                    src="/media/hexagono.png"
+                    src="/media/hexa-corrigido.png"
                     alt="Pacotes e serviços, API Oficial e API Alternativa"
                     width="3000"
                     height="4000"
