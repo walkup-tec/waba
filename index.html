@@ -7870,12 +7870,13 @@
         --disp-preview-img-bg: #3d4654;
         --disp-preview-text: #4b5563;
         --disp-hex-size: 132px;
+        width: 100%;
         min-height: auto;
-        padding: 32px 20px 48px;
+        padding: 32px 0 48px;
         position: relative;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
         background: transparent;
       }
       #tab-disparos-lancamento {
@@ -8163,6 +8164,16 @@
         margin: 0 auto;
         padding: 16px 16px 40px;
       }
+      #disparos-purchase-home.disparos-credits-hub-page {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 16px clamp(20px, 4vw, 48px) 40px;
+      }
+      #disparos-credits-hub-panel-history .disparos-credits-panel,
+      #disparos-credits-hub-panel-history .disparos-credits-history-section {
+        width: min(1040px, 100%);
+      }
       .disparos-credits-api-split {
         display: flex;
         flex-direction: column;
@@ -8377,8 +8388,8 @@
       }
       .disparos-choice-grid {
         width: 100%;
-        max-width: 1280px;
-        margin: 0 auto;
+        max-width: none;
+        margin: 0;
       }
       .disparos-pricing-board {
         display: grid;
@@ -8574,8 +8585,8 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 0;
         width: 100%;
-        max-width: 1280px;
-        margin: 28px auto 0;
+        max-width: none;
+        margin: 28px 0 0;
         padding: 0;
         border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 14px;

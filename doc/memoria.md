@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Créditos Contratar largura total:** seção Contratar ocupa 100% da página; hex e cards mantêm tamanho. Ver `doc/LOG-2026-06-25__creditos-contratar-largura-total.md`.
+
 **WABA — Wizard Nova campanha (API Oficial):** removido seletor "Plano de envio" no passo Leads; campanha sempre `apiKind: oficial`. Ver `doc/LOG-2026-06-25__dis-wizard-sem-plano-envio-api-oficial.md`.
 
 **WABA — Envio teste Aquecedor:** envia mensagem entre 2 instâncias ativas; motor visível sem depender do teste. Ver `doc/LOG-2026-06-25__aquecedor-envio-teste-funcional.md`.
