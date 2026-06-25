@@ -7823,15 +7823,14 @@
         --disp-page-bg: #0b111b;
         --disp-card-bg: #131a26;
         --disp-green: #10b981;
+        --disp-oficial-hex: #10b981;
+        --disp-oficial-hex-dark: #059669;
+        --disp-alt-hex: #0ea5e9;
+        --disp-alt-hex-dark: #0284c7;
         --disp-preview-bg: #d1d1d1;
         --disp-preview-img-bg: #3d4654;
         --disp-preview-text: #4b5563;
-        --disp-note-bg: #6b6320;
-        --disp-note-gold: #e3d667;
-        --disp-card-width: 300px;
-        --disp-cards-gap: 28px;
-        --disp-note-margin-y: 48px;
-        --disp-note-slot-height: 196px;
+        --disp-hex-size: 132px;
         min-height: calc(100vh - 200px);
         padding: 32px 20px 48px;
         position: relative;
@@ -8160,56 +8159,265 @@
         min-height: auto;
       }
       .disparos-choice-grid {
-        display: grid;
-        grid-template-columns: repeat(2, var(--disp-card-width));
-        gap: var(--disp-cards-gap);
-        width: fit-content;
-        max-width: 100%;
-        margin: 0 auto;
-        position: relative;
-      }
-      @media (max-width: 700px) {
-        .disparos-choice-grid {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        .disparos-api-card[data-disparos-api="oficial"] {
-          order: 1;
-        }
-        .disparos-choice-note {
-          order: 2;
-          position: static !important;
-          transform: none !important;
-          width: min(400px, 92vw) !important;
-          margin: var(--disp-note-margin-y) auto;
-          pointer-events: auto;
-        }
-        .disparos-api-card[data-disparos-api="alternativa"] {
-          order: 3;
-        }
-        .disparos-note-slot {
-          display: none;
-        }
-      }
-      .disparos-note-slot {
         width: 100%;
-        height: var(--disp-note-slot-height);
-        min-height: var(--disp-note-slot-height);
-        flex-shrink: 0;
+        max-width: 1120px;
+        margin: 0 auto;
       }
-      .disparos-api-card {
-        width: var(--disp-card-width);
-        max-width: 100%;
-        border-radius: 16px;
-        border: none;
-        background: var(--disp-card-bg);
-        padding: 20px 14px 22px;
+      .disparos-pricing-board {
+        display: grid;
+        grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+        gap: 8px 12px;
+        align-items: stretch;
+        padding: 8px 0 16px;
+      }
+      .disparos-pricing-hex-cluster {
+        position: relative;
+        min-height: 360px;
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--intro {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1;
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--oficial {
+        position: absolute;
+        right: 4px;
+        top: 8px;
+        z-index: 3;
+      }
+      .disparos-pricing-hex-cluster .disparos-api-hex--alternativa {
+        position: absolute;
+        right: 0;
+        bottom: 8px;
+        z-index: 2;
+      }
+      .disparos-api-hex {
+        width: var(--disp-hex-size);
+        height: calc(var(--disp-hex-size) * 1.1547);
+        position: relative;
+        flex-shrink: 0;
+        filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.35));
+      }
+      .disparos-api-hex::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        background: linear-gradient(145deg, #1e293b, #0f172a);
+        border: 2px solid rgba(255, 255, 255, 0.12);
+      }
+      .disparos-api-hex::after {
+        content: "";
+        position: absolute;
+        inset: 5px;
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.22);
+        pointer-events: none;
+      }
+      .disparos-api-hex--intro::before {
+        background: linear-gradient(160deg, #ffffff, #e8edf4);
+        border-color: rgba(255, 255, 255, 0.9);
+      }
+      .disparos-api-hex--oficial::before {
+        background: linear-gradient(145deg, #8cc63f, #5a9e22);
+      }
+      .disparos-api-hex--alternativa::before {
+        background: linear-gradient(145deg, #0081c6, #005f94);
+      }
+      .disparos-api-hex-content {
+        position: relative;
+        z-index: 1;
+        height: 100%;
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 24px 12px;
         text-align: center;
-        gap: 14px;
+      }
+      .disparos-api-hex-content .disparos-api-card-title {
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.82rem;
+        line-height: 1.15;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .disparos-api-hex--intro .disparos-api-hex-content strong {
+        font-size: 0.92rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #1e293b;
+      }
+      .disparos-api-hex--intro .disparos-api-hex-content span {
+        font-size: 0.68rem;
+        line-height: 1.4;
+        color: #64748b;
+        max-width: 112px;
+      }
+      .disparos-api-hex--oficial .disparos-api-hex-content,
+      .disparos-api-hex--alternativa .disparos-api-hex-content {
+        color: #fff;
+      }
+      .disparos-api-hex--oficial .disparos-api-card-title,
+      .disparos-api-hex--alternativa .disparos-api-card-title {
+        color: #fff;
+      }
+      .disparos-api-hex--oficial .wa-icon {
+        width: 22px;
+        height: 22px;
+        color: #ecfdf5;
+      }
+      .disparos-api-hex--alternativa .rocket-icon {
+        width: 22px;
+        height: 22px;
+        color: #e0f2fe;
+      }
+      .disparos-pricing-lanes {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 56px;
+        padding: 28px 0 24px;
+        min-height: 360px;
+      }
+      .disparos-pricing-lane {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr) 40px minmax(170px, 210px);
+        align-items: center;
+        gap: 0;
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+      }
+      .disparos-pricing-lane.is-selected {
+        outline: none;
+      }
+      .disparos-pricing-lane[data-disparos-api="oficial"].is-selected .disparos-pricing-lane-pricing {
+        box-shadow: 0 0 0 2px rgba(140, 198, 63, 0.45);
+      }
+      .disparos-pricing-lane[data-disparos-api="alternativa"].is-selected .disparos-pricing-lane-pricing {
+        box-shadow: 0 0 0 2px rgba(0, 129, 198, 0.45);
+      }
+      .disparos-pricing-lane-connector,
+      .disparos-pricing-lane-connector-mid {
+        height: 2px;
+        background: rgba(148, 163, 184, 0.35);
+        align-self: center;
+      }
+      .disparos-pricing-lane-features {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        padding: 0 6px;
+      }
+      .disparos-pricing-lane-pricing {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        text-align: center;
+        padding: 4px 6px;
+        border-radius: 12px;
+      }
+      .disparos-pricing-lane-note {
+        margin: 0;
+        font-size: 0.72rem;
+        line-height: 1.45;
+        color: #94a3b8;
+      }
+      .disparos-api-feature-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 7px;
+      }
+      .disparos-api-feature-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        line-height: 1.35;
+      }
+      .disparos-api-feature-list li::before {
+        content: "";
+        flex: 0 0 18px;
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, 0.18) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M3.5 8.2l2.8 2.8 6.2-6.4' stroke='%2322c55e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 11px no-repeat;
+      }
+      .disparos-pricing-lane .disparos-msg-preview {
+        max-width: 320px;
+        padding: 10px;
+        gap: 8px;
+      }
+      .disparos-pricing-lane .disparos-msg-preview-image {
+        aspect-ratio: 16 / 10;
+        max-height: 88px;
+      }
+      @media (max-width: 960px) {
+        .disparos-pricing-board {
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .disparos-pricing-hex-cluster {
+          min-height: 300px;
+          max-width: 280px;
+        }
+        .disparos-pricing-lanes {
+          min-height: 0;
+          gap: 36px;
+          padding: 0;
+        }
+        .disparos-pricing-lane {
+          grid-template-columns: 1fr;
+          gap: 14px;
+          text-align: center;
+        }
+        .disparos-pricing-lane-connector,
+        .disparos-pricing-lane-connector-mid {
+          display: none;
+        }
+        .disparos-pricing-lane-features,
+        .disparos-pricing-lane-pricing {
+          width: 100%;
+          max-width: 400px;
+          margin: 0 auto;
+        }
+        .disparos-pricing-lane .disparos-msg-preview {
+          max-width: none;
+        }
+        .disparos-api-feature-list li {
+          justify-content: center;
+        }
+      }
+      .disparos-api-card {
+        width: 100%;
+        max-width: 100%;
+        border: none;
+        background: transparent;
+        padding: 0;
+        display: block;
+        text-align: left;
         box-shadow: none;
         position: relative;
         z-index: 2;
@@ -8263,15 +8471,30 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 5px 14px;
+        align-self: flex-start;
+        padding: 4px 12px;
         border-radius: 999px;
         border: 1px solid var(--disp-green);
         background: transparent;
         color: var(--disp-green);
-        font-size: 13px;
-        font-weight: 600;
+        font-size: 11px;
+        font-weight: 700;
         line-height: 1.2;
-        letter-spacing: 0;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .disparos-pricing-lane[data-disparos-api="alternativa"] .disparos-api-section-label {
+        border-color: #38bdf8;
+        color: #7dd3fc;
+      }
+      .disparos-pricing-lane-pricing .disparos-api-section-label {
+        align-self: center;
+      }
+      @media (max-width: 960px) {
+        .disparos-api-section-label,
+        .disparos-pricing-lane-pricing .disparos-api-section-label {
+          align-self: center;
+        }
       }
       .disparos-msg-preview {
         width: 100%;
@@ -8344,34 +8567,42 @@
       }
       .disparos-api-price {
         width: 100%;
-        font-size: 20px;
-        font-weight: 700;
-        color: #ffffff;
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #f8fafc;
         letter-spacing: 0;
-        line-height: 1.25;
+        line-height: 1.2;
         text-align: center;
         margin: 0;
       }
       .disparos-api-contratar {
         width: 100%;
         align-self: stretch;
-        padding: 12px 14px;
+        padding: 11px 14px;
         border: none;
-        border-radius: 10px;
-        background: #ffffff;
-        color: #374151;
-        font-size: 16px;
-        font-weight: 700;
+        border-radius: 4px;
+        background: #0f172a;
+        color: #ffffff;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         line-height: 1.2;
         cursor: pointer;
-        box-shadow: none;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
         position: relative;
         z-index: 12;
         pointer-events: auto;
         transition: background 0.15s ease, transform 0.1s ease;
       }
-      .disparos-api-contratar:hover {
-        background: #f9fafb;
+      .disparos-pricing-lane[data-disparos-api="oficial"] .disparos-api-contratar:hover {
+        background: #1e293b;
+      }
+      .disparos-pricing-lane[data-disparos-api="alternativa"] .disparos-api-contratar {
+        background: linear-gradient(145deg, #0081c6, #005f94);
+      }
+      .disparos-pricing-lane[data-disparos-api="alternativa"] .disparos-api-contratar:hover {
+        background: linear-gradient(145deg, #0ea5e9, #006aa3);
       }
       .disparos-api-contratar:active {
         transform: scale(0.98);
@@ -9232,32 +9463,6 @@
         }
       }
 
-      /* Sobrepõe os cards inteiros — entre prévia e tag Investimento (top via JS) */
-      .disparos-choice-note {
-        position: absolute;
-        left: 50%;
-        top: 286px;
-        transform: translateX(-50%) translateY(-50%);
-        width: 400px;
-        max-width: calc(100vw - 24px);
-        padding: 20px 30px;
-        border-radius: 20px;
-        border: 1.5px solid #e3d667 !important;
-        background: #6b6320 !important;
-        background-color: #6b6320 !important;
-        color: #e3d667 !important;
-        -webkit-text-fill-color: #e3d667 !important;
-        font-size: 13px;
-        line-height: 1.5;
-        font-weight: 500;
-        text-align: center;
-        box-shadow: none;
-        z-index: 5;
-        pointer-events: none;
-      }
-      .disparos-api-card.is-selected {
-        box-shadow: inset 0 0 0 1.5px var(--disp-green);
-      }
 
       /* Disparos */
       .disparos-layout {
@@ -12641,7 +12846,8 @@
                           id="aquecedor-stop-btn"
                           class="instance-action-btn btn-delete enabled aquecedor-start-stop-btn hidden"
                           type="button"
-                          data-waba-aquecedor-text="Pausar Aquecedor"
+                          data-waba-aquecedor-text="Aquecedor Ativo"
+                          title="Pausar Aquecedor"
                         ></button>
                         <button
                           id="aquecedor-run-once-btn"
@@ -12674,8 +12880,7 @@
                         <span
                           id="aquecedor-runtime-hero-title"
                           class="aquecedor-runtime-hero-title"
-                          data-waba-aquecedor-text="Aquecedor parado"
-                        ></span>
+                        >Aquecedor parado</span>
                         <span id="aquecedor-runtime-instance-count" class="aquecedor-runtime-instance-count" aria-live="polite"></span>
                       </div>
                       <div id="aquecedor-runtime-hero-sub" class="aquecedor-runtime-hero-sub">
@@ -12880,117 +13085,147 @@
           >
           <div id="disparos-purchase-choice-wrap" class="disparos-choice-wrap">
             <div class="disparos-choice-grid">
-              <article class="disparos-api-card" data-disparos-api="oficial">
-                <header class="disparos-api-card-header">
-                  <span class="disparos-api-card-title">
-                    <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
-                      />
-                    </svg>
-                    <span>API Oficial</span>
-                  </span>
-                </header>
-
-                <span class="disparos-api-section-label">Modelo de mensagem</span>
-                <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
-                  <div class="disparos-msg-preview-image" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-                      <circle cx="8.5" cy="10" r="1.5"></circle>
-                      <path d="M21 16l-5-5-4 4-2-2-5 5"></path>
-                    </svg>
-                    <span>Imagem que você escolher</span>
+              <div class="disparos-pricing-board">
+                <div class="disparos-pricing-hex-cluster" aria-label="Planos de envio">
+                  <div class="disparos-api-hex disparos-api-hex--intro">
+                    <div class="disparos-api-hex-content">
+                      <strong>Nossos planos</strong>
+                      <span>Contrate créditos de envio pela API que melhor combina com sua operação.</span>
+                    </div>
                   </div>
-                  <p class="disparos-msg-preview-text">
-                    Aqui vai o texto de venda do seu produto ou serviço e, a baixo, o botão de ação.
-                  </p>
-                  <div class="disparos-msg-preview-btn" role="presentation">Mais informações</div>
+                  <div class="disparos-api-hex disparos-api-hex--oficial" id="disparos-hex-oficial">
+                    <div class="disparos-api-hex-content">
+                      <span class="disparos-api-card-title">
+                        <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"
+                          />
+                        </svg>
+                        <span>API Oficial</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="disparos-api-hex disparos-api-hex--alternativa" id="disparos-hex-alternativa">
+                    <div class="disparos-api-hex-content">
+                      <span class="disparos-api-card-title">
+                        <svg class="rocket-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+                          <circle cx="12" cy="9" r="1.2"></circle>
+                          <path d="M9 12l-3 3h3"></path>
+                          <path d="M15 12l3 3h-3"></path>
+                          <path d="M12 15v4"></path>
+                        </svg>
+                        <span>API Alternativa</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="disparos-note-slot" aria-hidden="true"></div>
+                <div class="disparos-pricing-lanes">
+                  <article
+                    class="disparos-pricing-lane disparos-api-card"
+                    data-disparos-api="oficial"
+                  >
+                    <div class="disparos-pricing-lane-connector" aria-hidden="true"></div>
+                    <div class="disparos-pricing-lane-features">
+                      <span class="disparos-api-section-label">Modelo de mensagem</span>
+                      <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
+                        <div class="disparos-msg-preview-image" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                            <circle cx="8.5" cy="10" r="1.5"></circle>
+                            <path d="M21 16l-5-5-4 4-2-2-5 5"></path>
+                          </svg>
+                          <span>Imagem que você escolher</span>
+                        </div>
+                        <p class="disparos-msg-preview-text">
+                          Aqui vai o texto de venda do seu produto ou serviço e, a baixo, o botão de ação.
+                        </p>
+                        <div class="disparos-msg-preview-btn" role="presentation">Mais informações</div>
+                      </div>
+                      <ul class="disparos-api-feature-list" aria-label="Recursos da API Oficial">
+                        <li>Imagem e texto personalizados no modelo</li>
+                        <li>Botão de ação na mensagem</li>
+                        <li>Entrega via API Oficial (Meta)</li>
+                      </ul>
+                    </div>
+                    <div class="disparos-pricing-lane-connector-mid" aria-hidden="true"></div>
+                    <div class="disparos-pricing-lane-pricing">
+                      <p class="disparos-pricing-lane-note">
+                        Investimento por envio, conforme volume contratado na tabela de preços.
+                      </p>
+                      <span class="disparos-api-section-label">Investimento</span>
+                      <p class="disparos-api-price">De R$ 0,29 a R$ 0,32</p>
+                      <button
+                        type="button"
+                        class="disparos-api-contratar"
+                        data-disparos-contratar="oficial"
+                      >
+                        Contratar
+                      </button>
+                      <p class="disparos-api-min-creditos">
+                        Valor mínimo de créditos:
+                        <strong>R$ 300,00</strong>
+                      </p>
+                    </div>
+                  </article>
 
-                <span class="disparos-api-section-label">Investimento</span>
-                <p class="disparos-api-price">De R$ 0,29 a R$ 0,32</p>
-
-                <button
-                  type="button"
-                  class="disparos-api-contratar"
-                  data-disparos-contratar="oficial"
-                >
-                  Contratar
-                </button>
-                <p class="disparos-api-min-creditos">
-                  Valor mínimo de créditos:
-                  <strong>R$ 300,00</strong>
-                </p>
-              </article>
-
-              <article class="disparos-api-card" data-disparos-api="alternativa">
-                <header class="disparos-api-card-header">
-                  <span class="disparos-api-card-title">
-                    <svg class="rocket-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
-                      <circle cx="12" cy="9" r="1.2"></circle>
-                      <path d="M9 12l-3 3h3"></path>
-                      <path d="M15 12l3 3h-3"></path>
-                      <path d="M12 15v4"></path>
-                    </svg>
-                    <span>API Alternativa</span>
-                  </span>
-                </header>
-
-                <span class="disparos-api-section-label">Modelo de mensagem</span>
-                <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
-                  <div class="disparos-msg-preview-image" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-                      <circle cx="8.5" cy="10" r="1.5"></circle>
-                      <path d="M21 16l-5-5-4 4-2-2-5 5"></path>
-                    </svg>
-                    <span>Imagem que você escolher</span>
-                  </div>
-                  <p class="disparos-msg-preview-text">
-                    Aqui vai o texto de venda do seu produto ou serviço e, a baixo, o link que a pessoa será direcionada:
-                  </p>
-                  <a
-                    class="disparos-msg-preview-link"
-                    href="#"
-                    tabindex="-1"
-                    aria-hidden="true"
-                    onclick="return false;"
-                  >https://sitedecompra.com.br</a>
+                  <article
+                    class="disparos-pricing-lane disparos-api-card"
+                    data-disparos-api="alternativa"
+                  >
+                    <div class="disparos-pricing-lane-connector" aria-hidden="true"></div>
+                    <div class="disparos-pricing-lane-features">
+                      <span class="disparos-api-section-label">Modelo de mensagem</span>
+                      <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
+                        <div class="disparos-msg-preview-image" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                            <circle cx="8.5" cy="10" r="1.5"></circle>
+                            <path d="M21 16l-5-5-4 4-2-2-5 5"></path>
+                          </svg>
+                          <span>Imagem que você escolher</span>
+                        </div>
+                        <p class="disparos-msg-preview-text">
+                          Aqui vai o texto de venda do seu produto ou serviço e, a baixo, o link que a pessoa será direcionada:
+                        </p>
+                        <a
+                          class="disparos-msg-preview-link"
+                          href="#"
+                          tabindex="-1"
+                          aria-hidden="true"
+                          onclick="return false;"
+                        >https://sitedecompra.com.br</a>
+                      </div>
+                      <ul class="disparos-api-feature-list" aria-label="Recursos da API Alternativa">
+                        <li>Imagem e texto personalizados no modelo</li>
+                        <li>Link de destino definido por você</li>
+                        <li>Entrega via API Alternativa</li>
+                      </ul>
+                    </div>
+                    <div class="disparos-pricing-lane-connector-mid" aria-hidden="true"></div>
+                    <div class="disparos-pricing-lane-pricing">
+                      <p class="disparos-pricing-lane-note">
+                        Investimento por envio, conforme volume contratado na tabela de preços.
+                      </p>
+                      <span class="disparos-api-section-label">Investimento</span>
+                      <p class="disparos-api-price">De R$ 0,17 a R$ 0,24</p>
+                      <button
+                        type="button"
+                        class="disparos-api-contratar"
+                        data-disparos-contratar="alternativa"
+                      >
+                        Contratar
+                      </button>
+                      <p class="disparos-api-min-creditos">
+                        Valor mínimo de créditos:
+                        <strong>R$ 300,00</strong>
+                      </p>
+                    </div>
+                  </article>
                 </div>
-
-                <div class="disparos-note-slot" aria-hidden="true"></div>
-
-                <span class="disparos-api-section-label">Investimento</span>
-                <p class="disparos-api-price">De R$ 0,17 a R$ 0,24</p>
-
-                <button
-                  type="button"
-                  class="disparos-api-contratar"
-                  data-disparos-contratar="alternativa"
-                >
-                  Contratar
-                </button>
-                <p class="disparos-api-min-creditos">
-                  Valor mínimo de créditos:
-                  <strong>R$ 300,00</strong>
-                </p>
-              </article>
-
-              <aside
-                class="disparos-choice-note"
-                aria-label="Diferença entre as APIs"
-                style="border-color:#e3d667;background:#6b6320;color:#e3d667"
-              >
-                Sim. Basicamente a diferença é o botão de ação.<br />
-                Na API oficial aparece um botão, já na API<br />
-                alternativa, a mensagem ganha um link de<br />
-                destino (link que definido por você).
-              </aside>
+              </div>
             </div>
           </div>
           </div>
@@ -17474,10 +17709,10 @@
       function setWabaAquecedorLabelElement(element, options = {}) {
         if (!element) return;
         const text = options.text != null ? String(options.text) : "Aquecedor";
-        element.innerHTML =
-          text === "Aquecedor"
-            ? renderWabaAquecedorLabelHtml("Aquecedor", options)
-            : renderTextWithAquecedorIconHtml(text);
+        const trimmed = text.trim();
+        element.innerHTML = trimmed.startsWith("Aquecedor")
+          ? renderWabaAquecedorLabelHtml(trimmed, options)
+          : renderTextWithAquecedorIconHtml(text);
         element.setAttribute("data-waba-aquecedor-label", "");
       }
 
@@ -17620,23 +17855,6 @@
         }
         applyIntegrationEnvironment(saved);
         enhanceWabaProductLabelElements(document);
-      }
-
-      function positionDisparosChoiceNote() {
-        const note = document.querySelector(".disparos-choice-note");
-        const grid = document.querySelector(".disparos-choice-grid");
-        const card = document.querySelector('.disparos-api-card[data-disparos-api="oficial"]');
-        if (!note || !grid || !card) return;
-        if (window.matchMedia("(max-width: 700px)").matches) {
-          note.style.top = "";
-          return;
-        }
-        const slot = card.querySelector(".disparos-note-slot");
-        if (!slot) return;
-        const gridRect = grid.getBoundingClientRect();
-        const slotRect = slot.getBoundingClientRect();
-        const midY = (slotRect.top + slotRect.bottom) / 2 - gridRect.top;
-        note.style.top = `${midY}px`;
       }
 
       const DISPAROS_PRICING_TIERS = {
@@ -23981,7 +24199,6 @@
         openDisparosOverlay("disparos-repurchase-overlay");
         preselectDisparosRepurchaseApiKind();
         void loadDisparosCredits();
-        requestAnimationFrame(() => positionDisparosChoiceNote());
       }
 
       function preselectDisparosRepurchaseApiKind() {
@@ -25693,9 +25910,6 @@
             syncDisparosCreditsEmptyNudge();
             if (isDisparosCreditsHubTabActive()) void loadDisparosCreditsHubHistory();
           });
-          if (isDisparosRepurchaseModalOpen()) {
-            requestAnimationFrame(() => positionDisparosChoiceNote());
-          }
         });
         document.getElementById("disparos-pix-copy-btn")?.addEventListener("click", async () => {
           const copyField = document.getElementById("disparos-pix-copy");
@@ -25759,11 +25973,6 @@
           );
         });
 
-        positionDisparosChoiceNote();
-        if (!window.__disparosNoteResizeBound) {
-          window.__disparosNoteResizeBound = true;
-          window.addEventListener("resize", positionDisparosChoiceNote);
-        }
       }
 
       let instancesSearchTerm = "";
@@ -27385,6 +27594,20 @@
         captionEl.textContent = "Pronto para próximo ciclo.";
       }
 
+      function syncAquecedorStopButtonLabel(status) {
+        const stopBtn = document.getElementById("aquecedor-stop-btn");
+        if (!stopBtn || stopBtn.classList.contains("hidden")) return;
+        const running = status?.running === true;
+        if (!running) return;
+        let label = "Aquecedor Ativo";
+        if (status?.isProcessing === true) {
+          label = "Aquecedor processando";
+        } else if (status?.windowOpen === false) {
+          label = "Aquecedor em pausa";
+        }
+        setWabaAquecedorLabelElement(stopBtn, { text: label });
+      }
+
       function renderAquecedorRuntimeHero(status) {
         const hero = document.getElementById("aquecedor-runtime-hero");
         const titleEl = document.getElementById("aquecedor-runtime-hero-title");
@@ -27409,15 +27632,15 @@
         }
         if (processing) {
           hero.classList.add("processing");
-          titleEl.innerHTML = renderTextWithAquecedorIconHtml("Aquecedor processando agora");
+          titleEl.textContent = "Aquecedor processando agora";
           subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
+          syncAquecedorStopButtonLabel(status);
           return;
         }
         if (running) {
           hero.classList.add("active");
-          titleEl.innerHTML = renderTextWithAquecedorIconHtml(
-            status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo"
-          );
+          titleEl.textContent =
+            status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo";
           if (status?.windowOpen === false) {
             subEl.textContent =
               status?.nextWindowOpenBr ||
@@ -27426,9 +27649,10 @@
           } else {
             subEl.textContent = lastResult || "Motor iniciado e aguardando próximo ciclo.";
           }
+          syncAquecedorStopButtonLabel(status);
           return;
         }
-        titleEl.innerHTML = renderTextWithAquecedorIconHtml("Aquecedor parado");
+        titleEl.textContent = "Aquecedor parado";
         subEl.textContent = lastResult || 'Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.';
       }
 
@@ -30913,7 +31137,6 @@
           stopAdminCampanhasPolling();
           setDisparosCreditsHubTab("purchase");
           void loadDisparosCredits();
-          requestAnimationFrame(() => positionDisparosChoiceNote());
         } else if (nextTab === "admin-assinantes") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
