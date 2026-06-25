@@ -1699,3 +1699,4 @@ Palavras-chave para buscar:
 - **2026-06-25 (hexagono.png):** arte transparente `media/hexagono.png` (+30% tamanho UI); ver `doc/LOG-2026-06-25__creditos-hexagono-png-transparente.md`.
 - **2026-06-25 (glow +20%):** hex +20% e halos verde/azul; ver `doc/LOG-2026-06-25__creditos-hexagono-glow-mais-20pct.md`.
 - **2026-06-25 (hexa-corrigido):** arte `media/hexa-corrigido.png` substitui `hexagono.png` na tela Contratar.
+- **2026-06-25 (fix retângulo glow):** removidas camadas CSS de luz; `mix-blend-mode: lighten` no PNG; ver `doc/LOG-2026-06-25__creditos-hex-fix-contorno-retangular.md`.
