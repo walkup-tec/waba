@@ -817,6 +817,37 @@ const DISPAROS_LOCAL_STATE_FILE = (0, data_path_1.resolveDataFile)("disparos-loc
 const RUNTIME_INTENT_FILE = (0, data_path_1.resolveDataFile)("runtime-intent.json");
 const AQUECEDOR_CONFIG_FILE = (0, data_path_1.resolveDataFile)("aquecedor-config.json");
 const AQUECEDOR_ENVIOS_LOG_FILE = (0, data_path_1.resolveDataFile)("aquecedor-envios-log.json");
+const AQUECEDOR_COMMAND_LOG_FILE = (0, data_path_1.resolveDataFile)("aquecedor-command-log.json");
+const AQUECEDOR_COMMAND_LOG_MAX = 500;
+async function readAquecedorCommandLog() {
+    try {
+        const raw = await fs_1.promises.readFile(AQUECEDOR_COMMAND_LOG_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed?.items) ? parsed.items : [];
+    }
+    catch {
+        return [];
+    }
+}
+async function appendAquecedorCommandLog(message, ownerEmail) {
+    const text = String(message ?? "").trim();
+    if (!text)
+        return;
+    const email = String(ownerEmail ?? aquecedorRuntimeOwnerEmail ?? "")
+        .trim()
+        .toLowerCase();
+    const items = await readAquecedorCommandLog();
+    items.unshift({
+        id: crypto_1.default.randomUUID(),
+        ownerEmail: email,
+        at: new Date().toISOString(),
+        message: text,
+    });
+    await fs_1.promises.mkdir(path_1.default.dirname(AQUECEDOR_COMMAND_LOG_FILE), { recursive: true });
+    const tmp = `${AQUECEDOR_COMMAND_LOG_FILE}.tmp`;
+    await fs_1.promises.writeFile(tmp, JSON.stringify({ items: items.slice(0, AQUECEDOR_COMMAND_LOG_MAX) }, null, 2), "utf-8");
+    await fs_1.promises.rename(tmp, AQUECEDOR_COMMAND_LOG_FILE);
+}
 async function readAquecedorEnviosLog() {
     try {
         const raw = await fs_1.promises.readFile(AQUECEDOR_ENVIOS_LOG_FILE, "utf-8");
@@ -846,6 +877,9 @@ async function recordAquecedorEnvio(params) {
         dataEnvio: params.dataEnvio || new Date().toISOString(),
         status: params.status,
     });
+    if (params.status === "Envio com Sucesso") {
+        void appendAquecedorCommandLog(`Envio realizado: ${params.instanciaOrigem} → ${params.instanciaDestino}`, ownerEmail);
+    }
 }
 function aquecedorEnvioMatchesOwner(instanciaOrigem, instanciaDestino, allowed) {
     if (!allowed)
@@ -3510,11 +3544,42 @@ if (base_path_1.BASE_PATH) {
 else {
     app.use(express_1.default.static(distPath, staticNoIndex));
 }
+// Cache curto em memória para GET /dados (reduz hits repetidos ao Supabase).
+const DADOS_RESPONSE_CACHE_TTL_MS = 45000;
+const dadosResponseCache = new Map();
+function buildDadosResponseCacheKey(rangeStart, rangeEnd) {
+    if (rangeStart && rangeEnd)
+        return `range:${rangeStart}:${rangeEnd}`;
+    return "default";
+}
+function readDadosResponseCache(key) {
+    const entry = dadosResponseCache.get(key);
+    if (!entry)
+        return null;
+    if (Date.now() > entry.expiresAt) {
+        dadosResponseCache.delete(key);
+        return null;
+    }
+    return entry.payload;
+}
+function writeDadosResponseCache(key, payload) {
+    dadosResponseCache.set(key, {
+        expiresAt: Date.now() + DADOS_RESPONSE_CACHE_TTL_MS,
+        payload,
+    });
+}
 // Dados direto do banco (view logs_envios_br já com fuso tratado)
 app.get("/dados", async (req, res) => {
     try {
         const rangeStart = typeof req.query.rangeStart === "string" ? req.query.rangeStart : null;
         const rangeEnd = typeof req.query.rangeEnd === "string" ? req.query.rangeEnd : null;
+        const cacheKey = buildDadosResponseCacheKey(rangeStart, rangeEnd);
+        const cachedPayload = readDadosResponseCache(cacheKey);
+        if (cachedPayload) {
+            res.setHeader("Cache-Control", "private, max-age=30");
+            res.setHeader("X-Waba-Dados-Cache", "hit");
+            return res.json(cachedPayload);
+        }
         const supabase = getSupabaseClient();
         if (!supabase) {
             return res.status(503).json({
@@ -3615,7 +3680,16 @@ app.get("/dados", async (req, res) => {
             return `Data/Hora: ${dataHora}\nQuem enviou: ${quemEnviou}\nQuem recebeu: ${quemRecebeu}`;
         })
             .join("\n-----------------------------\n");
-        return res.json({ log: texto, count: rows.length, totalCount, countsBySender });
+        const payload = {
+            log: texto,
+            count: rows.length,
+            totalCount,
+            countsBySender,
+        };
+        writeDadosResponseCache(cacheKey, payload);
+        res.setHeader("Cache-Control", "private, max-age=30");
+        res.setHeader("X-Waba-Dados-Cache", "miss");
+        return res.json(payload);
     }
     catch (error) {
         console.error("Erro ao buscar dados no Supabase:", error);
@@ -6345,6 +6419,47 @@ app.get("/aquecedor/envios", async (req, res) => {
         return res.status(500).json({ error: "Erro ao listar envios do aquecedor." });
     }
 });
+app.get("/aquecedor/command-logs", async (req, res) => {
+    if (rejectAquecedorWithoutEntitlement(req, res))
+        return;
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const ownerEmail = auth.email?.trim().toLowerCase() || "";
+        const rawLimit = Number(req.query.limit ?? 30);
+        const limit = Number.isFinite(rawLimit)
+            ? Math.max(1, Math.min(120, Math.floor(rawLimit)))
+            : 30;
+        const globalScope = isAquecedorGlobalScopeOwner(ownerEmail);
+        const items = (await readAquecedorCommandLog()).filter((row) => {
+            if (globalScope)
+                return true;
+            const rowOwner = String(row.ownerEmail || "").trim().toLowerCase();
+            return !rowOwner || rowOwner === ownerEmail;
+        });
+        return res.json({ items: items.slice(0, limit) });
+    }
+    catch (error) {
+        console.error("Erro inesperado ao listar logs de comando do aquecedor:", error);
+        return res.status(500).json({ error: "Erro ao listar logs de comando." });
+    }
+});
+app.post("/aquecedor/command-logs", async (req, res) => {
+    if (rejectAquecedorWithoutEntitlement(req, res))
+        return;
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const message = String(req.body?.message ?? "").trim();
+        if (!message) {
+            return res.status(400).json({ error: "Informe a mensagem do log." });
+        }
+        await appendAquecedorCommandLog(message, auth.email);
+        return res.status(201).json({ ok: true });
+    }
+    catch (error) {
+        console.error("Erro inesperado ao gravar log de comando do aquecedor:", error);
+        return res.status(500).json({ error: "Erro ao gravar log de comando." });
+    }
+});
 app.post("/aquecedor/start", async (req, res) => {
     if (rejectAquecedorWithoutEntitlement(req, res))
         return;
@@ -6369,6 +6484,7 @@ app.post("/aquecedor/start", async (req, res) => {
     startAquecedorRuntimeLocal();
     void ensureAquecedorPendingMessage();
     aquecedorRuntime.lastResult = "Aquecedor iniciado.";
+    void appendAquecedorCommandLog("Aquecedor iniciado.", aquecedorRuntimeOwnerEmail);
     return res.json({
         ok: true,
         message: "Aquecedor iniciado.",
@@ -6384,7 +6500,9 @@ app.post("/aquecedor/start", async (req, res) => {
 app.post("/aquecedor/stop", async (_req, res) => {
     stopAquecedorRuntime();
     aquecedorRuntime.lastResult = "Aquecedor parado.";
+    const stopOwner = aquecedorRuntimeOwnerEmail;
     await persistAquecedorRuntimeIntent(false, null);
+    void appendAquecedorCommandLog("Aquecedor parado.", stopOwner);
     await reloadAquecedorPersistedBundleFromDisk();
     return res.json({
         ok: true,
@@ -6425,6 +6543,7 @@ app.post("/aquecedor/run-once", async (req, res) => {
     const status = buildLiveAquecedorStatusPayload();
     const lastResult = String(aquecedorRuntime.lastResult || "").trim();
     const ok = /enviado com sucesso|realizado/i.test(lastResult);
+    void appendAquecedorCommandLog(lastResult ? `Envio teste: ${lastResult}` : "Envio teste executado.", aquecedorRuntimeOwnerEmail);
     return res.json({
         ok,
         message: lastResult || "Ciclo de teste executado.",

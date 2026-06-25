@@ -15,6 +15,14 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Dashboard Aquecedor cache rápido:** localStorage (30 min) + cache TTL 45s no backend `/dados`; hidratação no login e render imediato; marker `DEPLOY-2026-06-25-aquecedor-dashboard-dados-cache`. Ver `doc/LOG-2026-06-25__aquecedor-dashboard-dados-cache.md`.
+
+**WABA — Lista campanhas altura dinâmica:** igual ao card Resumo (Oficial + Alternativa); marker `DEPLOY-2026-06-25-disparos-campanhas-list-height-sync`. Ver `doc/LOG-2026-06-25__disparos-campanhas-lista-altura-dinamica.md`.
+
+**WABA — Ocultar Log diagnóstico API Alternativa (prod):** CSS só baseline; marker `DEPLOY-2026-06-25-hide-disparos-diagnostico-producao`. Ver `doc/LOG-2026-06-25__hide-disparos-diagnostico-api-alternativa-producao.md`.
+
+**WABA — Aquecedor logs de comando (histórico 30):** persistência `aquecedor-command-log.json`, GET/POST `/aquecedor/command-logs`, fallback envios; marker `DEPLOY-2026-06-25-aquecedor-command-log-history`. Ver `doc/LOG-2026-06-25__aquecedor-command-log-historico-30.md`.
+
 **WABA — Operacional Confirmar início campanha:** retry + erro inline no modal; botão renomeado; marker `DEPLOY-2026-06-25-operacional-campanha-iniciar-fix`. Ver `doc/LOG-2026-06-25__operacional-campanha-iniciar-sem-acao.md`.
 
 **WABA — Login assinante (Failed to fetch):** retry + mensagem amigável no frontend; try/catch em `POST /auth/login`; marker `DEPLOY-2026-06-25-login-resilience-retry`. Ver `doc/LOG-2026-06-25__login-resilience-retry-failed-to-fetch.md`.

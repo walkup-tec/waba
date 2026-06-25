@@ -22,6 +22,8 @@ exports.PRODUCTION_PERSISTENCE_CATALOG = [
     { id: "instanceAliases", file: "instance-aliases.json", label: "Aliases de instâncias" },
     { id: "aquecedorLifecycle", file: "aquecedor-instance-lifecycle.json", label: "Aquecedor / lifecycle" },
     { id: "aquecedorConfig", file: "aquecedor-config.json", label: "Aquecedor / config local" },
+    { id: "aquecedorEnviosLog", file: "aquecedor-envios-log.json", label: "Aquecedor / envios" },
+    { id: "aquecedorCommandLog", file: "aquecedor-command-log.json", label: "Aquecedor / logs de comando" },
     { id: "runtimeIntent", file: "runtime-intent.json", label: "Motor disparador/aquecedor" },
     { id: "adminBadges", file: "waba-admin-master-menu-badges.json", label: "Dashboard / badges admin" },
     { id: "alternativaActivations", file: "alternativa-number-activations.json", label: "Números alternativa" },

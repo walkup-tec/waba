@@ -9793,6 +9793,7 @@
         display: flex;
         flex-direction: column;
         min-height: 0;
+        height: 100%;
         border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 12px;
         padding: 16px;
@@ -9805,11 +9806,9 @@
         color: var(--text-secondary);
         margin-bottom: 12px;
       }
-      .disparos-side-campanhas {
-        min-height: 100%;
-      }
+      .disparos-side-campanhas,
       .disparos-side-resumo {
-        min-height: 100%;
+        min-height: 0;
       }
       .disparos-resumo-grid {
         display: flex;
@@ -10394,18 +10393,21 @@
       .disparos-evo-baseline-only {
         display: none !important;
       }
+      body.waba-ui-production .disparos-diagnostico-dev-only,
+      body.waba-ui-production #disparos-diagnostico-btn {
+        display: none !important;
+      }
       body.waba-ui-baseline .disparos-saas-only,
       body.waba-disparo-evo-mode .disparos-saas-only {
         display: none !important;
       }
       body.waba-ui-baseline .disparos-evo-baseline-only,
-      body.waba-disparo-evo-mode .disparos-evo-baseline-only {
+      body.waba-ui-baseline .disparos-diagnostico-dev-only {
         display: block !important;
       }
       body.waba-ui-baseline button.disparos-evo-baseline-only,
       body.waba-ui-baseline .instance-action-btn.disparos-evo-baseline-only,
-      body.waba-disparo-evo-mode button.disparos-evo-baseline-only,
-      body.waba-disparo-evo-mode .instance-action-btn.disparos-evo-baseline-only {
+      body.waba-ui-baseline #disparos-diagnostico-btn {
         display: inline-flex !important;
       }
       body.waba-ui-baseline #disparos-config-legacy,
@@ -11031,12 +11033,33 @@
       }
 
       .disparos-list {
-        flex: 1;
+        flex: 1 1 auto;
         min-height: 0;
-        overflow: auto;
+        overflow-x: hidden;
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      #disparos-list.disparos-list.list-wrapper {
+        max-height: none;
+        height: auto;
+      }
+      @media (min-width: 993px) {
+        .disparos-side-campanhas {
+          display: flex;
+          flex-direction: column;
+        }
+        #disparos-list.disparos-list {
+          flex: 1 1 auto;
+          min-height: 0;
+        }
+      }
+      @media (max-width: 992px) {
+        #disparos-list.disparos-list {
+          flex: none;
+          max-height: none;
+        }
       }
       .disparos-campaign-item {
         display: grid;
@@ -13825,7 +13848,7 @@
                   <div id="disparos-list" class="disparos-list list-wrapper">
                     <div class="muted">Carregando campanhas...</div>
                   </div>
-                  <div class="aquecedor-command-log disparos-evo-baseline-only" style="margin-top: 14px;">
+                  <div class="aquecedor-command-log disparos-evo-baseline-only disparos-diagnostico-dev-only" style="margin-top: 14px;">
                     <div class="disparos-side-title" style="margin-bottom: 6px;">Log de diagnóstico</div>
                     <div id="disparos-diagnostico-log-list" class="aquecedor-command-log-list">
                       <div class="muted">Clique em Diagnóstico para ver o estado do envio e das campanhas.</div>
@@ -16513,6 +16536,117 @@
       let instancesFullRefreshInFlight = false;
       let instancesLastFullRefreshAt = 0;
       const INSTANCES_FULL_REFRESH_INTERVAL_MS = 45000;
+      const DASHBOARD_DADOS_CACHE_PREFIX = "waba.dashboard.dados.cache.v1.";
+      const DASHBOARD_DADOS_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+      let dashboardDadosCacheSavedAt = 0;
+
+      function buildDadosFetchUrl() {
+        let dadosUrl = "/dados";
+        if (timeFilter === "range") {
+          const parsed = parseRangeFromInputValue();
+          if (parsed?.startD && parsed?.endD) {
+            const fmtYMD = (dt) => {
+              const y = dt.getFullYear();
+              const m = String(dt.getMonth() + 1).padStart(2, "0");
+              const d = String(dt.getDate()).padStart(2, "0");
+              return `${y}-${m}-${d}`;
+            };
+            const startYMD = fmtYMD(parsed.startD);
+            const endYMD = fmtYMD(parsed.endD);
+            dadosUrl = `/dados?rangeStart=${encodeURIComponent(
+              startYMD
+            )}&rangeEnd=${encodeURIComponent(endYMD)}`;
+          }
+        }
+        return dadosUrl;
+      }
+
+      function dashboardDadosCacheKey(dadosUrl = buildDadosFetchUrl()) {
+        return `${DASHBOARD_DADOS_CACHE_PREFIX}${wabaSessionEmail || "guest"}:${dadosUrl}`;
+      }
+
+      function persistDashboardDadosCache(payload, dadosUrl = buildDadosFetchUrl()) {
+        if (!payload || typeof payload.log !== "string") return;
+        try {
+          localStorage.setItem(
+            dashboardDadosCacheKey(dadosUrl),
+            JSON.stringify({
+              savedAt: Date.now(),
+              dadosUrl,
+              data: {
+                log: payload.log,
+                totalCount:
+                  typeof payload.totalCount === "number" ? payload.totalCount : null,
+                countsBySender:
+                  payload.countsBySender && typeof payload.countsBySender === "object"
+                    ? payload.countsBySender
+                    : null,
+              },
+            })
+          );
+        } catch (error) {
+          console.warn("Não foi possível salvar cache local do dashboard.", error);
+        }
+      }
+
+      function restoreDashboardDadosCache(dadosUrl = buildDadosFetchUrl()) {
+        try {
+          const raw = localStorage.getItem(dashboardDadosCacheKey(dadosUrl));
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed?.data || typeof parsed.data.log !== "string") return null;
+          if (Date.now() - (parsed.savedAt || 0) > DASHBOARD_DADOS_CACHE_MAX_AGE_MS) {
+            localStorage.removeItem(dashboardDadosCacheKey(dadosUrl));
+            return null;
+          }
+          return parsed;
+        } catch {
+          return null;
+        }
+      }
+
+      function applyDashboardDadosPayload(data) {
+        const texto = data.log || "";
+        serverTotalCount =
+          typeof data.totalCount === "number" ? data.totalCount : null;
+        serverCountsBySender =
+          data && typeof data.countsBySender === "object" ? data.countsBySender : null;
+
+        const blocks = texto
+          .split("-----------------------------")
+          .map((b) => b.trim())
+          .filter(Boolean);
+
+        const events = [];
+        blocks.forEach((b) => {
+          const parsed = parseBlock(b);
+          if (parsed) events.push(parsed);
+        });
+
+        allEvents = events;
+        rawEvents = events;
+        isFirstLoad = false;
+        updateInstanceOptions();
+        applyFilters();
+        return events.length;
+      }
+
+      function formatDashboardCacheLabel(savedAt) {
+        if (!savedAt) return "Exibindo cache local — atualizando...";
+        const when = new Date(savedAt).toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `Cache local (${when}) — atualizando...`;
+      }
+
+      function hydrateDashboardFromLocalCache(dadosUrl = buildDadosFetchUrl()) {
+        const cached = restoreDashboardDadosCache(dadosUrl);
+        if (!cached?.data) return false;
+        dashboardDadosCacheSavedAt = cached.savedAt || 0;
+        applyDashboardDadosPayload(cached.data);
+        return true;
+      }
 
       function instancesLocalCacheKey() {
         return `${INSTANCES_LOCAL_CACHE_PREFIX}${wabaSessionEmail || "guest"}`;
@@ -16849,6 +16983,12 @@
           wabaSubscriberProfile =
             session.subscriber && typeof session.subscriber === "object" ? session.subscriber : null;
           hydrateInstancesFromLocalCache();
+          if (hydrateDashboardFromLocalCache()) {
+            const cacheLabel = document.getElementById("last-update-label");
+            if (cacheLabel) {
+              cacheLabel.textContent = formatDashboardCacheLabel(dashboardDadosCacheSavedAt);
+            }
+          }
           wabaOperacionalDispatchesApi = String(
             session.operacionalDispatchesApi || session.systemUser?.operacionalDispatchesApi || ""
           ).trim();
@@ -17826,6 +17966,8 @@
           initDisparoEvoPanelLayout();
           normalizeDisparosSectionFlow();
         }
+        initDisparosCampanhasLayoutSync();
+        syncDisparosCampanhasListLayout();
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
           setWabaApiKindLabelElement(panelTitle, "alternativa");
@@ -27113,6 +27255,9 @@
       }
       let aquecedorEditMode = false;
       const aquecedorCommandLogs = [];
+      let aquecedorCommandLogsHistory = [];
+      let aquecedorCommandLogsHistoryLoaded = false;
+      const AQUECEDOR_COMMAND_LOG_HISTORY_MIN = 30;
       const disparosDiagnosticoLogs = [];
       const AQUECEDOR_RECOMMENDED = {
         expediente: [
@@ -27329,15 +27474,40 @@
         }, Math.max(1200, timeoutMs));
       }
 
+      function formatAquecedorCommandLogTime(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "—";
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return raw;
+        return parsed.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      }
+
+      function getAquecedorCommandLogsForDisplay() {
+        if (aquecedorCommandLogs.length) return aquecedorCommandLogs;
+        return aquecedorCommandLogsHistory.slice(0, AQUECEDOR_COMMAND_LOG_HISTORY_MIN);
+      }
+
       function renderAquecedorCommandLogs() {
         const container = document.getElementById("aquecedor-command-log-list");
         if (!container) return;
-        if (!aquecedorCommandLogs.length) {
+        const entries = getAquecedorCommandLogsForDisplay();
+        if (!entries.length) {
+          if (!aquecedorCommandLogsHistoryLoaded) {
+            container.innerHTML = '<div class="muted">Carregando histórico de comandos…</div>';
+            return;
+          }
           container.innerHTML = '<div class="muted">Nenhum comando executado ainda.</div>';
           return;
         }
         container.innerHTML = "";
-        aquecedorCommandLogs.forEach((entry) => {
+        entries.forEach((entry) => {
           const row = document.createElement("div");
           row.className = "aquecedor-command-log-item";
           row.textContent = `[${entry.time}] ${entry.message}`;
@@ -27345,10 +27515,68 @@
         });
       }
 
+      async function loadAquecedorCommandLogHistory(force = false) {
+        if (aquecedorCommandLogsHistoryLoaded && !force) return;
+        try {
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath("/aquecedor/command-logs?limit=30"),
+            { credentials: "same-origin" },
+            20000
+          );
+          let items = [];
+          if (response.ok) {
+            const data = await response.json().catch(() => ({}));
+            items = Array.isArray(data?.items) ? data.items : [];
+          }
+          if (!items.length) {
+            const envRes = await fetchWithTimeout(
+              resolveWabaPublicPath("/aquecedor/envios?limit=30"),
+              { credentials: "same-origin" },
+              20000
+            );
+            if (envRes.ok) {
+              const envData = await envRes.json().catch(() => ({}));
+              const envItems = Array.isArray(envData?.items) ? envData.items : [];
+              items = envItems.map((item) => ({
+                at: item?.dataEnvio || item?.dataEnvioBr || "",
+                message: `Envio: ${String(item?.instanciaOrigem || "—")} → ${String(
+                  item?.instanciaDestino || "—"
+                )} (${String(item?.status || "—")})`,
+              }));
+            }
+          }
+          aquecedorCommandLogsHistory = items.map((item) => ({
+            time: formatAquecedorCommandLogTime(item?.at),
+            message: String(item?.message || "").trim(),
+          })).filter((entry) => entry.message);
+        } catch {
+          aquecedorCommandLogsHistory = [];
+        } finally {
+          aquecedorCommandLogsHistoryLoaded = true;
+          renderAquecedorCommandLogs();
+        }
+      }
+
+      function persistAquecedorCommandLog(message) {
+        const text = String(message || "").trim();
+        if (!text) return;
+        void fetchWithTimeout(
+          resolveWabaPublicPath("/aquecedor/command-logs"),
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text }),
+          },
+          8000
+        ).catch(() => {});
+      }
+
       function addAquecedorCommandLog(message) {
         const time = new Date().toLocaleTimeString("pt-BR");
         aquecedorCommandLogs.unshift({ time, message: String(message || "") });
         if (aquecedorCommandLogs.length > 120) aquecedorCommandLogs.length = 120;
+        persistAquecedorCommandLog(message);
         renderAquecedorCommandLogs();
       }
 
@@ -28268,6 +28496,7 @@
         if (aquecedorEnviosPollTimer) clearInterval(aquecedorEnviosPollTimer);
         if (aquecedorRuntimePollTimer) clearInterval(aquecedorRuntimePollTimer);
         if (aquecedorRuntimeVizTimer) clearInterval(aquecedorRuntimeVizTimer);
+        void loadAquecedorCommandLogHistory();
         loadAquecedorEnvios();
         void resumeAquecedorRuntimeFromPersistedIntent();
         aquecedorEnviosPollTimer = setInterval(loadAquecedorEnvios, 8000);
@@ -29899,6 +30128,56 @@
           }
         }
         syncDisparosCreditsEmptyNudge();
+        syncDisparosCampanhasListLayout();
+      }
+
+      let disparosCampanhasLayoutObserver = null;
+
+      function syncDisparosCampanhasListLayout() {
+        const tab = document.getElementById("tab-disparos");
+        const campanhasSide = document.querySelector(".disparos-side-campanhas");
+        const resumoSide = document.querySelector(".disparos-side-resumo");
+        const list = document.getElementById("disparos-list");
+        if (!tab || tab.classList.contains("tab-hidden") || !campanhasSide || !resumoSide || !list) {
+          return;
+        }
+        if (window.matchMedia("(max-width: 992px)").matches) {
+          list.style.maxHeight = "";
+          list.style.minHeight = "";
+          return;
+        }
+        const resumoHeight = Math.round(resumoSide.getBoundingClientRect().height);
+        if (resumoHeight < 1) return;
+        const campanhasStyle = window.getComputedStyle(campanhasSide);
+        const padTop = parseFloat(campanhasStyle.paddingTop) || 0;
+        const padBottom = parseFloat(campanhasStyle.paddingBottom) || 0;
+        let used = padTop + padBottom;
+        campanhasSide.querySelectorAll(":scope > *:not(#disparos-list)").forEach((el) => {
+          if (el.hidden || el.getAttribute("aria-hidden") === "true") return;
+          const style = window.getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden") return;
+          used += el.getBoundingClientRect().height;
+          used += parseFloat(style.marginTop) || 0;
+          used += parseFloat(style.marginBottom) || 0;
+        });
+        const listHeight = Math.max(160, resumoHeight - used);
+        list.style.minHeight = `${listHeight}px`;
+        list.style.maxHeight = `${listHeight}px`;
+      }
+
+      function initDisparosCampanhasLayoutSync() {
+        if (disparosCampanhasLayoutObserver) return;
+        const resumoSide = document.querySelector(".disparos-side-resumo");
+        const campanhasSide = document.querySelector(".disparos-side-campanhas");
+        if (!resumoSide || !campanhasSide || typeof ResizeObserver !== "function") return;
+        const schedule = () => {
+          window.requestAnimationFrame(() => syncDisparosCampanhasListLayout());
+        };
+        disparosCampanhasLayoutObserver = new ResizeObserver(schedule);
+        disparosCampanhasLayoutObserver.observe(resumoSide);
+        disparosCampanhasLayoutObserver.observe(campanhasSide);
+        window.addEventListener("resize", schedule);
+        schedule();
       }
 
       function renderDisparosTemplatesList(items) {
@@ -29906,12 +30185,14 @@
         if (!list) return;
         if (!items.length) {
           list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
+          syncDisparosCampanhasListLayout();
           return;
         }
         list.innerHTML = "";
         items.slice(0, 80).forEach((item) => {
           list.appendChild(renderDisparosIntakeCampaignRow(item));
         });
+        syncDisparosCampanhasListLayout();
       }
 
       function showDisparosCampaignListLoadWarning(message) {
@@ -29990,6 +30271,7 @@
         if (list) {
           list.innerHTML = `<div class="muted disparos-list-load-error">${escapeAdminHtml(message)}</div>`;
         }
+        syncDisparosCampanhasListLayout();
       }
 
       async function loadDisparosEvoCampaigns(options = {}) {
@@ -30050,6 +30332,7 @@
           disparosCampaignItemsFingerprint = fingerprint;
           if (!items.length) {
             list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
+            syncDisparosCampanhasListLayout();
             return;
           }
           list.innerHTML = "";
@@ -30284,6 +30567,7 @@
                   }
                   list.appendChild(row);
                 });
+          syncDisparosCampanhasListLayout();
               } catch (error) {
                 if (loadSeq !== disparosCampaignsLoadSeq) return;
                 const message = await resolveDisparosCampaignListErrorMessage(null, error);
@@ -34403,7 +34687,20 @@
           return;
         }
 
-        if (isFirstLoad) {
+        const shouldFetchDados = activeTab === "dashboard";
+        const dadosUrl = buildDadosFetchUrl();
+
+        if (shouldFetchDados && isFirstLoad && !rawEvents.length) {
+          if (hydrateDashboardFromLocalCache(dadosUrl)) {
+            if (lastUpdateLabel) {
+              lastUpdateLabel.textContent = formatDashboardCacheLabel(
+                dashboardDadosCacheSavedAt
+              );
+            }
+          }
+        }
+
+        if (isFirstLoad && !rawEvents.length) {
           container.innerHTML = `
             <div class="loading-state">
               <span>Carregando dados de envios...</span>
@@ -34411,28 +34708,17 @@
             </div>
           `;
         }
-        lastUpdateLabel.textContent = "Atualizando...";
+        if (lastUpdateLabel) {
+          if (rawEvents.length && dashboardDadosCacheSavedAt) {
+            lastUpdateLabel.textContent = formatDashboardCacheLabel(
+              dashboardDadosCacheSavedAt
+            );
+          } else {
+            lastUpdateLabel.textContent = "Atualizando...";
+          }
+        }
 
         try {
-          const shouldFetchDados = activeTab === "dashboard";
-
-          let dadosUrl = "/dados";
-          if (shouldFetchDados && timeFilter === "range") {
-            const parsed = parseRangeFromInputValue();
-            if (parsed?.startD && parsed?.endD) {
-              const fmtYMD = (dt) => {
-                const y = dt.getFullYear();
-                const m = String(dt.getMonth() + 1).padStart(2, "0");
-                const d = String(dt.getDate()).padStart(2, "0");
-                return `${y}-${m}-${d}`;
-              };
-              const startYMD = fmtYMD(parsed.startD);
-              const endYMD = fmtYMD(parsed.endD);
-              dadosUrl = `/dados?rangeStart=${encodeURIComponent(
-                startYMD
-              )}&rangeEnd=${encodeURIComponent(endYMD)}`;
-            }
-          }
 
           const [resDados, resInstancias] = await Promise.allSettled([
             shouldFetchDados
@@ -34503,6 +34789,12 @@
             resDados.status !== "fulfilled" ||
             !resDados.value.ok
           ) {
+            if (!rawEvents.length && hydrateDashboardFromLocalCache(dadosUrl)) {
+              lastUpdateLabel.textContent = `${formatDashboardCacheLabel(
+                dashboardDadosCacheSavedAt
+              ).replace(" — atualizando...", "")} — servidor indisponível`;
+              return;
+            }
             if (!rawEvents.length) {
               throw new Error("Resposta não OK do servidor de dados");
             }
@@ -34519,39 +34811,23 @@
           }
 
           const data = await resDados.value.json();
-          const texto = data.log || "";
-          serverTotalCount =
-            typeof data.totalCount === "number" ? data.totalCount : null;
-          serverCountsBySender =
-            data && typeof data.countsBySender === "object"
-              ? data.countsBySender
-              : null;
-
-          const blocks = texto
-            .split("-----------------------------")
-            .map((b) => b.trim())
-            .filter(Boolean);
-
-          const events = [];
-          blocks.forEach((b) => {
-            const parsed = parseBlock(b);
-            if (parsed) events.push(parsed);
-          });
-
-          allEvents = events;
-          isFirstLoad = false;
+          persistDashboardDadosCache(data, dadosUrl);
+          dashboardDadosCacheSavedAt = 0;
+          applyDashboardDadosPayload(data);
 
           const now = new Date();
           lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
             "pt-BR",
             { hour: "2-digit", minute: "2-digit", second: "2-digit" }
           )}`;
-
-          rawEvents = events;
-          updateInstanceOptions();
-          applyFilters();
         } catch (err) {
           console.error(err);
+          if (!rawEvents.length && hydrateDashboardFromLocalCache(dadosUrl)) {
+            lastUpdateLabel.textContent = `${formatDashboardCacheLabel(
+              dashboardDadosCacheSavedAt
+            ).replace(" — atualizando...", "")} — offline`;
+            return;
+          }
           container.innerHTML = `
             <div class="error-state">
               <span class="error-title">Erro ao carregar dados</span>
@@ -37304,6 +37580,7 @@
         updateAquecedorParamsSummary();
         await resumeAquecedorRuntimeFromPersistedIntent();
         setAquecedorEditMode(false);
+        void loadAquecedorCommandLogHistory();
         renderAquecedorCommandLogs();
 
       document.getElementById("sender-filter")?.addEventListener("change", (e) => {
