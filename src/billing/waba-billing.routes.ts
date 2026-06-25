@@ -102,6 +102,18 @@ export const registerWabaBillingRoutes = (app: Express) => {
     });
   });
 
+  app.get("/billing/disparos/bonus-history", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para consultar bonificações." });
+    }
+    const limitRaw = Number(req.query.limit ?? 20);
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 20;
+    return res.status(200).json({
+      items: disparosCreditsService.listBonusHistory(auth.email, limit),
+    });
+  });
+
   app.post("/billing/disparos/checkout", async (req, res) => {
     try {
       const auth = resolveRequestAuth(req);

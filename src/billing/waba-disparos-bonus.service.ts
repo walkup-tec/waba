@@ -74,4 +74,11 @@ export class WabaDisparosBonusService {
     const kind = normalizeDispatchesApiKind(apiKind) ?? "oficial";
     return this.repository.clearPendingShipments(normalizeEmail(email), kind);
   }
+
+  listBonusGrantHistory(email: string, limit = 20) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return [];
+    this.syncPendingBonusFromCompletedCampaigns(normalized);
+    return this.repository.listGrantHistory(normalized, limit);
+  }
 }

@@ -7762,9 +7762,9 @@
         background: #0b111b;
       }
       .disparos-credits-panel {
-        width: min(920px, 100%);
-        margin: 0 auto 28px;
-        padding: 0 12px;
+        width: 100%;
+        margin: 0 auto 24px;
+        padding: 0;
       }
       .disparos-credits-panel[hidden] {
         display: none !important;
@@ -7810,7 +7810,7 @@
       }
       .disparos-credits-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         gap: 14px;
       }
       @media (max-width: 760px) {
@@ -7853,8 +7853,200 @@
       .disparos-credits-meta-short {
         display: none;
       }
+      .disparos-credits-stat.is-bonus {
+        border-color: rgba(249, 168, 212, 0.35);
+        background: rgba(80, 20, 50, 0.28);
+      }
+      .disparos-credits-stat.is-bonus .disparos-credits-value {
+        color: #f9a8d4;
+      }
+      .disparos-credits-hub-page {
+        width: min(1040px, 100%);
+        margin: 0 auto;
+        padding: 28px 16px 40px;
+      }
+      .disparos-credits-hub-intro {
+        margin-bottom: 22px;
+        text-align: center;
+      }
+      .disparos-credits-hub-intro h1 {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #f8fafc;
+        letter-spacing: 0.01em;
+      }
+      .disparos-credits-hub-intro p {
+        margin: 8px auto 0;
+        max-width: 640px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: #94a3b8;
+      }
+      .disparos-credits-api-split {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(148, 163, 184, 0.16);
+      }
+      @media (max-width: 680px) {
+        .disparos-credits-api-split {
+          grid-template-columns: 1fr;
+        }
+      }
+      .disparos-credits-api-card {
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(15, 23, 42, 0.45);
+        padding: 14px 16px;
+      }
+      .disparos-credits-api-card.is-active {
+        border-color: rgba(37, 211, 102, 0.45);
+        box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.12);
+      }
+      .disparos-credits-api-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .disparos-credits-api-card-name {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+      .disparos-credits-api-badge {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.14);
+        border: 1px solid rgba(34, 197, 94, 0.28);
+      }
+      .disparos-credits-api-badge.is-alternativa {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.14);
+        border-color: rgba(59, 130, 246, 0.28);
+      }
+      .disparos-credits-api-rows {
+        display: grid;
+        gap: 6px;
+      }
+      .disparos-credits-api-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.84rem;
+      }
+      .disparos-credits-api-row-key {
+        color: #94a3b8;
+      }
+      .disparos-credits-api-row-value {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: #f1f5f9;
+      }
+      .disparos-credits-api-row.is-remaining .disparos-credits-api-row-value {
+        color: #4ade80;
+      }
+      .disparos-credits-api-row.is-bonus .disparos-credits-api-row-value {
+        color: #f9a8d4;
+      }
+      .disparos-credits-history-section {
+        width: 100%;
+        margin: 0 auto 28px;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(12, 18, 28, 0.92);
+        padding: 18px 20px 16px;
+      }
+      .disparos-credits-history-section[hidden] {
+        display: none !important;
+      }
+      .disparos-credits-history-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .disparos-credits-history-head h2 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .disparos-credits-history-head p {
+        margin: 4px 0 0;
+        font-size: 0.85rem;
+        color: #94a3b8;
+      }
+      .disparos-credits-history-tabs {
+        display: inline-flex;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.65);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        margin-bottom: 12px;
+      }
+      .disparos-credits-history-tab {
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .disparos-credits-history-tab.is-active {
+        background: rgba(37, 211, 102, 0.16);
+        color: #bbf7d0;
+      }
+      .disparos-credits-history-panel[hidden] {
+        display: none !important;
+      }
+      .disparos-credits-hub-section-title {
+        width: min(1040px, 100%);
+        margin: 0 auto 14px;
+        padding: 0 16px;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #e2e8f0;
+        text-align: center;
+      }
+      .disparos-api-balance {
+        margin: 0 0 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        line-height: 1.35;
+        color: #cbd5e1;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+      }
+      .disparos-api-balance strong {
+        color: #4ade80;
+        font-weight: 700;
+      }
+      .disparos-api-balance.is-bonus strong.bonus {
+        color: #f9a8d4;
+      }
+      .disparos-api-balance[hidden] {
+        display: none !important;
+      }
       body.disparos-has-credits #tab-disparos-lancamento .disparos-choice-wrap {
         padding-top: 4px;
+        min-height: auto;
       }
       .disparos-choice-grid {
         display: grid;
@@ -8110,7 +8302,12 @@
       .disparos-repurchase-body .disparos-credits-panel {
         margin-bottom: 12px;
       }
-      #disparos-purchase-home #disparos-credits-panel {
+      #disparos-purchase-home .disparos-credits-api-split,
+      #disparos-purchase-home .disparos-credits-history-section {
+        display: block;
+      }
+      #disparos-repurchase-overlay .disparos-credits-api-split,
+      #disparos-repurchase-overlay .disparos-credits-history-section {
         display: none !important;
       }
       #disparos-repurchase-overlay .disparos-credits-panel {
@@ -12501,7 +12698,14 @@
         </div>
 
         <div id="tab-disparos-lancamento" class="tab-panel tab-hidden" aria-hidden="true">
-          <div id="disparos-purchase-home">
+          <div id="disparos-purchase-home" class="disparos-credits-hub-page">
+            <header class="disparos-credits-hub-intro">
+              <h1>Créditos de disparos</h1>
+              <p>
+                Acompanhe saldo, compras e bonificações por API. Os créditos bonificados entram
+                automaticamente na próxima compra do mesmo plano.
+              </p>
+            </header>
           <section
             id="disparos-credits-panel"
             class="disparos-credits-panel"
@@ -12511,7 +12715,7 @@
             <div class="disparos-credits-card-wrap">
               <div class="disparos-credits-head">
                 <div>
-                  <h2 class="disparos-credits-title">Seus créditos de disparos</h2>
+                  <h2 class="disparos-credits-title">Seu saldo</h2>
                   <p class="disparos-credits-subtitle" id="disparos-credits-subtitle">
                     Acompanhe o pacote contratado, o que já foi usado e o saldo disponível.
                   </p>
@@ -12551,13 +12755,125 @@
                   <span class="disparos-credits-label">Créditos bonificados</span>
                   <strong class="disparos-credits-value" id="disparos-credits-bonus">—</strong>
                   <span class="disparos-credits-meta" id="disparos-credits-bonus-meta">
-                    <span class="disparos-credits-meta-long">somados aos disponíveis na próxima compra</span>
+                    <span class="disparos-credits-meta-long">somados na próxima compra do mesmo plano</span>
                     <span class="disparos-credits-meta-short">na próxima compra</span>
                   </span>
                 </article>
               </div>
+              <div class="disparos-credits-api-split" aria-label="Saldo por API">
+                <article class="disparos-credits-api-card" id="disparos-credits-api-oficial">
+                  <div class="disparos-credits-api-card-head">
+                    <span class="disparos-credits-api-card-name">API Oficial</span>
+                    <span class="disparos-credits-api-badge">Oficial</span>
+                  </div>
+                  <div class="disparos-credits-api-rows">
+                    <div class="disparos-credits-api-row">
+                      <span class="disparos-credits-api-row-key">Contratados</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-contracted">—</span>
+                    </div>
+                    <div class="disparos-credits-api-row">
+                      <span class="disparos-credits-api-row-key">Consumidos</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-consumed">—</span>
+                    </div>
+                    <div class="disparos-credits-api-row is-remaining">
+                      <span class="disparos-credits-api-row-key">Disponíveis</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-remaining">—</span>
+                    </div>
+                    <div class="disparos-credits-api-row is-bonus" id="disparos-credits-oficial-bonus-row" hidden>
+                      <span class="disparos-credits-api-row-key">Bonificados</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-bonus">—</span>
+                    </div>
+                  </div>
+                </article>
+                <article class="disparos-credits-api-card" id="disparos-credits-api-alternativa">
+                  <div class="disparos-credits-api-card-head">
+                    <span class="disparos-credits-api-card-name">API Alternativa</span>
+                    <span class="disparos-credits-api-badge is-alternativa">Alternativa</span>
+                  </div>
+                  <div class="disparos-credits-api-rows">
+                    <div class="disparos-credits-api-row">
+                      <span class="disparos-credits-api-row-key">Contratados</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-contracted">—</span>
+                    </div>
+                    <div class="disparos-credits-api-row">
+                      <span class="disparos-credits-api-row-key">Consumidos</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-consumed">—</span>
+                    </div>
+                    <div class="disparos-credits-api-row is-remaining">
+                      <span class="disparos-credits-api-row-key">Disponíveis</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-remaining">—</span>
+                    </div>
+                    <div class="disparos-credits-api-row is-bonus" id="disparos-credits-alternativa-bonus-row" hidden>
+                      <span class="disparos-credits-api-row-key">Bonificados</span>
+                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-bonus">—</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
             </div>
           </section>
+          <section
+            id="disparos-credits-history-section"
+            class="disparos-credits-history-section"
+            aria-label="Histórico de créditos"
+            hidden
+          >
+            <div class="disparos-credits-history-head">
+              <div>
+                <h2>Histórico</h2>
+                <p>Compras confirmadas e bonificações geradas por campanhas finalizadas.</p>
+              </div>
+              <button
+                type="button"
+                id="disparos-credits-history-refresh-btn"
+                class="disparos-credits-refresh-btn"
+              >
+                Atualizar histórico
+              </button>
+            </div>
+            <div class="disparos-credits-history-tabs" role="tablist" aria-label="Tipo de histórico">
+              <button
+                type="button"
+                id="disparos-credits-history-tab-purchases"
+                class="disparos-credits-history-tab is-active"
+                role="tab"
+                aria-selected="true"
+                aria-controls="disparos-credits-history-purchases"
+              >
+                Compras
+              </button>
+              <button
+                type="button"
+                id="disparos-credits-history-tab-bonus"
+                class="disparos-credits-history-tab"
+                role="tab"
+                aria-selected="false"
+                aria-controls="disparos-credits-history-bonus"
+              >
+                Bonificações
+              </button>
+            </div>
+            <div
+              id="disparos-credits-history-purchases"
+              class="disparos-credits-history-panel"
+              role="tabpanel"
+            >
+              <div id="disparos-credits-history-purchases-list" class="disparos-statement-list">
+                <div class="disparos-statement-empty">Carregando compras…</div>
+              </div>
+            </div>
+            <div
+              id="disparos-credits-history-bonus"
+              class="disparos-credits-history-panel"
+              role="tabpanel"
+              hidden
+            >
+              <div id="disparos-credits-history-bonus-list" class="disparos-statement-list">
+                <div class="disparos-statement-empty">Carregando bonificações…</div>
+              </div>
+            </div>
+          </section>
+          <h2 class="disparos-credits-hub-section-title">Contratar créditos</h2>
           <div id="disparos-purchase-choice-wrap" class="disparos-choice-wrap">
             <div class="disparos-choice-grid">
               <article class="disparos-api-card" data-disparos-api="oficial">
@@ -12574,6 +12890,12 @@
                 </header>
 
                 <span class="disparos-api-section-label">Modelo de mensagem</span>
+                <p
+                  class="disparos-api-balance"
+                  id="disparos-api-balance-oficial"
+                  hidden
+                  aria-live="polite"
+                ></p>
                 <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
                   <div class="disparos-msg-preview-image" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -12615,6 +12937,12 @@
                 </header>
 
                 <span class="disparos-api-section-label">Modelo de mensagem</span>
+                <p
+                  class="disparos-api-balance"
+                  id="disparos-api-balance-alternativa"
+                  hidden
+                  aria-live="polite"
+                ></p>
                 <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
                   <div class="disparos-msg-preview-image" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -23380,6 +23708,7 @@
         void loadDisparosCredits().then(() => {
           syncCampanhasMenuVisibility();
           syncDisparosCreditsEmptyNudge();
+          if (isDisparosCreditsHubTabActive()) void loadDisparosCreditsHubHistory();
           closeDisparosOverlay("disparos-pix-overlay");
           closeDisparosRepurchaseModal();
           if (!isStaffRole(wabaAuthRole) && hasCampanhasMenuAccess()) {
@@ -23417,6 +23746,81 @@
         return Boolean(el.closest("#disparos-purchase-home"));
       }
 
+      function isDisparosCreditsHubTabActive() {
+        return activeTab === "disparos-lancamento";
+      }
+
+      function renderDisparosCreditsApiSplit(credits) {
+        const kinds = [
+          { key: "oficial", cardId: "disparos-credits-api-oficial" },
+          { key: "alternativa", cardId: "disparos-credits-api-alternativa" },
+        ];
+        const activeApiKind = String(credits?.activeApiKind || "oficial");
+
+        kinds.forEach(({ key, cardId }) => {
+          const bucket = credits?.byApi?.[key] || {};
+          const contracted = Number(bucket.contractedShipments || 0);
+          const consumed = Number(bucket.consumedShipments || 0);
+          const remaining = Boolean(credits?.unlimitedCredits)
+            ? "Ilimitado"
+            : formatDisparosQty(Number(bucket.remainingShipments || 0));
+          const bonus = Number(bucket.pendingBonusShipments || 0);
+
+          const contractedEl = document.getElementById(`disparos-credits-${key}-contracted`);
+          const consumedEl = document.getElementById(`disparos-credits-${key}-consumed`);
+          const remainingEl = document.getElementById(`disparos-credits-${key}-remaining`);
+          const bonusEl = document.getElementById(`disparos-credits-${key}-bonus`);
+          const bonusRow = document.getElementById(`disparos-credits-${key}-bonus-row`);
+          const cardEl = document.getElementById(cardId);
+
+          if (contractedEl) contractedEl.textContent = formatDisparosQty(contracted);
+          if (consumedEl) consumedEl.textContent = formatDisparosQty(consumed);
+          if (remainingEl) remainingEl.textContent = remaining;
+          if (bonusEl) bonusEl.textContent = formatDisparosQty(bonus);
+          if (bonusRow) bonusRow.hidden = bonus <= 0;
+          if (cardEl) cardEl.classList.toggle("is-active", key === activeApiKind);
+        });
+      }
+
+      function renderDisparosApiCardBalances(credits) {
+        const kinds = ["oficial", "alternativa"];
+        kinds.forEach((key) => {
+          const balanceEl = document.getElementById(`disparos-api-balance-${key}`);
+          if (!balanceEl) return;
+          if (!credits || !wabaAuthEnabled) {
+            balanceEl.hidden = true;
+            balanceEl.textContent = "";
+            return;
+          }
+          const bucket = credits?.byApi?.[key] || {};
+          const remaining = Number(bucket.remainingShipments || 0);
+          const bonus = Number(bucket.pendingBonusShipments || 0);
+          const hasAny = remaining > 0 || bonus > 0 || Boolean(credits?.unlimitedCredits);
+          balanceEl.hidden = !hasAny;
+          if (!hasAny) {
+            balanceEl.textContent = "";
+            return;
+          }
+          const remainingLabel = credits?.unlimitedCredits
+            ? "Ilimitado"
+            : `${formatDisparosQty(remaining)} disponíveis`;
+          const bonusPart =
+            bonus > 0
+              ? ` · <strong class="bonus">${formatDisparosQty(bonus)} bonificados</strong>`
+              : "";
+          balanceEl.classList.toggle("is-bonus", bonus > 0);
+          balanceEl.innerHTML = `Seu saldo: <strong>${remainingLabel}</strong>${bonusPart}`;
+        });
+      }
+
+      function syncDisparosCreditsHubVisibility(credits) {
+        const historySection = document.getElementById("disparos-credits-history-section");
+        const onHub = isDisparosCreditsHubTabActive();
+        if (historySection) {
+          historySection.hidden = !onHub || !wabaAuthEnabled;
+        }
+      }
+
       function renderDisparosCreditsPanel(credits) {
         const panel = document.getElementById("disparos-credits-panel");
         const contractedEl = document.getElementById("disparos-credits-contracted");
@@ -23432,10 +23836,44 @@
         const pendingBonus = Number(credits?.pendingBonusShipments || 0);
         const hasCredits = Boolean(credits?.hasCredits);
         const showCreditsPanel = hasCredits || pendingBonus > 0;
-        const inFirstPurchaseMenu = isDisparosCreditsPanelInFirstPurchaseMenu(panel);
+        const onCreditsHub = isDisparosCreditsHubTabActive();
+        const inRepurchaseModal = Boolean(panel.closest("#disparos-repurchase-overlay"));
+
         document.body.classList.toggle("disparos-has-credits", hasCredits);
-        panel.hidden = !showCreditsPanel || inFirstPurchaseMenu;
-        if (!showCreditsPanel) {
+
+        if (onCreditsHub && wabaAuthEnabled) {
+          panel.hidden = false;
+        } else if (inRepurchaseModal) {
+          panel.hidden = !showCreditsPanel;
+        } else {
+          panel.hidden = true;
+        }
+
+        syncDisparosCreditsHubVisibility(credits);
+        renderDisparosApiCardBalances(credits);
+
+        if (!credits && onCreditsHub && wabaAuthEnabled) {
+          contractedEl.textContent = "0";
+          consumedEl.textContent = "0";
+          remainingEl.textContent = "0";
+          if (bonusStatEl) bonusStatEl.hidden = true;
+          if (contractedMetaEl) contractedMetaEl.textContent = "Nenhuma compra confirmada ainda";
+          if (remainingMetaEl) {
+            remainingMetaEl.innerHTML =
+              '<span class="disparos-credits-meta-long">contrate abaixo para começar</span><span class="disparos-credits-meta-short">contrate abaixo</span>';
+          }
+          if (subtitleEl) {
+            subtitleEl.textContent =
+              "Escolha API Oficial ou Alternativa e contrate seu primeiro pacote de envios.";
+          }
+          renderDisparosCreditsApiSplit(null);
+          syncCampanhasMenuVisibility();
+          syncDisparosResumoSide();
+          syncDisparosSubscriberToolbar(null);
+          return;
+        }
+
+        if (!showCreditsPanel && !onCreditsHub) {
           syncCampanhasMenuVisibility();
           syncDisparosResumoSide();
           syncDisparosSubscriberToolbar(credits);
@@ -23478,12 +23916,18 @@
               : "esgotado";
           remainingMetaEl.innerHTML = `<span class="disparos-credits-meta-long">${longText}</span><span class="disparos-credits-meta-short">${shortText}</span>`;
         }
-        if (subtitleEl && credits.lastPaidAt) {
-          const paidAt = new Date(credits.lastPaidAt);
-          if (!Number.isNaN(paidAt.getTime())) {
-            subtitleEl.textContent = `Última contratação confirmada em ${paidAt.toLocaleDateString("pt-BR")}.`;
+        if (subtitleEl) {
+          if (credits.lastPaidAt) {
+            const paidAt = new Date(credits.lastPaidAt);
+            if (!Number.isNaN(paidAt.getTime())) {
+              subtitleEl.textContent = `Última contratação confirmada em ${paidAt.toLocaleDateString("pt-BR")}.`;
+            }
+          } else if (onCreditsHub) {
+            subtitleEl.textContent =
+              "Saldo separado por API Oficial e Alternativa — cada plano tem créditos independentes.";
           }
         }
+        renderDisparosCreditsApiSplit(credits);
         syncCampanhasMenuVisibility();
         syncDisparosResumoSide();
         syncDisparosSubscriberToolbar(credits);
@@ -23535,67 +23979,210 @@
         if (!listEl) return;
         listEl.innerHTML = '<div class="disparos-statement-empty">Carregando…</div>';
         try {
-          const response = await fetchWithTimeout(
-            "/billing/disparos/purchases?limit=20",
-            { cache: "no-store" },
-            15000
+          listEl.innerHTML = renderDisparosPurchaseHistoryHtml(
+            await fetchDisparosPurchaseHistoryItems()
           );
-          if (response.status === 401) {
-            listEl.innerHTML =
-              '<div class="disparos-statement-empty">Faça login para ver o extrato.</div>';
-            return;
-          }
-          if (!response.ok) {
-            throw new Error("Não foi possível carregar o extrato.");
-          }
-          const data = await response.json();
-          const items = Array.isArray(data?.items) ? data.items : [];
-          if (!items.length) {
-            listEl.innerHTML =
-              '<div class="disparos-statement-empty">Nenhuma compra confirmada ainda.</div>';
-            return;
-          }
-          const rows = items
-            .map((item) => {
-              const plan = item?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
-              const shipments = Number(item?.shipmentCount || 0);
-              const bonus = Number(item?.bonusShipmentsApplied || 0);
-              const shipmentsLabel =
-                bonus > 0
-                  ? `${shipments.toLocaleString("pt-BR")} (+${bonus.toLocaleString("pt-BR")} bônus)`
-                  : shipments.toLocaleString("pt-BR");
-              return `
-                <tr>
-                  <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.paidAt))}</td>
-                  <td class="is-shipments">${escapeDisparosHtml(shipmentsLabel)}</td>
-                  <td class="is-plan">${escapeDisparosHtml(plan)}</td>
-                  <td class="is-value">${escapeDisparosHtml(
-                    formatBrlFromCents(item?.valueCents || 0)
-                  )}</td>
-                </tr>
-              `;
-            })
-            .join("");
-          listEl.innerHTML = `
-            <div class="disparos-statement-table-wrap">
-              <table class="disparos-statement-table" aria-label="Extrato de compras">
-                <thead>
-                  <tr>
-                    <th scope="col">Data e hora</th>
-                    <th scope="col">Quantidade de envios</th>
-                    <th scope="col">Tipo de plano</th>
-                    <th scope="col">Valor pago</th>
-                  </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </div>
-          `;
         } catch (error) {
           listEl.innerHTML = `<div class="disparos-statement-empty">${escapeDisparosHtml(
             error?.message || "Falha ao carregar extrato."
           )}</div>`;
         }
+      }
+
+      async function fetchDisparosPurchaseHistoryItems() {
+        const response = await fetchWithTimeout(
+          "/billing/disparos/purchases?limit=20",
+          { cache: "no-store" },
+          15000
+        );
+        if (response.status === 401) {
+          throw new Error("Faça login para ver o extrato.");
+        }
+        if (!response.ok) {
+          throw new Error("Não foi possível carregar o extrato.");
+        }
+        const data = await response.json();
+        return Array.isArray(data?.items) ? data.items : [];
+      }
+
+      function renderDisparosPurchaseHistoryHtml(items) {
+        if (!items.length) {
+          return '<div class="disparos-statement-empty">Nenhuma compra confirmada ainda.</div>';
+        }
+        const rows = items
+          .map((item) => {
+            const plan = item?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+            const shipments = Number(item?.shipmentCount || 0);
+            const bonus = Number(item?.bonusShipmentsApplied || 0);
+            const shipmentsLabel =
+              bonus > 0
+                ? `${shipments.toLocaleString("pt-BR")} (+${bonus.toLocaleString("pt-BR")} bônus)`
+                : shipments.toLocaleString("pt-BR");
+            return `
+              <tr>
+                <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.paidAt))}</td>
+                <td class="is-shipments">${escapeDisparosHtml(shipmentsLabel)}</td>
+                <td class="is-plan">${escapeDisparosHtml(plan)}</td>
+                <td class="is-value">${escapeDisparosHtml(
+                  formatBrlFromCents(item?.valueCents || 0)
+                )}</td>
+              </tr>
+            `;
+          })
+          .join("");
+        return `
+          <div class="disparos-statement-table-wrap">
+            <table class="disparos-statement-table" aria-label="Extrato de compras">
+              <thead>
+                <tr>
+                  <th scope="col">Data e hora</th>
+                  <th scope="col">Quantidade de envios</th>
+                  <th scope="col">Tipo de plano</th>
+                  <th scope="col">Valor pago</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      async function fetchDisparosBonusHistoryItems() {
+        const response = await fetchWithTimeout(
+          "/billing/disparos/bonus-history?limit=20",
+          { cache: "no-store" },
+          15000
+        );
+        if (response.status === 401) {
+          throw new Error("Faça login para ver bonificações.");
+        }
+        if (!response.ok) {
+          throw new Error("Não foi possível carregar bonificações.");
+        }
+        const data = await response.json();
+        return Array.isArray(data?.items) ? data.items : [];
+      }
+
+      function formatDisparosBonusStatusLabel(status) {
+        return status === "applied" ? "Creditado na compra" : "Pendente";
+      }
+
+      function renderDisparosBonusHistoryHtml(items) {
+        if (!items.length) {
+          return '<div class="disparos-statement-empty">Nenhuma bonificação registrada ainda.</div>';
+        }
+        const rows = items
+          .map((item) => {
+            const plan = item?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+            const campaignId = String(item?.campaignId || "").trim();
+            const campaignLabel =
+              campaignId.length > 10 ? `${campaignId.slice(0, 8)}…` : campaignId || "—";
+            const status = String(item?.status || "pending");
+            return `
+              <tr>
+                <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.grantedAt))}</td>
+                <td class="is-plan">${escapeDisparosHtml(plan)}</td>
+                <td class="is-shipments">${escapeDisparosHtml(
+                  Number(item?.shipments || 0).toLocaleString("pt-BR")
+                )}</td>
+                <td title="${escapeDisparosHtml(campaignId)}">${escapeDisparosHtml(campaignLabel)}</td>
+                <td class="is-value">${escapeDisparosHtml(formatDisparosBonusStatusLabel(status))}</td>
+              </tr>
+            `;
+          })
+          .join("");
+        return `
+          <div class="disparos-statement-table-wrap">
+            <table class="disparos-statement-table" aria-label="Histórico de bonificações">
+              <thead>
+                <tr>
+                  <th scope="col">Data</th>
+                  <th scope="col">Plano</th>
+                  <th scope="col">Envios</th>
+                  <th scope="col">Campanha</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      async function loadDisparosCreditsHubHistory() {
+        const purchasesListEl = document.getElementById("disparos-credits-history-purchases-list");
+        const bonusListEl = document.getElementById("disparos-credits-history-bonus-list");
+        if (!purchasesListEl && !bonusListEl) return;
+        if (!wabaAuthEnabled) {
+          const loginMsg = '<div class="disparos-statement-empty">Faça login para ver o histórico.</div>';
+          if (purchasesListEl) purchasesListEl.innerHTML = loginMsg;
+          if (bonusListEl) bonusListEl.innerHTML = loginMsg;
+          return;
+        }
+        if (purchasesListEl) {
+          purchasesListEl.innerHTML = '<div class="disparos-statement-empty">Carregando compras…</div>';
+        }
+        if (bonusListEl) {
+          bonusListEl.innerHTML = '<div class="disparos-statement-empty">Carregando bonificações…</div>';
+        }
+        try {
+          const [purchases, bonusItems] = await Promise.all([
+            fetchDisparosPurchaseHistoryItems().catch((error) => {
+              if (purchasesListEl) {
+                purchasesListEl.innerHTML = `<div class="disparos-statement-empty">${escapeDisparosHtml(
+                  error?.message || "Falha ao carregar compras."
+                )}</div>`;
+              }
+              return [];
+            }),
+            fetchDisparosBonusHistoryItems().catch((error) => {
+              if (bonusListEl) {
+                bonusListEl.innerHTML = `<div class="disparos-statement-empty">${escapeDisparosHtml(
+                  error?.message || "Falha ao carregar bonificações."
+                )}</div>`;
+              }
+              return [];
+            }),
+          ]);
+          if (purchasesListEl) {
+            purchasesListEl.innerHTML = renderDisparosPurchaseHistoryHtml(purchases);
+          }
+          if (bonusListEl) {
+            bonusListEl.innerHTML = renderDisparosBonusHistoryHtml(bonusItems);
+          }
+        } catch (error) {
+          const message = escapeDisparosHtml(error?.message || "Falha ao carregar histórico.");
+          if (purchasesListEl) purchasesListEl.innerHTML = `<div class="disparos-statement-empty">${message}</div>`;
+          if (bonusListEl) bonusListEl.innerHTML = `<div class="disparos-statement-empty">${message}</div>`;
+        }
+      }
+
+      function setDisparosCreditsHistoryTab(tabName) {
+        const purchasesTab = document.getElementById("disparos-credits-history-tab-purchases");
+        const bonusTab = document.getElementById("disparos-credits-history-tab-bonus");
+        const purchasesPanel = document.getElementById("disparos-credits-history-purchases");
+        const bonusPanel = document.getElementById("disparos-credits-history-bonus");
+        const showBonus = tabName === "bonus";
+        purchasesTab?.classList.toggle("is-active", !showBonus);
+        bonusTab?.classList.toggle("is-active", showBonus);
+        purchasesTab?.setAttribute("aria-selected", showBonus ? "false" : "true");
+        bonusTab?.setAttribute("aria-selected", showBonus ? "true" : "false");
+        if (purchasesPanel) purchasesPanel.hidden = showBonus;
+        if (bonusPanel) bonusPanel.hidden = !showBonus;
+      }
+
+      function openDisparosCreditsHubHistory(options = {}) {
+        const tabName = options.tab === "bonus" ? "bonus" : "purchases";
+        if (typeof setActiveTab === "function" && activeTab !== "disparos-lancamento") {
+          setActiveTab("disparos-lancamento");
+        }
+        setDisparosCreditsHistoryTab(tabName);
+        void loadDisparosCreditsHubHistory();
+        requestAnimationFrame(() => {
+          document
+            .getElementById("disparos-credits-history-section")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       }
 
       function openDisparosStatementModal() {
@@ -24519,7 +25106,7 @@
           ?.addEventListener("click", () => goToDisparosAddCredits());
         document
           .getElementById("disparos-toolbar-statement-btn")
-          ?.addEventListener("click", () => openDisparosStatementModal());
+          ?.addEventListener("click", () => openDisparosCreditsHubHistory({ tab: "purchases" }));
         document
           .getElementById("disparos-statement-close-btn")
           ?.addEventListener("click", () => closeDisparosStatementModal());
@@ -24628,7 +25215,22 @@
           });
         document
           .getElementById("disparos-credits-refresh-btn")
-          ?.addEventListener("click", () => void loadDisparosCredits());
+          ?.addEventListener("click", () => {
+            void loadDisparosCredits().then(() => {
+              if (isDisparosCreditsHubTabActive()) void loadDisparosCreditsHubHistory();
+            });
+          });
+        document
+          .getElementById("disparos-credits-history-refresh-btn")
+          ?.addEventListener("click", () => {
+            void loadDisparosCreditsHubHistory();
+          });
+        document
+          .getElementById("disparos-credits-history-tab-purchases")
+          ?.addEventListener("click", () => setDisparosCreditsHistoryTab("purchases"));
+        document
+          .getElementById("disparos-credits-history-tab-bonus")
+          ?.addEventListener("click", () => setDisparosCreditsHistoryTab("bonus"));
         document
           .getElementById("disparos-pricing-cancel-btn")
           ?.addEventListener("click", () => closeDisparosOverlay("disparos-pricing-overlay"));
@@ -24656,6 +25258,7 @@
           void loadDisparosCredits().then(() => {
             syncCampanhasMenuVisibility();
             syncDisparosCreditsEmptyNudge();
+            if (isDisparosCreditsHubTabActive()) void loadDisparosCreditsHubHistory();
           });
           if (isDisparosRepurchaseModalOpen()) {
             requestAnimationFrame(() => positionDisparosChoiceNote());
@@ -28103,15 +28706,11 @@
           showToast("Você não tem acesso à área de contratação de créditos.", "warning");
           return;
         }
-        if (shouldUseCampanhasSubscriberUi()) {
-          openDisparosRepurchaseModal();
-          return;
-        }
         if (typeof setActiveTab === "function") {
           setActiveTab("disparos-lancamento");
           return;
         }
-        showToast("Abra a aba Disparos para contratar créditos.", "info");
+        showToast("Abra a aba Créditos para contratar envios.", "info");
       }
 
       function syncDisparosCreditsEmptyNudge() {
@@ -29764,7 +30363,9 @@
           stopDisparosCampaignsPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
-          void loadDisparosCredits();
+          void loadDisparosCredits().then(() => {
+            void loadDisparosCreditsHubHistory();
+          });
           requestAnimationFrame(() => positionDisparosChoiceNote());
         } else if (nextTab === "admin-assinantes") {
           stopAquecedorEnviosPolling();

@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Typebot monitor Asaas (paridade):** implementado em `D:\typebot-Saas` serviço `api`. Ver `doc/LOG-2026-06-21__typebot-asaas-monitor-paridade-waba.md` e typebot `doc/LOG-2026-06-21__typebot-asaas-monitor-verificacao-diaria.md`.
+
 **WABA — Monitor Asaas diário:** 2 verificações/dia (08:00 e 20:00 SP), alerta WhatsApp instância 5197462102 + e-mail walkup@walkuptec.com.br. Ver `doc/LOG-2026-06-21__asaas-monitor-verificacao-diaria.md`.
 
 **WABA — Env Asaas completo (Easypanel):** bloco produção em `.env`, `.env.v02` e `env.easypanel-producao-asaas.snippet` (gitignored). Inclui `ASAAS_TRANSFER_API_KEY`, `ASAAS_TRANSFER_WEBHOOK_ACCESS_TOKEN`, split payout. Ver `doc/LOG-2026-06-21__env-asaas-completo-easypanel.md`.
@@ -1652,3 +1654,10 @@ Palavras-chave para buscar:
 - **Preparando 6h fixas (2026-06-23):** removida fila escalonada (contadores 23h–35h); 6h desde integração; bloqueio disparo+aquecedor; promoção em lote. Ver `doc/LOG-2026-06-23__preparando-6h-sem-fila-escalonada.md`.
 - **Deploy 2026-06-23 (3):** commit `250a080` — preparando 6h fixas.
 - **Aquecedor rotação pares (2026-06-23):** `recentDirectedEdges` + score dinâmico para variar A→B, C→A, B→C. Ver `doc/LOG-2026-06-23__aquecedor-rotacao-pares-dinamica.md`.
+
+## 2026-06-21 — Hub UI Créditos (saldo por API + histórico + compra)
+
+- Aba **Créditos** unifica saldo (totais + Oficial/Alternativa), histórico (compras + bonificações) e contratação PIX.
+- API: `GET /billing/disparos/bonus-history`, `GET /billing/disparos/purchases`.
+- Log: `doc/LOG-2026-06-21__creditos-hub-ui-historico-compras-bonus.md`.
+- **Palavras-chave:** `creditos-hub`, `disparos-lancamento`, `bonus-history`, `byApi`.
