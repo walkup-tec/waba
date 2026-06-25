@@ -1678,3 +1678,18 @@ Palavras-chave para buscar:
 - Log: `doc/LOG-2026-06-21__creditos-hub-ui-historico-compras-bonus.md`.
 - **Palavras-chave:** `creditos-hub`, `disparos-lancamento`, `bonus-history`, `byApi`.
 - **Deploy 2026-06-24:** produção usa Docker + `dist/` no Git; commit `cb07ab2` com marker `DEPLOY-2026-06-24-creditos-hub-ui`. Ver `doc/LOG-2026-06-24__deploy-creditos-hub-dist-easypanel.md`.
+
+## 2026-06-21 — Créditos Contratar: layout hexagonal + Aquecedor UI
+
+- **Contratar:** `disparos-pricing-board` com cluster hexagonal (esquerda) + lanes de features/preço (direita); removido alerta amarelo e nota flutuante.
+- **Aquecedor:** botão vermelho «Aquecedor Ativo» (ícone + texto); hero de status sem ícone, só texto.
+- Log: `doc/LOG-2026-06-21__creditos-cards-layout-hexagonal.md`.
+- **Palavras-chave:** `disparos-pricing-board`, `disparos-pricing-hex-cluster`, `Aquecedor Ativo`, `syncAquecedorStopButtonLabel`.
+- **Deploy 2026-06-21:** commit `fc60968` em `master` — pricing board hexagonal e ajustes Aquecedor.
+
+## 2026-06-21 — Tela compra referência (mock hexagonal completo)
+
+- Layout fiel ao mock: hex badges, «Pacotes e serviços», features em cápsulas, rodapé Seguro/Performance/Flexível.
+- Botões `data-disparos-contratar` preservam `openDisparosPricingModal`.
+- Log: `doc/LOG-2026-06-21__creditos-tela-compra-referencia-hexagonal.md`.
+- **Palavras-chave:** `disparos-pricing-benefits`, `disparos-pricing-lane-action`, mock compra créditos.
