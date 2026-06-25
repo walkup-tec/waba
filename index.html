@@ -8165,48 +8165,27 @@
       }
       .disparos-pricing-board {
         display: grid;
-        grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+        grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
         gap: 16px 32px;
         align-items: center;
         padding: 12px 0 8px;
       }
       .disparos-pricing-hex-cluster {
-        position: relative;
-        width: 360px;
-        height: 392px;
-        max-width: none;
-        min-height: 0;
+        width: 100%;
+        max-width: 320px;
         margin: 0;
         flex-shrink: 0;
+        line-height: 0;
       }
-      .disparos-hex-art {
-        position: absolute;
+      .disparos-hex-cluster-art {
         display: block;
-        width: auto;
+        width: 100%;
         height: auto;
-        max-width: none;
+        max-width: 320px;
+        margin: 0;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
-      }
-      .disparos-hex-art--intro {
-        width: 188px;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: 2;
-      }
-      .disparos-hex-art--oficial {
-        width: 252px;
-        left: 104px;
-        top: -8px;
-        z-index: 3;
-      }
-      .disparos-hex-art--alternativa {
-        width: 252px;
-        left: 104px;
-        bottom: -8px;
-        z-index: 3;
       }
       .disparos-pricing-lanes {
         display: flex;
@@ -8214,7 +8193,7 @@
         justify-content: center;
         gap: 40px;
         padding: 0;
-        min-height: 392px;
+        min-height: 0;
       }
       .disparos-pricing-lane {
         display: grid;
@@ -8403,30 +8382,12 @@
       }
       @media (min-width: 1100px) {
         .disparos-pricing-board {
-          grid-template-columns: 400px minmax(0, 1fr);
+          grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
           gap: 20px 40px;
         }
-        .disparos-pricing-hex-cluster {
-          width: 400px;
-          height: 432px;
-        }
-        .disparos-hex-art--intro {
-          width: 208px;
-          left: 2px;
-        }
-        .disparos-hex-art--oficial,
-        .disparos-hex-art--alternativa {
-          width: 278px;
-          left: 118px;
-        }
-        .disparos-hex-art--oficial {
-          top: -10px;
-        }
-        .disparos-hex-art--alternativa {
-          bottom: -10px;
-        }
-        .disparos-pricing-lanes {
-          min-height: 432px;
+        .disparos-pricing-hex-cluster,
+        .disparos-hex-cluster-art {
+          max-width: 380px;
         }
       }
       @media (max-width: 960px) {
@@ -8435,10 +8396,10 @@
           gap: 20px;
           justify-items: center;
         }
-        .disparos-pricing-hex-cluster {
-          transform: scale(0.9);
-          transform-origin: center top;
-          margin: 0 auto 0;
+        .disparos-pricing-hex-cluster,
+        .disparos-hex-cluster-art {
+          max-width: min(300px, 92vw);
+          margin: 0 auto;
         }
         .disparos-pricing-lanes {
           min-height: 0;
@@ -13161,27 +13122,9 @@
               <div class="disparos-pricing-board">
                 <div class="disparos-pricing-hex-cluster" aria-label="Pacotes e serviços">
                   <img
-                    class="disparos-hex-art disparos-hex-art--intro"
-                    src="/media/disparos-hex-pacotes-servicos.png"
-                    alt="Pacotes e serviços — diversas possibilidades para diversas necessidades"
-                    width="1024"
-                    height="1024"
-                    decoding="async"
-                  />
-                  <img
-                    class="disparos-hex-art disparos-hex-art--oficial"
-                    id="disparos-hex-oficial"
-                    src="/media/disparos-hex-api-oficial.png"
-                    alt="API Oficial"
-                    width="1024"
-                    height="1024"
-                    decoding="async"
-                  />
-                  <img
-                    class="disparos-hex-art disparos-hex-art--alternativa"
-                    id="disparos-hex-alternativa"
-                    src="/media/disparos-hex-api-alternativa.png"
-                    alt="API Alternativa"
+                    class="disparos-hex-cluster-art"
+                    src="/media/disparos-hex-cluster.png"
+                    alt="Pacotes e serviços, API Oficial e API Alternativa"
                     width="1024"
                     height="1024"
                     decoding="async"
