@@ -7838,6 +7838,179 @@
         flex-direction: column;
         align-items: center;
         background: var(--disp-page-bg);
+        overflow: hidden;
+      }
+      .disparos-choice-backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .disparos-choice-backdrop-fx {
+        position: absolute;
+        inset: -12% -8%;
+      }
+      .disparos-choice-light {
+        position: absolute;
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      .disparos-choice-light--green {
+        width: min(52vw, 520px);
+        height: min(52vw, 520px);
+        top: 4%;
+        left: -6%;
+        background: radial-gradient(
+          circle,
+          rgba(154, 224, 72, 0.42) 0%,
+          rgba(120, 210, 50, 0.16) 38%,
+          transparent 72%
+        );
+        filter: blur(28px);
+      }
+      .disparos-choice-light--blue {
+        width: min(48vw, 480px);
+        height: min(48vw, 480px);
+        bottom: 6%;
+        left: 8%;
+        background: radial-gradient(
+          circle,
+          rgba(56, 220, 255, 0.38) 0%,
+          rgba(0, 170, 240, 0.14) 40%,
+          transparent 72%
+        );
+        filter: blur(30px);
+      }
+      .disparos-choice-light--violet {
+        width: min(40vw, 400px);
+        height: min(40vw, 400px);
+        top: 38%;
+        right: -4%;
+        background: radial-gradient(
+          circle,
+          rgba(168, 120, 255, 0.22) 0%,
+          rgba(120, 80, 220, 0.08) 42%,
+          transparent 70%
+        );
+        filter: blur(34px);
+      }
+      .disparos-choice-stroke {
+        position: absolute;
+        height: 1px;
+        width: 140%;
+        left: -20%;
+        opacity: 0.55;
+        background: linear-gradient(
+          90deg,
+          transparent 0%,
+          rgba(154, 224, 72, 0.55) 22%,
+          rgba(56, 220, 255, 0.45) 58%,
+          rgba(168, 120, 255, 0.35) 78%,
+          transparent 100%
+        );
+        filter: blur(0.4px);
+      }
+      .disparos-choice-stroke--a {
+        top: 22%;
+        transform: rotate(-10deg);
+      }
+      .disparos-choice-stroke--b {
+        top: 52%;
+        transform: rotate(7deg);
+        opacity: 0.4;
+      }
+      .disparos-choice-stroke--c {
+        top: 78%;
+        transform: rotate(-5deg);
+        opacity: 0.35;
+      }
+      .disparos-choice-stroke--arc {
+        width: min(70vw, 680px);
+        height: min(70vw, 680px);
+        left: 50%;
+        top: 46%;
+        right: auto;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        border: 1px solid transparent;
+        background:
+          radial-gradient(circle, transparent 58%, rgba(56, 220, 255, 0.08) 62%, transparent 68%) padding-box,
+          conic-gradient(
+            from 200deg,
+            transparent 0deg,
+            rgba(154, 224, 72, 0.35) 40deg,
+            rgba(56, 220, 255, 0.3) 120deg,
+            transparent 200deg,
+            rgba(168, 120, 255, 0.2) 280deg,
+            transparent 360deg
+          )
+          border-box;
+        -webkit-mask-image: radial-gradient(circle, #000 42%, transparent 72%);
+        mask-image: radial-gradient(circle, #000 42%, transparent 72%);
+        opacity: 0.65;
+        filter: blur(0.5px);
+      }
+      .disparos-choice-node {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        box-shadow: 0 0 14px currentColor;
+      }
+      .disparos-choice-node--1 {
+        top: 24%;
+        left: 18%;
+        color: rgba(154, 224, 72, 0.9);
+        background: rgba(200, 255, 120, 0.95);
+      }
+      .disparos-choice-node--2 {
+        top: 58%;
+        left: 42%;
+        color: rgba(56, 220, 255, 0.9);
+        background: rgba(120, 230, 255, 0.95);
+      }
+      .disparos-choice-node--3 {
+        top: 34%;
+        right: 16%;
+        color: rgba(168, 120, 255, 0.85);
+        background: rgba(200, 170, 255, 0.9);
+      }
+      .disparos-choice-backdrop-mesh {
+        position: absolute;
+        inset: 0;
+        opacity: 0.28;
+        background-image:
+          linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(ellipse 88% 78% at 46% 44%, #000 18%, transparent 74%);
+      }
+      .disparos-choice-backdrop-veil {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        backdrop-filter: blur(40px) saturate(1.12);
+        -webkit-backdrop-filter: blur(40px) saturate(1.12);
+        background: linear-gradient(
+          168deg,
+          rgba(11, 17, 27, 0.34) 0%,
+          rgba(11, 17, 27, 0.5) 48%,
+          rgba(11, 17, 27, 0.42) 100%
+        );
+      }
+      .disparos-choice-content {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .disparos-choice-light {
+          filter: blur(28px) !important;
+        }
       }
       #tab-disparos-lancamento {
         background: #0b111b;
@@ -13120,6 +13293,23 @@
             aria-labelledby="disparos-credits-hub-tab-purchase"
           >
           <div id="disparos-purchase-choice-wrap" class="disparos-choice-wrap">
+            <div class="disparos-choice-backdrop" aria-hidden="true">
+              <div class="disparos-choice-backdrop-fx">
+                <span class="disparos-choice-light disparos-choice-light--green"></span>
+                <span class="disparos-choice-light disparos-choice-light--blue"></span>
+                <span class="disparos-choice-light disparos-choice-light--violet"></span>
+                <span class="disparos-choice-stroke disparos-choice-stroke--arc"></span>
+                <span class="disparos-choice-stroke disparos-choice-stroke--a"></span>
+                <span class="disparos-choice-stroke disparos-choice-stroke--b"></span>
+                <span class="disparos-choice-stroke disparos-choice-stroke--c"></span>
+                <span class="disparos-choice-node disparos-choice-node--1"></span>
+                <span class="disparos-choice-node disparos-choice-node--2"></span>
+                <span class="disparos-choice-node disparos-choice-node--3"></span>
+                <span class="disparos-choice-backdrop-mesh"></span>
+              </div>
+              <div class="disparos-choice-backdrop-veil"></div>
+            </div>
+            <div class="disparos-choice-content">
             <div class="disparos-choice-grid">
               <div class="disparos-pricing-board">
                 <div class="disparos-pricing-hex-cluster" aria-label="Pacotes e serviços">
@@ -13239,6 +13429,7 @@
                   <p>Soluções que se adaptam ao seu negócio e ao seu objetivo.</p>
                 </div>
               </div>
+            </div>
             </div>
           </div>
           </div>
