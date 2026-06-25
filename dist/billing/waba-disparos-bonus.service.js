@@ -58,5 +58,12 @@ class WabaDisparosBonusService {
         const kind = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(apiKind) ?? "oficial";
         return this.repository.clearPendingShipments(normalizeEmail(email), kind);
     }
+    listBonusGrantHistory(email, limit = 20) {
+        const normalized = normalizeEmail(email);
+        if (!normalized)
+            return [];
+        this.syncPendingBonusFromCompletedCampaigns(normalized);
+        return this.repository.listGrantHistory(normalized, limit);
+    }
 }
 exports.WabaDisparosBonusService = WabaDisparosBonusService;
