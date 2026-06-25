@@ -27826,10 +27826,16 @@
         const processing = status?.isProcessing === true;
         const lastResult = String(status?.lastResult || "").trim();
         const instanceCount = Number(status?.connectedInstanceCount ?? 0);
+        const preparingCount = Number(status?.preparingInstanceCount ?? 0);
+        const totalEnabled = Number(status?.totalAquecedorEnabledCount ?? instanceCount);
         hero.classList.remove("active", "processing", "failed");
         if (countEl) {
           if (running && instanceCount >= 2) {
-            countEl.textContent = `${instanceCount} instâncias no ciclo`;
+            if (preparingCount > 0) {
+              countEl.textContent = `${instanceCount} no ciclo · ${preparingCount} preparando (${totalEnabled} total)`;
+            } else {
+              countEl.textContent = `${instanceCount} instâncias no ciclo`;
+            }
           } else if (running && instanceCount === 1) {
             countEl.textContent = "1 instância (mín. 2)";
           } else if (running) {

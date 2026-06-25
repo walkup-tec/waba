@@ -85,6 +85,7 @@ import {
   recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
   syncAquecedorPreparingPromotions,
+  getAquecedorLifecycleStatusForInstance,
 } from "./services/aquecedor-instance-lifecycle.service";
 import { getAquecedorWarmthMapForInstances } from "./services/aquecedor-instance-warmth.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
@@ -2622,15 +2623,26 @@ let aquecedorPersistedBundleSavedAtMs = 0;
 let aquecedorConnectedSummaryCache: {
   count: number;
   names: string[];
+  preparingCount: number;
+  preparingNames: string[];
+  totalEnabled: number;
   at: number;
-} = { count: 0, names: [], at: 0 };
+} = { count: 0, names: [], preparingCount: 0, preparingNames: [], totalEnabled: 0, at: 0 };
 
 function updateAquecedorConnectedSummary(
   connected: Array<{ instancia: string; numero: string }>,
+  connectedAll: Array<{ instancia: string; numero: string }> = connected,
 ): void {
+  const activeKeys = new Set(connected.map((item) => item.instancia.toLowerCase()));
+  const preparingNames = connectedAll
+    .filter((item) => !activeKeys.has(item.instancia.toLowerCase()))
+    .map((item) => item.instancia);
   aquecedorConnectedSummaryCache = {
     count: connected.length,
     names: connected.map((item) => item.instancia),
+    preparingCount: preparingNames.length,
+    preparingNames,
+    totalEnabled: connectedAll.length,
     at: Date.now(),
   };
 }
@@ -2772,6 +2784,9 @@ function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
     workerLeaseValid: isAquecedorWorkerLeaseValid(bundle.snapshot),
     connectedInstanceCount: aquecedorConnectedSummaryCache.count,
     connectedInstances: aquecedorConnectedSummaryCache.names,
+    preparingInstanceCount: aquecedorConnectedSummaryCache.preparingCount,
+    preparingInstances: aquecedorConnectedSummaryCache.preparingNames,
+    totalAquecedorEnabledCount: aquecedorConnectedSummaryCache.totalEnabled,
     connectedSummaryAt: aquecedorConnectedSummaryCache.at
       ? new Date(aquecedorConnectedSummaryCache.at).toISOString()
       : null,
@@ -3904,10 +3919,13 @@ async function runAquecedorCycle(forceTest = false) {
 
     const resolved = await resolveAquecedorConnectedForOwner(aquecedorRuntimeOwnerEmail);
     const connectedAll = resolved.connected;
+    for (const item of connectedAll) {
+      await registerAquecedorInstancePreparing(item.instancia);
+    }
     const connected = await filterAquecedorCycleConnected(connectedAll);
-    updateAquecedorConnectedSummary(connected);
+    updateAquecedorConnectedSummary(connected, connectedAll);
 
-    const preparingCount = Math.max(0, connectedAll.length - connected.length);
+    const preparingCount = aquecedorConnectedSummaryCache.preparingCount;
     if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
       aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
       return;
@@ -3945,7 +3963,7 @@ async function runAquecedorCycle(forceTest = false) {
 
     await releaseStuckAquecedorQueueRows(supabase);
 
-    await syncAquecedorConnectedInstances(supabase, connected);
+    await syncAquecedorConnectedInstances(supabase, connectedAll);
 
     const combinations: Array<{
       instancia_origem: string;
@@ -4202,7 +4220,11 @@ async function runAquecedorCycle(forceTest = false) {
     const waitSeconds =
       Math.floor(Math.random() * (waitMax - waitMin + 1)) + waitMin;
     aquecedorRuntime.nextAllowedAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
-    aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.`;
+    aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.${
+      preparingCount > 0
+        ? ` ${preparingCount} instância(s) em preparação (6h): ${aquecedorConnectedSummaryCache.preparingNames.join(", ")}.`
+        : ""
+    }`;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Erro no ciclo do aquecedor:", error);
@@ -4824,10 +4846,14 @@ app.get("/instancias/uso-config", async (req, res) => {
       Array.from(usageMap.keys())
     );
     const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
-    const items = Array.from(usageMap.entries())
-      .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
-      .map(([instanceName, cfg]) => {
-        const lifecycle = lifecycleMap[instanceName.toLowerCase()];
+    const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) =>
+      allowedLower.has(String(instanceName).toLowerCase()),
+    );
+    const items = await Promise.all(
+      filteredEntries.map(async ([instanceName, cfg]) => {
+        const lifecycle =
+          lifecycleMap[instanceName.toLowerCase()] ??
+          (await getAquecedorLifecycleStatusForInstance(instanceName));
         const warmth = warmthMap[instanceName.toLowerCase()];
         return {
           instanceName,
@@ -4839,7 +4865,8 @@ app.get("/instancias/uso-config", async (req, res) => {
           warmthLevel: warmth?.level ?? 0,
           warmthLabel: warmth?.label ?? "Não aquecido",
         };
-      });
+      }),
+    );
     return res.json({ items });
   } catch (error) {
     return res.status(500).json({ error: "Erro ao buscar configuração de uso das instâncias." });
