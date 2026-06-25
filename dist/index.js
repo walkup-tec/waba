@@ -2096,11 +2096,18 @@ let aquecedorPersistedBundle = {
 };
 let aquecedorPersistedBundleReloadedAt = 0;
 let aquecedorPersistedBundleSavedAtMs = 0;
-let aquecedorConnectedSummaryCache = { count: 0, names: [], at: 0 };
-function updateAquecedorConnectedSummary(connected) {
+let aquecedorConnectedSummaryCache = { count: 0, names: [], preparingCount: 0, preparingNames: [], totalEnabled: 0, at: 0 };
+function updateAquecedorConnectedSummary(connected, connectedAll = connected) {
+    const activeKeys = new Set(connected.map((item) => item.instancia.toLowerCase()));
+    const preparingNames = connectedAll
+        .filter((item) => !activeKeys.has(item.instancia.toLowerCase()))
+        .map((item) => item.instancia);
     aquecedorConnectedSummaryCache = {
         count: connected.length,
         names: connected.map((item) => item.instancia),
+        preparingCount: preparingNames.length,
+        preparingNames,
+        totalEnabled: connectedAll.length,
         at: Date.now(),
     };
 }
@@ -2227,6 +2234,9 @@ function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
         workerLeaseValid: isAquecedorWorkerLeaseValid(bundle.snapshot),
         connectedInstanceCount: aquecedorConnectedSummaryCache.count,
         connectedInstances: aquecedorConnectedSummaryCache.names,
+        preparingInstanceCount: aquecedorConnectedSummaryCache.preparingCount,
+        preparingInstances: aquecedorConnectedSummaryCache.preparingNames,
+        totalAquecedorEnabledCount: aquecedorConnectedSummaryCache.totalEnabled,
         connectedSummaryAt: aquecedorConnectedSummaryCache.at
             ? new Date(aquecedorConnectedSummaryCache.at).toISOString()
             : null,
@@ -3193,9 +3203,12 @@ async function runAquecedorCycle(forceTest = false) {
         }
         const resolved = await resolveAquecedorConnectedForOwner(aquecedorRuntimeOwnerEmail);
         const connectedAll = resolved.connected;
+        for (const item of connectedAll) {
+            await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(item.instancia);
+        }
         const connected = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(connectedAll);
-        updateAquecedorConnectedSummary(connected);
-        const preparingCount = Math.max(0, connectedAll.length - connected.length);
+        updateAquecedorConnectedSummary(connected, connectedAll);
+        const preparingCount = aquecedorConnectedSummaryCache.preparingCount;
         if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
             aquecedorRuntime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
             return;
@@ -3226,7 +3239,7 @@ async function runAquecedorCycle(forceTest = false) {
             return;
         }
         await releaseStuckAquecedorQueueRows(supabase);
-        await syncAquecedorConnectedInstances(supabase, connected);
+        await syncAquecedorConnectedInstances(supabase, connectedAll);
         const combinations = [];
         for (const origem of connected) {
             for (const destino of connected) {
@@ -3379,7 +3392,9 @@ async function runAquecedorCycle(forceTest = false) {
         const waitMax = config.waitMaxSeconds;
         const waitSeconds = Math.floor(Math.random() * (waitMax - waitMin + 1)) + waitMin;
         aquecedorRuntime.nextAllowedAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
-        aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.`;
+        aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.${preparingCount > 0
+            ? ` ${preparingCount} instância(s) em preparação (6h): ${aquecedorConnectedSummaryCache.preparingNames.join(", ")}.`
+            : ""}`;
     }
     catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -3904,10 +3919,10 @@ app.get("/instancias/uso-config", async (req, res) => {
         const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
         const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
         const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
-        const items = Array.from(usageMap.entries())
-            .filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()))
-            .map(([instanceName, cfg]) => {
-            const lifecycle = lifecycleMap[instanceName.toLowerCase()];
+        const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()));
+        const items = await Promise.all(filteredEntries.map(async ([instanceName, cfg]) => {
+            const lifecycle = lifecycleMap[instanceName.toLowerCase()] ??
+                (await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(instanceName));
             const warmth = warmthMap[instanceName.toLowerCase()];
             return {
                 instanceName,
@@ -3919,7 +3934,7 @@ app.get("/instancias/uso-config", async (req, res) => {
                 warmthLevel: warmth?.level ?? 0,
                 warmthLabel: warmth?.label ?? "Não aquecido",
             };
-        });
+        }));
         return res.json({ items });
     }
     catch (error) {

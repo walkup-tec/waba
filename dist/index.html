@@ -16786,6 +16786,38 @@
         errorEl.hidden = !text;
       }
 
+      function resolveWabaLoginErrorMessage(error, payload) {
+        if (error?.message === "timeout") {
+          return "O servidor demorou para responder. Tente novamente.";
+        }
+        const raw = String(error?.message || payload?.error || "").trim();
+        if (!raw) return "Não foi possível entrar.";
+        if (raw === "Failed to fetch" || /networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(raw)) {
+          return "Não foi possível contactar o servidor. Verifique sua conexão e tente novamente.";
+        }
+        return raw;
+      }
+
+      async function fetchWabaAuthJson(path, options = {}, timeoutMs = 25000, retries = 3) {
+        const url = resolveWabaPublicPath(path);
+        let lastError = null;
+        for (let attempt = 1; attempt <= retries; attempt += 1) {
+          try {
+            return await fetchWithTimeout(
+              url,
+              { credentials: "same-origin", ...options },
+              timeoutMs
+            );
+          } catch (error) {
+            lastError = error;
+            if (attempt < retries) {
+              await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+            }
+          }
+        }
+        throw lastError || new Error("Failed to fetch");
+      }
+
       function unlockWabaApp(session) {
         document.body.classList.remove("waba-auth-locked", "waba-auth-checking");
         const loginScreen = document.getElementById("waba-login-screen");
@@ -17586,7 +17618,7 @@
       async function initWabaAuthGate() {
         let session = {};
         try {
-          const response = await fetch("/auth/session", { credentials: "same-origin" });
+          const response = await fetchWabaAuthJson("/auth/session", {}, 15000, 2);
           session = await response.json().catch(() => ({}));
           const email = String(session.email || "").trim();
           const hasValidSession = response.ok && session.authenticated === true && Boolean(email);
@@ -17596,13 +17628,13 @@
           }
           if (session.authenticated === false) {
             try {
-              await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+              await fetchWabaAuthJson("/auth/logout", { method: "POST" }, 10000, 1);
             } catch {
               /* ignore */
             }
           }
         } catch {
-          /* ignore */
+          /* ignore — tela de login permanece disponível */
         }
         lockWabaApp();
         if (session.authConfigured === false) {
@@ -17687,12 +17719,16 @@
           }
           if (submitBtn) submitBtn.disabled = true;
           try {
-            const response = await fetch("/auth/login", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, password }),
-            });
+            const response = await fetchWabaAuthJson(
+              "/auth/login",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password }),
+              },
+              30000,
+              3
+            );
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
               throw new Error(payload.error || "Não foi possível entrar.");
@@ -17708,7 +17744,8 @@
             }
             window.location.reload();
           } catch (error) {
-            setWabaLoginError(error?.message || "Não foi possível entrar.");
+            const payload = error?.payload;
+            setWabaLoginError(resolveWabaLoginErrorMessage(error, payload));
           } finally {
             if (submitBtn) submitBtn.disabled = false;
           }
@@ -27826,10 +27863,16 @@
         const processing = status?.isProcessing === true;
         const lastResult = String(status?.lastResult || "").trim();
         const instanceCount = Number(status?.connectedInstanceCount ?? 0);
+        const preparingCount = Number(status?.preparingInstanceCount ?? 0);
+        const totalEnabled = Number(status?.totalAquecedorEnabledCount ?? instanceCount);
         hero.classList.remove("active", "processing", "failed");
         if (countEl) {
           if (running && instanceCount >= 2) {
-            countEl.textContent = `${instanceCount} instâncias no ciclo`;
+            if (preparingCount > 0) {
+              countEl.textContent = `${instanceCount} no ciclo · ${preparingCount} preparando (${totalEnabled} total)`;
+            } else {
+              countEl.textContent = `${instanceCount} instâncias no ciclo`;
+            }
           } else if (running && instanceCount === 1) {
             countEl.textContent = "1 instância (mín. 2)";
           } else if (running) {
