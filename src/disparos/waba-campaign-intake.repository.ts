@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { resolveDataDir, resolveDataFile } from "../data-path";
 import type { WabaDispatchesApiKind } from "./waba-dispatches-api-kind";
@@ -93,7 +93,10 @@ const readStore = (): Store => {
 
 const writeStore = (store: Store) => {
   ensureStore();
-  writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), "utf-8");
+  const payload = JSON.stringify(store, null, 2);
+  const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, payload, "utf-8");
+  renameSync(tmp, STORE_FILE);
 };
 
 export class WabaCampaignIntakeRepository {

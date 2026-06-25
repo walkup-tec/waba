@@ -17769,6 +17769,11 @@
         return isProductionUi() && activeTab === "disparo-evo";
       }
 
+      /** Assinante em produção na aba API Oficial — lista intake + wizard, sem motor EVO. */
+      function isDisparosCampanhasIntakeOnlyUi() {
+        return isProductionUi() && activeTab === "disparos" && !isDisparoEvoUi();
+      }
+
       function syncDisparoEvoMode() {
         const on = isDisparoEvoUi();
         document.body.classList.toggle("waba-disparo-evo-mode", on && !isBaselineUi());
@@ -26297,6 +26302,7 @@
       let aquecedorEnviosPollTimer = null;
       let aquecedorEnviosLastItems = [];
       let aquecedorEnviosLoadSeq = 0;
+      let disparosCampaignsLoadSeq = 0;
       let aquecedorRuntimePollTimer = null;
       let aquecedorRuntimeVizTimer = null;
       let disparosCampaignsPollTimer = null;
@@ -29142,14 +29148,23 @@
         applyDisparosSectionLayout();
       }
 
-      async function loadDisparosConfig() {
+      async function loadDisparosConfig(options = {}) {
+        const silent = Boolean(options.silent);
+        const intakeOnly = isDisparosCampanhasIntakeOnlyUi();
         const statusLabel = document.getElementById("disparos-status-label");
+        if (statusLabel && !intakeOnly) {
+          statusLabel.textContent = "Carregando…";
+        }
         try {
           initDisparosSectionLayout();
           resetDisparosSectionFlow();
-          const response = await fetchWithTimeout("/disparos/config", {}, 10000);
+          const response = await fetchDisparosCampaignListWithRetry("/disparos/config", {}, 15000);
           if (!response.ok) {
-            if (statusLabel) statusLabel.textContent = "Erro ao carregar";
+            if (statusLabel && !silent && !intakeOnly) {
+              statusLabel.textContent = "Erro ao carregar";
+            } else if (statusLabel && intakeOnly) {
+              statusLabel.textContent = "";
+            }
             return;
           }
           const data = await response.json().catch(() => ({}));
@@ -29178,11 +29193,21 @@
               "Definido automaticamente pelo backend."
             );
           }
-          if (statusLabel) statusLabel.textContent = "Configuração carregada";
+          if (statusLabel && !intakeOnly) {
+            statusLabel.textContent = "Configuração carregada";
+          } else if (statusLabel && intakeOnly) {
+            statusLabel.textContent = "";
+          }
           applyDisparosSectionLayout();
-          await loadMessengerProductsList();
+          if (!intakeOnly) {
+            await loadMessengerProductsList();
+          }
         } catch {
-          if (statusLabel) statusLabel.textContent = "Erro ao carregar";
+          if (statusLabel && !silent && !intakeOnly) {
+            statusLabel.textContent = "Erro ao carregar";
+          } else if (statusLabel && intakeOnly) {
+            statusLabel.textContent = "";
+          }
         }
       }
 
@@ -29747,23 +29772,104 @@
         });
       }
 
+      function showDisparosCampaignListLoadWarning(message) {
+        const list = document.getElementById("disparos-list");
+        if (!list) return;
+        list.querySelector(".disparos-list-load-error")?.remove();
+        const banner = document.createElement("div");
+        banner.className = "disparos-list-load-error muted";
+        banner.style.cssText =
+          "margin-bottom:10px;padding:8px 10px;border:1px solid rgba(251,146,60,.35);border-radius:8px;background:rgba(251,146,60,.08);";
+        banner.textContent = message;
+        list.prepend(banner);
+      }
+
+      async function resolveDisparosCampaignListErrorMessage(response, error) {
+        if (error?.message === "timeout") {
+          return "A consulta demorou demais. Clique em Atualizar para tentar de novo.";
+        }
+        const raw = String(error?.message || "").trim();
+        if (raw === "Failed to fetch" || /networkerror|load failed/i.test(raw)) {
+          return "Sem conexão com o servidor. Verifique a rede e clique em Atualizar.";
+        }
+        if (response) {
+          const data = await response.json().catch(() => ({}));
+          if (response.status === 401) {
+            return String(data?.error || "Sessão expirada. Faça login novamente.");
+          }
+          if (response.status === 503) {
+            return String(data?.message || data?.error || "Serviço em manutenção. Tente em alguns minutos.");
+          }
+          return String(data?.error || "Erro ao carregar campanhas geradas.");
+        }
+        return raw || "Erro ao carregar campanhas geradas.";
+      }
+
+      async function fetchDisparosCampaignListWithRetry(path, options = {}, timeoutMs = 15000) {
+        const url = resolveWabaPublicPath(path);
+        const maxAttempts = 3;
+        let lastError = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const response = await fetchWithTimeout(url, options, timeoutMs);
+            if (response.ok || response.status === 401 || response.status === 400 || response.status === 404) {
+              return response;
+            }
+            if (response.status >= 500 && attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+              continue;
+            }
+            return response;
+          } catch (error) {
+            lastError = error;
+            if (attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+              continue;
+            }
+            throw error;
+          }
+        }
+        throw lastError || new Error("Failed to fetch");
+      }
+
+      function handleDisparosCampaignListLoadFailure(message, silent) {
+        if (silent) return;
+        const cached = Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : [];
+        if (cached.length) {
+          showDisparosCampaignListLoadWarning(
+            `${message} Exibindo a última lista carregada.`
+          );
+          return;
+        }
+        disparosHasRunningCampaign = false;
+        applyDisparosActiveInstanceCardDisplay("");
+        syncDisparosResumoSide([]);
+        const list = document.getElementById("disparos-list");
+        if (list) {
+          list.innerHTML = `<div class="muted disparos-list-load-error">${escapeAdminHtml(message)}</div>`;
+        }
+      }
+
       async function loadDisparosEvoCampaigns(options = {}) {
         const silent = Boolean(options.silent);
         const list = document.getElementById("disparos-list");
         if (!list) return;
+        const loadSeq = ++disparosCampaignsLoadSeq;
         try {
-          const response = await fetchWithTimeout("/disparos/campanhas", {}, 10000);
+          const response = await fetchDisparosCampaignListWithRetry(
+            "/disparos/campanhas",
+            { cache: "no-store" },
+            20000
+          );
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
           if (!response.ok) {
-            if (!silent) {
-              disparosHasRunningCampaign = false;
-              applyDisparosActiveInstanceCardDisplay("");
-              disparosCampaignItemsCache = [];
-              syncDisparosResumoSide([]);
-              list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
-            }
+            const message = await resolveDisparosCampaignListErrorMessage(response, null);
+            handleDisparosCampaignListLoadFailure(message, silent);
             return;
           }
+          list.querySelector(".disparos-list-load-error")?.remove();
           const data = await response.json().catch(() => ({}));
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
           const items = Array.isArray(data?.items) ? data.items : [];
           const prevById = new Map(
             (Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : []).map(
@@ -30036,10 +30142,10 @@
                   }
                   list.appendChild(row);
                 });
-              } catch {
-                disparosHasRunningCampaign = false;
-                applyDisparosActiveInstanceCardDisplay("");
-                list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
+              } catch (error) {
+                if (loadSeq !== disparosCampaignsLoadSeq) return;
+                const message = await resolveDisparosCampaignListErrorMessage(null, error);
+                handleDisparosCampaignListLoadFailure(message, silent);
               }
       }
 
@@ -30050,22 +30156,22 @@
         const silent = Boolean(options.silent);
         const list = document.getElementById("disparos-list");
         if (!list) return;
+        const loadSeq = ++disparosCampaignsLoadSeq;
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchDisparosCampaignListWithRetry(
             "/disparos/campanhas/intake",
             { cache: "no-store" },
-            10000
+            15000
           );
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
           if (!response.ok) {
-            if (!silent) {
-              disparosHasRunningCampaign = false;
-              disparosCampaignItemsCache = [];
-              syncDisparosResumoSide([]);
-              list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
-            }
+            const message = await resolveDisparosCampaignListErrorMessage(response, null);
+            handleDisparosCampaignListLoadFailure(message, silent);
             return;
           }
+          list.querySelector(".disparos-list-load-error")?.remove();
           const data = await response.json().catch(() => ({}));
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
           const items = Array.isArray(data?.items) ? data.items : [];
           const prevById = new Map(
             (Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : []).map(
@@ -30100,11 +30206,10 @@
           }
           disparosCampaignItemsFingerprint = fingerprint;
           renderDisparosTemplatesList(items);
-        } catch {
-          if (!silent) {
-            disparosHasRunningCampaign = false;
-            list.innerHTML = '<div class="muted">Falha ao carregar campanhas.</div>';
-          }
+        } catch (error) {
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
+          const message = await resolveDisparosCampaignListErrorMessage(null, error);
+          handleDisparosCampaignListLoadFailure(message, silent);
         }
       }
 
@@ -31341,7 +31446,9 @@
           stopAquecedorEnviosPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
-          loadDisparosConfig();
+          loadDisparosConfig({
+            silent: isProductionUi() && nextTab === "disparos",
+          });
           void refreshDisparosCampaignsAndResumo();
           startDisparosCampaignsPolling();
           if (nextTab === "disparo-evo") {
