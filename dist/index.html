@@ -8429,9 +8429,9 @@
       }
       .disparos-pricing-lane {
         display: grid;
-        grid-template-columns: 36px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         align-items: stretch;
-        gap: 0 10px;
+        gap: 0;
         width: 100%;
         padding: 0;
         border: none;
@@ -8446,16 +8446,7 @@
         box-shadow: 0 0 0 2px rgba(0, 177, 240, 0.4);
       }
       .disparos-pricing-lane-connector {
-        position: relative;
-        align-self: center;
-        height: 2px;
-        background: linear-gradient(90deg, rgba(148, 163, 184, 0.15), rgba(148, 163, 184, 0.45));
-      }
-      .disparos-pricing-lane[data-disparos-api="oficial"] .disparos-pricing-lane-connector {
-        background: linear-gradient(90deg, rgba(140, 198, 63, 0.2), rgba(140, 198, 63, 0.55));
-      }
-      .disparos-pricing-lane[data-disparos-api="alternativa"] .disparos-pricing-lane-connector {
-        background: linear-gradient(90deg, rgba(0, 177, 240, 0.2), rgba(0, 177, 240, 0.55));
+        display: none;
       }
       .disparos-pricing-lane-body {
         display: flex;
@@ -8557,9 +8548,7 @@
         background: rgba(6, 12, 22, 0.75);
         border: 1px solid rgba(140, 198, 63, 0.45);
         border-radius: 999px 6px 6px 999px;
-        box-shadow:
-          0 0 14px rgba(140, 198, 63, 0.12),
-          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        box-shadow: 0 0 14px rgba(140, 198, 63, 0.12);
       }
       .disparos-api-feature-list li::before {
         content: "";
@@ -8572,13 +8561,30 @@
       }
       .disparos-pricing-lane[data-disparos-api="alternativa"] .disparos-api-feature-list li {
         border-color: rgba(0, 177, 240, 0.45);
-        box-shadow:
-          0 0 14px rgba(0, 177, 240, 0.12),
-          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        box-shadow: 0 0 14px rgba(0, 177, 240, 0.12);
       }
       .disparos-pricing-lane[data-disparos-api="alternativa"] .disparos-api-feature-list li::before {
         background: rgba(0, 177, 240, 0.2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M3.5 8.2l2.8 2.8 6.2-6.4' stroke='%2300b4f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
         box-shadow: 0 0 10px rgba(0, 177, 240, 0.35);
+      }
+      .disparos-api-feature-list li.is-sentence-case {
+        text-transform: none;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      .disparos-api-feature-soon-tag {
+        flex-shrink: 0;
+        margin-left: auto;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #7dd3fc;
+        background: rgba(14, 165, 233, 0.14);
+        border: 1px solid rgba(56, 189, 248, 0.42);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.18);
       }
       .disparos-pricing-benefits {
         display: grid;
@@ -8598,16 +8604,16 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
-        gap: 8px;
-        padding: 20px 16px 22px;
+        gap: 10px;
+        padding: 24px 20px 26px;
         border-right: 1px solid rgba(148, 163, 184, 0.16);
       }
       .disparos-pricing-benefit:last-child {
         border-right: none;
       }
       .disparos-pricing-benefit-icon {
-        width: 40px;
-        height: 40px;
+        width: 48px;
+        height: 48px;
         border-radius: 50%;
         display: flex;
         align-items: center;
@@ -8615,8 +8621,8 @@
         flex-shrink: 0;
       }
       .disparos-pricing-benefit-icon svg {
-        width: 22px;
-        height: 22px;
+        width: 26px;
+        height: 26px;
       }
       .disparos-pricing-benefit-icon--secure {
         background: rgba(140, 198, 63, 0.15);
@@ -8634,7 +8640,7 @@
         box-shadow: 0 0 16px rgba(168, 85, 247, 0.25);
       }
       .disparos-pricing-benefit strong {
-        font-size: 0.78rem;
+        font-size: 0.95rem;
         font-weight: 800;
         letter-spacing: 0.1em;
         text-transform: uppercase;
@@ -8642,10 +8648,10 @@
       }
       .disparos-pricing-benefit p {
         margin: 0;
-        font-size: 0.72rem;
-        line-height: 1.5;
+        font-size: 0.88rem;
+        line-height: 1.55;
         color: #94a3b8;
-        max-width: 280px;
+        max-width: 320px;
       }
       @media (min-width: 1100px) {
         .disparos-pricing-board {
@@ -13428,8 +13434,11 @@
                         <li>Nossa IA gera textos de vendas para você</li>
                         <li>Você define para onde irá as respostas</li>
                         <li>Você sabe exatamente quantos clicaram nas suas mensagens</li>
-                        <li>Você pode utilizar seus próprios números aquecidos</li>
-                        <li>Você pode comprar números vitalícios para fazer seus disparos</li>
+                        <li class="is-sentence-case">Utilize seus próprios números aquecidos</li>
+                        <li>
+                          <span>Você pode comprar números vitalícios para fazer seus disparos</span>
+                          <span class="disparos-api-feature-soon-tag">Em breve</span>
+                        </li>
                       </ul>
                       <div class="disparos-pricing-lane-action">
                         <div class="disparos-pricing-lane-action-head">
@@ -26781,6 +26790,18 @@
         showToast("Campanha enviada com sucesso.", "success", 4200);
       }
 
+      function resolveDisCampaignWizardSubmitErrorMessage(error) {
+        const raw = String(error?.message || "").trim();
+        if (!raw) return "Erro ao enviar campanha.";
+        if (raw === "timeout") {
+          return "O envio demorou demais. Tente novamente ou use uma planilha menor.";
+        }
+        if (raw === "Failed to fetch" || /networkerror|load failed/i.test(raw)) {
+          return "Falha de conexão com o servidor ao enviar a campanha. Recarregue a página e tente de novo.";
+        }
+        return raw;
+      }
+
       async function submitDisCampaignWizard() {
         if (disCampaignWizardSubmitInFlight) {
           showToast("Aguarde, a campanha já está sendo enviada…", "warning", 3200);
@@ -26830,7 +26851,7 @@
           formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
 
           const response = await fetchWithTimeout(
-            "/disparos/campanhas/intake",
+            resolveWabaPublicPath("/disparos/campanhas/intake"),
             {
               method: "POST",
               body: formData,
@@ -26857,7 +26878,7 @@
           showDisCampaignWizardSuccess(successMessage);
           void refreshDisparosCampaignsAndResumo();
         } catch (error) {
-          const message = error?.message || "Erro ao enviar campanha.";
+          const message = resolveDisCampaignWizardSubmitErrorMessage(error);
           showDisCampaignWizardSubmitError(message, disCampaignWizardStep);
           showToast(message, "error", 5200);
         } finally {

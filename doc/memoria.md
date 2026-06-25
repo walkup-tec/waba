@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Aquecedor escopo e conexão:** só instâncias live conectadas no ciclo; envios filtrados por dono. Ver `doc/LOG-2026-06-25__aquecedor-scope-connected-owner-fix.md`.
+
+**WABA — Fix Gerar Campanha (Failed to fetch):** intake multipart com erros tratados + URL base path. Ver `doc/LOG-2026-06-25__fix-campanha-intake-failed-to-fetch.md`.
+
 **WABA — Créditos Contratar largura total:** seção Contratar ocupa 100% da página; hex e cards mantêm tamanho. Ver `doc/LOG-2026-06-25__creditos-contratar-largura-total.md`.
 
 **WABA — Wizard Nova campanha (API Oficial):** removido seletor "Plano de envio" no passo Leads; campanha sempre `apiKind: oficial`. Ver `doc/LOG-2026-06-25__dis-wizard-sem-plano-envio-api-oficial.md`.

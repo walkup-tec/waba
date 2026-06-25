@@ -983,18 +983,29 @@ function aquecedorEnvioMatchesOwner(
   if (!allowed) return true;
   const origin = String(instanciaOrigem || "").trim().toLowerCase();
   const dest = String(instanciaDestino || "").trim().toLowerCase();
-  return (
-    (origin.length > 0 && allowed.has(origin)) ||
-    (dest.length > 0 && allowed.has(dest))
-  );
+  if (!origin || origin === "—") return false;
+  if (!allowed.has(origin)) return false;
+  if (dest && dest !== "—" && !/^\d{10,15}$/.test(dest) && !allowed.has(dest)) return false;
+  return true;
 }
 
 async function resolveAquecedorEnviosAllowedInstances(
   ownerEmail: string
 ): Promise<Set<string> | null> {
   if (!isWabaAuthConfigured()) return null;
-  const names = await wabaInstanceOwnershipService.listOwnedInstanceNames(ownerEmail);
-  return new Set(names.map((name) => name.toLowerCase()));
+  if (isAquecedorGlobalScopeOwner(ownerEmail)) return null;
+
+  const names = await listAquecedorScopedInstanceNames(ownerEmail);
+  const aliasesMap = await loadInstanceAliasesMap();
+  const allowed = new Set<string>();
+  for (const name of names) {
+    const normalized = String(name || "").trim().toLowerCase();
+    if (!normalized) continue;
+    allowed.add(normalized);
+    const alias = mapGetInsensitive(aliasesMap, name);
+    if (alias) allowed.add(alias.toLowerCase());
+  }
+  return allowed;
 }
 
 const AQUECEDOR_FALLBACK_MESSAGE = "Olá! Tudo bem? Mensagem automática do aquecedor.";
@@ -3110,25 +3121,37 @@ async function listEvoInstanceNamesForScopeReconcile(): Promise<string[]> {
   return Array.from(names);
 }
 
-/** Mesma estratégia do painel `/instancias`: cache preenche lacunas quando a EVO live vem incompleta. */
+/** Live EVO é fonte de verdade; cache só preenche número quando a instância está conectada agora. */
 function mergeAquecedorConnectedRows(
-  primary: Array<{ instancia: string; numero: string }>,
-  secondary: Array<{ instancia: string; numero: string }>,
-): Array<{ instancia: string; numero: string }> {
-  const byKey = new Map<string, { instancia: string; numero: string }>();
-  for (const row of secondary) {
-    const key = row.instancia.toLowerCase();
-    if (!byKey.has(key)) byKey.set(key, row);
+  live: Array<{ instancia: string; numero: string }>,
+  cache: Array<{ instancia: string; numero: string }>,
+): {
+  rows: Array<{ instancia: string; numero: string }>;
+  usedCacheOnlyForNumbers: boolean;
+} {
+  const cacheByKey = new Map<string, { instancia: string; numero: string }>();
+  for (const row of cache) {
+    cacheByKey.set(row.instancia.toLowerCase(), row);
   }
-  for (const row of primary) {
-    const key = row.instancia.toLowerCase();
-    const prev = byKey.get(key);
-    byKey.set(key, {
-      instancia: row.instancia,
-      numero: String(row.numero || prev?.numero || "").trim(),
-    });
+
+  if (live.length > 0) {
+    const rows = live
+      .map((row) => {
+        const cached = cacheByKey.get(row.instancia.toLowerCase());
+        const numero = String(row.numero || cached?.numero || "").trim();
+        return numero ? { instancia: row.instancia, numero } : null;
+      })
+      .filter((row): row is { instancia: string; numero: string } => row != null)
+      .sort((a, b) => a.instancia.localeCompare(b.instancia, "pt-BR"));
+    return { rows, usedCacheOnlyForNumbers: cache.length > 0 };
   }
-  return Array.from(byKey.values()).sort((a, b) => a.instancia.localeCompare(b.instancia, "pt-BR"));
+
+  return {
+    rows: cache
+      .slice()
+      .sort((a, b) => a.instancia.localeCompare(b.instancia, "pt-BR")),
+    usedCacheOnlyForNumbers: false,
+  };
 }
 
 async function listMergedConnectedEvoInstancesUnscoped(): Promise<{
@@ -3137,17 +3160,20 @@ async function listMergedConnectedEvoInstancesUnscoped(): Promise<{
   cacheCount: number;
   evoOk: boolean;
   evoError?: string;
+  usedCacheOnlyForNumbers: boolean;
 }> {
   const evoList = await fetchEvoInstancesList();
   const cache = await loadEvoInstancesCache();
   const fromLive = evoList.ok ? buildConnectedFromEvoResponse(evoList.instances) : [];
   const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
+  const merged = mergeAquecedorConnectedRows(fromLive, fromCache);
   return {
-    rows: mergeAquecedorConnectedRows(fromLive, fromCache),
+    rows: merged.rows,
     liveCount: fromLive.length,
     cacheCount: fromCache.length,
     evoOk: evoList.ok,
     evoError: evoList.ok ? undefined : evoList.detail,
+    usedCacheOnlyForNumbers: merged.usedCacheOnlyForNumbers,
   };
 }
 
@@ -3349,13 +3375,14 @@ async function resolveAquecedorConnectedForOwner(ownerEmail: string): Promise<{
   }
 
   const usedCacheSupplement =
-    mergedEvo.cacheCount > 0 &&
+    mergedEvo.evoOk &&
+    mergedEvo.usedCacheOnlyForNumbers &&
     connected.length > mergedEvo.liveCount &&
     mergedEvo.liveCount > 0;
 
   return {
     connected,
-    source: mergedEvo.evoOk && !usedCacheSupplement ? "evo-live" : "evo-cache",
+    source: mergedEvo.evoOk ? "evo-live" : "evo-cache",
     evoDegraded: !mergedEvo.evoOk || usedCacheSupplement,
     evoError: mergedEvo.evoError,
   };
@@ -7288,6 +7315,10 @@ app.get("/aquecedor/envios", async (req, res) => {
       return aliasesMap.get(key) || key;
     };
     const allowed = await resolveAquecedorEnviosAllowedInstances(ownerEmail);
+    const scopedTechnicalNames = isAquecedorGlobalScopeOwner(ownerEmail)
+      ? []
+      : await listAquecedorScopedInstanceNames(ownerEmail);
+    const filterQueueByOwner = scopedTechnicalNames.length > 0;
 
     const pushItem = (
       instanciaOrigem: string,
@@ -7318,12 +7349,21 @@ app.get("/aquecedor/envios", async (req, res) => {
     if (supabase) {
       const numToInst = await buildControleInstanciaNumToNameMap(supabase);
 
-      const { data: processandoData } = await (supabase
-        .from("aquecedor" as any)
-        .select("instancia, numero_destino, scheduled_at, processing_at")
-        .eq("status", "PROCESSANDO")
-        .order("processing_at", { ascending: false })
-        .limit(5)) as any;
+      const processandoQuery = filterQueueByOwner
+        ? supabase
+            .from("aquecedor" as any)
+            .select("instancia, numero_destino, scheduled_at, processing_at")
+            .eq("status", "PROCESSANDO")
+            .in("instancia", scopedTechnicalNames)
+            .order("processing_at", { ascending: false })
+            .limit(5)
+        : supabase
+            .from("aquecedor" as any)
+            .select("instancia, numero_destino, scheduled_at, processing_at")
+            .eq("status", "PROCESSANDO")
+            .order("processing_at", { ascending: false })
+            .limit(5);
+      const { data: processandoData } = (await processandoQuery) as any;
 
       if (Array.isArray(processandoData) && processandoData.length > 0) {
         for (const row of processandoData) {
@@ -7335,19 +7375,36 @@ app.get("/aquecedor/envios", async (req, res) => {
         }
       }
 
-      const { count: pendingTotal } = (await (supabase
-        .from("aquecedor" as any)
-        .select("id", { count: "exact", head: true })
-        .eq("status", "PENDENTE"))) as { count: number | null };
+      const pendingCountQuery = filterQueueByOwner
+        ? supabase
+            .from("aquecedor" as any)
+            .select("id", { count: "exact", head: true })
+            .eq("status", "PENDENTE")
+            .in("instancia", scopedTechnicalNames)
+        : supabase
+            .from("aquecedor" as any)
+            .select("id", { count: "exact", head: true })
+            .eq("status", "PENDENTE");
+      const { count: pendingTotal } = (await pendingCountQuery) as { count: number | null };
       pendingCount = typeof pendingTotal === "number" ? pendingTotal : 0;
 
-      const { data: pendingData } = await (supabase
-        .from("aquecedor" as any)
-        .select("scheduled_at, instancia, numero_destino")
-        .eq("status", "PENDENTE")
-        .order("scheduled_at", { ascending: true })
-        .limit(1)
-        .maybeSingle()) as any;
+      const pendingDataQuery = filterQueueByOwner
+        ? supabase
+            .from("aquecedor" as any)
+            .select("scheduled_at, instancia, numero_destino")
+            .eq("status", "PENDENTE")
+            .in("instancia", scopedTechnicalNames)
+            .order("scheduled_at", { ascending: true })
+            .limit(1)
+            .maybeSingle()
+        : supabase
+            .from("aquecedor" as any)
+            .select("scheduled_at, instancia, numero_destino")
+            .eq("status", "PENDENTE")
+            .order("scheduled_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+      const { data: pendingData } = (await pendingDataQuery) as any;
 
       if (pendingData) {
         let origem = String(pendingData?.instancia || "").trim();
@@ -7358,7 +7415,8 @@ app.get("/aquecedor/envios", async (req, res) => {
           destino = numToInst.get(numDest) || "—";
         }
         if (!origem || destino === "—") {
-          const connected = await buildAquecedorConnectedFromControleInstancia(supabase, ownerEmail);
+          const resolvedConnected = await resolveAquecedorConnectedForOwner(ownerEmail);
+          const connected = await filterAquecedorCycleConnected(resolvedConnected.connected);
           if (connected.length >= 2) {
             const combinations = connected.flatMap((origemItem) =>
               connected

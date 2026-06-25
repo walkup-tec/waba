@@ -152,29 +152,35 @@ const listAvailableApiKindsForEmail = (ownerEmail) => {
 };
 const parseRequestedApiKind = (body, ownerEmail) => {
     const email = ownerEmail.trim().toLowerCase();
+    const requested = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(body.apiKind);
     if (masterPolicyService.hasUnlimitedCredits(email)) {
-        const parsed = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(body.apiKind);
-        return { apiKind: parsed === "alternativa" ? "alternativa" : "oficial" };
+        return { apiKind: requested === "alternativa" ? "alternativa" : "oficial" };
     }
     const available = listAvailableApiKindsForEmail(email);
     if (!available.length) {
         return {
-            apiKind: "oficial",
+            apiKind: requested === "alternativa" ? "alternativa" : "oficial",
             error: "Você não possui saldo em nenhum plano. Contrate envios antes de gerar a campanha.",
         };
     }
-    // Um único plano com saldo: uso implícito, sem escolha do assinante.
+    // Plano explícito no wizard (ex.: API Oficial) — honra quando há saldo nesse plano.
+    if (requested && available.includes(requested)) {
+        return { apiKind: requested };
+    }
     if (available.length === 1) {
         return { apiKind: available[0] };
     }
-    const parsed = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(body.apiKind);
-    if (!parsed || !available.includes(parsed)) {
+    if (requested && !available.includes(requested)) {
+        const apiLabel = requested === "alternativa" ? "API Alternativa" : "API Oficial";
         return {
-            apiKind: available[0],
-            error: "Selecione o plano de envio (API Oficial ou API Alternativa).",
+            apiKind: requested,
+            error: `Você não possui envios disponíveis no plano ${apiLabel}. Contrate um pacote antes de gerar a campanha.`,
         };
     }
-    return { apiKind: parsed };
+    return {
+        apiKind: available[0],
+        error: "Selecione o plano de envio (API Oficial ou API Alternativa).",
+    };
 };
 const parseTextOptions = (body) => {
     const options = [
@@ -186,106 +192,146 @@ const parseTextOptions = (body) => {
         return null;
     return options;
 };
-const registerWabaCampaignIntakeRoutes = (app) => {
-    app.post("/disparos/campanhas/intake", uploadIntake.fields([
+const handleCampaignIntakeUpload = (req, res, next) => {
+    uploadIntake.fields([
         { name: "image", maxCount: 1 },
         { name: "spreadsheet", maxCount: 1 },
-    ]), (req, res) => {
-        const auth = resolveRequestAuth(req);
-        if (!auth.email) {
-            return res.status(401).json({ error: "Faça login para enviar a campanha." });
+    ])(req, res, (err) => {
+        if (!err) {
+            next();
+            return;
         }
-        const body = req.body;
-        const campaignName = String(body.campaignName ?? "").trim();
-        const regionDdd = normalizeDdd(String(body.regionDdd ?? ""));
-        const textOptions = parseTextOptions(body);
-        const responseLink = parseResponseLink(body);
-        if (campaignName.length < 2) {
-            return res.status(400).json({ error: "Informe o nome da campanha." });
+        const limitErr = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE";
+        const msg = limitErr
+            ? `Arquivo acima do limite de ${Math.round(UPLOAD_MAX_BYTES / 1024 / 1024)}MB.`
+            : err.message || "Falha no upload dos arquivos da campanha.";
+        return res.status(400).json({ error: msg });
+    });
+};
+const registerWabaCampaignIntakeRoutes = (app) => {
+    app.post("/disparos/campanhas/intake", handleCampaignIntakeUpload, (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para enviar a campanha." });
+            }
+            const body = req.body;
+            const campaignName = String(body.campaignName ?? "").trim();
+            const regionDdd = normalizeDdd(String(body.regionDdd ?? ""));
+            const textOptions = parseTextOptions(body);
+            const responseLink = parseResponseLink(body);
+            if (campaignName.length < 2) {
+                return res.status(400).json({ error: "Informe o nome da campanha." });
+            }
+            if (!regionDdd) {
+                return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
+            }
+            if (!textOptions) {
+                return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });
+            }
+            if (!responseLink) {
+                return res.status(400).json({ error: "Informe um link de resposta válido (http ou https)." });
+            }
+            const files = req.files;
+            const imageFile = files?.image?.[0];
+            const spreadsheetFile = files?.spreadsheet?.[0];
+            if (!imageFile) {
+                return res.status(400).json({ error: "Envie a imagem da campanha (1080×1080 px)." });
+            }
+            if (!spreadsheetFile) {
+                return res.status(400).json({ error: "Envie a planilha Excel com a lista de leads." });
+            }
+            const imageMime = String(imageFile.mimetype || "").toLowerCase();
+            if (!imageMime.startsWith("image/")) {
+                return res.status(400).json({ error: "A imagem deve ser PNG ou JPG." });
+            }
+            const sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
+            if (!sheetName.endsWith(".xlsx") && !sheetName.endsWith(".xls")) {
+                return res.status(400).json({ error: "A lista de clientes deve ser um arquivo Excel (.xlsx ou .xls)." });
+            }
+            let importedLineCount = 0;
+            try {
+                importedLineCount = (0, waba_campaign_spreadsheet_util_1.countSpreadsheetImportedRows)(spreadsheetFile.buffer);
+            }
+            catch {
+                return res.status(400).json({ error: "Não foi possível ler a planilha Excel." });
+            }
+            if (importedLineCount < 1) {
+                return res.status(400).json({ error: "A planilha não contém linhas de leads." });
+            }
+            const { apiKind, error: apiKindError } = parseRequestedApiKind(body, auth.email);
+            if (apiKindError) {
+                return res.status(400).json({ error: apiKindError });
+            }
+            const requestedSendCount = parseRequestedPlannedSendCount(body);
+            const { plannedSendCount, isMaster, error: plannedSendError } = resolvePlannedSendCount(auth.email, importedLineCount, requestedSendCount, apiKind);
+            if (plannedSendError) {
+                return res.status(400).json({ error: plannedSendError });
+            }
+            const now = new Date().toISOString();
+            const intakeId = (0, node_crypto_1.randomUUID)();
+            const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
+            const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
+            const imageStoredPath = node_path_1.default.join(storageDir, `campaign-image${imageExt}`);
+            const spreadsheetStoredPath = node_path_1.default.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
+            const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
+            const spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
+            let trimmedSpreadsheetBuffer;
+            try {
+                trimmedSpreadsheetBuffer = (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(spreadsheetFile.buffer, plannedSendCount);
+            }
+            catch {
+                return res.status(400).json({ error: "Não foi possível preparar a planilha para envio." });
+            }
+            try {
+                (0, node_fs_1.writeFileSync)(imageStoredPath, imageFile.buffer);
+                (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetFile.buffer);
+                (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+            }
+            catch {
+                return res.status(500).json({
+                    error: "Não foi possível gravar os arquivos da campanha no servidor. Tente novamente.",
+                });
+            }
+            const intake = intakeRepository.create({
+                id: intakeId,
+                ownerEmail: auth.email,
+                campaignName,
+                regionDdd,
+                textOptions,
+                responseLink,
+                imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
+                imageStoredPath,
+                spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
+                spreadsheetStoredPath,
+                spreadsheetTrimmedPath,
+                spreadsheetTrimmedFileName,
+                importedLineCount,
+                plannedSendCount,
+                apiKind,
+                status: "generated",
+                createdAt: now,
+                updatedAt: now,
+            });
+            if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
+                disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+            }
+            const importSummary = plannedSendCount < importedLineCount
+                ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
+                : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
+            return res.status(201).json({
+                ok: true,
+                ...toPublicIntake(intake),
+                message: "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
+                importSummary,
+            });
         }
-        if (!regionDdd) {
-            return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
+        catch (error) {
+            console.error("[disparos/campanhas/intake] erro:", error);
+            return res.status(500).json({
+                error: "Erro interno ao processar a campanha. Tente novamente em instantes.",
+            });
         }
-        if (!textOptions) {
-            return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });
-        }
-        if (!responseLink) {
-            return res.status(400).json({ error: "Informe um link de resposta válido (http ou https)." });
-        }
-        const files = req.files;
-        const imageFile = files?.image?.[0];
-        const spreadsheetFile = files?.spreadsheet?.[0];
-        if (!imageFile) {
-            return res.status(400).json({ error: "Envie a imagem da campanha (1080×1080 px)." });
-        }
-        if (!spreadsheetFile) {
-            return res.status(400).json({ error: "Envie a planilha Excel com a lista de leads." });
-        }
-        const imageMime = String(imageFile.mimetype || "").toLowerCase();
-        if (!imageMime.startsWith("image/")) {
-            return res.status(400).json({ error: "A imagem deve ser PNG ou JPG." });
-        }
-        const sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
-        if (!sheetName.endsWith(".xlsx") && !sheetName.endsWith(".xls")) {
-            return res.status(400).json({ error: "A lista de clientes deve ser um arquivo Excel (.xlsx ou .xls)." });
-        }
-        const importedLineCount = (0, waba_campaign_spreadsheet_util_1.countSpreadsheetImportedRows)(spreadsheetFile.buffer);
-        if (importedLineCount < 1) {
-            return res.status(400).json({ error: "A planilha não contém linhas de leads." });
-        }
-        const { apiKind, error: apiKindError } = parseRequestedApiKind(body, auth.email);
-        if (apiKindError) {
-            return res.status(400).json({ error: apiKindError });
-        }
-        const requestedSendCount = parseRequestedPlannedSendCount(body);
-        const { plannedSendCount, isMaster, error: plannedSendError } = resolvePlannedSendCount(auth.email, importedLineCount, requestedSendCount, apiKind);
-        if (plannedSendError) {
-            return res.status(400).json({ error: plannedSendError });
-        }
-        const now = new Date().toISOString();
-        const intakeId = (0, node_crypto_1.randomUUID)();
-        const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
-        const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
-        const imageStoredPath = node_path_1.default.join(storageDir, `campaign-image${imageExt}`);
-        const spreadsheetStoredPath = node_path_1.default.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
-        const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
-        const spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
-        const trimmedSpreadsheetBuffer = (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(spreadsheetFile.buffer, plannedSendCount);
-        (0, node_fs_1.writeFileSync)(imageStoredPath, imageFile.buffer);
-        (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetFile.buffer);
-        (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
-        const intake = intakeRepository.create({
-            id: intakeId,
-            ownerEmail: auth.email,
-            campaignName,
-            regionDdd,
-            textOptions,
-            responseLink,
-            imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
-            imageStoredPath,
-            spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
-            spreadsheetStoredPath,
-            spreadsheetTrimmedPath,
-            spreadsheetTrimmedFileName,
-            importedLineCount,
-            plannedSendCount,
-            apiKind,
-            status: "generated",
-            createdAt: now,
-            updatedAt: now,
-        });
-        if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
-            disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
-        }
-        const importSummary = plannedSendCount < importedLineCount
-            ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
-            : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
-        return res.status(201).json({
-            ok: true,
-            ...toPublicIntake(intake),
-            message: "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
-            importSummary,
-        });
     });
     app.get("/disparos/campanhas/intake", (req, res) => {
         const auth = resolveRequestAuth(req);
