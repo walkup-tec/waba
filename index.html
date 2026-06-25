@@ -26797,7 +26797,7 @@
           return "O envio demorou demais. Tente novamente ou use uma planilha menor.";
         }
         if (raw === "Failed to fetch" || /networkerror|load failed/i.test(raw)) {
-          return "Falha de conexão com o servidor ao enviar a campanha. Recarregue a página e tente de novo.";
+          return "Falha de conexão com o servidor ao enviar a campanha. Se o erro persistir após recarregar, o backend pode estar desatualizado — avise o suporte.";
         }
         return raw;
       }

@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Fix Gerar Campanha multipart (causa raiz):** `express.json` não consome mais body de `POST /disparos/campanhas/intake`; marker `DEPLOY-2026-06-25-campanha-intake-multipart-parser-fix`. Ver `doc/LOG-2026-06-25__campanha-intake-multipart-parser-fix.md`.
+
 **WABA — Aquecedor escopo e conexão:** só instâncias live conectadas no ciclo; envios filtrados por dono. Ver `doc/LOG-2026-06-25__aquecedor-scope-connected-owner-fix.md`.
 
 **WABA — Fix Gerar Campanha (Failed to fetch):** intake multipart com erros tratados + URL base path. Ver `doc/LOG-2026-06-25__fix-campanha-intake-failed-to-fetch.md`.

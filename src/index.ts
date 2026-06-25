@@ -321,12 +321,20 @@ function isDisparosCampaignCreatePost(req: express.Request) {
   return p === "/disparos/campanhas";
 }
 
+/** Multipart não pode passar pelo express.json — corrompe o stream antes do multer. */
+function shouldSkipBodyParserForMultipart(req: express.Request) {
+  if (req.method !== "POST") return false;
+  const ct = String(req.headers["content-type"] || "");
+  if (!ct.includes("multipart/form-data")) return false;
+  const p = String(req.path || "").replace(/\/+$/, "") || "/";
+  return p === "/disparos/campanhas" || p === "/disparos/campanhas/intake";
+}
+
 app.use((req, res, next) => {
+  if (shouldSkipBodyParserForMultipart(req)) {
+    return next();
+  }
   if (isDisparosCampaignCreatePost(req)) {
-    const ct = String(req.headers["content-type"] || "");
-    if (ct.includes("multipart/form-data")) {
-      return next();
-    }
     return parseJsonCampaignCreate(req, res, next);
   }
   return parseJsonDefault(req, res, next);
