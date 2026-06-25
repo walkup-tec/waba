@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Botão Aquecedor 3 fases:** Iniciar (verde), Aguarde Iniciar (azul, disabled), Pausar (vermelho); ícone foguinho à frente. Ver `doc/LOG-2026-06-25__hex-tamanho-aquecedor-botao-3-fases.md`.
+
+**WABA — Hex Créditos tamanho:** restaurado max-width 500/593px mantendo lanes amplas.
+
 **WABA — Faixa Créditos (conta corrente):** menu Créditos exibe "Sua conta corrente" + "Compre seus créditos" na `integration-env-strip`. Ver `doc/LOG-2026-06-25__125835__creditos-strip-conta-corrente.md`.
 
 **WABA — Créditos Contratar (lanes):** fontes maiores, label API+ícone no card de compra, coluna direita mais larga e próxima dos hexágonos. Ver `doc/LOG-2026-06-25__125425__creditos-lanes-fonte-api-label-largura.md`.

@@ -5929,6 +5929,22 @@
         background: rgba(153, 27, 27, 0.65);
         border-color: rgba(251, 113, 133, 0.45);
       }
+
+      .instance-action-btn.btn-aquecedor-wait.enabled {
+        background: rgba(29, 78, 216, 0.78);
+        border-color: rgba(96, 165, 250, 0.62);
+        cursor: wait;
+        pointer-events: none;
+      }
+
+      .instance-action-btn .waba-aquecedor-label {
+        gap: 8px;
+      }
+
+      .instance-action-btn .waba-aquecedor-label-text {
+        color: inherit;
+        font-weight: inherit;
+      }
       .instance-action-btn.btn-safe.enabled {
         border: 1px solid rgba(148, 163, 184, 0.35);
         background: rgba(15, 23, 42, 0.55);
@@ -8357,15 +8373,15 @@
       }
       .disparos-pricing-board {
         display: grid;
-        grid-template-columns: minmax(340px, 420px) minmax(420px, 1fr);
-        gap: 12px 18px;
+        grid-template-columns: minmax(406px, 530px) minmax(0, 1fr);
+        gap: 16px 32px;
         align-items: center;
         padding: 12px 0 8px;
       }
       .disparos-pricing-hex-cluster {
         position: relative;
         width: 100%;
-        max-width: 420px;
+        max-width: 500px;
         margin: 0;
         flex-shrink: 0;
         line-height: 0;
@@ -8374,7 +8390,7 @@
         display: block;
         width: 100%;
         height: auto;
-        max-width: 420px;
+        max-width: 500px;
         margin: 0;
         pointer-events: none;
         user-select: none;
@@ -8613,12 +8629,12 @@
       }
       @media (min-width: 1100px) {
         .disparos-pricing-board {
-          grid-template-columns: minmax(380px, 480px) minmax(520px, 1fr);
-          gap: 14px 22px;
+          grid-template-columns: minmax(468px, 593px) minmax(0, 1fr);
+          gap: 20px 40px;
         }
         .disparos-pricing-hex-cluster,
         .disparos-hex-cluster-art {
-          max-width: 480px;
+          max-width: 593px;
         }
         .disparos-pricing-lanes {
           max-width: none;
@@ -13106,16 +13122,19 @@
                       <div id="aquecedor-runtime-actions" class="instance-actions">
                         <button
                           id="aquecedor-start-btn"
-                          class="instance-action-btn btn-qrcode enabled aquecedor-start-stop-btn hidden"
+                          class="instance-action-btn btn-qrcode enabled aquecedor-start-stop-btn aquecedor-motor-btn hidden"
                           type="button"
                           data-waba-aquecedor-text="Iniciar Aquecedor"
+                          data-motor-phase="start"
+                          title="Iniciar Aquecedor"
                         ></button>
                         <button
                           id="aquecedor-stop-btn"
                           class="instance-action-btn btn-delete enabled aquecedor-start-stop-btn hidden"
                           type="button"
-                          data-waba-aquecedor-text="Aquecedor Ativo"
-                          title="Pausar Aquecedor"
+                          hidden
+                          tabindex="-1"
+                          aria-hidden="true"
                         ></button>
                         <button
                           id="aquecedor-run-once-btn"
@@ -18004,9 +18023,11 @@
         if (!element) return;
         const text = options.text != null ? String(options.text) : "Aquecedor";
         const trimmed = text.trim();
-        element.innerHTML = trimmed.startsWith("Aquecedor")
-          ? renderWabaAquecedorLabelHtml(trimmed, options)
-          : renderTextWithAquecedorIconHtml(text);
+        if (options.inlineInText) {
+          element.innerHTML = renderTextWithAquecedorIconHtml(text);
+        } else {
+          element.innerHTML = renderWabaAquecedorLabelHtml(trimmed, options);
+        }
         element.setAttribute("data-waba-aquecedor-label", "");
       }
 
@@ -26330,6 +26351,7 @@
       const ADMIN_CAMPANHAS_POLL_MS = 15 * 60 * 1000;
       let aquecedorRuntimeStatusCache = null;
       let aquecedorRuntimeResumeInFlight = false;
+      let aquecedorMotorActionInFlight = null;
       let aquecedorRuntimeUiPin = null;
       const AQUECEDOR_RUNTIME_UI_PIN_MS = 15000;
 
@@ -27521,27 +27543,73 @@
 
       function showAquecedorStartStopButtons() {
         aquecedorStartUnlocked = true;
-        updateAquecedorStartStopVisibility(
-          resolveAquecedorMotorRunning(aquecedorRuntimeStatusCache)
-        );
+        syncAquecedorMotorButton(aquecedorRuntimeStatusCache);
       }
-      function updateAquecedorStartStopVisibility(motorRunning) {
-        const startBtn = document.getElementById("aquecedor-start-btn");
+
+      function resolveAquecedorMotorButtonPhase(status) {
+        const data = applyAquecedorRuntimeUiPin(status || {}) || {};
+        const running = data.running === true;
+        const desiredRunning = data.desiredRunning === true;
+        if (aquecedorMotorActionInFlight === "start" || (desiredRunning && !running)) {
+          return "waiting";
+        }
+        if (running) return "pause";
+        return "start";
+      }
+
+      function syncAquecedorMotorButton(status) {
+        const btn = document.getElementById("aquecedor-start-btn");
         const stopBtn = document.getElementById("aquecedor-stop-btn");
+        if (stopBtn) stopBtn.classList.add("hidden");
+        if (!btn) return;
+
+        if (!aquecedorStartUnlocked) {
+          btn.classList.add("hidden");
+          return;
+        }
+
+        const phase = resolveAquecedorMotorButtonPhase(status);
+        btn.classList.remove("hidden", "btn-qrcode", "btn-delete", "btn-aquecedor-wait", "disabled");
+        btn.classList.remove("enabled");
+        btn.removeAttribute("disabled");
+        btn.removeAttribute("aria-disabled");
+
+        if (phase === "start") {
+          btn.classList.add("btn-qrcode", "enabled");
+          setWabaAquecedorLabelElement(btn, { text: "Iniciar Aquecedor" });
+          btn.title = "Iniciar Aquecedor";
+          btn.dataset.motorPhase = "start";
+          return;
+        }
+
+        if (phase === "waiting") {
+          btn.classList.add("btn-aquecedor-wait", "enabled", "disabled");
+          btn.setAttribute("disabled", "true");
+          btn.setAttribute("aria-disabled", "true");
+          setWabaAquecedorLabelElement(btn, { text: "Aguarde Iniciar" });
+          btn.title = "Aguarde — o Aquecedor está iniciando";
+          btn.dataset.motorPhase = "waiting";
+          return;
+        }
+
+        btn.classList.add("btn-delete", "enabled");
+        setWabaAquecedorLabelElement(btn, { text: "Pausar Aquecedor" });
+        btn.title = "Pausar Aquecedor";
+        btn.dataset.motorPhase = "pause";
+      }
+
+      function updateAquecedorStartStopVisibility(_motorRunning, status) {
+        const resolved = status || aquecedorRuntimeStatusCache;
+        syncAquecedorMotorButton(resolved);
+        const phase = resolveAquecedorMotorButtonPhase(resolved);
+        const motorEngaged = phase !== "start";
         const runOnceBtn = document.getElementById("aquecedor-run-once-btn");
         const criarTesteBtn = document.getElementById("aquecedor-criar-teste-btn");
-        if (startBtn) {
-          // Motor parado: sempre mostrar Iniciar (ex.: após Parar ou refresh da aba).
-          startBtn.classList.toggle("hidden", motorRunning);
-        }
-        if (stopBtn) {
-          stopBtn.classList.toggle("hidden", !motorRunning);
-        }
         if (runOnceBtn) {
-          runOnceBtn.classList.toggle("hidden", motorRunning);
+          runOnceBtn.classList.toggle("hidden", motorEngaged);
         }
         if (criarTesteBtn) {
-          criarTesteBtn.classList.toggle("hidden", motorRunning);
+          criarTesteBtn.classList.toggle("hidden", motorEngaged);
         }
       }
 
@@ -27811,7 +27879,7 @@
               running ? "ativo" : desiredRunning ? "retomando" : "parado"
             } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
           }
-          updateAquecedorStartStopVisibility(motorRunning);
+          updateAquecedorStartStopVisibility(motorRunning, data);
           renderAquecedorRuntimeHero(data);
           renderAquecedorRuntimeProgress();
           updateAquecedorChatFabIndicator(data);
@@ -27918,17 +27986,7 @@
       }
 
       function syncAquecedorStopButtonLabel(status) {
-        const stopBtn = document.getElementById("aquecedor-stop-btn");
-        if (!stopBtn || stopBtn.classList.contains("hidden")) return;
-        const running = status?.running === true;
-        if (!running) return;
-        let label = "Aquecedor Ativo";
-        if (status?.isProcessing === true) {
-          label = "Aquecedor processando";
-        } else if (status?.windowOpen === false) {
-          label = "Aquecedor em pausa";
-        }
-        setWabaAquecedorLabelElement(stopBtn, { text: label });
+        syncAquecedorMotorButton(status);
       }
 
       function renderAquecedorRuntimeHero(status) {
@@ -31049,14 +31107,11 @@
         };
         const url = map[action];
         if (!url) return;
-        const labelMap = {
-          start: "Iniciando Aquecedor...",
-          stop: "Parando Aquecedor...",
-          runOnce: "Executando...",
-        };
-        const originalLabel = actionBtn ? actionBtn.textContent : "";
-        if (actionBtn) {
-          actionBtn.textContent = labelMap[action] || "Processando...";
+        if (action === "start" || action === "stop") {
+          aquecedorMotorActionInFlight = action;
+          syncAquecedorMotorButton(aquecedorRuntimeStatusCache);
+        }
+        if (actionBtn && action !== "runOnce") {
           actionBtn.classList.add("disabled");
           actionBtn.setAttribute("disabled", "true");
         }
@@ -31117,7 +31172,7 @@
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
-            updateAquecedorStartStopVisibility(true);
+            updateAquecedorStartStopVisibility(true, aquecedorRuntimeStatusCache);
             showAquecedorStartStopButtons();
             window.setTimeout(() => {
               void syncAquecedorRuntimeUi({ autoResume: false });
@@ -31133,7 +31188,7 @@
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
-            updateAquecedorStartStopVisibility(false);
+            updateAquecedorStartStopVisibility(false, aquecedorRuntimeStatusCache);
             showAquecedorStartStopButtons();
             await syncAquecedorRuntimeUi({ autoResume: false });
           } else {
@@ -31156,11 +31211,12 @@
           const actionLabel = { start: "Iniciar Aquecedor", stop: "Parar Aquecedor", runOnce: "Envio teste" }[action] || action;
           addAquecedorCommandLog(`Erro ao executar ${actionLabel}.`);
         } finally {
-          if (actionBtn) {
-            actionBtn.textContent = originalLabel || "Ação";
+          aquecedorMotorActionInFlight = null;
+          if (actionBtn && action !== "runOnce") {
             actionBtn.classList.remove("disabled");
             actionBtn.removeAttribute("disabled");
           }
+          syncAquecedorMotorButton(aquecedorRuntimeStatusCache);
         }
       }
 
@@ -36411,14 +36467,15 @@
         aquecedorSaveBtn.addEventListener("click", () => saveAquecedorConfig());
       }
       if (aquecedorStartBtn) {
-        aquecedorStartBtn.addEventListener("click", () =>
-          callAquecedorRuntimeAction("start", aquecedorStartBtn)
-        );
-      }
-      if (aquecedorStopBtn) {
-        aquecedorStopBtn.addEventListener("click", () =>
-          callAquecedorRuntimeAction("stop", aquecedorStopBtn)
-        );
+        aquecedorStartBtn.addEventListener("click", () => {
+          const phase = aquecedorStartBtn.dataset.motorPhase || "start";
+          if (phase === "waiting") return;
+          if (phase === "pause") {
+            callAquecedorRuntimeAction("stop", aquecedorStartBtn);
+            return;
+          }
+          callAquecedorRuntimeAction("start", aquecedorStartBtn);
+        });
       }
       if (aquecedorRunOnceBtn) {
         aquecedorRunOnceBtn.addEventListener("click", () =>
