@@ -8074,10 +8074,13 @@
         display: none !important;
       }
       #disparos-credits-hub-panel-purchase .disparos-choice-wrap {
-        padding-top: 20px;
+        padding-top: 8px;
       }
       #disparos-credits-hub-panel-history {
         padding: 20px 0 32px;
+      }
+      #disparos-credits-hub-panel-history .disparos-credits-panel {
+        margin: 0 auto 24px;
       }
       #disparos-credits-hub-panel-history .disparos-credits-history-section {
         margin: 0 auto;
@@ -12773,116 +12776,10 @@
             <header class="disparos-credits-hub-intro">
               <h1>Créditos de disparos</h1>
               <p>
-                Acompanhe saldo, compras e bonificações por API. Os créditos bonificados entram
-                automaticamente na próxima compra do mesmo plano.
+                Contrate créditos para API Oficial ou Alternativa. Saldo, compras e bonificações
+                ficam na aba Histórico.
               </p>
             </header>
-          <section
-            id="disparos-credits-panel"
-            class="disparos-credits-panel"
-            aria-label="Saldo de créditos de disparos"
-            hidden
-          >
-            <div class="disparos-credits-card-wrap">
-              <div class="disparos-credits-head">
-                <div>
-                  <h2 class="disparos-credits-title">Seu saldo</h2>
-                  <p class="disparos-credits-subtitle" id="disparos-credits-subtitle">
-                    Acompanhe o pacote contratado, o que já foi usado e o saldo disponível.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  id="disparos-credits-refresh-btn"
-                  class="disparos-credits-refresh-btn"
-                >
-                  Atualizar saldo
-                </button>
-              </div>
-              <div class="disparos-credits-grid">
-                <article class="disparos-credits-stat">
-                  <span class="disparos-credits-label">Créditos contratados</span>
-                  <strong class="disparos-credits-value" id="disparos-credits-contracted">—</strong>
-                  <span class="disparos-credits-meta" id="disparos-credits-contracted-meta"></span>
-                </article>
-                <article class="disparos-credits-stat">
-                  <span class="disparos-credits-label">Total consumido</span>
-                  <strong class="disparos-credits-value" id="disparos-credits-consumed">—</strong>
-                  <span class="disparos-credits-meta">
-                    <span class="disparos-credits-meta-long">envios realizados</span>
-                    <span class="disparos-credits-meta-short">realizados</span>
-                  </span>
-                </article>
-                <article class="disparos-credits-stat is-remaining">
-                  <span class="disparos-credits-label">Saldo restante</span>
-                  <strong class="disparos-credits-value" id="disparos-credits-remaining">—</strong>
-                  <span class="disparos-credits-meta" id="disparos-credits-remaining-meta"></span>
-                </article>
-                <article
-                  class="disparos-credits-stat is-bonus"
-                  id="disparos-credits-bonus-stat"
-                  hidden
-                >
-                  <span class="disparos-credits-label">Créditos bonificados</span>
-                  <strong class="disparos-credits-value" id="disparos-credits-bonus">—</strong>
-                  <span class="disparos-credits-meta" id="disparos-credits-bonus-meta">
-                    <span class="disparos-credits-meta-long">somados na próxima compra do mesmo plano</span>
-                    <span class="disparos-credits-meta-short">na próxima compra</span>
-                  </span>
-                </article>
-              </div>
-              <div class="disparos-credits-api-split" aria-label="Saldo por API">
-                <article class="disparos-credits-api-card is-oficial" id="disparos-credits-api-oficial">
-                  <div class="disparos-credits-api-card-head">
-                    <span class="disparos-credits-api-card-name">API Oficial</span>
-                    <span class="disparos-credits-api-badge">Oficial</span>
-                  </div>
-                  <div class="disparos-credits-api-rows">
-                    <div class="disparos-credits-api-row">
-                      <span class="disparos-credits-api-row-key">Contratados</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-contracted">—</span>
-                    </div>
-                    <div class="disparos-credits-api-row">
-                      <span class="disparos-credits-api-row-key">Consumidos</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-consumed">—</span>
-                    </div>
-                    <div class="disparos-credits-api-row is-remaining">
-                      <span class="disparos-credits-api-row-key">Disponíveis</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-remaining">—</span>
-                    </div>
-                    <div class="disparos-credits-api-row is-bonus" id="disparos-credits-oficial-bonus-row" hidden>
-                      <span class="disparos-credits-api-row-key">Bonificados</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-bonus">—</span>
-                    </div>
-                  </div>
-                </article>
-                <article class="disparos-credits-api-card is-alternativa" id="disparos-credits-api-alternativa">
-                  <div class="disparos-credits-api-card-head">
-                    <span class="disparos-credits-api-card-name">API Alternativa</span>
-                    <span class="disparos-credits-api-badge is-alternativa">Alternativa</span>
-                  </div>
-                  <div class="disparos-credits-api-rows">
-                    <div class="disparos-credits-api-row">
-                      <span class="disparos-credits-api-row-key">Contratados</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-contracted">—</span>
-                    </div>
-                    <div class="disparos-credits-api-row">
-                      <span class="disparos-credits-api-row-key">Consumidos</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-consumed">—</span>
-                    </div>
-                    <div class="disparos-credits-api-row is-remaining">
-                      <span class="disparos-credits-api-row-key">Disponíveis</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-remaining">—</span>
-                    </div>
-                    <div class="disparos-credits-api-row is-bonus" id="disparos-credits-alternativa-bonus-row" hidden>
-                      <span class="disparos-credits-api-row-key">Bonificados</span>
-                      <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-bonus">—</span>
-                    </div>
-                  </div>
-                </article>
-              </div>
-            </div>
-          </section>
           <div
             id="disparos-credits-hub-tabs"
             class="disparos-credits-hub-tabs"
@@ -13047,6 +12944,112 @@
             aria-labelledby="disparos-credits-hub-tab-history"
             hidden
           >
+            <section
+              id="disparos-credits-panel"
+              class="disparos-credits-panel"
+              aria-label="Saldo de créditos de disparos"
+              hidden
+            >
+              <div class="disparos-credits-card-wrap">
+                <div class="disparos-credits-head">
+                  <div>
+                    <h2 class="disparos-credits-title">Seu saldo</h2>
+                    <p class="disparos-credits-subtitle" id="disparos-credits-subtitle">
+                      Acompanhe o pacote contratado, o que já foi usado e o saldo disponível.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    id="disparos-credits-refresh-btn"
+                    class="disparos-credits-refresh-btn"
+                  >
+                    Atualizar saldo
+                  </button>
+                </div>
+                <div class="disparos-credits-grid">
+                  <article class="disparos-credits-stat">
+                    <span class="disparos-credits-label">Créditos contratados</span>
+                    <strong class="disparos-credits-value" id="disparos-credits-contracted">—</strong>
+                    <span class="disparos-credits-meta" id="disparos-credits-contracted-meta"></span>
+                  </article>
+                  <article class="disparos-credits-stat">
+                    <span class="disparos-credits-label">Total consumido</span>
+                    <strong class="disparos-credits-value" id="disparos-credits-consumed">—</strong>
+                    <span class="disparos-credits-meta">
+                      <span class="disparos-credits-meta-long">envios realizados</span>
+                      <span class="disparos-credits-meta-short">realizados</span>
+                    </span>
+                  </article>
+                  <article class="disparos-credits-stat is-remaining">
+                    <span class="disparos-credits-label">Saldo restante</span>
+                    <strong class="disparos-credits-value" id="disparos-credits-remaining">—</strong>
+                    <span class="disparos-credits-meta" id="disparos-credits-remaining-meta"></span>
+                  </article>
+                  <article
+                    class="disparos-credits-stat is-bonus"
+                    id="disparos-credits-bonus-stat"
+                    hidden
+                  >
+                    <span class="disparos-credits-label">Créditos bonificados</span>
+                    <strong class="disparos-credits-value" id="disparos-credits-bonus">—</strong>
+                    <span class="disparos-credits-meta" id="disparos-credits-bonus-meta">
+                      <span class="disparos-credits-meta-long">somados na próxima compra do mesmo plano</span>
+                      <span class="disparos-credits-meta-short">na próxima compra</span>
+                    </span>
+                  </article>
+                </div>
+                <div class="disparos-credits-api-split" aria-label="Saldo por API">
+                  <article class="disparos-credits-api-card is-oficial" id="disparos-credits-api-oficial">
+                    <div class="disparos-credits-api-card-head">
+                      <span class="disparos-credits-api-card-name">API Oficial</span>
+                      <span class="disparos-credits-api-badge">Oficial</span>
+                    </div>
+                    <div class="disparos-credits-api-rows">
+                      <div class="disparos-credits-api-row">
+                        <span class="disparos-credits-api-row-key">Contratados</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-contracted">—</span>
+                      </div>
+                      <div class="disparos-credits-api-row">
+                        <span class="disparos-credits-api-row-key">Consumidos</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-consumed">—</span>
+                      </div>
+                      <div class="disparos-credits-api-row is-remaining">
+                        <span class="disparos-credits-api-row-key">Disponíveis</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-remaining">—</span>
+                      </div>
+                      <div class="disparos-credits-api-row is-bonus" id="disparos-credits-oficial-bonus-row" hidden>
+                        <span class="disparos-credits-api-row-key">Bonificados</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-oficial-bonus">—</span>
+                      </div>
+                    </div>
+                  </article>
+                  <article class="disparos-credits-api-card is-alternativa" id="disparos-credits-api-alternativa">
+                    <div class="disparos-credits-api-card-head">
+                      <span class="disparos-credits-api-card-name">API Alternativa</span>
+                      <span class="disparos-credits-api-badge is-alternativa">Alternativa</span>
+                    </div>
+                    <div class="disparos-credits-api-rows">
+                      <div class="disparos-credits-api-row">
+                        <span class="disparos-credits-api-row-key">Contratados</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-contracted">—</span>
+                      </div>
+                      <div class="disparos-credits-api-row">
+                        <span class="disparos-credits-api-row-key">Consumidos</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-consumed">—</span>
+                      </div>
+                      <div class="disparos-credits-api-row is-remaining">
+                        <span class="disparos-credits-api-row-key">Disponíveis</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-remaining">—</span>
+                      </div>
+                      <div class="disparos-credits-api-row is-bonus" id="disparos-credits-alternativa-bonus-row" hidden>
+                        <span class="disparos-credits-api-row-key">Bonificados</span>
+                        <span class="disparos-credits-api-row-value" id="disparos-credits-alternativa-bonus">—</span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </section>
             <section
               id="disparos-credits-history-section"
               class="disparos-credits-history-section"
@@ -23752,15 +23755,13 @@
       }
 
       function restoreDisparosPurchaseContent() {
-        const home = document.getElementById("disparos-purchase-home");
-        const panel = document.getElementById("disparos-credits-panel");
         const choice = document.getElementById("disparos-purchase-choice-wrap");
         const purchasePanel = document.getElementById("disparos-credits-hub-panel-purchase");
-        const hubTabs = document.getElementById("disparos-credits-hub-tabs");
-        if (!home) return;
-        if (panel && panel.parentElement !== home) {
-          if (hubTabs) home.insertBefore(panel, hubTabs);
-          else home.insertBefore(panel, home.firstChild?.nextSibling || null);
+        const historyPanel = document.getElementById("disparos-credits-hub-panel-history");
+        const historySection = document.getElementById("disparos-credits-history-section");
+        const panel = document.getElementById("disparos-credits-panel");
+        if (panel && historyPanel && historySection && panel.parentElement !== historyPanel) {
+          historyPanel.insertBefore(panel, historySection);
         }
         if (choice && purchasePanel && choice.parentElement !== purchasePanel) {
           purchasePanel.appendChild(choice);
@@ -23768,10 +23769,8 @@
       }
 
       function mountDisparosPurchaseContent(targetEl) {
-        const panel = document.getElementById("disparos-credits-panel");
         const choice = document.getElementById("disparos-purchase-choice-wrap");
-        if (!targetEl || !panel || !choice) return;
-        targetEl.appendChild(panel);
+        if (!targetEl || !choice) return;
         targetEl.appendChild(choice);
       }
 
@@ -23958,6 +23957,11 @@
         return activeTab === "disparos-lancamento";
       }
 
+      function isDisparosCreditsHubHistoryTabActive() {
+        const historyTab = document.getElementById("disparos-credits-hub-tab-history");
+        return isDisparosCreditsHubTabActive() && historyTab?.classList.contains("is-active");
+      }
+
       function renderDisparosCreditsApiSplit(credits) {
         const kinds = [
           { key: "oficial", cardId: "disparos-credits-api-oficial" },
@@ -24040,6 +24044,7 @@
         if (purchasePanel) purchasePanel.hidden = isHistory;
         if (historyPanel) historyPanel.hidden = !isHistory;
         if (isHistory) void loadDisparosCreditsHubHistory();
+        renderDisparosCreditsPanel(disparosCreditsCache);
       }
 
       function renderDisparosCreditsPanel(credits) {
@@ -24058,14 +24063,17 @@
         const hasCredits = Boolean(credits?.hasCredits);
         const showCreditsPanel = hasCredits || pendingBonus > 0;
         const onCreditsHub = isDisparosCreditsHubTabActive();
+        const onHistoryHubTab = isDisparosCreditsHubHistoryTabActive();
         const inRepurchaseModal = Boolean(panel.closest("#disparos-repurchase-overlay"));
 
         document.body.classList.toggle("disparos-has-credits", hasCredits);
 
-        if (onCreditsHub && wabaAuthEnabled) {
+        if (onCreditsHub && wabaAuthEnabled && onHistoryHubTab) {
           panel.hidden = false;
+        } else if (onCreditsHub && wabaAuthEnabled) {
+          panel.hidden = true;
         } else if (inRepurchaseModal) {
-          panel.hidden = !showCreditsPanel;
+          panel.hidden = true;
         } else {
           panel.hidden = true;
         }
@@ -24081,11 +24089,11 @@
           if (contractedMetaEl) contractedMetaEl.textContent = "Nenhuma compra confirmada ainda";
           if (remainingMetaEl) {
             remainingMetaEl.innerHTML =
-              '<span class="disparos-credits-meta-long">contrate abaixo para começar</span><span class="disparos-credits-meta-short">contrate abaixo</span>';
+              '<span class="disparos-credits-meta-long">contrate na aba Contratar créditos</span><span class="disparos-credits-meta-short">contrate acima</span>';
           }
           if (subtitleEl) {
             subtitleEl.textContent =
-              "Escolha API Oficial ou Alternativa e contrate seu primeiro pacote de envios.";
+              "Ainda sem compras confirmadas. Use a aba Contratar créditos para começar.";
           }
           renderDisparosCreditsApiSplit(null);
           syncCampanhasMenuVisibility();
@@ -25610,6 +25618,46 @@
       const ADMIN_CAMPANHAS_POLL_MS = 15 * 60 * 1000;
       let aquecedorRuntimeStatusCache = null;
       let aquecedorRuntimeResumeInFlight = false;
+      let aquecedorRuntimeUiPin = null;
+      const AQUECEDOR_RUNTIME_UI_PIN_MS = 15000;
+
+      function pinAquecedorRuntimeUi(running, desiredRunning = running) {
+        aquecedorRuntimeUiPin = {
+          running: Boolean(running),
+          desiredRunning: Boolean(desiredRunning),
+          until: Date.now() + AQUECEDOR_RUNTIME_UI_PIN_MS,
+        };
+      }
+
+      function clearAquecedorRuntimeUiPinIfConfirmed(data) {
+        if (!aquecedorRuntimeUiPin) return;
+        const running = data?.running === true;
+        const desired = data?.desiredRunning === true;
+        if (
+          running === aquecedorRuntimeUiPin.running &&
+          desired === aquecedorRuntimeUiPin.desiredRunning
+        ) {
+          aquecedorRuntimeUiPin = null;
+        }
+      }
+
+      function applyAquecedorRuntimeUiPin(data) {
+        if (!data || typeof data !== "object") return data;
+        if (!aquecedorRuntimeUiPin || Date.now() > aquecedorRuntimeUiPin.until) {
+          aquecedorRuntimeUiPin = null;
+          return data;
+        }
+        return {
+          ...data,
+          running: aquecedorRuntimeUiPin.running,
+          desiredRunning: aquecedorRuntimeUiPin.desiredRunning,
+        };
+      }
+
+      function resolveAquecedorMotorRunning(data) {
+        const pinned = applyAquecedorRuntimeUiPin(data || {});
+        return pinned?.running === true || pinned?.desiredRunning === true;
+      }
       let aquecedorChatEvents = [];
       const aquecedorChatSeen = new Set();
       let disparosNextInstanceTechnicalCache = null;
@@ -26761,7 +26809,7 @@
       function showAquecedorStartStopButtons() {
         aquecedorStartUnlocked = true;
         updateAquecedorStartStopVisibility(
-          aquecedorRuntimeStatusCache?.running === true
+          resolveAquecedorMotorRunning(aquecedorRuntimeStatusCache)
         );
       }
       function updateAquecedorStartStopVisibility(motorRunning) {
@@ -26957,6 +27005,16 @@
         const autoResume = options.autoResume !== false;
         const label = document.getElementById("aquecedor-runtime-label");
         const renderStatusFailure = (reason = "") => {
+          if (aquecedorRuntimeUiPin && Date.now() < aquecedorRuntimeUiPin.until) {
+            const pinned = applyAquecedorRuntimeUiPin(aquecedorRuntimeStatusCache || {});
+            if (label) {
+              label.textContent = `Motor: ativo | sincronizando status…${reason ? ` (${reason})` : ""}`;
+            }
+            renderAquecedorRuntimeHero(pinned);
+            renderAquecedorRuntimeProgress();
+            updateAquecedorChatFabIndicator(pinned);
+            return pinned;
+          }
           const cached = aquecedorRuntimeStatusCache;
           if (cached && (cached.running === true || cached.desiredRunning === true)) {
             if (label) {
@@ -26989,6 +27047,7 @@
             return renderStatusFailure(reason);
           }
           let data = await response.json().catch(() => ({}));
+          data = applyAquecedorRuntimeUiPin(data);
           const desiredRunning = data?.desiredRunning === true;
           let running = data?.running === true;
 
@@ -27024,8 +27083,10 @@
           }
 
           aquecedorRuntimeStatusCache = data || null;
+          clearAquecedorRuntimeUiPinIfConfirmed(data);
           const isProcessing = data?.isProcessing === true;
-          if (running || desiredRunning) {
+          const motorRunning = running || desiredRunning;
+          if (motorRunning) {
             showAquecedorStartStopButtons();
           }
           const nextAllowedAt = data?.nextAllowedAt
@@ -27037,7 +27098,7 @@
               running ? "ativo" : desiredRunning ? "retomando" : "parado"
             } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
           }
-          updateAquecedorStartStopVisibility(running);
+          updateAquecedorStartStopVisibility(motorRunning);
           renderAquecedorRuntimeHero(data);
           renderAquecedorRuntimeProgress();
           updateAquecedorChatFabIndicator(data);
@@ -30295,6 +30356,7 @@
               data?.message || data?.error || "Falha ao executar ação do aquecedor.";
             addAquecedorCommandLog(`Falha (${action}): ${failMsg}`);
             if (action === "start" && runtimeBgOff) {
+              aquecedorRuntimeUiPin = null;
               showToast(
                 "Aquecedor desativado neste servidor. Em dev local, defina ENABLE_AQUECEDOR_PROCESSING=true no .env.v02 e reinicie.",
                 "warning",
@@ -30307,6 +30369,7 @@
                   "Aquecedor indisponível neste processo (ENABLE_AQUECEDOR_PROCESSING=false).",
               });
             } else {
+              if (action === "start") aquecedorRuntimeUiPin = null;
               showToast(failMsg, "error");
             }
             return;
@@ -30314,6 +30377,7 @@
           showToast(data?.message || "Ação executada com sucesso.", "success");
           addAquecedorCommandLog(data?.message || `Ação concluída: ${action}.`);
           if (action === "start") {
+            pinAquecedorRuntimeUi(true, true);
             aquecedorRuntimeStatusCache = {
               ...(data?.status || {}),
               running: true,
@@ -30323,23 +30387,13 @@
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
-          }
-          const lastResult = data?.status?.lastResult;
-          if (action === "runOnce" && lastResult) {
-            addAquecedorCommandLog("Resultado: " + lastResult);
-          }
-          if (lastResult && String(lastResult).toLowerCase().includes("sucesso")) {
-            showAquecedorStartStopButtons();
-          }
-          if (action === "runOnce" || action === "start") {
-            showAquecedorStartStopButtons();
-          }
-          if (action === "start") {
             updateAquecedorStartStopVisibility(true);
-          }
-          if (action === "stop") {
             showAquecedorStartStopButtons();
-            updateAquecedorStartStopVisibility(false);
+            window.setTimeout(() => {
+              void syncAquecedorRuntimeUi({ autoResume: false });
+            }, 2500);
+          } else if (action === "stop") {
+            pinAquecedorRuntimeUi(false, false);
             aquecedorRuntimeStatusCache = {
               ...(data?.status || {}),
               running: false,
@@ -30349,10 +30403,25 @@
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
+            updateAquecedorStartStopVisibility(false);
+            showAquecedorStartStopButtons();
+            await syncAquecedorRuntimeUi({ autoResume: false });
+          } else {
+            const lastResult = data?.status?.lastResult;
+            if (action === "runOnce" && lastResult) {
+              addAquecedorCommandLog("Resultado: " + lastResult);
+            }
+            if (lastResult && String(lastResult).toLowerCase().includes("sucesso")) {
+              showAquecedorStartStopButtons();
+            }
+            if (action === "runOnce") {
+              showAquecedorStartStopButtons();
+            }
+            await syncAquecedorRuntimeUi({ autoResume: false });
           }
-          await syncAquecedorRuntimeUi({ autoResume: false });
           if (action === "runOnce") loadAquecedorEnvios();
         } catch {
+          aquecedorRuntimeUiPin = null;
           showToast("Erro ao executar ação do aquecedor.", "error");
           const actionLabel = { start: "Iniciar Aquecedor", stop: "Parar Aquecedor", runOnce: "Envio teste" }[action] || action;
           addAquecedorCommandLog(`Erro ao executar ${actionLabel}.`);

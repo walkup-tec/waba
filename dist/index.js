@@ -2068,6 +2068,7 @@ let aquecedorPersistedBundle = {
     snapshot: createDefaultAquecedorRuntimeSnapshot(),
 };
 let aquecedorPersistedBundleReloadedAt = 0;
+let aquecedorPersistedBundleSavedAtMs = 0;
 let aquecedorConnectedSummaryCache = { count: 0, names: [], at: 0 };
 function updateAquecedorConnectedSummary(connected) {
     aquecedorConnectedSummaryCache = {
@@ -2167,7 +2168,17 @@ async function reloadAquecedorPersistedBundleFromDisk(force = false) {
     aquecedorPersistedBundleReloadedAt = now;
     try {
         const raw = await fs_1.promises.readFile(RUNTIME_INTENT_FILE, "utf-8");
-        aquecedorPersistedBundle = parseAquecedorRuntimePersistedBundle(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        const fileSavedAtMs = new Date(String(parsed.savedAt || "")).getTime();
+        if (Number.isFinite(fileSavedAtMs) &&
+            aquecedorPersistedBundleSavedAtMs > 0 &&
+            fileSavedAtMs < aquecedorPersistedBundleSavedAtMs) {
+            return aquecedorPersistedBundle;
+        }
+        aquecedorPersistedBundle = parseAquecedorRuntimePersistedBundle(parsed);
+        if (Number.isFinite(fileSavedAtMs)) {
+            aquecedorPersistedBundleSavedAtMs = fileSavedAtMs;
+        }
     }
     catch {
         /* mantém cache em memória */
@@ -2175,11 +2186,13 @@ async function reloadAquecedorPersistedBundleFromDisk(force = false) {
     return aquecedorPersistedBundle;
 }
 function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
-    const running = bundle.desired === true && bundle.snapshot.running === true;
+    const desiredRunning = bundle.desired === true;
+    const workerActive = isAquecedorWorkerLeaseValid(bundle.snapshot);
+    const running = desiredRunning && (bundle.snapshot.running === true || workerActive);
     return {
         ...bundle.snapshot,
         running,
-        desiredRunning: bundle.desired === true,
+        desiredRunning,
         persistedOwnerEmail: bundle.ownerEmail,
         ownerEmailBound: Boolean(aquecedorRuntimeOwnerEmail || bundle.ownerEmail),
         workerId: bundle.snapshot.workerId,
@@ -2225,9 +2238,10 @@ async function withAquecedorTimeout(promise, ms, fallback) {
 async function writeAquecedorPersistedBundleToDisk() {
     try {
         await fs_1.promises.mkdir(path_1.default.dirname(RUNTIME_INTENT_FILE), { recursive: true });
+        const savedAtMs = Date.now();
         const payload = {
             version: 2,
-            savedAt: new Date().toISOString(),
+            savedAt: new Date(savedAtMs).toISOString(),
             aquecedorRuntimeDesired: aquecedorPersistedBundle.desired === true,
             aquecedorOwnerEmail: aquecedorPersistedBundle.ownerEmail,
             aquecedorRuntimeSnapshot: aquecedorPersistedBundle.snapshot,
@@ -2235,6 +2249,7 @@ async function writeAquecedorPersistedBundleToDisk() {
         const tmp = `${RUNTIME_INTENT_FILE}.tmp`;
         await fs_1.promises.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
         await fs_1.promises.rename(tmp, RUNTIME_INTENT_FILE);
+        aquecedorPersistedBundleSavedAtMs = savedAtMs;
     }
     catch (e) {
         console.error("[Runtime] falha ao gravar runtime-intent.json:", e);
@@ -2303,7 +2318,7 @@ async function syncAquecedorWorkerLeadership() {
     await reloadAquecedorPersistedBundleFromDisk(true);
     const bundle = aquecedorPersistedBundle;
     aquecedorRuntimeOwnerEmail = bundle.ownerEmail;
-    if (bundle.desired !== true || !bundle.snapshot.running) {
+    if (bundle.desired !== true) {
         stopAquecedorRuntimeLocal();
         applyPersistedSnapshotToLocal(bundle.snapshot);
         return;
@@ -6268,17 +6283,18 @@ app.post("/aquecedor/start", async (req, res) => {
     if (!aquecedorRuntimeOwnerEmail) {
         return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
     }
+    await persistAquecedorRuntimeIntent(true, aquecedorRuntimeOwnerEmail);
     startAquecedorRuntimeLocal();
     void ensureAquecedorPendingMessage();
-    await persistAquecedorRuntimeIntent(true, aquecedorRuntimeOwnerEmail);
-    await reloadAquecedorPersistedBundleFromDisk();
+    aquecedorRuntime.lastResult = "Aquecedor iniciado.";
     return res.json({
         ok: true,
         message: "Aquecedor iniciado.",
         status: {
-            ...aquecedorPersistedBundle.snapshot,
+            ...buildLiveAquecedorStatusPayload(),
             running: true,
             desiredRunning: true,
+            lastResult: aquecedorRuntime.lastResult,
         },
         desiredRunning: true,
     });

@@ -27,6 +27,10 @@ Como usar:
 
 2026-06-24
 
+**WABA — Aquecedor start duplo clique:** pin UI + persist antes do motor; status com worker lease. Marker `DEPLOY-2026-06-24-aquecedor-start-double-click-fix`. Ver `doc/LOG-2026-06-24__aquecedor-start-duplo-clique-fix.md`.
+
+**WABA — Créditos hub compra no topo:** saldo na aba Histórico; Contratar só cards API. Ver `doc/LOG-2026-06-24__creditos-hub-compra-topo-historico-saldo.md`.
+
 **WABA — Aquecedor envio atrasado (status poll):** poll 3s não reverte mais runtime; scheduler 5–30s; fila PROCESSANDO liberada. Marker `DEPLOY-2026-06-24-aquecedor-cycle-scheduler-fix`. Ver `doc/LOG-2026-06-24__aquecedor-envio-atrasado-status-poll-fix.md`.
 
 **WABA — Comparativo campanhas com data:** data de criação abaixo do nome no gráfico do dashboard Disparos. Ver `doc/LOG-2026-06-24__disparos-dashboard-compare-data-criacao.md`.
