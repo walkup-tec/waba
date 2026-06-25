@@ -1474,6 +1474,25 @@ async function resolveAquecedorMessageForSend(supabase, pendingId, pendingText, 
         .eq("id", pendingId);
     return mensagem;
 }
+async function releaseStuckAquecedorQueueRows(supabase) {
+    const cutoff = new Date(Date.now() - AQUECEDOR_QUEUE_STUCK_MS).toISOString();
+    const resetPayload = {
+        status: "PENDENTE",
+        instancia: null,
+        numero_destino: null,
+        processing_at: null,
+        sent_at: null,
+    };
+    await supabase.from("aquecedor")
+        .update(resetPayload)
+        .eq("status", "PROCESSANDO")
+        .lt("processing_at", cutoff);
+    await supabase.from("aquecedor")
+        .update(resetPayload)
+        .eq("status", "PROCESSANDO")
+        .is("processing_at", null)
+        .lt("scheduled_at", cutoff);
+}
 async function fetchProcessableAquecedorPending(supabase) {
     const now = new Date().toISOString();
     const { data } = (await (supabase
@@ -2021,8 +2040,12 @@ const aquecedorRuntime = {
     lastResult: null,
     lastEvoError: null,
 };
-let aquecedorInterval = null;
+let aquecedorScheduleTimer = null;
 let aquecedorRuntimeOwnerEmail = null;
+const AQUECEDOR_CYCLE_TICK_MIN_MS = 5000;
+const AQUECEDOR_CYCLE_TICK_MAX_MS = 30000;
+const AQUECEDOR_PROCESSING_STALE_MS = 8 * 60 * 1000;
+const AQUECEDOR_QUEUE_STUCK_MS = 3 * 60 * 1000;
 const AQUECEDOR_WORKER_LEASE_MS = 90000;
 const AQUECEDOR_WORKER_SYNC_MS = 12000;
 const AQUECEDOR_PERSISTED_RELOAD_MS = 2000;
@@ -2074,9 +2097,18 @@ function shouldThisProcessLeadAquecedor(bundle) {
         return true;
     return false;
 }
+function isAquecedorProcessingSnapshotStale(snapshot) {
+    if (!snapshot.isProcessing)
+        return false;
+    const lastRunMs = snapshot.lastRunAt ? new Date(snapshot.lastRunAt).getTime() : Number.NaN;
+    if (!Number.isFinite(lastRunMs))
+        return true;
+    return Date.now() - lastRunMs > AQUECEDOR_PROCESSING_STALE_MS;
+}
 function applyPersistedSnapshotToLocal(snapshot) {
     aquecedorRuntime.running = snapshot.running === true;
-    aquecedorRuntime.isProcessing = snapshot.isProcessing === true;
+    aquecedorRuntime.isProcessing =
+        snapshot.isProcessing === true && !isAquecedorProcessingSnapshotStale(snapshot);
     aquecedorRuntime.nextAllowedAt = snapshot.nextAllowedAt;
     aquecedorRuntime.lastRunAt = snapshot.lastRunAt;
     aquecedorRuntime.lastResult = snapshot.lastResult;
@@ -2160,6 +2192,21 @@ function buildAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
             : null,
     };
 }
+/** Status para API: worker líder expõe estado em memória (evita corrida com poll a cada 3s). */
+function buildLiveAquecedorStatusPayload(bundle = aquecedorPersistedBundle) {
+    const base = buildAquecedorStatusPayload(bundle);
+    if (!shouldThisProcessLeadAquecedor(bundle))
+        return base;
+    return {
+        ...base,
+        running: aquecedorRuntime.running,
+        isProcessing: aquecedorRuntime.isProcessing,
+        nextAllowedAt: aquecedorRuntime.nextAllowedAt,
+        lastRunAt: aquecedorRuntime.lastRunAt,
+        lastResult: aquecedorRuntime.lastResult,
+        lastEvoError: aquecedorRuntime.lastEvoError,
+    };
+}
 async function withAquecedorTimeout(promise, ms, fallback) {
     let timer = null;
     try {
@@ -2219,23 +2266,52 @@ async function loadAquecedorRuntimeIntent() {
 }
 function stopAquecedorRuntimeLocal() {
     aquecedorRuntime.running = false;
-    if (aquecedorInterval) {
-        clearInterval(aquecedorInterval);
-        aquecedorInterval = null;
+    if (aquecedorScheduleTimer) {
+        clearTimeout(aquecedorScheduleTimer);
+        aquecedorScheduleTimer = null;
     }
+}
+function computeAquecedorNextCycleDelayMs() {
+    if (aquecedorRuntime.nextAllowedAt) {
+        const nextMs = new Date(aquecedorRuntime.nextAllowedAt).getTime();
+        if (Number.isFinite(nextMs)) {
+            const delta = nextMs - Date.now();
+            if (delta > 0) {
+                return Math.min(AQUECEDOR_CYCLE_TICK_MAX_MS, Math.max(AQUECEDOR_CYCLE_TICK_MIN_MS, delta));
+            }
+            return AQUECEDOR_CYCLE_TICK_MIN_MS;
+        }
+    }
+    return 15000;
+}
+function scheduleAquecedorCycleTick() {
+    if (!aquecedorRuntime.running || !ENABLE_AQUECEDOR_PROCESSING)
+        return;
+    if (aquecedorScheduleTimer)
+        clearTimeout(aquecedorScheduleTimer);
+    const delay = computeAquecedorNextCycleDelayMs();
+    aquecedorScheduleTimer = setTimeout(() => {
+        aquecedorScheduleTimer = null;
+        if (!aquecedorRuntime.running)
+            return;
+        void runAquecedorCycle().finally(() => scheduleAquecedorCycleTick());
+    }, delay);
 }
 async function syncAquecedorWorkerLeadership() {
     if (!ENABLE_AQUECEDOR_PROCESSING || MAINTENANCE_MODE)
         return;
     await reloadAquecedorPersistedBundleFromDisk(true);
     const bundle = aquecedorPersistedBundle;
-    applyPersistedSnapshotToLocal(bundle.snapshot);
     aquecedorRuntimeOwnerEmail = bundle.ownerEmail;
     if (bundle.desired !== true || !bundle.snapshot.running) {
         stopAquecedorRuntimeLocal();
+        applyPersistedSnapshotToLocal(bundle.snapshot);
         return;
     }
     if (shouldThisProcessLeadAquecedor(bundle)) {
+        if (!aquecedorRuntime.running) {
+            applyPersistedSnapshotToLocal(bundle.snapshot);
+        }
         startAquecedorRuntimeLocal();
         bundle.snapshot.workerId = getAquecedorWorkerId();
         bundle.snapshot.workerHeartbeatAt = new Date().toISOString();
@@ -2243,6 +2319,7 @@ async function syncAquecedorWorkerLeadership() {
         await writeAquecedorPersistedBundleToDisk();
         return;
     }
+    applyPersistedSnapshotToLocal(bundle.snapshot);
     stopAquecedorRuntimeLocal();
 }
 async function readAquecedorConfigFromFile() {
@@ -3023,12 +3100,6 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
     }
     await supabase.from("controle_ciclo").upsert({ id: 1, ciclo_global: proximo }, { onConflict: "id" });
 }
-function shouldPreserveAquecedorLastResult(message) {
-    const text = String(message || "").trim();
-    if (!text)
-        return false;
-    return text !== "Aguardando intervalo aleatório.";
-}
 function deferAquecedorOutsideWindow(config, fromSp) {
     const nextOpen = nextAquecedorWindowOpenAt(config, fromSp);
     aquecedorRuntime.nextAllowedAt = nextOpen ? nextOpen.toISOString() : null;
@@ -3041,7 +3112,8 @@ function deferAquecedorRetryOrWindow(config, nowSp, retrySeconds, retryReason) {
         deferAquecedorOutsideWindow(config, nowSp);
         return;
     }
-    aquecedorRuntime.nextAllowedAt = new Date(Date.now() + retrySeconds * 1000).toISOString();
+    const boundedRetry = Math.max(15, Math.min(300, Math.floor(retrySeconds)));
+    aquecedorRuntime.nextAllowedAt = new Date(Date.now() + boundedRetry * 1000).toISOString();
     aquecedorRuntime.lastResult = retryReason;
 }
 async function runAquecedorCycle(forceTest = false) {
@@ -3054,9 +3126,6 @@ async function runAquecedorCycle(forceTest = false) {
         if (aquecedorRuntime.nextAllowedAt) {
             const nextAllowed = new Date(aquecedorRuntime.nextAllowedAt);
             if (nextAllowed.getTime() > now.getTime()) {
-                if (!shouldPreserveAquecedorLastResult(String(aquecedorRuntime.lastResult || ""))) {
-                    aquecedorRuntime.lastResult = "Aguardando intervalo aleatório.";
-                }
                 return;
             }
         }
@@ -3105,11 +3174,7 @@ async function runAquecedorCycle(forceTest = false) {
             aquecedorRuntime.lastResult = "Supabase não configurado.";
             return;
         }
-        const cutoffStuck = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        await (supabase.from("aquecedor")
-            .update({ status: "PENDENTE" })
-            .eq("status", "PROCESSANDO")
-            .lt("processing_at", cutoffStuck));
+        await releaseStuckAquecedorQueueRows(supabase);
         await syncAquecedorConnectedInstances(supabase, connected);
         const combinations = [];
         for (const origem of connected) {
@@ -3141,14 +3206,13 @@ async function runAquecedorCycle(forceTest = false) {
         }
         const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal);
         if (!picked) {
-            const retrySeconds = Math.max(60, Math.min(config.waitMinSeconds, 180));
-            deferAquecedorRetryOrWindow(config, nowSp, retrySeconds, "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.");
+            deferAquecedorRetryOrWindow(config, nowSp, 30, "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.");
             return;
         }
         const chosen = picked.chosen;
         const dailyQuota = await (0, aquecedor_instance_lifecycle_service_1.canAquecedorInstanceSendToday)(chosen.instancia_origem);
         if (!dailyQuota.ok) {
-            deferAquecedorRetryOrWindow(config, nowSp, config.waitMaxSeconds, `${chosen.instancia_origem}: ${dailyQuota.reason}`);
+            deferAquecedorRetryOrWindow(config, nowSp, 300, `${chosen.instancia_origem}: ${dailyQuota.reason}`);
             return;
         }
         const proximo = picked.index + 1;
@@ -3288,16 +3352,11 @@ function startAquecedorRuntimeLocal() {
             "Aquecedor desativado neste processo (ENABLE_AQUECEDOR_PROCESSING=false).";
         return;
     }
-    if (aquecedorInterval)
+    if (aquecedorRuntime.running && aquecedorScheduleTimer)
         return;
     aquecedorRuntime.running = true;
-    aquecedorInterval = setInterval(() => {
-        if (!aquecedorRuntime.running)
-            return;
-        runAquecedorCycle();
-    }, 30000);
     void ensureAquecedorPendingMessage();
-    runAquecedorCycle();
+    void runAquecedorCycle().finally(() => scheduleAquecedorCycleTick());
 }
 function startAquecedorRuntime() {
     startAquecedorRuntimeLocal();
@@ -6018,13 +6077,12 @@ app.post("/aquecedor/config", async (req, res) => {
 app.get("/aquecedor/status", async (_req, res) => {
     try {
         await reloadAquecedorPersistedBundleFromDisk();
-        applyPersistedSnapshotToLocal(aquecedorPersistedBundle.snapshot);
         const config = await loadAquecedorEffectiveConfig();
         const nowSp = nowInSaoPaulo();
         const windowOpen = isAquecedorWindowOpen(config, nowSp);
         const nextWindowOpenAt = windowOpen ? null : nextAquecedorWindowOpenAt(config, nowSp);
         return res.json({
-            ...buildAquecedorStatusPayload(),
+            ...buildLiveAquecedorStatusPayload(),
             windowOpen,
             nextWindowOpenAt: nextWindowOpenAt ? nextWindowOpenAt.toISOString() : null,
             nextWindowOpenBr: nextWindowOpenAt ? formatDateBr(nextWindowOpenAt.toISOString()) : null,
@@ -6033,7 +6091,7 @@ app.get("/aquecedor/status", async (_req, res) => {
     catch (error) {
         console.error("[Aquecedor] erro em GET /aquecedor/status:", error);
         return res.json({
-            ...buildAquecedorStatusPayload(),
+            ...buildLiveAquecedorStatusPayload(),
             statusReadError: true,
             statusReadMessage: "Falha ao ler estado persistido; exibindo último snapshot conhecido.",
         });
