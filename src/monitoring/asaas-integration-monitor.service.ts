@@ -169,6 +169,25 @@ async function deliverAsaasIntegrationAlerts(report: AsaasIntegrationHealthRepor
   return { whatsapp: whatsappResult, email: emailResult };
 }
 
+export async function sendAsaasIntegrationTestAlert(): Promise<{
+  whatsapp: { ok: boolean; detail: string };
+  email: { ok: boolean; detail: string };
+}> {
+  const report: AsaasIntegrationHealthReport = {
+    ok: false,
+    checkedAt: new Date().toISOString(),
+    issues: [
+      {
+        code: "test_alert",
+        severity: "warning",
+        message: "Alerta de teste manual — integração pode estar OK; ignore se foi solicitado.",
+        action: "env",
+      },
+    ],
+  };
+  return deliverAsaasIntegrationAlerts(report);
+}
+
 export async function runAsaasIntegrationMonitorCheck(input?: {
   slot?: string;
   forceAlert?: boolean;

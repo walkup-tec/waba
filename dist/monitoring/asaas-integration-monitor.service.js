@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveAsaasMonitorSlots = exports.isAsaasIntegrationMonitorEnabled = void 0;
+exports.sendAsaasIntegrationTestAlert = sendAsaasIntegrationTestAlert;
 exports.runAsaasIntegrationMonitorCheck = runAsaasIntegrationMonitorCheck;
 exports.startAsaasIntegrationMonitorScheduler = startAsaasIntegrationMonitorScheduler;
 exports.getAsaasIntegrationMonitorStatus = getAsaasIntegrationMonitorStatus;
@@ -142,6 +143,21 @@ async function deliverAsaasIntegrationAlerts(report) {
         console.warn("[asaas-monitor] email falhou:", emailResult.detail);
     }
     return { whatsapp: whatsappResult, email: emailResult };
+}
+async function sendAsaasIntegrationTestAlert() {
+    const report = {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        issues: [
+            {
+                code: "test_alert",
+                severity: "warning",
+                message: "Alerta de teste manual — integração pode estar OK; ignore se foi solicitado.",
+                action: "env",
+            },
+        ],
+    };
+    return deliverAsaasIntegrationAlerts(report);
 }
 async function runAsaasIntegrationMonitorCheck(input) {
     const report = await (0, asaas_integration_health_service_1.evaluateAsaasIntegrationHealth)();

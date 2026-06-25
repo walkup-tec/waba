@@ -110,6 +110,19 @@ const registerWabaAdminRoutes = (app) => {
             });
         }
     });
+    app.post("/admin/financeiro/asaas-monitor/test-alert", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const alerts = await (0, asaas_integration_monitor_service_1.sendAsaasIntegrationTestAlert)();
+            return res.status(200).json({ ok: true, test: true, alerts });
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
+            });
+        }
+    });
     app.get("/admin/financeiro/orders", (req, res) => {
         if (!rejectNonMaster(req, res))
             return;

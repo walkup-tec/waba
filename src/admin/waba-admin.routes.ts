@@ -11,8 +11,9 @@ import { WabaAdminSupportService } from "./waba-admin-support.service";
 import { WabaAdminMasterMenuBadgesService } from "./waba-admin-master-menu-badges.service";
 import { MASTER_MENU_BADGE_KEYS, type MasterMenuBadgeKey } from "./waba-admin-master-menu-badges.repository";
 import {
-  getAsaasIntegrationMonitorStatus,
   runAsaasIntegrationMonitorCheck,
+  sendAsaasIntegrationTestAlert,
+  getAsaasIntegrationMonitorStatus,
 } from "../monitoring/asaas-integration-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 
@@ -107,6 +108,18 @@ export const registerWabaAdminRoutes = (app: Express) => {
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível executar o monitor Asaas.",
+      });
+    }
+  });
+
+  app.post("/admin/financeiro/asaas-monitor/test-alert", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const alerts = await sendAsaasIntegrationTestAlert();
+      return res.status(200).json({ ok: true, test: true, alerts });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
       });
     }
   });
