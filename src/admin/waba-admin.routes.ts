@@ -7,6 +7,7 @@ import { WabaAdminDashboardService } from "./waba-admin-dashboard.service";
 import { WabaAdminFinanceiroService } from "./waba-admin-financeiro.service";
 import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminSubscriberPromoteService } from "./waba-admin-subscriber-promote.service";
+import { WabaAdminMasterPromoteService } from "./waba-admin-master-promote.service";
 import { WabaAdminSupportService } from "./waba-admin-support.service";
 import { WabaAdminMasterMenuBadgesService } from "./waba-admin-master-menu-badges.service";
 import { MASTER_MENU_BADGE_KEYS, type MasterMenuBadgeKey } from "./waba-admin-master-menu-badges.repository";
@@ -21,6 +22,7 @@ const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
 const adminSubscribersService = new WabaAdminSubscribersService();
 const adminSubscriberPromoteService = new WabaAdminSubscriberPromoteService();
+const adminMasterPromoteService = new WabaAdminMasterPromoteService();
 const adminUsersService = new WabaAdminUsersService();
 const adminFinanceiroService = new WabaAdminFinanceiroService();
 const adminDashboardService = new WabaAdminDashboardService();
@@ -70,6 +72,19 @@ export const registerWabaAdminRoutes = (app: Express) => {
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Não foi possível promover o assinante.",
+      });
+    }
+  });
+
+  app.post("/admin/master/promote-from-v02", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = adminMasterPromoteService.promoteFromV02Bundle(body as any);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível promover o master.",
       });
     }
   });

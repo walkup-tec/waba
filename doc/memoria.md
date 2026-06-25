@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Aquecedor 4 instâncias / 2 no ciclo:** lifecycle unificado por alias; UI e status mostram preparação; marker `DEPLOY-2026-06-25-aquecedor-lifecycle-alias-cycle-fix`. Ver `doc/LOG-2026-06-25__aquecedor-4-instancias-2-ciclo-alias-fix.md`.
+
+**WABA — Master walkup V02 → produção:** script + API `POST /admin/master/promote-from-v02`; escopo só walkup@walkuptec.com.br. Ver `doc/LOG-2026-06-25__master-walkup-v02-to-producao.md`.
+
 **WABA — Lista campanhas geradas (resiliência):** retry + cache na falha + escrita atômica intakes. Marker `DEPLOY-2026-06-25-disparos-campanhas-list-resilience`. Ver `doc/LOG-2026-06-25__disparos-campanhas-list-resilience.md`.
 
 **WABA — Fix Gerar Campanha multipart (causa raiz):** `express.json` não consome mais body de `POST /disparos/campanhas/intake`; marker `DEPLOY-2026-06-25-campanha-intake-multipart-parser-fix`. Ver `doc/LOG-2026-06-25__campanha-intake-multipart-parser-fix.md`.

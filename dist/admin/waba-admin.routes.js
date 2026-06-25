@@ -12,6 +12,7 @@ const waba_admin_dashboard_service_1 = require("./waba-admin-dashboard.service")
 const waba_admin_financeiro_service_1 = require("./waba-admin-financeiro.service");
 const waba_admin_subscribers_service_1 = require("./waba-admin-subscribers.service");
 const waba_admin_subscriber_promote_service_1 = require("./waba-admin-subscriber-promote.service");
+const waba_admin_master_promote_service_1 = require("./waba-admin-master-promote.service");
 const waba_admin_support_service_1 = require("./waba-admin-support.service");
 const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-menu-badges.service");
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
@@ -20,6 +21,7 @@ const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
 const adminSubscriberPromoteService = new waba_admin_subscriber_promote_service_1.WabaAdminSubscriberPromoteService();
+const adminMasterPromoteService = new waba_admin_master_promote_service_1.WabaAdminMasterPromoteService();
 const adminUsersService = new waba_admin_users_service_1.WabaAdminUsersService();
 const adminFinanceiroService = new waba_admin_financeiro_service_1.WabaAdminFinanceiroService();
 const adminDashboardService = new waba_admin_dashboard_service_1.WabaAdminDashboardService();
@@ -68,6 +70,20 @@ const registerWabaAdminRoutes = (app) => {
         catch (error) {
             return res.status(400).json({
                 error: error instanceof Error ? error.message : "Não foi possível promover o assinante.",
+            });
+        }
+    });
+    app.post("/admin/master/promote-from-v02", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const body = req.body;
+            const result = adminMasterPromoteService.promoteFromV02Bundle(body);
+            return res.status(200).json(result);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível promover o master.",
             });
         }
     });
