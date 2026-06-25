@@ -3750,12 +3750,13 @@ async function runAquecedorCycleTestBatch(
     combinations,
     cicloGlobal,
   );
-  if (!picked) {
+  const chosen = picked?.chosen ?? combinations[0] ?? null;
+  const proximo = picked ? picked.index + 1 : 1;
+  if (!chosen) {
     aquecedorRuntime.lastResult =
-      "Teste: nenhum par disponível no momento (aguardando alternância entre instâncias).";
+      "Teste: nenhum par disponível (é necessário ao menos 2 instâncias ativas no Aquecedor).";
     return;
   }
-  const chosen = picked.chosen;
   const deliveryTag = buildAquecedorDeliveryTag();
   const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
@@ -3765,7 +3766,6 @@ async function runAquecedorCycleTestBatch(
     : { number: numero, text: texto, textMessage: { text: texto } };
   const sendStartedAtMs = Date.now();
   const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
-  const proximo = picked.index + 1;
   const origemConnected = connected.find(
     (item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase(),
   );
@@ -3847,7 +3847,7 @@ async function runAquecedorCycle(forceTest = false) {
 
   try {
     const now = new Date();
-    if (aquecedorRuntime.nextAllowedAt) {
+    if (!forceTest && aquecedorRuntime.nextAllowedAt) {
       const nextAllowed = new Date(aquecedorRuntime.nextAllowedAt);
       if (nextAllowed.getTime() > now.getTime()) {
         return;
@@ -7506,15 +7506,41 @@ app.post("/aquecedor/stop", async (_req, res) => {
 
 app.post("/aquecedor/run-once", async (req, res) => {
   if (rejectAquecedorWithoutEntitlement(req, res)) return;
+  if (!ENABLE_AQUECEDOR_PROCESSING) {
+    return res.status(409).json({
+      ok: false,
+      error:
+        "Aquecedor desativado neste processo. Defina ENABLE_AQUECEDOR_PROCESSING=true ou use o runtime de produção.",
+      status: aquecedorRuntime,
+      runtime: {
+        mode: RUNTIME_MODE,
+        backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+        aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+      },
+    });
+  }
   const auth = resolveWabaRequestAuth(req);
   aquecedorRuntimeOwnerEmail = auth.email?.trim().toLowerCase() || null;
   if (!aquecedorRuntimeOwnerEmail) {
     return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
   }
-  await runAquecedorCycle(true); // bypass janela e cooldown para teste
-  stopAquecedorRuntime(); // execução única: para o motor ao finalizar
+  await runAquecedorCycle(true); // bypass janela e cooldown para teste entre 2 instâncias
+  stopAquecedorRuntimeLocal();
   void persistAquecedorRuntimeIntent(false, null);
-  return res.json({ ok: true, message: "Ciclo executado.", status: aquecedorRuntime });
+  const status = buildLiveAquecedorStatusPayload();
+  const lastResult = String(aquecedorRuntime.lastResult || "").trim();
+  const ok = /enviado com sucesso|realizado/i.test(lastResult);
+  return res.json({
+    ok,
+    message: lastResult || "Ciclo de teste executado.",
+    status: {
+      ...status,
+      running: false,
+      desiredRunning: false,
+      isProcessing: false,
+      lastResult: lastResult || status.lastResult,
+    },
+  });
 });
 
 app.post("/aquecedor/criar-mensagem-teste", async (req, res) => {

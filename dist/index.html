@@ -2005,6 +2005,15 @@
         background: rgba(56, 189, 248, 0.28);
       }
 
+      body.integration-env-aquecedor .integration-env-strip {
+        border-color: rgba(251, 146, 60, 0.38);
+        background: linear-gradient(145deg, rgba(84, 32, 8, 0.78), rgba(52, 22, 6, 0.72));
+      }
+
+      body.integration-env-aquecedor .integration-env-btn.active {
+        background: rgba(251, 146, 60, 0.32);
+      }
+
       body.integration-env-credits-active .integration-env-strip {
         border-color: rgba(148, 163, 184, 0.28);
         background: linear-gradient(145deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.62));
@@ -11075,57 +11084,6 @@
         color: #fca5a5;
         line-height: 1.4;
       }
-      .dis-wizard-plan-implicit {
-        margin: 0 0 12px;
-        padding: 10px 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(37, 211, 102, 0.35);
-        background: rgba(6, 44, 28, 0.22);
-        color: #bbf7d0;
-        font-size: 0.86rem;
-        line-height: 1.45;
-      }
-      .dis-wizard-plan-wrap {
-        margin-bottom: 14px;
-      }
-      .dis-wizard-plan-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-top: 8px;
-      }
-      .dis-wizard-plan-option {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        background: rgba(15, 23, 42, 0.45);
-        cursor: pointer;
-      }
-      .dis-wizard-plan-option:has(input:checked) {
-        border-color: rgba(37, 211, 102, 0.45);
-        background: rgba(6, 44, 28, 0.22);
-      }
-      .dis-wizard-plan-option input {
-        flex-shrink: 0;
-      }
-      .dis-wizard-plan-option-body {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-      }
-      .dis-wizard-plan-option-name {
-        font-size: 0.92rem;
-        font-weight: 700;
-        color: #e2e8f0;
-      }
-      .dis-wizard-plan-option-balance {
-        font-size: 0.78rem;
-        color: #94a3b8;
-      }
       .dis-wizard-response-link-hint {
         margin: 6px 0 0;
         font-size: 0.78rem;
@@ -13122,7 +13080,7 @@
                       <div id="aquecedor-runtime-actions" class="instance-actions">
                         <button
                           id="aquecedor-start-btn"
-                          class="instance-action-btn btn-qrcode enabled aquecedor-start-stop-btn aquecedor-motor-btn hidden"
+                          class="instance-action-btn btn-qrcode enabled aquecedor-start-stop-btn aquecedor-motor-btn"
                           type="button"
                           data-waba-aquecedor-text="Iniciar Aquecedor"
                           data-motor-phase="start"
@@ -14010,26 +13968,6 @@
 
                   <div class="dis-campaign-wizard-panel" data-wizard-step="5" hidden>
                     <h3 class="dis-campaign-wizard-panel-title">Lista de clientes (leads)</h3>
-                    <p id="dis-wizard-plan-implicit" class="dis-wizard-plan-implicit" hidden></p>
-                    <div id="dis-wizard-plan-wrap" class="dis-wizard-plan-wrap" hidden>
-                      <span class="dis-campaign-import-label">Plano de envio</span>
-                      <div class="dis-wizard-plan-grid" id="dis-wizard-plan-grid">
-                        <label class="dis-wizard-plan-option" data-wizard-plan="oficial">
-                          <input type="radio" name="dis-wizard-api-kind" value="oficial" />
-                          <span class="dis-wizard-plan-option-body">
-                            <span class="dis-wizard-plan-option-name" data-waba-api-kind="oficial"></span>
-                            <span class="dis-wizard-plan-option-balance" id="dis-wizard-plan-balance-oficial">—</span>
-                          </span>
-                        </label>
-                        <label class="dis-wizard-plan-option" data-wizard-plan="alternativa">
-                          <input type="radio" name="dis-wizard-api-kind" value="alternativa" />
-                          <span class="dis-wizard-plan-option-body">
-                            <span class="dis-wizard-plan-option-name" data-waba-api-kind="alternativa"></span>
-                            <span class="dis-wizard-plan-option-balance" id="dis-wizard-plan-balance-alternativa">—</span>
-                          </span>
-                        </label>
-                      </div>
-                    </div>
                     <div class="dis-campaign-import-wrap">
                       <span class="dis-campaign-import-label">Planilha Excel com os leads</span>
                       <div class="dis-campaign-dropzone" id="dis-wizard-leads-dropzone">
@@ -14071,7 +14009,6 @@
                           />
                           <p class="dis-wizard-leads-count-hint" id="dis-wizard-leads-count-hint"></p>
                           <p class="dis-wizard-leads-count-error hidden" id="dis-wizard-leads-count-error"></p>
-                          <div id="dis-wizard-alternativa-projection" class="dis-evo-campaign-projection" hidden></div>
                         </div>
                       </div>
                     </div>
@@ -18113,6 +18050,9 @@
           currentLabel.querySelectorAll(".wa-icon, .rocket-icon, .flame-icon").forEach((icon) => {
             icon.classList.add("hidden");
           });
+          document.body.classList.toggle("integration-env-official", false);
+          document.body.classList.toggle("integration-env-alternativa", false);
+          document.body.classList.toggle("integration-env-aquecedor", false);
           return;
         }
 
@@ -25850,7 +25790,7 @@
           syncDisparosResumoSide();
           syncAquecedorSectionVisual();
           if (disCampaignWizardStep === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
-            updateDisCampaignWizardPlanUi();
+            updateDisCampaignWizardLeadsCountUi();
           }
           return disparosCreditsCache;
         } catch {
@@ -26423,7 +26363,7 @@
         if (nextBtn) nextBtn.hidden = step >= DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
         if (generateBtn) generateBtn.hidden = step !== DIS_CAMPAIGN_WIZARD_TOTAL_STEPS;
         if (step === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
-          updateDisCampaignWizardPlanUi();
+          updateDisCampaignWizardLeadsCountUi();
         }
       }
 
@@ -26499,11 +26439,10 @@
           return "";
         }
         if (step === 5) {
-          ensureDisCampaignWizardPlanSelection();
           if (!hasMasterAccess()) {
-            const availablePlans = listDisCampaignWizardAvailableApiKinds();
-            if (!availablePlans.length) {
-              return "Você não possui saldo em nenhum plano. Contrate envios antes de gerar a campanha.";
+            const remaining = getDisCampaignWizardRemainingShipments();
+            if (remaining < 1) {
+              return "Você não possui envios disponíveis na API Oficial. Contrate envios antes de gerar a campanha.";
             }
           }
           if (!disCampaignWizardLeadsFile) {
@@ -26513,22 +26452,14 @@
           if (imported < 1) {
             return "A planilha não contém linhas de leads.";
           }
-          const apiKind = getDisCampaignWizardSelectedApiKind();
-          if (!apiKind) {
-            return "Selecione o plano de envio (API Oficial ou API Alternativa).";
-          }
           const planned = getDisCampaignWizardPlannedSendCountValue();
           if (!planned || planned < 1) {
             return "Informe a quantidade de envios desejada.";
           }
           if (!hasMasterAccess()) {
-            const remaining = getDisCampaignWizardRemainingShipments(apiKind);
-            const apiLabel = apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
-            if (remaining < 1) {
-              return `Você não possui envios disponíveis no plano ${apiLabel}.`;
-            }
+            const remaining = getDisCampaignWizardRemainingShipments();
             if (planned > remaining) {
-              return `No plano ${apiLabel}, você possui apenas ${formatDisparosQty(remaining)} envio(s) disponível(is).`;
+              return `Na API Oficial, você possui apenas ${formatDisparosQty(remaining)} envio(s) disponível(is).`;
             }
           }
           if (planned > imported) {
@@ -26658,118 +26589,17 @@
         return "";
       }
 
-      function listDisCampaignWizardAvailableApiKinds() {
-        if (hasMasterAccess()) return ["oficial", "alternativa"];
-        const kinds = [];
-        if (resolveDisparosCreditsApiBucket("oficial").remainingShipments > 0) kinds.push("oficial");
-        if (resolveDisparosCreditsApiBucket("alternativa").remainingShipments > 0) {
-          kinds.push("alternativa");
-        }
-        return kinds;
-      }
-
-      function ensureDisCampaignWizardPlanSelection() {
-        const available = listDisCampaignWizardAvailableApiKinds();
-        const oficialInput = document.querySelector('input[name="dis-wizard-api-kind"][value="oficial"]');
-        const alternativaInput = document.querySelector(
-          'input[name="dis-wizard-api-kind"][value="alternativa"]'
-        );
-        if (hasMasterAccess()) return;
-        if (available.length === 1) {
-          const kind = available[0];
-          if (oficialInput) oficialInput.checked = kind === "oficial";
-          if (alternativaInput) alternativaInput.checked = kind === "alternativa";
-          return;
-        }
-        const checked = document.querySelector('input[name="dis-wizard-api-kind"]:checked')?.value;
-        if (checked && !available.includes(checked)) {
-          if (oficialInput) oficialInput.checked = false;
-          if (alternativaInput) alternativaInput.checked = false;
-        }
-      }
-
-      function getDisCampaignWizardApiKindLabel(apiKind) {
-        return apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
-      }
-
       function getDisCampaignWizardSelectedApiKind() {
-        ensureDisCampaignWizardPlanSelection();
-        const available = listDisCampaignWizardAvailableApiKinds();
-        if (hasMasterAccess()) {
-          const checked = document.querySelector('input[name="dis-wizard-api-kind"]:checked')?.value;
-          return checked === "alternativa" ? "alternativa" : "oficial";
-        }
-        if (available.length === 1) return available[0];
-        const checked = document.querySelector('input[name="dis-wizard-api-kind"]:checked')?.value;
-        if ((checked === "oficial" || checked === "alternativa") && available.includes(checked)) {
-          return checked;
-        }
-        return "";
+        return "oficial";
       }
 
-      function updateDisCampaignWizardPlanUi() {
-        const implicitEl = document.getElementById("dis-wizard-plan-implicit");
-        const wrap = document.getElementById("dis-wizard-plan-wrap");
-        const oficialBalanceEl = document.getElementById("dis-wizard-plan-balance-oficial");
-        const alternativaBalanceEl = document.getElementById("dis-wizard-plan-balance-alternativa");
-        const oficialOption = document.querySelector('.dis-wizard-plan-option[data-wizard-plan="oficial"]');
-        const alternativaOption = document.querySelector(
-          '.dis-wizard-plan-option[data-wizard-plan="alternativa"]'
-        );
-        const oficialInput = document.querySelector('input[name="dis-wizard-api-kind"][value="oficial"]');
-        const alternativaInput = document.querySelector(
-          'input[name="dis-wizard-api-kind"][value="alternativa"]'
-        );
-        const available = listDisCampaignWizardAvailableApiKinds();
-        const isMaster = hasMasterAccess();
-
-        const oficialRemaining = isMaster
-          ? Number.MAX_SAFE_INTEGER
-          : resolveDisparosCreditsApiBucket("oficial").remainingShipments;
-        const alternativaRemaining = isMaster
-          ? Number.MAX_SAFE_INTEGER
-          : resolveDisparosCreditsApiBucket("alternativa").remainingShipments;
-
-        if (oficialBalanceEl) {
-          oficialBalanceEl.textContent = isMaster
-            ? "Saldo ilimitado (master)"
-            : `${formatDisparosQty(oficialRemaining)} envio(s) disponível(is)`;
-        }
-        if (alternativaBalanceEl) {
-          alternativaBalanceEl.textContent = isMaster
-            ? "Saldo ilimitado (master)"
-            : `${formatDisparosQty(alternativaRemaining)} envio(s) disponível(is)`;
-        }
-
-        if (oficialOption) {
-          oficialOption.hidden = isMaster ? false : !available.includes("oficial");
-        }
-        if (alternativaOption) {
-          alternativaOption.hidden = isMaster ? false : !available.includes("alternativa");
-        }
-
-        if (wrap) {
-          wrap.hidden = isMaster ? false : available.length < 2;
-        }
-        if (implicitEl) {
-          if (!isMaster && available.length === 1) {
-            implicitEl.hidden = false;
-            implicitEl.innerHTML = `Envio pelo plano ${renderWabaApiKindLabelHtml(
-              available[0]
-            )} (único com saldo disponível).`;
-          } else {
-            implicitEl.hidden = true;
-            implicitEl.textContent = "";
-          }
-        }
-
-        ensureDisCampaignWizardPlanSelection();
-
-        updateDisCampaignWizardLeadsCountUi();
+      function getDisCampaignWizardRemainingShipments() {
+        if (hasMasterAccess()) return Number.MAX_SAFE_INTEGER;
+        const bucket = resolveDisparosCreditsApiBucket("oficial");
+        return Math.max(0, Math.floor(Number(bucket.remainingShipments) || 0));
       }
 
       async function ensureDisCampaignWizardArtifacts() {
-        ensureDisCampaignWizardPlanSelection();
         const imageInput = document.getElementById("dis-wizard-campaign-image");
         if (!disCampaignWizardImageFile && imageInput?.files?.[0]) {
           await validateDisCampaignWizardImageFile(imageInput.files[0]);
@@ -26778,13 +26608,6 @@
         if (!disCampaignWizardLeadsFile && leadsInput?.files?.[0]) {
           await setDisCampaignWizardLeadsFile(leadsInput.files[0]);
         }
-      }
-
-      function getDisCampaignWizardRemainingShipments(apiKind = getDisCampaignWizardSelectedApiKind()) {
-        if (hasMasterAccess()) return Number.MAX_SAFE_INTEGER;
-        const kind = apiKind === "alternativa" ? "alternativa" : "oficial";
-        const bucket = resolveDisparosCreditsApiBucket(kind);
-        return Math.max(0, Math.floor(Number(bucket.remainingShipments) || 0));
       }
 
       function getDisCampaignWizardPlannedSendCountValue() {
@@ -26836,27 +26659,14 @@
         if (hintEl) {
           const parts = [`Até ${formatDisparosQty(imported)} contato(s) na planilha`];
           if (!hasMasterAccess()) {
-            const apiKind = getDisCampaignWizardSelectedApiKind();
             parts.push(
-              `${formatDisparosQty(remaining)} envio(s) disponível(is) no plano ${renderWabaApiKindLabelHtml(apiKind)}`
+              `${formatDisparosQty(remaining)} envio(s) disponível(is) na ${renderWabaApiKindLabelHtml("oficial")}`
             );
           }
           hintEl.innerHTML = parts.join(" · ");
         }
         const planned = getDisCampaignWizardPlannedSendCountValue();
         renderCampaignImportStatsElement(statsEl, imported, planned);
-        if (getDisCampaignWizardSelectedApiKind() === "alternativa") {
-          renderAlternativaProjectionElement(
-            document.getElementById("dis-wizard-alternativa-projection"),
-            planned
-          );
-        } else {
-          const altProjection = document.getElementById("dis-wizard-alternativa-projection");
-          if (altProjection) {
-            altProjection.hidden = true;
-            altProjection.textContent = "";
-          }
-        }
       }
 
       async function setDisCampaignWizardLeadsFile(file) {
@@ -26941,11 +26751,6 @@
         });
         const responseLinkInput = document.getElementById("dis-wizard-response-link");
         if (responseLinkInput) responseLinkInput.value = "";
-        document
-          .querySelectorAll('input[name="dis-wizard-api-kind"]')
-          .forEach((input) => {
-            input.checked = false;
-          });
         void validateDisCampaignWizardImageFile(null);
         setDisCampaignWizardLeadsFile(null);
         renderDisCampaignWizardStep();
@@ -26993,10 +26798,7 @@
           if (!responseLink) {
             throw new Error("Informe um link de resposta válido (http ou https).");
           }
-          const apiKind = getDisCampaignWizardSelectedApiKind();
-          if (!apiKind) {
-            throw new Error("Selecione o plano de envio (API Oficial ou API Alternativa).");
-          }
+          const apiKind = "oficial";
           if (!disCampaignWizardImageFile) {
             throw new Error("Envie a imagem da campanha (1080×1080 px).");
           }
@@ -27105,12 +26907,6 @@
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
         });
-        document.querySelectorAll('input[name="dis-wizard-api-kind"]').forEach((input) => {
-          input.addEventListener("change", () => {
-            clearDisCampaignWizardLeadsCountError();
-            updateDisCampaignWizardPlanUi();
-          });
-        });
         if (leadsDropzone && leadsInput) {
           ["dragenter", "dragover"].forEach((evt) => {
             leadsDropzone.addEventListener(evt, (e) => {
@@ -27142,7 +26938,6 @@
         }
       }
       let aquecedorEditMode = false;
-      let aquecedorStartUnlocked = false;
       const aquecedorCommandLogs = [];
       const disparosDiagnosticoLogs = [];
       const AQUECEDOR_RECOMMENDED = {
@@ -27542,7 +27337,6 @@
       }
 
       function showAquecedorStartStopButtons() {
-        aquecedorStartUnlocked = true;
         syncAquecedorMotorButton(aquecedorRuntimeStatusCache);
       }
 
@@ -27562,11 +27356,6 @@
         const stopBtn = document.getElementById("aquecedor-stop-btn");
         if (stopBtn) stopBtn.classList.add("hidden");
         if (!btn) return;
-
-        if (!aquecedorStartUnlocked) {
-          btn.classList.add("hidden");
-          return;
-        }
 
         const phase = resolveAquecedorMotorButtonPhase(status);
         btn.classList.remove("hidden", "btn-qrcode", "btn-delete", "btn-aquecedor-wait", "disabled");
@@ -31111,7 +30900,10 @@
           aquecedorMotorActionInFlight = action;
           syncAquecedorMotorButton(aquecedorRuntimeStatusCache);
         }
-        if (actionBtn && action !== "runOnce") {
+        if (actionBtn) {
+          if (action === "runOnce") {
+            actionBtn.textContent = "Enviando teste...";
+          }
           actionBtn.classList.add("disabled");
           actionBtn.setAttribute("disabled", "true");
         }
@@ -31159,6 +30951,34 @@
             }
             return;
           }
+          if (action === "runOnce") {
+            const statusPayload = data?.status || {};
+            const lastResult = String(statusPayload?.lastResult || data?.message || "").trim();
+            aquecedorRuntimeStatusCache = {
+              ...(aquecedorRuntimeStatusCache || {}),
+              ...statusPayload,
+              running: false,
+              desiredRunning: false,
+              isProcessing: false,
+              lastResult: lastResult || aquecedorRuntimeStatusCache?.lastResult,
+            };
+            renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
+            renderAquecedorRuntimeProgress();
+            updateAquecedorStartStopVisibility(false, aquecedorRuntimeStatusCache);
+            if (lastResult) {
+              addAquecedorCommandLog("Resultado: " + lastResult);
+            } else {
+              addAquecedorCommandLog("Envio teste concluído.");
+            }
+            const testOk = data?.ok === true || /enviado com sucesso|realizado/i.test(lastResult);
+            showToast(
+              lastResult || (testOk ? "Envio teste concluído." : "Envio teste não concluído."),
+              testOk ? "success" : "warning",
+              testOk ? 4200 : 6200
+            );
+            await syncAquecedorRuntimeUi({ autoResume: false });
+            loadAquecedorEnvios();
+          } else {
           showToast(data?.message || "Ação executada com sucesso.", "success");
           addAquecedorCommandLog(data?.message || `Ação concluída: ${action}.`);
           if (action === "start") {
@@ -31191,20 +31011,8 @@
             updateAquecedorStartStopVisibility(false, aquecedorRuntimeStatusCache);
             showAquecedorStartStopButtons();
             await syncAquecedorRuntimeUi({ autoResume: false });
-          } else {
-            const lastResult = data?.status?.lastResult;
-            if (action === "runOnce" && lastResult) {
-              addAquecedorCommandLog("Resultado: " + lastResult);
-            }
-            if (lastResult && String(lastResult).toLowerCase().includes("sucesso")) {
-              showAquecedorStartStopButtons();
-            }
-            if (action === "runOnce") {
-              showAquecedorStartStopButtons();
-            }
-            await syncAquecedorRuntimeUi({ autoResume: false });
           }
-          if (action === "runOnce") loadAquecedorEnvios();
+          }
         } catch {
           aquecedorRuntimeUiPin = null;
           showToast("Erro ao executar ação do aquecedor.", "error");
@@ -31212,9 +31020,12 @@
           addAquecedorCommandLog(`Erro ao executar ${actionLabel}.`);
         } finally {
           aquecedorMotorActionInFlight = null;
-          if (actionBtn && action !== "runOnce") {
+          if (actionBtn) {
             actionBtn.classList.remove("disabled");
             actionBtn.removeAttribute("disabled");
+            if (action === "runOnce") {
+              actionBtn.textContent = "Envio teste";
+            }
           }
           syncAquecedorMotorButton(aquecedorRuntimeStatusCache);
         }
@@ -34556,6 +34367,7 @@
         }
         document.body.classList.toggle("integration-env-official", normalized === "oficial");
         document.body.classList.toggle("integration-env-alternativa", normalized === "alternativa");
+        document.body.classList.toggle("integration-env-aquecedor", normalized === "nao-oficial");
         document
           .querySelectorAll(".integration-env-btn[data-integration-env]")
           .forEach((btn) => {

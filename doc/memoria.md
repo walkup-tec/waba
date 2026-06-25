@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Wizard Nova campanha (API Oficial):** removido seletor "Plano de envio" no passo Leads; campanha sempre `apiKind: oficial`. Ver `doc/LOG-2026-06-25__dis-wizard-sem-plano-envio-api-oficial.md`.
+
+**WABA — Envio teste Aquecedor:** envia mensagem entre 2 instâncias ativas; motor visível sem depender do teste. Ver `doc/LOG-2026-06-25__aquecedor-envio-teste-funcional.md`.
+
 **WABA — Botão Aquecedor 3 fases:** Iniciar (verde), Aguarde Iniciar (azul, disabled), Pausar (vermelho); ícone foguinho à frente. Ver `doc/LOG-2026-06-25__hex-tamanho-aquecedor-botao-3-fases.md`.
 
 **WABA — Hex Créditos tamanho:** restaurado max-width 500/593px mantendo lanes amplas.
