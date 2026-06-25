@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
@@ -17,6 +17,7 @@ exports.filterInstancesLifecycleReady = filterInstancesLifecycleReady;
 exports.formatAquecedorLifecycleStatusLabel = formatAquecedorLifecycleStatusLabel;
 exports.getAquecedorLifecycleStatusMap = getAquecedorLifecycleStatusMap;
 exports.filterAquecedorCycleConnected = filterAquecedorCycleConnected;
+exports.refreshAquecedorDailyCapsIfNeeded = refreshAquecedorDailyCapsIfNeeded;
 exports.canAquecedorInstanceSendToday = canAquecedorInstanceSendToday;
 exports.recordAquecedorInstanceDailySend = recordAquecedorInstanceDailySend;
 exports.detectAndMarkRestrictionFromSend = detectAndMarkRestrictionFromSend;
@@ -138,26 +139,15 @@ function todayKeySp() {
         return new Date().toISOString().slice(0, 10);
     }
 }
-function stableWeeklyHash(instanceName, weekIndex) {
-    const seed = `${instanceName.toLowerCase()}|w${weekIndex}`;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i += 1) {
-        hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-    }
-    return hash;
-}
-/** Semana 1: 8–16/dia; sobe ~40% por semana (teto 48). */
-function computeDailyCapForInstance(instanceName, activatedAt) {
+/** Semana 1: 70/dia por instância; +40% por semana; teto 150 (~semana 4). */
+exports.AQUECEDOR_DAILY_CAP_BASE = 70;
+exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = 1.4;
+exports.AQUECEDOR_DAILY_CAP_CEILING = 150;
+function computeDailyCapForInstance(_instanceName, activatedAt) {
     const activatedMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
     const weekIndex = Math.max(0, Math.floor((Date.now() - activatedMs) / (7 * 24 * 60 * 60 * 1000)));
-    const baseMin = 8;
-    const baseMax = 16;
-    const growth = 1 + weekIndex * 0.4;
-    const min = Math.min(40, Math.round(baseMin * growth));
-    const max = Math.min(48, Math.round(baseMax * growth));
-    const span = Math.max(1, max - min + 1);
-    const hash = stableWeeklyHash(instanceName, weekIndex);
-    return min + (hash % span);
+    const scaled = Math.round(exports.AQUECEDOR_DAILY_CAP_BASE * exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH ** weekIndex);
+    return Math.min(exports.AQUECEDOR_DAILY_CAP_CEILING, scaled);
 }
 function isLikelyWhatsAppRestriction(detail, httpStatus) {
     const d = String(detail || "").toLowerCase();
@@ -203,11 +193,8 @@ function ensureDailyCap(row, instanceName) {
     if (row.dailyDate !== today) {
         row.dailyDate = today;
         row.dailySendCount = 0;
-        row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
     }
-    else if (row.dailyCap == null) {
-        row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
-    }
+    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
 }
 async function getAquecedorLifecycleRow(instanceName) {
     const store = await loadStore();
@@ -404,12 +391,27 @@ async function filterAquecedorCycleConnected(connected) {
         await saveStore(store);
     return out;
 }
+/** Zera contadores diários ao virar o dia (SP) e persiste quando necessário. */
+async function refreshAquecedorDailyCapsIfNeeded() {
+    const store = await loadStore();
+    let dirty = false;
+    for (const [key, row] of Object.entries(store.instances)) {
+        refreshRestrictionPhase(row);
+        const beforeDate = row.dailyDate;
+        const beforeCap = row.dailyCap;
+        ensureDailyCap(row, key);
+        if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap)
+            dirty = true;
+    }
+    if (dirty)
+        await saveStore(store);
+}
 async function canAquecedorInstanceSendToday(instanceName) {
     const store = await loadStore();
     const key = normalizeKey(instanceName);
     const row = store.instances[key];
     if (!row) {
-        return { ok: true, reason: "", dailyCap: 16, dailyCount: 0 };
+        return { ok: true, reason: "", dailyCap: exports.AQUECEDOR_DAILY_CAP_BASE, dailyCount: 0 };
     }
     refreshRestrictionPhase(row);
     if (row.phase !== "active") {
@@ -422,8 +424,13 @@ async function canAquecedorInstanceSendToday(instanceName) {
             dailyCount: 0,
         };
     }
+    const beforeDate = row.dailyDate;
+    const beforeCap = row.dailyCap;
     ensureDailyCap(row, instanceName);
-    const cap = row.dailyCap ?? 16;
+    if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap) {
+        await saveStore(store);
+    }
+    const cap = row.dailyCap ?? exports.AQUECEDOR_DAILY_CAP_BASE;
     if (row.dailySendCount >= cap) {
         return {
             ok: false,

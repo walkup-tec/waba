@@ -13,6 +13,18 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-25
+
+**WABA — Faixa Créditos (conta corrente):** menu Créditos exibe "Sua conta corrente" + "Compre seus créditos" na `integration-env-strip`. Ver `doc/LOG-2026-06-25__125835__creditos-strip-conta-corrente.md`.
+
+**WABA — Créditos Contratar (lanes):** fontes maiores, label API+ícone no card de compra, coluna direita mais larga e próxima dos hexágonos. Ver `doc/LOG-2026-06-25__125425__creditos-lanes-fonte-api-label-largura.md`.
+
+**WABA — Aquecedor limite diário 70:** semana 1 = 70 msgs/instância/dia; +40%/semana; teto 150 na semana 4. Ver `doc/LOG-2026-06-25__aquecedor-limite-diario-70-ramp.md`.
+
+**WABA — Aquecedor sem envio no expediente:** rotação entre instâncias + timezone janela. Ver `doc/LOG-2026-06-25__aquecedor-limite-diario-sem-envio-dia.md`.
+
+**WABA — Preservação dados produção:** scripts backup/verify + `production-data-persistence.service`. Ver `doc/LOG-2026-06-24__preservacao-dados-deploy-producao.md`.
+
 2026-06-21
 
 **WABA — Typebot monitor Asaas (paridade):** implementado em `D:\typebot-Saas` serviço `api`. Ver `doc/LOG-2026-06-21__typebot-asaas-monitor-paridade-waba.md` e typebot `doc/LOG-2026-06-21__typebot-asaas-monitor-verificacao-diaria.md`.

@@ -149,18 +149,13 @@ function todayKeySp(): string {
   }
 }
 
-function stableWeeklyHash(instanceName: string, weekIndex: number): number {
-  const seed = `${instanceName.toLowerCase()}|w${weekIndex}`;
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
+/** Semana 1: 70/dia por instância; +40% por semana; teto 150 (~semana 4). */
+export const AQUECEDOR_DAILY_CAP_BASE = 70;
+export const AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = 1.4;
+export const AQUECEDOR_DAILY_CAP_CEILING = 150;
 
-/** Semana 1: 8–16/dia; sobe ~40% por semana (teto 48). */
 export function computeDailyCapForInstance(
-  instanceName: string,
+  _instanceName: string,
   activatedAt: string | null,
 ): number {
   const activatedMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
@@ -168,14 +163,10 @@ export function computeDailyCapForInstance(
     0,
     Math.floor((Date.now() - activatedMs) / (7 * 24 * 60 * 60 * 1000)),
   );
-  const baseMin = 8;
-  const baseMax = 16;
-  const growth = 1 + weekIndex * 0.4;
-  const min = Math.min(40, Math.round(baseMin * growth));
-  const max = Math.min(48, Math.round(baseMax * growth));
-  const span = Math.max(1, max - min + 1);
-  const hash = stableWeeklyHash(instanceName, weekIndex);
-  return min + (hash % span);
+  const scaled = Math.round(
+    AQUECEDOR_DAILY_CAP_BASE * AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH ** weekIndex,
+  );
+  return Math.min(AQUECEDOR_DAILY_CAP_CEILING, scaled);
 }
 
 export function isLikelyWhatsAppRestriction(detail: string, httpStatus?: number): boolean {
@@ -222,10 +213,8 @@ function ensureDailyCap(row: AquecedorInstanceLifecycleRow, instanceName: string
   if (row.dailyDate !== today) {
     row.dailyDate = today;
     row.dailySendCount = 0;
-    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
-  } else if (row.dailyCap == null) {
-    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
   }
+  row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
 }
 
 export async function getAquecedorLifecycleRow(
@@ -450,6 +439,20 @@ export async function filterAquecedorCycleConnected<T extends { instancia: strin
   return out;
 }
 
+/** Zera contadores diários ao virar o dia (SP) e persiste quando necessário. */
+export async function refreshAquecedorDailyCapsIfNeeded(): Promise<void> {
+  const store = await loadStore();
+  let dirty = false;
+  for (const [key, row] of Object.entries(store.instances)) {
+    refreshRestrictionPhase(row);
+    const beforeDate = row.dailyDate;
+    const beforeCap = row.dailyCap;
+    ensureDailyCap(row, key);
+    if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap) dirty = true;
+  }
+  if (dirty) await saveStore(store);
+}
+
 export async function canAquecedorInstanceSendToday(instanceName: string): Promise<{
   ok: boolean;
   reason: string;
@@ -460,7 +463,7 @@ export async function canAquecedorInstanceSendToday(instanceName: string): Promi
   const key = normalizeKey(instanceName);
   const row = store.instances[key];
   if (!row) {
-    return { ok: true, reason: "", dailyCap: 16, dailyCount: 0 };
+    return { ok: true, reason: "", dailyCap: AQUECEDOR_DAILY_CAP_BASE, dailyCount: 0 };
   }
   refreshRestrictionPhase(row);
   if (row.phase !== "active") {
@@ -474,8 +477,13 @@ export async function canAquecedorInstanceSendToday(instanceName: string): Promi
       dailyCount: 0,
     };
   }
+  const beforeDate = row.dailyDate;
+  const beforeCap = row.dailyCap;
   ensureDailyCap(row, instanceName);
-  const cap = row.dailyCap ?? 16;
+  if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap) {
+    await saveStore(store);
+  }
+  const cap = row.dailyCap ?? AQUECEDOR_DAILY_CAP_BASE;
   if (row.dailySendCount >= cap) {
     return {
       ok: false,
