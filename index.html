@@ -4409,6 +4409,13 @@
         color: #b91c1c;
       }
 
+      .admin-campanhas-detail-action-error {
+        margin: 0 0 10px;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        color: #fda4af;
+      }
+
       .admin-campanhas-error-readonly {
         margin-top: 14px;
         padding: 12px 14px;
@@ -15884,6 +15891,7 @@
             placeholder="Descreva o motivo pelo qual a campanha não pôde ser configurada…"
           ></textarea>
         </div>
+        <p id="admin-campanhas-detail-action-error" class="admin-campanhas-detail-action-error" hidden role="alert"></p>
         <div class="confirm-actions">
           <button
             id="admin-campanhas-start-btn"
@@ -15891,7 +15899,7 @@
             type="button"
             hidden
           >
-            Campanha Iniciada
+            Confirmar início
           </button>
           <button
             id="admin-campanhas-submit-error-btn"
@@ -22626,6 +22634,66 @@
       let adminCampanhasPlanFilter = "all";
       const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 8;
       const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 7;
+      const ADMIN_CAMPANHAS_START_BTN_LABEL = "Confirmar início";
+
+      function resolveAdminOperacionalFetchError(error, payload) {
+        if (error?.message === "timeout") {
+          return "O servidor demorou para responder. Tente novamente.";
+        }
+        const raw = String(error?.message || payload?.error || "").trim();
+        if (!raw) return "Não foi possível concluir a operação.";
+        if (
+          raw === "Failed to fetch" ||
+          /networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(raw)
+        ) {
+          return "Não foi possível contactar o servidor. Verifique sua conexão e tente novamente.";
+        }
+        return raw;
+      }
+
+      async function fetchAdminOperacionalJson(path, options = {}, timeoutMs = 20000, retries = 3) {
+        const url = resolveWabaPublicPath(path);
+        let lastError = null;
+        for (let attempt = 1; attempt <= retries; attempt += 1) {
+          try {
+            const response = await fetchWithTimeout(
+              url,
+              { credentials: "same-origin", ...options },
+              timeoutMs
+            );
+            if (
+              response.ok ||
+              response.status === 401 ||
+              response.status === 403 ||
+              response.status === 400 ||
+              response.status === 404
+            ) {
+              return response;
+            }
+            if (response.status >= 500 && attempt < retries) {
+              await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+              continue;
+            }
+            return response;
+          } catch (error) {
+            lastError = error;
+            if (attempt < retries) {
+              await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+              continue;
+            }
+            throw error;
+          }
+        }
+        throw lastError || new Error("Failed to fetch");
+      }
+
+      function setAdminCampanhasDetailActionError(message) {
+        const el = document.getElementById("admin-campanhas-detail-action-error");
+        if (!el) return;
+        const text = String(message || "").trim();
+        el.textContent = text;
+        el.hidden = !text;
+      }
 
       function getAdminCampanhasTableColspan() {
         return hasMasterAccess() ? ADMIN_CAMPANHAS_TABLE_COLS_MASTER : ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT;
@@ -22981,9 +23049,13 @@
 
         if (startBtn) {
           const canStart = Boolean(campaign.canStartCampaign);
+          startBtn.textContent = ADMIN_CAMPANHAS_START_BTN_LABEL;
           startBtn.hidden = !canStart;
-          startBtn.toggleAttribute("disabled", !canStart);
+          startBtn.removeAttribute("disabled");
+          if (!canStart) startBtn.setAttribute("disabled", "true");
         }
+
+        setAdminCampanhasDetailActionError("");
 
         if (errorBlock) errorBlock.hidden = true;
         if (errorText) errorText.value = "";
@@ -23017,11 +23089,16 @@
         const submitErrorBtn = document.getElementById("admin-campanhas-submit-error-btn");
         const errorBlock = document.getElementById("admin-campanhas-error-report-block");
         const errorText = document.getElementById("admin-campanhas-error-report-text");
-        if (startBtn) startBtn.hidden = true;
+        if (startBtn) {
+          startBtn.hidden = true;
+          startBtn.textContent = ADMIN_CAMPANHAS_START_BTN_LABEL;
+          startBtn.removeAttribute("disabled");
+        }
         if (reportErrorBtn) reportErrorBtn.hidden = true;
         if (submitErrorBtn) submitErrorBtn.hidden = true;
         if (errorBlock) errorBlock.hidden = true;
         if (errorText) errorText.value = "";
+        setAdminCampanhasDetailActionError("");
       }
 
       function toggleAdminCampanhasErrorReportForm(show) {
@@ -23053,15 +23130,15 @@
           submitErrorBtn.setAttribute("disabled", "true");
         }
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/reportar-erro`,
             {
               method: "POST",
-              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ justification }),
             },
-            12000
+            20000,
+            3
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -23084,10 +23161,11 @@
       async function openAdminCampanhasErrorReason(campaignId) {
         if (!campaignId) return;
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}`,
             {},
-            12000
+            15000,
+            2
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -23129,30 +23207,45 @@
 
       async function markAdminCampanhaStarted() {
         const campaignId = adminCampanhasDetailCampaignId;
-        if (!campaignId) return;
+        if (!campaignId) {
+          setAdminCampanhasDetailActionError("Campanha não identificada. Feche e abra os detalhes novamente.");
+          return;
+        }
 
         const startBtn = document.getElementById("admin-campanhas-start-btn");
-        const previousLabel = startBtn?.textContent || "Campanha Iniciada";
+        const previousLabel = startBtn?.textContent || ADMIN_CAMPANHAS_START_BTN_LABEL;
+        setAdminCampanhasDetailActionError("");
         if (startBtn) {
           startBtn.textContent = "Salvando…";
           startBtn.setAttribute("disabled", "true");
         }
 
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/iniciar`,
-            { method: "POST", credentials: "same-origin" },
-            12000
+            { method: "POST" },
+            30000,
+            3
           );
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
           const payload = await response.json().catch(() => ({}));
+          if (!contentType.includes("application/json")) {
+            throw new Error("Resposta inválida do servidor. Confirme se a API está atualizada.");
+          }
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível iniciar a campanha.");
           }
+          if (!payload?.ok) {
+            throw new Error(payload.error || "Não foi possível confirmar o início da campanha.");
+          }
           closeAdminCampanhasDetailModal();
           showToast("Campanha iniciada.", "success", 2600);
-          await loadAdminCampanhas();
+          await loadAdminCampanhas({ silent: true });
+          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
         } catch (error) {
-          showToast(error?.message || "Falha ao iniciar campanha.", "error");
+          const message = resolveAdminOperacionalFetchError(error, error?.payload);
+          setAdminCampanhasDetailActionError(message);
+          showToast(message, "error", 4200);
         } finally {
           if (startBtn) {
             startBtn.textContent = previousLabel;
@@ -23502,10 +23595,11 @@
         overlay.setAttribute("aria-hidden", "false");
 
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/relatorio`,
             {},
-            12000
+            15000,
+            2
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -23539,15 +23633,15 @@
         }
 
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/relatorio`,
             {
               method: "PUT",
-              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             },
-            12000
+            20000,
+            3
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -23602,7 +23696,11 @@
         }
 
         try {
-          const response = await fetchWithTimeout(path, { credentials: "same-origin" }, 30000);
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath(path),
+            { credentials: "same-origin" },
+            30000
+          );
           if (!response.ok) {
             const payload = await response.json().catch(() => ({}));
             throw new Error(payload.error || "Não foi possível baixar o arquivo.");
@@ -23629,10 +23727,11 @@
       async function openAdminCampanhasDetail(campaignId) {
         if (!campaignId) return;
         try {
-          const response = await fetchWithTimeout(
+          const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}`,
             {},
-            12000
+            15000,
+            2
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -23667,7 +23766,7 @@
         }
 
         try {
-          const response = await fetchWithTimeout("/admin/operacional/campanhas", {}, 12000);
+          const response = await fetchAdminOperacionalJson("/admin/operacional/campanhas", {}, 20000, 3);
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar as campanhas.");

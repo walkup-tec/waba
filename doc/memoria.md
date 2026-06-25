@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Operacional Confirmar início campanha:** retry + erro inline no modal; botão renomeado; marker `DEPLOY-2026-06-25-operacional-campanha-iniciar-fix`. Ver `doc/LOG-2026-06-25__operacional-campanha-iniciar-sem-acao.md`.
+
 **WABA — Login assinante (Failed to fetch):** retry + mensagem amigável no frontend; try/catch em `POST /auth/login`; marker `DEPLOY-2026-06-25-login-resilience-retry`. Ver `doc/LOG-2026-06-25__login-resilience-retry-failed-to-fetch.md`.
 
 **WABA — Aquecedor 4 instâncias / 2 no ciclo:** lifecycle unificado por alias; UI e status mostram preparação; marker `DEPLOY-2026-06-25-aquecedor-lifecycle-alias-cycle-fix`. Ver `doc/LOG-2026-06-25__aquecedor-4-instancias-2-ciclo-alias-fix.md`.

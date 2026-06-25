@@ -70,9 +70,14 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(200).json({ ok: true, campaign });
         }
         catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível iniciar a campanha.",
-            });
+            const message = error instanceof Error ? error.message : "Não foi possível iniciar a campanha.";
+            const status = /não encontrada|não disponível|Somente campanhas|não foi possível atualizar/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/iniciar] erro:", error);
+            }
+            return res.status(status).json({ error: message });
         }
     });
     app.get("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
