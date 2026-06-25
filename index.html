@@ -1320,6 +1320,10 @@
         opacity: 0.92;
       }
 
+      #tab-btn-aquecedor .tab-icon svg {
+        color: #fb923c;
+      }
+
       .tab-label {
         display: inline;
       }
@@ -1545,6 +1549,77 @@
       }
 
       .integration-env-current .rocket-icon.hidden {
+        display: none;
+      }
+
+      .waba-api-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        vertical-align: middle;
+      }
+
+      .waba-api-label .wa-icon {
+        width: 16px;
+        height: 16px;
+        color: #22c55e;
+        flex: 0 0 auto;
+      }
+
+      .waba-api-label .rocket-icon {
+        width: 16px;
+        height: 16px;
+        color: #38bdf8;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .waba-api-label--md .wa-icon,
+      .waba-api-label--md .rocket-icon {
+        width: 18px;
+        height: 18px;
+      }
+
+      .waba-aquecedor-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        vertical-align: middle;
+      }
+
+      .waba-aquecedor-label--inline {
+        gap: 4px;
+      }
+
+      .waba-aquecedor-label .flame-icon,
+      .integration-env-btn .flame-icon,
+      .integration-env-current .flame-icon {
+        width: 16px;
+        height: 16px;
+        color: #fb923c;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .waba-aquecedor-label--inline .flame-icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .waba-aquecedor-label--md .flame-icon {
+        width: 18px;
+        height: 18px;
+      }
+
+      .integration-env-current .flame-icon.hidden {
         display: none;
       }
 
@@ -8055,8 +8130,12 @@
       .disparos-credits-hub-panel[hidden] {
         display: none !important;
       }
+      #disparos-credits-hub-panel-purchase {
+        padding-top: 16px;
+      }
       #disparos-credits-hub-panel-purchase .disparos-choice-wrap {
-        padding-top: 8px;
+        padding-top: 28px;
+        min-height: auto;
       }
       #disparos-credits-hub-panel-history {
         padding: 20px 0 32px;
@@ -8076,28 +8155,8 @@
         color: #e2e8f0;
         text-align: center;
       }
-      .disparos-api-balance {
-        margin: 0 0 10px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        font-size: 0.78rem;
-        line-height: 1.35;
-        color: #cbd5e1;
-        background: rgba(15, 23, 42, 0.55);
-        border: 1px solid rgba(148, 163, 184, 0.18);
-      }
-      .disparos-api-balance strong {
-        color: #4ade80;
-        font-weight: 700;
-      }
-      .disparos-api-balance.is-bonus strong.bonus {
-        color: #f9a8d4;
-      }
-      .disparos-api-balance[hidden] {
-        display: none !important;
-      }
-      body.disparos-has-credits #tab-disparos-lancamento .disparos-choice-wrap {
-        padding-top: 4px;
+      body.disparos-has-credits #disparos-credits-hub-panel-purchase .disparos-choice-wrap {
+        padding-top: 24px;
         min-height: auto;
       }
       .disparos-choice-grid {
@@ -8181,6 +8240,24 @@
         flex-shrink: 0;
         display: block;
         margin: 0;
+      }
+      .disparos-api-card-header .rocket-icon {
+        width: 20px;
+        height: 20px;
+        color: #38bdf8;
+        flex-shrink: 0;
+        display: block;
+        margin: 0;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .dis-campaign-intake-plan-tag .waba-api-label .wa-icon,
+      .dis-campaign-intake-plan-tag .waba-api-label .rocket-icon {
+        width: 13px;
+        height: 13px;
       }
       .disparos-api-section-label {
         display: inline-flex;
@@ -11465,16 +11542,24 @@
               <path d="M15 12l3 3h-3"></path>
               <path d="M12 15v4"></path>
             </svg>
+            <svg class="flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+              <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+            </svg>
             <span class="env-text">Aquecedor</span>
           </span>
         </div>
         <div class="integration-env-toggle" role="group" aria-label="Seleção de ambiente de integração">
           <button
             type="button"
-            class="integration-env-btn active"
+            class="integration-env-btn with-icon active"
             data-integration-env="nao-oficial"
           >
-            Aquecedor
+            <svg class="flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+              <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+            </svg>
+            <span>Aquecedor</span>
           </button>
           <button
             type="button"
@@ -11529,7 +11614,7 @@
                 data-menu-group-toggle="nao-oficial"
                 aria-expanded="true"
               >
-                <span class="menu-group-title">Aquecedor</span>
+                <span class="menu-group-title" data-waba-aquecedor-label data-waba-aquecedor-text="Aquecedor"></span>
                 <span class="menu-group-caret" aria-hidden="true">▾</span>
               </button>
               <div class="menu-group-items">
@@ -12000,7 +12085,7 @@
               aria-checked="false"
               data-min-instances="2"
             >
-              Aquecedor
+              <span class="waba-aquecedor-label" data-waba-aquecedor-label></span>
             </button>
             <button
               class="tab-button waba-full-only"
@@ -12040,7 +12125,7 @@
               role="menuitemradio"
               aria-checked="false"
             >
-              API Alternativa
+              <span class="waba-api-label" data-waba-api-kind="alternativa"></span>
             </button>
             <button
               class="tab-button waba-prod-only waba-campanhas-menu"
@@ -12052,7 +12137,7 @@
               hidden
               aria-hidden="true"
             >
-              API Oficial
+              <span class="waba-api-label" data-waba-api-kind="oficial"></span>
             </button>
             <button
               class="tab-button waba-full-only"
@@ -12441,7 +12526,7 @@
           <div class="row g-3">
             <section class="panel col-12">
               <div class="panel-header">
-                <div class="panel-title">Aquecedor</div>
+                <div class="panel-title" data-waba-aquecedor-label></div>
                 <span id="aquecedor-status-label">Configuração</span>
               </div>
               <div class="muted">
@@ -12550,16 +12635,14 @@
                           id="aquecedor-start-btn"
                           class="instance-action-btn btn-qrcode enabled aquecedor-start-stop-btn hidden"
                           type="button"
-                        >
-                          Iniciar Aquecedor
-                        </button>
+                          data-waba-aquecedor-text="Iniciar Aquecedor"
+                        ></button>
                         <button
                           id="aquecedor-stop-btn"
                           class="instance-action-btn btn-delete enabled aquecedor-start-stop-btn hidden"
                           type="button"
-                        >
-                          Pausar Aquecedor
-                        </button>
+                          data-waba-aquecedor-text="Pausar Aquecedor"
+                        ></button>
                         <button
                           id="aquecedor-run-once-btn"
                           class="instance-action-btn btn-refresh enabled"
@@ -12588,7 +12671,11 @@
                     <div id="aquecedor-runtime-hero" class="aquecedor-runtime-hero">
                       <div class="aquecedor-runtime-hero-row">
                         <span class="aquecedor-runtime-hero-dot"></span>
-                        <span id="aquecedor-runtime-hero-title" class="aquecedor-runtime-hero-title">Aquecedor parado</span>
+                        <span
+                          id="aquecedor-runtime-hero-title"
+                          class="aquecedor-runtime-hero-title"
+                          data-waba-aquecedor-text="Aquecedor parado"
+                        ></span>
                         <span id="aquecedor-runtime-instance-count" class="aquecedor-runtime-instance-count" aria-live="polite"></span>
                       </div>
                       <div id="aquecedor-runtime-hero-sub" class="aquecedor-runtime-hero-sub">
@@ -12807,12 +12894,6 @@
                 </header>
 
                 <span class="disparos-api-section-label">Modelo de mensagem</span>
-                <p
-                  class="disparos-api-balance"
-                  id="disparos-api-balance-oficial"
-                  hidden
-                  aria-live="polite"
-                ></p>
                 <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
                   <div class="disparos-msg-preview-image" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -12849,17 +12930,18 @@
               <article class="disparos-api-card" data-disparos-api="alternativa">
                 <header class="disparos-api-card-header">
                   <span class="disparos-api-card-title">
+                    <svg class="rocket-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3l3 4v5l-3 3-3-3V7z"></path>
+                      <circle cx="12" cy="9" r="1.2"></circle>
+                      <path d="M9 12l-3 3h3"></path>
+                      <path d="M15 12l3 3h-3"></path>
+                      <path d="M12 15v4"></path>
+                    </svg>
                     <span>API Alternativa</span>
                   </span>
                 </header>
 
                 <span class="disparos-api-section-label">Modelo de mensagem</span>
-                <p
-                  class="disparos-api-balance"
-                  id="disparos-api-balance-alternativa"
-                  hidden
-                  aria-live="polite"
-                ></p>
                 <div class="disparos-msg-preview" aria-label="Prévia do modelo de mensagem">
                   <div class="disparos-msg-preview-image" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -12976,7 +13058,7 @@
                 <div class="disparos-credits-api-split" aria-label="Saldo por API">
                   <article class="disparos-credits-api-card is-oficial" id="disparos-credits-api-oficial">
                     <div class="disparos-credits-api-card-head">
-                      <span class="disparos-credits-api-card-name">API Oficial</span>
+                      <span class="disparos-credits-api-card-name" data-waba-api-kind="oficial"></span>
                       <span class="disparos-credits-api-badge">Oficial</span>
                     </div>
                     <div class="disparos-credits-api-rows">
@@ -13000,7 +13082,7 @@
                   </article>
                   <article class="disparos-credits-api-card is-alternativa" id="disparos-credits-api-alternativa">
                     <div class="disparos-credits-api-card-head">
-                      <span class="disparos-credits-api-card-name">API Alternativa</span>
+                      <span class="disparos-credits-api-card-name" data-waba-api-kind="alternativa"></span>
                       <span class="disparos-credits-api-badge is-alternativa">Alternativa</span>
                     </div>
                     <div class="disparos-credits-api-rows">
@@ -13248,7 +13330,7 @@
                       </div>
                       <div class="disparos-resumo-plan-grid" aria-label="Saldo por plano">
                         <div class="disparos-resumo-plan-block">
-                          <div class="disparos-resumo-plan-name">API Oficial</div>
+                          <div class="disparos-resumo-plan-name" data-waba-api-kind="oficial"></div>
                           <div class="disparos-resumo-plan-row">
                             <span class="disparos-resumo-plan-key">Disponíveis</span>
                             <span class="disparos-resumo-plan-value" id="disparos-resumo-oficial-disponiveis">—</span>
@@ -13259,7 +13341,7 @@
                           </div>
                         </div>
                         <div class="disparos-resumo-plan-block">
-                          <div class="disparos-resumo-plan-name">API Alternativa</div>
+                          <div class="disparos-resumo-plan-name" data-waba-api-kind="alternativa"></div>
                           <div class="disparos-resumo-plan-row">
                             <span class="disparos-resumo-plan-key">Disponíveis</span>
                             <span class="disparos-resumo-plan-value" id="disparos-resumo-alternativa-disponiveis">—</span>
@@ -13391,14 +13473,14 @@
                         <label class="dis-wizard-plan-option" data-wizard-plan="oficial">
                           <input type="radio" name="dis-wizard-api-kind" value="oficial" />
                           <span class="dis-wizard-plan-option-body">
-                            <span class="dis-wizard-plan-option-name">API Oficial</span>
+                            <span class="dis-wizard-plan-option-name" data-waba-api-kind="oficial"></span>
                             <span class="dis-wizard-plan-option-balance" id="dis-wizard-plan-balance-oficial">—</span>
                           </span>
                         </label>
                         <label class="dis-wizard-plan-option" data-wizard-plan="alternativa">
                           <input type="radio" name="dis-wizard-api-kind" value="alternativa" />
                           <span class="dis-wizard-plan-option-body">
-                            <span class="dis-wizard-plan-option-name">API Alternativa</span>
+                            <span class="dis-wizard-plan-option-name" data-waba-api-kind="alternativa"></span>
                             <span class="dis-wizard-plan-option-balance" id="dis-wizard-plan-balance-alternativa">—</span>
                           </span>
                         </label>
@@ -13488,9 +13570,7 @@
                       <div class="aquecedor-section-title">1) Seleção de números</div>
 
                       <div id="dis-number-source-tabs" class="dis-number-source-tabs" role="tablist" aria-label="Origem dos números">
-                        <button type="button" class="dis-number-source-tab active" data-source="aquecedor" role="tab" aria-selected="true">
-                          Instâncias do Aquecedor
-                        </button>
+                        <button type="button" class="dis-number-source-tab active" data-source="aquecedor" role="tab" aria-selected="true" data-waba-aquecedor-text="Instâncias do Aquecedor"></button>
                         <button type="button" class="dis-number-source-tab" data-source="comprar" role="tab" aria-selected="false">
                           Comprar números
                         </button>
@@ -15790,7 +15870,7 @@
         <div class="aquecedor-chat-head-left">
           <span class="aquecedor-chat-head-avatar">WA</span>
           <div>
-            <div class="aquecedor-chat-title">Simulação WhatsApp (Aquecedor)</div>
+            <div class="aquecedor-chat-title" data-waba-aquecedor-text="Simulação WhatsApp (Aquecedor)"></div>
             <div class="aquecedor-chat-subtitle">online · envio automático</div>
           </div>
         </div>
@@ -16838,10 +16918,11 @@
         if (groupTitle) groupTitle.textContent = label.toUpperCase();
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle) {
-          panelTitle.textContent =
-            hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()
-              ? "API Oficial"
-              : "Disparos";
+          if (hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()) {
+            setWabaApiKindLabelElement(panelTitle, "oficial");
+          } else {
+            panelTitle.textContent = "Disparos";
+          }
         }
         const activeEnv = readActiveIntegrationEnv();
         if (isDisparosApiIntegrationEnv(activeEnv)) {
@@ -17192,12 +17273,13 @@
         }
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
-          panelTitle.textContent = "API Alternativa";
+          setWabaApiKindLabelElement(panelTitle, "alternativa");
         } else if (panelTitle && isProductionUi() && activeTab === "disparos") {
-          panelTitle.textContent =
-            hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()
-              ? "API Oficial"
-              : "Disparos";
+          if (hasCampanhasOnlyOfficialAccess() || shouldUseCampanhasSubscriberUi()) {
+            setWabaApiKindLabelElement(panelTitle, "oficial");
+          } else {
+            panelTitle.textContent = "Disparos";
+          }
         }
       }
 
@@ -17291,6 +17373,132 @@
         return "nao-oficial";
       }
 
+      const WABA_WA_ICON_PATH =
+        "M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z";
+
+      function normalizeWabaApiKind(value) {
+        const raw = String(value || "").trim().toLowerCase();
+        if (raw === "alternativa") return "alternativa";
+        if (raw === "oficial") return "oficial";
+        return "";
+      }
+
+      function formatWabaApiKindLabel(apiKind) {
+        const kind = normalizeWabaApiKind(apiKind);
+        if (kind === "alternativa") return "API Alternativa";
+        if (kind === "oficial") return "API Oficial";
+        return "";
+      }
+
+      function escapeWabaApiLabelHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function wabaApiKindIconSvg(apiKind) {
+        const kind = normalizeWabaApiKind(apiKind);
+        if (kind === "alternativa") {
+          return `<svg class="rocket-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l3 4v5l-3 3-3-3V7z"></path><circle cx="12" cy="9" r="1.2"></circle><path d="M9 12l-3 3h3"></path><path d="M15 12l3 3h-3"></path><path d="M12 15v4"></path></svg>`;
+        }
+        if (kind === "oficial") {
+          return `<svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${WABA_WA_ICON_PATH}"></path></svg>`;
+        }
+        return "";
+      }
+
+      function renderWabaApiKindLabelHtml(apiKind, options = {}) {
+        const kind = normalizeWabaApiKind(apiKind);
+        if (!kind) return escapeWabaApiLabelHtml(options.fallback || "");
+        const text = formatWabaApiKindLabel(kind);
+        const sizeClass = options.size === "md" ? " waba-api-label--md" : "";
+        const extraClass = options.className ? ` ${options.className}` : "";
+        return `<span class="waba-api-label waba-api-label--${kind}${sizeClass}${extraClass}">${wabaApiKindIconSvg(kind)}<span class="waba-api-label-text">${escapeWabaApiLabelHtml(text)}</span></span>`;
+      }
+
+      function setWabaApiKindLabelElement(element, apiKind, options = {}) {
+        if (!element) return;
+        const kind = normalizeWabaApiKind(apiKind);
+        if (!kind) {
+          if (options.fallback != null) element.textContent = String(options.fallback);
+          return;
+        }
+        element.innerHTML = renderWabaApiKindLabelHtml(kind, options);
+        element.setAttribute("data-waba-api-kind", kind);
+      }
+
+      function resolveWabaApiKindFromLabelText(text) {
+        const normalized = String(text || "").trim().toLowerCase();
+        if (normalized.includes("alternativa")) return "alternativa";
+        if (normalized.includes("oficial")) return "oficial";
+        return "";
+      }
+
+      function enhanceWabaApiKindLabelElements(root) {
+        const scope = root && root.querySelectorAll ? root : document;
+        scope.querySelectorAll("[data-waba-api-kind]").forEach((el) => {
+          if (el.querySelector(".waba-api-label-text")) return;
+          const kind = el.getAttribute("data-waba-api-kind");
+          if (!kind) return;
+          setWabaApiKindLabelElement(el, kind);
+        });
+      }
+
+      function wabaAquecedorFlameIconSvg() {
+        return `<svg class="flame-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path><path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path></svg>`;
+      }
+
+      function renderWabaAquecedorLabelHtml(text = "Aquecedor", options = {}) {
+        const label = String(text || "Aquecedor").trim() || "Aquecedor";
+        const sizeClass = options.size === "md" ? " waba-aquecedor-label--md" : "";
+        const inlineClass = options.inline ? " waba-aquecedor-label--inline" : "";
+        const extraClass = options.className ? ` ${options.className}` : "";
+        return `<span class="waba-aquecedor-label${sizeClass}${inlineClass}${extraClass}">${wabaAquecedorFlameIconSvg()}<span class="waba-aquecedor-label-text">${escapeWabaApiLabelHtml(label)}</span></span>`;
+      }
+
+      function renderTextWithAquecedorIconHtml(text) {
+        const raw = String(text || "");
+        if (!raw.includes("Aquecedor")) return escapeWabaApiLabelHtml(raw);
+        return raw
+          .split(/(Aquecedor)/g)
+          .map((part) =>
+            part === "Aquecedor"
+              ? renderWabaAquecedorLabelHtml("Aquecedor", { inline: true })
+              : escapeWabaApiLabelHtml(part)
+          )
+          .join("");
+      }
+
+      function setWabaAquecedorLabelElement(element, options = {}) {
+        if (!element) return;
+        const text = options.text != null ? String(options.text) : "Aquecedor";
+        element.innerHTML =
+          text === "Aquecedor"
+            ? renderWabaAquecedorLabelHtml("Aquecedor", options)
+            : renderTextWithAquecedorIconHtml(text);
+        element.setAttribute("data-waba-aquecedor-label", "");
+      }
+
+      function enhanceWabaAquecedorLabelElements(root) {
+        const scope = root && root.querySelectorAll ? root : document;
+        scope.querySelectorAll("[data-waba-aquecedor-label], [data-waba-aquecedor-text]").forEach((el) => {
+          if (el.hasAttribute("data-waba-aquecedor-text")) {
+            const customText = el.getAttribute("data-waba-aquecedor-text") || "Aquecedor";
+            setWabaAquecedorLabelElement(el, { text: customText });
+            return;
+          }
+          if (el.querySelector(".waba-aquecedor-label-text")) return;
+          setWabaAquecedorLabelElement(el, {});
+        });
+      }
+
+      function enhanceWabaProductLabelElements(root) {
+        enhanceWabaApiKindLabelElements(root);
+        enhanceWabaAquecedorLabelElements(root);
+      }
+
       function syncProductionIntegrationStripLabels() {
         if (!isProductionUi()) return;
         const naoBtn = document.querySelector(
@@ -17300,15 +17508,20 @@
         const altBtn = document.querySelector(
           '.integration-env-btn[data-integration-env="alternativa"]'
         );
-        if (naoBtn) naoBtn.textContent = "Aquecedor";
+        if (naoBtn) {
+          naoBtn.classList.add("with-icon");
+          const labelSpan = naoBtn.querySelector("span:not(.flame-icon)");
+          if (labelSpan) labelSpan.textContent = "Aquecedor";
+          else setWabaAquecedorLabelElement(naoBtn, {});
+        }
         if (ofBtn) {
-          const labelSpan = ofBtn.querySelector("span:not(.wa-icon)");
+          const labelSpan = ofBtn.querySelector(".waba-api-label-text, span:not(.wa-icon)");
           if (labelSpan) labelSpan.textContent = "API Oficial";
           else ofBtn.textContent = "API Oficial";
         }
         if (altBtn) {
           altBtn.classList.add("with-icon");
-          const labelSpan = altBtn.querySelector("span:not(.rocket-icon)");
+          const labelSpan = altBtn.querySelector(".waba-api-label-text, span:not(.rocket-icon):not(.wa-icon)");
           if (labelSpan) labelSpan.textContent = "API Alternativa";
         }
       }
@@ -17364,6 +17577,7 @@
         }
         applyIntegrationEnvironment(saved);
         initBaselineDisparosPanel();
+        enhanceWabaProductLabelElements(document);
       }
 
       function initBaselineDisparosPanel() {
@@ -17382,9 +17596,10 @@
         const naoTitle = document.querySelector(
           '.menu-group[data-menu-group="nao-oficial"] .menu-group-title'
         );
-        if (naoTitle) naoTitle.textContent = "AQUECEDOR";
+        if (naoTitle) setWabaAquecedorLabelElement(naoTitle, { text: "AQUECEDOR" });
         syncProductionIntegrationStripLabels();
         syncOfficialSectionLabels();
+        enhanceWabaProductLabelElements(document);
 
         let saved = "nao-oficial";
         try {
@@ -17404,6 +17619,7 @@
           }
         }
         applyIntegrationEnvironment(saved);
+        enhanceWabaProductLabelElements(document);
       }
 
       function positionDisparosChoiceNote() {
@@ -17615,7 +17831,9 @@
         const maxAllowed = hasMasterAccess() ? imported : Math.min(imported, remaining);
         if (input) input.max = String(Math.max(1, maxAllowed));
         if (hint) {
-          hint.textContent = `Até ${formatDisparosQty(imported)} contato(s) na planilha · ${formatDisparosQty(remaining)} envio(s) disponíveis no plano API Alternativa · máx. ${resolveAlternativaDispatchRules().maxSendsPerDayPerNumber} envios/dia por número.`;
+          hint.innerHTML = `Até ${formatDisparosQty(imported)} contato(s) na planilha · ${formatDisparosQty(remaining)} envio(s) disponíveis no plano ${renderWabaApiKindLabelHtml(
+            "alternativa"
+          )} · máx. ${resolveAlternativaDispatchRules().maxSendsPerDayPerNumber} envios/dia por número.`;
         }
         const planned = Math.floor(Number(input?.value || 0));
         renderAlternativaProjectionElement(
@@ -19272,8 +19490,7 @@
         }
         tbody.innerHTML = rows
           .map((item) => {
-            const plan =
-              item?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+            const planKind = item?.apiKind === "alternativa" ? "alternativa" : "oficial";
             const rateio = renderSplitSettlementLinesBlock(item?.lines, item) || '<span class="muted">—</span>';
             const repasseCell = renderSplitRepasseCell(item);
             const orderId = escapeAdminHtml(item?.orderId || "");
@@ -19281,7 +19498,7 @@
               <tr>
                 <td>${escapeAdminHtml(formatAdminDateTimeLabel(item?.createdAt))}</td>
                 <td><code>${orderId || "—"}</code></td>
-                <td>${escapeAdminHtml(plan)}</td>
+                <td>${renderWabaApiKindLabelHtml(planKind)}</td>
                 <td class="admin-subscribers-num">${escapeAdminHtml(
                   formatDisparosMoneyFromCents(item?.paidValueCents || 0)
                 )}</td>
@@ -19535,11 +19752,15 @@
           barClass === "oficial"
             ? "admin-financeiro-metrics-legend-dot--oficial"
             : "admin-financeiro-metrics-legend-dot--alternativa";
+        const labelHtml =
+          barClass === "oficial" || barClass === "alternativa"
+            ? renderWabaApiKindLabelHtml(barClass)
+            : escapeAdminHtml(label);
         return `
           <div class="admin-financeiro-compare-row">
             <div class="admin-financeiro-compare-row-label">
               <span class="admin-financeiro-metrics-legend-dot ${dotClass}"></span>
-              <span>${escapeAdminHtml(label)}</span>
+              <span>${labelHtml}</span>
             </div>
             <div class="admin-financeiro-compare-row-value ${escapeAdminHtml(valueClass)}">${escapeAdminHtml(value)}</div>
             <div class="admin-financeiro-compare-bar-wrap">
@@ -19666,6 +19887,8 @@
 
       function renderAdminCostCompositionRow(label, dotClass, data) {
         const bucket = normalizeAdminCostCompositionBucket(data);
+        const apiKind = dotClass.includes("alternativa") ? "alternativa" : "oficial";
+        const labelHtml = renderWabaApiKindLabelHtml(apiKind);
         const otherLine =
           bucket.other > 0
             ? ` · Outros ${escapeAdminHtml(formatDisparosMoneyFromCents(bucket.other))} (${escapeAdminHtml(formatCostCompositionPercent(bucket.other, bucket.total))})`
@@ -19674,7 +19897,7 @@
           <div class="admin-cost-composition-row">
             <div class="admin-cost-composition-row-label">
               <span class="admin-financeiro-metrics-legend-dot ${dotClass}"></span>
-              <span>${escapeAdminHtml(label)}</span>
+              <span>${labelHtml}</span>
             </div>
             ${renderAdminCostCompositionStack(bucket.supplier, bucket.cet, bucket.other)}
             <div class="admin-cost-composition-detail">
@@ -19762,14 +19985,9 @@
       }
 
       function renderAdminDashboardApiLabel(apiKind) {
-        const key = String(apiKind || "").trim().toLowerCase();
+        const key = normalizeWabaApiKind(apiKind);
         if (!key) return '<span class="muted">—</span>';
-        const dotClass =
-          key === "oficial"
-            ? "admin-financeiro-metrics-legend-dot--oficial"
-            : "admin-financeiro-metrics-legend-dot--alternativa";
-        const label = key === "oficial" ? "Oficial" : key === "alternativa" ? "Alternativa" : key;
-        return `<span class="admin-dashboard-activity-api"><span class="admin-financeiro-metrics-legend-dot ${dotClass}"></span>${escapeAdminHtml(label)}</span>`;
+        return `<span class="admin-dashboard-activity-api">${renderWabaApiKindLabelHtml(key)}</span>`;
       }
 
       function renderAdminDashboardPrimaryKpis(primary, capabilities) {
@@ -20357,7 +20575,7 @@
         const id = escapeAdminHtml(order?.id || "—");
         const customer = escapeAdminHtml(order?.customerName || "—");
         const email = escapeAdminHtml(order?.ownerEmail || "—");
-        const apiKind = order?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+        const apiKind = order?.apiKind === "alternativa" ? "alternativa" : "oficial";
         const value = escapeAdminHtml(formatDisparosMoneyFromCents(order?.valueCents || 0));
         const shipments = escapeAdminHtml(formatDisparosQty(order?.shipmentCount || 0));
         const createdAt = escapeAdminHtml(formatAdminDateTimeLabel(order?.createdAt));
@@ -20372,7 +20590,7 @@
             <td><code>${id}</code></td>
             <td>${customer}</td>
             <td>${email}</td>
-            <td>${escapeAdminHtml(apiKind)}</td>
+            <td>${renderWabaApiKindLabelHtml(apiKind)}</td>
             <td class="admin-subscribers-num">${value}</td>
             <td class="admin-subscribers-num">${shipments}</td>
             <td>${statusBadge}</td>
@@ -21175,8 +21393,9 @@
         const hint = document.getElementById("admin-campanhas-scope-hint");
         if (!hint) return;
         if (wabaAuthRole === "master") {
-          hint.textContent =
-            "Como master, você enxerga todas as campanhas de todos os assinantes (API Oficial e API Alternativa).";
+          hint.innerHTML = `Como master, você enxerga todas as campanhas de todos os assinantes (${renderWabaApiKindLabelHtml(
+            "oficial"
+          )} e ${renderWabaApiKindLabelHtml("alternativa")}).`;
           return;
         }
         if (wabaAuthRole === "suporte") {
@@ -21186,13 +21405,15 @@
         }
         if (wabaAuthRole === "operacional") {
           if (wabaOperacionalDispatchesApi === "oficial") {
-            hint.textContent =
-              "Campanhas contratadas na API Oficial — em aberto para operação ou finalizadas para consulta.";
+            hint.innerHTML = `Campanhas contratadas na ${renderWabaApiKindLabelHtml(
+              "oficial"
+            )} — em aberto para operação ou finalizadas para consulta.`;
             return;
           }
           if (wabaOperacionalDispatchesApi === "alternativa") {
-            hint.textContent =
-              "Campanhas contratadas na API Alternativa — em aberto para operação ou finalizadas para consulta.";
+            hint.innerHTML = `Campanhas contratadas na ${renderWabaApiKindLabelHtml(
+              "alternativa"
+            )} — em aberto para operação ou finalizadas para consulta.`;
             return;
           }
           hint.textContent =
@@ -22038,7 +22259,8 @@
           .map((item) => {
             const overdueCell = hasMasterAccess() ? renderAdminCampanhasOverdueCell(item) : "";
             const subscriberId = escapeAdminHtml(item?.subscriberId || "—");
-            const planType = escapeAdminHtml(item?.planTypeLabel || "—");
+            const planTypeKind = resolveAdminCampanhaApiKind(item);
+            const planType = renderWabaApiKindLabelHtml(planTypeKind);
             const campaignName = escapeAdminHtml(item?.campaignName || "—");
             const envios = Number(item?.plannedSendCount || 0);
             const statusBadge = renderAdminCampanhasStatusBadge(item?.status, item?.displayStatus);
@@ -23969,37 +24191,6 @@
         });
       }
 
-      function renderDisparosApiCardBalances(credits) {
-        const kinds = ["oficial", "alternativa"];
-        kinds.forEach((key) => {
-          const balanceEl = document.getElementById(`disparos-api-balance-${key}`);
-          if (!balanceEl) return;
-          if (!credits || !wabaAuthEnabled) {
-            balanceEl.hidden = true;
-            balanceEl.textContent = "";
-            return;
-          }
-          const bucket = credits?.byApi?.[key] || {};
-          const remaining = Number(bucket.remainingShipments || 0);
-          const bonus = Number(bucket.pendingBonusShipments || 0);
-          const hasAny = remaining > 0 || bonus > 0 || Boolean(credits?.unlimitedCredits);
-          balanceEl.hidden = !hasAny;
-          if (!hasAny) {
-            balanceEl.textContent = "";
-            return;
-          }
-          const remainingLabel = credits?.unlimitedCredits
-            ? "Ilimitado"
-            : `${formatDisparosQty(remaining)} disponíveis`;
-          const bonusPart =
-            bonus > 0
-              ? ` · <strong class="bonus">${formatDisparosQty(bonus)} bonificados</strong>`
-              : "";
-          balanceEl.classList.toggle("is-bonus", bonus > 0);
-          balanceEl.innerHTML = `Seu saldo: <strong>${remainingLabel}</strong>${bonusPart}`;
-        });
-      }
-
       function syncDisparosCreditsHubVisibility(credits) {
         const hubTabs = document.getElementById("disparos-credits-hub-tabs");
         const onHub = isDisparosCreditsHubTabActive();
@@ -24054,7 +24245,6 @@
         }
 
         syncDisparosCreditsHubVisibility(credits);
-        renderDisparosApiCardBalances(credits);
 
         if (!credits && onCreditsHub && wabaAuthEnabled) {
           contractedEl.textContent = "0";
@@ -24127,8 +24317,11 @@
               subtitleEl.textContent = `Última contratação confirmada em ${paidAt.toLocaleDateString("pt-BR")}.`;
             }
           } else if (onCreditsHub) {
-            subtitleEl.textContent =
-              "Saldo separado por API Oficial e Alternativa — cada plano tem créditos independentes.";
+            subtitleEl.innerHTML = `Saldo separado por ${renderWabaApiKindLabelHtml(
+              "oficial"
+            )} e ${renderWabaApiKindLabelHtml(
+              "alternativa"
+            )} — cada plano tem créditos independentes.`;
           }
         }
         renderDisparosCreditsApiSplit(credits);
@@ -24215,7 +24408,7 @@
         }
         const rows = items
           .map((item) => {
-            const plan = item?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+            const planKind = item?.apiKind === "alternativa" ? "alternativa" : "oficial";
             const shipments = Number(item?.shipmentCount || 0);
             const bonus = Number(item?.bonusShipmentsApplied || 0);
             const shipmentsLabel =
@@ -24226,7 +24419,7 @@
               <tr>
                 <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.paidAt))}</td>
                 <td class="is-shipments">${escapeDisparosHtml(shipmentsLabel)}</td>
-                <td class="is-plan">${escapeDisparosHtml(plan)}</td>
+                <td class="is-plan">${renderWabaApiKindLabelHtml(planKind)}</td>
                 <td class="is-value">${escapeDisparosHtml(
                   formatBrlFromCents(item?.valueCents || 0)
                 )}</td>
@@ -24277,7 +24470,7 @@
         }
         const rows = items
           .map((item) => {
-            const plan = item?.apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+            const planKind = item?.apiKind === "alternativa" ? "alternativa" : "oficial";
             const campaignId = String(item?.campaignId || "").trim();
             const campaignLabel =
               campaignId.length > 10 ? `${campaignId.slice(0, 8)}…` : campaignId || "—";
@@ -24285,7 +24478,7 @@
             return `
               <tr>
                 <td>${escapeDisparosHtml(formatDisparosStatementDateTime(item?.grantedAt))}</td>
-                <td class="is-plan">${escapeDisparosHtml(plan)}</td>
+                <td class="is-plan">${renderWabaApiKindLabelHtml(planKind)}</td>
                 <td class="is-shipments">${escapeDisparosHtml(
                   Number(item?.shipments || 0).toLocaleString("pt-BR")
                 )}</td>
@@ -24758,9 +24951,19 @@
           }.</div>`;
           if (chartEl.innerHTML !== emptyHtml) chartEl.innerHTML = emptyHtml;
           if (captionEl) {
-            captionEl.textContent = subscriberLabel
-              ? `Nenhuma campanha encontrada para ${subscriberLabel} em ${apiLabel}.`
-              : `Selecione outra API ou aguarde campanhas finalizadas em ${apiLabel}.`;
+            if (compareApiKind === "oficial" || compareApiKind === "alternativa") {
+              captionEl.innerHTML = subscriberLabel
+                ? `Nenhuma campanha encontrada para ${escapeReportHtml(subscriberLabel)} em ${renderWabaApiKindLabelHtml(
+                    compareApiKind
+                  )}.`
+                : `Selecione outra API ou aguarde campanhas finalizadas em ${renderWabaApiKindLabelHtml(
+                    compareApiKind
+                  )}.`;
+            } else {
+              captionEl.textContent = subscriberLabel
+                ? `Nenhuma campanha encontrada para ${subscriberLabel} em ${apiLabel}.`
+                : `Selecione outra API ou aguarde campanhas finalizadas em ${apiLabel}.`;
+            }
           }
           renderDisparosDashboardCompareSubscriberSuggestions(overview);
           return true;
@@ -24787,8 +24990,8 @@
                 : "";
             const apiLine =
               compareApiKind === "all" && item.planTypeLabel
-                ? `<div class="disparos-dashboard-compare-group-sub">${escapeReportHtml(
-                    item.planTypeLabel
+                ? `<div class="disparos-dashboard-compare-group-sub">${renderWabaApiKindLabelHtml(
+                    item.apiKind
                   )}</div>`
                 : "";
             const barCol = (rate, modifier) => {
@@ -25205,11 +25408,12 @@
       }
 
       function openDisparosPricingModal(apiKind) {
-        const label = apiKind === "oficial" ? "API Oficial" : "API Alternativa";
         disparosBillingSelectedKind = apiKind;
         disparosSelectedPackage = null;
         const title = document.getElementById("disparos-pricing-title");
-        if (title) title.textContent = `Tabela de preços · ${label}`;
+        if (title) {
+          title.innerHTML = `Tabela de preços · ${renderWabaApiKindLabelHtml(apiKind)}`;
+        }
         renderDisparosPricingTable(apiKind);
         openDisparosOverlay("disparos-pricing-overlay");
       }
@@ -25238,13 +25442,14 @@
           return;
         }
         resetAlternativaNumbersCheckoutState();
-        const label = disparosBillingSelectedKind === "oficial" ? "API Oficial" : "API Alternativa";
 
         try {
           const config = await loadDisparosBillingConfig();
           const title = document.getElementById("disparos-billing-title");
           if (title) {
-            title.textContent = `Contratar · ${label} · ${formatDisparosQty(disparosSelectedPackage.shipments)} envios`;
+            title.innerHTML = `Contratar · ${renderWabaApiKindLabelHtml(
+              disparosBillingSelectedKind
+            )} · ${formatDisparosQty(disparosSelectedPackage.shipments)} envios`;
           }
           syncDisparosBillingModalState(config);
           prefillDisparosBillingForm();
@@ -25995,7 +26200,9 @@
         if (implicitEl) {
           if (!isMaster && available.length === 1) {
             implicitEl.hidden = false;
-            implicitEl.textContent = `Envio pelo plano ${getDisCampaignWizardApiKindLabel(available[0])} (único com saldo disponível).`;
+            implicitEl.innerHTML = `Envio pelo plano ${renderWabaApiKindLabelHtml(
+              available[0]
+            )} (único com saldo disponível).`;
           } else {
             implicitEl.hidden = true;
             implicitEl.textContent = "";
@@ -26076,12 +26283,11 @@
           const parts = [`Até ${formatDisparosQty(imported)} contato(s) na planilha`];
           if (!hasMasterAccess()) {
             const apiKind = getDisCampaignWizardSelectedApiKind();
-            const apiLabel = apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
             parts.push(
-              `${formatDisparosQty(remaining)} envio(s) disponível(is) no plano ${apiLabel}`
+              `${formatDisparosQty(remaining)} envio(s) disponível(is) no plano ${renderWabaApiKindLabelHtml(apiKind)}`
             );
           }
-          hintEl.textContent = parts.join(" · ");
+          hintEl.innerHTML = parts.join(" · ");
         }
         const planned = getDisCampaignWizardPlannedSendCountValue();
         renderCampaignImportStatsElement(statsEl, imported, planned);
@@ -27203,13 +27409,15 @@
         }
         if (processing) {
           hero.classList.add("processing");
-          titleEl.textContent = "Aquecedor processando agora";
+          titleEl.innerHTML = renderTextWithAquecedorIconHtml("Aquecedor processando agora");
           subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
           return;
         }
         if (running) {
           hero.classList.add("active");
-          titleEl.textContent = status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo";
+          titleEl.innerHTML = renderTextWithAquecedorIconHtml(
+            status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo"
+          );
           if (status?.windowOpen === false) {
             subEl.textContent =
               status?.nextWindowOpenBr ||
@@ -27220,7 +27428,7 @@
           }
           return;
         }
-        titleEl.textContent = "Aquecedor parado";
+        titleEl.innerHTML = renderTextWithAquecedorIconHtml("Aquecedor parado");
         subEl.textContent = lastResult || 'Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.';
       }
 
@@ -28968,7 +29176,7 @@
           { status, sentCount: item?.sentCount }
         );
         const planTag = resolveCampaignIntakePlanTag(item);
-        const safePlanLabel = planTag.label.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const planLabelHtml = renderWabaApiKindLabelHtml(planTag.apiKind);
         const isErrorReported = status === "error_reported";
         if (isErrorReported) {
           row.classList.add("disparos-campaign-item--error_reported");
@@ -28987,7 +29195,7 @@
           }
           <div class="dis-campaign-intake-meta">Criada em ${createdLabel}</div>
           <div class="dis-campaign-intake-tags">
-            <span class="dis-campaign-intake-plan-tag dis-campaign-intake-plan-tag--${planTag.apiKind}">${safePlanLabel}</span>
+            <span class="dis-campaign-intake-plan-tag dis-campaign-intake-plan-tag--${planTag.apiKind}">${planLabelHtml}</span>
             <span class="dis-campaign-intake-status dis-campaign-intake-status--${status}">${displayStatus}</span>
           </div>
         `;
@@ -33722,6 +33930,7 @@
           const currentText = currentLabel.querySelector(".env-text");
           const currentWaIcon = currentLabel.querySelector(".wa-icon");
           const currentRocketIcon = currentLabel.querySelector(".rocket-icon");
+          const currentFlameIcon = currentLabel.querySelector(".flame-icon");
           const label = integrationEnvLabel(normalized);
           if (currentText) {
             currentText.textContent = label;
@@ -33733,6 +33942,9 @@
           }
           if (currentRocketIcon) {
             currentRocketIcon.classList.toggle("hidden", normalized !== "alternativa");
+          }
+          if (currentFlameIcon) {
+            currentFlameIcon.classList.toggle("hidden", normalized !== "nao-oficial");
           }
         }
         document.body.classList.toggle("integration-env-official", normalized === "oficial");
@@ -36338,6 +36550,7 @@
       initAdminChamadosUi();
       initAdminUsersUi();
       initDisCampaignWizard();
+      enhanceWabaProductLabelElements(document);
 
       void initWabaAuthGate().then(async (unlocked) => {
         if (!unlocked) return;

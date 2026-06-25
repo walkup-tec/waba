@@ -25,6 +25,12 @@ Como usar:
 
 2026-06-21 pedido usuário; `git revert cd9de58` (a90a466). Lifecycle voltou ao comportamento original. Ver `doc/LOG-2026-06-21__revert-lifecycle-preparando-fix.md`.
 
+**WABA — Ícones API Oficial/Alternativa:** helpers `renderWabaApiKindLabelHtml` + `data-waba-api-kind` em todo o UI; WhatsApp verde e foguete azul. Ver `doc/LOG-2026-06-21__icones-api-oficial-alternativa-sistema.md`.
+
+**WABA — Créditos Contratar sem saldo nos cards:** removido «Seu saldo» dos cards de compra; saldo só na aba Histórico. Ver `doc/LOG-2026-06-21__creditos-contratar-sem-saldo-cards.md`.
+
+**WABA — Ícone Aquecedor (foguinho laranja):** `renderWabaAquecedorLabelHtml` + chama `#fb923c` em labels do produto. Ver `doc/LOG-2026-06-21__icone-aquecedor-foguinho-laranja.md`.
+
 2026-06-24
 
 **WABA — Aquecedor start duplo clique:** pin UI + persist antes do motor; status com worker lease. Marker `DEPLOY-2026-06-24-aquecedor-start-double-click-fix`. Ver `doc/LOG-2026-06-24__aquecedor-start-duplo-clique-fix.md`.
