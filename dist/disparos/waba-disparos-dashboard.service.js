@@ -43,6 +43,7 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
             campaignName: intake.campaignName,
             apiKind,
             planTypeLabel: waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind],
+            createdAt: intake.createdAt,
             completedAt: intake.updatedAt,
             ...(options?.includeOwnerEmail ? { ownerEmail: intake.ownerEmail } : {}),
             ...rates,

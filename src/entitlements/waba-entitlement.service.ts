@@ -1,5 +1,6 @@
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaBillingOrderRepository } from "../billing/waba-billing-order.repository";
+import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 
 export type WabaAuthRole = "master" | "operacional" | "suporte" | "subscriber" | "guest";
 
@@ -20,7 +21,33 @@ export type AquecedorEntitlement = {
 };
 
 export class WabaEntitlementService {
-  constructor(private readonly orderRepository = new WabaBillingOrderRepository()) {}
+  constructor(
+    private readonly orderRepository = new WabaBillingOrderRepository(),
+    private readonly disparosCreditsService = new WabaDisparosCreditsService(),
+  ) {}
+
+  private buildActiveFromCredits(email: string): AquecedorEntitlement | null {
+    const summary = this.disparosCreditsService.getCreditsSummary(email);
+    const hasAccess =
+      summary.hasCredits ||
+      summary.pendingBonusShipments > 0 ||
+      summary.contractedShipments > 0;
+    if (!hasAccess) return null;
+
+    return {
+      active: true,
+      bypass: false,
+      reason: "active",
+      email,
+      lastPaidAt: summary.lastPaidAt,
+      expiresAt: "",
+      daysRemaining: summary.unlimitedCredits ? 999 : Math.max(0, summary.remainingShipments),
+      sourceOrderId: "",
+      message: summary.unlimitedCredits
+        ? "Aquecedor liberado — créditos ilimitados na conta."
+        : `Aquecedor liberado enquanto houver créditos de disparos (${summary.remainingShipments.toLocaleString("pt-BR")} restantes).`,
+    };
+  }
 
   getAquecedorEntitlement(email: string, role: WabaAuthRole): AquecedorEntitlement {
     const normalizedEmail = normalizeEmail(email);
@@ -75,6 +102,8 @@ export class WabaEntitlementService {
 
     const latest = paidOrders[0];
     if (!latest?.paidAt) {
+      const fromCredits = this.buildActiveFromCredits(normalizedEmail);
+      if (fromCredits) return fromCredits;
       return inactive(
         "no_payment",
         "Contrate um pacote de disparos e aguarde a confirmação do PIX para liberar o Aquecedor gratuitamente.",
@@ -86,6 +115,8 @@ export class WabaEntitlementService {
     const now = Date.now();
 
     if (!Number.isFinite(paidAtMs) || now > expiresAtMs) {
+      const fromCredits = this.buildActiveFromCredits(normalizedEmail);
+      if (fromCredits) return fromCredits;
       return {
         active: false,
         bypass: false,

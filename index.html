@@ -3293,6 +3293,13 @@
         word-break: break-all;
       }
 
+      .disparos-dashboard-compare-group-date {
+        margin-top: -4px;
+        font-size: 0.62rem;
+        color: rgba(148, 163, 184, 0.72);
+        word-break: normal;
+      }
+
       .disparos-dashboard-compare-caption {
         margin: 8px 0 0;
         font-size: 0.74rem;
@@ -7884,16 +7891,20 @@
         color: #94a3b8;
       }
       .disparos-credits-api-split {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
         margin-top: 16px;
         padding-top: 16px;
         border-top: 1px solid rgba(148, 163, 184, 0.16);
       }
-      @media (max-width: 680px) {
+      @media (min-width: 900px) {
         .disparos-credits-api-split {
-          grid-template-columns: 1fr;
+          flex-direction: row;
+          align-items: stretch;
+        }
+        .disparos-credits-api-card {
+          flex: 1;
         }
       }
       .disparos-credits-api-card {
@@ -7902,9 +7913,21 @@
         background: rgba(15, 23, 42, 0.45);
         padding: 14px 16px;
       }
-      .disparos-credits-api-card.is-active {
-        border-color: rgba(37, 211, 102, 0.45);
-        box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.12);
+      .disparos-credits-api-card.is-oficial {
+        border-color: rgba(37, 211, 102, 0.42);
+        box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.1);
+      }
+      .disparos-credits-api-card.is-alternativa {
+        border-color: rgba(59, 130, 246, 0.58);
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.14);
+      }
+      .disparos-credits-api-card.is-active.is-oficial {
+        border-color: rgba(37, 211, 102, 0.55);
+        box-shadow: 0 0 0 1px rgba(37, 211, 102, 0.18);
+      }
+      .disparos-credits-api-card.is-active.is-alternativa {
+        border-color: rgba(96, 165, 250, 0.72);
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.22);
       }
       .disparos-credits-api-card-head {
         display: flex;
@@ -8014,6 +8037,50 @@
       }
       .disparos-credits-history-panel[hidden] {
         display: none !important;
+      }
+      .disparos-credits-hub-tabs {
+        display: flex;
+        gap: 4px;
+        width: min(1040px, 100%);
+        margin: 0 auto 0;
+        padding: 0 16px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      }
+      .disparos-credits-hub-tabs[hidden] {
+        display: none !important;
+      }
+      .disparos-credits-hub-tab {
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding: 12px 18px;
+        margin-bottom: -1px;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+      }
+      .disparos-credits-hub-tab.is-active {
+        color: #e2e8f0;
+        border-bottom-color: #22c55e;
+      }
+      .disparos-credits-hub-tab.is-active[data-hub-tab="history"] {
+        border-bottom-color: #60a5fa;
+      }
+      .disparos-credits-hub-panel {
+        width: 100%;
+      }
+      .disparos-credits-hub-panel[hidden] {
+        display: none !important;
+      }
+      #disparos-credits-hub-panel-purchase .disparos-choice-wrap {
+        padding-top: 20px;
+      }
+      #disparos-credits-hub-panel-history {
+        padding: 20px 0 32px;
+      }
+      #disparos-credits-hub-panel-history .disparos-credits-history-section {
+        margin: 0 auto;
       }
       .disparos-credits-hub-section-title {
         width: min(1040px, 100%);
@@ -8302,12 +8369,16 @@
       .disparos-repurchase-body .disparos-credits-panel {
         margin-bottom: 12px;
       }
-      #disparos-purchase-home .disparos-credits-api-split,
-      #disparos-purchase-home .disparos-credits-history-section {
+      #disparos-purchase-home .disparos-credits-api-split {
+        display: flex;
+      }
+      #disparos-purchase-home .disparos-credits-hub-tabs,
+      #disparos-purchase-home .disparos-credits-hub-panel-history {
         display: block;
       }
       #disparos-repurchase-overlay .disparos-credits-api-split,
-      #disparos-repurchase-overlay .disparos-credits-history-section {
+      #disparos-repurchase-overlay .disparos-credits-hub-tabs,
+      #disparos-repurchase-overlay .disparos-credits-hub-panel-history {
         display: none !important;
       }
       #disparos-repurchase-overlay .disparos-credits-panel {
@@ -12761,7 +12832,7 @@
                 </article>
               </div>
               <div class="disparos-credits-api-split" aria-label="Saldo por API">
-                <article class="disparos-credits-api-card" id="disparos-credits-api-oficial">
+                <article class="disparos-credits-api-card is-oficial" id="disparos-credits-api-oficial">
                   <div class="disparos-credits-api-card-head">
                     <span class="disparos-credits-api-card-name">API Oficial</span>
                     <span class="disparos-credits-api-badge">Oficial</span>
@@ -12785,7 +12856,7 @@
                     </div>
                   </div>
                 </article>
-                <article class="disparos-credits-api-card" id="disparos-credits-api-alternativa">
+                <article class="disparos-credits-api-card is-alternativa" id="disparos-credits-api-alternativa">
                   <div class="disparos-credits-api-card-head">
                     <span class="disparos-credits-api-card-name">API Alternativa</span>
                     <span class="disparos-credits-api-badge is-alternativa">Alternativa</span>
@@ -12812,68 +12883,42 @@
               </div>
             </div>
           </section>
-          <section
-            id="disparos-credits-history-section"
-            class="disparos-credits-history-section"
-            aria-label="Histórico de créditos"
+          <div
+            id="disparos-credits-hub-tabs"
+            class="disparos-credits-hub-tabs"
+            role="tablist"
+            aria-label="Créditos de disparos"
             hidden
           >
-            <div class="disparos-credits-history-head">
-              <div>
-                <h2>Histórico</h2>
-                <p>Compras confirmadas e bonificações geradas por campanhas finalizadas.</p>
-              </div>
-              <button
-                type="button"
-                id="disparos-credits-history-refresh-btn"
-                class="disparos-credits-refresh-btn"
-              >
-                Atualizar histórico
-              </button>
-            </div>
-            <div class="disparos-credits-history-tabs" role="tablist" aria-label="Tipo de histórico">
-              <button
-                type="button"
-                id="disparos-credits-history-tab-purchases"
-                class="disparos-credits-history-tab is-active"
-                role="tab"
-                aria-selected="true"
-                aria-controls="disparos-credits-history-purchases"
-              >
-                Compras
-              </button>
-              <button
-                type="button"
-                id="disparos-credits-history-tab-bonus"
-                class="disparos-credits-history-tab"
-                role="tab"
-                aria-selected="false"
-                aria-controls="disparos-credits-history-bonus"
-              >
-                Bonificações
-              </button>
-            </div>
-            <div
-              id="disparos-credits-history-purchases"
-              class="disparos-credits-history-panel"
-              role="tabpanel"
+            <button
+              type="button"
+              id="disparos-credits-hub-tab-purchase"
+              class="disparos-credits-hub-tab is-active"
+              role="tab"
+              aria-selected="true"
+              aria-controls="disparos-credits-hub-panel-purchase"
+              data-hub-tab="purchase"
             >
-              <div id="disparos-credits-history-purchases-list" class="disparos-statement-list">
-                <div class="disparos-statement-empty">Carregando compras…</div>
-              </div>
-            </div>
-            <div
-              id="disparos-credits-history-bonus"
-              class="disparos-credits-history-panel"
-              role="tabpanel"
-              hidden
+              Contratar créditos
+            </button>
+            <button
+              type="button"
+              id="disparos-credits-hub-tab-history"
+              class="disparos-credits-hub-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="disparos-credits-hub-panel-history"
+              data-hub-tab="history"
             >
-              <div id="disparos-credits-history-bonus-list" class="disparos-statement-list">
-                <div class="disparos-statement-empty">Carregando bonificações…</div>
-              </div>
-            </div>
-          </section>
-          <h2 class="disparos-credits-hub-section-title">Contratar créditos</h2>
+              Histórico
+            </button>
+          </div>
+          <div
+            id="disparos-credits-hub-panel-purchase"
+            class="disparos-credits-hub-panel"
+            role="tabpanel"
+            aria-labelledby="disparos-credits-hub-tab-purchase"
+          >
           <div id="disparos-purchase-choice-wrap" class="disparos-choice-wrap">
             <div class="disparos-choice-grid">
               <article class="disparos-api-card" data-disparos-api="oficial">
@@ -12993,6 +13038,75 @@
                 destino (link que definido por você).
               </aside>
             </div>
+          </div>
+          </div>
+          <div
+            id="disparos-credits-hub-panel-history"
+            class="disparos-credits-hub-panel"
+            role="tabpanel"
+            aria-labelledby="disparos-credits-hub-tab-history"
+            hidden
+          >
+            <section
+              id="disparos-credits-history-section"
+              class="disparos-credits-history-section"
+              aria-label="Histórico de créditos"
+            >
+              <div class="disparos-credits-history-head">
+                <div>
+                  <h2>Histórico</h2>
+                  <p>Compras confirmadas e bonificações geradas por campanhas finalizadas.</p>
+                </div>
+                <button
+                  type="button"
+                  id="disparos-credits-history-refresh-btn"
+                  class="disparos-credits-refresh-btn"
+                >
+                  Atualizar histórico
+                </button>
+              </div>
+              <div class="disparos-credits-history-tabs" role="tablist" aria-label="Tipo de histórico">
+                <button
+                  type="button"
+                  id="disparos-credits-history-tab-purchases"
+                  class="disparos-credits-history-tab is-active"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="disparos-credits-history-purchases"
+                >
+                  Compras
+                </button>
+                <button
+                  type="button"
+                  id="disparos-credits-history-tab-bonus"
+                  class="disparos-credits-history-tab"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="disparos-credits-history-bonus"
+                >
+                  Bonificações
+                </button>
+              </div>
+              <div
+                id="disparos-credits-history-purchases"
+                class="disparos-credits-history-panel"
+                role="tabpanel"
+              >
+                <div id="disparos-credits-history-purchases-list" class="disparos-statement-list">
+                  <div class="disparos-statement-empty">Carregando compras…</div>
+                </div>
+              </div>
+              <div
+                id="disparos-credits-history-bonus"
+                class="disparos-credits-history-panel"
+                role="tabpanel"
+                hidden
+              >
+                <div id="disparos-credits-history-bonus-list" class="disparos-statement-list">
+                  <div class="disparos-statement-empty">Carregando bonificações…</div>
+                </div>
+              </div>
+            </section>
           </div>
           </div>
         </div>
@@ -16045,7 +16159,60 @@
       let adminUserEditId = "";
       let adminUserDeleteId = "";
       let aquecedorEntitlementCache = null;
+      let aquecedorEntitlementLoading = false;
+      const AQUECEDOR_ENTITLEMENT_CACHE_PREFIX = "waba.aquecedor.entitlement.v1.";
       let disparosCreditsCache = null;
+      function aquecedorEntitlementCacheKey() {
+        return `${AQUECEDOR_ENTITLEMENT_CACHE_PREFIX}${wabaSessionEmail || "guest"}`;
+      }
+
+      function persistAquecedorEntitlementCache(entitlement) {
+        if (!entitlement?.active || !wabaSessionEmail) return;
+        try {
+          sessionStorage.setItem(
+            aquecedorEntitlementCacheKey(),
+            JSON.stringify({ savedAt: Date.now(), entitlement })
+          );
+        } catch {
+          /* ignore quota */
+        }
+      }
+
+      function restoreAquecedorEntitlementCache() {
+        try {
+          const raw = sessionStorage.getItem(aquecedorEntitlementCacheKey());
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          return parsed?.entitlement && typeof parsed.entitlement === "object"
+            ? parsed.entitlement
+            : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function resolveAquecedorEntitlementFallback(failureKind = "unavailable") {
+        if (isStaffRole(wabaAuthRole)) return null;
+        if (Boolean(disparosCreditsCache?.hasCredits)) {
+          return {
+            active: true,
+            reason: "active",
+            message: "Aquecedor liberado pelos créditos da conta (verificação em segundo plano).",
+            _fallback: failureKind,
+          };
+        }
+        const cached = restoreAquecedorEntitlementCache();
+        if (cached?.active) {
+          return { ...cached, _fallback: failureKind };
+        }
+        return null;
+      }
+
+      function hydrateAquecedorEntitlementFromSession() {
+        const restored = restoreAquecedorEntitlementCache();
+        if (restored) aquecedorEntitlementCache = restored;
+      }
+
       let disparosDashboardOverviewCache = null;
       let disparosDashboardRenderFingerprint = "";
       let disparosDashboardCompareApiKind = "all";
@@ -16104,6 +16271,8 @@
         }
 
         applyMenuSectionAccess();
+        hydrateAquecedorEntitlementFromSession();
+        syncAquecedorSectionVisual();
         void loadAquecedorEntitlement();
         void loadDisparosCredits();
         syncWabaSupportButtonVisibility();
@@ -16197,7 +16366,10 @@
 
       function hasAquecedorAccess() {
         if (isStaffRole(wabaAuthRole)) return hasAquecedorSectionMenuAccess();
-        return Boolean(aquecedorEntitlementCache?.active);
+        if (Boolean(aquecedorEntitlementCache?.active)) return true;
+        if (Boolean(disparosCreditsCache?.hasCredits)) return true;
+        if (aquecedorEntitlementLoading) return true;
+        return Boolean(restoreAquecedorEntitlementCache()?.active);
       }
 
       function hasStaffMenuAccess(menuKey) {
@@ -16777,31 +16949,60 @@
 
       function renderAquecedorAccessGate(entitlement) {
         aquecedorEntitlementCache = entitlement || null;
+        if (entitlement?.active) persistAquecedorEntitlementCache(entitlement);
         syncAquecedorSectionVisual();
       }
 
       async function loadAquecedorEntitlement() {
+        if (!wabaAuthEnabled) {
+          aquecedorEntitlementCache = null;
+          aquecedorEntitlementLoading = false;
+          syncAquecedorSectionVisual();
+          return null;
+        }
+
+        hydrateAquecedorEntitlementFromSession();
+        aquecedorEntitlementLoading = true;
+        syncAquecedorSectionVisual();
+
         try {
           const response = await fetch("/entitlements/aquecedor", { credentials: "same-origin" });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
-            renderAquecedorAccessGate({
-              active: false,
-              message: payload.error || "Não foi possível verificar o acesso ao Aquecedor.",
-            });
+            const fallback = resolveAquecedorEntitlementFallback("http");
+            if (fallback) {
+              renderAquecedorAccessGate(fallback);
+            } else if (aquecedorEntitlementCache?.active) {
+              syncAquecedorSectionVisual();
+            } else {
+              renderAquecedorAccessGate({
+                active: false,
+                message: payload.error || "Não foi possível verificar o acesso ao Aquecedor.",
+              });
+            }
             applyMenuSectionAccess();
-            return null;
+            return fallback || aquecedorEntitlementCache;
           }
           renderAquecedorAccessGate(payload);
           applyMenuSectionAccess();
           return payload;
         } catch {
-          renderAquecedorAccessGate({
-            active: false,
-            message: "Não foi possível verificar o acesso ao Aquecedor.",
-          });
+          const fallback = resolveAquecedorEntitlementFallback("network");
+          if (fallback) {
+            renderAquecedorAccessGate(fallback);
+          } else if (aquecedorEntitlementCache?.active) {
+            syncAquecedorSectionVisual();
+          } else {
+            renderAquecedorAccessGate({
+              active: false,
+              message: "Não foi possível verificar o acesso ao Aquecedor.",
+            });
+          }
           applyMenuSectionAccess();
-          return null;
+          return fallback || aquecedorEntitlementCache;
+        } finally {
+          aquecedorEntitlementLoading = false;
+          syncAquecedorSectionVisual();
         }
       }
 
@@ -23554,9 +23755,16 @@
         const home = document.getElementById("disparos-purchase-home");
         const panel = document.getElementById("disparos-credits-panel");
         const choice = document.getElementById("disparos-purchase-choice-wrap");
+        const purchasePanel = document.getElementById("disparos-credits-hub-panel-purchase");
+        const hubTabs = document.getElementById("disparos-credits-hub-tabs");
         if (!home) return;
-        if (panel && panel.parentElement !== home) home.appendChild(panel);
-        if (choice && choice.parentElement !== home) home.appendChild(choice);
+        if (panel && panel.parentElement !== home) {
+          if (hubTabs) home.insertBefore(panel, hubTabs);
+          else home.insertBefore(panel, home.firstChild?.nextSibling || null);
+        }
+        if (choice && purchasePanel && choice.parentElement !== purchasePanel) {
+          purchasePanel.appendChild(choice);
+        }
       }
 
       function mountDisparosPurchaseContent(targetEl) {
@@ -23814,11 +24022,24 @@
       }
 
       function syncDisparosCreditsHubVisibility(credits) {
-        const historySection = document.getElementById("disparos-credits-history-section");
+        const hubTabs = document.getElementById("disparos-credits-hub-tabs");
         const onHub = isDisparosCreditsHubTabActive();
-        if (historySection) {
-          historySection.hidden = !onHub || !wabaAuthEnabled;
-        }
+        if (hubTabs) hubTabs.hidden = !onHub || !wabaAuthEnabled;
+      }
+
+      function setDisparosCreditsHubTab(tabName) {
+        const isHistory = tabName === "history";
+        const purchaseTab = document.getElementById("disparos-credits-hub-tab-purchase");
+        const historyTab = document.getElementById("disparos-credits-hub-tab-history");
+        const purchasePanel = document.getElementById("disparos-credits-hub-panel-purchase");
+        const historyPanel = document.getElementById("disparos-credits-hub-panel-history");
+        purchaseTab?.classList.toggle("is-active", !isHistory);
+        historyTab?.classList.toggle("is-active", isHistory);
+        purchaseTab?.setAttribute("aria-selected", isHistory ? "false" : "true");
+        historyTab?.setAttribute("aria-selected", isHistory ? "true" : "false");
+        if (purchasePanel) purchasePanel.hidden = isHistory;
+        if (historyPanel) historyPanel.hidden = !isHistory;
+        if (isHistory) void loadDisparosCreditsHubHistory();
       }
 
       function renderDisparosCreditsPanel(credits) {
@@ -24176,11 +24397,11 @@
         if (typeof setActiveTab === "function" && activeTab !== "disparos-lancamento") {
           setActiveTab("disparos-lancamento");
         }
+        setDisparosCreditsHubTab("history");
         setDisparosCreditsHistoryTab(tabName);
-        void loadDisparosCreditsHubHistory();
         requestAnimationFrame(() => {
           document
-            .getElementById("disparos-credits-history-section")
+            .getElementById("disparos-credits-hub-tabs")
             ?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
@@ -24484,6 +24705,14 @@
         select.value = disparosDashboardCompareApiKind;
       }
 
+      function formatDisparosDashboardCompareCreatedAt(item) {
+        const raw = String(item?.createdAt || item?.completedAt || "").trim();
+        if (!raw) return "";
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) return "";
+        return date.toLocaleDateString("pt-BR");
+      }
+
       function renderDisparosDashboardComparison(overview, options = {}) {
         const section = document.getElementById("disparos-dashboard-compare");
         const chartEl = document.getElementById("disparos-dashboard-compare-chart");
@@ -24521,6 +24750,7 @@
           subscriberEmail: disparosDashboardCompareSelectedSubscriberEmail,
           items: filtered.map((item) => ({
             id: item.id,
+            createdAt: item.createdAt,
             deliveryRate: item.deliveryRate,
             readRate: item.readRate,
             failureRate: item.failureRate,
@@ -24558,6 +24788,12 @@
         const groupsHtml = filtered
           .map((item) => {
             const label = truncateDisparosDashboardCampaignLabel(item.campaignName, 20);
+            const createdAtLabel = formatDisparosDashboardCompareCreatedAt(item);
+            const createdAtLine = createdAtLabel
+              ? `<div class="disparos-dashboard-compare-group-sub disparos-dashboard-compare-group-date" title="Criada em ${escapeReportHtml(
+                  createdAtLabel
+                )}">${escapeReportHtml(createdAtLabel)}</div>`
+              : "";
             const ownerLine =
               showOwnerOnBars && item.ownerEmail
                 ? `<div class="disparos-dashboard-compare-group-sub" title="${escapeReportHtml(
@@ -24598,6 +24834,7 @@
                   ${barCol(item.failureRate, "failure")}
                 </div>
                 <div class="disparos-dashboard-compare-group-label">${escapeReportHtml(label)}</div>
+                ${createdAtLine}
                 ${apiLine}
                 ${ownerLine}
               </div>
@@ -24864,6 +25101,7 @@
           disparosCreditsCache = await response.json();
           renderDisparosCreditsPanel(disparosCreditsCache);
           syncDisparosResumoSide();
+          syncAquecedorSectionVisual();
           if (disCampaignWizardStep === DIS_CAMPAIGN_WIZARD_TOTAL_STEPS) {
             updateDisCampaignWizardPlanUi();
           }
@@ -24871,6 +25109,7 @@
         } catch {
           if (disparosCreditsCache) {
             renderDisparosCreditsPanel(disparosCreditsCache);
+            syncAquecedorSectionVisual();
             return disparosCreditsCache;
           }
           return null;
@@ -25231,6 +25470,12 @@
         document
           .getElementById("disparos-credits-history-tab-bonus")
           ?.addEventListener("click", () => setDisparosCreditsHistoryTab("bonus"));
+        document
+          .getElementById("disparos-credits-hub-tab-purchase")
+          ?.addEventListener("click", () => setDisparosCreditsHubTab("purchase"));
+        document
+          .getElementById("disparos-credits-hub-tab-history")
+          ?.addEventListener("click", () => setDisparosCreditsHubTab("history"));
         document
           .getElementById("disparos-pricing-cancel-btn")
           ?.addEventListener("click", () => closeDisparosOverlay("disparos-pricing-overlay"));
@@ -26821,13 +27066,30 @@
         const status = aquecedorRuntimeStatusCache || {};
         const running = status?.running === true;
         const isProcessing = status?.isProcessing === true;
+        const lastResult = String(status?.lastResult || "").trim();
+        const windowOpen = status?.windowOpen !== false;
         const nextAllowedAtMs = status?.nextAllowedAt ? new Date(status.nextAllowedAt).getTime() : 0;
+        const nextWindowOpenAtMs = status?.nextWindowOpenAt
+          ? new Date(status.nextWindowOpenAt).getTime()
+          : 0;
         const nowMs = Date.now();
+        const configuredMaxWait = Math.max(
+          10,
+          Math.floor(Number(document.getElementById("aq-wait-max")?.value) || 480)
+        );
 
         fillEl.classList.remove("processing", "failed");
         if (!running) {
           fillEl.style.width = "0%";
           captionEl.textContent = "Motor parado. Clique em \"Iniciar Aquecedor\" para começar.";
+          return;
+        }
+        if (!windowOpen) {
+          fillEl.style.width = "0%";
+          captionEl.textContent =
+            status?.nextWindowOpenBr ||
+            lastResult ||
+            "Fora do expediente. O motor retoma automaticamente na próxima janela.";
           return;
         }
         if (isProcessing) {
@@ -26836,18 +27098,45 @@
           captionEl.textContent = "Processando envio agora...";
           return;
         }
+        if (lastResult && !/^Aguardando intervalo aleatório\.?$/i.test(lastResult)) {
+          if (nextAllowedAtMs > nowMs) {
+            const remainingSec = Math.max(0, Math.ceil((nextAllowedAtMs - nowMs) / 1000));
+            if (remainingSec > configuredMaxWait * 1.5) {
+              fillEl.style.width = "0%";
+              captionEl.textContent = lastResult;
+              return;
+            }
+            fillEl.style.width = `${Math.max(
+              0,
+              Math.min(
+                100,
+                Math.round(((configuredMaxWait - remainingSec) / configuredMaxWait) * 100)
+              )
+            )}%`;
+            captionEl.textContent = `${lastResult} (${remainingSec}s)`;
+            return;
+          }
+          if (/fora da janela|aguardando turno|falha no envio|não confirmado|ignorado/i.test(lastResult)) {
+            fillEl.style.width = "0%";
+            captionEl.textContent = lastResult;
+            return;
+          }
+        }
         if (nextAllowedAtMs > nowMs) {
           const remainingSec = Math.max(0, Math.ceil((nextAllowedAtMs - nowMs) / 1000));
-          const configuredMaxWait = Math.max(
-            10,
-            Math.floor(Number(document.getElementById("aq-wait-max")?.value) || 480)
-          );
           const progressedPct = Math.max(
             0,
             Math.min(100, Math.round(((configuredMaxWait - remainingSec) / configuredMaxWait) * 100))
           );
           fillEl.style.width = `${progressedPct}%`;
           captionEl.textContent = `Aguardando próximo ciclo: ${remainingSec}s restantes.`;
+          return;
+        }
+        if (nextWindowOpenAtMs > nowMs) {
+          fillEl.style.width = "0%";
+          captionEl.textContent =
+            status?.nextWindowOpenBr ||
+            `Próximo expediente: ${new Date(nextWindowOpenAtMs).toLocaleString("pt-BR")}`;
           return;
         }
         fillEl.style.width = "100%";
@@ -26884,8 +27173,15 @@
         }
         if (running) {
           hero.classList.add("active");
-          titleEl.textContent = "Aquecedor ativo";
-          subEl.textContent = lastResult || "Motor iniciado e aguardando próximo ciclo.";
+          titleEl.textContent = status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo";
+          if (status?.windowOpen === false) {
+            subEl.textContent =
+              status?.nextWindowOpenBr ||
+              lastResult ||
+              "Fora do expediente configurado. Nenhum envio até a próxima janela.";
+          } else {
+            subEl.textContent = lastResult || "Motor iniciado e aguardando próximo ciclo.";
+          }
           return;
         }
         titleEl.textContent = "Aquecedor parado";
@@ -30363,9 +30659,8 @@
           stopDisparosCampaignsPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
-          void loadDisparosCredits().then(() => {
-            void loadDisparosCreditsHubHistory();
-          });
+          setDisparosCreditsHubTab("purchase");
+          void loadDisparosCredits();
           requestAnimationFrame(() => positionDisparosChoiceNote());
         } else if (nextTab === "admin-assinantes") {
           stopAquecedorEnviosPolling();
@@ -36003,8 +36298,7 @@
       void initWabaAuthGate().then(async (unlocked) => {
         if (!unlocked) return;
 
-        await loadAquecedorEntitlement();
-        await loadDisparosCredits();
+        await Promise.all([loadAquecedorEntitlement(), loadDisparosCredits()]);
 
         let initialTab = activeTab;
         try {
@@ -36034,6 +36328,8 @@
         window.addEventListener("focus", () => {
           void refreshStaffSessionMenuAccess();
           void refreshSessionSupportAccess();
+          void loadAquecedorEntitlement();
+          void loadDisparosCredits();
         });
         window.setInterval(() => {
           void refreshStaffSessionMenuAccess();

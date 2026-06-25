@@ -3715,6 +3715,34 @@ async function runAquecedorCycleTestBatch(
   );
 }
 
+function shouldPreserveAquecedorLastResult(message: string): boolean {
+  const text = String(message || "").trim();
+  if (!text) return false;
+  return text !== "Aguardando intervalo aleatório.";
+}
+
+function deferAquecedorOutsideWindow(config: AquecedorConfig, fromSp: Date): void {
+  const nextOpen = nextAquecedorWindowOpenAt(config, fromSp);
+  aquecedorRuntime.nextAllowedAt = nextOpen ? nextOpen.toISOString() : null;
+  aquecedorRuntime.lastResult = nextOpen
+    ? `Fora da janela humanizada. Próximo retorno previsto: ${formatDateBr(nextOpen.toISOString())}.`
+    : "Fora da janela humanizada.";
+}
+
+function deferAquecedorRetryOrWindow(
+  config: AquecedorConfig,
+  nowSp: Date,
+  retrySeconds: number,
+  retryReason: string,
+): void {
+  if (!isAquecedorWindowOpen(config, nowSp)) {
+    deferAquecedorOutsideWindow(config, nowSp);
+    return;
+  }
+  aquecedorRuntime.nextAllowedAt = new Date(Date.now() + retrySeconds * 1000).toISOString();
+  aquecedorRuntime.lastResult = retryReason;
+}
+
 async function runAquecedorCycle(forceTest = false) {
   if (aquecedorRuntime.isProcessing) return;
   aquecedorRuntime.isProcessing = true;
@@ -3725,7 +3753,9 @@ async function runAquecedorCycle(forceTest = false) {
     if (aquecedorRuntime.nextAllowedAt) {
       const nextAllowed = new Date(aquecedorRuntime.nextAllowedAt);
       if (nextAllowed.getTime() > now.getTime()) {
-        aquecedorRuntime.lastResult = "Aguardando intervalo aleatório.";
+        if (!shouldPreserveAquecedorLastResult(String(aquecedorRuntime.lastResult || ""))) {
+          aquecedorRuntime.lastResult = "Aguardando intervalo aleatório.";
+        }
         return;
       }
     }
@@ -3733,11 +3763,7 @@ async function runAquecedorCycle(forceTest = false) {
     const config = await loadAquecedorEffectiveConfig();
     const nowSp = nowInSaoPaulo();
     if (!forceTest && !isAquecedorWindowOpen(config, nowSp)) {
-      const nextOpen = nextAquecedorWindowOpenAt(config, nowSp);
-      aquecedorRuntime.nextAllowedAt = nextOpen ? nextOpen.toISOString() : null;
-      aquecedorRuntime.lastResult = nextOpen
-        ? `Fora da janela humanizada. Próximo retorno previsto: ${formatDateBr(nextOpen.toISOString())}.`
-        : "Fora da janela humanizada.";
+      deferAquecedorOutsideWindow(config, nowSp);
       return;
     }
 
@@ -3788,7 +3814,7 @@ async function runAquecedorCycle(forceTest = false) {
       return;
     }
 
-    const cutoffStuck = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const cutoffStuck = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     await ((supabase.from("aquecedor" as any) as any)
       .update({ status: "PENDENTE" })
       .eq("status", "PROCESSANDO")
@@ -3841,9 +3867,12 @@ async function runAquecedorCycle(forceTest = false) {
     );
     if (!picked) {
       const retrySeconds = Math.max(60, Math.min(config.waitMinSeconds, 180));
-      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + retrySeconds * 1000).toISOString();
-      aquecedorRuntime.lastResult =
-        "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.";
+      deferAquecedorRetryOrWindow(
+        config,
+        nowSp,
+        retrySeconds,
+        "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.",
+      );
       return;
     }
 
@@ -3851,10 +3880,12 @@ async function runAquecedorCycle(forceTest = false) {
 
     const dailyQuota = await canAquecedorInstanceSendToday(chosen.instancia_origem);
     if (!dailyQuota.ok) {
-      aquecedorRuntime.nextAllowedAt = new Date(
-        Date.now() + config.waitMaxSeconds * 1000,
-      ).toISOString();
-      aquecedorRuntime.lastResult = `${chosen.instancia_origem}: ${dailyQuota.reason}`;
+      deferAquecedorRetryOrWindow(
+        config,
+        nowSp,
+        config.waitMaxSeconds,
+        `${chosen.instancia_origem}: ${dailyQuota.reason}`,
+      );
       return;
     }
 
@@ -3891,8 +3922,7 @@ async function runAquecedorCycle(forceTest = false) {
       chosen.instancia_destino,
     );
     if (!turnCheck.ok) {
-      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90_000).toISOString();
-      aquecedorRuntime.lastResult = turnCheck.reason;
+      deferAquecedorRetryOrWindow(config, nowSp, 90, turnCheck.reason);
       return;
     }
 
@@ -3905,8 +3935,12 @@ async function runAquecedorCycle(forceTest = false) {
         90,
       )
     ) {
-      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90_000).toISOString();
-      aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`;
+      deferAquecedorRetryOrWindow(
+        config,
+        nowSp,
+        90,
+        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`,
+      );
       return;
     }
 
@@ -3917,8 +3951,7 @@ async function runAquecedorCycle(forceTest = false) {
       chosen.instancia_destino,
     );
     if (!turnRecheck.ok) {
-      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 90_000).toISOString();
-      aquecedorRuntime.lastResult = turnRecheck.reason;
+      deferAquecedorRetryOrWindow(config, nowSp, 90, turnRecheck.reason);
       return;
     }
 
@@ -3958,7 +3991,12 @@ async function runAquecedorCycle(forceTest = false) {
         detailStr,
       );
       const detail = evoDetail ? ` (${String(evoDetail).slice(0, 120)})` : "";
-      aquecedorRuntime.lastResult = `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`;
+      deferAquecedorRetryOrWindow(
+        config,
+        nowSp,
+        120,
+        `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`,
+      );
       aquecedorRuntime.lastEvoError = {
         status: sendResult.status,
         body: String(sendResult.body || "").slice(0, 500),
@@ -3984,8 +4022,12 @@ async function runAquecedorCycle(forceTest = false) {
     );
     if (!deliveryCheck.ok) {
       await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
-      aquecedorRuntime.nextAllowedAt = new Date(Date.now() + 120_000).toISOString();
-      aquecedorRuntime.lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryCheck.detail}`;
+      deferAquecedorRetryOrWindow(
+        config,
+        nowSp,
+        120,
+        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryCheck.detail}`,
+      );
       aquecedorRuntime.lastEvoError = {
         status: sendResult.status,
         body: deliveryCheck.detail.slice(0, 500),
@@ -7118,7 +7160,16 @@ app.get("/aquecedor/status", async (_req, res) => {
   try {
     await reloadAquecedorPersistedBundleFromDisk();
     applyPersistedSnapshotToLocal(aquecedorPersistedBundle.snapshot);
-    return res.json(buildAquecedorStatusPayload());
+    const config = await loadAquecedorEffectiveConfig();
+    const nowSp = nowInSaoPaulo();
+    const windowOpen = isAquecedorWindowOpen(config, nowSp);
+    const nextWindowOpenAt = windowOpen ? null : nextAquecedorWindowOpenAt(config, nowSp);
+    return res.json({
+      ...buildAquecedorStatusPayload(),
+      windowOpen,
+      nextWindowOpenAt: nextWindowOpenAt ? nextWindowOpenAt.toISOString() : null,
+      nextWindowOpenBr: nextWindowOpenAt ? formatDateBr(nextWindowOpenAt.toISOString()) : null,
+    });
   } catch (error) {
     console.error("[Aquecedor] erro em GET /aquecedor/status:", error);
     return res.json({

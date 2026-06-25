@@ -27,6 +27,10 @@ Como usar:
 
 2026-06-24
 
+**WABA — Comparativo campanhas com data:** data de criação abaixo do nome no gráfico do dashboard Disparos. Ver `doc/LOG-2026-06-24__disparos-dashboard-compare-data-criacao.md`.
+
+**WABA — Aquecedor paywall falso em deploy:** entitlement resiliente (sessionStorage + créditos + não bloquear durante loading); backend libera por saldo de créditos. Marker `DEPLOY-2026-06-24-aquecedor-entitlement-resilience`. Ver `doc/LOG-2026-06-24__aquecedor-paywall-falso-entitlement-resilience.md`.
+
 **WABA — Login Mozart produção:** conta só no V02; promote pendente no Easypanel. Ver `doc/LOG-2026-06-24__mozart-login-producao-assinante-nao-migrado.md`.
 
 **WABA — Produção foguinhos (dist publicado):** causa: `dist/` não estava no Git; Easypanel servia build 22/06. Marker `DEPLOY-2026-06-24-instancias-foguinhos-producao-dist`. Ver `doc/LOG-2026-06-24__producao-foguinhos-dist-nao-publicado.md`.
@@ -1661,3 +1665,4 @@ Palavras-chave para buscar:
 - API: `GET /billing/disparos/bonus-history`, `GET /billing/disparos/purchases`.
 - Log: `doc/LOG-2026-06-21__creditos-hub-ui-historico-compras-bonus.md`.
 - **Palavras-chave:** `creditos-hub`, `disparos-lancamento`, `bonus-history`, `byApi`.
+- **Deploy 2026-06-24:** produção usa Docker + `dist/` no Git; commit `cb07ab2` com marker `DEPLOY-2026-06-24-creditos-hub-ui`. Ver `doc/LOG-2026-06-24__deploy-creditos-hub-dist-easypanel.md`.

@@ -22,6 +22,7 @@ export type DisparosDashboardCampaignComparisonItem = {
   campaignName: string;
   apiKind: WabaDispatchesApiKind;
   planTypeLabel: string;
+  createdAt: string;
   completedAt: string;
   ownerEmail?: string;
   totalLeads: number;
@@ -115,6 +116,7 @@ export const buildCampaignComparisonFromIntakes = (
         campaignName: intake.campaignName,
         apiKind,
         planTypeLabel: WABA_DISPATCHES_API_LABELS[apiKind],
+        createdAt: intake.createdAt,
         completedAt: intake.updatedAt,
         ...(options?.includeOwnerEmail ? { ownerEmail: intake.ownerEmail } : {}),
         ...rates,
