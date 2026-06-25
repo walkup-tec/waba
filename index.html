@@ -7831,25 +7831,41 @@
         --disp-preview-img-bg: #3d4654;
         --disp-preview-text: #4b5563;
         --disp-hex-size: 132px;
-        min-height: calc(100vh - 200px);
+        min-height: auto;
         padding: 32px 20px 48px;
         position: relative;
         display: flex;
         flex-direction: column;
         align-items: center;
-        background: var(--disp-page-bg);
+        background: transparent;
+      }
+      #tab-disparos-lancamento {
+        position: relative;
+        min-height: calc(100dvh - 112px);
+        background: #0b111b;
         overflow: hidden;
       }
-      .disparos-choice-backdrop {
+      .disparos-credits-backdrop {
         position: absolute;
         inset: 0;
         z-index: 0;
         pointer-events: none;
         overflow: hidden;
       }
+      .disparos-credits-scene {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        min-height: calc(100dvh - 112px);
+      }
+      .disparos-credits-hub-tabs,
+      .disparos-credits-hub-panel {
+        position: relative;
+        z-index: 1;
+      }
       .disparos-choice-backdrop-fx {
         position: absolute;
-        inset: -12% -8%;
+        inset: 0;
       }
       .disparos-choice-light {
         position: absolute;
@@ -7857,10 +7873,10 @@
         pointer-events: none;
       }
       .disparos-choice-light--green {
-        width: min(52vw, 520px);
-        height: min(52vw, 520px);
-        top: 4%;
-        left: -6%;
+        width: min(62vw, 640px);
+        height: min(62vw, 640px);
+        top: -4%;
+        left: -10%;
         background: radial-gradient(
           circle,
           rgba(154, 224, 72, 0.42) 0%,
@@ -7870,10 +7886,10 @@
         filter: blur(28px);
       }
       .disparos-choice-light--blue {
-        width: min(48vw, 480px);
-        height: min(48vw, 480px);
-        bottom: 6%;
-        left: 8%;
+        width: min(58vw, 600px);
+        height: min(58vw, 600px);
+        bottom: -2%;
+        left: 4%;
         background: radial-gradient(
           circle,
           rgba(56, 220, 255, 0.38) 0%,
@@ -7883,10 +7899,10 @@
         filter: blur(30px);
       }
       .disparos-choice-light--violet {
-        width: min(40vw, 400px);
-        height: min(40vw, 400px);
-        top: 38%;
-        right: -4%;
+        width: min(50vw, 520px);
+        height: min(50vw, 520px);
+        top: 42%;
+        right: -8%;
         background: radial-gradient(
           circle,
           rgba(168, 120, 255, 0.22) 0%,
@@ -7979,12 +7995,12 @@
       .disparos-choice-backdrop-mesh {
         position: absolute;
         inset: 0;
-        opacity: 0.28;
+        opacity: 0.32;
         background-image:
           linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
           linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
         background-size: 44px 44px;
-        mask-image: radial-gradient(ellipse 88% 78% at 46% 44%, #000 18%, transparent 74%);
+        mask-image: radial-gradient(ellipse 120% 100% at 50% 48%, #000 22%, transparent 88%);
       }
       .disparos-choice-backdrop-veil {
         position: absolute;
@@ -7999,21 +8015,10 @@
           rgba(11, 17, 27, 0.42) 100%
         );
       }
-      .disparos-choice-content {
-        position: relative;
-        z-index: 2;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
       @media (prefers-reduced-motion: reduce) {
         .disparos-choice-light {
           filter: blur(28px) !important;
         }
-      }
-      #tab-disparos-lancamento {
-        background: #0b111b;
       }
       .disparos-credits-panel {
         width: 100%;
@@ -13255,6 +13260,23 @@
         </div>
 
         <div id="tab-disparos-lancamento" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="disparos-credits-backdrop" aria-hidden="true">
+            <div class="disparos-choice-backdrop-fx">
+              <span class="disparos-choice-light disparos-choice-light--green"></span>
+              <span class="disparos-choice-light disparos-choice-light--blue"></span>
+              <span class="disparos-choice-light disparos-choice-light--violet"></span>
+              <span class="disparos-choice-stroke disparos-choice-stroke--arc"></span>
+              <span class="disparos-choice-stroke disparos-choice-stroke--a"></span>
+              <span class="disparos-choice-stroke disparos-choice-stroke--b"></span>
+              <span class="disparos-choice-stroke disparos-choice-stroke--c"></span>
+              <span class="disparos-choice-node disparos-choice-node--1"></span>
+              <span class="disparos-choice-node disparos-choice-node--2"></span>
+              <span class="disparos-choice-node disparos-choice-node--3"></span>
+              <span class="disparos-choice-backdrop-mesh"></span>
+            </div>
+            <div class="disparos-choice-backdrop-veil"></div>
+          </div>
+          <div class="disparos-credits-scene">
           <div id="disparos-purchase-home" class="disparos-credits-hub-page">
           <div
             id="disparos-credits-hub-tabs"
@@ -13293,23 +13315,6 @@
             aria-labelledby="disparos-credits-hub-tab-purchase"
           >
           <div id="disparos-purchase-choice-wrap" class="disparos-choice-wrap">
-            <div class="disparos-choice-backdrop" aria-hidden="true">
-              <div class="disparos-choice-backdrop-fx">
-                <span class="disparos-choice-light disparos-choice-light--green"></span>
-                <span class="disparos-choice-light disparos-choice-light--blue"></span>
-                <span class="disparos-choice-light disparos-choice-light--violet"></span>
-                <span class="disparos-choice-stroke disparos-choice-stroke--arc"></span>
-                <span class="disparos-choice-stroke disparos-choice-stroke--a"></span>
-                <span class="disparos-choice-stroke disparos-choice-stroke--b"></span>
-                <span class="disparos-choice-stroke disparos-choice-stroke--c"></span>
-                <span class="disparos-choice-node disparos-choice-node--1"></span>
-                <span class="disparos-choice-node disparos-choice-node--2"></span>
-                <span class="disparos-choice-node disparos-choice-node--3"></span>
-                <span class="disparos-choice-backdrop-mesh"></span>
-              </div>
-              <div class="disparos-choice-backdrop-veil"></div>
-            </div>
-            <div class="disparos-choice-content">
             <div class="disparos-choice-grid">
               <div class="disparos-pricing-board">
                 <div class="disparos-pricing-hex-cluster" aria-label="Pacotes e serviços">
@@ -13317,8 +13322,8 @@
                     class="disparos-hex-cluster-art"
                     src="/media/hexa-corrigi-2.png"
                     alt="Pacotes e serviços, API Oficial e API Alternativa"
-                    width="1024"
-                    height="1536"
+                    width="3000"
+                    height="4000"
                     decoding="async"
                   />
                 </div>
@@ -13429,7 +13434,6 @@
                   <p>Soluções que se adaptam ao seu negócio e ao seu objetivo.</p>
                 </div>
               </div>
-            </div>
             </div>
           </div>
           </div>
@@ -13606,6 +13610,7 @@
                 </div>
               </div>
             </section>
+          </div>
           </div>
           </div>
         </div>

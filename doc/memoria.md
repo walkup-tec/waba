@@ -1702,3 +1702,4 @@ Palavras-chave para buscar:
 - **2026-06-25 (fix retângulo glow):** removidas camadas CSS de luz; `mix-blend-mode: lighten` no PNG; ver `doc/LOG-2026-06-25__creditos-hex-fix-contorno-retangular.md`.
 - **2026-06-25 (hexa-corrigi-2):** arte `media/hexa-corrigi-2.png` (1024×1536, ~2,2MB) na tela Contratar.
 - **2026-06-25 (backdrop contratar):** luzes + véu blur + conteúdo; ver `doc/LOG-2026-06-25__creditos-contratar-backdrop-luz-blur.md`.
+- **2026-06-25 (backdrop tela inteira):** `#tab-disparos-lancamento` full bleed; PNG hexa-corrigi-2 atualizado.
