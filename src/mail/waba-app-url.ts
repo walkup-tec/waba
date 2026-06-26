@@ -26,3 +26,12 @@ export const buildCampaignListDeepLink = (): string => {
   url.searchParams.set("aba", "disparos");
   return url.toString();
 };
+
+/** Deep link para operacional abrir detalhes da campanha no Admin · Campanhas. */
+export const buildOperacionalAdminCampaignDeepLink = (campaignId: string): string => {
+  const id = String(campaignId || "").trim();
+  const base = resolveWabaAppLoginUrl().replace(/\/$/, "");
+  const url = new URL(`${base}/`);
+  url.searchParams.set("operacionalCampanha", id);
+  return url.toString();
+};

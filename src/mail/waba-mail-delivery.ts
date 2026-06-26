@@ -1,8 +1,14 @@
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
-import { buildCampaignReportDeepLink, buildCampaignListDeepLink, resolveWabaAppLoginUrl } from "./waba-app-url";
+import {
+  buildCampaignReportDeepLink,
+  buildCampaignListDeepLink,
+  buildOperacionalAdminCampaignDeepLink,
+  resolveWabaAppLoginUrl,
+} from "./waba-app-url";
 import {
   buildCampaignCompletedTemplate,
   buildCampaignErrorReportedTemplate,
+  buildOperacionalNewCampaignTemplate,
   buildSubscriberWelcomeTemplate,
   buildSupportTicketClosedTemplate,
 } from "./waba-mail.templates";
@@ -195,6 +201,56 @@ export const notifyCampaignErrorReportedEmail = (input: {
   void deliverCampaignErrorReportedEmail(input).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[mail] campanha erro reportado (async):", message);
+  });
+};
+
+export const deliverOperacionalNewCampaignEmail = async (input: {
+  operacionalEmail: string;
+  operacionalName: string;
+  campaignId: string;
+  campaignName: string;
+  subscriberId: string;
+  plannedSendCount: number;
+  createdAtLabel: string;
+  apiKindLabel: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const operacionalEmail = String(input.operacionalEmail || "")
+    .trim()
+    .toLowerCase();
+  const operacionalName = String(input.operacionalName || "").trim();
+  const campaignUrl = buildOperacionalAdminCampaignDeepLink(input.campaignId);
+  const mail = buildOperacionalNewCampaignTemplate({
+    recipientName: operacionalName,
+    recipientEmail: operacionalEmail,
+    campaignId: input.campaignId,
+    campaignName: input.campaignName,
+    subscriberId: input.subscriberId,
+    plannedSendCount: input.plannedSendCount,
+    createdAtLabel: input.createdAtLabel,
+    apiKindLabel: input.apiKindLabel,
+    campaignUrl,
+  });
+  return deliverEmail({
+    toEmail: operacionalEmail,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `operacional nova campanha ${input.campaignId}`,
+  });
+};
+
+export const notifyOperacionalNewCampaignEmail = (input: {
+  operacionalEmail: string;
+  operacionalName: string;
+  campaignId: string;
+  campaignName: string;
+  subscriberId: string;
+  plannedSendCount: number;
+  createdAtLabel: string;
+  apiKindLabel: string;
+}): void => {
+  void deliverOperacionalNewCampaignEmail(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] operacional nova campanha (async):", message);
   });
 };
 

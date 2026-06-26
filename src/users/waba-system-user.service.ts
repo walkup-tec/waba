@@ -207,6 +207,16 @@ export class WabaSystemUserService {
     return user.operacionalDispatchesApi ?? null;
   }
 
+  /** Operacionais designados para atender campanhas de um plano (API Oficial ou Alternativa). */
+  listOperacionalUsersForDispatchesApi(apiKind: WabaDispatchesApiKind): WabaSystemUser[] {
+    return this.repository
+      .list()
+      .filter(
+        (user) =>
+          user.role === "operacional" && user.operacionalDispatchesApi === apiKind,
+      );
+  }
+
   getSessionMenuAccess(email: string): { allowedMenuIds: string[]; menuPermissions: MenuPermissionsMap } {
     const user = this.getUserWithMigration(email);
     if (!user) {

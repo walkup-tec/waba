@@ -25,6 +25,7 @@ import {
   countSpreadsheetImportedRows,
   trimSpreadsheetBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
+import { notifyOperacionalStaffOnCampaignCreated } from "../mail/waba-operacional-campaign-notify.service";
 import { buildDisparosDashboardOverview, buildMasterSubscribersDisparosDashboardOverview } from "./waba-disparos-dashboard.service";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import {
@@ -373,6 +374,8 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
         disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
       }
+
+      notifyOperacionalStaffOnCampaignCreated(intake);
 
       const importSummary =
         plannedSendCount < importedLineCount

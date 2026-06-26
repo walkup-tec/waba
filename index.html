@@ -31193,6 +31193,24 @@
         }
       }
 
+      async function consumeOperacionalCampanhaDeepLink() {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const campaignId = String(params.get("operacionalCampanha") || "").trim();
+          if (!campaignId) return;
+          params.delete("operacionalCampanha");
+          const qs = params.toString();
+          const cleanUrl =
+            window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "");
+          window.history.replaceState(null, "", cleanUrl);
+          setActiveTab("admin-campanhas", { skipPolicyCheck: true });
+          await loadAdminCampanhas({ silent: true });
+          await openAdminCampanhasDetail(campaignId);
+        } catch {
+          /* ignore deep-link errors */
+        }
+      }
+
       function closeDisCampaignErrorModal() {
         const overlay = document.getElementById("dis-campaign-error-overlay");
         if (!overlay) return;
@@ -37760,6 +37778,7 @@
         }
         consumeCampanhaRelatorioDeepLink();
         consumeCampanhaErroDeepLink();
+        void consumeOperacionalCampanhaDeepLink();
         applyMenuSectionAccess();
         window.addEventListener("focus", () => {
           void refreshStaffSessionMenuAccess();

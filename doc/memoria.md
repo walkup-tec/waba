@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-26
 
+**WABA — E-mail operacional nova campanha:** ao gerar intake, notifica operacional do plano (Oficial/Alternativa) com prazo 24h; marker `DEPLOY-2026-06-26-operacional-email-nova-campanha`. Ver `doc/LOG-2026-06-26__operacional-email-nova-campanha.md`.
+
 **WABA — Fix criar campanha API Oficial (502/conexão):** skip `express.json` sempre no intake; retry no wizard + pausa polling; marker `DEPLOY-2026-06-26-campanha-intake-body-parser-skip`. Ver `doc/LOG-2026-06-26__campanha-oficial-intake-502-retry.md`.
 
 **WABA — Chrome salvar senha aleatória:** guards autocomplete + login inert após auth; marker `DEPLOY-2026-06-26-browser-password-manager-guards`. Ver `doc/LOG-2026-06-26__browser-password-manager-random-save.md`.
