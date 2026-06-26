@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-26
 
+**WABA — Campanha intake resilience v2:** skip `express.json`/`urlencoded` no POST intake; health `campaignIntakeSafeParser` + `campaignIntakeApiVersion`; wizard com preflight `/health`, retry FormData reconstruído, timeout dinâmico e validação obrigatória de todos os inputs. Marker `DEPLOY-2026-06-26-campanha-intake-resilience-v2`. **Redeploy Node obrigatório** no Easypanel. Ver `doc/LOG-2026-06-21__campanha-intake-resilience-v2-fix.md`.
+
 **WABA — E-mail operacional nova campanha:** ao gerar intake, notifica operacional do plano (Oficial/Alternativa) com prazo 24h; marker `DEPLOY-2026-06-26-operacional-email-nova-campanha`. Ver `doc/LOG-2026-06-26__operacional-email-nova-campanha.md`.
 
 **WABA — Fix criar campanha API Oficial (502/conexão):** skip `express.json` sempre no intake; retry no wizard + pausa polling; marker `DEPLOY-2026-06-26-campanha-intake-body-parser-skip`. Ver `doc/LOG-2026-06-26__campanha-oficial-intake-502-retry.md`.
@@ -72,24 +74,6 @@ Como usar:
 **WABA — Preservação dados produção:** scripts backup/verify + `production-data-persistence.service`. Ver `doc/LOG-2026-06-24__preservacao-dados-deploy-producao.md`.
 
 2026-06-21
-
-**WABA — Typebot monitor Asaas (paridade):** implementado em `D:\typebot-Saas` serviço `api`. Ver `doc/LOG-2026-06-21__typebot-asaas-monitor-paridade-waba.md` e typebot `doc/LOG-2026-06-21__typebot-asaas-monitor-verificacao-diaria.md`.
-
-**WABA — Monitor Asaas diário:** 2 verificações/dia (08:00 e 20:00 SP), alerta WhatsApp instância 5197462102 + e-mail walkup@walkuptec.com.br. Ver `doc/LOG-2026-06-21__asaas-monitor-verificacao-diaria.md`.
-
-**WABA — Env Asaas completo (Easypanel):** bloco produção em `.env`, `.env.v02` e `env.easypanel-producao-asaas.snippet` (gitignored). Inclui `ASAAS_TRANSFER_API_KEY`, `ASAAS_TRANSFER_WEBHOOK_ACCESS_TOKEN`, split payout. Ver `doc/LOG-2026-06-21__env-asaas-completo-easypanel.md`.
-
-**WABA — Webhooks Asaas fila pausada:** HTTP 200 async, token multi-header, bypass manutenção transfer-auth. Ver `doc/LOG-2026-06-21__fix-asaas-webhook-fila-pausada.md`.
-
-2026-06-21 pedido usuário; `git revert cd9de58` (a90a466). Lifecycle voltou ao comportamento original. Ver `doc/LOG-2026-06-21__revert-lifecycle-preparando-fix.md`.
-
-**WABA — Ícones API Oficial/Alternativa:** helpers `renderWabaApiKindLabelHtml` + `data-waba-api-kind` em todo o UI; WhatsApp verde e foguete azul. Ver `doc/LOG-2026-06-21__icones-api-oficial-alternativa-sistema.md`.
-
-**WABA — Créditos Contratar sem saldo nos cards:** removido «Seu saldo» dos cards de compra; saldo só na aba Histórico. Ver `doc/LOG-2026-06-21__creditos-contratar-sem-saldo-cards.md`.
-
-**WABA — Ícone Aquecedor (foguinho laranja):** `renderWabaAquecedorLabelHtml` + chama `#fb923c` em labels do produto. Ver `doc/LOG-2026-06-21__icone-aquecedor-foguinho-laranja.md`.
-
-2026-06-24
 
 **WABA — Aquecedor start duplo clique:** pin UI + persist antes do motor; status com worker lease. Marker `DEPLOY-2026-06-24-aquecedor-start-double-click-fix`. Ver `doc/LOG-2026-06-24__aquecedor-start-duplo-clique-fix.md`.
 

@@ -88,7 +88,12 @@ import {
   getAquecedorLifecycleStatusForInstance,
 } from "./services/aquecedor-instance-lifecycle.service";
 import { getAquecedorWarmthMapForInstances } from "./services/aquecedor-instance-warmth.service";
+import { getProductionDataPersistenceSnapshot } from "./services/production-data-persistence.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
+import {
+  WABA_CAMPAIGN_INTAKE_API_VERSION,
+  WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
+} from "./disparos/waba-campaign-intake.constants";
 
 const app = express();
 app.use(stripBasePathMiddleware);
@@ -322,7 +327,7 @@ function isDisparosCampaignCreatePost(req: express.Request) {
   return p === "/disparos/campanhas";
 }
 
-/** Multipart não pode passar pelo express.json — corrompe o stream antes do multer. */
+/** Multipart não pode passar pelo express.json/urlencoded — corrompe o stream antes do multer. */
 function shouldSkipBodyParserForMultipart(req: express.Request) {
   if (req.method !== "POST") return false;
   const p = String(req.path || "").replace(/\/+$/, "") || "/";
@@ -344,7 +349,12 @@ app.use((req, res, next) => {
 });
 
 /** Form POST (alguns proxies lidam melhor com urlencoded do que com JSON no mesmo host). */
-app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+app.use((req, res, next) => {
+  if (shouldSkipBodyParserForMultipart(req)) {
+    return next();
+  }
+  return express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT })(req, res, next);
+});
 
 function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
   const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
@@ -408,6 +418,8 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     deployMarker: WABA_DEPLOY_MARKER,
+    campaignIntakeApiVersion: WABA_CAMPAIGN_INTAKE_API_VERSION,
+    campaignIntakeSafeParser: WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
     wabaEnv: WABA_ENV,
     uiProfile: resolveUiProfile(),
     featureFlags: getWabaFeatureFlagsForClient(),
@@ -420,6 +432,7 @@ app.get("/health", (_req, res) => {
     evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),
     evoTlsInsecure: isEvoTlsInsecure(),
     evoHttpTimeoutMs: defaultEvoHttpTimeoutMs(),
+    dataPersistence: getProductionDataPersistenceSnapshot(),
   });
 });
 

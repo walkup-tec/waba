@@ -14010,6 +14010,8 @@
                         type="text"
                         placeholder="Ex.: Campanha CLT — Junho 2026"
                         autocomplete="off"
+                        required
+                        minlength="2"
                       />
                     </div>
                   </div>
@@ -14026,6 +14028,8 @@
                         maxlength="2"
                         placeholder="Ex.: 11"
                         autocomplete="off"
+                        required
+                        pattern="[0-9]{2}"
                       />
                       <span class="aquecedor-hint">Usamos o DDD para direcionar a operação na sua região.</span>
                     </div>
@@ -14039,6 +14043,7 @@
                         id="dis-wizard-campaign-image"
                         type="file"
                         accept="image/png,image/jpeg,image/jpg"
+                        required
                       />
                       <span class="aquecedor-hint">A imagem precisa ter exatamente 1080 px de largura e 1080 px de altura.</span>
                       <span id="dis-wizard-image-error" class="field-error hidden"></span>
@@ -14052,15 +14057,15 @@
                     <h3 class="dis-campaign-wizard-panel-title">3 opções de texto para o envio</h3>
                     <div class="aquecedor-field">
                       <label for="dis-wizard-text-1">Opção 1</label>
-                      <textarea id="dis-wizard-text-1" class="register-input" rows="3" placeholder="Primeira variação da mensagem"></textarea>
+                      <textarea id="dis-wizard-text-1" class="register-input" rows="3" placeholder="Primeira variação da mensagem" required minlength="8"></textarea>
                     </div>
                     <div class="aquecedor-field" style="margin-top: 10px;">
                       <label for="dis-wizard-text-2">Opção 2</label>
-                      <textarea id="dis-wizard-text-2" class="register-input" rows="3" placeholder="Segunda variação da mensagem"></textarea>
+                      <textarea id="dis-wizard-text-2" class="register-input" rows="3" placeholder="Segunda variação da mensagem" required minlength="8"></textarea>
                     </div>
                     <div class="aquecedor-field" style="margin-top: 10px;">
                       <label for="dis-wizard-text-3">Opção 3</label>
-                      <textarea id="dis-wizard-text-3" class="register-input" rows="3" placeholder="Terceira variação da mensagem"></textarea>
+                      <textarea id="dis-wizard-text-3" class="register-input" rows="3" placeholder="Terceira variação da mensagem" required minlength="8"></textarea>
                     </div>
                     <div class="aquecedor-field" style="margin-top: 14px;">
                       <label for="dis-wizard-response-link">Link de resposta do envio</label>
@@ -14071,6 +14076,7 @@
                         inputmode="url"
                         placeholder="https://seusite.com.br/resposta"
                         autocomplete="url"
+                        required
                       />
                       <p class="dis-wizard-response-link-hint">
                         URL do botão ou resposta que o lead deve acessar após o disparo.
@@ -14089,6 +14095,7 @@
                           class="dis-campaign-file-input"
                           accept=".xlsx,.xls"
                           aria-label="Selecionar planilha Excel de leads"
+                          required
                         />
                         <div class="dis-campaign-dropzone-visual">
                           <div class="dis-campaign-dropzone-icon" aria-hidden="true">
@@ -14118,6 +14125,7 @@
                             step="1"
                             inputmode="numeric"
                             placeholder="Ex.: 100"
+                            required
                           />
                           <p class="dis-wizard-leads-count-hint" id="dis-wizard-leads-count-hint"></p>
                           <p class="dis-wizard-leads-count-error hidden" id="dis-wizard-leads-count-error"></p>
@@ -26884,9 +26892,12 @@
           return "";
         }
         if (step === 3) {
-          const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
-          if (!disCampaignWizardImageFile && !imageFromInput) {
-            return "Envie a imagem da campanha (1080×1080 px).";
+          if (!disCampaignWizardImageFile) {
+            const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
+            if (!imageFromInput) {
+              return "Envie a imagem da campanha (1080×1080 px).";
+            }
+            return "Aguarde a validação da imagem ou envie um arquivo 1080×1080 px (PNG ou JPG).";
           }
           return "";
         }
@@ -26946,7 +26957,21 @@
         return false;
       }
 
-      function validateDisCampaignWizardForSubmit() {
+      async function validateDisCampaignWizardForSubmit() {
+        await ensureDisCampaignWizardArtifacts();
+        if (!disCampaignWizardImageFile) {
+          const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
+          const imageOk = imageFromInput
+            ? await validateDisCampaignWizardImageFile(imageFromInput)
+            : false;
+          if (!imageOk) {
+            showDisCampaignWizardSubmitError(
+              "Envie a imagem da campanha com 1080×1080 px (PNG ou JPG).",
+              3
+            );
+            return false;
+          }
+        }
         for (let step = 1; step <= DIS_CAMPAIGN_WIZARD_TOTAL_STEPS; step += 1) {
           const error = getDisCampaignWizardStepError(step);
           if (error) {
@@ -26956,6 +26981,152 @@
         }
         clearDisCampaignWizardSubmitError();
         return true;
+      }
+
+      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 2;
+      let wabaCampaignIntakeBackendCache = null;
+
+      async function fetchCampaignIntakeBackendStatus(force = false) {
+        if (!force && wabaCampaignIntakeBackendCache) return wabaCampaignIntakeBackendCache;
+        try {
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath("/health"),
+            { cache: "no-store" },
+            12000
+          );
+          const data = await response.json().catch(() => ({}));
+          wabaCampaignIntakeBackendCache = {
+            ok: Boolean(response.ok && data?.ok),
+            safeParser: data?.campaignIntakeSafeParser === true,
+            apiVersion: Number(data?.campaignIntakeApiVersion || 0),
+            deployMarker: String(data?.deployMarker || ""),
+          };
+        } catch {
+          wabaCampaignIntakeBackendCache = {
+            ok: false,
+            safeParser: false,
+            apiVersion: 0,
+            deployMarker: "",
+          };
+        }
+        return wabaCampaignIntakeBackendCache;
+      }
+
+      async function assertCampaignIntakeBackendReady() {
+        const status = await fetchCampaignIntakeBackendStatus(true);
+        if (!status.ok) {
+          throw new Error("Não foi possível verificar o servidor. Tente novamente em alguns segundos.");
+        }
+        if (
+          !status.safeParser ||
+          status.apiVersion < WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED
+        ) {
+          throw new Error(
+            `O servidor de campanhas está desatualizado (marker: ${status.deployMarker || "desconhecido"}). ` +
+              "É necessário redeploy do serviço Node no painel antes de gerar campanhas."
+          );
+        }
+      }
+
+      function buildDisCampaignWizardFormData() {
+        const responseLink = normalizeDisCampaignWizardResponseLink(
+          document.getElementById("dis-wizard-response-link")?.value
+        );
+        const apiKind = getDisCampaignWizardSelectedApiKind();
+        const formData = new FormData();
+        formData.append(
+          "campaignName",
+          String(document.getElementById("dis-wizard-campaign-name")?.value || "").trim()
+        );
+        formData.append(
+          "regionDdd",
+          String(document.getElementById("dis-wizard-region-ddd")?.value || "").replace(/\D/g, "")
+        );
+        formData.append(
+          "textOption1",
+          String(document.getElementById("dis-wizard-text-1")?.value || "").trim()
+        );
+        formData.append(
+          "textOption2",
+          String(document.getElementById("dis-wizard-text-2")?.value || "").trim()
+        );
+        formData.append(
+          "textOption3",
+          String(document.getElementById("dis-wizard-text-3")?.value || "").trim()
+        );
+        formData.append("responseLink", responseLink);
+        formData.append("apiKind", apiKind);
+        formData.append("image", disCampaignWizardImageFile);
+        formData.append("spreadsheet", disCampaignWizardLeadsFile);
+        formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
+        return formData;
+      }
+
+      function resolveDisCampaignWizardSubmitTimeoutMs() {
+        const imageBytes = Number(disCampaignWizardImageFile?.size || 0);
+        const sheetBytes = Number(disCampaignWizardLeadsFile?.size || 0);
+        const totalKb = Math.ceil((imageBytes + sheetBytes) / 1024);
+        return Math.min(300000, Math.max(180000, 90000 + totalKb * 120));
+      }
+
+      function resolveDisCampaignWizardSubmitErrorMessage(error, response) {
+        const status = Number(response?.status || 0);
+        if (status === 502 || status === 503 || status === 504) {
+          return "Servidor temporariamente indisponível. Aguarde alguns segundos e tente novamente. Se persistir, verifique o serviço Node no painel.";
+        }
+        const raw = String(error?.message || "").trim();
+        if (!raw) return "Erro ao enviar campanha.";
+        if (raw === "timeout") {
+          return "O envio demorou demais. Tente novamente ou use uma planilha menor.";
+        }
+        if (raw === "Failed to fetch" || /networkerror|load failed|econnreset|socket hang up/i.test(raw)) {
+          return "Falha de conexão ao enviar a campanha. O backend de produção pode estar desatualizado — peça redeploy do Node no painel e tente novamente.";
+        }
+        return raw;
+      }
+
+      async function fetchDisCampaignWizardIntakeWithRetry(buildFormData, timeoutMs = 180000) {
+        const url = resolveWabaPublicPath("/disparos/campanhas/intake");
+        const maxAttempts = 3;
+        let lastError = null;
+        let lastResponse = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const response = await fetchWithTimeout(
+              url,
+              {
+                method: "POST",
+                body: buildFormData(),
+                credentials: "same-origin",
+              },
+              timeoutMs
+            );
+            lastResponse = response;
+            if (
+              response.ok ||
+              response.status === 400 ||
+              response.status === 401 ||
+              response.status === 403 ||
+              response.status === 404
+            ) {
+              return response;
+            }
+            if (response.status >= 500 && attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+              continue;
+            }
+            return response;
+          } catch (error) {
+            lastError = error;
+            if (attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+              continue;
+            }
+            throw error;
+          }
+        }
+        if (lastResponse) return lastResponse;
+        throw lastError || new Error("Failed to fetch");
       }
 
       async function validateDisCampaignWizardImageFile(file) {
@@ -27233,66 +27404,6 @@
         showToast("Campanha enviada com sucesso.", "success", 4200);
       }
 
-      function resolveDisCampaignWizardSubmitErrorMessage(error, response) {
-        const status = Number(response?.status || 0);
-        if (status === 502 || status === 503 || status === 504) {
-          return "Servidor temporariamente indisponível (erro de gateway). Aguarde alguns segundos e tente novamente. Se persistir, verifique se o serviço Node no painel está em execução.";
-        }
-        const raw = String(error?.message || "").trim();
-        if (!raw) return "Erro ao enviar campanha.";
-        if (raw === "timeout") {
-          return "O envio demorou demais. Tente novamente ou use uma planilha menor.";
-        }
-        if (raw === "Failed to fetch" || /networkerror|load failed|econnreset|socket hang up/i.test(raw)) {
-          return "Falha de conexão com o servidor ao enviar a campanha. Aguarde alguns segundos e tente de novo. Se o erro persistir após recarregar, o backend pode estar indisponível — avise o suporte.";
-        }
-        return raw;
-      }
-
-      async function fetchDisCampaignWizardIntakeWithRetry(formData, timeoutMs = 120000) {
-        const url = resolveWabaPublicPath("/disparos/campanhas/intake");
-        const maxAttempts = 3;
-        let lastError = null;
-        let lastResponse = null;
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-          try {
-            const response = await fetchWithTimeout(
-              url,
-              {
-                method: "POST",
-                body: formData,
-                credentials: "same-origin",
-              },
-              timeoutMs
-            );
-            lastResponse = response;
-            if (
-              response.ok ||
-              response.status === 400 ||
-              response.status === 401 ||
-              response.status === 403 ||
-              response.status === 404
-            ) {
-              return response;
-            }
-            if (response.status >= 500 && attempt < maxAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
-              continue;
-            }
-            return response;
-          } catch (error) {
-            lastError = error;
-            if (attempt < maxAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
-              continue;
-            }
-            throw error;
-          }
-        }
-        if (lastResponse) return lastResponse;
-        throw lastError || new Error("Failed to fetch");
-      }
-
       async function submitDisCampaignWizard() {
         if (disCampaignWizardSubmitInFlight) {
           showToast("Aguarde, a campanha já está sendo enviada…", "warning", 3200);
@@ -27305,7 +27416,7 @@
           showDisCampaignWizardSubmitError("Não foi possível ler os arquivos da campanha.", 5);
           return;
         }
-        if (!validateDisCampaignWizardForSubmit()) return;
+        if (!(await validateDisCampaignWizardForSubmit())) return;
 
         const generateBtn = document.getElementById("dis-wizard-generate-btn");
         disCampaignWizardSubmitInFlight = true;
@@ -27317,13 +27428,18 @@
 
         let submitResponse = null;
         try {
+          await assertCampaignIntakeBackendReady();
+
           const responseLink = normalizeDisCampaignWizardResponseLink(
             document.getElementById("dis-wizard-response-link")?.value
           );
           if (!responseLink) {
             throw new Error("Informe um link de resposta válido (http ou https).");
           }
-          const apiKind = "oficial";
+          const apiKind = getDisCampaignWizardSelectedApiKind();
+          if (!apiKind) {
+            throw new Error("Selecione o plano de envio (API Oficial ou API Alternativa).");
+          }
           if (!disCampaignWizardImageFile) {
             throw new Error("Envie a imagem da campanha (1080×1080 px).");
           }
@@ -27331,24 +27447,16 @@
             throw new Error("Envie a planilha Excel com a lista de leads.");
           }
 
-          const formData = new FormData();
-          formData.append("campaignName", String(document.getElementById("dis-wizard-campaign-name")?.value || "").trim());
-          formData.append("regionDdd", String(document.getElementById("dis-wizard-region-ddd")?.value || "").replace(/\D/g, ""));
-          formData.append("textOption1", String(document.getElementById("dis-wizard-text-1")?.value || "").trim());
-          formData.append("textOption2", String(document.getElementById("dis-wizard-text-2")?.value || "").trim());
-          formData.append("textOption3", String(document.getElementById("dis-wizard-text-3")?.value || "").trim());
-          formData.append("responseLink", responseLink);
-          formData.append("apiKind", apiKind);
-          formData.append("image", disCampaignWizardImageFile);
-          formData.append("spreadsheet", disCampaignWizardLeadsFile);
-          formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
-
-          submitResponse = await fetchDisCampaignWizardIntakeWithRetry(formData, 120000);
+          const timeoutMs = resolveDisCampaignWizardSubmitTimeoutMs();
+          submitResponse = await fetchDisCampaignWizardIntakeWithRetry(
+            buildDisCampaignWizardFormData,
+            timeoutMs
+          );
           const payload = await submitResponse.json().catch(() => ({}));
           if (!submitResponse.ok) {
             if (submitResponse.status === 404) {
               throw new Error(
-                "Servidor sem a rota de campanhas (API desatualizada). Reinicie com npm run dev:v02 e tente de novo."
+                "Servidor sem a rota de campanhas (API desatualizada). Peça redeploy do Node no painel."
               );
             }
             if (submitResponse.status === 401) {
@@ -31603,24 +31711,67 @@
         showToast("Criando campanha… Aguarde alguns segundos.", "info", 8000);
         await new Promise((resolve) => window.setTimeout(resolve, 8000));
 
-        setDisCampaignWorkBusy(
-          true,
-          "Registrando campanha…",
-          "Enviando o arquivo Excel ao servidor (sem lista gigante no JSON)."
-        );
-        try {
+        const buildFormData = () => {
           const formData = new FormData();
           formData.append("name", campaignName);
           formData.append("numberColumn", numberCol);
           formData.append("configSnapshot", configSnapshotJson);
           formData.append("spreadsheet", spreadsheetFile, spreadsheetFile.name);
-          const response = await fetchWithTimeout(
-            "/disparos/campanhas",
-            { method: "POST", body: formData },
-            180000
-          );
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
+          return formData;
+        };
+
+        setDisCampaignWorkBusy(
+          true,
+          "Registrando campanha…",
+          "Enviando o arquivo Excel ao servidor (sem lista gigante no JSON)."
+        );
+        stopDisparosCampaignsPolling();
+        let lastResponse = null;
+        try {
+          const url = resolveWabaPublicPath("/disparos/campanhas");
+          const maxAttempts = 3;
+          let data = {};
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            const response = await fetchWithTimeout(
+              url,
+              {
+                method: "POST",
+                body: buildFormData(),
+                credentials: "same-origin",
+              },
+              180000
+            );
+            lastResponse = response;
+            data = await response.json().catch(() => ({}));
+            if (
+              response.ok ||
+              response.status === 400 ||
+              response.status === 401 ||
+              response.status === 403 ||
+              response.status === 404
+            ) {
+              break;
+            }
+            if (response.status >= 500 && attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+              continue;
+            }
+            break;
+          }
+          if (!lastResponse?.ok) {
+            const status = Number(lastResponse?.status || 0);
+            if (status === 401) {
+              showToast("Sessão expirada. Faça login novamente.", "error");
+              return;
+            }
+            if (status === 404) {
+              showToast("Servidor sem a rota de campanhas (API desatualizada). Peça redeploy do Node.", "error");
+              return;
+            }
+            if (status >= 502) {
+              showToast("Servidor temporariamente indisponível. Tente novamente em alguns segundos.", "error");
+              return;
+            }
             showToast(data?.error || "Falha ao criar campanha.", "error");
             return;
           }
@@ -31636,10 +31787,20 @@
           showToast(data?.message || "Campanha criada com sucesso.", "success");
           await resetDisparosPanelToOriginalAfterCampaignCreate();
           loadDisparosTemplates();
-        } catch {
-          showToast("Erro ao criar campanha.", "error");
+        } catch (error) {
+          const raw = String(error?.message || "");
+          if (raw === "timeout") {
+            showToast("O envio demorou demais. Tente novamente ou use uma planilha menor.", "error");
+          } else if (raw === "Failed to fetch" || /networkerror|load failed/i.test(raw)) {
+            showToast("Falha de conexão ao criar campanha. Verifique o serviço Node no painel.", "error");
+          } else {
+            showToast("Erro ao criar campanha.", "error");
+          }
         } finally {
           setDisCampaignWorkBusy(false);
+          if (activeTab === "disparos" || activeTab === "disparo-evo") {
+            startDisparosCampaignsPolling();
+          }
         }
       }
 
