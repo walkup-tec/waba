@@ -5208,6 +5208,53 @@
         margin-bottom: 8px;
       }
 
+      .admin-campanhas-report-entry:not([hidden]) {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+        background: linear-gradient(
+          180deg,
+          rgba(15, 23, 42, 0.98) 0%,
+          rgba(15, 23, 42, 0.98) 82%,
+          rgba(15, 23, 42, 0) 100%
+        );
+      }
+
+      .admin-campanhas-report-entry-title {
+        margin: 0 0 4px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #38bdf8;
+      }
+
+      .admin-campanhas-report-entry-hint {
+        margin: 0 0 10px;
+        font-size: 0.84rem;
+        color: #94a3b8;
+        line-height: 1.45;
+      }
+
+      .admin-campanhas-report-field input:not(:read-only):not(:disabled) {
+        cursor: text;
+        border-color: rgba(56, 189, 248, 0.42);
+        box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.08);
+      }
+
+      .admin-campanhas-report-field input:not(:read-only):not(:disabled):focus {
+        outline: 2px solid rgba(56, 189, 248, 0.55);
+        outline-offset: 1px;
+        border-color: rgba(56, 189, 248, 0.65);
+      }
+
+      .admin-campanhas-report-entry.is-loading {
+        opacity: 0.72;
+        pointer-events: none;
+      }
+
       .admin-campanhas-report-entry[hidden] {
         display: none !important;
       }
@@ -16271,6 +16318,10 @@
         <div class="confirm-title" id="admin-campanhas-report-title">Relatório da campanha</div>
         <p class="confirm-text" id="admin-campanhas-report-subtitle"></p>
         <div id="admin-campanhas-report-entry" class="admin-campanhas-report-entry">
+          <h3 class="admin-campanhas-report-entry-title">Registrar resultados</h3>
+          <p class="admin-campanhas-report-entry-hint">
+            Preencha os campos abaixo. O gráfico e as taxas são atualizados automaticamente.
+          </p>
           <form id="admin-campanhas-report-form" class="admin-campanhas-report-grid" autocomplete="off">
             <div class="admin-campanhas-report-field">
               <label for="admin-campanhas-report-total-leads">Total de Leads</label>
@@ -23803,11 +23854,10 @@
         const overlay = document.getElementById("admin-campanhas-report-overlay");
         if (!overlay) return;
         overlay.classList.remove("open");
-        overlay.classList.remove("admin-campanhas-report-overlay--readonly");
         overlay.setAttribute("aria-hidden", "true");
         adminCampanhasReportCampaignId = "";
         adminCampanhasReportTotalLeads = 0;
-        adminCampanhasReportReadOnly = false;
+        setAdminCampanhasReportReadOnly(false);
       }
 
       function formatAdminCampanhasReportNumber(value) {
@@ -23928,6 +23978,7 @@
       function buildCampaignPerformanceDashboardHtml(metricsInput, options = {}) {
         const metrics = computeCampaignPerformanceMetrics(metricsInput, options);
         const showProgress = options.showProgress !== false;
+        const hideMessageMetrics = options.hideMessageMetrics === true;
         const campaignName = String(options.campaignName || "").trim();
         const subtitle = campaignName
           ? `<p class="confirm-text" style="margin:0 0 4px">${escapeReportHtml(campaignName)}</p>`
@@ -23967,9 +24018,9 @@
             } Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100 · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).`
           : "Taxa de entrega = Entregues ÷ Enviados × 100 · Taxa de leitura = Lidos ÷ Entregues × 100 · Taxa de falha = Falhados ÷ Total de Leads × 100 · Créditos bonificados = Total de Leads − Enviados (creditados na próxima compra).";
 
-        return `
-          ${subtitle}
-          ${progressSection}
+        const messageCountSection = hideMessageMetrics
+          ? ""
+          : `
           <section class="camp-report-block">
             <h4 class="camp-report-block-title">Contagem de Mensagens</h4>
             <div class="camp-report-metrics-row">
@@ -23994,7 +24045,12 @@
                 <span class="camp-report-metric-value">${formatAdminCampanhasReportNumber(metrics.failed)}</span>
               </article>
             </div>
-          </section>
+          </section>`;
+
+        return `
+          ${subtitle}
+          ${progressSection}
+          ${messageCountSection}
           ${
             metrics.bonusShipments > 0
               ? `
@@ -24056,7 +24112,23 @@
         dashboard.innerHTML = buildCampaignPerformanceDashboardHtml(readAdminCampanhasReportMetrics(), {
           campaignName: "",
           isFinalized: adminCampanhasReportReadOnly,
+          hideMessageMetrics: !adminCampanhasReportReadOnly,
         });
+      }
+
+      function setAdminCampanhasReportEntryLoading(isLoading) {
+        const entry = document.getElementById("admin-campanhas-report-entry");
+        entry?.classList.toggle("is-loading", Boolean(isLoading));
+      }
+
+      function focusAdminCampanhasReportEntry() {
+        const entry = document.getElementById("admin-campanhas-report-entry");
+        const firstInput = document.getElementById("admin-campanhas-report-sent");
+        entry?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (firstInput && !firstInput.disabled && !firstInput.readOnly) {
+          firstInput.focus();
+          firstInput.select?.();
+        }
       }
 
       function setAdminCampanhasReportReadOnly(readOnly) {
@@ -24077,12 +24149,21 @@
           const input = document.getElementById(id);
           if (!input) return;
           input.readOnly = adminCampanhasReportReadOnly;
-          input.toggleAttribute("disabled", adminCampanhasReportReadOnly);
+          if (adminCampanhasReportReadOnly) {
+            input.setAttribute("disabled", "");
+          } else {
+            input.removeAttribute("disabled");
+            input.removeAttribute("readonly");
+          }
         });
 
         if (saveBtn) {
           saveBtn.hidden = adminCampanhasReportReadOnly;
-          saveBtn.toggleAttribute("disabled", adminCampanhasReportReadOnly);
+          if (adminCampanhasReportReadOnly) {
+            saveBtn.setAttribute("disabled", "");
+          } else {
+            saveBtn.removeAttribute("disabled");
+          }
         }
         if (entry) {
           entry.hidden = adminCampanhasReportReadOnly;
@@ -24092,6 +24173,7 @@
             ? "Relatório da campanha"
             : "Indicadores da campanha";
         }
+        setAdminCampanhasReportEntryLoading(false);
         updateAdminCampanhasReportDashboard();
       }
 
@@ -24136,6 +24218,7 @@
         fillAdminCampanhasReportForm({
           isReadOnly: options.readOnly === true,
         });
+        setAdminCampanhasReportEntryLoading(true);
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
 
@@ -24151,9 +24234,14 @@
             throw new Error(payload.error || "Não foi possível carregar o relatório.");
           }
           fillAdminCampanhasReportForm(payload);
+          if (!adminCampanhasReportReadOnly) {
+            focusAdminCampanhasReportEntry();
+          }
         } catch (error) {
           closeAdminCampanhasReportModal();
           showToast(error?.message || "Falha ao abrir relatório.", "error");
+        } finally {
+          setAdminCampanhasReportEntryLoading(false);
         }
       }
 
