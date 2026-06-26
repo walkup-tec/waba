@@ -95,6 +95,11 @@ import {
   WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
 } from "./disparos/waba-campaign-intake.constants";
 import { wabaMailService } from "./mail/waba-mail.service";
+import {
+  isWabaServerShuttingDown,
+  registerWabaGracefulShutdown,
+  registerWabaShutdownGate,
+} from "./server/waba-graceful-shutdown";
 
 const app = express();
 app.use(stripBasePathMiddleware);
@@ -415,9 +420,13 @@ app.use((req, res, next) => {
   });
 });
 
+registerWabaShutdownGate(app);
+
 app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
+  const shuttingDown = isWabaServerShuttingDown();
+  res.status(shuttingDown ? 503 : 200).json({
+    ok: !shuttingDown,
+    shuttingDown,
     deployMarker: WABA_DEPLOY_MARKER,
     campaignIntakeApiVersion: WABA_CAMPAIGN_INTAKE_API_VERSION,
     campaignIntakeSafeParser: WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
@@ -440,6 +449,16 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/ready", (_req, res) => {
+  const shuttingDown = isWabaServerShuttingDown();
+  if (shuttingDown) {
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      shuttingDown: true,
+      message: "Servidor em atualização.",
+      retryAfterSec: 15,
+    });
+  }
   if (MAINTENANCE_MODE) {
     return res.status(503).json({
       ok: false,
@@ -4356,6 +4375,16 @@ function sendIndexHtml(res: express.Response) {
 }
 
 const staticNoIndex = { index: false as const };
+
+app.get("/sw-deploy-resilience.js", (_req, res) => {
+  const swPath = path.join(distPath, "sw-deploy-resilience.js");
+  if (!existsSync(swPath)) {
+    return res.status(404).type("text/plain").send("Service worker não encontrado.");
+  }
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.setHeader("Cache-Control", "no-cache");
+  return res.type("application/javascript").sendFile(swPath);
+});
 
 app.get("/", (req, res) => {
   if (BASE_PATH && !requestUnderBasePath(req)) {
@@ -10902,7 +10931,7 @@ registerWabaOperacionalCampanhasRoutes(app);
 
 new WabaSystemUserService().ensureBootstrapFromEnvMaster();
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   const publicRoot = BASE_PATH
     ? `http://localhost:${PORT}${BASE_PATH}/`
     : `http://localhost:${PORT}/`;
@@ -11010,4 +11039,6 @@ app.listen(PORT, () => {
     startAsaasIntegrationMonitorScheduler();
   })();
 });
+
+registerWabaGracefulShutdown(httpServer);
 

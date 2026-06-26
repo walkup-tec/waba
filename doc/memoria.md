@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-26
 
+**WABA — Deploy sem Bad Gateway (UX):** service worker cache da shell, overlay “atualizando sistema”, graceful shutdown SIGTERM + gate 503. Marker `DEPLOY-2026-06-26-deploy-zero-downtime-ux`. Ver `doc/LOG-2026-06-26__deploy-zero-downtime-ux.md`.
+
 **WABA — E-mail operacional não enviado (somaconecta):** produção com marker antigo (sem código de notify); e-mail só vai ao operacional do plano (`operacionalDispatchesApi`). V02: Oficial=digitalcorban, Alternativa=somaconecta. Health `mailConfigured` + logs de skipped. Marker `DEPLOY-2026-06-26-operacional-email-notify-fix`. Ver `doc/LOG-2026-06-26__operacional-email-nao-enviado-diagnostico-fix.md`.
 
 **WABA — Campanha intake resilience v2:** skip `express.json`/`urlencoded` no POST intake; health `campaignIntakeSafeParser` + `campaignIntakeApiVersion`; wizard com preflight `/health`, retry FormData reconstruído, timeout dinâmico e validação obrigatória de todos os inputs. Marker `DEPLOY-2026-06-26-campanha-intake-resilience-v2`. **Redeploy Node obrigatório** no Easypanel. Ver `doc/LOG-2026-06-21__campanha-intake-resilience-v2-fix.md`.
