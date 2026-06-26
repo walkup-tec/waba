@@ -15,11 +15,13 @@ Como usar:
 ## Última atualização
 2026-06-26
 
+**WABA — Fix criar campanha API Oficial (502/conexão):** skip `express.json` sempre no intake; retry no wizard + pausa polling; marker `DEPLOY-2026-06-26-campanha-intake-body-parser-skip`. Ver `doc/LOG-2026-06-26__campanha-oficial-intake-502-retry.md`.
+
 **WABA — Chrome salvar senha aleatória:** guards autocomplete + login inert após auth; marker `DEPLOY-2026-06-26-browser-password-manager-guards`. Ver `doc/LOG-2026-06-26__browser-password-manager-random-save.md`.
 
 **WABA — Admin Campanhas Confirmar erro reportado:** feedback inline no modal + payload.ok + backend 400/500; marker `DEPLOY-2026-06-26-admin-campanhas-reportar-erro-fix`. Ver `doc/LOG-2026-06-26__admin-campanhas-reportar-erro-sem-acao.md`.
 
-**WABA — Admin Campanhas espaçamento API labels:** ícone colado ao texto no hint master; marker `DEPLOY-2026-06-26-admin-campanhas-api-label-spacing`. Ver `doc/LOG-2026-06-26__admin-campanhas-api-label-spacing.md`.
+**WABA — Admin Campanhas espaçamento API labels:** ícone colado ao texto no hint master (gap 2px, join sem espaços extras); marker `DEPLOY-2026-06-26-admin-campanhas-api-label-spacing`. Ver `doc/LOG-2026-06-26__admin-campanhas-api-label-spacing.md`.
 
 **WABA — Lista campanhas altura (fix):** max-height alinhada ao bloco `.disparos-resumo-grid` (cards saldo/resumo); marker `DEPLOY-2026-06-25-disparos-campanhas-list-height-resumo-grid`. Ver `doc/LOG-2026-06-25__disparos-campanhas-lista-altura-dinamica.md`.
 

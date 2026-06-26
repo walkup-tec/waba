@@ -15,6 +15,8 @@ Na tela Admin · Campanhas (master), os rótulos `ícone + API Oficial` e `ícon
 2. `#admin-campanhas-scope-hint .waba-api-label` — `gap: 4px`, ícones 14px, `white-space: nowrap`.
 3. Classe `waba-api-label--inline` + `renderWabaApiKindLabelHtml(..., { inline: true })` no hint master/operacional.
 
+**2026-06-26 (refino):** `gap: 2px`, ícones 13px, `join("")` no hint master para eliminar espaços fantasmas entre ícone e texto / entre os rótulos.
+
 Marker: `DEPLOY-2026-06-26-admin-campanhas-api-label-spacing`
 
 ## Validar

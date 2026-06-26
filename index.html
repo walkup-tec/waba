@@ -986,17 +986,24 @@
         display: inline-flex;
         align-items: center;
         justify-content: flex-start;
-        gap: 4px;
+        gap: 2px;
         width: auto;
         max-width: max-content;
+        margin: 0;
+        padding: 0;
         white-space: nowrap;
         vertical-align: baseline;
       }
 
+      #admin-campanhas-scope-hint .waba-api-label-text {
+        margin: 0;
+        padding: 0;
+      }
+
       #admin-campanhas-scope-hint .waba-api-label .wa-icon,
       #admin-campanhas-scope-hint .waba-api-label .rocket-icon {
-        width: 14px;
-        height: 14px;
+        width: 13px;
+        height: 13px;
         flex: 0 0 auto;
       }
 
@@ -22212,10 +22219,13 @@
         const hint = document.getElementById("admin-campanhas-scope-hint");
         if (!hint) return;
         if (wabaAuthRole === "master") {
-          hint.innerHTML = `Como master, você enxerga todas as campanhas de todos os assinantes (${renderWabaApiKindLabelHtml(
-            "oficial",
-            { inline: true }
-          )} e ${renderWabaApiKindLabelHtml("alternativa", { inline: true })}).`;
+          hint.innerHTML = [
+            "Como master, você enxerga todas as campanhas de todos os assinantes (",
+            renderWabaApiKindLabelHtml("oficial", { inline: true }),
+            " e ",
+            renderWabaApiKindLabelHtml("alternativa", { inline: true }),
+            ").",
+          ].join("");
           return;
         }
         if (wabaAuthRole === "suporte") {
@@ -22225,17 +22235,19 @@
         }
         if (wabaAuthRole === "operacional") {
           if (wabaOperacionalDispatchesApi === "oficial") {
-            hint.innerHTML = `Campanhas contratadas na ${renderWabaApiKindLabelHtml(
-              "oficial",
-              { inline: true }
-            )} — em aberto para operação ou finalizadas para consulta.`;
+            hint.innerHTML = [
+              "Campanhas contratadas na ",
+              renderWabaApiKindLabelHtml("oficial", { inline: true }),
+              " — em aberto para operação ou finalizadas para consulta.",
+            ].join("");
             return;
           }
           if (wabaOperacionalDispatchesApi === "alternativa") {
-            hint.innerHTML = `Campanhas contratadas na ${renderWabaApiKindLabelHtml(
-              "alternativa",
-              { inline: true }
-            )} — em aberto para operação ou finalizadas para consulta.`;
+            hint.innerHTML = [
+              "Campanhas contratadas na ",
+              renderWabaApiKindLabelHtml("alternativa", { inline: true }),
+              " — em aberto para operação ou finalizadas para consulta.",
+            ].join("");
             return;
           }
           hint.textContent =
@@ -27221,16 +27233,64 @@
         showToast("Campanha enviada com sucesso.", "success", 4200);
       }
 
-      function resolveDisCampaignWizardSubmitErrorMessage(error) {
+      function resolveDisCampaignWizardSubmitErrorMessage(error, response) {
+        const status = Number(response?.status || 0);
+        if (status === 502 || status === 503 || status === 504) {
+          return "Servidor temporariamente indisponível (erro de gateway). Aguarde alguns segundos e tente novamente. Se persistir, verifique se o serviço Node no painel está em execução.";
+        }
         const raw = String(error?.message || "").trim();
         if (!raw) return "Erro ao enviar campanha.";
         if (raw === "timeout") {
           return "O envio demorou demais. Tente novamente ou use uma planilha menor.";
         }
-        if (raw === "Failed to fetch" || /networkerror|load failed/i.test(raw)) {
-          return "Falha de conexão com o servidor ao enviar a campanha. Se o erro persistir após recarregar, o backend pode estar desatualizado — avise o suporte.";
+        if (raw === "Failed to fetch" || /networkerror|load failed|econnreset|socket hang up/i.test(raw)) {
+          return "Falha de conexão com o servidor ao enviar a campanha. Aguarde alguns segundos e tente de novo. Se o erro persistir após recarregar, o backend pode estar indisponível — avise o suporte.";
         }
         return raw;
+      }
+
+      async function fetchDisCampaignWizardIntakeWithRetry(formData, timeoutMs = 120000) {
+        const url = resolveWabaPublicPath("/disparos/campanhas/intake");
+        const maxAttempts = 3;
+        let lastError = null;
+        let lastResponse = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const response = await fetchWithTimeout(
+              url,
+              {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin",
+              },
+              timeoutMs
+            );
+            lastResponse = response;
+            if (
+              response.ok ||
+              response.status === 400 ||
+              response.status === 401 ||
+              response.status === 403 ||
+              response.status === 404
+            ) {
+              return response;
+            }
+            if (response.status >= 500 && attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+              continue;
+            }
+            return response;
+          } catch (error) {
+            lastError = error;
+            if (attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+              continue;
+            }
+            throw error;
+          }
+        }
+        if (lastResponse) return lastResponse;
+        throw lastError || new Error("Failed to fetch");
       }
 
       async function submitDisCampaignWizard() {
@@ -27249,11 +27309,13 @@
 
         const generateBtn = document.getElementById("dis-wizard-generate-btn");
         disCampaignWizardSubmitInFlight = true;
+        stopDisparosCampaignsPolling();
         if (generateBtn) {
           generateBtn.disabled = true;
           generateBtn.textContent = "Enviando…";
         }
 
+        let submitResponse = null;
         try {
           const responseLink = normalizeDisCampaignWizardResponseLink(
             document.getElementById("dis-wizard-response-link")?.value
@@ -27281,21 +27343,16 @@
           formData.append("spreadsheet", disCampaignWizardLeadsFile);
           formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
 
-          const response = await fetchWithTimeout(
-            resolveWabaPublicPath("/disparos/campanhas/intake"),
-            {
-              method: "POST",
-              body: formData,
-              credentials: "same-origin",
-            },
-            120000
-          );
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            if (response.status === 404) {
+          submitResponse = await fetchDisCampaignWizardIntakeWithRetry(formData, 120000);
+          const payload = await submitResponse.json().catch(() => ({}));
+          if (!submitResponse.ok) {
+            if (submitResponse.status === 404) {
               throw new Error(
                 "Servidor sem a rota de campanhas (API desatualizada). Reinicie com npm run dev:v02 e tente de novo."
               );
+            }
+            if (submitResponse.status === 401) {
+              throw new Error("Sessão expirada. Faça login novamente e tente enviar a campanha.");
             }
             throw new Error(payload.error || "Não foi possível enviar a campanha.");
           }
@@ -27309,11 +27366,14 @@
           showDisCampaignWizardSuccess(successMessage);
           void refreshDisparosCampaignsAndResumo();
         } catch (error) {
-          const message = resolveDisCampaignWizardSubmitErrorMessage(error);
+          const message = resolveDisCampaignWizardSubmitErrorMessage(error, submitResponse);
           showDisCampaignWizardSubmitError(message, disCampaignWizardStep);
           showToast(message, "error", 5200);
         } finally {
           disCampaignWizardSubmitInFlight = false;
+          if (activeTab === "disparos" || activeTab === "disparo-evo") {
+            startDisparosCampaignsPolling();
+          }
           if (generateBtn) {
             generateBtn.disabled = false;
             generateBtn.textContent = "Gerar Campanha";
