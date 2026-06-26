@@ -13,10 +13,11 @@
     <script>
       (function () {
         var POLL_MS = 2500;
-        var MAX_WAIT_MS = 180000;
+        var STABLE_PROBES_REQUIRED = 4;
         var pollTimer = null;
         var pollStartedAt = 0;
         var deployRecoveryActive = false;
+        var stableProbeStreak = 0;
 
         function isProductionDeployHost() {
           var host = String(window.location.hostname || "").toLowerCase();
@@ -42,6 +43,10 @@
           return resolveBasePath() + "/health";
         }
 
+        function resolveReadyUrl() {
+          return resolveBasePath() + "/ready";
+        }
+
         function resolveSwUrl() {
           return resolveBasePath() + "/sw-deploy-resilience.js";
         }
@@ -59,35 +64,79 @@
           el.id = "waba-deploy-overlay";
           el.setAttribute("hidden", "");
           el.innerHTML =
-            '<div class="waba-deploy-overlay-card" role="status" aria-live="polite">' +
-            '<div class="waba-deploy-overlay-spinner" aria-hidden="true"></div>' +
+            '<div class="waba-deploy-overlay-card" role="status" aria-live="polite" aria-busy="true">' +
+            '<div class="waba-deploy-visual" aria-hidden="true">' +
+            '<div class="waba-deploy-icon-wrap">' +
+            '<div class="waba-deploy-orbit waba-deploy-orbit--outer"></div>' +
+            '<div class="waba-deploy-orbit waba-deploy-orbit--inner"></div>' +
+            '<div class="waba-deploy-icon-core">' +
+            '<svg class="waba-deploy-icon-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<path class="waba-deploy-icon-cloud" d="M14 32h22a8 8 0 0 0 .6-16 10 10 0 0 0-19.3 3.2A6.5 6.5 0 0 0 14 32Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
+            '<path class="waba-deploy-icon-arrow waba-deploy-icon-arrow--up" d="M24 12v14M24 12l-4 4M24 12l4 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+            '<path class="waba-deploy-icon-arrow waba-deploy-icon-arrow--down" d="M24 36V22M24 36l-4-4M24 36l4-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+            "</svg>" +
+            "</div>" +
+            "</div>" +
+            '<div class="waba-deploy-progress-track">' +
+            '<div class="waba-deploy-progress-bar" id="waba-deploy-progress-bar"></div>' +
+            "</div>" +
+            '<div class="waba-deploy-dots"><span></span><span></span><span></span></div>' +
+            "</div>" +
+            '<p class="waba-deploy-phase" id="waba-deploy-overlay-phase">Atualizando serviços</p>' +
             '<h1>Estamos atualizando o sistema</h1>' +
-            '<p id="waba-deploy-overlay-message">Sua sessão está preservada. Aguarde alguns instantes — a página será restaurada automaticamente.</p>' +
+            '<p id="waba-deploy-overlay-message">Sua sessão está preservada. Aguarde — liberaremos o acesso assim que tudo estiver estável.</p>' +
             '<p class="waba-deploy-overlay-hint">Não é necessário abrir chamado: isso costuma levar menos de um minuto durante o deploy.</p>' +
-            '<button type="button" id="waba-deploy-overlay-retry" class="waba-deploy-overlay-btn">Tentar agora</button>' +
             "</div>";
           document.body.appendChild(el);
-          var retryBtn = document.getElementById("waba-deploy-overlay-retry");
-          if (retryBtn) {
-            retryBtn.addEventListener("click", function () {
-              window.wabaDeployResilience.pollUntilReady(true);
-            });
-          }
           return el;
         }
 
-        function showDeployOverlay(message) {
+        function setOverlayPhase(phase, stableCurrent, stableRequired) {
+          var phaseEl = document.getElementById("waba-deploy-overlay-phase");
+          var card = document.querySelector("#waba-deploy-overlay .waba-deploy-overlay-card");
+          if (card) {
+            card.classList.remove("is-stabilizing", "is-complete");
+            if (phase === "stabilizing") card.classList.add("is-stabilizing");
+            if (phase === "complete") card.classList.add("is-complete");
+          }
+          if (!phaseEl) return;
+          if (phase === "stabilizing") {
+            var n = Number(stableCurrent || 0);
+            var total = Number(stableRequired || STABLE_PROBES_REQUIRED);
+            phaseEl.textContent =
+              "Confirmando estabilidade (" + n + "/" + total + ")";
+            return;
+          }
+          if (phase === "complete") {
+            phaseEl.textContent = "Sistema normalizado";
+            return;
+          }
+          if (phase === "long_wait") {
+            phaseEl.textContent = "Atualização em andamento";
+            return;
+          }
+          phaseEl.textContent = "Atualizando serviços";
+        }
+
+        function showDeployOverlay(message, phase) {
           if (!isDeployResilienceEnabled()) return;
           var el = ensureOverlay();
           if (!el) return;
           var msgEl = document.getElementById("waba-deploy-overlay-message");
           if (msgEl && message) msgEl.textContent = message;
+          setOverlayPhase(phase || "deploying");
           el.removeAttribute("hidden");
+          var card = el.querySelector(".waba-deploy-overlay-card");
+          if (card) card.setAttribute("aria-busy", "true");
         }
 
         function hideDeployOverlay() {
           var el = document.getElementById("waba-deploy-overlay");
-          if (el) el.setAttribute("hidden", "");
+          if (el) {
+            el.setAttribute("hidden", "");
+            var card = el.querySelector(".waba-deploy-overlay-card");
+            if (card) card.setAttribute("aria-busy", "false");
+          }
           if (pollTimer) {
             clearTimeout(pollTimer);
             pollTimer = null;
@@ -98,27 +147,50 @@
           return status === 502 || status === 503 || status === 504;
         }
 
-        async function probeHealth() {
+        async function probeHealthDetailed() {
           try {
             var response = await fetch(resolveHealthUrl(), {
               cache: "no-store",
               credentials: "same-origin",
             });
-            if (response.ok) {
-              return { ready: true, deploySignal: false };
-            }
             if (isGatewayStatus(response.status)) {
-              return { ready: false, deploySignal: true };
+              return { stable: false, deploySignal: true, reason: "gateway" };
+            }
+            var data = null;
+            try {
+              data = await response.json();
+            } catch (_) {
+              data = null;
+            }
+            if (data && data.shuttingDown) {
+              return { stable: false, deploySignal: true, reason: "shutdown" };
+            }
+            if (data && data.maintenanceMode) {
+              return { stable: false, deploySignal: true, reason: "maintenance" };
+            }
+            if (!response.ok || !data || data.ok !== true) {
+              return { stable: false, deploySignal: false, reason: "unhealthy" };
             }
             try {
-              var data = await response.json();
-              if (data && data.shuttingDown) {
-                return { ready: false, deploySignal: true };
+              var readyRes = await fetch(resolveReadyUrl(), {
+                cache: "no-store",
+                credentials: "same-origin",
+              });
+              var readyData = null;
+              try {
+                readyData = await readyRes.json();
+              } catch (_) {
+                readyData = null;
               }
-            } catch (_) {}
-            return { ready: false, deploySignal: false };
+              if (!readyRes.ok || !readyData || readyData.ready !== true || readyData.shuttingDown) {
+                return { stable: false, deploySignal: Boolean(readyData && readyData.shuttingDown), reason: "not_ready" };
+              }
+            } catch (_) {
+              return { stable: false, deploySignal: false, reason: "ready_unreachable" };
+            }
+            return { stable: true, deploySignal: false, reason: "ok" };
           } catch (_) {
-            return { ready: false, deploySignal: false };
+            return { stable: false, deploySignal: false, reason: "network" };
           }
         }
 
@@ -127,20 +199,34 @@
           if (force) deployRecoveryActive = true;
           if (!deployRecoveryActive) return;
           if (!force && pollTimer) return;
-          if (!pollStartedAt || force) pollStartedAt = Date.now();
-          showDeployOverlay();
-          var probe = await probeHealth();
-          if (probe.ready) {
-            hideDeployOverlay();
-            pollStartedAt = 0;
-            deployRecoveryActive = false;
-            return;
+          if (!pollStartedAt || force) {
+            pollStartedAt = Date.now();
+            stableProbeStreak = 0;
           }
-          if (Date.now() - pollStartedAt >= MAX_WAIT_MS) {
-            showDeployOverlay(
-              "A atualização está demorando mais que o usual. Você pode tentar novamente ou recarregar a página em instantes."
-            );
-            return;
+          showDeployOverlay();
+          var probe = await probeHealthDetailed();
+          if (probe.stable) {
+            stableProbeStreak += 1;
+            setOverlayPhase("stabilizing", stableProbeStreak, STABLE_PROBES_REQUIRED);
+            if (stableProbeStreak >= STABLE_PROBES_REQUIRED) {
+              setOverlayPhase("complete");
+              window.setTimeout(function () {
+                hideDeployOverlay();
+                pollStartedAt = 0;
+                stableProbeStreak = 0;
+                deployRecoveryActive = false;
+              }, 480);
+              return;
+            }
+          } else {
+            stableProbeStreak = 0;
+            setOverlayPhase(probe.deploySignal ? "deploying" : "waiting");
+            if (Date.now() - pollStartedAt >= 120000) {
+              showDeployOverlay(
+                "A atualização está demorando mais que o usual. Continuamos verificando automaticamente — aguarde nesta tela.",
+                "long_wait"
+              );
+            }
           }
           pollTimer = setTimeout(function () {
             pollTimer = null;
@@ -173,8 +259,8 @@
 
         document.addEventListener("DOMContentLoaded", function () {
           if (!isDeployResilienceEnabled()) return;
-          void probeHealth().then(function (probe) {
-            if (!probe.ready && probe.deploySignal) startDeployRecovery(false);
+          void probeHealthDetailed().then(function (probe) {
+            if (!probe.stable && probe.deploySignal) startDeployRecovery(false);
           });
         });
       })();
@@ -195,54 +281,190 @@
         display: none !important;
       }
       .waba-deploy-overlay-card {
-        max-width: 26rem;
+        max-width: 22rem;
         width: 100%;
-        padding: 28px 24px;
-        border-radius: 16px;
+        padding: 28px 24px 24px;
+        border-radius: 18px;
         border: 1px solid rgba(34, 211, 238, 0.22);
         background: linear-gradient(165deg, #131b2e 0%, #0e1525 100%);
         color: #f8fafc;
         text-align: center;
         box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+        transition: border-color 0.35s ease, box-shadow 0.35s ease;
+      }
+      .waba-deploy-overlay-card.is-stabilizing {
+        border-color: rgba(46, 228, 160, 0.45);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(46, 228, 160, 0.12);
+      }
+      .waba-deploy-overlay-card.is-complete .waba-deploy-icon-core {
+        color: #2ee4a0;
+        transform: scale(1.04);
+      }
+      .waba-deploy-visual {
+        margin-bottom: 6px;
+      }
+      .waba-deploy-icon-wrap {
+        position: relative;
+        width: 88px;
+        height: 88px;
+        margin: 0 auto 14px;
+      }
+      .waba-deploy-orbit {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid transparent;
+      }
+      .waba-deploy-orbit--outer {
+        border-top-color: rgba(46, 228, 160, 0.85);
+        border-right-color: rgba(46, 228, 160, 0.15);
+        animation: waba-deploy-orbit 1.4s linear infinite;
+      }
+      .waba-deploy-orbit--inner {
+        inset: 10px;
+        border-bottom-color: rgba(34, 211, 238, 0.85);
+        border-left-color: rgba(34, 211, 238, 0.12);
+        animation: waba-deploy-orbit 1.1s linear infinite reverse;
+      }
+      .waba-deploy-icon-core {
+        position: absolute;
+        inset: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #22d3ee;
+        transition: color 0.35s ease, transform 0.35s ease;
+      }
+      .waba-deploy-icon-svg {
+        width: 100%;
+        height: 100%;
+      }
+      .waba-deploy-icon-arrow--up {
+        animation: waba-deploy-float-up 1.6s ease-in-out infinite;
+      }
+      .waba-deploy-icon-arrow--down {
+        animation: waba-deploy-float-down 1.6s ease-in-out infinite;
+        opacity: 0.55;
+      }
+      .waba-deploy-progress-track {
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.18);
+        overflow: hidden;
+        margin: 0 auto 10px;
+        max-width: 168px;
+      }
+      .waba-deploy-progress-bar {
+        height: 100%;
+        width: 42%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #2ee4a0, #22d3ee, #2ee4a0);
+        background-size: 200% 100%;
+        animation: waba-deploy-progress-slide 1.35s ease-in-out infinite;
+      }
+      .waba-deploy-overlay-card.is-stabilizing .waba-deploy-progress-bar {
+        width: 100%;
+        animation: waba-deploy-progress-fill 0.9s ease-out forwards;
+      }
+      .waba-deploy-dots {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        min-height: 8px;
+      }
+      .waba-deploy-dots span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #2ee4a0;
+        animation: waba-deploy-dot 1.2s ease-in-out infinite;
+      }
+      .waba-deploy-dots span:nth-child(2) {
+        animation-delay: 0.18s;
+      }
+      .waba-deploy-dots span:nth-child(3) {
+        animation-delay: 0.36s;
+      }
+      .waba-deploy-phase {
+        margin: 0 0 6px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #2ee4a0;
       }
       .waba-deploy-overlay-card h1 {
-        font-size: 1.15rem;
-        margin: 16px 0 10px;
+        font-size: 1.12rem;
+        margin: 0 0 10px;
         font-weight: 600;
       }
       .waba-deploy-overlay-card p {
         margin: 0 0 10px;
         color: #cbd5e1;
         line-height: 1.55;
-        font-size: 0.95rem;
+        font-size: 0.92rem;
       }
       .waba-deploy-overlay-hint {
-        font-size: 0.82rem !important;
+        font-size: 0.8rem !important;
         color: #8fa3b8 !important;
+        margin-bottom: 0 !important;
       }
-      .waba-deploy-overlay-spinner {
-        width: 40px;
-        height: 40px;
-        margin: 0 auto;
-        border-radius: 50%;
-        border: 3px solid rgba(46, 228, 160, 0.2);
-        border-top-color: #2ee4a0;
-        animation: waba-deploy-spin 0.9s linear infinite;
-      }
-      @keyframes waba-deploy-spin {
+      @keyframes waba-deploy-orbit {
         to {
           transform: rotate(360deg);
         }
       }
-      .waba-deploy-overlay-btn {
-        margin-top: 14px;
-        padding: 10px 18px;
-        border: none;
-        border-radius: 999px;
-        background: linear-gradient(135deg, #2ee4a0, #22d3ee);
-        color: #030712;
-        font-weight: 600;
-        cursor: pointer;
+      @keyframes waba-deploy-float-up {
+        0%,
+        100% {
+          transform: translateY(2px);
+          opacity: 0.45;
+        }
+        50% {
+          transform: translateY(-3px);
+          opacity: 1;
+        }
+      }
+      @keyframes waba-deploy-float-down {
+        0%,
+        100% {
+          transform: translateY(-2px);
+          opacity: 0.35;
+        }
+        50% {
+          transform: translateY(3px);
+          opacity: 0.75;
+        }
+      }
+      @keyframes waba-deploy-progress-slide {
+        0% {
+          transform: translateX(-120%);
+          background-position: 0% 50%;
+        }
+        100% {
+          transform: translateX(280%);
+          background-position: 100% 50%;
+        }
+      }
+      @keyframes waba-deploy-progress-fill {
+        from {
+          transform: translateX(-8%);
+        }
+        to {
+          transform: translateX(0);
+        }
+      }
+      @keyframes waba-deploy-dot {
+        0%,
+        80%,
+        100% {
+          transform: scale(0.55);
+          opacity: 0.35;
+        }
+        40% {
+          transform: scale(1);
+          opacity: 1;
+        }
       }
     </style>
 
@@ -16845,21 +17067,8 @@
       let allEvents = [];
       let refreshTimer = null;
       let isManualMode = false;
-      const ADMIN_FORM_TABS_SKIP_AUTO_REFRESH = new Set([
-        "admin-usuarios",
-        "admin-financeiro",
-        "aquecedor",
-        "disparos",
-        "disparo-evo",
-      ]);
-
-      function isAdminFormEditingTab(tab = activeTab) {
-        if (ADMIN_FORM_TABS_SKIP_AUTO_REFRESH.has(tab)) return true;
-        return false;
-      }
-
       function syncGlobalAutoRefreshTimer() {
-        if (isManualMode || isAdminFormEditingTab()) {
+        if (isManualMode) {
           if (refreshTimer) {
             clearInterval(refreshTimer);
             refreshTimer = null;
@@ -16867,15 +17076,7 @@
           return;
         }
         if (!refreshTimer) {
-          refreshTimer = window.setInterval(carregar, 15000);
-        }
-      }
-
-      function syncAdminFormTabRefreshLabel(tab = activeTab) {
-        const lastUpdateLabel = document.getElementById("last-update-label");
-        if (!lastUpdateLabel) return;
-        if (isAdminFormEditingTab(tab)) {
-          lastUpdateLabel.textContent = "Atualização automática pausada nesta tela";
+          refreshTimer = window.setInterval(() => carregar({ silent: true }), 15000);
         }
       }
 
@@ -16964,7 +17165,8 @@
         }
       }
 
-      function applyDashboardDadosPayload(data) {
+      function applyDashboardDadosPayload(data, options = {}) {
+        const render = options.render !== false;
         const texto = data.log || "";
         serverTotalCount =
           typeof data.totalCount === "number" ? data.totalCount : null;
@@ -16985,8 +17187,10 @@
         allEvents = events;
         rawEvents = events;
         isFirstLoad = false;
-        updateInstanceOptions();
-        applyFilters();
+        if (render) {
+          updateInstanceOptions();
+          applyFilters();
+        }
         return events.length;
       }
 
@@ -17123,9 +17327,8 @@
                 )
               )
             : "";
-          applyInstancesPayload(payload);
+          applyInstancesPayload(payload, { render: false });
           await loadInstanceUsageConfig();
-          syncDisparadorNumberPicker();
         } catch (error) {
           if (!instancesData?.items?.length) {
             instancesLoadError =
@@ -30250,12 +30453,14 @@
         const intakeOnly = isDisparosCampanhasIntakeOnlyUi();
         const statusLabel = document.getElementById("disparos-status-label");
         if (disparosConfigSaveInFlight) return;
-        if (statusLabel && !intakeOnly) {
+        if (statusLabel && !intakeOnly && !silent) {
           statusLabel.textContent = "Carregando…";
         }
         try {
-          initDisparosSectionLayout();
-          resetDisparosSectionFlow();
+          if (!silent) {
+            initDisparosSectionLayout();
+            resetDisparosSectionFlow();
+          }
           const response = await fetchDisparosCampaignListWithRetry("/disparos/config", {}, 15000);
           if (!response.ok) {
             if (statusLabel && !silent && !intakeOnly) {
@@ -30272,9 +30477,11 @@
           } else {
             disparosAlternativaThrottleCache = null;
           }
-          setDisparosFormValues(data?.config || {});
+          if (!silent) {
+            setDisparosFormValues(data?.config || {});
+          }
           const shortenerSelect = document.getElementById("dis-shortener-provider");
-          if (shortenerSelect) {
+          if (shortenerSelect && !silent) {
             if (data?.currentShortenerProvider) {
               const labels = {
                 waba: "WABA (encurtador próprio)",
@@ -30291,14 +30498,16 @@
               "Definido automaticamente pelo backend."
             );
           }
-          if (statusLabel && !intakeOnly) {
+          if (statusLabel && !intakeOnly && !silent) {
             statusLabel.textContent = "Configuração carregada";
           } else if (statusLabel && intakeOnly) {
             statusLabel.textContent = "";
           }
-          applyDisparosSectionLayout();
-          if (!intakeOnly) {
-            await loadMessengerProductsList();
+          if (!silent) {
+            applyDisparosSectionLayout();
+            if (!intakeOnly) {
+              await loadMessengerProductsList();
+            }
           }
         } catch {
           if (statusLabel && !silent && !intakeOnly) {
@@ -32776,7 +32985,6 @@
         }
 
         syncGlobalAutoRefreshTimer();
-        syncAdminFormTabRefreshLabel(nextTab);
       }
 
       function closeMobileTabsDrawer() {
@@ -35456,8 +35664,6 @@
       }
 
       async function refreshActiveTabData() {
-        if (isAdminFormEditingTab()) return;
-
         switch (activeTab) {
           case "admin-chamados":
             await loadAdminChamados();
@@ -35496,10 +35702,13 @@
         }
       }
 
-      async function carregar() {
+      async function carregar(options = {}) {
+        const silent = Boolean(options.silent);
         const container = document.getElementById("conteudo");
         const lastUpdateLabel = document.getElementById("last-update-label");
-        avatarRefreshNonce = Date.now();
+        if (!silent) {
+          avatarRefreshNonce = Date.now();
+        }
 
         const canLoadDashboard =
           activeTab !== "dashboard" ||
@@ -35525,7 +35734,7 @@
           }
         }
 
-        if (isFirstLoad && !rawEvents.length) {
+        if (isFirstLoad && !rawEvents.length && !silent) {
           container.innerHTML = `
             <div class="loading-state">
               <span>Carregando dados de envios...</span>
@@ -35533,7 +35742,7 @@
             </div>
           `;
         }
-        if (lastUpdateLabel) {
+        if (lastUpdateLabel && !silent) {
           if (rawEvents.length && dashboardDadosCacheSavedAt) {
             lastUpdateLabel.textContent = formatDashboardCacheLabel(
               dashboardDadosCacheSavedAt
@@ -35559,9 +35768,13 @@
           ) {
             try {
               const payload = await resInstancias.value.json();
-              applyInstancesPayload(payload, { render: activeTab === "instancias" });
+              applyInstancesPayload(payload, {
+                render: !silent && activeTab === "instancias",
+              });
               instancesLoadError = "";
-              scheduleInstancesFullRefresh(500);
+              if (!silent) {
+                scheduleInstancesFullRefresh(500);
+              }
             } catch (e) {
               console.error("Falha ao ler JSON de /instancias/snapshot", e);
               // mantém último cache
@@ -35583,29 +35796,36 @@
                 : "Não foi possível carregar instâncias.";
           }
           await loadInstanceUsageConfig();
-          syncDisparadorNumberPicker();
+          if (!silent) {
+            syncDisparadorNumberPicker();
+          }
 
           // Se não estamos na aba Dashboard, não carregamos o payload de /dados.
           // Mesmo assim, mantemos o resumo/lista de instâncias atualizado.
           if (!shouldFetchDados) {
-            updateInstancesIndicators();
+            if (!silent) {
+              updateInstancesIndicators();
 
-            if (activeTab === "instancias") {
-              renderInstancesList();
-            }
+              if (activeTab === "instancias") {
+                renderInstancesList();
+              }
 
-            if (!isAdminFormEditingTab()) {
               await refreshActiveTabData();
             }
 
             const now = new Date();
-            if (isAdminFormEditingTab()) {
-              syncAdminFormTabRefreshLabel();
-            } else {
-              lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
-                "pt-BR",
-                { hour: "2-digit", minute: "2-digit", second: "2-digit" }
-              )}`;
+            if (lastUpdateLabel) {
+              lastUpdateLabel.textContent = silent
+                ? `Dados em segundo plano · ${now.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}`
+                : `Atualizado às ${now.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}`;
             }
             return;
           }
@@ -35631,26 +35851,43 @@
               { hour: "2-digit", minute: "2-digit", second: "2-digit" }
             )})`;
 
-            applyFilters();
+            if (!silent) {
+              applyFilters();
+            }
             return;
           }
 
           const data = await resDados.value.json();
           persistDashboardDadosCache(data, dadosUrl);
           dashboardDadosCacheSavedAt = 0;
-          applyDashboardDadosPayload(data);
+          applyDashboardDadosPayload(data, { render: !silent });
 
           const now = new Date();
-          lastUpdateLabel.textContent = `Atualizado às ${now.toLocaleTimeString(
-            "pt-BR",
-            { hour: "2-digit", minute: "2-digit", second: "2-digit" }
-          )}`;
+          if (lastUpdateLabel) {
+            lastUpdateLabel.textContent = silent
+              ? `Dados em segundo plano · ${now.toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}`
+              : `Atualizado às ${now.toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}`;
+          }
         } catch (err) {
           console.error(err);
           if (!rawEvents.length && hydrateDashboardFromLocalCache(dadosUrl)) {
-            lastUpdateLabel.textContent = `${formatDashboardCacheLabel(
-              dashboardDadosCacheSavedAt
-            ).replace(" — atualizando...", "")} — offline`;
+            if (lastUpdateLabel) {
+              lastUpdateLabel.textContent = `${formatDashboardCacheLabel(
+                dashboardDadosCacheSavedAt
+              ).replace(" — atualizando...", "")} — offline`;
+            }
+            return;
+          }
+          if (silent) {
+            if (lastUpdateLabel) lastUpdateLabel.textContent = "Falha na atualização em segundo plano";
             return;
           }
           container.innerHTML = `

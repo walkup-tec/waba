@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Overlay deploy animado + estabilização:** sem botão Tentar agora; ícone/orbitas/barra; fecha só após 4 probes OK em `/health`+`/ready`. Marker `DEPLOY-2026-06-21-deploy-overlay-estabilizacao-ui`. Ver `doc/LOG-2026-06-21__deploy-overlay-estabilizacao-ui.md`.
+
+**WABA — Auto-update sem refresh de UI:** timer 15s usa `carregar({ silent: true })`; cache em background sem re-render de forms/listas. Marker `DEPLOY-2026-06-21-auto-update-sem-refresh-ui`. Ver `doc/LOG-2026-06-21__auto-update-sem-refresh-ui.md`.
+
 **WABA — Fix gerar mensagem teste (IA) API Alternativa:** timeout 90s, hints encurtador no backend, fallback wa.me, validação WhatsApp, erros explícitos. Marker `DEPLOY-2026-06-21-disparos-gerar-mensagem-ai-fix`. Ver `doc/LOG-2026-06-21__disparos-gerar-mensagem-ai-fix.md`.
 
 **WABA — Salvar config Disparador 1 clique:** fix blur/click no botão; pausa auto-refresh em disparos/disparo-evo. Marker `DEPLOY-2026-06-26-disparos-salvar-config-primeiro-clique`. Ver `doc/LOG-2026-06-26__disparos-salvar-config-primeiro-clique.md`.
