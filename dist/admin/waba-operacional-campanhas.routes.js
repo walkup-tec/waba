@@ -128,9 +128,14 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(200).json({ ok: true, campaign });
         }
         catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível reportar o erro.",
-            });
+            const message = error instanceof Error ? error.message : "Não foi possível reportar o erro.";
+            const status = /não encontrada|não disponível|Somente campanhas|já foi finalizada|foi cancelada|justificativa|não foi possível registrar/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/reportar-erro] erro:", error);
+            }
+            return res.status(status).json({ error: message });
         }
     });
 };

@@ -964,10 +964,46 @@
         font-weight: 650;
       }
 
-      .panel-header span {
+      .panel-header > span,
+      .panel-header > .muted {
         font-size: 0.8rem;
         color: var(--text-secondary);
         padding-inline: 2px;
+      }
+
+      .panel-header .waba-api-label,
+      .panel-header .waba-api-label-text {
+        padding-inline: 0;
+      }
+
+      #admin-campanhas-scope-hint {
+        flex: 1 1 280px;
+        min-width: 0;
+        line-height: 1.45;
+      }
+
+      #admin-campanhas-scope-hint .waba-api-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 4px;
+        width: auto;
+        max-width: max-content;
+        white-space: nowrap;
+        vertical-align: baseline;
+      }
+
+      #admin-campanhas-scope-hint .waba-api-label .wa-icon,
+      #admin-campanhas-scope-hint .waba-api-label .rocket-icon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+      }
+
+      #tab-admin-campanhas .panel-header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 6px 12px;
       }
 
       .summary-grid {
@@ -1582,6 +1618,17 @@
       .waba-api-label--md .rocket-icon {
         width: 18px;
         height: 18px;
+      }
+
+      .waba-api-label--inline {
+        gap: 4px;
+        white-space: nowrap;
+      }
+
+      .waba-api-label--inline .wa-icon,
+      .waba-api-label--inline .rocket-icon {
+        width: 14px;
+        height: 14px;
       }
 
       .waba-aquecedor-label {
@@ -12805,6 +12852,14 @@
                 id="date-range"
                 class="range-input"
                 type="text"
+                name="waba-dashboard-date-range"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                data-lpignore="true"
+                data-1p-ignore
+                data-bwignore
                 placeholder="Selecionar período (dd/mm/aaaa)"
               />
             </div>
@@ -14687,7 +14742,7 @@
                       </div>
                       <div class="aquecedor-field">
                         <label for="meta-dev-app-secret">App Secret</label>
-                        <input id="meta-dev-app-secret" type="password" autocomplete="off" placeholder="Chave secreta do app" />
+                        <input id="meta-dev-app-secret" type="password" autocomplete="new-password" placeholder="Chave secreta do app" />
                       </div>
                     </div>
                     <div class="disparos-inline-actions" style="margin-top: 8px;">
@@ -14752,7 +14807,7 @@
                         <input
                           id="meta-bm-admin-token"
                           type="password"
-                          autocomplete="off"
+                          autocomplete="new-password"
                           placeholder="Token com permissão na Business Manager"
                         />
                       </div>
@@ -14805,7 +14860,7 @@
                     <div class="disparos-grid disparos-grid-2">
                       <div class="aquecedor-field">
                         <label for="meta-token-input">Token de acesso à API (WABA / Cloud API)</label>
-                        <input id="meta-token-input" type="password" placeholder="Preenchido ao conectar ou cole aqui" />
+                        <input id="meta-token-input" type="password" autocomplete="new-password" placeholder="Preenchido ao conectar ou cole aqui" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="meta-waba-id-input">WABA ID (id_bm no fluxo n8n)</label>
@@ -15251,11 +15306,11 @@
                     </div>
                     <div class="aquecedor-field">
                       <label for="admin-user-email">E-mail</label>
-                      <input id="admin-user-email" type="email" required placeholder="usuario@empresa.com.br" />
+                      <input id="admin-user-email" type="email" required autocomplete="off" placeholder="usuario@empresa.com.br" />
                     </div>
                     <div class="aquecedor-field">
                       <label for="admin-user-password">Senha</label>
-                      <input id="admin-user-password" type="password" required minlength="6" placeholder="Mínimo 6 caracteres" />
+                      <input id="admin-user-password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
                     </div>
                     <div class="aquecedor-field">
                       <label for="admin-user-role">Tipo de usuário</label>
@@ -16164,7 +16219,7 @@
             <code id="waba-support-ticket-id">—</code>
           </div>
         </div>
-        <form id="waba-support-form" class="waba-support-form">
+        <form id="waba-support-form" class="waba-support-form" autocomplete="off">
           <label class="register-label" for="waba-support-description">Descrição do problema *</label>
           <textarea
             id="waba-support-description"
@@ -16960,6 +17015,53 @@
         throw lastError || new Error("Failed to fetch");
       }
 
+      function syncWabaCredentialAutocompleteState(isLoginScreenActive) {
+        const loginScreen = document.getElementById("waba-login-screen");
+        const loginForm = document.getElementById("waba-login-form");
+        const loginEmail = document.getElementById("waba-login-email");
+        const loginPassword = document.getElementById("waba-login-password");
+
+        if (loginScreen) {
+          if (isLoginScreenActive) {
+            loginScreen.removeAttribute("inert");
+          } else {
+            loginScreen.setAttribute("inert", "");
+          }
+        }
+
+        if (isLoginScreenActive) {
+          if (loginForm) loginForm.setAttribute("autocomplete", "on");
+          if (loginEmail) {
+            loginEmail.setAttribute("autocomplete", "username");
+            loginEmail.setAttribute("name", "email");
+            loginEmail.removeAttribute("readonly");
+            loginEmail.removeAttribute("tabindex");
+          }
+          if (loginPassword) {
+            loginPassword.setAttribute("autocomplete", "current-password");
+            loginPassword.setAttribute("name", "password");
+            loginPassword.removeAttribute("readonly");
+            loginPassword.removeAttribute("tabindex");
+          }
+          return;
+        }
+
+        if (loginForm) loginForm.setAttribute("autocomplete", "off");
+        if (loginEmail) {
+          loginEmail.setAttribute("autocomplete", "off");
+          loginEmail.removeAttribute("name");
+          loginEmail.setAttribute("readonly", "true");
+          loginEmail.setAttribute("tabindex", "-1");
+        }
+        if (loginPassword) {
+          loginPassword.value = "";
+          loginPassword.setAttribute("autocomplete", "new-password");
+          loginPassword.removeAttribute("name");
+          loginPassword.setAttribute("readonly", "true");
+          loginPassword.setAttribute("tabindex", "-1");
+        }
+      }
+
       function unlockWabaApp(session) {
         document.body.classList.remove("waba-auth-locked", "waba-auth-checking");
         const loginScreen = document.getElementById("waba-login-screen");
@@ -17017,6 +17119,7 @@
         syncWabaSupportButtonVisibility();
         void refreshMasterMenuBadges();
         startMasterMenuBadgePolling();
+        syncWabaCredentialAutocompleteState(false);
       }
 
       function applyStaffSessionMenuAccess(sessionLike) {
@@ -17761,6 +17864,7 @@
         syncWabaSupportButtonVisibility();
         stopMasterMenuBadgePolling();
         syncMasterMenuBadgeUi({});
+        syncWabaCredentialAutocompleteState(true);
       }
 
       async function initWabaAuthGate() {
@@ -18111,8 +18215,9 @@
         if (!kind) return escapeWabaApiLabelHtml(options.fallback || "");
         const text = formatWabaApiKindLabel(kind);
         const sizeClass = options.size === "md" ? " waba-api-label--md" : "";
+        const inlineClass = options.inline ? " waba-api-label--inline" : "";
         const extraClass = options.className ? ` ${options.className}` : "";
-        return `<span class="waba-api-label waba-api-label--${kind}${sizeClass}${extraClass}">${wabaApiKindIconSvg(kind)}<span class="waba-api-label-text">${escapeWabaApiLabelHtml(text)}</span></span>`;
+        return `<span class="waba-api-label waba-api-label--${kind}${sizeClass}${inlineClass}${extraClass}">${wabaApiKindIconSvg(kind)}<span class="waba-api-label-text">${escapeWabaApiLabelHtml(text)}</span></span>`;
       }
 
       function setWabaApiKindLabelElement(element, apiKind, options = {}) {
@@ -22108,8 +22213,9 @@
         if (!hint) return;
         if (wabaAuthRole === "master") {
           hint.innerHTML = `Como master, você enxerga todas as campanhas de todos os assinantes (${renderWabaApiKindLabelHtml(
-            "oficial"
-          )} e ${renderWabaApiKindLabelHtml("alternativa")}).`;
+            "oficial",
+            { inline: true }
+          )} e ${renderWabaApiKindLabelHtml("alternativa", { inline: true })}).`;
           return;
         }
         if (wabaAuthRole === "suporte") {
@@ -22120,13 +22226,15 @@
         if (wabaAuthRole === "operacional") {
           if (wabaOperacionalDispatchesApi === "oficial") {
             hint.innerHTML = `Campanhas contratadas na ${renderWabaApiKindLabelHtml(
-              "oficial"
+              "oficial",
+              { inline: true }
             )} — em aberto para operação ou finalizadas para consulta.`;
             return;
           }
           if (wabaOperacionalDispatchesApi === "alternativa") {
             hint.innerHTML = `Campanhas contratadas na ${renderWabaApiKindLabelHtml(
-              "alternativa"
+              "alternativa",
+              { inline: true }
             )} — em aberto para operação ou finalizadas para consulta.`;
             return;
           }
@@ -22777,6 +22885,7 @@
       const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 8;
       const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 7;
       const ADMIN_CAMPANHAS_START_BTN_LABEL = "Confirmar início";
+      const ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL = "Confirmar erro reportado";
 
       function resolveAdminOperacionalFetchError(error, payload) {
         if (error?.message === "timeout") {
@@ -22835,6 +22944,9 @@
         const text = String(message || "").trim();
         el.textContent = text;
         el.hidden = !text;
+        if (text) {
+          el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
       }
 
       function getAdminCampanhasTableColspan() {
@@ -23205,7 +23317,11 @@
           reportErrorBtn.hidden = !canReportError;
           reportErrorBtn.removeAttribute("disabled");
         }
-        if (submitErrorBtn) submitErrorBtn.hidden = true;
+        if (submitErrorBtn) {
+          submitErrorBtn.hidden = true;
+          submitErrorBtn.textContent = ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL;
+          submitErrorBtn.removeAttribute("disabled");
+        }
 
         if (campaignStatus === "error_reported" && errorJustification) {
           body.insertAdjacentHTML(
@@ -23237,7 +23353,11 @@
           startBtn.removeAttribute("disabled");
         }
         if (reportErrorBtn) reportErrorBtn.hidden = true;
-        if (submitErrorBtn) submitErrorBtn.hidden = true;
+        if (submitErrorBtn) {
+          submitErrorBtn.hidden = true;
+          submitErrorBtn.textContent = ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL;
+          submitErrorBtn.removeAttribute("disabled");
+        }
         if (errorBlock) errorBlock.hidden = true;
         if (errorText) errorText.value = "";
         setAdminCampanhasDetailActionError("");
@@ -23247,12 +23367,21 @@
         const errorBlock = document.getElementById("admin-campanhas-error-report-block");
         const reportErrorBtn = document.getElementById("admin-campanhas-report-error-btn");
         const submitErrorBtn = document.getElementById("admin-campanhas-submit-error-btn");
+        const startBtn = document.getElementById("admin-campanhas-start-btn");
         const errorText = document.getElementById("admin-campanhas-error-report-text");
         if (errorBlock) errorBlock.hidden = !show;
         if (reportErrorBtn) reportErrorBtn.hidden = show;
-        if (submitErrorBtn) submitErrorBtn.hidden = !show;
-        if (show && errorText) {
-          errorText.focus();
+        if (submitErrorBtn) {
+          submitErrorBtn.hidden = !show;
+          if (show) {
+            submitErrorBtn.textContent = ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL;
+            submitErrorBtn.removeAttribute("disabled");
+          }
+        }
+        if (startBtn && show) startBtn.hidden = true;
+        if (show) {
+          setAdminCampanhasDetailActionError("");
+          if (errorText) errorText.focus();
         }
       }
 
@@ -23261,12 +23390,20 @@
         const errorText = document.getElementById("admin-campanhas-error-report-text");
         const submitErrorBtn = document.getElementById("admin-campanhas-submit-error-btn");
         const justification = String(errorText?.value || "").trim();
-        if (!campaignId) return;
-        if (justification.length < 8) {
-          showToast("Informe a justificativa do erro (mínimo 8 caracteres).", "warning");
+        setAdminCampanhasDetailActionError("");
+        if (!campaignId) {
+          setAdminCampanhasDetailActionError(
+            "Campanha não identificada. Feche e abra os detalhes novamente."
+          );
           return;
         }
-        const previousLabel = submitErrorBtn?.textContent || "Confirmar erro reportado";
+        if (justification.length < 8) {
+          const message = "Informe a justificativa do erro (mínimo 8 caracteres).";
+          setAdminCampanhasDetailActionError(message);
+          showToast(message, "warning");
+          return;
+        }
+        const previousLabel = submitErrorBtn?.textContent || ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL;
         if (submitErrorBtn) {
           submitErrorBtn.textContent = "Enviando…";
           submitErrorBtn.setAttribute("disabled", "true");
@@ -23279,19 +23416,29 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ justification }),
             },
-            20000,
+            30000,
             3
           );
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
           const payload = await response.json().catch(() => ({}));
+          if (!contentType.includes("application/json")) {
+            throw new Error("Resposta inválida do servidor. Confirme se a API está atualizada.");
+          }
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível reportar o erro.");
           }
+          if (!payload?.ok) {
+            throw new Error(payload.error || "Não foi possível confirmar o erro reportado.");
+          }
           closeAdminCampanhasDetailModal();
           showToast("Erro reportado. Saldo restituído ao assinante.", "success", 3200);
-          await loadAdminCampanhas();
+          await loadAdminCampanhas({ silent: true });
+          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
           setAdminCampanhasBucket("finalized");
         } catch (error) {
-          showToast(error?.message || "Falha ao reportar erro.", "error");
+          const message = resolveAdminOperacionalFetchError(error, error?.payload);
+          setAdminCampanhasDetailActionError(message);
+          showToast(message, "error", 4200);
         } finally {
           if (submitErrorBtn) {
             submitErrorBtn.textContent = previousLabel;
