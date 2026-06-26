@@ -6574,7 +6574,10 @@ function ensureMessageContainsLink(message: string, link: string, cta: string) {
   return `${replaced}${joiner}${safeCta}: ${safeLink}`.trim();
 }
 
-async function generateShortUrlForDisparos(longUrl: string) {
+async function generateShortUrlForDisparos(
+  longUrl: string,
+  publicBaseHints?: WabaPublicBaseRequestHints,
+) {
   const baseUrl = String(longUrl || "").trim();
   if (!/^https?:\/\//i.test(baseUrl)) {
     throw new Error("accessUrl deve ser uma URL válida (http/https).");
@@ -6589,7 +6592,12 @@ async function generateShortUrlForDisparos(longUrl: string) {
     const candidateUrl = attempt === 1 ? baseUrl : appendAntiRepeatParam(baseUrl, attempt);
     for (const provider of providers) {
       try {
-        const candidateShort = await shortenUrlWithProvider(candidateUrl, provider, "");
+        const candidateShort = await shortenUrlWithProvider(
+          candidateUrl,
+          provider,
+          "",
+          publicBaseHints,
+        );
         shortUrl = candidateShort;
         sourceUrlUsed = candidateUrl;
         providerUsed = provider;
@@ -8998,6 +9006,7 @@ app.post("/disparos/shorten", async (req, res) => {
 app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
   try {
     const config = await loadDisparosConfigFromDb();
+    const publicBaseHints = publicBaseHintsFromExpressRequest(req);
     const customBriefing = String(req.body?.briefing || "").trim();
     const briefing = customBriefing || String(config.aiBriefing || "").trim();
     const tone = String(req.body?.tone || config.aiTone || "consultivo").trim();
@@ -9015,11 +9024,21 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
     // longUrl único para o teste de geração (evita acúmulo de cliques em shortUrl reaproveitado)
     const nonce = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
     const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1&_n8n_link_nonce=${nonce}`;
-    let shortUrl = "";
+    let shortUrl = accessUrlRaw;
     let shortenerProvider = "";
-    const shortened = await generateShortUrlForDisparos(accessUrlRaw);
-    shortUrl = shortened.shortUrl;
-    shortenerProvider = String(shortened.provider || "");
+    let shortenerWarning = "";
+    try {
+      const shortened = await generateShortUrlForDisparos(accessUrlRaw, publicBaseHints);
+      shortUrl = shortened.shortUrl;
+      shortenerProvider = String(shortened.provider || "");
+    } catch (shortErr: any) {
+      console.warn(
+        "[gerar-mensagem-ai] encurtador indisponível, usando wa.me longo:",
+        shortErr?.message || shortErr,
+      );
+      shortenerWarning =
+        "Link não encurtado (encurtador indisponível). Verifique WABA_PUBLIC_BASE_URL no servidor.";
+    }
     const prompt = buildDisparosAiPrompt({
       briefing,
       tone,
@@ -9041,6 +9060,7 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
       latencyMs: generated.latencyMs,
       shortUrl,
       shortenerProvider,
+      ...(shortenerWarning ? { shortenerWarning } : {}),
     });
   } catch (error: any) {
     return res.status(502).json({

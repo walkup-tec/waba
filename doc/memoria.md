@@ -13,7 +13,9 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-26
+2026-06-21
+
+**WABA — Fix gerar mensagem teste (IA) API Alternativa:** timeout 90s, hints encurtador no backend, fallback wa.me, validação WhatsApp, erros explícitos. Marker `DEPLOY-2026-06-21-disparos-gerar-mensagem-ai-fix`. Ver `doc/LOG-2026-06-21__disparos-gerar-mensagem-ai-fix.md`.
 
 **WABA — Salvar config Disparador 1 clique:** fix blur/click no botão; pausa auto-refresh em disparos/disparo-evo. Marker `DEPLOY-2026-06-26-disparos-salvar-config-primeiro-clique`. Ver `doc/LOG-2026-06-26__disparos-salvar-config-primeiro-clique.md`.
 

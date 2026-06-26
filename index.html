@@ -30541,6 +30541,16 @@
           showToast("Ative o modo 'Gerar mensagens com IA' para testar.", "warning");
           return;
         }
+        if (!validateWhatsappTarget(true)) {
+          const err =
+            "Informe o WhatsApp de destino na seção Encurtador (DDD + 9 dígitos, ex.: (11) 99999-9999).";
+          if (statusEl) {
+            statusEl.textContent = err;
+            statusEl.style.color = "#fda4af";
+          }
+          showToast(err, "warning");
+          return;
+        }
 
         if (btn) {
           btn.textContent = "Gerando...";
@@ -30559,6 +30569,7 @@
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
               body: JSON.stringify({
                 briefing,
                 tone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
@@ -30568,7 +30579,7 @@
                 whatsappTargetNumber: getWhatsappTargetDigits(),
               }),
             },
-            20000
+            90000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -30582,17 +30593,25 @@
           }
           const generatedMessage = String(data?.message || "").trim();
           if (outputEl) outputEl.value = generatedMessage || "";
+          const shortenerWarning = String(data?.shortenerWarning || "").trim();
           if (statusEl) {
-            statusEl.textContent = "Mensagem gerada com sucesso";
-            statusEl.style.color = "#86efac";
+            statusEl.textContent = shortenerWarning || "Mensagem gerada com sucesso";
+            statusEl.style.color = shortenerWarning ? "#fcd34d" : "#86efac";
           }
-          showToast("Mensagem teste gerada com IA.", "success");
-        } catch {
+          showToast(
+            shortenerWarning ? `Mensagem gerada. ${shortenerWarning}` : "Mensagem teste gerada com IA.",
+            shortenerWarning ? "warning" : "success",
+          );
+        } catch (err) {
+          const isTimeout = String(err?.message || err || "").toLowerCase().includes("timeout");
+          const msg = isTimeout
+            ? "Tempo esgotado ao gerar mensagem (IA + encurtador). Tente novamente."
+            : "Falha de rede ao gerar mensagem com IA. Verifique conexão e tente de novo.";
           if (statusEl) {
-            statusEl.textContent = "Erro ao gerar mensagem com IA.";
+            statusEl.textContent = msg;
             statusEl.style.color = "#fda4af";
           }
-          showToast("Erro ao gerar mensagem com IA.", "error");
+          showToast(msg, "error");
         } finally {
           if (btn) {
             btn.textContent = original;
