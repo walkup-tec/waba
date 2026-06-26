@@ -3522,6 +3522,7 @@ function stopAquecedorRuntime() {
     aquecedorRuntimeOwnerEmail = null;
 }
 let indexHtmlTemplate = null;
+let indexHtmlTemplateMtimeMs = 0;
 function resolveIndexHtmlPath() {
     const rootHtml = path_1.default.join(rootPath, "index.html");
     const distHtml = path_1.default.join(distPath, "index.html");
@@ -3535,8 +3536,10 @@ function loadIndexHtmlTemplate() {
     if (RUNTIME_MODE === "development") {
         return (0, fs_1.readFileSync)(htmlPath, "utf8");
     }
-    if (!indexHtmlTemplate) {
+    const mtimeMs = (0, fs_1.statSync)(htmlPath).mtimeMs;
+    if (!indexHtmlTemplate || mtimeMs !== indexHtmlTemplateMtimeMs) {
         indexHtmlTemplate = (0, fs_1.readFileSync)(htmlPath, "utf8");
+        indexHtmlTemplateMtimeMs = mtimeMs;
     }
     return indexHtmlTemplate;
 }
@@ -3558,6 +3561,8 @@ function sendIndexHtml(res) {
         uiProfile: resolveUiProfile(),
         featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
     });
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     res.type("html").send(html);
 }
 const staticNoIndex = { index: false };

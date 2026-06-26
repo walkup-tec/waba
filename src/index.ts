@@ -5,7 +5,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import path from "path";
 import crypto from "crypto";
-import { promises as fs, existsSync, readFileSync } from "fs";
+import { promises as fs, existsSync, readFileSync, statSync } from "fs";
 import { lookup } from "dns/promises";
 import { hostname } from "os";
 import { createClient } from "@supabase/supabase-js";
@@ -4411,6 +4411,7 @@ function stopAquecedorRuntime(): void {
 }
 
 let indexHtmlTemplate: string | null = null;
+let indexHtmlTemplateMtimeMs = 0;
 function resolveIndexHtmlPath(): string {
   const rootHtml = path.join(rootPath, "index.html");
   const distHtml = path.join(distPath, "index.html");
@@ -4424,8 +4425,10 @@ function loadIndexHtmlTemplate(): string {
   if (RUNTIME_MODE === "development") {
     return readFileSync(htmlPath, "utf8");
   }
-  if (!indexHtmlTemplate) {
+  const mtimeMs = statSync(htmlPath).mtimeMs;
+  if (!indexHtmlTemplate || mtimeMs !== indexHtmlTemplateMtimeMs) {
     indexHtmlTemplate = readFileSync(htmlPath, "utf8");
+    indexHtmlTemplateMtimeMs = mtimeMs;
   }
   return indexHtmlTemplate;
 }
@@ -4448,6 +4451,8 @@ function sendIndexHtml(res: express.Response) {
     uiProfile: resolveUiProfile(),
     featureFlags: getWabaFeatureFlagsForClient(),
   });
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   res.type("html").send(html);
 }
 

@@ -2,7 +2,7 @@
  * Service worker — mantém a shell do app disponível durante redeploy (502/503 do proxy).
  * Em navegação com falha de gateway, devolve a última index.html em cache.
  */
-const CACHE_SHELL = "waba-deploy-shell-v1";
+const CACHE_SHELL = "waba-deploy-shell-v2";
 
 function isNavigationRequest(request) {
   if (request.mode === "navigate") return true;
@@ -29,7 +29,15 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.filter((key) => key !== CACHE_SHELL).map((key) => caches.delete(key)),
+      );
+      await self.clients.claim();
+    })(),
+  );
 });
 
 self.addEventListener("fetch", (event) => {
