@@ -1203,38 +1203,43 @@ async function loadAquecedorTurnManager(supabase, connected) {
         }
         return `${origem} não pode enviar para ${destino} no turno atual.`;
     };
-    const scoreCombination = (origemRaw, destinoRaw, comboIndex, startIndex) => {
+    const scoreEquityCombination = (origemRaw, destinoRaw, comboIndex, startIndex, equityBaseline) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
         const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-        const stats = instanceStats.get(origem.toLowerCase());
-        const destStats = instanceStats.get(destino.toLowerCase());
-        let score = 0;
-        if (owesPairReply(origemRaw, destinoRaw)) {
-            score -= 10000000;
-        }
-        score += (stats?.sendCount ?? 0) * 1000000;
-        score += (destStats?.receiveCount ?? 0) * 100000;
         const directedKey = buildAquecedorDirectedKey(origem, destino);
-        score += (directedSendCounts.get(directedKey) ?? 0) * 50000;
+        const directed = directedSendCounts.get(directedKey) ?? 0;
+        const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
+        const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
+        let score = (directed - equityBaseline.minDirected) * 1000000000000;
+        score += (oSend - equityBaseline.minOriginSend) * 1000000000;
+        score += (dRecv - equityBaseline.minDestReceive) * 1000000;
         const recentIdx = recentDirectedEdges.indexOf(directedKey);
         if (recentIdx >= 0) {
-            score += (recentIdx + 1) * 500000;
+            score += (recentIdx + 1) * 10000;
         }
-        if (recentDirectedEdges.length > 0) {
-            const lastDirected = recentDirectedEdges[0];
-            const lastParts = lastDirected.split("→");
-            const lastOrig = lastParts[0] || "";
-            const lastDest = lastParts[1] || "";
-            if (origem.toLowerCase() === lastOrig.toLowerCase()) {
-                score += 300000;
-            }
-            if (destino.toLowerCase() === lastDest.toLowerCase()) {
-                score += 150000;
-            }
+        // Resposta pendente só desempata — não monopoliza o ciclo (equidade primeiro).
+        if (owesPairReply(origemRaw, destinoRaw)) {
+            score -= 500;
         }
         const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
-        score += rotation;
+        score += rotation * 0.001;
         return score;
+    };
+    const getDirectedSendCount = (origemRaw, destinoRaw) => {
+        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        if (!origem || !destino)
+            return 0;
+        return directedSendCounts.get(buildAquecedorDirectedKey(origem, destino)) ?? 0;
+    };
+    const getOriginSendCount = (origemRaw) => instanceStats.get(resolveAquecedorCanonicalInstance(origemRaw, canonicalMap).toLowerCase())?.sendCount ?? 0;
+    const getDestReceiveCount = (destinoRaw) => instanceStats.get(resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap).toLowerCase())?.receiveCount ?? 0;
+    const getUndirectedPairSendTotal = (instA, instB) => getDirectedSendCount(instA, instB) + getDirectedSendCount(instB, instA);
+    const getTotalDirectedSendCount = () => {
+        let total = 0;
+        for (const count of directedSendCounts.values())
+            total += count;
+        return total;
     };
     return {
         canonicalMap,
@@ -1243,7 +1248,12 @@ async function loadAquecedorTurnManager(supabase, connected) {
         canSendDirected,
         owesPairReply,
         describeBlockReason,
-        scoreCombination,
+        getDirectedSendCount,
+        getOriginSendCount,
+        getDestReceiveCount,
+        getUndirectedPairSendTotal,
+        getTotalDirectedSendCount,
+        scoreEquityCombination,
     };
 }
 async function canAquecedorOrigemSendDirected(supabase, connected, instanciaOrigem, instanciaDestino, manager) {
@@ -1254,22 +1264,50 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
     if (!combinations.length)
         return null;
     const manager = await loadAquecedorTurnManager(supabase, connected);
-    const eligible = [];
+    let eligible = [];
     for (let index = 0; index < combinations.length; index += 1) {
         const combo = combinations[index];
         if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino))
             continue;
-        eligible.push({
-            combo,
-            index,
-            score: manager.scoreCombination(combo.instancia_origem, combo.instancia_destino, index, startIndex),
-        });
+        eligible.push({ combo, index });
     }
     if (!eligible.length)
         return null;
-    eligible.sort((a, b) => a.score - b.score);
-    const bestScore = eligible[0].score;
-    const ties = eligible.filter((item) => item.score === bestScore);
+    const instanceCount = Math.max(2, connected.length);
+    const maxUndirectedPairShare = Math.max(0.5, 2 / instanceCount);
+    const totalDirectedSends = manager.getTotalDirectedSendCount();
+    if (totalDirectedSends >= instanceCount) {
+        const nonSaturated = eligible.filter(({ combo }) => {
+            const pairTotal = manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino);
+            return pairTotal / totalDirectedSends <= maxUndirectedPairShare;
+        });
+        if (nonSaturated.length) {
+            eligible = nonSaturated;
+        }
+    }
+    let minDirected = Number.POSITIVE_INFINITY;
+    let minOriginSend = Number.POSITIVE_INFINITY;
+    let minDestReceive = Number.POSITIVE_INFINITY;
+    for (const { combo } of eligible) {
+        minDirected = Math.min(minDirected, manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino));
+        minOriginSend = Math.min(minOriginSend, manager.getOriginSendCount(combo.instancia_origem));
+        minDestReceive = Math.min(minDestReceive, manager.getDestReceiveCount(combo.instancia_destino));
+    }
+    if (!Number.isFinite(minDirected))
+        minDirected = 0;
+    if (!Number.isFinite(minOriginSend))
+        minOriginSend = 0;
+    if (!Number.isFinite(minDestReceive))
+        minDestReceive = 0;
+    const equityBaseline = { minDirected, minOriginSend, minDestReceive };
+    const scored = eligible.map(({ combo, index }) => ({
+        combo,
+        index,
+        score: manager.scoreEquityCombination(combo.instancia_origem, combo.instancia_destino, index, startIndex, equityBaseline),
+    }));
+    scored.sort((a, b) => a.score - b.score);
+    const bestScore = scored[0].score;
+    const ties = scored.filter((item) => item.score === bestScore);
     const base = ((startIndex % ties.length) + ties.length) % ties.length;
     const picked = ties[base];
     return { chosen: picked.combo, index: picked.index };

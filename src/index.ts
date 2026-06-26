@@ -1342,11 +1342,21 @@ type AquecedorTurnManager = {
   canSendDirected: (origemRaw: string, destinoRaw: string) => boolean;
   owesPairReply: (origemRaw: string, destinoRaw: string) => boolean;
   describeBlockReason: (origemRaw: string, destinoRaw: string) => string;
-  scoreCombination: (
+  getDirectedSendCount: (origemRaw: string, destinoRaw: string) => number;
+  getOriginSendCount: (origemRaw: string) => number;
+  getDestReceiveCount: (destinoRaw: string) => number;
+  getUndirectedPairSendTotal: (instA: string, instB: string) => number;
+  getTotalDirectedSendCount: () => number;
+  scoreEquityCombination: (
     origemRaw: string,
     destinoRaw: string,
     comboIndex: number,
     startIndex: number,
+    equityBaseline: {
+      minDirected: number;
+      minOriginSend: number;
+      minDestReceive: number;
+    },
   ) => number;
 };
 
@@ -1478,48 +1488,67 @@ async function loadAquecedorTurnManager(
     return `${origem} não pode enviar para ${destino} no turno atual.`;
   };
 
-  const scoreCombination = (
+  const scoreEquityCombination = (
     origemRaw: string,
     destinoRaw: string,
     comboIndex: number,
     startIndex: number,
+    equityBaseline: {
+      minDirected: number;
+      minOriginSend: number;
+      minDestReceive: number;
+    },
   ): number => {
     const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-    const stats = instanceStats.get(origem.toLowerCase());
-    const destStats = instanceStats.get(destino.toLowerCase());
-    let score = 0;
-
-    if (owesPairReply(origemRaw, destinoRaw)) {
-      score -= 10_000_000;
-    }
-
-    score += (stats?.sendCount ?? 0) * 1_000_000;
-    score += (destStats?.receiveCount ?? 0) * 100_000;
-
     const directedKey = buildAquecedorDirectedKey(origem, destino);
-    score += (directedSendCounts.get(directedKey) ?? 0) * 50_000;
+    const directed = directedSendCounts.get(directedKey) ?? 0;
+    const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
+    const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
+
+    let score = (directed - equityBaseline.minDirected) * 1_000_000_000_000;
+    score += (oSend - equityBaseline.minOriginSend) * 1_000_000_000;
+    score += (dRecv - equityBaseline.minDestReceive) * 1_000_000;
 
     const recentIdx = recentDirectedEdges.indexOf(directedKey);
     if (recentIdx >= 0) {
-      score += (recentIdx + 1) * 500_000;
+      score += (recentIdx + 1) * 10_000;
     }
-    if (recentDirectedEdges.length > 0) {
-      const lastDirected = recentDirectedEdges[0];
-      const lastParts = lastDirected.split("→");
-      const lastOrig = lastParts[0] || "";
-      const lastDest = lastParts[1] || "";
-      if (origem.toLowerCase() === lastOrig.toLowerCase()) {
-        score += 300_000;
-      }
-      if (destino.toLowerCase() === lastDest.toLowerCase()) {
-        score += 150_000;
-      }
+
+    // Resposta pendente só desempata — não monopoliza o ciclo (equidade primeiro).
+    if (owesPairReply(origemRaw, destinoRaw)) {
+      score -= 500;
     }
 
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
-    score += rotation;
+    score += rotation * 0.001;
     return score;
+  };
+
+  const getDirectedSendCount = (origemRaw: string, destinoRaw: string): number => {
+    const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
+    const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+    if (!origem || !destino) return 0;
+    return directedSendCounts.get(buildAquecedorDirectedKey(origem, destino)) ?? 0;
+  };
+
+  const getOriginSendCount = (origemRaw: string): number =>
+    instanceStats.get(
+      resolveAquecedorCanonicalInstance(origemRaw, canonicalMap).toLowerCase(),
+    )?.sendCount ?? 0;
+
+  const getDestReceiveCount = (destinoRaw: string): number =>
+    instanceStats.get(
+      resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap).toLowerCase(),
+    )?.receiveCount ?? 0;
+
+  const getUndirectedPairSendTotal = (instA: string, instB: string): number =>
+    getDirectedSendCount(instA, instB) + getDirectedSendCount(instB, instA);
+
+  const getTotalDirectedSendCount = (): number => {
+    let total = 0;
+    for (const count of directedSendCounts.values()) total += count;
+    return total;
   };
 
   return {
@@ -1529,7 +1558,12 @@ async function loadAquecedorTurnManager(
     canSendDirected,
     owesPairReply,
     describeBlockReason,
-    scoreCombination,
+    getDirectedSendCount,
+    getOriginSendCount,
+    getDestReceiveCount,
+    getUndirectedPairSendTotal,
+    getTotalDirectedSendCount,
+    scoreEquityCombination,
   };
 }
 
@@ -1552,28 +1586,65 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
 ): Promise<{ chosen: T; index: number } | null> {
   if (!combinations.length) return null;
   const manager = await loadAquecedorTurnManager(supabase, connected);
-  const eligible: Array<{ combo: T; index: number; score: number }> = [];
+  let eligible: Array<{ combo: T; index: number }> = [];
 
   for (let index = 0; index < combinations.length; index += 1) {
     const combo = combinations[index];
     if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino)) continue;
-    eligible.push({
-      combo,
-      index,
-      score: manager.scoreCombination(
-        combo.instancia_origem,
-        combo.instancia_destino,
-        index,
-        startIndex,
-      ),
-    });
+    eligible.push({ combo, index });
   }
 
   if (!eligible.length) return null;
 
-  eligible.sort((a, b) => a.score - b.score);
-  const bestScore = eligible[0].score;
-  const ties = eligible.filter((item) => item.score === bestScore);
+  const instanceCount = Math.max(2, connected.length);
+  const maxUndirectedPairShare = Math.max(0.5, 2 / instanceCount);
+  const totalDirectedSends = manager.getTotalDirectedSendCount();
+  if (totalDirectedSends >= instanceCount) {
+    const nonSaturated = eligible.filter(({ combo }) => {
+      const pairTotal = manager.getUndirectedPairSendTotal(
+        combo.instancia_origem,
+        combo.instancia_destino,
+      );
+      return pairTotal / totalDirectedSends <= maxUndirectedPairShare;
+    });
+    if (nonSaturated.length) {
+      eligible = nonSaturated;
+    }
+  }
+
+  let minDirected = Number.POSITIVE_INFINITY;
+  let minOriginSend = Number.POSITIVE_INFINITY;
+  let minDestReceive = Number.POSITIVE_INFINITY;
+  for (const { combo } of eligible) {
+    minDirected = Math.min(
+      minDirected,
+      manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino),
+    );
+    minOriginSend = Math.min(minOriginSend, manager.getOriginSendCount(combo.instancia_origem));
+    minDestReceive = Math.min(minDestReceive, manager.getDestReceiveCount(combo.instancia_destino));
+  }
+  if (!Number.isFinite(minDirected)) minDirected = 0;
+  if (!Number.isFinite(minOriginSend)) minOriginSend = 0;
+  if (!Number.isFinite(minDestReceive)) minDestReceive = 0;
+
+  const equityBaseline = { minDirected, minOriginSend, minDestReceive };
+  const scored: Array<{ combo: T; index: number; score: number }> = eligible.map(
+    ({ combo, index }) => ({
+      combo,
+      index,
+      score: manager.scoreEquityCombination(
+        combo.instancia_origem,
+        combo.instancia_destino,
+        index,
+        startIndex,
+        equityBaseline,
+      ),
+    }),
+  );
+
+  scored.sort((a, b) => a.score - b.score);
+  const bestScore = scored[0].score;
+  const ties = scored.filter((item) => item.score === bestScore);
   const base = ((startIndex % ties.length) + ties.length) % ties.length;
   const picked = ties[base];
   return { chosen: picked.combo, index: picked.index };

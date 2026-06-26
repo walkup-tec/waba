@@ -16,10 +16,10 @@ Remover botão "Tentar agora" do modal de deploy; adicionar gráfico com movimen
 - Label de fase: "Atualizando serviços" → "Confirmando estabilidade (n/4)" → "Sistema normalizado".
 
 ### Lógica de fechamento
-- Poll a cada 2,5s em `/health` **e** `/ready`.
+- Poll a cada 2s em `/health` **e** `/ready`.
 - Estável = HTTP 200, `ok: true`, sem `shuttingDown`, sem `maintenanceMode`, e `/ready` com `ready: true`.
-- Exige **4 probes estáveis consecutivos** (~10s) antes de fechar (evita fechar no primeiro 200 durante rolling deploy).
-- Após estabilizar: breve estado "Sistema normalizado" (480ms) e fade do overlay.
+- Exige **3 probes estáveis consecutivos** (~6s); se cair no meio, zera a contagem.
+- Após estabilizar: breve estado "Sistema normalizado" (500ms) e fade do overlay.
 - Poll **não para** após 3 min — continua verificando; mensagem informa demora prolongada.
 
 ## Validar

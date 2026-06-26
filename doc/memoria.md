@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-21
 
-**WABA — Overlay deploy animado + estabilização:** sem botão Tentar agora; ícone/orbitas/barra; fecha só após 4 probes OK em `/health`+`/ready`. Marker `DEPLOY-2026-06-21-deploy-overlay-estabilizacao-ui`. Ver `doc/LOG-2026-06-21__deploy-overlay-estabilizacao-ui.md`.
+**WABA — Overlay deploy (3 probes / 2s):** poll `/health`+`/ready` a cada 2s; 3 verificações estáveis; fecha após 500ms "Sistema normalizado". Marker `DEPLOY-2026-06-21-deploy-overlay-3probes-aquecedor-equidade-v2`. Ver `doc/LOG-2026-06-21__deploy-overlay-estabilizacao-ui.md`.
+
+**WABA — Aquecedor equidade ciclo v2:** score por menor uso (aresta/origem/destino), filtro saturação de par >50%, owesPairReply só desempate. Ver `doc/LOG-2026-06-21__aquecedor-equidade-ciclo-v2.md`.
 
 **WABA — Auto-update sem refresh de UI:** timer 15s usa `carregar({ silent: true })`; cache em background sem re-render de forms/listas. Marker `DEPLOY-2026-06-21-auto-update-sem-refresh-ui`. Ver `doc/LOG-2026-06-21__auto-update-sem-refresh-ui.md`.
 
