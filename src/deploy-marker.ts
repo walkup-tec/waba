@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-26-operacional-email-await-audit";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-26-deploy-overlay-somente-producao";

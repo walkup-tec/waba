@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-26
 
+**WABA — Overlay deploy só produção:** resiliência de deploy desativada em localhost/IP privado; overlay só com 502/503/504 ou `shuttingDown` em `*.draxsistemas.com.br`. Marker `DEPLOY-2026-06-26-deploy-overlay-somente-producao`. Ver `doc/LOG-2026-06-26__deploy-overlay-somente-producao.md`.
+
 **WABA — E-mail operacional await + auditoria:** notify síncrono no intake, `operacionalNotifyAudit`, reenvio admin, toast no wizard; marker `DEPLOY-2026-06-26-operacional-email-await-audit`. Campanha Oficial → operacional Oficial (V02: digitalcorban, não somaconecta). Ver `doc/LOG-2026-06-26__operacional-email-await-audit-reenvio.md`.
 
 **WABA — Deploy sem Bad Gateway (UX):** service worker cache da shell, overlay “atualizando sistema”, graceful shutdown SIGTERM + gate 503. Marker `DEPLOY-2026-06-26-deploy-zero-downtime-ux`. Ver `doc/LOG-2026-06-26__deploy-zero-downtime-ux.md`.

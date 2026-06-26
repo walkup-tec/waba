@@ -16,6 +16,22 @@
         var MAX_WAIT_MS = 180000;
         var pollTimer = null;
         var pollStartedAt = 0;
+        var deployRecoveryActive = false;
+
+        function isProductionDeployHost() {
+          var host = String(window.location.hostname || "").toLowerCase();
+          if (!host || host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
+            return false;
+          }
+          if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host)) {
+            return false;
+          }
+          return host === "waba.draxsistemas.com.br" || host.endsWith(".draxsistemas.com.br");
+        }
+
+        function isDeployResilienceEnabled() {
+          return isProductionDeployHost();
+        }
 
         function resolveBasePath() {
           var base = String(window.WABA_BASE_PATH || "").replace(/\/$/, "");
@@ -61,6 +77,7 @@
         }
 
         function showDeployOverlay(message) {
+          if (!isDeployResilienceEnabled()) return;
           var el = ensureOverlay();
           if (!el) return;
           var msgEl = document.getElementById("waba-deploy-overlay-message");
@@ -87,29 +104,36 @@
               cache: "no-store",
               credentials: "same-origin",
             });
-            if (!response.ok) {
-              if (isGatewayStatus(response.status)) return false;
-              try {
-                var data = await response.json();
-                if (data && data.shuttingDown) return false;
-              } catch (_) {
-                return false;
-              }
+            if (response.ok) {
+              return { ready: true, deploySignal: false };
             }
-            return response.ok;
+            if (isGatewayStatus(response.status)) {
+              return { ready: false, deploySignal: true };
+            }
+            try {
+              var data = await response.json();
+              if (data && data.shuttingDown) {
+                return { ready: false, deploySignal: true };
+              }
+            } catch (_) {}
+            return { ready: false, deploySignal: false };
           } catch (_) {
-            return false;
+            return { ready: false, deploySignal: false };
           }
         }
 
         async function pollUntilReady(force) {
+          if (!isDeployResilienceEnabled()) return;
+          if (force) deployRecoveryActive = true;
+          if (!deployRecoveryActive) return;
           if (!force && pollTimer) return;
           if (!pollStartedAt || force) pollStartedAt = Date.now();
           showDeployOverlay();
-          var ok = await probeHealth();
-          if (ok) {
+          var probe = await probeHealth();
+          if (probe.ready) {
             hideDeployOverlay();
             pollStartedAt = 0;
+            deployRecoveryActive = false;
             return;
           }
           if (Date.now() - pollStartedAt >= MAX_WAIT_MS) {
@@ -124,14 +148,22 @@
           }, POLL_MS);
         }
 
+        function startDeployRecovery(force) {
+          if (!isDeployResilienceEnabled()) return;
+          deployRecoveryActive = true;
+          void pollUntilReady(!!force);
+        }
+
         window.wabaDeployResilience = {
           show: showDeployOverlay,
           hide: hideDeployOverlay,
           pollUntilReady: pollUntilReady,
+          startDeployRecovery: startDeployRecovery,
           isGatewayStatus: isGatewayStatus,
+          isEnabled: isDeployResilienceEnabled,
         };
 
-        if ("serviceWorker" in navigator) {
+        if ("serviceWorker" in navigator && isDeployResilienceEnabled()) {
           window.addEventListener("load", function () {
             navigator.serviceWorker
               .register(resolveSwUrl(), { scope: resolveSwScope() })
@@ -140,8 +172,9 @@
         }
 
         document.addEventListener("DOMContentLoaded", function () {
-          void probeHealth().then(function (ok) {
-            if (!ok) void pollUntilReady(false);
+          if (!isDeployResilienceEnabled()) return;
+          void probeHealth().then(function (probe) {
+            if (!probe.ready && probe.deploySignal) startDeployRecovery(false);
           });
         });
       })();
@@ -32612,26 +32645,20 @@
               const resilience = window.wabaDeployResilience;
               if (
                 resilience &&
+                typeof resilience.isEnabled === "function" &&
+                resilience.isEnabled() &&
                 typeof resilience.isGatewayStatus === "function" &&
                 resilience.isGatewayStatus(res.status) &&
                 !/\/health(\?|$)/.test(path) &&
-                !/\/ready(\?|$)/.test(path)
+                !/\/ready(\?|$)/.test(path) &&
+                typeof resilience.startDeployRecovery === "function"
               ) {
-                resilience.pollUntilReady(false);
+                resilience.startDeployRecovery(false);
               }
               resolve(res);
             })
             .catch((err) => {
               clearTimeout(timer);
-              const path = String(url || "");
-              const resilience = window.wabaDeployResilience;
-              if (
-                resilience &&
-                !/\/health(\?|$)/.test(path) &&
-                !/\/ready(\?|$)/.test(path)
-              ) {
-                resilience.pollUntilReady(false);
-              }
               reject(err);
             });
         });
