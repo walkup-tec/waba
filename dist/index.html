@@ -30135,10 +30135,9 @@
 
       function syncDisparosCampanhasListLayout() {
         const tab = document.getElementById("tab-disparos");
-        const campanhasSide = document.querySelector(".disparos-side-campanhas");
-        const resumoSide = document.querySelector(".disparos-side-resumo");
         const list = document.getElementById("disparos-list");
-        if (!tab || tab.classList.contains("tab-hidden") || !campanhasSide || !resumoSide || !list) {
+        const resumoGrid = document.querySelector(".disparos-resumo-grid");
+        if (!tab || tab.classList.contains("tab-hidden") || !list || !resumoGrid) {
           return;
         }
         if (window.matchMedia("(max-width: 992px)").matches) {
@@ -30146,36 +30145,27 @@
           list.style.minHeight = "";
           return;
         }
-        const resumoHeight = Math.round(resumoSide.getBoundingClientRect().height);
-        if (resumoHeight < 1) return;
-        const campanhasStyle = window.getComputedStyle(campanhasSide);
-        const padTop = parseFloat(campanhasStyle.paddingTop) || 0;
-        const padBottom = parseFloat(campanhasStyle.paddingBottom) || 0;
-        let used = padTop + padBottom;
-        campanhasSide.querySelectorAll(":scope > *:not(#disparos-list)").forEach((el) => {
-          if (el.hidden || el.getAttribute("aria-hidden") === "true") return;
-          const style = window.getComputedStyle(el);
-          if (style.display === "none" || style.visibility === "hidden") return;
-          used += el.getBoundingClientRect().height;
-          used += parseFloat(style.marginTop) || 0;
-          used += parseFloat(style.marginBottom) || 0;
-        });
-        const listHeight = Math.max(160, resumoHeight - used);
-        list.style.minHeight = `${listHeight}px`;
-        list.style.maxHeight = `${listHeight}px`;
+        const gridHeight = Math.round(resumoGrid.getBoundingClientRect().height);
+        if (gridHeight < 1) return;
+        list.style.minHeight = "";
+        list.style.maxHeight = `${Math.max(160, gridHeight)}px`;
       }
 
       function initDisparosCampanhasLayoutSync() {
         if (disparosCampanhasLayoutObserver) return;
-        const resumoSide = document.querySelector(".disparos-side-resumo");
-        const campanhasSide = document.querySelector(".disparos-side-campanhas");
-        if (!resumoSide || !campanhasSide || typeof ResizeObserver !== "function") return;
+        const resumoGrid = document.querySelector(".disparos-resumo-grid");
+        const saldosCard = document.getElementById("disparos-resumo-disponiveis-card");
+        const totalRow = document.getElementById("disparos-resumo-total-row");
+        const creditsNudge = document.getElementById("disparos-credits-nudge");
+        if (!resumoGrid || typeof ResizeObserver !== "function") return;
         const schedule = () => {
           window.requestAnimationFrame(() => syncDisparosCampanhasListLayout());
         };
         disparosCampanhasLayoutObserver = new ResizeObserver(schedule);
-        disparosCampanhasLayoutObserver.observe(resumoSide);
-        disparosCampanhasLayoutObserver.observe(campanhasSide);
+        disparosCampanhasLayoutObserver.observe(resumoGrid);
+        if (saldosCard) disparosCampanhasLayoutObserver.observe(saldosCard);
+        if (totalRow) disparosCampanhasLayoutObserver.observe(totalRow);
+        if (creditsNudge) disparosCampanhasLayoutObserver.observe(creditsNudge);
         window.addEventListener("resize", schedule);
         schedule();
       }

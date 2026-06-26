@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-25
 
+**WABA — Lista campanhas altura (fix):** max-height alinhada ao bloco `.disparos-resumo-grid` (cards saldo/resumo); marker `DEPLOY-2026-06-25-disparos-campanhas-list-height-resumo-grid`. Ver `doc/LOG-2026-06-25__disparos-campanhas-lista-altura-dinamica.md`.
+
 **WABA — Dashboard Aquecedor cache rápido:** localStorage (30 min) + cache TTL 45s no backend `/dados`; hidratação no login e render imediato; marker `DEPLOY-2026-06-25-aquecedor-dashboard-dados-cache`. Ver `doc/LOG-2026-06-25__aquecedor-dashboard-dados-cache.md`.
 
 **WABA — Lista campanhas altura dinâmica:** igual ao card Resumo (Oficial + Alternativa); marker `DEPLOY-2026-06-25-disparos-campanhas-list-height-sync`. Ver `doc/LOG-2026-06-25__disparos-campanhas-lista-altura-dinamica.md`.

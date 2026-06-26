@@ -1,23 +1,23 @@
-# LOG: Disparos — altura dinâmica lista de campanhas = card Resumo
+# LOG: Disparos — altura máxima lista de campanhas = cards de saldo/resumo
 
 ## Pedido
 
-Listagem de campanhas (API Oficial e Alternativa) deve ser dinâmica e ter a mesma altura do card **Resumo** ao lado.
+Listagem de campanhas (API Oficial e Alternativa) com altura máxima igual aos cards de saldo total ao lado (bloco Enviados + Em fila + Saldos).
 
 ## Causa
 
-- `.list-wrapper` global impunha `max-height: 420px` em `#disparos-list`.
-- Colunas do grid não repassavam altura via flex de forma consistente.
+- Implementação anterior usava altura da coluna `.disparos-side-resumo` inteira (título + nudge), deixando a lista mais alta que o bloco de cards.
+- `minHeight` forçado alongava a lista mesmo com poucas campanhas.
 
 ## Solução
 
-1. **CSS:** `#disparos-list` sem teto fixo; flex `1 1 auto` dentro de `.disparos-side-campanhas`; grid `align-items: stretch`.
-2. **JS:** `syncDisparosCampanhasListLayout()` calcula altura útil da lista = altura do card Resumo − cabeçalhos/rodapés da coluna Campanhas.
-3. **ResizeObserver** em Resumo + Campanhas; re-sync após carregar/renderizar campanhas e ao mudar aba.
+1. **CSS:** `#disparos-list` com scroll interno; sem `max-height` fixo global.
+2. **JS:** `syncDisparosCampanhasListLayout()` usa `.disparos-resumo-grid` como referência; só `maxHeight` (sem `minHeight`).
+3. **ResizeObserver** no grid, card Saldos, linha Total disponível e nudge de créditos.
 
-Marker: `DEPLOY-2026-06-25-disparos-campanhas-list-height-sync`
+Marker: `DEPLOY-2026-06-25-disparos-campanhas-list-height-resumo-grid`
 
 ## Validar
 
-Desktop (>992px): API Oficial e Alternativa — lista com scroll interno, mesma altura visual que Resumo.
+Desktop (>992px): API Oficial e Alternativa — lista com scroll, altura máxima alinhada ao bloco de cards de resumo/saldo.
 Mobile: lista cresce naturalmente (sem altura forçada).
