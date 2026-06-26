@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-21-deploy-overlay-3probes-aquecedor-equidade-v2";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-21-auto-update-label-sistema-atualizado";
