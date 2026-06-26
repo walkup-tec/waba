@@ -3,23 +3,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.peekWabaShortPublicBaseUrl = void 0;
 exports.createWabaShortUrl = createWabaShortUrl;
 exports.resolveWabaShortRedirect = resolveWabaShortRedirect;
 exports.fetchWabaShortUrlClicks = fetchWabaShortUrlClicks;
 exports.isWabaManagedShortUrl = isWabaManagedShortUrl;
 const crypto_1 = __importDefault(require("crypto"));
+const waba_public_base_url_1 = require("../lib/waba-public-base-url");
+Object.defineProperty(exports, "peekWabaShortPublicBaseUrl", { enumerable: true, get: function () { return waba_public_base_url_1.peekWabaShortPublicBaseUrl; } });
 const waba_shortener_repository_1 = require("./waba-shortener.repository");
-function resolveWabaShortPublicBase() {
-    const explicit = String(process.env.WABA_SHORT_PUBLIC_BASE ||
-        process.env.BASE_SHORT_DOMAIN ||
-        process.env.WABA_SHORTENER_PUBLIC_BASE ||
-        "")
-        .trim()
-        .replace(/\/+$/, "");
-    if (explicit)
-        return explicit;
-    const port = String(process.env.PORT || "3000").trim();
-    return `http://localhost:${port}`;
+function buildPublicShortUrl(slug, hints) {
+    (0, waba_public_base_url_1.rememberPublicBaseFromRequest)(hints);
+    const base = (0, waba_public_base_url_1.resolveWabaShortPublicBaseUrl)(hints);
+    return `${base}/s/${slug}`;
 }
 function deriveSlugFromLongUrl(longUrl) {
     const nonceMatch = longUrl.match(/_n8n_link_nonce=([^&]+)/i) ||
@@ -29,10 +25,6 @@ function deriveSlugFromLongUrl(longUrl) {
     if (clean)
         return (0, waba_shortener_repository_1.normalizeSlug)(`n${clean.slice(-7)}`);
     return (0, waba_shortener_repository_1.randomSlug)(7);
-}
-function buildPublicShortUrl(slug) {
-    const base = resolveWabaShortPublicBase();
-    return `${base}/s/${slug}`;
 }
 async function createWabaShortUrl(longUrl, options = {}) {
     const safeLongUrl = String(longUrl || "").trim();
@@ -53,7 +45,7 @@ async function createWabaShortUrl(longUrl, options = {}) {
                 longUrl: safeLongUrl,
                 tenantId: options.tenantId,
             });
-            return buildPublicShortUrl(record.slug);
+            return buildPublicShortUrl(record.slug, options.publicBaseHints);
         }
         catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error?.message || "Falha ao criar slug"));
@@ -80,7 +72,10 @@ function isWabaManagedShortUrl(shortUrl) {
     const slug = (0, waba_shortener_repository_1.extractSlugFromPublicShortUrl)(shortUrl);
     if (!slug)
         return false;
-    const base = resolveWabaShortPublicBase().toLowerCase();
+    const peek = (0, waba_public_base_url_1.peekWabaShortPublicBaseUrl)();
+    const base = String(peek.base || "").toLowerCase();
+    if (!base)
+        return String(shortUrl || "").toLowerCase().includes("/s/");
     try {
         const u = new URL(String(shortUrl || "").trim());
         const shortBase = new URL(base);

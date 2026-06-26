@@ -67,6 +67,7 @@ const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-ca
 const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
 const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
+const waba_public_base_url_1 = require("./lib/waba-public-base-url");
 const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
 const waba_dispatches_api_kind_1 = require("./disparos/waba-dispatches-api-kind");
@@ -381,6 +382,7 @@ app.get("/health", (_req, res) => {
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
         evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+        shortPublicBase: (0, waba_shortener_service_1.peekWabaShortPublicBaseUrl)(),
         dataPersistence: (0, production_data_persistence_service_1.getProductionDataPersistenceSnapshot)(),
     });
 });
@@ -5627,14 +5629,17 @@ async function callOpenAiGenerateMessage(input) {
     }
     throw new Error(lastError);
 }
-async function shortenUrlWithProvider(longUrl, provider, customDomain = "") {
+async function shortenUrlWithProvider(longUrl, provider, customDomain = "", publicBaseHints) {
     const safeLongUrl = String(longUrl || "").trim();
     if (!safeLongUrl) {
         throw new Error("URL original é obrigatória.");
     }
     if (provider === "waba") {
         try {
-            return await (0, waba_shortener_service_1.createWabaShortUrl)(safeLongUrl, { tenantId: "disparador" });
+            return await (0, waba_shortener_service_1.createWabaShortUrl)(safeLongUrl, {
+                tenantId: "disparador",
+                publicBaseHints,
+            });
         }
         catch (error) {
             throw new Error(String(error?.message || "Falha no encurtador WABA."));
@@ -7664,6 +7669,7 @@ app.post("/disparos/shorten", async (req, res) => {
     try {
         const longUrl = String(req.body?.longUrl || "").trim();
         const domain = ""; // domínio custom removido da UI por simplicidade operacional
+        const publicBaseHints = (0, waba_public_base_url_1.publicBaseHintsFromExpressRequest)(req);
         if (!/^https?:\/\//i.test(longUrl)) {
             return res.status(400).json({ error: "longUrl deve ser uma URL válida." });
         }
@@ -7676,7 +7682,7 @@ app.post("/disparos/shorten", async (req, res) => {
             const candidateUrl = attempt === 1 ? longUrl : appendAntiRepeatParam(longUrl, attempt);
             for (const provider of providers) {
                 try {
-                    const candidateShort = await shortenUrlWithProvider(candidateUrl, provider, domain);
+                    const candidateShort = await shortenUrlWithProvider(candidateUrl, provider, domain, publicBaseHints);
                     shortUrl = candidateShort;
                     finalLongUrl = candidateUrl;
                     providerUsed = provider;

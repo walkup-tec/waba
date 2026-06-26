@@ -44,8 +44,13 @@ import {
   createWabaShortUrl,
   fetchWabaShortUrlClicks,
   isWabaManagedShortUrl,
+  peekWabaShortPublicBaseUrl,
   resolveWabaShortRedirect,
 } from "./shortener/waba-shortener.service";
+import {
+  publicBaseHintsFromExpressRequest,
+  type WabaPublicBaseRequestHints,
+} from "./lib/waba-public-base-url";
 import { WabaSystemUserService } from "./users/waba-system-user.service";
 import { registerWabaCampaignIntakeRoutes } from "./disparos/waba-campaign-intake.routes";
 import {
@@ -444,6 +449,7 @@ app.get("/health", (_req, res) => {
     evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),
     evoTlsInsecure: isEvoTlsInsecure(),
     evoHttpTimeoutMs: defaultEvoHttpTimeoutMs(),
+    shortPublicBase: peekWabaShortPublicBaseUrl(),
     dataPersistence: getProductionDataPersistenceSnapshot(),
   });
 });
@@ -6765,7 +6771,8 @@ async function callOpenAiGenerateMessage(input: {
 async function shortenUrlWithProvider(
   longUrl: string,
   provider: DisparosConfig["shortenerProvider"],
-  customDomain = ""
+  customDomain = "",
+  publicBaseHints?: WabaPublicBaseRequestHints,
 ) {
   const safeLongUrl = String(longUrl || "").trim();
   if (!safeLongUrl) {
@@ -6773,7 +6780,10 @@ async function shortenUrlWithProvider(
   }
   if (provider === "waba") {
     try {
-      return await createWabaShortUrl(safeLongUrl, { tenantId: "disparador" });
+      return await createWabaShortUrl(safeLongUrl, {
+        tenantId: "disparador",
+        publicBaseHints,
+      });
     } catch (error: any) {
       throw new Error(String(error?.message || "Falha no encurtador WABA."));
     }
@@ -8934,6 +8944,7 @@ app.post("/disparos/shorten", async (req, res) => {
   try {
     const longUrl = String(req.body?.longUrl || "").trim();
     const domain = ""; // domínio custom removido da UI por simplicidade operacional
+    const publicBaseHints = publicBaseHintsFromExpressRequest(req);
     if (!/^https?:\/\//i.test(longUrl)) {
       return res.status(400).json({ error: "longUrl deve ser uma URL válida." });
     }
@@ -8952,7 +8963,8 @@ app.post("/disparos/shorten", async (req, res) => {
           const candidateShort = await shortenUrlWithProvider(
             candidateUrl,
             provider,
-            domain
+            domain,
+            publicBaseHints,
           );
           shortUrl = candidateShort;
           finalLongUrl = candidateUrl;
