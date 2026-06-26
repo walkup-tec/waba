@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-26
 
-**WABA — Encurtador URL pública (sem localhost):** fallback `WABA_PUBLIC_BASE_URL` + host do proxy; `/health` → `shortPublicBase`. Marker `DEPLOY-2026-06-26-shortener-url-publica-producao`. Configurar `WABA_SHORT_PUBLIC_BASE` ou `WABA_PUBLIC_BASE_URL` no Easypanel. Ver `doc/LOG-2026-06-26__shortener-url-publica-producao.md`.
+**WABA — Salvar config Disparador 1 clique:** fix blur/click no botão; pausa auto-refresh em disparos/disparo-evo. Marker `DEPLOY-2026-06-26-disparos-salvar-config-primeiro-clique`. Ver `doc/LOG-2026-06-26__disparos-salvar-config-primeiro-clique.md`.
+
+**WABA — Encurtador URL pública (sem localhost):** fallback `WABA_PUBLIC_BASE_URL` + host do proxy; `/health` → `shortPublicBase`. Marker `DEPLOY-2026-06-26-shortener-url-publica-producao`. Ver `doc/LOG-2026-06-26__shortener-url-publica-producao.md`.
 
 **WABA — Relatório operacional inputs editáveis:** formulário destacado, sem duplicar métricas no preview, reset ao fechar modal, foco automático. Marker `DEPLOY-2026-06-26-operacional-relatorio-inputs-editaveis`. Ver `doc/LOG-2026-06-26__operacional-relatorio-inputs-editaveis.md`.
 

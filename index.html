@@ -16849,6 +16849,8 @@
         "admin-usuarios",
         "admin-financeiro",
         "aquecedor",
+        "disparos",
+        "disparo-evo",
       ]);
 
       function isAdminFormEditingTab(tab = activeTab) {
@@ -28170,6 +28172,7 @@
       const disparosSectionCollapsedState = {};
       const disparosSectionSavedState = {};
       let disparosActiveSectionIndex = 0;
+      let disparosConfigSaveInFlight = false;
       let messengerProductsCache = [];
 
       function showToast(message, type = "success", timeoutMs = 3200) {
@@ -30084,6 +30087,49 @@
         applyDisparosSectionLayout();
       }
 
+      function bindDisparosSectionSaveButton(saveBtn, section, sectionKey, title) {
+        if (!saveBtn || saveBtn.dataset.disSaveBound === "1") return;
+        saveBtn.dataset.disSaveBound = "1";
+        saveBtn.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+        });
+        saveBtn.addEventListener("click", async () => {
+          if (disparosConfigSaveInFlight) return;
+          const original = saveBtn.textContent;
+          saveBtn.textContent = "Salvando...";
+          saveBtn.setAttribute("disabled", "true");
+          const ok = await saveDisparosConfig({
+            collapseAll: false,
+            useMainButtonLoading: false,
+            skipWhatsappValidation: true,
+            skipRequiredValidation: true,
+          });
+          saveBtn.textContent = original || "Salvar configurações";
+          saveBtn.removeAttribute("disabled");
+          if (!ok) return;
+          if (/mensageiro/i.test(title)) hideMessengerLibrarySavePanel();
+          disparosSectionSavedState[sectionKey] = true;
+          disparosSectionCollapsedState[sectionKey] = true;
+          const flowSections = getDisparosFlowSections();
+          const flowIdx = flowSections.indexOf(section);
+          if (flowIdx >= 0 && flowIdx + 1 < flowSections.length) {
+            const nextSection = flowSections[flowIdx + 1];
+            const nextKey = String(
+              nextSection.dataset.sectionKey ||
+                `section-${Array.from(
+                  document.querySelectorAll("#disparos-config-area .aquecedor-section")
+                ).indexOf(nextSection) + 1}`
+            );
+            disparosSectionCollapsedState[nextKey] = false;
+            disparosActiveSectionIndex = Array.from(
+              document.querySelectorAll("#disparos-config-area .aquecedor-section")
+            ).indexOf(nextSection);
+          }
+          applyDisparosSectionLayout();
+        });
+      }
+
       function initDisparosSectionLayout() {
         if (disparosSectionLayoutInitialized) {
           applyDisparosSectionLayout();
@@ -30147,37 +30193,7 @@
           saveRow.innerHTML = `<button type="button" class="dis-section-save-btn" data-section-key="${sectionKey}">Salvar configurações</button>`;
           body.appendChild(saveRow);
           const saveBtn = saveRow.querySelector(".dis-section-save-btn");
-          if (saveBtn) {
-            saveBtn.addEventListener("click", async () => {
-              const original = saveBtn.textContent;
-              saveBtn.textContent = "Salvando...";
-              saveBtn.setAttribute("disabled", "true");
-              const ok = await saveDisparosConfig({
-                collapseAll: false,
-                useMainButtonLoading: false,
-                skipWhatsappValidation: true,
-                skipRequiredValidation: true,
-              });
-              saveBtn.textContent = original || "Salvar configurações";
-              saveBtn.removeAttribute("disabled");
-              if (!ok) return;
-              if (/mensageiro/i.test(title)) hideMessengerLibrarySavePanel();
-              disparosSectionSavedState[sectionKey] = true;
-              disparosSectionCollapsedState[sectionKey] = true;
-              const flowSections = getDisparosFlowSections();
-              const flowIdx = flowSections.indexOf(section);
-              if (flowIdx >= 0 && flowIdx + 1 < flowSections.length) {
-                const nextSection = flowSections[flowIdx + 1];
-                const nextKey = String(
-                  nextSection.dataset.sectionKey ||
-                    `section-${sections.indexOf(nextSection) + 1}`
-                );
-                disparosSectionCollapsedState[nextKey] = false;
-                disparosActiveSectionIndex = sections.indexOf(nextSection);
-              }
-              applyDisparosSectionLayout();
-            });
-          }
+          bindDisparosSectionSaveButton(saveBtn, section, sectionKey, title);
 
           section.dataset.sectionReady = "1";
         });
@@ -30233,6 +30249,7 @@
         const silent = Boolean(options.silent);
         const intakeOnly = isDisparosCampanhasIntakeOnlyUi();
         const statusLabel = document.getElementById("disparos-status-label");
+        if (disparosConfigSaveInFlight) return;
         if (statusLabel && !intakeOnly) {
           statusLabel.textContent = "Carregando…";
         }
@@ -30293,6 +30310,7 @@
       }
 
       async function saveDisparosConfig(options = {}) {
+        if (disparosConfigSaveInFlight) return false;
         const btn = document.getElementById("dis-save-btn");
         const statusLabel = document.getElementById("disparos-status-label");
         const original = btn?.textContent || "Salvar";
@@ -30361,11 +30379,13 @@
           btn.textContent = "Salvando...";
           btn.setAttribute("disabled", "true");
         }
+        disparosConfigSaveInFlight = true;
         try {
           const response = await fetchWithTimeout(
             "/disparos/config",
             {
               method: "POST",
+              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ config: getDisparosFormValues(), allowPartialSave }),
             },
@@ -30387,6 +30407,7 @@
           showToast("Erro ao salvar configuração do Disparador.", "error");
           return false;
         } finally {
+          disparosConfigSaveInFlight = false;
           if (useMainButtonLoading && btn) {
             btn.textContent = original;
             btn.removeAttribute("disabled");
@@ -38138,7 +38159,13 @@
       }
 
       const disSaveBtn = document.getElementById("dis-save-btn");
-      if (disSaveBtn) disSaveBtn.addEventListener("click", () => saveDisparosConfig());
+      if (disSaveBtn) {
+        disSaveBtn.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+        });
+        disSaveBtn.addEventListener("click", () => saveDisparosConfig());
+      }
 
       const disTestShortenerBtn = document.getElementById("dis-test-shortener-btn");
       if (disTestShortenerBtn) {
