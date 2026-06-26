@@ -248,10 +248,18 @@ export const notifyOperacionalNewCampaignEmail = (input: {
   createdAtLabel: string;
   apiKindLabel: string;
 }): void => {
-  void deliverOperacionalNewCampaignEmail(input).catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[mail] operacional nova campanha (async):", message);
-  });
+  void deliverOperacionalNewCampaignEmail(input)
+    .then((result) => {
+      if (result.status === "skipped") {
+        console.warn(`[mail] ${result.message}`);
+      } else if (result.status === "failed") {
+        console.error(`[mail] operacional nova campanha (async): ${result.message}`);
+      }
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[mail] operacional nova campanha (async):", message);
+    });
 };
 
 export const notifySubscriberWelcomeEmail = (input: {

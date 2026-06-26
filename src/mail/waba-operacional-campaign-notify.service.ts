@@ -6,7 +6,7 @@ import {
 import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
-import { notifyOperacionalNewCampaignEmail } from "./waba-mail-delivery";
+import { deliverOperacionalNewCampaignEmail } from "./waba-mail-delivery";
 
 const formatCreatedAtLabel = (iso: string): string => {
   const value = String(iso ?? "").trim();
@@ -33,11 +33,23 @@ const resolveApiKind = (intake: WabaCampaignIntake): WabaDispatchesApiKind =>
   resolveIntakeApiKindFromIntake(intake);
 
 export const notifyOperacionalStaffOnCampaignCreated = (intake: WabaCampaignIntake): void => {
+  setImmediate(() => {
+    void notifyOperacionalStaffOnCampaignCreatedAsync(intake).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[mail] campanha ${intake.id}: falha ao notificar operacional:`, message);
+    });
+  });
+};
+
+const notifyOperacionalStaffOnCampaignCreatedAsync = async (
+  intake: WabaCampaignIntake,
+): Promise<void> => {
   const apiKind = resolveApiKind(intake);
   const operacionais = new WabaSystemUserService().listOperacionalUsersForDispatchesApi(apiKind);
   if (!operacionais.length) {
     console.warn(
-      `[mail] campanha ${intake.id}: nenhum usuário operacional designado para ${apiKind}.`,
+      `[mail] campanha ${intake.id}: nenhum usuário operacional designado para ${apiKind}. ` +
+        "Verifique Admin · Usuários → operacionalDispatchesApi.",
     );
     return;
   }
@@ -48,16 +60,31 @@ export const notifyOperacionalStaffOnCampaignCreated = (intake: WabaCampaignInta
   const plannedSendCount = resolvePlannedSendCount(intake);
   const apiKindLabel = WABA_DISPATCHES_API_LABELS[apiKind];
 
-  for (const operacional of operacionais) {
-    notifyOperacionalNewCampaignEmail({
-      operacionalEmail: operacional.email,
-      operacionalName: operacional.fullName,
-      campaignId: intake.id,
-      campaignName: intake.campaignName,
-      subscriberId,
-      plannedSendCount,
-      createdAtLabel,
-      apiKindLabel,
-    });
+  console.log(
+    `[mail] campanha ${intake.id} (${apiKindLabel}): notificando ${operacionais.length} operacional(is): ` +
+      operacionais.map((user) => user.email).join(", "),
+  );
+
+  const results = await Promise.all(
+    operacionais.map((operacional) =>
+      deliverOperacionalNewCampaignEmail({
+        operacionalEmail: operacional.email,
+        operacionalName: operacional.fullName,
+        campaignId: intake.id,
+        campaignName: intake.campaignName,
+        subscriberId,
+        plannedSendCount,
+        createdAtLabel,
+        apiKindLabel,
+      }),
+    ),
+  );
+
+  for (const result of results) {
+    if (result.status === "skipped") {
+      console.warn(`[mail] ${result.message}`);
+    } else if (result.status === "failed") {
+      console.error(`[mail] operacional nova campanha: ${result.message}`);
+    }
   }
 };

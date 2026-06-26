@@ -211,6 +211,7 @@ export class WabaSystemUserService {
   listOperacionalUsersForDispatchesApi(apiKind: WabaDispatchesApiKind): WabaSystemUser[] {
     return this.repository
       .list()
+      .map((user) => this.ensureUserMigrated(user))
       .filter(
         (user) =>
           user.role === "operacional" && user.operacionalDispatchesApi === apiKind,

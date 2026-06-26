@@ -94,6 +94,7 @@ import {
   WABA_CAMPAIGN_INTAKE_API_VERSION,
   WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
 } from "./disparos/waba-campaign-intake.constants";
+import { wabaMailService } from "./mail/waba-mail.service";
 
 const app = express();
 app.use(stripBasePathMiddleware);
@@ -420,6 +421,8 @@ app.get("/health", (_req, res) => {
     deployMarker: WABA_DEPLOY_MARKER,
     campaignIntakeApiVersion: WABA_CAMPAIGN_INTAKE_API_VERSION,
     campaignIntakeSafeParser: WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
+    mailConfigured: wabaMailService.isConfigured(),
+    operacionalCampaignNotifyEnabled: true,
     wabaEnv: WABA_ENV,
     uiProfile: resolveUiProfile(),
     featureFlags: getWabaFeatureFlagsForClient(),
@@ -1339,6 +1342,7 @@ async function loadAquecedorTurnManager(
   const instanceStats = new Map<string, AquecedorInstanceTurnStats>();
   const pairLastSender = new Map<string, string>();
   const pairStates = new Map<string, AquecedorPairConversationState>();
+  const directedSendCounts = new Map<string, number>();
 
   const ensureStats = (canonical: string): AquecedorInstanceTurnStats => {
     const key = canonical.toLowerCase();
@@ -1378,6 +1382,8 @@ async function loadAquecedorTurnManager(
     fromStats.outboundSinceInbound += 1;
     toStats.outboundSinceInbound = 0;
     pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+    const directedKey = buildAquecedorDirectedKey(ev.fromInst, ev.toInst);
+    directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
 
     const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
     const pairState = ensurePairState(pairKey);
@@ -1456,49 +1462,34 @@ async function loadAquecedorTurnManager(
     const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
     const stats = instanceStats.get(origem.toLowerCase());
+    const destStats = instanceStats.get(destino.toLowerCase());
     let score = 0;
 
     if (owesPairReply(origemRaw, destinoRaw)) {
-      score -= 5_000_000;
+      score -= 10_000_000;
     }
 
-    score += (stats?.sendCount || 0) * 10_000;
-
-    const pairKey = buildAquecedorPairKey(origem, destino);
-    const pairState = pairStates.get(pairKey);
-    if (pairState) {
-      score += pairState.exchangeCount * 2_000;
-    } else {
-      score -= 100_000;
-    }
-
-    const destStats = instanceStats.get(destino.toLowerCase());
-    score += (destStats?.sendCount || 0) * 1_000;
+    score += (stats?.sendCount ?? 0) * 1_000_000;
+    score += (destStats?.receiveCount ?? 0) * 100_000;
 
     const directedKey = buildAquecedorDirectedKey(origem, destino);
+    score += (directedSendCounts.get(directedKey) ?? 0) * 50_000;
+
     const recentIdx = recentDirectedEdges.indexOf(directedKey);
     if (recentIdx >= 0) {
-      score += (recentIdx + 1) * 750_000;
+      score += (recentIdx + 1) * 500_000;
     }
     if (recentDirectedEdges.length > 0) {
       const lastDirected = recentDirectedEdges[0];
       const lastParts = lastDirected.split("→");
       const lastOrig = lastParts[0] || "";
       const lastDest = lastParts[1] || "";
-      if (origem.toLowerCase() === lastOrig) {
-        score += 250_000;
+      if (origem.toLowerCase() === lastOrig.toLowerCase()) {
+        score += 300_000;
       }
-      if (destino.toLowerCase() === lastDest) {
-        score += 120_000;
+      if (destino.toLowerCase() === lastDest.toLowerCase()) {
+        score += 150_000;
       }
-    }
-
-    const sentAtMs = stats?.lastSentAt ? new Date(stats.lastSentAt).getTime() : 0;
-    if (sentAtMs > 0) {
-      const idleMinutes = Math.max(0, (Date.now() - sentAtMs) / 60_000);
-      score -= Math.min(80_000, Math.floor(idleMinutes * 2_000));
-    } else {
-      score -= 90_000;
     }
 
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
@@ -1555,14 +1546,9 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
 
   if (!eligible.length) return null;
 
-  const replyDue = eligible.filter((item) =>
-    manager.owesPairReply(item.combo.instancia_origem, item.combo.instancia_destino),
-  );
-  const pool = replyDue.length ? replyDue : eligible;
-
-  pool.sort((a, b) => a.score - b.score);
-  const bestScore = pool[0].score;
-  const ties = pool.filter((item) => item.score === bestScore);
+  eligible.sort((a, b) => a.score - b.score);
+  const bestScore = eligible[0].score;
+  const ties = eligible.filter((item) => item.score === bestScore);
   const base = ((startIndex % ties.length) + ties.length) % ties.length;
   const picked = ties[base];
   return { chosen: picked.combo, index: picked.index };

@@ -15,7 +15,11 @@ Como usar:
 ## Última atualização
 2026-06-26
 
+**WABA — E-mail operacional não enviado (somaconecta):** produção com marker antigo (sem código de notify); e-mail só vai ao operacional do plano (`operacionalDispatchesApi`). V02: Oficial=digitalcorban, Alternativa=somaconecta. Health `mailConfigured` + logs de skipped. Marker `DEPLOY-2026-06-26-operacional-email-notify-fix`. Ver `doc/LOG-2026-06-26__operacional-email-nao-enviado-diagnostico-fix.md`.
+
 **WABA — Campanha intake resilience v2:** skip `express.json`/`urlencoded` no POST intake; health `campaignIntakeSafeParser` + `campaignIntakeApiVersion`; wizard com preflight `/health`, retry FormData reconstruído, timeout dinâmico e validação obrigatória de todos os inputs. Marker `DEPLOY-2026-06-26-campanha-intake-resilience-v2`. **Redeploy Node obrigatório** no Easypanel. Ver `doc/LOG-2026-06-21__campanha-intake-resilience-v2-fix.md`.
+
+**WABA — Aquecedor equidade no ciclo:** score por send/receive count; fim do pool exclusivo owesPairReply; marker `DEPLOY-2026-06-26-aquecedor-equidade-ciclo-pares`. Ver `doc/LOG-2026-06-26__aquecedor-equidade-ciclo-pares.md`.
 
 **WABA — E-mail operacional nova campanha:** ao gerar intake, notifica operacional do plano (Oficial/Alternativa) com prazo 24h; marker `DEPLOY-2026-06-26-operacional-email-nova-campanha`. Ver `doc/LOG-2026-06-26__operacional-email-nova-campanha.md`.
 
