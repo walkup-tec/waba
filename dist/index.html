@@ -27222,46 +27222,101 @@
       const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 2;
       let wabaCampaignIntakeBackendCache = null;
 
+      function isCampaignIntakeGatewayStatus(status) {
+        const code = Number(status || 0);
+        return code === 502 || code === 503 || code === 504;
+      }
+
       async function fetchCampaignIntakeBackendStatus(force = false) {
         if (!force && wabaCampaignIntakeBackendCache) return wabaCampaignIntakeBackendCache;
         try {
           const response = await fetchWithTimeout(
             resolveWabaPublicPath("/health"),
             { cache: "no-store" },
-            12000
+            15000
           );
           const data = await response.json().catch(() => ({}));
           wabaCampaignIntakeBackendCache = {
+            reachable: true,
             ok: Boolean(response.ok && data?.ok),
+            shuttingDown: Boolean(data?.shuttingDown),
+            maintenanceMode: Boolean(data?.maintenanceMode),
             safeParser: data?.campaignIntakeSafeParser === true,
             apiVersion: Number(data?.campaignIntakeApiVersion || 0),
             deployMarker: String(data?.deployMarker || ""),
+            httpStatus: Number(response.status || 0),
           };
         } catch {
           wabaCampaignIntakeBackendCache = {
+            reachable: false,
             ok: false,
+            shuttingDown: false,
+            maintenanceMode: false,
             safeParser: false,
             apiVersion: 0,
             deployMarker: "",
+            httpStatus: 0,
           };
         }
         return wabaCampaignIntakeBackendCache;
       }
 
-      async function assertCampaignIntakeBackendReady() {
-        const status = await fetchCampaignIntakeBackendStatus(true);
-        if (!status.ok) {
-          throw new Error("Não foi possível verificar o servidor. Tente novamente em alguns segundos.");
+      async function fetchCampaignIntakeBackendStatusWithRetry(maxAttempts = 6) {
+        let last = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          last = await fetchCampaignIntakeBackendStatus(true);
+          if (last.ok) return last;
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+          }
         }
-        if (
-          !status.safeParser ||
-          status.apiVersion < WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED
-        ) {
+        return last;
+      }
+
+      async function assertCampaignIntakeBackendReady() {
+        const status = await fetchCampaignIntakeBackendStatusWithRetry(6);
+
+        if (status.reachable && status.ok) {
+          if (
+            !status.safeParser ||
+            status.apiVersion < WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED
+          ) {
+            throw new Error(
+              `O servidor de campanhas está desatualizado (marker: ${status.deployMarker || "desconhecido"}). ` +
+                "É necessário redeploy do serviço Node no painel antes de gerar campanhas."
+            );
+          }
+          return;
+        }
+
+        if (status.reachable && status.maintenanceMode) {
+          throw new Error("O sistema está em manutenção. Tente novamente em alguns minutos.");
+        }
+
+        if (status.reachable && status.shuttingDown) {
           throw new Error(
-            `O servidor de campanhas está desatualizado (marker: ${status.deployMarker || "desconhecido"}). ` +
-              "É necessário redeploy do serviço Node no painel antes de gerar campanhas."
+            "O servidor está sendo atualizado neste momento. Aguarde cerca de um minuto e clique em Gerar Campanha novamente."
           );
         }
+
+        if (
+          status.reachable &&
+          isCampaignIntakeGatewayStatus(status.httpStatus)
+        ) {
+          console.warn(
+            "[campanha] preflight /health retornou gateway",
+            status.httpStatus,
+            "— tentando envio direto."
+          );
+          return;
+        }
+
+        if (!status.reachable) {
+          console.warn("[campanha] preflight /health indisponível — tentando envio direto.");
+          return;
+        }
+
+        console.warn("[campanha] preflight /health inconclusivo — tentando envio direto.");
       }
 
       function buildDisCampaignWizardFormData() {
@@ -27664,7 +27719,9 @@
 
         let submitResponse = null;
         try {
+          if (generateBtn) generateBtn.textContent = "Verificando servidor…";
           await assertCampaignIntakeBackendReady();
+          if (generateBtn) generateBtn.textContent = "Enviando…";
 
           const responseLink = normalizeDisCampaignWizardResponseLink(
             document.getElementById("dis-wizard-response-link")?.value
