@@ -14,6 +14,7 @@ const waba_master_disparos_policy_service_1 = require("../users/waba-master-disp
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
+const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
@@ -316,6 +317,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
                 disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
             }
+            (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignCreated)(intake);
             const importSummary = plannedSendCount < importedLineCount
                 ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
                 : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;

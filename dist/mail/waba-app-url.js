@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildCampaignListDeepLink = exports.buildCampaignErrorDeepLink = exports.buildCampaignReportDeepLink = exports.resolveWabaAppLoginUrl = void 0;
+exports.buildOperacionalAdminCampaignDeepLink = exports.buildCampaignListDeepLink = exports.buildCampaignErrorDeepLink = exports.buildCampaignReportDeepLink = exports.resolveWabaAppLoginUrl = void 0;
 const base_path_1 = require("../base-path");
 const resolveWabaAppLoginUrl = () => {
     const fromEnv = String(process.env.WABA_APP_LOGIN_URL ?? "")
@@ -30,3 +30,12 @@ const buildCampaignListDeepLink = () => {
     return url.toString();
 };
 exports.buildCampaignListDeepLink = buildCampaignListDeepLink;
+/** Deep link para operacional abrir detalhes da campanha no Admin · Campanhas. */
+const buildOperacionalAdminCampaignDeepLink = (campaignId) => {
+    const id = String(campaignId || "").trim();
+    const base = (0, exports.resolveWabaAppLoginUrl)().replace(/\/$/, "");
+    const url = new URL(`${base}/`);
+    url.searchParams.set("operacionalCampanha", id);
+    return url.toString();
+};
+exports.buildOperacionalAdminCampaignDeepLink = buildOperacionalAdminCampaignDeepLink;

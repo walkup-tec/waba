@@ -82,7 +82,11 @@ const instance_integration_probe_1 = require("./instance-integration-probe");
 const instance_inbound_validation_service_1 = require("./instance-inbound-validation.service");
 const aquecedor_instance_lifecycle_service_1 = require("./services/aquecedor-instance-lifecycle.service");
 const aquecedor_instance_warmth_service_1 = require("./services/aquecedor-instance-warmth.service");
+const production_data_persistence_service_1 = require("./services/production-data-persistence.service");
 const deploy_marker_1 = require("./deploy-marker");
+const waba_campaign_intake_constants_1 = require("./disparos/waba-campaign-intake.constants");
+const waba_mail_service_1 = require("./mail/waba-mail.service");
+const waba_graceful_shutdown_1 = require("./server/waba-graceful-shutdown");
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
@@ -278,15 +282,18 @@ function isDisparosCampaignCreatePost(req) {
     const p = String(req.path || "").replace(/\/+$/, "") || "/";
     return p === "/disparos/campanhas";
 }
-/** Multipart não pode passar pelo express.json — corrompe o stream antes do multer. */
+/** Multipart não pode passar pelo express.json/urlencoded — corrompe o stream antes do multer. */
 function shouldSkipBodyParserForMultipart(req) {
     if (req.method !== "POST")
         return false;
+    const p = String(req.path || "").replace(/\/+$/, "") || "/";
+    // Intake do wizard é sempre multipart; não depender só do Content-Type (proxies podem alterá-lo).
+    if (p === "/disparos/campanhas/intake")
+        return true;
     const ct = String(req.headers["content-type"] || "");
     if (!ct.includes("multipart/form-data"))
         return false;
-    const p = String(req.path || "").replace(/\/+$/, "") || "/";
-    return p === "/disparos/campanhas" || p === "/disparos/campanhas/intake";
+    return p === "/disparos/campanhas";
 }
 app.use((req, res, next) => {
     if (shouldSkipBodyParserForMultipart(req)) {
@@ -298,7 +305,12 @@ app.use((req, res, next) => {
     return parseJsonDefault(req, res, next);
 });
 /** Form POST (alguns proxies lidam melhor com urlencoded do que com JSON no mesmo host). */
-app.use(express_1.default.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+app.use((req, res, next) => {
+    if (shouldSkipBodyParserForMultipart(req)) {
+        return next();
+    }
+    return express_1.default.urlencoded({ extended: true, limit: JSON_BODY_LIMIT })(req, res, next);
+});
 function isMaintenanceBypassPath(method, reqPath) {
     const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
     if (p === "/webhooks/asaas" || p.startsWith("/webhooks/asaas/") || p === "/webhooks/evolution") {
@@ -346,10 +358,17 @@ app.use((req, res, next) => {
         retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
     });
 });
+(0, waba_graceful_shutdown_1.registerWabaShutdownGate)(app);
 app.get("/health", (_req, res) => {
-    res.json({
-        ok: true,
+    const shuttingDown = (0, waba_graceful_shutdown_1.isWabaServerShuttingDown)();
+    res.status(shuttingDown ? 503 : 200).json({
+        ok: !shuttingDown,
+        shuttingDown,
         deployMarker: deploy_marker_1.WABA_DEPLOY_MARKER,
+        campaignIntakeApiVersion: waba_campaign_intake_constants_1.WABA_CAMPAIGN_INTAKE_API_VERSION,
+        campaignIntakeSafeParser: waba_campaign_intake_constants_1.WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
+        mailConfigured: waba_mail_service_1.wabaMailService.isConfigured(),
+        operacionalCampaignNotifyEnabled: true,
         wabaEnv: load_env_1.WABA_ENV,
         uiProfile: resolveUiProfile(),
         featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
@@ -362,9 +381,20 @@ app.get("/health", (_req, res) => {
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
         evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
+        dataPersistence: (0, production_data_persistence_service_1.getProductionDataPersistenceSnapshot)(),
     });
 });
 app.get("/ready", (_req, res) => {
+    const shuttingDown = (0, waba_graceful_shutdown_1.isWabaServerShuttingDown)();
+    if (shuttingDown) {
+        return res.status(503).json({
+            ok: false,
+            ready: false,
+            shuttingDown: true,
+            message: "Servidor em atualização.",
+            retryAfterSec: 15,
+        });
+    }
     if (MAINTENANCE_MODE) {
         return res.status(503).json({
             ok: false,
@@ -1070,6 +1100,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
     const instanceStats = new Map();
     const pairLastSender = new Map();
     const pairStates = new Map();
+    const directedSendCounts = new Map();
     const ensureStats = (canonical) => {
         const key = canonical.toLowerCase();
         let stats = instanceStats.get(key);
@@ -1106,6 +1137,8 @@ async function loadAquecedorTurnManager(supabase, connected) {
         fromStats.outboundSinceInbound += 1;
         toStats.outboundSinceInbound = 0;
         pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
+        const directedKey = buildAquecedorDirectedKey(ev.fromInst, ev.toInst);
+        directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
         const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
         const pairState = ensurePairState(pairKey);
         pairState.exchangeCount += 1;
@@ -1172,45 +1205,30 @@ async function loadAquecedorTurnManager(supabase, connected) {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
         const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
         const stats = instanceStats.get(origem.toLowerCase());
+        const destStats = instanceStats.get(destino.toLowerCase());
         let score = 0;
         if (owesPairReply(origemRaw, destinoRaw)) {
-            score -= 5000000;
+            score -= 10000000;
         }
-        score += (stats?.sendCount || 0) * 10000;
-        const pairKey = buildAquecedorPairKey(origem, destino);
-        const pairState = pairStates.get(pairKey);
-        if (pairState) {
-            score += pairState.exchangeCount * 2000;
-        }
-        else {
-            score -= 100000;
-        }
-        const destStats = instanceStats.get(destino.toLowerCase());
-        score += (destStats?.sendCount || 0) * 1000;
+        score += (stats?.sendCount ?? 0) * 1000000;
+        score += (destStats?.receiveCount ?? 0) * 100000;
         const directedKey = buildAquecedorDirectedKey(origem, destino);
+        score += (directedSendCounts.get(directedKey) ?? 0) * 50000;
         const recentIdx = recentDirectedEdges.indexOf(directedKey);
         if (recentIdx >= 0) {
-            score += (recentIdx + 1) * 750000;
+            score += (recentIdx + 1) * 500000;
         }
         if (recentDirectedEdges.length > 0) {
             const lastDirected = recentDirectedEdges[0];
             const lastParts = lastDirected.split("→");
             const lastOrig = lastParts[0] || "";
             const lastDest = lastParts[1] || "";
-            if (origem.toLowerCase() === lastOrig) {
-                score += 250000;
+            if (origem.toLowerCase() === lastOrig.toLowerCase()) {
+                score += 300000;
             }
-            if (destino.toLowerCase() === lastDest) {
-                score += 120000;
+            if (destino.toLowerCase() === lastDest.toLowerCase()) {
+                score += 150000;
             }
-        }
-        const sentAtMs = stats?.lastSentAt ? new Date(stats.lastSentAt).getTime() : 0;
-        if (sentAtMs > 0) {
-            const idleMinutes = Math.max(0, (Date.now() - sentAtMs) / 60000);
-            score -= Math.min(80000, Math.floor(idleMinutes * 2000));
-        }
-        else {
-            score -= 90000;
         }
         const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
         score += rotation;
@@ -1247,11 +1265,9 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
     }
     if (!eligible.length)
         return null;
-    const replyDue = eligible.filter((item) => manager.owesPairReply(item.combo.instancia_origem, item.combo.instancia_destino));
-    const pool = replyDue.length ? replyDue : eligible;
-    pool.sort((a, b) => a.score - b.score);
-    const bestScore = pool[0].score;
-    const ties = pool.filter((item) => item.score === bestScore);
+    eligible.sort((a, b) => a.score - b.score);
+    const bestScore = eligible[0].score;
+    const ties = eligible.filter((item) => item.score === bestScore);
     const base = ((startIndex % ties.length) + ties.length) % ties.length;
     const picked = ties[base];
     return { chosen: picked.combo, index: picked.index };
@@ -3505,6 +3521,15 @@ function sendIndexHtml(res) {
     res.type("html").send(html);
 }
 const staticNoIndex = { index: false };
+app.get("/sw-deploy-resilience.js", (_req, res) => {
+    const swPath = path_1.default.join(distPath, "sw-deploy-resilience.js");
+    if (!(0, fs_1.existsSync)(swPath)) {
+        return res.status(404).type("text/plain").send("Service worker não encontrado.");
+    }
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.setHeader("Cache-Control", "no-cache");
+    return res.type("application/javascript").sendFile(swPath);
+});
 app.get("/", (req, res) => {
     if (base_path_1.BASE_PATH && !(0, base_path_1.requestUnderBasePath)(req)) {
         return res.redirect(301, `${base_path_1.BASE_PATH}/`);
@@ -9492,7 +9517,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 (0, waba_admin_routes_1.registerWabaAdminRoutes)(app);
 (0, waba_operacional_campanhas_routes_1.registerWabaOperacionalCampanhasRoutes)(app);
 new waba_system_user_service_1.WabaSystemUserService().ensureBootstrapFromEnvMaster();
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
     const publicRoot = base_path_1.BASE_PATH
         ? `http://localhost:${PORT}${base_path_1.BASE_PATH}/`
         : `http://localhost:${PORT}/`;
@@ -9568,3 +9593,4 @@ app.listen(PORT, () => {
         (0, asaas_integration_monitor_service_1.startAsaasIntegrationMonitorScheduler)();
     })();
 });
+(0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer);

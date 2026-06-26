@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifySubscriberWelcomeEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
+exports.notifySubscriberWelcomeEmail = exports.notifyOperacionalNewCampaignEmail = exports.deliverOperacionalNewCampaignEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_app_url_1 = require("./waba-app-url");
 const waba_mail_templates_1 = require("./waba-mail.templates");
@@ -144,6 +144,47 @@ const notifyCampaignErrorReportedEmail = (input) => {
     });
 };
 exports.notifyCampaignErrorReportedEmail = notifyCampaignErrorReportedEmail;
+const deliverOperacionalNewCampaignEmail = async (input) => {
+    const operacionalEmail = String(input.operacionalEmail || "")
+        .trim()
+        .toLowerCase();
+    const operacionalName = String(input.operacionalName || "").trim();
+    const campaignUrl = (0, waba_app_url_1.buildOperacionalAdminCampaignDeepLink)(input.campaignId);
+    const mail = (0, waba_mail_templates_1.buildOperacionalNewCampaignTemplate)({
+        recipientName: operacionalName,
+        recipientEmail: operacionalEmail,
+        campaignId: input.campaignId,
+        campaignName: input.campaignName,
+        subscriberId: input.subscriberId,
+        plannedSendCount: input.plannedSendCount,
+        createdAtLabel: input.createdAtLabel,
+        apiKindLabel: input.apiKindLabel,
+        campaignUrl,
+    });
+    return deliverEmail({
+        toEmail: operacionalEmail,
+        subject: mail.subject,
+        html: mail.html,
+        logLabel: `operacional nova campanha ${input.campaignId}`,
+    });
+};
+exports.deliverOperacionalNewCampaignEmail = deliverOperacionalNewCampaignEmail;
+const notifyOperacionalNewCampaignEmail = (input) => {
+    void (0, exports.deliverOperacionalNewCampaignEmail)(input)
+        .then((result) => {
+        if (result.status === "skipped") {
+            console.warn(`[mail] ${result.message}`);
+        }
+        else if (result.status === "failed") {
+            console.error(`[mail] operacional nova campanha (async): ${result.message}`);
+        }
+    })
+        .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[mail] operacional nova campanha (async):", message);
+    });
+};
+exports.notifyOperacionalNewCampaignEmail = notifyOperacionalNewCampaignEmail;
 const notifySubscriberWelcomeEmail = (input) => {
     void (0, exports.deliverSubscriberWelcomeEmail)(input).catch((error) => {
         const message = error instanceof Error ? error.message : String(error);

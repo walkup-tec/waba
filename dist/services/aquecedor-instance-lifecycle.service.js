@@ -4,6 +4,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.collectInstanceNameKeys = collectInstanceNameKeys;
+exports.findAquecedorLifecycleRow = findAquecedorLifecycleRow;
+exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForInstance;
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
@@ -26,6 +29,7 @@ const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../data-path");
 const LIFECYCLE_FILE = (0, data_path_1.resolveDataFile)("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
+const INSTANCE_ALIASES_FILE = (0, data_path_1.resolveDataFile)("instance-aliases.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
 exports.AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
@@ -34,8 +38,78 @@ const PREPARING_DURATION_MS = exports.AQUECEDOR_PREPARING_DURATION_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
 let cache = null;
+let aliasesCache = null;
 function normalizeKey(instanceName) {
     return String(instanceName || "").trim().toLowerCase();
+}
+async function loadAliasesMap() {
+    if (aliasesCache)
+        return aliasesCache;
+    try {
+        const raw = await fs_1.promises.readFile(INSTANCE_ALIASES_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        aliasesCache = new Map();
+        for (const [technical, alias] of Object.entries(parsed || {})) {
+            const key = String(technical || "").trim();
+            const val = String(alias || "").trim();
+            if (key && val)
+                aliasesCache.set(key, val);
+        }
+    }
+    catch {
+        aliasesCache = new Map();
+    }
+    return aliasesCache;
+}
+/** Todas as chaves (técnica + alias) que referem a mesma instância. */
+function collectInstanceNameKeys(instanceName, aliasesMap) {
+    const keys = new Set();
+    const add = (raw) => {
+        const key = normalizeKey(raw);
+        if (key)
+            keys.add(key);
+    };
+    const target = normalizeKey(instanceName);
+    if (!target)
+        return [];
+    add(instanceName);
+    for (const [technical, alias] of aliasesMap) {
+        const techKey = normalizeKey(technical);
+        const aliasKey = normalizeKey(alias);
+        if (techKey === target || aliasKey === target) {
+            add(technical);
+            add(alias);
+        }
+    }
+    return [...keys];
+}
+async function findAquecedorLifecycleRow(instanceName) {
+    const aliasesMap = await loadAliasesMap();
+    const store = await loadStore();
+    for (const key of collectInstanceNameKeys(instanceName, aliasesMap)) {
+        const row = store.instances[key];
+        if (row)
+            return { key, row };
+    }
+    return null;
+}
+async function getAquecedorLifecycleStatusForInstance(instanceName) {
+    await syncAquecedorPreparingPromotions();
+    const found = await findAquecedorLifecycleRow(instanceName);
+    if (!found)
+        return null;
+    const row = found.row;
+    refreshRestrictionPhase(row);
+    let promoteAt = null;
+    if (row.phase === "preparing") {
+        promoteAt = new Date(computePreparingPromoteAtMs(row)).toISOString();
+    }
+    return {
+        phase: row.phase,
+        statusLabel: formatAquecedorLifecycleStatusLabel(row),
+        restrictedUntil: row.restrictedUntil,
+        promoteAt,
+    };
 }
 function emptyRow(phase, preparingSince) {
     const now = new Date().toISOString();
@@ -54,9 +128,11 @@ async function readEvoInstanceCreatedAt(instanceName) {
     try {
         const raw = await fs_1.promises.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
         const parsed = JSON.parse(raw);
-        const key = normalizeKey(instanceName);
+        const aliasesMap = await loadAliasesMap();
+        const keys = new Set(collectInstanceNameKeys(instanceName, aliasesMap));
         for (const item of parsed?.items || []) {
-            if (normalizeKey(String(item?.name || "")) !== key)
+            const itemKey = normalizeKey(String(item?.name || ""));
+            if (!keys.has(itemKey))
                 continue;
             const createdAt = String(item?.createdAt || "").trim();
             return createdAt || null;
@@ -197,13 +273,11 @@ function ensureDailyCap(row, instanceName) {
     row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
 }
 async function getAquecedorLifecycleRow(instanceName) {
-    const store = await loadStore();
-    const key = normalizeKey(instanceName);
-    const row = store.instances[key];
-    if (!row)
+    const found = await findAquecedorLifecycleRow(instanceName);
+    if (!found)
         return null;
-    refreshRestrictionPhase(row);
-    return { ...row };
+    refreshRestrictionPhase(found.row);
+    return { ...found.row };
 }
 async function registerAquecedorInstancePreparing(instanceName, preparingSince) {
     const name = String(instanceName || "").trim();
@@ -211,13 +285,13 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince) 
         return;
     const store = await loadStore();
     const key = normalizeKey(name);
-    const existing = store.instances[key];
+    const existing = await findAquecedorLifecycleRow(name);
     if (existing) {
-        refreshRestrictionPhase(existing);
-        if (existing.phase === "restricted_wait")
+        refreshRestrictionPhase(existing.row);
+        if (existing.row.phase === "restricted_wait")
             return;
-        if (existing.phase === "active") {
-            if (await reconcileGrandfatheredActiveRow(name, existing)) {
+        if (existing.row.phase === "active") {
+            if (await reconcileGrandfatheredActiveRow(name, existing.row)) {
                 await saveStore(store);
             }
             return;
@@ -305,8 +379,8 @@ async function filterInstancesLifecycleReady(instanceNames) {
         const name = String(rawName || "").trim();
         if (!name)
             continue;
-        const key = normalizeKey(name);
-        const row = store.instances[key];
+        const found = await findAquecedorLifecycleRow(name);
+        const row = found?.row;
         if (!row) {
             const createdAt = await readEvoInstanceCreatedAt(name);
             if (isGrandfatherEligible(createdAt))
@@ -365,17 +439,19 @@ async function filterAquecedorCycleConnected(connected) {
     const out = [];
     let storeDirty = false;
     for (const item of connected) {
-        const key = normalizeKey(item.instancia);
-        let row = store.instances[key];
+        let found = await findAquecedorLifecycleRow(item.instancia);
+        let row = found?.row;
         if (!row) {
             const createdAt = await readEvoInstanceCreatedAt(item.instancia);
             if (isGrandfatherEligible(createdAt)) {
                 await grandfatherAquecedorInstanceActive(item.instancia);
-                row = (await loadStore()).instances[key];
+                found = await findAquecedorLifecycleRow(item.instancia);
+                row = found?.row;
             }
             else {
                 await registerAquecedorInstancePreparing(item.instancia, createdAt);
-                row = (await loadStore()).instances[key];
+                found = await findAquecedorLifecycleRow(item.instancia);
+                row = found?.row;
             }
         }
         else if (await reconcileGrandfatheredActiveRow(item.instancia, row)) {
@@ -408,8 +484,8 @@ async function refreshAquecedorDailyCapsIfNeeded() {
 }
 async function canAquecedorInstanceSendToday(instanceName) {
     const store = await loadStore();
-    const key = normalizeKey(instanceName);
-    const row = store.instances[key];
+    const found = await findAquecedorLifecycleRow(instanceName);
+    const row = found?.row;
     if (!row) {
         return { ok: true, reason: "", dailyCap: exports.AQUECEDOR_DAILY_CAP_BASE, dailyCount: 0 };
     }
@@ -446,8 +522,9 @@ async function recordAquecedorInstanceDailySend(instanceName) {
     if (!name)
         return;
     const store = await loadStore();
-    const key = normalizeKey(name);
-    const row = store.instances[key] || emptyRow("active");
+    const found = await findAquecedorLifecycleRow(name);
+    const key = found?.key ?? normalizeKey(name);
+    const row = found?.row ?? emptyRow("active");
     ensureDailyCap(row, name);
     row.dailySendCount += 1;
     store.instances[key] = row;

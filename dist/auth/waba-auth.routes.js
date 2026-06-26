@@ -151,59 +151,67 @@ exports.wabaRequireAuthMiddleware = wabaRequireAuthMiddleware;
 const registerWabaAuthRoutes = (app) => {
     app.get("/auth/session", (req, res) => sendSession(req, res));
     app.post("/auth/login", (req, res) => {
-        if (!(0, waba_auth_service_1.isWabaAuthConfigured)()) {
-            return res.status(503).json({
-                error: "Login não configurado. Defina WABA_ADMIN_EMAIL e WABA_ADMIN_PASSWORD no servidor.",
-            });
-        }
-        const body = req.body;
-        const email = String(body.email ?? body.username ?? "");
-        const password = String(body.password ?? "");
-        if (systemUserService.validateCredentials(email, password)) {
-            const user = systemUserService.getByEmail(email);
-            if (!user) {
-                return res.status(401).json({ error: "E-mail ou senha inválidos." });
+        try {
+            if (!(0, waba_auth_service_1.isWabaAuthConfigured)()) {
+                return res.status(503).json({
+                    error: "Login não configurado. Defina WABA_ADMIN_EMAIL e WABA_ADMIN_PASSWORD no servidor.",
+                });
             }
-            const token = (0, waba_auth_service_1.createWabaSessionToken)(user.email, user.role);
-            writeSessionCookie(res, token);
-            const menuAccess = systemUserService.getSessionMenuAccess(user.email);
-            return res.status(200).json({
-                ok: true,
-                email: user.email,
-                role: user.role,
-                systemUser: {
-                    id: user.id,
-                    fullName: user.fullName,
+            const body = req.body;
+            const email = String(body.email ?? body.username ?? "");
+            const password = String(body.password ?? "");
+            if (systemUserService.validateCredentials(email, password)) {
+                const user = systemUserService.getByEmail(email);
+                if (!user) {
+                    return res.status(401).json({ error: "E-mail ou senha inválidos." });
+                }
+                const token = (0, waba_auth_service_1.createWabaSessionToken)(user.email, user.role);
+                writeSessionCookie(res, token);
+                const menuAccess = systemUserService.getSessionMenuAccess(user.email);
+                return res.status(200).json({
+                    ok: true,
                     email: user.email,
                     role: user.role,
+                    systemUser: {
+                        id: user.id,
+                        fullName: user.fullName,
+                        email: user.email,
+                        role: user.role,
+                        operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+                    },
                     operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
-                },
-                operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
-                allowedMenuIds: menuAccess.allowedMenuIds,
-                menuPermissions: menuAccess.menuPermissions,
+                    allowedMenuIds: menuAccess.allowedMenuIds,
+                    menuPermissions: menuAccess.menuPermissions,
+                });
+            }
+            if ((0, waba_auth_service_1.validateWabaAdminCredentials)(email, password)) {
+                const token = (0, waba_auth_service_1.createWabaSessionToken)(email, "master");
+                writeSessionCookie(res, token);
+                return res.status(200).json({
+                    ok: true,
+                    email: email.trim().toLowerCase(),
+                    role: "master",
+                });
+            }
+            if (subscriberService.validateCredentials(email, password)) {
+                const token = (0, waba_auth_service_1.createWabaSessionToken)(email, "subscriber");
+                writeSessionCookie(res, token);
+                const profile = subscriberService.getPublicProfile(email);
+                return res.status(200).json({
+                    ok: true,
+                    email: profile?.email ?? email.trim().toLowerCase(),
+                    role: "subscriber",
+                    subscriber: profile,
+                });
+            }
+            return res.status(401).json({ error: "E-mail ou senha inválidos." });
+        }
+        catch (error) {
+            console.error("[auth/login] erro:", error);
+            return res.status(500).json({
+                error: "Erro temporário ao processar login. Tente novamente em instantes.",
             });
         }
-        if ((0, waba_auth_service_1.validateWabaAdminCredentials)(email, password)) {
-            const token = (0, waba_auth_service_1.createWabaSessionToken)(email, "master");
-            writeSessionCookie(res, token);
-            return res.status(200).json({
-                ok: true,
-                email: email.trim().toLowerCase(),
-                role: "master",
-            });
-        }
-        if (subscriberService.validateCredentials(email, password)) {
-            const token = (0, waba_auth_service_1.createWabaSessionToken)(email, "subscriber");
-            writeSessionCookie(res, token);
-            const profile = subscriberService.getPublicProfile(email);
-            return res.status(200).json({
-                ok: true,
-                email: profile?.email ?? email.trim().toLowerCase(),
-                role: "subscriber",
-                subscriber: profile,
-            });
-        }
-        return res.status(401).json({ error: "E-mail ou senha inválidos." });
     });
     app.post("/auth/logout", (_req, res) => {
         clearSessionCookie(res);
