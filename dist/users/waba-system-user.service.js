@@ -145,7 +145,11 @@ class WabaSystemUserService {
         return this.repository
             .list()
             .map((user) => this.ensureUserMigrated(user))
-            .filter((user) => user.role === "operacional" && user.operacionalDispatchesApi === apiKind);
+            .filter((user) => user.role === "operacional" && user.operacionalDispatchesApi === apiKind)
+            .map((user) => ({
+            ...user,
+            email: user.email.trim().toLowerCase(),
+        }));
     }
     getSessionMenuAccess(email) {
         const user = this.getUserWithMigration(email);

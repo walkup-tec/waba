@@ -27675,6 +27675,20 @@
             .filter(Boolean)
             .join(" ");
           showDisCampaignWizardSuccess(successMessage);
+          const notify = payload?.operacionalNotify;
+          const notifySent = Array.isArray(notify?.recipients)
+            ? notify.recipients.some((item) => item?.status === "sent")
+            : false;
+          if (notify && !notifySent) {
+            const detail = Array.isArray(notify.recipients) && notify.recipients.length
+              ? notify.recipients.map((item) => `${item.email}: ${item.message}`).join(" · ")
+              : `Nenhum operacional designado para ${notify.apiKindLabel || "este plano"}.`;
+            showToast(
+              `Campanha criada, mas o aviso por e-mail ao operacional falhou. ${detail}`,
+              "warning",
+              9000
+            );
+          }
           void refreshDisparosCampaignsAndResumo();
         } catch (error) {
           const message = resolveDisCampaignWizardSubmitErrorMessage(error, submitResponse);

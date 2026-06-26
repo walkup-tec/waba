@@ -28,46 +28,59 @@ const resolvePlannedSendCount = (intake) => {
     return Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
 };
 const resolveApiKind = (intake) => (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
-const notifyOperacionalStaffOnCampaignCreated = (intake) => {
-    setImmediate(() => {
-        void notifyOperacionalStaffOnCampaignCreatedAsync(intake).catch((error) => {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error(`[mail] campanha ${intake.id}: falha ao notificar operacional:`, message);
-        });
-    });
-};
-exports.notifyOperacionalStaffOnCampaignCreated = notifyOperacionalStaffOnCampaignCreated;
-const notifyOperacionalStaffOnCampaignCreatedAsync = async (intake) => {
+const notifyOperacionalStaffOnCampaignCreated = async (intake) => {
+    const attemptedAt = new Date().toISOString();
     const apiKind = resolveApiKind(intake);
+    const apiKindLabel = waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind];
     const operacionais = new waba_system_user_service_1.WabaSystemUserService().listOperacionalUsersForDispatchesApi(apiKind);
     if (!operacionais.length) {
-        console.warn(`[mail] campanha ${intake.id}: nenhum usuário operacional designado para ${apiKind}. ` +
-            "Verifique Admin · Usuários → operacionalDispatchesApi.");
-        return;
+        const message = `Nenhum usuário operacional designado para ${apiKindLabel}. ` +
+            "Configure em Admin · Usuários o plano de atendimento (API Oficial ou API Alternativa).";
+        console.warn(`[mail] campanha ${intake.id}: ${message}`);
+        return {
+            attemptedAt,
+            apiKind,
+            apiKindLabel,
+            recipients: [],
+        };
     }
     const subscriber = new waba_subscriber_repository_1.WabaSubscriberRepository().getByEmail(intake.ownerEmail);
     const subscriberId = String(subscriber?.id ?? "").trim() || "—";
     const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
     const plannedSendCount = resolvePlannedSendCount(intake);
-    const apiKindLabel = waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind];
     console.log(`[mail] campanha ${intake.id} (${apiKindLabel}): notificando ${operacionais.length} operacional(is): ` +
         operacionais.map((user) => user.email).join(", "));
-    const results = await Promise.all(operacionais.map((operacional) => (0, waba_mail_delivery_1.deliverOperacionalNewCampaignEmail)({
-        operacionalEmail: operacional.email,
-        operacionalName: operacional.fullName,
-        campaignId: intake.id,
-        campaignName: intake.campaignName,
-        subscriberId,
-        plannedSendCount,
-        createdAtLabel,
-        apiKindLabel,
-    })));
-    for (const result of results) {
-        if (result.status === "skipped") {
-            console.warn(`[mail] ${result.message}`);
+    const recipients = [];
+    for (const operacional of operacionais) {
+        const delivery = await (0, waba_mail_delivery_1.deliverOperacionalNewCampaignEmail)({
+            operacionalEmail: operacional.email,
+            operacionalName: operacional.fullName,
+            campaignId: intake.id,
+            campaignName: intake.campaignName,
+            subscriberId,
+            plannedSendCount,
+            createdAtLabel,
+            apiKindLabel,
+        });
+        recipients.push({
+            email: operacional.email.trim().toLowerCase(),
+            fullName: operacional.fullName,
+            status: delivery.status,
+            message: delivery.message,
+            messageId: delivery.messageId,
+        });
+        if (delivery.status === "skipped") {
+            console.warn(`[mail] ${delivery.message}`);
         }
-        else if (result.status === "failed") {
-            console.error(`[mail] operacional nova campanha: ${result.message}`);
+        else if (delivery.status === "failed") {
+            console.error(`[mail] operacional nova campanha: ${delivery.message}`);
         }
     }
+    return {
+        attemptedAt,
+        apiKind,
+        apiKindLabel,
+        recipients,
+    };
 };
+exports.notifyOperacionalStaffOnCampaignCreated = notifyOperacionalStaffOnCampaignCreated;

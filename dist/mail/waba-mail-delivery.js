@@ -24,17 +24,35 @@ const deliverEmail = async (input) => {
         };
     }
     try {
-        const delivery = await waba_mail_service_1.wabaMailService.send({
-            to: toEmail,
-            subject: input.subject,
-            html: input.html,
-        });
-        console.log(`[mail] ${input.logLabel} enviado para ${toEmail} (${delivery.messageId || "ok"}).`);
-        return {
-            status: "sent",
-            message: "E-mail enviado.",
-            messageId: delivery.messageId,
-        };
+        let lastError = null;
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+            try {
+                const delivery = await waba_mail_service_1.wabaMailService.send({
+                    to: toEmail,
+                    subject: input.subject,
+                    html: input.html,
+                });
+                console.log(`[mail] ${input.logLabel} enviado para ${toEmail} (${delivery.messageId || "ok"}).`);
+                return {
+                    status: "sent",
+                    message: "E-mail enviado.",
+                    messageId: delivery.messageId,
+                };
+            }
+            catch (error) {
+                lastError = error;
+                const message = error instanceof Error ? error.message : "Falha ao enviar e-mail.";
+                const retryable = /timeout|econnreset|econnrefused|421|450|451|452|454/i.test(message);
+                if (attempt < 2 && retryable) {
+                    await new Promise((resolve) => setTimeout(resolve, 900));
+                    continue;
+                }
+                console.error(`[mail] ${input.logLabel} falhou para ${toEmail}:`, message);
+                return { status: "failed", message };
+            }
+        }
+        const message = lastError instanceof Error ? lastError.message : "Falha ao enviar e-mail.";
+        return { status: "failed", message };
     }
     catch (error) {
         const message = error instanceof Error ? error.message : "Falha ao enviar e-mail.";

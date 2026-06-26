@@ -215,7 +215,11 @@ export class WabaSystemUserService {
       .filter(
         (user) =>
           user.role === "operacional" && user.operacionalDispatchesApi === apiKind,
-      );
+      )
+      .map((user) => ({
+        ...user,
+        email: user.email.trim().toLowerCase(),
+      }));
   }
 
   getSessionMenuAccess(email: string): { allowedMenuIds: string[]; menuPermissions: MenuPermissionsMap } {

@@ -26,6 +26,19 @@ export type WabaCampaignPerformanceReport = {
   filledByEmail: string;
 };
 
+export type WabaCampaignOperacionalNotifyAudit = {
+  attemptedAt: string;
+  apiKind: WabaDispatchesApiKind;
+  apiKindLabel: string;
+  recipients: {
+    email: string;
+    fullName: string;
+    status: "sent" | "skipped" | "failed";
+    message: string;
+    messageId?: string;
+  }[];
+};
+
 export type WabaCampaignIntake = {
   id: string;
   ownerEmail: string;
@@ -52,6 +65,8 @@ export type WabaCampaignIntake = {
   startedByEmail?: string;
   performanceReport?: WabaCampaignPerformanceReport;
   errorReport?: WabaCampaignErrorReport;
+  /** Última tentativa de e-mail ao operacional designado. */
+  operacionalNotifyAudit?: WabaCampaignOperacionalNotifyAudit;
   createdAt: string;
   updatedAt: string;
 };
@@ -135,6 +150,7 @@ export class WabaCampaignIntakeRepository {
         | "startedByEmail"
         | "performanceReport"
         | "errorReport"
+        | "operacionalNotifyAudit"
       >
     >,
   ): WabaCampaignIntake | null {

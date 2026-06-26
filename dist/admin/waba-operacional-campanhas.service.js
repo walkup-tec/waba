@@ -17,6 +17,7 @@ const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
+const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 exports.CAMPAIGN_START_DEADLINE_MS = 6 * 60 * 60 * 1000;
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const formatDateLabel = (iso) => {
@@ -361,6 +362,23 @@ class WabaOperacionalCampanhasService {
             buffer: (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(originalBuffer, plannedSendCount),
             fileName: trimmedFileName,
         };
+    }
+    async resendOperacionalNotifyEmail(campaignId, staff) {
+        const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+        const result = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignCreated)(intake);
+        this.intakeRepository.updateById(intake.id, {
+            updatedAt: new Date().toISOString(),
+            operacionalNotifyAudit: result,
+        });
+        const anySent = result.recipients.some((item) => item.status === "sent");
+        if (!result.recipients.length) {
+            throw new Error(`Nenhum operacional designado para ${result.apiKindLabel}. Ajuste em Admin · Usuários.`);
+        }
+        if (!anySent) {
+            throw new Error(result.recipients.map((item) => `${item.email}: ${item.message}`).join(" | ") ||
+                "Falha ao enviar e-mail operacional.");
+        }
+        return result;
     }
 }
 exports.WabaOperacionalCampanhasService = WabaOperacionalCampanhasService;

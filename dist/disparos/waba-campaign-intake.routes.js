@@ -210,7 +210,7 @@ const handleCampaignIntakeUpload = (req, res, next) => {
     });
 };
 const registerWabaCampaignIntakeRoutes = (app) => {
-    app.post("/disparos/campanhas/intake", handleCampaignIntakeUpload, (req, res) => {
+    app.post("/disparos/campanhas/intake", handleCampaignIntakeUpload, async (req, res) => {
         try {
             const auth = resolveRequestAuth(req);
             if (!auth.email) {
@@ -314,16 +314,21 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 createdAt: now,
                 updatedAt: now,
             });
-            if (!isMaster && plannedSendCount > 0 && apiKind === "oficial") {
+            if (!isMaster && plannedSendCount > 0) {
                 disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
             }
-            (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignCreated)(intake);
+            const operacionalNotify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignCreated)(intake);
+            intakeRepository.updateById(intake.id, {
+                updatedAt: new Date().toISOString(),
+                operacionalNotifyAudit: operacionalNotify,
+            });
             const importSummary = plannedSendCount < importedLineCount
                 ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
                 : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
             return res.status(201).json({
                 ok: true,
                 ...toPublicIntake(intake),
+                operacionalNotify,
                 message: "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
                 importSummary,
             });

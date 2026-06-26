@@ -8,6 +8,11 @@ const resolveWabaAppLoginUrl = () => {
         .replace(/\/$/, "");
     if (fromEnv)
         return fromEnv;
+    const fromPublic = String(process.env.WABA_PUBLIC_BASE_URL ?? process.env.WABA_WEBHOOK_BASE_URL ?? "")
+        .trim()
+        .replace(/\/$/, "");
+    if (fromPublic)
+        return fromPublic;
     const port = String(process.env.PORT || 3012).trim();
     const base = base_path_1.BASE_PATH || "";
     return `http://localhost:${port}${base}`;

@@ -115,6 +115,22 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             });
         }
     });
+    app.post("/admin/operacional/campanhas/:id/reenviar-email-operacional", async (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const result = await operacionalCampanhasService.resendOperacionalNotifyEmail(req.params.id, {
+                email: auth.email,
+                role: auth.role,
+            });
+            return res.status(200).json({ ok: true, operacionalNotify: result });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível reenviar o e-mail operacional.";
+            return res.status(400).json({ error: message });
+        }
+    });
     app.post("/admin/operacional/campanhas/:id/reportar-erro", (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
