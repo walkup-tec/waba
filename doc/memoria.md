@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Overlay deploy simplificado:** só círculo + barra; textos fixos com linha accent cyan. Ver `doc/LOG-2026-06-21__deploy-overlay-simplificacao-textos.md`.
+
+**WABA — Aquecedor UI hero/progress deduplicação:** hero mostra só último envio (`origem → destino realizado`); barra mostra só countdown (`Próximo ciclo em Ns`). Ver `doc/LOG-2026-06-21__aquecedor-ui-hero-progress-deduplicacao.md`.
+
 **WABA — Overlay deploy (3 probes / 2s):** poll `/health`+`/ready` a cada 2s; 3 verificações estáveis; fecha após 500ms "Sistema normalizado". Marker `DEPLOY-2026-06-21-deploy-overlay-3probes-aquecedor-equidade-v2`. Ver `doc/LOG-2026-06-21__deploy-overlay-estabilizacao-ui.md`.
 
 **WABA — Aquecedor equidade ciclo v2:** score por menor uso (aresta/origem/destino), filtro saturação de par >50%, owesPairReply só desempate. Ver `doc/LOG-2026-06-21__aquecedor-equidade-ciclo-v2.md`.
