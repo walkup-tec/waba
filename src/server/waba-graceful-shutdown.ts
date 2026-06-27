@@ -30,6 +30,7 @@ export const registerWabaShutdownGate = (app: Express): void => {
     if (!shuttingDown) return next();
     const p = String(req.path || "/").replace(/\/+$/, "") || "/";
     if (p === "/health" || p === "/ready") return next();
+    if (p === "/auth/session" && req.method === "GET") return next();
     if (isStaticRequestDuringShutdown(req.method, req.path)) return next();
     res.set("Retry-After", "15");
     res.set("Connection", "close");

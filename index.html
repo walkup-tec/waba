@@ -15,10 +15,14 @@
         var POLL_MS = 2000;
         var STABLE_PROBES_REQUIRED = 3;
         var STABLE_COMPLETE_MS = 500;
+        var FALSE_ALARM_MS = 45000;
         var pollTimer = null;
         var pollStartedAt = 0;
         var deployRecoveryActive = false;
         var stableProbeStreak = 0;
+        var sawDeploySignal = false;
+        var baselineDeployMarker = "";
+        var baselineServerBootId = "";
 
         function isProductionDeployHost() {
           var host = String(window.location.hostname || "").toLowerCase();
@@ -139,6 +143,47 @@
           if (card) card.setAttribute("aria-busy", "true");
         }
 
+        async function captureDeployBaseline() {
+          try {
+            var response = await fetch(resolveHealthUrl(), {
+              cache: "no-store",
+              credentials: "same-origin",
+            });
+            if (!response.ok) return;
+            var data = null;
+            try {
+              data = await response.json();
+            } catch (_) {
+              data = null;
+            }
+            if (!data) return;
+            baselineDeployMarker = String(data.deployMarker || "");
+            baselineServerBootId = String(data.serverBootId || "");
+          } catch (_) {}
+        }
+
+        function isDeployVersionReady(probe) {
+          if (!probe || !probe.stable) return false;
+          if (!sawDeploySignal) return false;
+          var nextMarker = String(probe.deployMarker || "");
+          var nextBootId = String(probe.serverBootId || "");
+          if (baselineDeployMarker && nextMarker && nextMarker !== baselineDeployMarker) return true;
+          if (baselineServerBootId && nextBootId && nextBootId !== baselineServerBootId) return true;
+          if (!baselineServerBootId && nextBootId) return true;
+          return false;
+        }
+
+        function completeDeployRecovery() {
+          setOverlayPhase("complete");
+          try {
+            sessionStorage.setItem("waba.deployReload", "1");
+          } catch (_) {}
+          purgeDeployServiceWorkerCache();
+          window.setTimeout(function () {
+            window.location.reload();
+          }, STABLE_COMPLETE_MS);
+        }
+
         function hideDeployOverlay() {
           var el = document.getElementById("waba-deploy-overlay");
           if (el) {
@@ -150,6 +195,16 @@
             clearTimeout(pollTimer);
             pollTimer = null;
           }
+        }
+
+        function dismissDeployRecoveryWithoutReload() {
+          hideDeployOverlay();
+          pollStartedAt = 0;
+          stableProbeStreak = 0;
+          deployRecoveryActive = false;
+          sawDeploySignal = false;
+          baselineDeployMarker = "";
+          baselineServerBootId = "";
         }
 
         function isGatewayStatus(status) {
@@ -197,7 +252,13 @@
             } catch (_) {
               return { stable: false, deploySignal: false, reason: "ready_unreachable" };
             }
-            return { stable: true, deploySignal: false, reason: "ok" };
+            return {
+              stable: true,
+              deploySignal: false,
+              reason: "ok",
+              deployMarker: String(data.deployMarker || ""),
+              serverBootId: String(data.serverBootId || ""),
+            };
           } catch (_) {
             return { stable: false, deploySignal: false, reason: "network" };
           }
@@ -214,17 +275,23 @@
           }
           showDeployOverlay();
           var probe = await probeHealthDetailed();
-          if (probe.stable) {
+          if (probe.deploySignal) sawDeploySignal = true;
+          if (probe.stable && isDeployVersionReady(probe)) {
             stableProbeStreak += 1;
             setOverlayPhase("stabilizing");
             if (stableProbeStreak >= STABLE_PROBES_REQUIRED) {
-              setOverlayPhase("complete");
-              window.setTimeout(function () {
-                hideDeployOverlay();
-                pollStartedAt = 0;
-                stableProbeStreak = 0;
-                deployRecoveryActive = false;
-              }, STABLE_COMPLETE_MS);
+              completeDeployRecovery();
+              return;
+            }
+          } else if (probe.stable) {
+            stableProbeStreak = 0;
+            setOverlayPhase("stabilizing");
+            if (
+              sawDeploySignal &&
+              pollStartedAt &&
+              Date.now() - pollStartedAt >= FALSE_ALARM_MS
+            ) {
+              dismissDeployRecoveryWithoutReload();
               return;
             }
           } else {
@@ -245,8 +312,11 @@
 
         function startDeployRecovery(force) {
           if (!isDeployResilienceEnabled()) return;
+          sawDeploySignal = true;
           deployRecoveryActive = true;
-          void pollUntilReady(!!force);
+          void captureDeployBaseline().finally(function () {
+            void pollUntilReady(!!force);
+          });
         }
 
         window.wabaDeployResilience = {
@@ -271,7 +341,12 @@
         document.addEventListener("DOMContentLoaded", function () {
           if (!isDeployResilienceEnabled()) return;
           void probeHealthDetailed().then(function (probe) {
-            if (!probe.stable && probe.deploySignal) startDeployRecovery(false);
+            if (probe.deploySignal) {
+              startDeployRecovery(false);
+              return;
+            }
+            baselineDeployMarker = String(probe.deployMarker || "");
+            baselineServerBootId = String(probe.serverBootId || "");
           });
         });
       })();
@@ -18662,26 +18737,85 @@
         syncWabaCredentialAutocompleteState(true);
       }
 
+      function isWabaAuthSessionTransientFailure(response, session) {
+        if (!response) return true;
+        if (response.status === 502 || response.status === 503 || response.status === 504) return true;
+        const payload = session && typeof session === "object" ? session : {};
+        if (payload.shuttingDown === true) return true;
+        if (payload.maintenanceMode === true) return true;
+        return false;
+      }
+
       async function initWabaAuthGate() {
         let session = {};
-        try {
-          const response = await fetchWabaAuthJson("/auth/session", {}, 15000, 2);
-          session = await response.json().catch(() => ({}));
-          const email = String(session.email || "").trim();
-          const hasValidSession = response.ok && session.authenticated === true && Boolean(email);
-          if (hasValidSession) {
-            unlockWabaApp(session);
-            return true;
+        const postDeployReload = (() => {
+          try {
+            return sessionStorage.getItem("waba.deployReload") === "1";
+          } catch {
+            return false;
           }
-          if (session.authenticated === false) {
-            try {
-              await fetchWabaAuthJson("/auth/logout", { method: "POST" }, 10000, 1);
-            } catch {
-              /* ignore */
+        })();
+        const maxAttempts = postDeployReload ? 20 : 3;
+        const retryDelayMs = postDeployReload ? 2000 : 900;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const response = await fetchWabaAuthJson("/auth/session", {}, 15000, 1);
+            session = await response.json().catch(() => ({}));
+            const email = String(session.email || "").trim();
+            const hasValidSession =
+              response.ok && session.authenticated === true && Boolean(email);
+
+            if (hasValidSession) {
+              try {
+                sessionStorage.removeItem("waba.deployReload");
+              } catch {
+                /* ignore */
+              }
+              unlockWabaApp(session);
+              return true;
+            }
+
+            if (isWabaAuthSessionTransientFailure(response, session) && attempt < maxAttempts) {
+              if (postDeployReload) {
+                document.body.classList.add("waba-auth-checking");
+                const resilience = window.wabaDeployResilience;
+                if (
+                  resilience &&
+                  typeof resilience.show === "function" &&
+                  typeof resilience.isEnabled === "function" &&
+                  resilience.isEnabled()
+                ) {
+                  resilience.show(
+                    "Finalizando a atualização. Sua sessão será restaurada em instantes.",
+                    "stabilizing"
+                  );
+                }
+              }
+              await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+              continue;
+            }
+
+            if (session.authenticated === false && response.ok) {
+              try {
+                await fetchWabaAuthJson("/auth/logout", { method: "POST" }, 10000, 1);
+              } catch {
+                /* ignore */
+              }
+            }
+            break;
+          } catch {
+            if (attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+              continue;
             }
           }
+        }
+
+        try {
+          sessionStorage.removeItem("waba.deployReload");
         } catch {
-          /* ignore — tela de login permanece disponível */
+          /* ignore */
         }
         lockWabaApp();
         if (session.authConfigured === false) {

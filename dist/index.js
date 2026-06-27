@@ -88,6 +88,8 @@ const deploy_marker_1 = require("./deploy-marker");
 const waba_campaign_intake_constants_1 = require("./disparos/waba-campaign-intake.constants");
 const waba_mail_service_1 = require("./mail/waba-mail.service");
 const waba_graceful_shutdown_1 = require("./server/waba-graceful-shutdown");
+/** Identificador único por processo — muda a cada redeploy/restart (overlay de deploy). */
+const WABA_SERVER_BOOT_ID = `${Date.now().toString(36)}-${crypto_1.default.randomBytes(4).toString("hex")}`;
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
@@ -366,6 +368,7 @@ app.get("/health", (_req, res) => {
         ok: !shuttingDown,
         shuttingDown,
         deployMarker: deploy_marker_1.WABA_DEPLOY_MARKER,
+        serverBootId: WABA_SERVER_BOOT_ID,
         campaignIntakeApiVersion: waba_campaign_intake_constants_1.WABA_CAMPAIGN_INTAKE_API_VERSION,
         campaignIntakeSafeParser: waba_campaign_intake_constants_1.WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
         mailConfigured: waba_mail_service_1.wabaMailService.isConfigured(),

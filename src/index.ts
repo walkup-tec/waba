@@ -108,6 +108,9 @@ import {
   registerWabaShutdownGate,
 } from "./server/waba-graceful-shutdown";
 
+/** Identificador único por processo — muda a cada redeploy/restart (overlay de deploy). */
+const WABA_SERVER_BOOT_ID = `${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
+
 const app = express();
 app.use(stripBasePathMiddleware);
 
@@ -435,6 +438,7 @@ app.get("/health", (_req, res) => {
     ok: !shuttingDown,
     shuttingDown,
     deployMarker: WABA_DEPLOY_MARKER,
+    serverBootId: WABA_SERVER_BOOT_ID,
     campaignIntakeApiVersion: WABA_CAMPAIGN_INTAKE_API_VERSION,
     campaignIntakeSafeParser: WABA_CAMPAIGN_INTAKE_SAFE_PARSER,
     mailConfigured: wabaMailService.isConfigured(),

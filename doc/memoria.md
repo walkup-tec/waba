@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Deploy resilience + sessão pós-reload:** overlay aguarda `serverBootId`/marker novo, reload automático, auth gate com retry; `/auth/session` no shutdown. Ver `doc/LOG-2026-06-21__deploy-resilience-session-estabilidade-fix.md`.
+
 **WABA — Alerta aquecimento incompleto (Seleção números):** modal Continuar/Reconfigurar se warmthLevel &lt; 3. Ver `doc/LOG-2026-06-21__disparos-alerta-aquecimento-incompleto.md`.
 
 **WABA — Campanhas lista por API (Alternativa/Oficial):** cache isolado por escopo; skeleton ao trocar aba; sem listagem cruzada. Ver `doc/LOG-2026-06-21__campanhas-lista-scope-api-alternativa-oficial-fix.md`.
