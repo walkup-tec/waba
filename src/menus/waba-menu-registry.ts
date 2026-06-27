@@ -164,6 +164,14 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     sectionLabel: SECTION_LABELS.suporte,
     profile: "all",
   },
+  {
+    id: "admin-monitor-cpu",
+    label: "Monitor CPU",
+    tab: "admin-monitor-cpu",
+    section: "suporte",
+    sectionLabel: SECTION_LABELS.suporte,
+    profile: "all",
+  },
 ];
 
 /** Menus Disparos visíveis para assinantes (UI produção / V02). */

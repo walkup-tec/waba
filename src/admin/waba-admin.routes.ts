@@ -17,6 +17,7 @@ import {
   getAsaasIntegrationMonitorStatus,
 } from "../monitoring/asaas-integration-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
+import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
@@ -29,6 +30,7 @@ const adminDashboardService = new WabaAdminDashboardService();
 const adminSupportService = new WabaAdminSupportService();
 const adminMasterMenuBadgesService = new WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new WabaFinanceiroSplitService();
+const vpsCpuMonitorService = new VpsCpuMonitorService();
 
 const rejectNonMaster = (req: Request, res: Response) => {
   const auth = resolveWabaRequestAuth(req);
@@ -439,5 +441,21 @@ export const registerWabaAdminRoutes = (app: Express) => {
       `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`,
     );
     return res.sendFile(path.resolve(resolved.absolutePath));
+  });
+
+  app.get("/admin/infra/cpu/dashboard", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    if (!vpsCpuMonitorService.isEnabled()) {
+      return res.status(503).json({ error: "Monitor CPU desativado neste ambiente." });
+    }
+    try {
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) ? Math.min(240, Math.max(20, limitRaw)) : 120;
+      return res.status(200).json(await vpsCpuMonitorService.getDashboard(limit));
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar o monitor CPU.",
+      });
+    }
   });
 };

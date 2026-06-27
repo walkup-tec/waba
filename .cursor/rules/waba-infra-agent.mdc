@@ -1,0 +1,17 @@
+---
+description: Ativa o agente de infraestrutura WABA (VPS, Traefik, CPU, Easypanel, Docker). Use skill waba-infrastructure-specialist.
+alwaysApply: false
+globs: scripts/infra/**,scripts/traefik*.sh,doc/FIX-TRAEFIK*.md,doc/INFRA*.md
+---
+
+# Agente de Infraestrutura WABA
+
+Quando o usuário trabalhar nestes ficheiros ou pedir VPS/Traefik/CPU/deploy produção:
+
+1. Ler e aplicar `.cursor/skills/waba-infrastructure-specialist/SKILL.md`
+2. Executar diagnóstico na ordem do skill (Docker → Traefik → health → HTTPS)
+3. Usar `scripts/infra/vps-health-audit.sh` e `vps-cpu-report.sh`
+4. Uma etapa SSH por vez; snapshot antes de `restart docker` ou prune agressivo
+5. Registar incidentes em `doc/LOG-*` + `doc/memoria.md`
+
+Invocação explícita: `@waba-infrastructure-specialist`

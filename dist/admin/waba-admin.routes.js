@@ -18,6 +18,7 @@ const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-men
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integration-monitor.service");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
+const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
 const adminSubscriberPromoteService = new waba_admin_subscriber_promote_service_1.WabaAdminSubscriberPromoteService();
@@ -28,6 +29,7 @@ const adminDashboardService = new waba_admin_dashboard_service_1.WabaAdminDashbo
 const adminSupportService = new waba_admin_support_service_1.WabaAdminSupportService();
 const adminMasterMenuBadgesService = new waba_admin_master_menu_badges_service_1.WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService();
+const vpsCpuMonitorService = new vps_cpu_monitor_service_1.VpsCpuMonitorService();
 const rejectNonMaster = (req, res) => {
     const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
     if (auth.role !== "master") {
@@ -426,6 +428,23 @@ const registerWabaAdminRoutes = (app) => {
         res.type(resolved.attachment.mimeType);
         res.setHeader("Content-Disposition", `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`);
         return res.sendFile(node_path_1.default.resolve(resolved.absolutePath));
+    });
+    app.get("/admin/infra/cpu/dashboard", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        if (!vpsCpuMonitorService.isEnabled()) {
+            return res.status(503).json({ error: "Monitor CPU desativado neste ambiente." });
+        }
+        try {
+            const limitRaw = Number(req.query.limit);
+            const limit = Number.isFinite(limitRaw) ? Math.min(240, Math.max(20, limitRaw)) : 120;
+            return res.status(200).json(await vpsCpuMonitorService.getDashboard(limit));
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível carregar o monitor CPU.",
+            });
+        }
     });
 };
 exports.registerWabaAdminRoutes = registerWabaAdminRoutes;

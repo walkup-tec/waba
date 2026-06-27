@@ -13,7 +13,19 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-21
+2026-06-27
+
+**WABA — Monitor CPU master (Suporte):** gráfico CPU VPS, alerta sustentado, top containers, playbook SSH copiável; `GET /admin/infra/cpu/dashboard`; coletor `waba-infra-cpu-collector.timer`. Ver `doc/LOG-2026-06-27__monitor-cpu-master-ui.md`.
+
+**WABA — Remoção Chatwoot + n8n VPS (2026-06-27):** `docker service rm` 4 chatwoot + `walkup_n8n`; WABA HTTPS 200; CPU aliviada. Ver `doc/LOG-2026-06-27__remocao-chatwoot-n8n-vps.md`.
+
+**WABA — Traefik CPU produção (2026-06-27):** `ACCESSLOG/API_INSECURE/DASHBOARD` → false; `custom.yaml` criado; CPU 39,75%→~5%→0% pós-reload; HTTPS 200. Ver `doc/LOG-2026-06-27__traefik-cpu-accesslog-off-producao.md`.
+
+**WABA — Estudo CPU Traefik (access log / dashboard):** audit `scripts/infra/traefik-config-audit.sh`; plano `doc/TRAEFIK-CPU-OTIMIZACAO-ESTUDO.md`. Easypanel usa `custom.yaml`, não docker-compose do repo; ganho drástico = migrar Chatwoot/n8n.
+
+**WABA — Agente Infra Cursor + monitor VPS:** skill `waba-infrastructure-specialist`, scripts `scripts/infra/` (audit, CPU, timer 15min), docs `doc/INFRA-AGENT-WABA.md`, `AGENTS.md`. CPU Hostinger jun/2026: carga real multi-app, não fantasma; prune+restart OK. Ver `doc/LOG-2026-06-27__infra-agent-cursor-monitor-vps.md`.
+
+Palavras-chave: `infra-agent`, `waba-infrastructure-specialist`, `vps-cpu-report`, `waba-infra-audit`, `srv1261237`, `Hostinger CPU`
 
 **WABA — Hex cluster linhas de luz:** órbitas elípticas SVG verde→azul envolvendo arte Contratar (estilo atômico). Ver `doc/LOG-2026-06-21__hex-cluster-linhas-luz-verde-azul.md`.
 
