@@ -15,9 +15,17 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Overlay deploy local (flag servidor):** modal antigo no dev por `dist/` desatualizado + hostname-only; flag `WABA_DEPLOY_RESILIENCE_ENABLED` injetada pelo servidor; ts-node serve `index.html` raiz; purge SW local. Ver `doc/LOG-2026-06-21__deploy-overlay-local-flag-servidor.md`.
+
+**WABA — Campanha EVO fluxo preview/mapear/quantidade:** ordem correta, Salvar configurações separado, projeção término com ⏱. Ver `doc/LOG-2026-06-21__campanha-evo-fluxo-preview-mapear-quantidade.md`.
+
+**WABA — Aquecedor Salvar config 1 clique (v2):** remove gate editMode, mousedown no botão, merge lote expediente pendente, skip reload ao editar. Ver `doc/LOG-2026-06-21__aquecedor-salvar-config-um-clique-fix-v2.md`.
+
+**WABA — Disparos Dashboard loading (cache + skeleton):** sem tela vazia; cache 30min, prefetch no login, skeleton estruturado. Ver `doc/LOG-2026-06-21__disparos-dashboard-loading-cache-skeleton.md`.
+
 **WABA — Overlay deploy simplificado:** só círculo + barra; textos fixos com linha accent cyan. Ver `doc/LOG-2026-06-21__deploy-overlay-simplificacao-textos.md`.
 
-**WABA — Aquecedor UI hero/progress deduplicação:** hero mostra só último envio (`origem → destino realizado`); barra mostra só countdown (`Próximo ciclo em Ns`). Ver `doc/LOG-2026-06-21__aquecedor-ui-hero-progress-deduplicacao.md`.
+**WABA — Aquecedor UI hero/progress deduplicação:** hero mostra só último envio ou retorno do expediente (data/hora uma vez); barra mostra countdown ou "Aguardando próximo expediente." Ver `doc/LOG-2026-06-21__aquecedor-ui-hero-progress-deduplicacao.md`.
 
 **WABA — Overlay deploy (3 probes / 2s):** poll `/health`+`/ready` a cada 2s; 3 verificações estáveis; fecha após 500ms "Sistema normalizado". Marker `DEPLOY-2026-06-21-deploy-overlay-3probes-aquecedor-equidade-v2`. Ver `doc/LOG-2026-06-21__deploy-overlay-estabilizacao-ui.md`.
 

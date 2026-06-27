@@ -32,6 +32,35 @@ export type WabaClientFeatureFlags = {
   alternativaNumbersPurchase: boolean;
 };
 
+export type WabaClientRuntimeInject = {
+  basePath: string;
+  uiProfile: WabaUiProfile;
+  featureFlags?: WabaClientFeatureFlags;
+  deployResilienceEnabled?: boolean;
+};
+
+/** Overlay de deploy só no runtime compilado de produção (Easypanel). Dev local sempre false. */
+export function resolveDeployResilienceForClient(): boolean {
+  const explicit = String(process.env.WABA_DEPLOY_RESILIENCE || "")
+    .trim()
+    .toLowerCase();
+  if (["0", "false", "off", "no"].includes(explicit)) return false;
+  if (["1", "true", "on", "yes"].includes(explicit)) return true;
+
+  const runtimeMode = String(process.env.RUNTIME_MODE || "production").toLowerCase();
+  if (runtimeMode === "development") return false;
+
+  const wabaEnv = String(process.env.WABA_ENV || "")
+    .trim()
+    .toLowerCase();
+  if (wabaEnv === "v01" || wabaEnv === "v02") return false;
+
+  const entry = String(process.argv[1] || "");
+  if (/\.ts$/i.test(entry)) return false;
+
+  return runtimeMode === "production";
+}
+
 function buildBasePathScript(basePath: string): string {
   const safe = basePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   return `<meta name="waba-base-path" content="${basePath}" />
@@ -53,13 +82,23 @@ window.WABA_BASE_PATH="${safe}";
 
 export function injectRuntimeIntoIndexHtml(
   html: string,
-  opts: { basePath: string; uiProfile: WabaUiProfile; featureFlags?: WabaClientFeatureFlags }
+  opts: {
+    basePath: string;
+    uiProfile: WabaUiProfile;
+    featureFlags?: WabaClientFeatureFlags;
+    deployResilienceEnabled?: boolean;
+  }
 ): string {
   const featureFlagsJson = JSON.stringify(opts.featureFlags ?? { alternativaNumbersPurchase: false });
+  const deployResilienceEnabled =
+    typeof opts.deployResilienceEnabled === "boolean"
+      ? opts.deployResilienceEnabled
+      : resolveDeployResilienceForClient();
   const injection = [
     opts.basePath ? buildBasePathScript(opts.basePath) : "",
     `<script>window.WABA_UI_PROFILE="${opts.uiProfile}";</script>`,
     `<script>window.WABA_FEATURE_FLAGS=${featureFlagsJson};</script>`,
+    `<script>window.WABA_DEPLOY_RESILIENCE_ENABLED=${deployResilienceEnabled ? "true" : "false"};</script>`,
   ]
     .filter(Boolean)
     .join("\n");

@@ -25,6 +25,6 @@ Função auxiliar `splitAquecedorLastResultMessage()` parseia `lastResult` do ba
    - Barra: apenas `Próximo ciclo em Ns` (atualizando a cada tick).
 3. Sem repetir a mesma frase completa nos dois lugares.
 
-## Palavras-chave
+## Observação (expediente)
 
-aquecedor, hero, progress, lastResult, redundância UI, countdown
+Quando `windowOpen === false`, hero exibe uma vez `Retoma automaticamente em {data/hora}.`; barra mostra só `Aguardando próximo expediente.` (sem repetir datetime).

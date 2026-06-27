@@ -17,6 +17,7 @@ import {
   stripBasePathMiddleware,
   requestUnderBasePath,
   injectRuntimeIntoIndexHtml,
+  resolveDeployResilienceForClient,
   type WabaUiProfile,
 } from "./base-path";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
@@ -4412,17 +4413,20 @@ function stopAquecedorRuntime(): void {
 
 let indexHtmlTemplate: string | null = null;
 let indexHtmlTemplateMtimeMs = 0;
+function isTsNodeDevServer(): boolean {
+  return /\.ts$/i.test(String(process.argv[1] || ""));
+}
 function resolveIndexHtmlPath(): string {
   const rootHtml = path.join(rootPath, "index.html");
   const distHtml = path.join(distPath, "index.html");
-  if (RUNTIME_MODE === "development" && existsSync(rootHtml)) {
+  if ((RUNTIME_MODE === "development" || isTsNodeDevServer()) && existsSync(rootHtml)) {
     return rootHtml;
   }
   return distHtml;
 }
 function loadIndexHtmlTemplate(): string {
   const htmlPath = resolveIndexHtmlPath();
-  if (RUNTIME_MODE === "development") {
+  if (RUNTIME_MODE === "development" || isTsNodeDevServer()) {
     return readFileSync(htmlPath, "utf8");
   }
   const mtimeMs = statSync(htmlPath).mtimeMs;
@@ -4450,6 +4454,7 @@ function sendIndexHtml(res: express.Response) {
     basePath: BASE_PATH,
     uiProfile: resolveUiProfile(),
     featureFlags: getWabaFeatureFlagsForClient(),
+    deployResilienceEnabled: resolveDeployResilienceForClient(),
   });
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
@@ -10003,6 +10008,10 @@ app.post(
     }
 
     let plannedSendCount = importedLineCount;
+    const requestedPlannedSendCount = Math.max(
+      0,
+      Math.floor(Number(req.body?.plannedSendCount) || 0)
+    );
     let creditsApiKind: WabaDispatchesApiKind = "oficial";
     if (ownerEmail && !disparosCreditsService.isMasterUnlimited(ownerEmail)) {
       creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
@@ -10013,7 +10022,10 @@ app.post(
             "Você não possui envios contratados disponíveis. Contrate um pacote antes de criar a campanha.",
         });
       }
-      plannedSendCount = Math.min(importedLineCount, remaining);
+      const cap = requestedPlannedSendCount > 0
+        ? Math.min(importedLineCount, remaining, requestedPlannedSendCount)
+        : Math.min(importedLineCount, remaining);
+      plannedSendCount = cap;
       numbers = numbers.slice(0, plannedSendCount);
       if (!numbers.length) {
         return res.status(400).json({
@@ -10023,6 +10035,9 @@ app.post(
       if (debitsDisparosCreditsOnCampaignCreate(creditsApiKind)) {
         disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length, creditsApiKind);
       }
+    } else if (requestedPlannedSendCount > 0) {
+      plannedSendCount = Math.min(importedLineCount, requestedPlannedSendCount);
+      numbers = numbers.slice(0, plannedSendCount);
     }
 
     if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {

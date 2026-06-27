@@ -31,8 +31,45 @@
           return host === "waba.draxsistemas.com.br" || host.endsWith(".draxsistemas.com.br");
         }
 
+        function isServerDeployResilienceEnabled() {
+          return window.WABA_DEPLOY_RESILIENCE_ENABLED === true;
+        }
+
         function isDeployResilienceEnabled() {
-          return isProductionDeployHost();
+          return isServerDeployResilienceEnabled() && isProductionDeployHost();
+        }
+
+        function purgeDeployServiceWorkerCache() {
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(function (regs) {
+                regs.forEach(function (reg) {
+                  var scriptUrl = String(
+                    (reg.active && reg.active.scriptURL) ||
+                      (reg.installing && reg.installing.scriptURL) ||
+                      (reg.waiting && reg.waiting.scriptURL) ||
+                      ""
+                  );
+                  if (scriptUrl.indexOf("sw-deploy-resilience") !== -1) {
+                    reg.unregister().catch(function () {});
+                  }
+                });
+              })
+              .catch(function () {});
+          }
+          if (window.caches && caches.keys) {
+            caches
+              .keys()
+              .then(function (keys) {
+                keys.forEach(function (key) {
+                  if (key.indexOf("waba-deploy-shell") !== -1) {
+                    caches.delete(key).catch(function () {});
+                  }
+                });
+              })
+              .catch(function () {});
+          }
         }
 
         function resolveBasePath() {
@@ -67,56 +104,25 @@
           el.innerHTML =
             '<div class="waba-deploy-overlay-card" role="status" aria-live="polite" aria-busy="true">' +
             '<div class="waba-deploy-visual" aria-hidden="true">' +
-            '<div class="waba-deploy-icon-wrap">' +
-            '<div class="waba-deploy-orbit waba-deploy-orbit--outer"></div>' +
-            '<div class="waba-deploy-orbit waba-deploy-orbit--inner"></div>' +
-            '<div class="waba-deploy-icon-core">' +
-            '<svg class="waba-deploy-icon-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-            '<path class="waba-deploy-icon-cloud" d="M14 32h22a8 8 0 0 0 .6-16 10 10 0 0 0-19.3 3.2A6.5 6.5 0 0 0 14 32Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
-            '<path class="waba-deploy-icon-arrow waba-deploy-icon-arrow--up" d="M24 12v14M24 12l-4 4M24 12l4 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-            '<path class="waba-deploy-icon-arrow waba-deploy-icon-arrow--down" d="M24 36V22M24 36l-4-4M24 36l4-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-            "</svg>" +
-            "</div>" +
-            "</div>" +
+            '<div class="waba-deploy-spinner"></div>' +
             '<div class="waba-deploy-progress-track">' +
             '<div class="waba-deploy-progress-bar" id="waba-deploy-progress-bar"></div>' +
             "</div>" +
-            '<div class="waba-deploy-dots"><span></span><span></span><span></span></div>' +
             "</div>" +
-            '<p class="waba-deploy-phase" id="waba-deploy-overlay-phase">Atualizando serviços</p>' +
-            '<h1>Estamos atualizando o sistema</h1>' +
-            '<p id="waba-deploy-overlay-message">Sua sessão está preservada. Aguarde — liberaremos o acesso assim que tudo estiver estável.</p>' +
-            '<p class="waba-deploy-overlay-hint">Não é necessário abrir chamado: isso costuma levar menos de um minuto durante o deploy.</p>' +
+            '<h1 class="waba-deploy-title" id="waba-deploy-overlay-phase">ATUALIZANDO O SISTEMA</h1>' +
+            '<p id="waba-deploy-overlay-message">Estamos aplicando melhorias para oferecer uma experiência cada vez melhor.</p>' +
+            '<p class="waba-deploy-overlay-accent" id="waba-deploy-overlay-accent">Em poucos segundos sua tela será atualizada automaticamente e você poderá continuar normalmente.</p>' +
             "</div>";
           document.body.appendChild(el);
           return el;
         }
 
-        function setOverlayPhase(phase, stableCurrent, stableRequired) {
-          var phaseEl = document.getElementById("waba-deploy-overlay-phase");
+        function setOverlayPhase(phase) {
           var card = document.querySelector("#waba-deploy-overlay .waba-deploy-overlay-card");
-          if (card) {
-            card.classList.remove("is-stabilizing", "is-complete");
-            if (phase === "stabilizing") card.classList.add("is-stabilizing");
-            if (phase === "complete") card.classList.add("is-complete");
-          }
-          if (!phaseEl) return;
-          if (phase === "stabilizing") {
-            var n = Number(stableCurrent || 0);
-            var total = Number(stableRequired || STABLE_PROBES_REQUIRED);
-            phaseEl.textContent =
-              "Confirmando estabilidade (" + n + "/" + total + ")";
-            return;
-          }
-          if (phase === "complete") {
-            phaseEl.textContent = "Sistema normalizado";
-            return;
-          }
-          if (phase === "long_wait") {
-            phaseEl.textContent = "Atualização em andamento";
-            return;
-          }
-          phaseEl.textContent = "Atualizando serviços";
+          if (!card) return;
+          card.classList.remove("is-stabilizing", "is-complete");
+          if (phase === "stabilizing") card.classList.add("is-stabilizing");
+          if (phase === "complete") card.classList.add("is-complete");
         }
 
         function showDeployOverlay(message, phase) {
@@ -124,7 +130,9 @@
           var el = ensureOverlay();
           if (!el) return;
           var msgEl = document.getElementById("waba-deploy-overlay-message");
-          if (msgEl && message) msgEl.textContent = message;
+          var defaultMsg =
+            "Estamos aplicando melhorias para oferecer uma experiência cada vez melhor.";
+          if (msgEl) msgEl.textContent = message || defaultMsg;
           setOverlayPhase(phase || "deploying");
           el.removeAttribute("hidden");
           var card = el.querySelector(".waba-deploy-overlay-card");
@@ -208,7 +216,7 @@
           var probe = await probeHealthDetailed();
           if (probe.stable) {
             stableProbeStreak += 1;
-            setOverlayPhase("stabilizing", stableProbeStreak, STABLE_PROBES_REQUIRED);
+            setOverlayPhase("stabilizing");
             if (stableProbeStreak >= STABLE_PROBES_REQUIRED) {
               setOverlayPhase("complete");
               window.setTimeout(function () {
@@ -256,6 +264,8 @@
               .register(resolveSwUrl(), { scope: resolveSwScope() })
               .catch(function () {});
           });
+        } else {
+          purgeDeployServiceWorkerCache();
         }
 
         document.addEventListener("DOMContentLoaded", function () {
@@ -297,63 +307,25 @@
         border-color: rgba(46, 228, 160, 0.45);
         box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(46, 228, 160, 0.12);
       }
-      .waba-deploy-overlay-card.is-complete .waba-deploy-icon-core {
-        color: #2ee4a0;
-        transform: scale(1.04);
-      }
       .waba-deploy-visual {
-        margin-bottom: 6px;
+        margin-bottom: 18px;
       }
-      .waba-deploy-icon-wrap {
-        position: relative;
-        width: 88px;
-        height: 88px;
-        margin: 0 auto 14px;
-      }
-      .waba-deploy-orbit {
-        position: absolute;
-        inset: 0;
+      .waba-deploy-spinner {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 16px;
         border-radius: 50%;
-        border: 2px solid transparent;
-      }
-      .waba-deploy-orbit--outer {
-        border-top-color: rgba(46, 228, 160, 0.85);
-        border-right-color: rgba(46, 228, 160, 0.15);
-        animation: waba-deploy-orbit 1.4s linear infinite;
-      }
-      .waba-deploy-orbit--inner {
-        inset: 10px;
-        border-bottom-color: rgba(34, 211, 238, 0.85);
-        border-left-color: rgba(34, 211, 238, 0.12);
-        animation: waba-deploy-orbit 1.1s linear infinite reverse;
-      }
-      .waba-deploy-icon-core {
-        position: absolute;
-        inset: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #22d3ee;
-        transition: color 0.35s ease, transform 0.35s ease;
-      }
-      .waba-deploy-icon-svg {
-        width: 100%;
-        height: 100%;
-      }
-      .waba-deploy-icon-arrow--up {
-        animation: waba-deploy-float-up 1.6s ease-in-out infinite;
-      }
-      .waba-deploy-icon-arrow--down {
-        animation: waba-deploy-float-down 1.6s ease-in-out infinite;
-        opacity: 0.55;
+        border: 2px solid rgba(34, 211, 238, 0.14);
+        border-top-color: rgba(46, 228, 160, 0.9);
+        animation: waba-deploy-orbit 1.2s linear infinite;
       }
       .waba-deploy-progress-track {
         height: 4px;
         border-radius: 999px;
         background: rgba(148, 163, 184, 0.18);
         overflow: hidden;
-        margin: 0 auto 10px;
-        max-width: 168px;
+        margin: 0 auto;
+        max-width: 180px;
       }
       .waba-deploy-progress-bar {
         height: 100%;
@@ -367,37 +339,17 @@
         width: 100%;
         animation: waba-deploy-progress-fill 0.9s ease-out forwards;
       }
-      .waba-deploy-dots {
-        display: flex;
-        justify-content: center;
-        gap: 6px;
-        min-height: 8px;
+      .waba-deploy-overlay-card.is-complete .waba-deploy-spinner {
+        border-top-color: #2ee4a0;
+        animation: none;
       }
-      .waba-deploy-dots span {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #2ee4a0;
-        animation: waba-deploy-dot 1.2s ease-in-out infinite;
-      }
-      .waba-deploy-dots span:nth-child(2) {
-        animation-delay: 0.18s;
-      }
-      .waba-deploy-dots span:nth-child(3) {
-        animation-delay: 0.36s;
-      }
-      .waba-deploy-phase {
-        margin: 0 0 6px;
-        font-size: 0.72rem;
+      .waba-deploy-title {
+        margin: 0 0 12px;
+        font-size: 0.78rem;
         font-weight: 600;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         color: #2ee4a0;
-      }
-      .waba-deploy-overlay-card h1 {
-        font-size: 1.12rem;
-        margin: 0 0 10px;
-        font-weight: 600;
       }
       .waba-deploy-overlay-card p {
         margin: 0 0 10px;
@@ -405,36 +357,14 @@
         line-height: 1.55;
         font-size: 0.92rem;
       }
-      .waba-deploy-overlay-hint {
-        font-size: 0.8rem !important;
-        color: #8fa3b8 !important;
+      .waba-deploy-overlay-accent {
         margin-bottom: 0 !important;
+        color: #22d3ee !important;
+        font-size: 0.88rem;
       }
       @keyframes waba-deploy-orbit {
         to {
           transform: rotate(360deg);
-        }
-      }
-      @keyframes waba-deploy-float-up {
-        0%,
-        100% {
-          transform: translateY(2px);
-          opacity: 0.45;
-        }
-        50% {
-          transform: translateY(-3px);
-          opacity: 1;
-        }
-      }
-      @keyframes waba-deploy-float-down {
-        0%,
-        100% {
-          transform: translateY(-2px);
-          opacity: 0.35;
-        }
-        50% {
-          transform: translateY(3px);
-          opacity: 0.75;
         }
       }
       @keyframes waba-deploy-progress-slide {
@@ -453,18 +383,6 @@
         }
         to {
           transform: translateX(0);
-        }
-      }
-      @keyframes waba-deploy-dot {
-        0%,
-        80%,
-        100% {
-          transform: scale(0.55);
-          opacity: 0.35;
-        }
-        40% {
-          transform: scale(1);
-          opacity: 1;
         }
       }
     </style>
@@ -3916,6 +3834,66 @@
         font-size: 0.74rem;
         line-height: 1.45;
         color: rgba(148, 163, 184, 0.9);
+      }
+
+      .disparos-dashboard-skeleton {
+        text-align: left;
+      }
+
+      .disparos-dashboard-skeleton-line {
+        width: min(220px, 72%);
+        height: 14px;
+        border-radius: 999px;
+        margin: 0 auto 14px !important;
+      }
+
+      .disparos-dashboard-skeleton-bar,
+      .disparos-dashboard-skeleton-line,
+      .disparos-dashboard-skeleton-pie,
+      .disparos-dashboard-skeleton-bar-inline {
+        background: linear-gradient(
+          90deg,
+          rgba(148, 163, 184, 0.12) 25%,
+          rgba(148, 163, 184, 0.28) 50%,
+          rgba(148, 163, 184, 0.12) 75%
+        );
+        background-size: 200% 100%;
+        animation: disparos-dashboard-skeleton-shimmer 1.25s ease-in-out infinite;
+      }
+
+      .disparos-dashboard-skeleton-bar {
+        display: inline-block;
+        width: 3.2rem;
+        height: 1.35rem;
+        border-radius: 8px;
+        color: transparent !important;
+      }
+
+      .disparos-dashboard-skeleton-bar-inline {
+        display: inline-block;
+        width: 7rem;
+        height: 0.72rem;
+        border-radius: 999px;
+      }
+
+      .disparos-dashboard-skeleton-pie {
+        width: 132px;
+        height: 132px;
+        border-radius: 50%;
+        opacity: 0.85;
+      }
+
+      #disparos-dashboard-report.is-loading {
+        min-height: 280px;
+      }
+
+      @keyframes disparos-dashboard-skeleton-shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
       }
 
       .admin-dashboard-restricted-note {
@@ -11029,6 +11007,57 @@
         background: rgba(69, 26, 3, 0.35);
         color: #fde68a;
       }
+      .dis-campaign-flow-step {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      .dis-campaign-flow-step-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px 12px;
+        margin-bottom: 10px;
+      }
+      .dis-campaign-flow-step-label {
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #22d3ee;
+      }
+      .dis-campaign-flow-step-status {
+        font-size: 0.82rem;
+        color: #94a3b8;
+      }
+      .dis-campaign-flow-step-status.is-done {
+        color: #86efac;
+      }
+      .dis-evo-campaign-projection-inner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .dis-evo-projection-icon {
+        flex: 0 0 auto;
+        font-size: 1.05rem;
+        line-height: 1.4;
+        opacity: 0.82;
+        color: #67e8f9;
+      }
+      .dis-evo-campaign-projection.is-warning .dis-evo-projection-icon {
+        color: #fcd34d;
+      }
+      .dis-evo-projection-deadline {
+        display: block;
+        margin-top: 4px;
+        color: #a5f3fc;
+        font-weight: 600;
+      }
+      .dis-evo-campaign-projection.is-warning .dis-evo-projection-deadline {
+        color: #fde68a;
+      }
       body.waba-ui-baseline #disparos-config-legacy,
       body.waba-disparo-evo-mode #disparos-config-legacy {
         margin-top: 12px;
@@ -13814,11 +13843,10 @@
                 <div id="disparos-dashboard-shell" class="disparos-dashboard-shell">
                 <div
                   id="disparos-dashboard-report"
-                  class="camp-report-dashboard"
+                  class="camp-report-dashboard is-loading"
                   aria-live="polite"
-                >
-                  <div class="muted">Carregando relatório consolidado…</div>
-                </div>
+                  aria-busy="true"
+                ></div>
                 <section
                   id="disparos-dashboard-compare"
                   class="disparos-dashboard-compare"
@@ -15132,7 +15160,21 @@
                             </table>
                           </div>
                         </div>
-                        <div id="dis-evo-campaign-send-wrap" class="dis-wizard-leads-count-wrap" hidden>
+                        <div id="dis-campaign-mapping-step" class="dis-campaign-flow-step" hidden>
+                          <div class="dis-campaign-flow-step-head">
+                            <span class="dis-campaign-flow-step-label">Mapear coluna</span>
+                            <span id="dis-campaign-mapping-status" class="dis-campaign-flow-step-status">
+                              Selecione a coluna de telefone da planilha.
+                            </span>
+                          </div>
+                          <button id="dis-campaign-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                            Mapear coluna
+                          </button>
+                        </div>
+                        <div id="dis-evo-campaign-send-wrap" class="dis-wizard-leads-count-wrap dis-campaign-flow-step" hidden>
+                          <div class="dis-campaign-flow-step-head">
+                            <span class="dis-campaign-flow-step-label">Quantidade de envios</span>
+                          </div>
                           <div class="aquecedor-field">
                             <label for="dis-evo-planned-send-count">Quantidade de envios desta campanha</label>
                             <input
@@ -15149,8 +15191,13 @@
                           <div id="dis-evo-campaign-projection" class="dis-evo-campaign-projection" hidden></div>
                         </div>
                         <div class="disparos-inline-actions" style="margin-top: 12px;">
-                          <button id="dis-campaign-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
-                            Mapear coluna e criar campanha
+                          <button
+                            id="dis-campaign-save-config-btn"
+                            class="instance-action-btn btn-qrcode enabled"
+                            type="button"
+                            hidden
+                          >
+                            Salvar configurações
                           </button>
                           <span id="dis-campaign-create-status" class="muted">Aguardando importação da planilha.</span>
                         </div>
@@ -16431,7 +16478,7 @@
       <div class="confirm-modal" role="dialog" aria-modal="true" style="max-width: 680px;">
         <div class="confirm-title">Mapear Arquivo</div>
         <div class="confirm-text">
-          Informe o nome da campanha e a coluna da planilha que contém o número do WhatsApp.
+          Confirme o nome da campanha e selecione a coluna da planilha que contém o número do WhatsApp.
         </div>
         <div style="display: grid; gap: 10px; margin-top: 12px;">
           <label class="register-label" for="dis-campaign-modal-name">Nome da campanha *</label>
@@ -16447,7 +16494,7 @@
         </div>
         <div class="confirm-actions">
           <button id="dis-campaign-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
-          <button id="dis-campaign-map-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">Confirmar e criar campanha</button>
+          <button id="dis-campaign-map-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">Confirmar mapeamento</button>
         </div>
       </div>
     </div>
@@ -17482,6 +17529,72 @@
       let disparosDashboardCompareApiKind = "all";
       let disparosDashboardCompareSelectedSubscriberEmail = "";
       let disparosDashboardCompareRenderFingerprint = "";
+      const DISPAROS_DASHBOARD_CACHE_PREFIX = "waba-disparos-dashboard-v1";
+      const DISPAROS_DASHBOARD_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+
+      function disparosDashboardCacheKey() {
+        return `${DISPAROS_DASHBOARD_CACHE_PREFIX}:${wabaSessionEmail || "guest"}`;
+      }
+
+      function persistDisparosDashboardCache(overview, credits) {
+        if (!overview || typeof overview !== "object") return;
+        try {
+          localStorage.setItem(
+            disparosDashboardCacheKey(),
+            JSON.stringify({
+              savedAt: Date.now(),
+              overview,
+              credits: credits && typeof credits === "object" ? credits : null,
+            })
+          );
+        } catch (error) {
+          console.warn("Não foi possível salvar cache local do dashboard de disparos.", error);
+        }
+      }
+
+      function restoreDisparosDashboardCache() {
+        try {
+          const raw = localStorage.getItem(disparosDashboardCacheKey());
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed?.overview || typeof parsed.overview !== "object") return null;
+          if (Date.now() - (parsed.savedAt || 0) > DISPAROS_DASHBOARD_CACHE_MAX_AGE_MS) {
+            localStorage.removeItem(disparosDashboardCacheKey());
+            return null;
+          }
+          return parsed;
+        } catch {
+          return null;
+        }
+      }
+
+      function hydrateDisparosDashboardFromLocalCache() {
+        const cached = restoreDisparosDashboardCache();
+        if (!cached?.overview) return false;
+        disparosDashboardOverviewCache = cached.overview;
+        if (cached.credits) disparosCreditsCache = cached.credits;
+        renderDisparosDashboard(cached.overview, cached.credits || disparosCreditsCache, {
+          force: true,
+        });
+        return true;
+      }
+
+      function prefetchDisparosDashboardInBackground() {
+        if (!wabaSessionEmail) return;
+        void Promise.all([
+          loadDisparosCredits().catch(() => disparosCreditsCache),
+          fetchDisparosDashboardOverview().catch(() => null),
+        ]).then(([credits, overview]) => {
+          if (!overview) return;
+          disparosDashboardOverviewCache = overview;
+          if (credits) disparosCreditsCache = credits;
+          persistDisparosDashboardCache(overview, credits);
+          if (activeTab === "disparos-dashboard") {
+            renderDisparosDashboard(overview, credits, { force: true });
+            restartDisparosDashboardPolling(overview);
+          }
+        });
+      }
 
       function setWabaLoginError(message) {
         const errorEl = document.getElementById("waba-login-error");
@@ -17599,6 +17712,8 @@
               cacheLabel.textContent = formatDashboardCacheLabel(dashboardDadosCacheSavedAt);
             }
           }
+          hydrateDisparosDashboardFromLocalCache();
+          prefetchDisparosDashboardInBackground();
           wabaOperacionalDispatchesApi = String(
             session.operacionalDispatchesApi || session.systemUser?.operacionalDispatchesApi || ""
           ).trim();
@@ -19092,6 +19207,91 @@
         return { summaryLabel, sendsPerDay, workingDaysNeeded, calendarDays };
       }
 
+      function resetDisCampaignMappingState() {
+        disCampaignMappingConfirmed = false;
+        disCampaignMappedNumberColumn = "";
+      }
+
+      const DIS_WEEKDAY_KEY_TO_JS = {
+        dom: 0,
+        seg: 1,
+        ter: 2,
+        qua: 3,
+        qui: 4,
+        sex: 5,
+        sab: 6,
+      };
+
+      function estimateDisCampaignCompletionBr(workingDaysNeeded) {
+        const needed = Math.max(1, Math.floor(Number(workingDaysNeeded) || 1));
+        const workingKeys = getDisparosWorkingDays();
+        const allowedJsDays = new Set(
+          (workingKeys.length ? workingKeys : ["seg", "ter", "qua", "qui", "sex"])
+            .map((key) => DIS_WEEKDAY_KEY_TO_JS[key])
+            .filter((day) => Number.isFinite(day))
+        );
+        const cursor = new Date();
+        let remaining = needed;
+        let guard = 0;
+        while (remaining > 0 && guard < 400) {
+          cursor.setDate(cursor.getDate() + 1);
+          guard += 1;
+          if (allowedJsDays.has(cursor.getDay())) {
+            remaining -= 1;
+          }
+        }
+        return cursor.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function buildAlternativaProjectionHtml(projection, options = {}) {
+        const completionBr = String(options.completionBr || "").trim();
+        const summary = escapeReportHtml(String(projection?.summaryLabel || "").trim());
+        const deadlineHtml = completionBr
+          ? `<span class="dis-evo-projection-deadline">Previsão de término: ${escapeReportHtml(
+              completionBr
+            )}</span>`
+          : "";
+        return `<div class="dis-evo-campaign-projection-inner"><span class="dis-evo-projection-icon" aria-hidden="true">⏱</span><span>${summary}${deadlineHtml}</span></div>`;
+      }
+
+      function updateDisCampaignFlowUi() {
+        const imported = Math.max(0, Math.floor(Number(campaignSpreadsheetRowsCache?.length) || 0));
+        const mappingStep = document.getElementById("dis-campaign-mapping-step");
+        const mappingStatus = document.getElementById("dis-campaign-mapping-status");
+        const saveBtn = document.getElementById("dis-campaign-save-config-btn");
+        const showFlow = imported > 0;
+
+        if (mappingStep) mappingStep.hidden = !showFlow;
+        if (mappingStatus) {
+          mappingStatus.classList.toggle(
+            "is-done",
+            Boolean(disCampaignMappingConfirmed && disCampaignMappedNumberColumn)
+          );
+          mappingStatus.textContent =
+            disCampaignMappingConfirmed && disCampaignMappedNumberColumn
+              ? `Coluna mapeada: ${disCampaignMappedNumberColumn}`
+              : "Selecione a coluna de telefone da planilha.";
+        }
+
+        const qtyWrap = document.getElementById("dis-evo-campaign-send-wrap");
+        const showQty = showFlow && disCampaignMappingConfirmed && isDisparoEvoUi();
+        if (qtyWrap) qtyWrap.hidden = !showQty;
+
+        if (saveBtn) {
+          saveBtn.hidden = !disCampaignMappingConfirmed;
+          const planned = getDisEvoPlannedSendCountValue();
+          saveBtn.disabled = isDisparoEvoUi() && !planned;
+        }
+
+        updateDisEvoCampaignSendUi();
+      }
+
       function renderAlternativaProjectionElement(el, plannedSendCount) {
         if (!el) return;
         const rules = resolveAlternativaDispatchRules();
@@ -19100,16 +19300,78 @@
         if (!plannedSendCount || plannedSendCount < 1) {
           el.hidden = true;
           el.textContent = "";
+          el.innerHTML = "";
           return;
         }
         el.hidden = false;
         if (activated < rules.minActivatedForSend) {
           el.classList.add("is-warning");
-          el.textContent = `Ative pelo menos ${rules.minActivatedForSend} números para disparar. Você possui ${activated} ativo(s). ${projection.summaryLabel}`;
+          el.innerHTML = buildAlternativaProjectionHtml(projection);
           return;
         }
         el.classList.remove("is-warning");
-        el.textContent = projection.summaryLabel;
+        const completionBr = estimateDisCampaignCompletionBr(projection.workingDaysNeeded);
+        el.innerHTML = buildAlternativaProjectionHtml(projection, { completionBr });
+      }
+
+      async function refreshDisEvoCampaignProjectionFromApi() {
+        const el = document.getElementById("dis-evo-campaign-projection");
+        const planned = getDisEvoPlannedSendCountValue();
+        if (!el || !planned) {
+          renderAlternativaProjectionElement(el, planned);
+          return;
+        }
+        renderAlternativaProjectionElement(el, planned);
+        const apiEstimate = await refreshAlternativaCampaignEstimateFromApi(planned);
+        if (!apiEstimate || getDisEvoPlannedSendCountValue() !== planned) return;
+        const summaryLabel = String(apiEstimate.summaryLabel || "").trim();
+        if (!summaryLabel) return;
+        const completionBr = estimateDisCampaignCompletionBr(
+          apiEstimate.workingDaysNeeded || 1
+        );
+        el.hidden = false;
+        el.classList.toggle("is-warning", apiEstimate.canSend === false);
+        el.innerHTML = buildAlternativaProjectionHtml(
+          { summaryLabel },
+          { completionBr }
+        );
+      }
+
+      function scheduleDisEvoCampaignProjectionRefresh() {
+        if (disCampaignProjectionTimer) {
+          clearTimeout(disCampaignProjectionTimer);
+        }
+        disCampaignProjectionTimer = window.setTimeout(() => {
+          disCampaignProjectionTimer = null;
+          void refreshDisEvoCampaignProjectionFromApi();
+        }, 280);
+      }
+
+      function updateDisEvoCampaignSendUi() {
+        const imported = Math.max(0, Math.floor(Number(campaignSpreadsheetRowsCache?.length) || 0));
+        const showQty = isDisparoEvoUi() && disCampaignMappingConfirmed && imported > 0;
+        const input = document.getElementById("dis-evo-planned-send-count");
+        const hint = document.getElementById("dis-evo-planned-send-hint");
+        const projection = document.getElementById("dis-evo-campaign-projection");
+        if (!showQty) {
+          if (projection) {
+            projection.hidden = true;
+            projection.innerHTML = "";
+          }
+          return;
+        }
+        const remaining = getDisCampaignWizardRemainingShipments("alternativa");
+        const maxAllowed = hasMasterAccess() ? imported : Math.min(imported, remaining);
+        if (input) input.max = String(Math.max(1, maxAllowed));
+        if (hint) {
+          hint.innerHTML = `Até ${formatDisparosQty(imported)} contato(s) na planilha · ${formatDisparosQty(remaining)} envio(s) disponíveis no plano ${renderWabaApiKindLabelHtml(
+            "alternativa"
+          )} · máx. ${resolveAlternativaDispatchRules().maxSendsPerDayPerNumber} envios/dia por número.`;
+        }
+        const planned = getDisEvoPlannedSendCountValue();
+        scheduleDisEvoCampaignProjectionRefresh();
+        const saveBtn = document.getElementById("dis-campaign-save-config-btn");
+        if (saveBtn) saveBtn.disabled = !planned;
       }
 
       async function refreshAlternativaCampaignEstimateFromApi(plannedSendCount) {
@@ -19136,37 +19398,6 @@
             el.textContent = String(rules.minPurchasedForPicker);
           });
         ensureAlternativaPurchaseQtyFloor();
-      }
-
-      function updateDisEvoCampaignSendUi() {
-        const wrap = document.getElementById("dis-evo-campaign-send-wrap");
-        const imported = Math.max(0, Math.floor(Number(campaignSpreadsheetRowsCache?.length) || 0));
-        const show = isDisparoEvoUi() && imported > 0;
-        if (wrap) wrap.hidden = !show;
-        const input = document.getElementById("dis-evo-planned-send-count");
-        const hint = document.getElementById("dis-evo-planned-send-hint");
-        if (!show) {
-          if (input) input.value = "";
-          const projection = document.getElementById("dis-evo-campaign-projection");
-          if (projection) {
-            projection.hidden = true;
-            projection.textContent = "";
-          }
-          return;
-        }
-        const remaining = getDisCampaignWizardRemainingShipments("alternativa");
-        const maxAllowed = hasMasterAccess() ? imported : Math.min(imported, remaining);
-        if (input) input.max = String(Math.max(1, maxAllowed));
-        if (hint) {
-          hint.innerHTML = `Até ${formatDisparosQty(imported)} contato(s) na planilha · ${formatDisparosQty(remaining)} envio(s) disponíveis no plano ${renderWabaApiKindLabelHtml(
-            "alternativa"
-          )} · máx. ${resolveAlternativaDispatchRules().maxSendsPerDayPerNumber} envios/dia por número.`;
-        }
-        const planned = Math.floor(Number(input?.value || 0));
-        renderAlternativaProjectionElement(
-          document.getElementById("dis-evo-campaign-projection"),
-          planned
-        );
       }
 
       function getDisEvoPlannedSendCountValue() {
@@ -26544,6 +26775,72 @@
         return true;
       }
 
+      function buildDisparosDashboardSkeletonHtml() {
+        const metricLabels = [
+          "Total de Leads",
+          "Enviados",
+          "Entregues",
+          "Lidos",
+          "Falhados",
+        ];
+        const rateLabels = ["Taxa de Entrega", "Taxa de Leitura", "Taxa de Falha"];
+        return `
+          <div class="disparos-dashboard-skeleton" aria-busy="true" aria-label="Carregando indicadores do dashboard">
+            <p class="confirm-text disparos-dashboard-skeleton-line" style="margin:0 0 4px"></p>
+            <section class="camp-report-block">
+              <h4 class="camp-report-block-title">Contagem de Mensagens</h4>
+              <div class="camp-report-metrics-row">
+                ${metricLabels
+                  .map(
+                    (label) => `
+                  <article class="camp-report-metric">
+                    <span class="camp-report-metric-label">${label}</span>
+                    <span class="camp-report-metric-value disparos-dashboard-skeleton-bar">&nbsp;</span>
+                  </article>
+                `
+                  )
+                  .join("")}
+              </div>
+            </section>
+            <div class="camp-report-main-grid">
+              <section class="camp-report-pie-card">
+                <h4 class="camp-report-block-title">Distribuição (Total de Leads)</h4>
+                <div class="camp-report-pie-wrap">
+                  <div class="camp-report-pie disparos-dashboard-skeleton-pie" aria-hidden="true"></div>
+                  <ul class="camp-report-pie-legend">
+                    <li><span class="disparos-dashboard-skeleton-bar-inline"></span></li>
+                    <li><span class="disparos-dashboard-skeleton-bar-inline"></span></li>
+                    <li><span class="disparos-dashboard-skeleton-bar-inline"></span></li>
+                  </ul>
+                </div>
+              </section>
+              <section class="camp-report-rates-card">
+                <h4 class="camp-report-block-title">Taxas de Performance</h4>
+                <div class="camp-report-rates-grid">
+                  ${rateLabels
+                    .map(
+                      (label) => `
+                    <article class="camp-report-rate">
+                      <span class="camp-report-rate-label">${label}</span>
+                      <span class="camp-report-rate-value disparos-dashboard-skeleton-bar">&nbsp;</span>
+                    </article>
+                  `
+                    )
+                    .join("")}
+                </div>
+              </section>
+            </div>
+          </div>
+        `;
+      }
+
+      function setDisparosDashboardReportLoading(isLoading) {
+        const reportEl = document.getElementById("disparos-dashboard-report");
+        if (!reportEl) return;
+        reportEl.classList.toggle("is-loading", Boolean(isLoading));
+        reportEl.setAttribute("aria-busy", isLoading ? "true" : "false");
+      }
+
       function buildDisparosDashboardPreviewHtml() {
         return buildCampaignPerformanceDashboardHtml(
           {
@@ -26602,11 +26899,14 @@
 
         if (!overview) {
           if (!disparosDashboardRenderFingerprint) {
-            reportEl.innerHTML = '<div class="muted">Carregando relatório consolidado…</div>';
+            reportEl.innerHTML = buildDisparosDashboardSkeletonHtml();
+            setDisparosDashboardReportLoading(true);
           }
           syncDisparosDashboardGate(null);
           return false;
         }
+
+        setDisparosDashboardReportLoading(false);
 
         const withReport = Number(overview?.campaigns?.withReport || 0);
         if (withReport < 1) {
@@ -26682,13 +26982,25 @@
         const force = options.force === true;
         const summaryEl = document.getElementById("disparos-dashboard-summary");
         const reportEl = document.getElementById("disparos-dashboard-report");
-        const hasCachedOverview = Boolean(disparosDashboardOverviewCache);
+        let hasCachedOverview = Boolean(disparosDashboardOverviewCache);
+
+        if (!hasCachedOverview) {
+          hasCachedOverview = hydrateDisparosDashboardFromLocalCache();
+        }
 
         if (!silent && !hasCachedOverview) {
-          if (summaryEl) summaryEl.textContent = "Carregando relatório consolidado…";
-          if (reportEl) {
-            reportEl.innerHTML = '<div class="muted">Carregando relatório consolidado…</div>';
+          if (summaryEl) {
+            summaryEl.textContent = "Atualizando indicadores do dashboard…";
           }
+          if (reportEl) {
+            reportEl.innerHTML = buildDisparosDashboardSkeletonHtml();
+            setDisparosDashboardReportLoading(true);
+          }
+        } else if (!silent && hasCachedOverview && summaryEl) {
+          summaryEl.textContent = `${buildDisparosDashboardSummaryText(
+            disparosDashboardOverviewCache,
+            disparosCreditsCache
+          )} · atualizando…`;
         }
 
         try {
@@ -26712,6 +27024,7 @@
           ]);
 
           disparosDashboardOverviewCache = overview;
+          persistDisparosDashboardCache(overview, credits);
           renderDisparosDashboard(disparosDashboardOverviewCache, credits, { force });
           restartDisparosDashboardPolling(disparosDashboardOverviewCache);
           return disparosDashboardOverviewCache;
@@ -28170,6 +28483,7 @@
         }
       }
       let aquecedorEditMode = false;
+      let aquecedorConfigSaveInFlight = false;
       const aquecedorCommandLogs = [];
       let aquecedorCommandLogsHistory = [];
       let aquecedorCommandLogsHistoryLoaded = false;
@@ -28192,6 +28506,9 @@
       let disparosAlternativaThrottleCache = null;
       let spreadsheetRowsCache = [];
       let campaignSpreadsheetRowsCache = [];
+      let disCampaignMappingConfirmed = false;
+      let disCampaignMappedNumberColumn = "";
+      let disCampaignProjectionTimer = null;
 
       function escapeHtmlCampaign(str) {
         const div = document.createElement("div");
@@ -28323,6 +28640,7 @@
         if (!file) return;
         const label = document.getElementById("dis-campaign-file-label");
         const dz = document.getElementById("dis-campaign-dropzone");
+        resetDisCampaignMappingState();
         clearDisCampaignDedupeCaption();
         setDisCampaignWorkBusy(true, "Importando planilha…", "Lendo linhas e colunas do Excel.");
         dz?.classList.add("is-busy");
@@ -28334,6 +28652,7 @@
             showToast("Nenhuma linha encontrada na planilha.", "warning");
             if (label) label.textContent = "Planilha vazia — envie outro arquivo.";
             renderDisCampaignPreviewTable([]);
+            updateDisCampaignFlowUi();
             return;
           }
           const colCount = Object.keys(campaignSpreadsheetRowsCache[0] || {}).length;
@@ -28341,22 +28660,24 @@
             label.textContent = `${file.name} · ${campaignSpreadsheetRowsCache.length} linha(s) · ${colCount} coluna(s)`;
           }
           renderDisCampaignPreviewTable(campaignSpreadsheetRowsCache);
-          updateDisEvoCampaignSendUi();
+          updateDisCampaignFlowUi();
           const statusEl = document.getElementById("dis-campaign-create-status");
           if (statusEl) {
             statusEl.textContent =
-              "Planilha importada. Clique em «Mapear coluna e criar campanha» para continuar.";
+              "Planilha importada. Mapeie a coluna de telefone para continuar.";
             statusEl.style.color = "#a5f3fc";
           }
           showToast(
-            `Planilha importada: ${campaignSpreadsheetRowsCache.length} linha(s). Prévia abaixo.`,
+            `Planilha importada: ${campaignSpreadsheetRowsCache.length} linha(s). Confira a prévia e mapeie a coluna.`,
             "success",
             4000
           );
         } catch (err) {
           campaignSpreadsheetRowsCache = [];
+          resetDisCampaignMappingState();
           clearDisCampaignDedupeCaption();
           renderDisCampaignPreviewTable([]);
+          updateDisCampaignFlowUi();
           showToast(err?.message || "Falha ao ler planilha.", "error");
           if (label) label.textContent = "Erro ao importar — tente outro arquivo.";
         } finally {
@@ -28621,6 +28942,44 @@
         return missing;
       }
 
+      function mergePendingAquecedorExpedienteBatchIfNeeded() {
+        const days = [];
+        document
+          .querySelectorAll("#tab-aquecedor .aquecedor-day-chk input:checked")
+          .forEach((cb) => {
+            const d = cb.getAttribute("data-day");
+            if (d) days.push(d);
+          });
+        if (!days.length) return false;
+        const startRaw = document.getElementById("aq-exp-inicio")?.value;
+        const endRaw = document.getElementById("aq-exp-fim")?.value;
+        if (startRaw === "" || startRaw == null || endRaw === "" || endRaw == null) {
+          return false;
+        }
+        const startHour = Math.floor(Number(startRaw));
+        const endHour = Math.floor(Number(endRaw));
+        if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || endHour <= startHour) {
+          return false;
+        }
+        aquecedorExpedienteBatches.push({
+          days,
+          startHour: Math.max(0, Math.min(23, startHour)),
+          endHour: Math.max(1, Math.min(24, endHour)),
+        });
+        document
+          .querySelectorAll("#tab-aquecedor .aquecedor-day-chk input")
+          .forEach((cb) => {
+            cb.checked = false;
+          });
+        const expInicio = document.getElementById("aq-exp-inicio");
+        const expFim = document.getElementById("aq-exp-fim");
+        if (expInicio) expInicio.value = "";
+        if (expFim) expFim.value = "";
+        renderExpedienteBatches();
+        updateAquecedorParamsSummary();
+        return true;
+      }
+
       function renderExpedienteBatches() {
         const container = document.getElementById("aq-expediente-batches");
         if (!container) return;
@@ -28757,7 +29116,9 @@
           .forEach((el) => (el.disabled = disabled));
       }
 
-      async function loadAquecedorConfig() {
+      async function loadAquecedorConfig(options = {}) {
+        const force = options.force === true;
+        if (!force && (aquecedorConfigSaveInFlight || aquecedorEditMode)) return;
         try {
           const response = await fetchWithTimeout(
             "/aquecedor/config",
@@ -28796,14 +29157,16 @@
       }
 
       async function saveAquecedorConfig() {
+        if (aquecedorConfigSaveInFlight) return;
         const toggle = document.getElementById("aquecedor-use-recommended");
         const saveBtn = document.getElementById("aquecedor-save-btn");
         const statusLabel = document.getElementById("aquecedor-status-label");
 
-        if (!aquecedorEditMode) {
-          setAquecedorEditMode(true);
-          setAquecedorSaveFeedback("Expanda os parâmetros, ajuste os campos e clique em Salvar.");
-          return;
+        setAquecedorEditMode(true);
+        const mergedPendingBatch = mergePendingAquecedorExpedienteBatchIfNeeded();
+        if (mergedPendingBatch && toggle) {
+          toggle.checked = false;
+          setAquecedorFormDisabled(false);
         }
 
         const useRecommended = Boolean(toggle?.checked);
@@ -28837,6 +29200,7 @@
           saveBtn.textContent = "Salvando...";
           saveBtn.setAttribute("disabled", "true");
         }
+        aquecedorConfigSaveInFlight = true;
         try {
           const response = await fetchWithTimeout(
             "/aquecedor/config",
@@ -28883,6 +29247,7 @@
           if (statusLabel) statusLabel.textContent = "Erro ao salvar";
           addAquecedorCommandLog(`Falha ao salvar: ${errMsg}`);
         } finally {
+          aquecedorConfigSaveInFlight = false;
           if (saveBtn) {
             saveBtn.textContent = "Salvar configurações";
             saveBtn.removeAttribute("disabled");
@@ -29009,6 +29374,45 @@
         return syncAquecedorRuntimeUi({ autoResume: true });
       }
 
+      function getAquecedorExpedienteResumeAt(status) {
+        const br = String(status?.nextWindowOpenBr || "").trim();
+        if (br) return br;
+        const lastResult = String(status?.lastResult || "").trim();
+        const fromLastResult = lastResult.match(/pr[oó]ximo retorno previsto:\s*(.+?)\.?\s*$/i);
+        if (fromLastResult) return fromLastResult[1].trim();
+        const nextWindowOpenAtMs = status?.nextWindowOpenAt
+          ? new Date(status.nextWindowOpenAt).getTime()
+          : 0;
+        if (nextWindowOpenAtMs > Date.now()) {
+          return new Date(nextWindowOpenAtMs).toLocaleString("pt-BR");
+        }
+        return "";
+      }
+
+      function buildAquecedorExpedienteHeroSub(status) {
+        const resumeAt = getAquecedorExpedienteResumeAt(status);
+        if (resumeAt) return `Retoma automaticamente em ${resumeAt}.`;
+        return "Fora do horário configurado. Nenhum envio até o próximo expediente.";
+      }
+
+      function splitAquecedorLastResultMessage(lastResult) {
+        const raw = String(lastResult || "").trim();
+        if (!raw) return { primary: "", includesScheduledWait: false };
+        const realizedMatch = raw.match(
+          /^(.+?\srealizado\.)\s*Próximo ciclo em ~\d+s\.?\s*(.*)$/i
+        );
+        if (realizedMatch) {
+          return {
+            primary: realizedMatch[1].trim(),
+            includesScheduledWait: true,
+          };
+        }
+        return {
+          primary: raw,
+          includesScheduledWait: /próximo ciclo em ~\d+s/i.test(raw),
+        };
+      }
+
       function renderAquecedorRuntimeProgress() {
         const fillEl = document.getElementById("aquecedor-runtime-progress-fill");
         const captionEl = document.getElementById("aquecedor-runtime-progress-caption");
@@ -29036,10 +29440,7 @@
         }
         if (!windowOpen) {
           fillEl.style.width = "0%";
-          captionEl.textContent =
-            status?.nextWindowOpenBr ||
-            lastResult ||
-            "Fora do expediente. O motor retoma automaticamente na próxima janela.";
+          captionEl.textContent = "Aguardando próximo expediente.";
           return;
         }
         if (isProcessing) {
@@ -29053,7 +29454,7 @@
             const remainingSec = Math.max(0, Math.ceil((nextAllowedAtMs - nowMs) / 1000));
             if (remainingSec > configuredMaxWait * 1.5) {
               fillEl.style.width = "0%";
-              captionEl.textContent = lastResult;
+              captionEl.textContent = `Próximo ciclo em ${remainingSec}s`;
               return;
             }
             fillEl.style.width = `${Math.max(
@@ -29063,12 +29464,12 @@
                 Math.round(((configuredMaxWait - remainingSec) / configuredMaxWait) * 100)
               )
             )}%`;
-            captionEl.textContent = `${lastResult} (${remainingSec}s)`;
+            captionEl.textContent = `Próximo ciclo em ${remainingSec}s`;
             return;
           }
           if (/fora da janela|aguardando turno|falha no envio|não confirmado|ignorado/i.test(lastResult)) {
             fillEl.style.width = "0%";
-            captionEl.textContent = lastResult;
+            captionEl.textContent = "Aguardando condições para retomar.";
             return;
           }
         }
@@ -29079,14 +29480,12 @@
             Math.min(100, Math.round(((configuredMaxWait - remainingSec) / configuredMaxWait) * 100))
           );
           fillEl.style.width = `${progressedPct}%`;
-          captionEl.textContent = `Aguardando próximo ciclo: ${remainingSec}s restantes.`;
+          captionEl.textContent = `Próximo ciclo em ${remainingSec}s`;
           return;
         }
         if (nextWindowOpenAtMs > nowMs) {
           fillEl.style.width = "0%";
-          captionEl.textContent =
-            status?.nextWindowOpenBr ||
-            `Próximo expediente: ${new Date(nextWindowOpenAtMs).toLocaleString("pt-BR")}`;
+          captionEl.textContent = "Aguardando próximo expediente.";
           return;
         }
         fillEl.style.width = "100%";
@@ -29137,12 +29536,11 @@
           titleEl.textContent =
             status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo";
           if (status?.windowOpen === false) {
-            subEl.textContent =
-              status?.nextWindowOpenBr ||
-              lastResult ||
-              "Fora do expediente configurado. Nenhum envio até a próxima janela.";
+            subEl.textContent = buildAquecedorExpedienteHeroSub(status);
           } else {
-            subEl.textContent = lastResult || "Motor iniciado e aguardando próximo ciclo.";
+            const parsed = splitAquecedorLastResultMessage(lastResult);
+            subEl.textContent =
+              parsed.primary || "Motor iniciado e aguardando próximo ciclo.";
           }
           syncAquecedorStopButtonLabel(status);
           return;
@@ -29692,6 +30090,15 @@
         hideMessengerLibrarySavePanel();
         resetDisparosSectionFlow();
         toggleDisparosModeBoxes();
+        campaignSpreadsheetRowsCache = [];
+        resetDisCampaignMappingState();
+        renderDisCampaignPreviewTable([]);
+        updateDisCampaignFlowUi();
+        const createStatus = document.getElementById("dis-campaign-create-status");
+        if (createStatus) {
+          createStatus.textContent = "Aguardando importação da planilha.";
+          createStatus.style.color = "";
+        }
         try {
           const response = await fetchWithTimeout(
             "/disparos/config",
@@ -32307,21 +32714,63 @@
         openDisCampaignMappingModalWithColumns(columns);
       }
 
-      async function createCampaignFromMappedSpreadsheet() {
+      function confirmDisCampaignColumnMapping() {
         const campaignName = String(
           document.getElementById("dis-campaign-modal-name")?.value ||
             document.getElementById("dis-campaign-name")?.value ||
             ""
         ).trim();
         const numberCol = String(document.getElementById("dis-campaign-map-number")?.value || "").trim();
+        const mainNameInput = document.getElementById("dis-campaign-name");
         const statusEl = document.getElementById("dis-campaign-create-status");
         if (!campaignName) {
-          showToast("Informe o nome da campanha no modal antes de criar.", "warning");
+          showToast("Informe o nome da campanha.", "warning");
           document.getElementById("dis-campaign-modal-name")?.focus();
-          return;
+          return false;
         }
         if (!numberCol) {
           showToast("Selecione a coluna do número.", "warning");
+          return false;
+        }
+        if (mainNameInput) mainNameInput.value = campaignName;
+        disCampaignMappedNumberColumn = numberCol;
+        disCampaignMappingConfirmed = true;
+        setDisCampaignDedupeCaption(
+          countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, numberCol)
+        );
+        closeDisCampaignMappingModal(false);
+        updateDisCampaignFlowUi();
+        if (statusEl) {
+          statusEl.textContent = isDisparoEvoUi()
+            ? "Coluna mapeada. Informe a quantidade de envios e clique em Salvar configurações."
+            : "Coluna mapeada. Clique em Salvar configurações para criar a campanha.";
+          statusEl.style.color = "#a5f3fc";
+        }
+        showToast("Coluna mapeada com sucesso.", "success");
+        if (isDisparoEvoUi()) {
+          document.getElementById("dis-evo-planned-send-count")?.focus();
+        }
+        return true;
+      }
+
+      async function createCampaignFromMappedSpreadsheet() {
+        const campaignName = String(document.getElementById("dis-campaign-name")?.value || "").trim();
+        const numberCol = String(disCampaignMappedNumberColumn || "").trim();
+        const statusEl = document.getElementById("dis-campaign-create-status");
+        if (!disCampaignMappingConfirmed || !numberCol) {
+          showToast("Mapeie a coluna da planilha antes de salvar.", "warning");
+          void openDisCampaignMappingFlow();
+          return;
+        }
+        if (!campaignName) {
+          showToast("Informe o nome da campanha.", "warning");
+          document.getElementById("dis-campaign-name")?.focus();
+          return;
+        }
+        const plannedSendCount = isDisparoEvoUi() ? getDisEvoPlannedSendCountValue() : 0;
+        if (isDisparoEvoUi() && !plannedSendCount) {
+          showToast("Informe a quantidade de envios desta campanha.", "warning");
+          document.getElementById("dis-evo-planned-send-count")?.focus();
           return;
         }
         const fileInput = document.getElementById("dis-campaign-file");
@@ -32353,8 +32802,7 @@
             //
           }
         }
-        showToast("Criando campanha… Aguarde alguns segundos.", "info", 8000);
-        await new Promise((resolve) => window.setTimeout(resolve, 8000));
+        showToast("Criando campanha…", "info", 4000);
 
         const buildFormData = () => {
           const formData = new FormData();
@@ -32362,6 +32810,9 @@
           formData.append("numberColumn", numberCol);
           formData.append("configSnapshot", configSnapshotJson);
           formData.append("spreadsheet", spreadsheetFile, spreadsheetFile.name);
+          if (plannedSendCount > 0) {
+            formData.append("plannedSendCount", String(plannedSendCount));
+          }
           return formData;
         };
 
@@ -32905,7 +33356,10 @@
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
           stopAdminCampanhasPolling();
-          void loadDisparosDashboard();
+          if (!disparosDashboardOverviewCache) {
+            hydrateDisparosDashboardFromLocalCache();
+          }
+          void loadDisparosDashboard({ silent: Boolean(disparosDashboardOverviewCache) });
         } else if (nextTab === "disparos-lancamento") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
@@ -35686,7 +36140,9 @@
             break;
           case "aquecedor":
             await loadAquecedorEntitlement();
-            loadAquecedorConfig();
+            if (!aquecedorEditMode && !aquecedorConfigSaveInFlight) {
+              loadAquecedorConfig();
+            }
             loadAquecedorRuntimeStatus();
             break;
           case "disparos":
@@ -37896,7 +38352,11 @@
       }
 
       if (aquecedorSaveBtn) {
-        aquecedorSaveBtn.addEventListener("click", () => saveAquecedorConfig());
+        aquecedorSaveBtn.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+        });
+        aquecedorSaveBtn.addEventListener("click", () => void saveAquecedorConfig());
       }
       if (aquecedorStartBtn) {
         aquecedorStartBtn.addEventListener("click", () => {
@@ -38480,10 +38940,22 @@
 
       const disCampaignOpenMappingBtn = document.getElementById("dis-campaign-open-mapping-btn");
       if (disCampaignOpenMappingBtn) {
+        disCampaignOpenMappingBtn.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+        });
         disCampaignOpenMappingBtn.addEventListener("click", () => openDisCampaignMappingFlow());
       }
+      const disCampaignSaveConfigBtn = document.getElementById("dis-campaign-save-config-btn");
+      if (disCampaignSaveConfigBtn) {
+        disCampaignSaveConfigBtn.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+        });
+        disCampaignSaveConfigBtn.addEventListener("click", () => void createCampaignFromMappedSpreadsheet());
+      }
       document.getElementById("dis-evo-planned-send-count")?.addEventListener("input", () => {
-        updateDisEvoCampaignSendUi();
+        updateDisCampaignFlowUi();
       });
 
       const disAddInstanceBtn = document.getElementById("dis-add-instance-btn");
@@ -38563,7 +39035,7 @@
           }
           if (e.target.closest("#dis-campaign-map-create-btn")) {
             e.preventDefault();
-            void createCampaignFromMappedSpreadsheet();
+            confirmDisCampaignColumnMapping();
           }
         });
       }

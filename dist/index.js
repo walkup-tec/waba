@@ -3523,17 +3523,20 @@ function stopAquecedorRuntime() {
 }
 let indexHtmlTemplate = null;
 let indexHtmlTemplateMtimeMs = 0;
+function isTsNodeDevServer() {
+    return /\.ts$/i.test(String(process.argv[1] || ""));
+}
 function resolveIndexHtmlPath() {
     const rootHtml = path_1.default.join(rootPath, "index.html");
     const distHtml = path_1.default.join(distPath, "index.html");
-    if (RUNTIME_MODE === "development" && (0, fs_1.existsSync)(rootHtml)) {
+    if ((RUNTIME_MODE === "development" || isTsNodeDevServer()) && (0, fs_1.existsSync)(rootHtml)) {
         return rootHtml;
     }
     return distHtml;
 }
 function loadIndexHtmlTemplate() {
     const htmlPath = resolveIndexHtmlPath();
-    if (RUNTIME_MODE === "development") {
+    if (RUNTIME_MODE === "development" || isTsNodeDevServer()) {
         return (0, fs_1.readFileSync)(htmlPath, "utf8");
     }
     const mtimeMs = (0, fs_1.statSync)(htmlPath).mtimeMs;
@@ -3560,6 +3563,7 @@ function sendIndexHtml(res) {
         basePath: base_path_1.BASE_PATH,
         uiProfile: resolveUiProfile(),
         featureFlags: (0, waba_feature_flags_1.getWabaFeatureFlagsForClient)(),
+        deployResilienceEnabled: (0, base_path_1.resolveDeployResilienceForClient)(),
     });
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
@@ -8631,6 +8635,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
             importedLineCount = numbers.length;
         }
         let plannedSendCount = importedLineCount;
+        const requestedPlannedSendCount = Math.max(0, Math.floor(Number(req.body?.plannedSendCount) || 0));
         let creditsApiKind = "oficial";
         if (ownerEmail && !disparosCreditsService.isMasterUnlimited(ownerEmail)) {
             creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
@@ -8640,7 +8645,10 @@ app.post("/disparos/campanhas", (req, res, next) => {
                     error: "Você não possui envios contratados disponíveis. Contrate um pacote antes de criar a campanha.",
                 });
             }
-            plannedSendCount = Math.min(importedLineCount, remaining);
+            const cap = requestedPlannedSendCount > 0
+                ? Math.min(importedLineCount, remaining, requestedPlannedSendCount)
+                : Math.min(importedLineCount, remaining);
+            plannedSendCount = cap;
             numbers = numbers.slice(0, plannedSendCount);
             if (!numbers.length) {
                 return res.status(400).json({
@@ -8650,6 +8658,10 @@ app.post("/disparos/campanhas", (req, res, next) => {
             if (debitsDisparosCreditsOnCampaignCreate(creditsApiKind)) {
                 disparosCreditsService.recordShipmentConsumed(ownerEmail, numbers.length, creditsApiKind);
             }
+        }
+        else if (requestedPlannedSendCount > 0) {
+            plannedSendCount = Math.min(importedLineCount, requestedPlannedSendCount);
+            numbers = numbers.slice(0, plannedSendCount);
         }
         if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
             try {
