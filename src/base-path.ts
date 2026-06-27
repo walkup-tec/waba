@@ -39,7 +39,6 @@ export type WabaClientRuntimeInject = {
   deployResilienceEnabled?: boolean;
 };
 
-/** Overlay de deploy só no runtime compilado de produção (Easypanel). Dev local sempre false. */
 export function resolveDeployResilienceForClient(): boolean {
   const explicit = String(process.env.WABA_DEPLOY_RESILIENCE || "")
     .trim()
@@ -59,6 +58,15 @@ export function resolveDeployResilienceForClient(): boolean {
   if (/\.ts$/i.test(entry)) return false;
 
   return runtimeMode === "production";
+}
+
+/** Chave de cache da shell HTML — deve coincidir com media/sw-deploy-resilience.js */
+export function resolveShellCacheKey(uiProfile: WabaUiProfile, basePath: string = BASE_PATH): string {
+  const normalizedBase = normalizeBasePath(basePath);
+  if (!normalizedBase) return "waba-shell-production-root";
+  const slug = normalizedBase.replace(/^\//, "").replace(/\//g, "-");
+  if (uiProfile === "baseline") return `waba-shell-baseline-${slug}`;
+  return `waba-shell-${uiProfile}-${slug}`;
 }
 
 function buildBasePathScript(basePath: string): string {

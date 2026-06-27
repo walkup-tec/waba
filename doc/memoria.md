@@ -15,6 +15,20 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Alerta aquecimento incompleto (Seleção números):** modal Continuar/Reconfigurar se warmthLevel &lt; 3. Ver `doc/LOG-2026-06-21__disparos-alerta-aquecimento-incompleto.md`.
+
+**WABA — Campanhas lista por API (Alternativa/Oficial):** cache isolado por escopo; skeleton ao trocar aba; sem listagem cruzada. Ver `doc/LOG-2026-06-21__campanhas-lista-scope-api-alternativa-oficial-fix.md`.
+
+**WABA — Campanha API Alternativa (Gerar Campanha):** mapeamento inline sem modal; campanha só no botão da etapa «Gerar Campanha». Ver `doc/LOG-2026-06-21__campanha-evo-gerar-campanha-inline-map.md`.
+
+**WABA — Encurtador URL destino WhatsApp ou URL custom:** abas na etapa 5; link único por envio (nonce); backend `linkDestinationMode` + `responseUrl`; modo base de mensagens também encurta. Ver `doc/LOG-2026-06-21__disparos-encurtador-link-destino-url-whatsapp.md`.
+
+**WABA — Projeção API Alternativa (throughput):** término por horas no expediente; texto capacidade + previsão; max(instâncias selecionadas, ativadas). Ver `doc/LOG-2026-06-21__alternativa-projecao-throughput-fix.md`.
+
+**WABA — API Alternativa Salvar config 1 clique (definitivo):** pointerdown delegado, commit picker, guards reload wizard, tabindex picker. Ver `doc/LOG-2026-06-21__disparos-salvar-config-pointerdown-definitivo.md`.
+
+**WABA — SW shell cache V01 em produção (fix):** cache SW não alias `/version-01` → `/`; header `X-Waba-Shell-Cache-Key`; UI profile síncrono no body. Ver `doc/LOG-2026-06-21__sw-shell-cache-v01-menus-producao-fix.md`.
+
 **WABA — Overlay deploy local (flag servidor):** modal antigo no dev por `dist/` desatualizado + hostname-only; flag `WABA_DEPLOY_RESILIENCE_ENABLED` injetada pelo servidor; ts-node serve `index.html` raiz; purge SW local. Ver `doc/LOG-2026-06-21__deploy-overlay-local-flag-servidor.md`.
 
 **WABA — Campanha EVO fluxo preview/mapear/quantidade:** ordem correta, Salvar configurações separado, projeção término com ⏱. Ver `doc/LOG-2026-06-21__campanha-evo-fluxo-preview-mapear-quantidade.md`.

@@ -5,6 +5,7 @@ exports.normalizeBasePath = normalizeBasePath;
 exports.stripBasePathMiddleware = stripBasePathMiddleware;
 exports.requestUnderBasePath = requestUnderBasePath;
 exports.resolveDeployResilienceForClient = resolveDeployResilienceForClient;
+exports.resolveShellCacheKey = resolveShellCacheKey;
 exports.injectRuntimeIntoIndexHtml = injectRuntimeIntoIndexHtml;
 exports.injectBasePathIntoIndexHtml = injectBasePathIntoIndexHtml;
 /** Prefixo público (ex.: /version-01). Vazio = raiz (produção). */
@@ -31,7 +32,6 @@ function stripBasePathMiddleware(req, _res, next) {
 function requestUnderBasePath(req) {
     return Boolean(req.underBasePath);
 }
-/** Overlay de deploy só no runtime compilado de produção (Easypanel). Dev local sempre false. */
 function resolveDeployResilienceForClient() {
     const explicit = String(process.env.WABA_DEPLOY_RESILIENCE || "")
         .trim()
@@ -52,6 +52,16 @@ function resolveDeployResilienceForClient() {
     if (/\.ts$/i.test(entry))
         return false;
     return runtimeMode === "production";
+}
+/** Chave de cache da shell HTML — deve coincidir com media/sw-deploy-resilience.js */
+function resolveShellCacheKey(uiProfile, basePath = exports.BASE_PATH) {
+    const normalizedBase = normalizeBasePath(basePath);
+    if (!normalizedBase)
+        return "waba-shell-production-root";
+    const slug = normalizedBase.replace(/^\//, "").replace(/\//g, "-");
+    if (uiProfile === "baseline")
+        return `waba-shell-baseline-${slug}`;
+    return `waba-shell-${uiProfile}-${slug}`;
 }
 function buildBasePathScript(basePath) {
     const safe = basePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");

@@ -18,6 +18,7 @@ import {
   requestUnderBasePath,
   injectRuntimeIntoIndexHtml,
   resolveDeployResilienceForClient,
+  resolveShellCacheKey,
   type WabaUiProfile,
 } from "./base-path";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
@@ -839,9 +840,70 @@ function parseDisparosConfig(input: any): DisparosConfig {
     aiAudience: String(input?.aiAudience || DISPAROS_DEFAULTS.aiAudience).slice(0, 240),
     shortenerProvider: safeProvider,
     shortenerDomain: String(input?.shortenerDomain || "").slice(0, 120),
+    linkDestinationMode:
+      String(input?.linkDestinationMode || "").toLowerCase().trim() === "url" ? "url" : "whatsapp",
     whatsappTargetNumber: normalizeWhatsAppNumber(String(input?.whatsappTargetNumber || "")),
+    responseUrl: normalizeDisparosResponseUrl(String(input?.responseUrl || "")),
     selectedDisparadorInstances,
   };
+}
+
+function normalizeDisparosResponseUrl(raw: string): string {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.slice(0, 2000);
+  return `https://${trimmed.replace(/^\/+/, "")}`.slice(0, 2000);
+}
+
+function validateDisparosLinkDestination(input: any): string | null {
+  const mode =
+    String(input?.linkDestinationMode || DISPAROS_DEFAULTS.linkDestinationMode).toLowerCase() ===
+    "url"
+      ? "url"
+      : "whatsapp";
+  if (mode === "whatsapp") {
+    const num = normalizeWhatsAppNumber(String(input?.whatsappTargetNumber || ""));
+    if (!num) return "Campo obrigatório ausente no Disparador: whatsappTargetNumber.";
+    return null;
+  }
+  const url = normalizeDisparosResponseUrl(String(input?.responseUrl || ""));
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return "Campo obrigatório ausente no Disparador: responseUrl.";
+  }
+  return null;
+}
+
+function buildDisparosDestinationLongUrl(config: DisparosConfig, nonce: string): string {
+  const mode = config.linkDestinationMode === "url" ? "url" : "whatsapp";
+  if (mode === "url") {
+    const base = normalizeDisparosResponseUrl(String(config.responseUrl || ""));
+    if (!base || !/^https?:\/\//i.test(base)) {
+      throw new Error("Snapshot da campanha sem URL de resposta (Encurtador).");
+    }
+    try {
+      const u = new URL(base);
+      u.searchParams.set("_n8n_link_nonce", nonce);
+      return u.toString();
+    } catch {
+      const sep = base.includes("?") ? "&" : "?";
+      return `${base}${sep}_n8n_link_nonce=${encodeURIComponent(nonce)}`;
+    }
+  }
+  const targetNumber = normalizeWhatsAppNumber(String(config.whatsappTargetNumber || ""));
+  if (!targetNumber) {
+    throw new Error("Snapshot da campanha sem número alvo (Encurtador).");
+  }
+  return `https://wa.me/${targetNumber}?text=Ol%C3%A1&_n8n_link_nonce=${nonce}`;
+}
+
+async function generateUniqueShortUrlForDisparosConfig(
+  config: DisparosConfig,
+  publicBaseHints?: WabaPublicBaseRequestHints,
+): Promise<{ shortUrl: string; longUrl: string }> {
+  const nonce = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const longUrl = buildDisparosDestinationLongUrl(config, nonce);
+  const shortened = await generateShortUrlForDisparos(longUrl, publicBaseHints);
+  return { shortUrl: shortened.shortUrl, longUrl };
 }
 
 function validateRequiredDisparosConfigPayload(input: any): string | null {
@@ -862,12 +924,13 @@ function validateRequiredDisparosConfigPayload(input: any): string | null {
     "endHour",
     "workingDays",
     "selectedDisparadorInstances",
-    "whatsappTargetNumber",
     "messageMode",
   ];
   for (const key of requiredKeys) {
     if (!hasValue(key)) return `Campo obrigatório ausente no Disparador: ${key}.`;
   }
+  const linkDestinationError = validateDisparosLinkDestination(input);
+  if (linkDestinationError) return linkDestinationError;
   const mode = String(input?.messageMode || "").toLowerCase();
   if (mode === "ai") {
     const aiRequired = ["aiTone", "aiCta", "aiAudience", "aiBriefing"];
@@ -2398,7 +2461,9 @@ type DisparosConfig = {
   aiAudience: string;
   shortenerProvider: "encurtadorpro" | "isgd" | "tinyurl" | "waba";
   shortenerDomain: string;
+  linkDestinationMode: "whatsapp" | "url";
   whatsappTargetNumber: string;
+  responseUrl: string;
   selectedDisparadorInstances: string[];
 };
 
@@ -2465,7 +2530,9 @@ const DISPAROS_DEFAULTS: DisparosConfig = {
   aiAudience: "CORBAN",
   shortenerProvider: "waba",
   shortenerDomain: "",
+  linkDestinationMode: "whatsapp",
   whatsappTargetNumber: "",
+  responseUrl: "",
   selectedDisparadorInstances: [],
 };
 
@@ -4450,14 +4517,16 @@ function resolveUiProfile(): WabaUiProfile {
 }
 
 function sendIndexHtml(res: express.Response) {
+  const uiProfile = resolveUiProfile();
   const html = injectRuntimeIntoIndexHtml(loadIndexHtmlTemplate(), {
     basePath: BASE_PATH,
-    uiProfile: resolveUiProfile(),
+    uiProfile,
     featureFlags: getWabaFeatureFlagsForClient(),
     deployResilienceEnabled: resolveDeployResilienceForClient(),
   });
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Waba-Shell-Cache-Key", resolveShellCacheKey(uiProfile, BASE_PATH));
   res.type("html").send(html);
 }
 
@@ -8808,10 +8877,17 @@ app.get("/disparos/alternativa/estimate", async (req, res) => {
     const summary = await alternativaNumbersService.getSummaryAsync(auth.email);
     const config = await loadDisparosConfigFromDb();
     const workingDaysPerWeek = Array.isArray(config.workingDays) ? config.workingDays.length : 5;
+    const selectedCount = Array.isArray(config.selectedDisparadorInstances)
+      ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean).length
+      : 0;
+    const instanceCount = Math.max(summary.activatedCount, selectedCount);
     const estimate = estimateAlternativaCampaignDuration({
       plannedSendCount,
-      activatedInstanceCount: summary.activatedCount,
+      activatedInstanceCount: instanceCount,
       workingDaysPerWeek,
+      startHour: config.startHour,
+      endHour: config.endHour,
+      workingDayKeys: Array.isArray(config.workingDays) ? config.workingDays : undefined,
     });
     return res.json({
       ...estimate,
@@ -8896,6 +8972,17 @@ app.get("/disparos/diagnostico", async (req, res) => {
     const wapp = normalizeWhatsAppNumber(String(fullConfig.whatsappTargetNumber || ""));
     const whatsappAlvoMascarado =
       wapp.length >= 4 ? `…${wapp.slice(-4)}` : wapp.length > 0 ? "definido" : "não definido";
+    const responseUrlRaw = normalizeDisparosResponseUrl(String(fullConfig.responseUrl || ""));
+    const responseUrlMascarada = responseUrlRaw
+      ? (() => {
+          try {
+            const u = new URL(responseUrlRaw);
+            return `${u.protocol}//${u.host}/…`;
+          } catch {
+            return "definida";
+          }
+        })()
+      : "não definida";
 
     const diag: Record<string, any> = {
       tickCampanhasMs: 7000,
@@ -8911,7 +8998,9 @@ app.get("/disparos/diagnostico", async (req, res) => {
         endHour: fullConfig.endHour,
         instanciasSelecionadasCount: fullConfig.selectedDisparadorInstances.length,
         shortenerProvider: fullConfig.shortenerProvider,
+        linkDestinationMode: fullConfig.linkDestinationMode,
         whatsappAlvoMascarado,
+        responseUrlMascarada,
       },
       evo: {
         ok: false,
@@ -9094,29 +9183,53 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
     const audience = String(req.body?.audience || config.aiAudience || "CORBAN").trim();
     const cta = String(req.body?.cta || config.aiCta || "Responda no link abaixo").trim();
     const objective = String(req.body?.objective || "gerar mensagem de prospeccao").trim();
-    const targetNumber = normalizeWhatsAppNumber(
-      String(req.body?.whatsappTargetNumber || config.whatsappTargetNumber || "")
-    );
-    if (!targetNumber) {
+    const linkMode =
+      String(req.body?.linkDestinationMode || config.linkDestinationMode || "whatsapp").toLowerCase() ===
+      "url"
+        ? "url"
+        : "whatsapp";
+    const previewConfig: DisparosConfig = {
+      ...config,
+      linkDestinationMode: linkMode,
+      whatsappTargetNumber: normalizeWhatsAppNumber(
+        String(req.body?.whatsappTargetNumber || config.whatsappTargetNumber || "")
+      ),
+      responseUrl: normalizeDisparosResponseUrl(
+        String(req.body?.responseUrl || config.responseUrl || "")
+      ),
+    };
+    const linkDestinationError = validateDisparosLinkDestination(previewConfig);
+    if (linkDestinationError) {
       return res.status(400).json({
-        error: "Número alvo não configurado na seção Encurtador de URL.",
+        error:
+          linkMode === "url"
+            ? "URL de resposta não configurada na seção Encurtador de URL."
+            : "Número alvo não configurado na seção Encurtador de URL.",
       });
     }
-    // longUrl único para o teste de geração (evita acúmulo de cliques em shortUrl reaproveitado)
-    const nonce = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-    const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1&_n8n_link_nonce=${nonce}`;
-    let shortUrl = accessUrlRaw;
+    let shortUrl = "";
     let shortenerProvider = "";
     let shortenerWarning = "";
     try {
-      const shortened = await generateShortUrlForDisparos(accessUrlRaw, publicBaseHints);
+      const shortened = await generateUniqueShortUrlForDisparosConfig(
+        previewConfig,
+        publicBaseHints,
+      );
       shortUrl = shortened.shortUrl;
-      shortenerProvider = String(shortened.provider || "");
+      shortenerProvider = String(config.shortenerProvider || "");
     } catch (shortErr: any) {
       console.warn(
-        "[gerar-mensagem-ai] encurtador indisponível, usando wa.me longo:",
+        "[gerar-mensagem-ai] encurtador indisponível, usando URL longa:",
         shortErr?.message || shortErr,
       );
+      try {
+        const nonce = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+        shortUrl = buildDisparosDestinationLongUrl(previewConfig, nonce);
+      } catch {
+        return res.status(400).json({
+          error: "Destino do link não configurado na seção Encurtador de URL.",
+        });
+      }
       shortenerWarning =
         "Link não encurtado (encurtador indisponível). Verifique WABA_PUBLIC_BASE_URL no servidor.";
     }
@@ -9631,20 +9744,22 @@ async function composeOutboundMessageForConfig(
         shortUrl: null,
       };
     }
-    const text = pick.text.trim();
-    return { text, shortUrl: extractFirstHttpUrl(text) };
+    const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
+    const httpRegex = /https?:\/\/[^\s)]+/gi;
+    let text = pick.text.trim();
+    if (httpRegex.test(text)) {
+      text = text.replace(httpRegex, shortUrl);
+    } else {
+      text = ensureMessageContainsLink(
+        text,
+        shortUrl,
+        String(config.aiCta || "Acesse aqui")
+      );
+    }
+    return { text, shortUrl };
   }
 
-  const targetNumber = normalizeWhatsAppNumber(String(config.whatsappTargetNumber || ""));
-  if (!targetNumber) {
-    throw new Error("Snapshot da campanha sem número alvo (Encurtador).");
-  }
-  // Importante: gerar um longUrl "único" por lead (via nonce) para evitar reuso do mesmo shortUrl
-  // e acúmulo de cliques históricos entre execuções/campanhas.
-  const nonce = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-  const accessUrlRaw = `https://wa.me/${targetNumber}?text=Ol%C3%A1&_n8n_link_nonce=${nonce}`;
-  const shortened = await generateShortUrlForDisparos(accessUrlRaw);
-  const shortUrl = shortened.shortUrl;
+  const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
   const briefing = String(config.aiBriefing || "");
   const prompt = buildDisparosAiPrompt({
     briefing,

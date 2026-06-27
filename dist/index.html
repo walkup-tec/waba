@@ -86,7 +86,7 @@
         }
 
         function resolveSwUrl() {
-          return resolveBasePath() + "/sw-deploy-resilience.js?v=2";
+          return resolveBasePath() + "/sw-deploy-resilience.js?v=3";
         }
 
         function resolveSwScope() {
@@ -9804,6 +9804,46 @@
         background: linear-gradient(135deg, rgba(20, 184, 166, 0.28), rgba(14, 116, 144, 0.35));
         box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.35);
       }
+      .dis-link-destination-tabs {
+        display: flex;
+        gap: 8px;
+        margin: 12px 0 14px;
+        padding: 4px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      .dis-link-destination-tab {
+        flex: 1;
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(226, 232, 240, 0.82);
+        background: transparent;
+        cursor: pointer;
+        transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+      }
+      .dis-link-destination-tab.active {
+        color: #ecfeff;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(14, 116, 144, 0.35));
+        box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+      }
+      .dis-link-mode-panel.hidden {
+        display: none;
+      }
+      .dis-link-destination-note {
+        display: block;
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: rgba(226, 232, 240, 0.88);
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+      }
       .alt-numbers-shop {
         display: grid;
         gap: 16px;
@@ -11049,6 +11089,9 @@
       .dis-evo-campaign-projection.is-warning .dis-evo-projection-icon {
         color: #fcd34d;
       }
+      .dis-evo-projection-capacity {
+        display: block;
+      }
       .dis-evo-projection-deadline {
         display: block;
         margin-top: 4px;
@@ -11284,6 +11327,49 @@
         border-color: rgba(249, 115, 22, 0.85);
         background: rgba(249, 115, 22, 0.18);
         color: #fdba74;
+      }
+
+      .dis-warmth-warning-modal {
+        width: min(94vw, 400px);
+      }
+      .dis-warmth-warning-modal .confirm-text {
+        margin-bottom: 0;
+        line-height: 1.45;
+      }
+      .dis-warmth-warning-actions {
+        margin-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .dis-warmth-warning-reconfig {
+        border: 0;
+        background: transparent;
+        color: rgba(148, 163, 184, 0.92);
+        font-size: 0.82rem;
+        padding: 8px 10px;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .dis-warmth-warning-reconfig:hover {
+        color: #e2e8f0;
+      }
+      .dis-warmth-warning-continue {
+        border: 0;
+        border-radius: 10px;
+        padding: 9px 16px;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #fff;
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        box-shadow: 0 8px 20px rgba(239, 68, 68, 0.28);
+        cursor: pointer;
+      }
+      .dis-warmth-warning-continue:hover {
+        filter: brightness(1.06);
       }
 
       .dis-picker-list {
@@ -11649,6 +11735,23 @@
           flex: none;
           max-height: none;
         }
+      }
+      .disparos-campaign-list-loading {
+        display: grid;
+        gap: 10px;
+        padding: 4px 0;
+      }
+      .disparos-campaign-list-loading-row {
+        height: 72px;
+        border-radius: 12px;
+        background: linear-gradient(
+          90deg,
+          rgba(30, 41, 59, 0.55) 0%,
+          rgba(51, 65, 85, 0.72) 50%,
+          rgba(30, 41, 59, 0.55) 100%
+        );
+        background-size: 200% 100%;
+        animation: disparos-dashboard-skeleton-shimmer 1.25s ease-in-out infinite;
       }
       .disparos-campaign-item {
         display: grid;
@@ -12481,6 +12584,13 @@
   </head>
 
   <body class="waba-auth-locked waba-auth-checking">
+    <script>
+      (function () {
+        var profile = String(window.WABA_UI_PROFILE || "").toLowerCase();
+        if (profile === "production") document.body.classList.add("waba-ui-production");
+        else if (profile === "baseline") document.body.classList.add("waba-ui-baseline");
+      })();
+    </script>
     <div id="waba-login-screen" class="waba-login-screen" aria-hidden="false">
       <div class="waba-login-card" role="dialog" aria-modal="true" aria-labelledby="waba-login-title">
         <div class="waba-login-brand">
@@ -14726,7 +14836,7 @@
                                 <button type="button" class="dis-warmth-chip" data-warmth-level="3" title="Totalmente aquecido (3 fogos)">3 🔥</button>
                               </div>
                             </div>
-                            <div id="dis-available-instances" class="dis-picker-list" role="listbox" tabindex="0" aria-label="Números disponíveis"></div>
+                            <div id="dis-available-instances" class="dis-picker-list" role="listbox" tabindex="-1" aria-label="Números disponíveis"></div>
                           </div>
                           <div class="dis-number-picker-actions">
                             <button id="dis-add-instance-btn" type="button" class="instance-action-btn enabled">→</button>
@@ -14739,7 +14849,7 @@
                                 <span id="dis-selected-instances-count" class="dis-picker-count">0 selecionados</span>
                               </label>
                             </div>
-                            <div id="dis-selected-instances" class="dis-picker-list" role="listbox" tabindex="0" aria-label="Números selecionados para disparo"></div>
+                            <div id="dis-selected-instances" class="dis-picker-list" role="listbox" tabindex="-1" aria-label="Números selecionados para disparo"></div>
                           </div>
                         </div>
                         <span class="aquecedor-hint">Clique no número para mover entre disponíveis e selecionados.</span>
@@ -14930,16 +15040,49 @@
                       </div>
                     </div>
 
-                    <div class="aquecedor-section">
+                    <div class="aquecedor-section" data-section-key="shortener">
                       <div class="aquecedor-section-title">5) Encurtador URL</div>
+                      <span class="dis-link-destination-note">
+                        Cada mensagem enviada recebe um link curto exclusivo. Assim você rastreia respostas
+                        individualmente, mesmo usando a mesma campanha.
+                      </span>
+                      <div
+                        id="dis-link-destination-tabs"
+                        class="dis-link-destination-tabs"
+                        role="tablist"
+                        aria-label="Destino do link encurtado"
+                      >
+                        <button
+                          type="button"
+                          class="dis-link-destination-tab active"
+                          data-mode="whatsapp"
+                          role="tab"
+                          aria-selected="true"
+                          aria-controls="dis-link-mode-whatsapp"
+                        >
+                          WhatsApp destino
+                        </button>
+                        <button
+                          type="button"
+                          class="dis-link-destination-tab"
+                          data-mode="url"
+                          role="tab"
+                          aria-selected="false"
+                          aria-controls="dis-link-mode-url"
+                        >
+                          Informar URL de resposta
+                        </button>
+                      </div>
                       <div class="disparos-grid disparos-grid-2">
                         <div class="aquecedor-field">
                           <label for="dis-shortener-provider">Encurtador de URL</label>
                           <input id="dis-shortener-provider" type="text" readonly />
                           <span class="aquecedor-hint">Definido automaticamente pelo backend.</span>
                         </div>
-                        <div class="aquecedor-field">
-                          <label for="dis-whatsapp-target">WhatsApp destino do link</label>
+                      </div>
+                      <div id="dis-link-mode-whatsapp" class="dis-link-mode-panel">
+                        <div class="aquecedor-field" style="max-width: 420px;">
+                          <label for="dis-whatsapp-target">WhatsApp que receberá o retorno</label>
                           <div class="phone-br-wrap">
                             <span class="phone-br-prefix">
                               <img
@@ -14958,8 +15101,21 @@
                               style="flex: 1;"
                             />
                           </div>
-                          <span class="aquecedor-hint">Informe apenas DDD + número.</span>
+                          <span class="aquecedor-hint">Informe apenas DDD + número. O link abrirá conversa no WhatsApp.</span>
                           <span id="dis-whatsapp-target-error" class="field-error hidden">Número incompleto. Informe DDD + número (11 dígitos).</span>
+                        </div>
+                      </div>
+                      <div id="dis-link-mode-url" class="dis-link-mode-panel hidden">
+                        <div class="aquecedor-field" style="max-width: 560px;">
+                          <label for="dis-response-url">URL de resposta da campanha</label>
+                          <input
+                            id="dis-response-url"
+                            type="url"
+                            placeholder="https://seusite.com.br/resposta"
+                            autocomplete="url"
+                          />
+                          <span class="aquecedor-hint">Use http ou https. O encurtador WABA gera um alias diferente a cada envio.</span>
+                          <span id="dis-response-url-error" class="field-error hidden">Informe uma URL válida (http ou https).</span>
                         </div>
                       </div>
                       <div class="disparos-inline-actions" style="margin-top: 10px;">
@@ -15113,7 +15269,7 @@
                       </div>
                     </div>
 
-                    <div class="aquecedor-section">
+                    <div class="aquecedor-section" data-section-key="campaign">
                       <div class="aquecedor-section-title">7) Campanha</div>
                       <div class="disparos-box dis-campaign-panel" id="dis-campaign-panel">
                         <div class="aquecedor-field">
@@ -15167,8 +15323,15 @@
                               Selecione a coluna de telefone da planilha.
                             </span>
                           </div>
-                          <button id="dis-campaign-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
-                            Mapear coluna
+                          <div class="aquecedor-field" style="max-width: 420px; margin-bottom: 10px;">
+                            <label for="dis-campaign-inline-map-number">Coluna do telefone</label>
+                            <select id="dis-campaign-inline-map-number" class="register-input">
+                              <option value="">Selecione a coluna</option>
+                            </select>
+                            <span class="aquecedor-hint">Escolha a coluna com DDD + número. A campanha só será criada ao clicar em Gerar Campanha.</span>
+                          </div>
+                          <button id="dis-campaign-apply-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                            Confirmar coluna
                           </button>
                         </div>
                         <div id="dis-evo-campaign-send-wrap" class="dis-wizard-leads-count-wrap dis-campaign-flow-step" hidden>
@@ -15191,14 +15354,6 @@
                           <div id="dis-evo-campaign-projection" class="dis-evo-campaign-projection" hidden></div>
                         </div>
                         <div class="disparos-inline-actions" style="margin-top: 12px;">
-                          <button
-                            id="dis-campaign-save-config-btn"
-                            class="instance-action-btn btn-qrcode enabled"
-                            type="button"
-                            hidden
-                          >
-                            Salvar configurações
-                          </button>
                           <span id="dis-campaign-create-status" class="muted">Aguardando importação da planilha.</span>
                         </div>
                         <div
@@ -16495,6 +16650,23 @@
         <div class="confirm-actions">
           <button id="dis-campaign-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
           <button id="dis-campaign-map-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">Confirmar mapeamento</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dis-warmth-warning-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal dis-warmth-warning-modal" role="dialog" aria-modal="true" aria-labelledby="dis-warmth-warning-title">
+        <div class="confirm-title" id="dis-warmth-warning-title">Aquecimento incompleto</div>
+        <p class="confirm-text">
+          Você selecionou números que não estão completamente aquecidos. Tem certeza que deseja continuar?
+        </p>
+        <div class="dis-warmth-warning-actions">
+          <button id="dis-warmth-warning-reconfig-btn" class="dis-warmth-warning-reconfig" type="button">
+            Reconfigurar
+          </button>
+          <button id="dis-warmth-warning-continue-btn" class="dis-warmth-warning-continue" type="button">
+            Continuar
+          </button>
         </div>
       </div>
     </div>
@@ -18689,6 +18861,7 @@
       function syncDisparoEvoMode() {
         const on = isDisparoEvoUi();
         document.body.classList.toggle("waba-disparo-evo-mode", on && !isBaselineUi());
+        prepareDisparosCampaignListScopeChange();
         if (on) {
           initDisparoEvoPanelLayout();
           normalizeDisparosSectionFlow();
@@ -19180,38 +19353,6 @@
         };
       }
 
-      function computeClientAlternativaDurationEstimate(plannedSendCount, activatedInstanceCount) {
-        const rules = resolveAlternativaDispatchRules();
-        const planned = Math.max(0, Math.floor(Number(plannedSendCount) || 0));
-        const activated = Math.max(0, Math.floor(Number(activatedInstanceCount) || 0));
-        if (!planned || !activated) {
-          return {
-            summaryLabel: !planned
-              ? "Informe a quantidade de envios para ver a projeção."
-              : `Ative ao menos ${rules.minActivatedForSend} números para calcular a projeção.`,
-            sendsPerDay: 0,
-            workingDaysNeeded: 0,
-          };
-        }
-        const sendsPerDay = activated * rules.maxSendsPerDayPerNumber;
-        const workingDaysNeeded = Math.max(1, Math.ceil(planned / sendsPerDay));
-        const workingDaysPerWeek = Math.max(1, getDisparosWorkingDays().length || 5);
-        const calendarDays = Math.max(
-          workingDaysNeeded,
-          Math.ceil((workingDaysNeeded / workingDaysPerWeek) * 7)
-        );
-        const summaryLabel =
-          workingDaysNeeded <= 1
-            ? `Projeção: conclusão em até 1 dia útil (${formatDisparosQty(sendsPerDay)} envios/dia com ${activated} número(s)).`
-            : `Projeção: cerca de ${workingDaysNeeded} dia(s) úteis (~${calendarDays} dia(s) de calendário) para ${formatDisparosQty(planned)} envios (${formatDisparosQty(sendsPerDay)}/dia).`;
-        return { summaryLabel, sendsPerDay, workingDaysNeeded, calendarDays };
-      }
-
-      function resetDisCampaignMappingState() {
-        disCampaignMappingConfirmed = false;
-        disCampaignMappedNumberColumn = "";
-      }
-
       const DIS_WEEKDAY_KEY_TO_JS = {
         dom: 0,
         seg: 1,
@@ -19222,24 +19363,114 @@
         sab: 6,
       };
 
-      function estimateDisCampaignCompletionBr(workingDaysNeeded) {
-        const needed = Math.max(1, Math.floor(Number(workingDaysNeeded) || 1));
-        const workingKeys = getDisparosWorkingDays();
-        const allowedJsDays = new Set(
-          (workingKeys.length ? workingKeys : ["seg", "ter", "qua", "qui", "sex"])
+      function computeClientAlternativaDurationEstimate(plannedSendCount, activatedInstanceCount) {
+        const rules = resolveAlternativaDispatchRules();
+        const planned = Math.max(0, Math.floor(Number(plannedSendCount) || 0));
+        const activated = Math.max(0, Math.floor(Number(activatedInstanceCount) || 0));
+        const startHour = Math.max(0, Math.floor(Number(document.getElementById("dis-start-hour")?.value) || 8));
+        const endHour = Math.max(
+          startHour + 1,
+          Math.floor(Number(document.getElementById("dis-end-hour")?.value) || 22)
+        );
+        const hoursPerWindow = endHour - startHour;
+        if (!planned) {
+          return {
+            capacityLabel: "Informe a quantidade de envios para ver a projeção.",
+            estimatedCompletionBr: "",
+            sendsPerDay: 0,
+            workingDaysNeeded: 0,
+          };
+        }
+        if (activated < rules.minActivatedForSend) {
+          const missing = `Ative ao menos ${rules.minActivatedForSend} números para calcular a projeção.`;
+          return {
+            capacityLabel: missing,
+            estimatedCompletionBr: "",
+            sendsPerDay: 0,
+            workingDaysNeeded: 0,
+          };
+        }
+        const sendsPerDay = activated * rules.maxSendsPerDayPerNumber;
+        const workingDaysNeeded = Math.max(1, Math.ceil(planned / sendsPerDay));
+        const capacityLabel = `Sua capacidade de envio hoje é de ${formatDisparosQty(
+          sendsPerDay
+        )} envios/dia, considerando ${activated} número(s).`;
+        const estimatedCompletionBr = estimateAlternativaCompletionBrClient({
+          plannedSendCount: planned,
+          activatedInstanceCount: activated,
+          startHour,
+          endHour,
+          workingDayKeys: getDisparosWorkingDays(),
+        });
+        return {
+          capacityLabel,
+          estimatedCompletionBr,
+          sendsPerDay,
+          workingDaysNeeded,
+        };
+      }
+
+      function estimateAlternativaCompletionBrClient(params) {
+        const planned = Math.max(0, Math.floor(Number(params?.plannedSendCount) || 0));
+        const activated = Math.max(0, Math.floor(Number(params?.activatedInstanceCount) || 0));
+        if (!planned || !activated) return "";
+        const startHour = Math.max(0, Math.floor(Number(params?.startHour) || 8));
+        const endHour = Math.max(startHour + 1, Math.floor(Number(params?.endHour) || 22));
+        const hoursPerWindow = endHour - startHour;
+        const sendsPerDay = activated * ALTERNATIVA_DISPATCH_RULES_FALLBACK.maxSendsPerDayPerNumber;
+        const sendsPerHour = sendsPerDay / hoursPerWindow;
+        if (!Number.isFinite(sendsPerHour) || sendsPerHour <= 0) return "";
+
+        const allowed = new Set(
+          (Array.isArray(params?.workingDayKeys) && params.workingDayKeys.length
+            ? params.workingDayKeys
+            : ["seg", "ter", "qua", "qui", "sex"]
+          )
             .map((key) => DIS_WEEKDAY_KEY_TO_JS[key])
             .filter((day) => Number.isFinite(day))
         );
-        const cursor = new Date();
-        let remaining = needed;
-        let guard = 0;
-        while (remaining > 0 && guard < 400) {
-          cursor.setDate(cursor.getDate() + 1);
-          guard += 1;
-          if (allowedJsDays.has(cursor.getDay())) {
-            remaining -= 1;
-          }
+        if (!allowed.size) {
+          ["seg", "ter", "qua", "qui", "sex"].forEach((key) => {
+            const day = DIS_WEEKDAY_KEY_TO_JS[key];
+            if (Number.isFinite(day)) allowed.add(day);
+          });
         }
+
+        let remainingHours = planned / sendsPerHour;
+        let cursor = new Date();
+        let guard = 0;
+        const cloneAtHour = (base, hour) => {
+          const d = new Date(base);
+          d.setHours(hour, 0, 0, 0);
+          return d;
+        };
+
+        while (remainingHours > 0.001 && guard < 500) {
+          guard += 1;
+          if (!allowed.has(cursor.getDay())) {
+            cursor.setDate(cursor.getDate() + 1);
+            cursor = cloneAtHour(cursor, startHour);
+            continue;
+          }
+          const windowStart = cloneAtHour(cursor, startHour);
+          const windowEnd = cloneAtHour(cursor, endHour);
+          if (cursor < windowStart) cursor = windowStart;
+          if (cursor >= windowEnd) {
+            cursor.setDate(cursor.getDate() + 1);
+            cursor = cloneAtHour(cursor, startHour);
+            continue;
+          }
+          const availableHours = (windowEnd.getTime() - cursor.getTime()) / 3600000;
+          if (remainingHours <= availableHours) {
+            cursor = new Date(cursor.getTime() + remainingHours * 3600000);
+            remainingHours = 0;
+            break;
+          }
+          remainingHours -= availableHours;
+          cursor.setDate(cursor.getDate() + 1);
+          cursor = cloneAtHour(cursor, startHour);
+        }
+
         return cursor.toLocaleString("pt-BR", {
           day: "2-digit",
           month: "2-digit",
@@ -19249,22 +19480,75 @@
         });
       }
 
-      function buildAlternativaProjectionHtml(projection, options = {}) {
-        const completionBr = String(options.completionBr || "").trim();
-        const summary = escapeReportHtml(String(projection?.summaryLabel || "").trim());
+      function resetDisCampaignMappingState() {
+        disCampaignMappingConfirmed = false;
+        disCampaignMappedNumberColumn = "";
+        const inlineSel = document.getElementById("dis-campaign-inline-map-number");
+        if (inlineSel) inlineSel.value = "";
+      }
+
+      function populateDisCampaignInlineColumnSelect(columns) {
+        const sel = document.getElementById("dis-campaign-inline-map-number");
+        if (!sel) return;
+        sel.innerHTML = "";
+        const optPlaceholder = document.createElement("option");
+        optPlaceholder.value = "";
+        optPlaceholder.textContent = "Selecione a coluna";
+        sel.appendChild(optPlaceholder);
+        (Array.isArray(columns) ? columns : []).forEach((c) => {
+          const col = String(c || "").trim();
+          if (!col) return;
+          const opt = document.createElement("option");
+          opt.value = col;
+          opt.textContent = col;
+          sel.appendChild(opt);
+        });
+        const preferred = (Array.isArray(columns) ? columns : []).find((c) =>
+          /numero|phone|telefone|celular|whatsapp|contato/i.test(String(c || ""))
+        );
+        if (preferred != null) sel.value = String(preferred);
+        const previewCol = String(sel.value || "").trim();
+        if (previewCol && campaignSpreadsheetRowsCache.length) {
+          setDisCampaignDedupeCaption(
+            countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, previewCol)
+          );
+        } else {
+          clearDisCampaignDedupeCaption();
+        }
+      }
+
+      function syncDisCampaignSectionSaveButton() {
+        const campaignSection = Array.from(
+          document.querySelectorAll("#disparos-config-area .aquecedor-section")
+        ).find((section) => /campanha/i.test(resolveDisparosSectionTitle(section)));
+        const saveBtn = campaignSection?.querySelector(".dis-section-save-btn");
+        if (!saveBtn) return;
+        saveBtn.textContent = "Gerar Campanha";
+        const planned = getDisEvoPlannedSendCountValue();
+        const ready =
+          disCampaignMappingConfirmed &&
+          Boolean(String(disCampaignMappedNumberColumn || "").trim()) &&
+          (!isDisparoEvoUi() || planned > 0);
+        saveBtn.disabled = !ready;
+      }
+
+      function buildAlternativaProjectionHtml(projection) {
+        const capacityLabel = escapeReportHtml(
+          String(projection?.capacityLabel || projection?.summaryLabel || "").trim()
+        );
+        const completionBr = escapeReportHtml(
+          String(projection?.estimatedCompletionBr || "").trim()
+        );
         const deadlineHtml = completionBr
-          ? `<span class="dis-evo-projection-deadline">Previsão de término: ${escapeReportHtml(
-              completionBr
-            )}</span>`
+          ? `<span class="dis-evo-projection-deadline">Previsão de término: ${completionBr}</span>`
           : "";
-        return `<div class="dis-evo-campaign-projection-inner"><span class="dis-evo-projection-icon" aria-hidden="true">⏱</span><span>${summary}${deadlineHtml}</span></div>`;
+        return `<div class="dis-evo-campaign-projection-inner"><span class="dis-evo-projection-icon" aria-hidden="true">⏱</span><span><span class="dis-evo-projection-capacity">${capacityLabel}</span>${deadlineHtml}</span></div>`;
       }
 
       function updateDisCampaignFlowUi() {
         const imported = Math.max(0, Math.floor(Number(campaignSpreadsheetRowsCache?.length) || 0));
         const mappingStep = document.getElementById("dis-campaign-mapping-step");
         const mappingStatus = document.getElementById("dis-campaign-mapping-status");
-        const saveBtn = document.getElementById("dis-campaign-save-config-btn");
         const showFlow = imported > 0;
 
         if (mappingStep) mappingStep.hidden = !showFlow;
@@ -19283,12 +19567,7 @@
         const showQty = showFlow && disCampaignMappingConfirmed && isDisparoEvoUi();
         if (qtyWrap) qtyWrap.hidden = !showQty;
 
-        if (saveBtn) {
-          saveBtn.hidden = !disCampaignMappingConfirmed;
-          const planned = getDisEvoPlannedSendCountValue();
-          saveBtn.disabled = isDisparoEvoUi() && !planned;
-        }
-
+        syncDisCampaignSectionSaveButton();
         updateDisEvoCampaignSendUi();
       }
 
@@ -19310,31 +19589,33 @@
           return;
         }
         el.classList.remove("is-warning");
-        const completionBr = estimateDisCampaignCompletionBr(projection.workingDaysNeeded);
-        el.innerHTML = buildAlternativaProjectionHtml(projection, { completionBr });
+        el.innerHTML = buildAlternativaProjectionHtml(projection);
       }
+
+      let disCampaignProjectionSeq = 0;
 
       async function refreshDisEvoCampaignProjectionFromApi() {
         const el = document.getElementById("dis-evo-campaign-projection");
         const planned = getDisEvoPlannedSendCountValue();
+        const seq = ++disCampaignProjectionSeq;
         if (!el || !planned) {
           renderAlternativaProjectionElement(el, planned);
           return;
         }
         renderAlternativaProjectionElement(el, planned);
         const apiEstimate = await refreshAlternativaCampaignEstimateFromApi(planned);
+        if (seq !== disCampaignProjectionSeq) return;
         if (!apiEstimate || getDisEvoPlannedSendCountValue() !== planned) return;
-        const summaryLabel = String(apiEstimate.summaryLabel || "").trim();
-        if (!summaryLabel) return;
-        const completionBr = estimateDisCampaignCompletionBr(
-          apiEstimate.workingDaysNeeded || 1
-        );
+        const capacityLabel = String(
+          apiEstimate.capacityLabel || apiEstimate.summaryLabel || ""
+        ).trim();
+        if (!capacityLabel) return;
         el.hidden = false;
         el.classList.toggle("is-warning", apiEstimate.canSend === false);
-        el.innerHTML = buildAlternativaProjectionHtml(
-          { summaryLabel },
-          { completionBr }
-        );
+        el.innerHTML = buildAlternativaProjectionHtml({
+          capacityLabel,
+          estimatedCompletionBr: String(apiEstimate.estimatedCompletionBr || "").trim(),
+        });
       }
 
       function scheduleDisEvoCampaignProjectionRefresh() {
@@ -19370,8 +19651,7 @@
         }
         const planned = getDisEvoPlannedSendCountValue();
         scheduleDisEvoCampaignProjectionRefresh();
-        const saveBtn = document.getElementById("dis-campaign-save-config-btn");
-        if (saveBtn) saveBtn.disabled = !planned;
+        syncDisCampaignSectionSaveButton();
       }
 
       async function refreshAlternativaCampaignEstimateFromApi(plannedSendCount) {
@@ -19436,6 +19716,75 @@
 
       function getActiveDisSelectedInstanceValues() {
         return getSelectOptionValues(resolveDisparosSelectedInstancesElement());
+      }
+
+      const DISPAROS_FULL_WARMTH_LEVEL = 3;
+      let disWarmthWarningResolver = null;
+
+      function shouldCheckDisparosWarmthOnSectionSave() {
+        if (isDisparoEvoUi() && disNumberSourceTab === "comprar") return false;
+        return getActiveDisSelectedInstanceValues().length > 0;
+      }
+
+      function getSelectedInstancesNotFullyWarmed() {
+        return getActiveDisSelectedInstanceValues()
+          .map((name) => String(name || "").trim())
+          .filter(Boolean)
+          .filter((name) => (getInstanceUsage(name).warmthLevel || 0) < DISPAROS_FULL_WARMTH_LEVEL);
+      }
+
+      function closeDisWarmthWarningOverlay(result) {
+        const overlay = document.getElementById("dis-warmth-warning-overlay");
+        if (overlay) {
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+        if (disWarmthWarningResolver) {
+          disWarmthWarningResolver(Boolean(result));
+          disWarmthWarningResolver = null;
+        }
+      }
+
+      function promptDisWarmthWarningIfNeeded() {
+        if (!shouldCheckDisparosWarmthOnSectionSave()) return Promise.resolve(true);
+        const notWarmed = getSelectedInstancesNotFullyWarmed();
+        if (!notWarmed.length) return Promise.resolve(true);
+        return new Promise((resolve) => {
+          disWarmthWarningResolver = resolve;
+          const overlay = document.getElementById("dis-warmth-warning-overlay");
+          if (!overlay) {
+            resolve(true);
+            disWarmthWarningResolver = null;
+            return;
+          }
+          overlay.classList.add("open");
+          overlay.setAttribute("aria-hidden", "false");
+        });
+      }
+
+      function reopenDisparosNumbersSection(section, sectionKey) {
+        if (section && sectionKey) {
+          disparosSectionSavedState[sectionKey] = false;
+          disparosSectionCollapsedState[sectionKey] = false;
+          const allSections = Array.from(
+            document.querySelectorAll("#disparos-config-area .aquecedor-section")
+          );
+          allSections.forEach((sec, idx) => {
+            const key = String(sec.dataset.sectionKey || `section-${idx + 1}`);
+            disparosSectionCollapsedState[key] = sec !== section;
+          });
+          disparosActiveSectionIndex = Math.max(0, allSections.indexOf(section));
+          applyDisparosSectionLayout();
+        }
+        window.setTimeout(() => {
+          const selectedList = resolveDisparosSelectedInstancesElement();
+          selectedList?.scrollIntoView({ behavior: "smooth", block: "center" });
+          try {
+            selectedList?.focus?.();
+          } catch {
+            //
+          }
+        }, 120);
       }
 
       function formatAlternativaNumbersTotal(qty) {
@@ -27651,6 +28000,17 @@
       let disparosNextInstanceTechnicalCache = null;
       let disparosHasRunningCampaign = false;
       let disparosCampaignItemsCache = [];
+      const DISPAROS_CAMPAIGN_LIST_SCOPE = {
+        OFICIAL: "oficial-intake",
+        ALTERNATIVA: "alternativa-evo",
+      };
+      const DISPAROS_CAMPAIGN_SCOPE_CACHE_PREFIX = "waba-disparos-campaigns-v1";
+      const DISPAROS_CAMPAIGN_SCOPE_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+      let disparosCampaignListScopeShown = "";
+      const disparosCampaignScopeState = {
+        [DISPAROS_CAMPAIGN_LIST_SCOPE.OFICIAL]: { items: [], fingerprint: "" },
+        [DISPAROS_CAMPAIGN_LIST_SCOPE.ALTERNATIVA]: { items: [], fingerprint: "" },
+      };
       let disCampaignWizardStep = 1;
       const DIS_CAMPAIGN_WIZARD_TOTAL_STEPS = 5;
       let disCampaignWizardImageFile = null;
@@ -28660,6 +29020,7 @@
             label.textContent = `${file.name} · ${campaignSpreadsheetRowsCache.length} linha(s) · ${colCount} coluna(s)`;
           }
           renderDisCampaignPreviewTable(campaignSpreadsheetRowsCache);
+          populateDisCampaignInlineColumnSelect(Object.keys(campaignSpreadsheetRowsCache[0] || {}));
           updateDisCampaignFlowUi();
           const statusEl = document.getElementById("dis-campaign-create-status");
           if (statusEl) {
@@ -28698,7 +29059,66 @@
       const disparosSectionSavedState = {};
       let disparosActiveSectionIndex = 0;
       let disparosConfigSaveInFlight = false;
+      let disparosSectionSaveDelegationReady = false;
       let messengerProductsCache = [];
+
+      function isDisparosConfigTabActive() {
+        return activeTab === "disparos" || activeTab === "disparo-evo";
+      }
+
+      function isDisparosSectionFlowInProgress() {
+        if (!disparosSectionLayoutInitialized) return false;
+        return getDisparosFlowSections().some((section) => {
+          const key = String(section.dataset.sectionKey || "");
+          if (!key) return false;
+          return !disparosSectionSavedState[key] || !disparosSectionCollapsedState[key];
+        });
+      }
+
+      function shouldSkipDisparosConfigReload() {
+        return disparosConfigSaveInFlight || isDisparosSectionFlowInProgress();
+      }
+
+      function commitDisparadorPickerStateBeforeSave() {
+        const selectedEl = resolveDisparosSelectedInstancesElement();
+        if (!selectedEl) return;
+        const values = getDisPickerValues(selectedEl);
+        pendingSelectedDisparadorInstances = values;
+      }
+
+      function resolveDisparosSectionTitle(section) {
+        if (!section) return "";
+        const headTitle = section.querySelector(".dis-section-head-title");
+        if (headTitle) return String(headTitle.textContent || "").trim();
+        const legacyTitle = section.querySelector(".aquecedor-section-title");
+        return String(legacyTitle?.textContent || "")
+          .trim()
+          .replace(/^\d+\)\s*/, "");
+      }
+
+      function initDisparosSectionSaveDelegation() {
+        if (disparosSectionSaveDelegationReady) return;
+        const area = document.getElementById("disparos-config-area");
+        if (!area) return;
+        disparosSectionSaveDelegationReady = true;
+        area.addEventListener(
+          "pointerdown",
+          (event) => {
+            const saveBtn = event.target.closest(".dis-section-save-btn");
+            if (!saveBtn || event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const section = saveBtn.closest(".aquecedor-section");
+            if (!section) return;
+            const sectionKey =
+              saveBtn.getAttribute("data-section-key") ||
+              String(section.dataset.sectionKey || "");
+            const title = resolveDisparosSectionTitle(section);
+            void executeDisparosSectionSave(saveBtn, section, sectionKey, title);
+          },
+          true
+        );
+      }
 
       function showToast(message, type = "success", timeoutMs = 3200) {
         const stack = document.getElementById("toast-stack");
@@ -29851,6 +30271,127 @@
           .join(";");
       }
 
+      function resolveDisparosCampaignListScope() {
+        return isDisparoEvoUi()
+          ? DISPAROS_CAMPAIGN_LIST_SCOPE.ALTERNATIVA
+          : DISPAROS_CAMPAIGN_LIST_SCOPE.OFICIAL;
+      }
+
+      function getDisparosCampaignScopeCache(scope) {
+        const key = scope || resolveDisparosCampaignListScope();
+        if (!disparosCampaignScopeState[key]) {
+          disparosCampaignScopeState[key] = { items: [], fingerprint: "" };
+        }
+        return disparosCampaignScopeState[key];
+      }
+
+      function getDisparosCampaignScopeCacheStorageKey(scope) {
+        return `${DISPAROS_CAMPAIGN_SCOPE_CACHE_PREFIX}:${scope}:${wabaSessionEmail || "guest"}`;
+      }
+
+      function hydrateDisparosCampaignScopeFromLocalCache(scope) {
+        const key = scope || resolveDisparosCampaignListScope();
+        try {
+          const raw = localStorage.getItem(getDisparosCampaignScopeCacheStorageKey(key));
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || !Array.isArray(parsed.items)) return null;
+          if (Date.now() - Number(parsed.savedAt || 0) > DISPAROS_CAMPAIGN_SCOPE_CACHE_MAX_AGE_MS) {
+            localStorage.removeItem(getDisparosCampaignScopeCacheStorageKey(key));
+            return null;
+          }
+          return parsed;
+        } catch {
+          return null;
+        }
+      }
+
+      function persistDisparosCampaignScopeToLocalCache(scope, items) {
+        const key = scope || resolveDisparosCampaignListScope();
+        try {
+          localStorage.setItem(
+            getDisparosCampaignScopeCacheStorageKey(key),
+            JSON.stringify({ savedAt: Date.now(), items: Array.isArray(items) ? items : [] })
+          );
+        } catch {
+          /* ignore quota */
+        }
+      }
+
+      function saveDisparosCampaignScopeCache(scope, items, fingerprint) {
+        const key = scope || resolveDisparosCampaignListScope();
+        const safeItems = Array.isArray(items) ? items : [];
+        disparosCampaignScopeState[key] = {
+          items: safeItems,
+          fingerprint: String(fingerprint || ""),
+        };
+        persistDisparosCampaignScopeToLocalCache(key, safeItems);
+        if (resolveDisparosCampaignListScope() === key) {
+          disparosCampaignItemsCache = safeItems;
+          disparosCampaignItemsFingerprint = String(fingerprint || "");
+        }
+      }
+
+      function showDisparosCampaignListLoading(message) {
+        const list = document.getElementById("disparos-list");
+        if (!list) return;
+        list.innerHTML = `
+          <div class="disparos-campaign-list-loading" aria-live="polite" aria-busy="true">
+            <div class="disparos-campaign-list-loading-row"></div>
+            <div class="disparos-campaign-list-loading-row"></div>
+            <div class="disparos-campaign-list-loading-row"></div>
+            <div class="muted" style="margin-top: 4px;">${escapeAdminHtml(
+              message || "Carregando campanhas da API selecionada…"
+            )}</div>
+          </div>
+        `;
+        syncDisparosCampanhasListLayout();
+      }
+
+      function renderDisparosCampaignListForScope(scope, items) {
+        const key = scope || resolveDisparosCampaignListScope();
+        if (resolveDisparosCampaignListScope() !== key) return;
+        if (key === DISPAROS_CAMPAIGN_LIST_SCOPE.ALTERNATIVA) {
+          void loadDisparosEvoCampaigns({ useCachedItemsOnly: true, items });
+          return;
+        }
+        renderDisparosTemplatesList(Array.isArray(items) ? items : []);
+      }
+
+      function prepareDisparosCampaignListScopeChange() {
+        const scope = resolveDisparosCampaignListScope();
+        if (scope === disparosCampaignListScopeShown) return false;
+        disparosCampaignListScopeShown = scope;
+        disparosCampaignsLoadSeq += 1;
+
+        let cached = getDisparosCampaignScopeCache(scope);
+        if (!cached.items.length) {
+          const hydrated = hydrateDisparosCampaignScopeFromLocalCache(scope);
+          if (hydrated?.items?.length) {
+            saveDisparosCampaignScopeCache(
+              scope,
+              hydrated.items,
+              buildDisparosCampaignItemsFingerprint(hydrated.items)
+            );
+            cached = getDisparosCampaignScopeCache(scope);
+          }
+        }
+
+        disparosCampaignItemsCache = cached.items;
+        disparosCampaignItemsFingerprint = cached.fingerprint;
+
+        if (cached.items.length) {
+          renderDisparosCampaignListForScope(scope, cached.items);
+        } else {
+          showDisparosCampaignListLoading(
+            scope === DISPAROS_CAMPAIGN_LIST_SCOPE.ALTERNATIVA
+              ? "Carregando campanhas da API Alternativa…"
+              : "Carregando campanhas da API Oficial…"
+          );
+        }
+        return true;
+      }
+
       function refreshDisparosCampaignsAndResumo() {
         if (isDisparoEvoUi()) {
           return loadDisparosEvoCampaigns().then(() => loadDisparosCredits());
@@ -30166,6 +30707,70 @@
         return String(document.getElementById("dis-whatsapp-target")?.value || "").replace(/\D/g, "");
       }
 
+      function getDisLinkDestinationMode() {
+        const active = document.querySelector(".dis-link-destination-tab.active");
+        return active?.dataset?.mode === "url" ? "url" : "whatsapp";
+      }
+
+      function setDisLinkDestinationMode(mode) {
+        const normalized = mode === "url" ? "url" : "whatsapp";
+        document.querySelectorAll(".dis-link-destination-tab").forEach((tab) => {
+          const isActive = tab.dataset.mode === normalized;
+          tab.classList.toggle("active", isActive);
+          tab.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        document.getElementById("dis-link-mode-whatsapp")?.classList.toggle("hidden", normalized !== "whatsapp");
+        document.getElementById("dis-link-mode-url")?.classList.toggle("hidden", normalized !== "url");
+      }
+
+      function getResponseUrlValue() {
+        return String(document.getElementById("dis-response-url")?.value || "").trim();
+      }
+
+      function validateResponseUrl(showFeedback = false) {
+        const raw = getResponseUrlValue();
+        let valid = false;
+        if (raw) {
+          try {
+            const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+            const u = new URL(withProto);
+            valid = u.protocol === "http:" || u.protocol === "https:";
+          } catch {
+            valid = false;
+          }
+        }
+        const errorEl = document.getElementById("dis-response-url-error");
+        if (showFeedback && errorEl) errorEl.classList.toggle("hidden", valid);
+        return valid;
+      }
+
+      function validateDisLinkDestination(showFeedback = false) {
+        const mode = getDisLinkDestinationMode();
+        if (mode === "whatsapp") return validateWhatsappTarget(showFeedback);
+        return validateResponseUrl(showFeedback);
+      }
+
+      function buildDisparosTestLongUrl() {
+        const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+        const mode = getDisLinkDestinationMode();
+        if (mode === "url") {
+          const raw = getResponseUrlValue();
+          if (!raw) return "";
+          const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+          try {
+            const u = new URL(withProto);
+            u.searchParams.set("_n8n_test_nonce", nonce);
+            return u.toString();
+          } catch {
+            return "";
+          }
+        }
+        const localDigits = getWhatsappTargetDigits();
+        const target = localDigits ? `55${localDigits}` : "";
+        if (!target) return "";
+        return `https://wa.me/${target}?text=Ol%C3%A1&_n8n_test_nonce=${nonce}`;
+      }
+
       function validateWhatsappTarget(showFeedback = false) {
         const digits = getWhatsappTargetDigits();
         const errorEl = document.getElementById("dis-whatsapp-target-error");
@@ -30216,7 +30821,9 @@
           aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
           aiCta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
           aiAudience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
+          linkDestinationMode: getDisLinkDestinationMode(),
           whatsappTargetNumber: getWhatsappTargetDigits(), // backend adiciona +55
+          responseUrl: getResponseUrlValue(),
           selectedDisparadorInstances: selectedInstances,
         };
       }
@@ -30237,11 +30844,13 @@
             const raw = String(config?.whatsappTargetNumber ?? "").replace(/\D/g, "");
             return raw.startsWith("55") && raw.length >= 12 ? raw.slice(2, 13) : raw;
           })(),
+          "dis-response-url": config?.responseUrl ?? "",
         };
         Object.entries(map).forEach(([id, value]) => {
           const el = document.getElementById(id);
           if (el) el.value = String(value);
         });
+        setDisLinkDestinationMode(config?.linkDestinationMode === "url" ? "url" : "whatsapp");
         const hiddenBriefing = document.getElementById("dis-ai-briefing");
         if (hiddenBriefing) hiddenBriefing.value = String(config?.aiBriefing || "");
         const notes = document.getElementById("dis-ai-notes");
@@ -30698,26 +31307,54 @@
         applyDisparosSectionLayout();
       }
 
-      function bindDisparosSectionSaveButton(saveBtn, section, sectionKey, title) {
-        if (!saveBtn || saveBtn.dataset.disSaveBound === "1") return;
+      function bindDisparosSectionSaveButton(saveBtn, section, sectionKey) {
+        if (!saveBtn) return;
         saveBtn.dataset.disSaveBound = "1";
-        saveBtn.addEventListener("mousedown", (event) => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-        });
-        saveBtn.addEventListener("click", async () => {
-          if (disparosConfigSaveInFlight) return;
-          const original = saveBtn.textContent;
-          saveBtn.textContent = "Salvando...";
-          saveBtn.setAttribute("disabled", "true");
+        saveBtn.setAttribute("data-section-key", sectionKey);
+        if (section) section.dataset.sectionKey = sectionKey;
+      }
+
+      async function executeDisparosSectionSave(saveBtn, section, sectionKey, title) {
+        if (!saveBtn || disparosConfigSaveInFlight || saveBtn.disabled) return;
+        commitDisparadorPickerStateBeforeSave();
+        const original = saveBtn.textContent;
+
+        if (/sele[cç][aã]o de n[uú]meros/i.test(title)) {
+          const proceed = await promptDisWarmthWarningIfNeeded();
+          if (!proceed) {
+            reopenDisparosNumbersSection(section, sectionKey);
+            return;
+          }
+        }
+
+        saveBtn.textContent = "Salvando...";
+        saveBtn.disabled = true;
+        try {
+          if (/campanha/i.test(title)) {
+            saveBtn.textContent = "Gerando...";
+            const created = await createCampaignFromMappedSpreadsheet();
+            if (!created) return;
+            disparosSectionSavedState[sectionKey] = true;
+            disparosSectionCollapsedState[sectionKey] = true;
+            applyDisparosSectionLayout();
+            return;
+          }
+          if (/encurtador/i.test(title) && !validateDisLinkDestination(true)) {
+            const mode = getDisLinkDestinationMode();
+            showToast(
+              mode === "url"
+                ? "Informe uma URL de resposta válida (http ou https)."
+                : "Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.",
+              "warning"
+            );
+            return;
+          }
           const ok = await saveDisparosConfig({
             collapseAll: false,
             useMainButtonLoading: false,
             skipWhatsappValidation: true,
             skipRequiredValidation: true,
           });
-          saveBtn.textContent = original || "Salvar configurações";
-          saveBtn.removeAttribute("disabled");
           if (!ok) return;
           if (/mensageiro/i.test(title)) hideMessengerLibrarySavePanel();
           disparosSectionSavedState[sectionKey] = true;
@@ -30728,9 +31365,11 @@
             const nextSection = flowSections[flowIdx + 1];
             const nextKey = String(
               nextSection.dataset.sectionKey ||
-                `section-${Array.from(
-                  document.querySelectorAll("#disparos-config-area .aquecedor-section")
-                ).indexOf(nextSection) + 1}`
+                `section-${
+                  Array.from(
+                    document.querySelectorAll("#disparos-config-area .aquecedor-section")
+                  ).indexOf(nextSection) + 1
+                }`
             );
             disparosSectionCollapsedState[nextKey] = false;
             disparosActiveSectionIndex = Array.from(
@@ -30738,7 +31377,11 @@
             ).indexOf(nextSection);
           }
           applyDisparosSectionLayout();
-        });
+        } finally {
+          saveBtn.textContent = original || (/campanha/i.test(title) ? "Gerar Campanha" : "Salvar configurações");
+          saveBtn.disabled = false;
+          if (/campanha/i.test(title)) syncDisCampaignSectionSaveButton();
+        }
       }
 
       function initDisparosSectionLayout() {
@@ -30801,15 +31444,18 @@
 
           const saveRow = document.createElement("div");
           saveRow.className = "dis-section-save-row";
-          saveRow.innerHTML = `<button type="button" class="dis-section-save-btn" data-section-key="${sectionKey}">Salvar configurações</button>`;
+          const saveLabel = /campanha/i.test(title) ? "Gerar Campanha" : "Salvar configurações";
+          saveRow.innerHTML = `<button type="button" class="dis-section-save-btn" data-section-key="${sectionKey}">${saveLabel}</button>`;
           body.appendChild(saveRow);
           const saveBtn = saveRow.querySelector(".dis-section-save-btn");
-          bindDisparosSectionSaveButton(saveBtn, section, sectionKey, title);
+          bindDisparosSectionSaveButton(saveBtn, section, sectionKey);
 
           section.dataset.sectionReady = "1";
         });
+        initDisparosSectionSaveDelegation();
         disparosSectionLayoutInitialized = true;
         applyDisparosSectionLayout();
+        syncDisCampaignSectionSaveButton();
       }
 
       function applyDisparosSectionLayout() {
@@ -30858,16 +31504,23 @@
 
       async function loadDisparosConfig(options = {}) {
         const silent = Boolean(options.silent);
+        const skipSectionFlowReset = Boolean(options.skipSectionFlowReset);
+        const forceReload = Boolean(options.forceReload);
         const intakeOnly = isDisparosCampanhasIntakeOnlyUi();
         const statusLabel = document.getElementById("disparos-status-label");
         if (disparosConfigSaveInFlight) return;
+        if (!silent && !forceReload && shouldSkipDisparosConfigReload()) {
+          return;
+        }
         if (statusLabel && !intakeOnly && !silent) {
           statusLabel.textContent = "Carregando…";
         }
         try {
           if (!silent) {
             initDisparosSectionLayout();
-            resetDisparosSectionFlow();
+            if (!skipSectionFlowReset) {
+              resetDisparosSectionFlow();
+            }
           }
           const response = await fetchDisparosCampaignListWithRetry("/disparos/config", {}, 15000);
           if (!response.ok) {
@@ -30885,7 +31538,7 @@
           } else {
             disparosAlternativaThrottleCache = null;
           }
-          if (!silent) {
+          if (!silent && !skipSectionFlowReset) {
             setDisparosFormValues(data?.config || {});
           }
           const shortenerSelect = document.getElementById("dis-shortener-provider");
@@ -30928,6 +31581,7 @@
 
       async function saveDisparosConfig(options = {}) {
         if (disparosConfigSaveInFlight) return false;
+        commitDisparadorPickerStateBeforeSave();
         const btn = document.getElementById("dis-save-btn");
         const statusLabel = document.getElementById("disparos-status-label");
         const original = btn?.textContent || "Salvar";
@@ -30949,7 +31603,9 @@
                 ]),
             { id: "dis-start-hour", label: "Início da janela (hora)" },
             { id: "dis-end-hour", label: "Fim da janela (hora)" },
-            { id: "dis-whatsapp-target", label: "Número WhatsApp para links" },
+            ...(getDisLinkDestinationMode() === "url"
+              ? [{ id: "dis-response-url", label: "URL de resposta da campanha" }]
+              : [{ id: "dis-whatsapp-target", label: "Número WhatsApp para links" }]),
             ...(isAiMode
               ? [
                   { id: "dis-ai-tone", label: "Tom da mensagem (IA)" },
@@ -30987,8 +31643,14 @@
             showToast("Selecione ao menos um dia de expediente antes de salvar.", "warning");
             return false;
           }
-          if (!skipWhatsappValidation && !validateWhatsappTarget(true)) {
-            showToast("Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.", "warning");
+          if (!skipWhatsappValidation && !validateDisLinkDestination(true)) {
+            const mode = getDisLinkDestinationMode();
+            showToast(
+              mode === "url"
+                ? "Informe uma URL de resposta válida (http ou https)."
+                : "Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.",
+              "warning"
+            );
             return false;
           }
         }
@@ -31036,8 +31698,14 @@
         const btn = document.getElementById("dis-test-shortener-btn");
         const statusEl = document.getElementById("dis-shortener-test-status");
         const original = btn?.textContent || "Testar encurtador";
-        if (!validateWhatsappTarget(true)) {
-          showToast("Número inválido. Complete no formato +55 (DDD) 9XXXX-XXXX.", "warning");
+        if (!validateDisLinkDestination(true)) {
+          const mode = getDisLinkDestinationMode();
+          showToast(
+            mode === "url"
+              ? "URL inválida. Informe http ou https completo."
+              : "Número inválido. Complete no formato +55 (DDD) 9XXXX-XXXX.",
+            "warning"
+          );
           return;
         }
         if (btn) {
@@ -31049,10 +31717,15 @@
           statusEl.style.color = "#cbd5e1";
         }
         try {
-          const localDigits = String(document.getElementById("dis-whatsapp-target")?.value || "").replace(/\D/g, "");
-          const target = localDigits ? `55${localDigits}` : "5511999999999";
-          const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-          const longUrl = `https://wa.me/${target}?text=Ol%C3%A1&_n8n_test_nonce=${nonce}`;
+          const longUrl = buildDisparosTestLongUrl();
+          if (!longUrl) {
+            if (statusEl) {
+              statusEl.textContent = "Configure o destino do link antes de testar.";
+              statusEl.style.color = "#fda4af";
+            }
+            showToast("Configure o destino do link antes de testar.", "warning");
+            return;
+          }
           const response = await fetchWithTimeout(
             "/disparos/shorten",
             {
@@ -31158,9 +31831,12 @@
           showToast("Ative o modo 'Gerar mensagens com IA' para testar.", "warning");
           return;
         }
-        if (!validateWhatsappTarget(true)) {
+        if (!validateDisLinkDestination(true)) {
+          const mode = getDisLinkDestinationMode();
           const err =
-            "Informe o WhatsApp de destino na seção Encurtador (DDD + 9 dígitos, ex.: (11) 99999-9999).";
+            mode === "url"
+              ? "Informe a URL de resposta na seção Encurtador (http ou https)."
+              : "Informe o WhatsApp de destino na seção Encurtador (DDD + 9 dígitos, ex.: (11) 99999-9999).";
           if (statusEl) {
             statusEl.textContent = err;
             statusEl.style.color = "#fda4af";
@@ -31193,7 +31869,9 @@
                 audience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
                 cta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
                 objective: String(document.getElementById("dis-ai-objective")?.value || "gerar mensagem de prospeccao"),
+                linkDestinationMode: getDisLinkDestinationMode(),
                 whatsappTargetNumber: getWhatsappTargetDigits(),
+                responseUrl: getResponseUrlValue(),
               }),
             },
             90000
@@ -31614,11 +32292,13 @@
 
       function handleDisparosCampaignListLoadFailure(message, silent) {
         if (silent) return;
-        const cached = Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : [];
-        if (cached.length) {
+        const scope = resolveDisparosCampaignListScope();
+        const cached = getDisparosCampaignScopeCache(scope).items;
+        if (cached.length && disparosCampaignListScopeShown === scope) {
           showDisparosCampaignListLoadWarning(
             `${message} Exibindo a última lista carregada.`
           );
+          renderDisparosCampaignListForScope(scope, cached);
           return;
         }
         disparosHasRunningCampaign = false;
@@ -31632,68 +32312,22 @@
       }
 
       async function loadDisparosEvoCampaigns(options = {}) {
+        const scope = DISPAROS_CAMPAIGN_LIST_SCOPE.ALTERNATIVA;
         const silent = Boolean(options.silent);
         const list = document.getElementById("disparos-list");
         if (!list) return;
-        const loadSeq = ++disparosCampaignsLoadSeq;
-        try {
-          const response = await fetchDisparosCampaignListWithRetry(
-            "/disparos/campanhas",
-            { cache: "no-store" },
-            20000
-          );
-          if (loadSeq !== disparosCampaignsLoadSeq) return;
-          if (!response.ok) {
-            const message = await resolveDisparosCampaignListErrorMessage(response, null);
-            handleDisparosCampaignListLoadFailure(message, silent);
-            return;
-          }
-          list.querySelector(".disparos-list-load-error")?.remove();
-          const data = await response.json().catch(() => ({}));
-          if (loadSeq !== disparosCampaignsLoadSeq) return;
-          const items = Array.isArray(data?.items) ? data.items : [];
-          const prevById = new Map(
-            (Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : []).map(
-              (item) => [String(item?.id || ""), item]
-            )
-          );
-          const fingerprint = buildDisparosCampaignItemsFingerprint(items);
-          const campaignsChanged = fingerprint !== disparosCampaignItemsFingerprint;
-          const enviadosTotal = computeDisparosEnviadosFinalizados(items);
-          const enviadosChanged = enviadosTotal !== disparosEnviadosTotalCache;
-          const newlyCompleted = items.some((item) => {
-            const id = String(item?.id || "");
-            const prev = prevById.get(id);
-            const status = normalizeCampaignIntakeStatus(item?.status);
-            const prevStatus = prev ? normalizeCampaignIntakeStatus(prev?.status) : "";
-            return status === "completed" && prevStatus !== "completed";
-          });
-          const runningCount = items.filter(
-            (item) => String(item?.status || "").toLowerCase() === "running"
-          ).length;
-          disparosCampaignItemsCache = items;
-          disparosEnviadosTotalCache = enviadosTotal;
-          disparosHasRunningCampaign = runningCount > 0;
-          syncDisparosResumoSide(items);
-          if (activeTab === "disparo-evo" || isBaselineUi()) {
-            restartDisparosCampaignsPolling(items);
-          }
-          if (campaignsChanged || newlyCompleted || enviadosChanged) {
-            void loadDisparosCredits();
-          }
-          updateDisparosSelectedInstancesSummaryCard();
-          await refreshDisparosActiveInstanceFromServer();
-          if (silent && !campaignsChanged && !newlyCompleted && !enviadosChanged) {
-            return;
-          }
-          disparosCampaignItemsFingerprint = fingerprint;
-          if (!items.length) {
+        if (resolveDisparosCampaignListScope() !== scope) return;
+
+        const renderEvoItems = (items) => {
+          if (resolveDisparosCampaignListScope() !== scope) return;
+          const safeItems = Array.isArray(items) ? items : [];
+          if (!safeItems.length) {
             list.innerHTML = '<div class="muted">Nenhuma campanha criada ainda.</div>';
             syncDisparosCampanhasListLayout();
             return;
           }
           list.innerHTML = "";
-          items.slice(0, 80).forEach((item) => {
+          safeItems.slice(0, 80).forEach((item) => {
                   const row = document.createElement("div");
                   row.className = "aquecedor-envio-item disparos-campaign-item";
                   const createdAt = String(item?.createdAt || "").trim();
@@ -31925,28 +32559,28 @@
                   list.appendChild(row);
                 });
           syncDisparosCampanhasListLayout();
-              } catch (error) {
-                if (loadSeq !== disparosCampaignsLoadSeq) return;
-                const message = await resolveDisparosCampaignListErrorMessage(null, error);
-                handleDisparosCampaignListLoadFailure(message, silent);
-              }
-      }
+        };
 
-      async function loadDisparosTemplates(options = {}) {
-        if (isDisparoEvoUi()) {
-          return loadDisparosEvoCampaigns(options);
+        if (options.useCachedItemsOnly) {
+          renderEvoItems(
+            Array.isArray(options.items) ? options.items : getDisparosCampaignScopeCache(scope).items
+          );
+          return;
         }
-        const silent = Boolean(options.silent);
-        const list = document.getElementById("disparos-list");
-        if (!list) return;
+
+        if (!silent && !getDisparosCampaignScopeCache(scope).items.length) {
+          showDisparosCampaignListLoading("Carregando campanhas da API Alternativa…");
+        }
+
         const loadSeq = ++disparosCampaignsLoadSeq;
         try {
           const response = await fetchDisparosCampaignListWithRetry(
-            "/disparos/campanhas/intake",
+            "/disparos/campanhas",
             { cache: "no-store" },
-            15000
+            20000
           );
           if (loadSeq !== disparosCampaignsLoadSeq) return;
+          if (resolveDisparosCampaignListScope() !== scope) return;
           if (!response.ok) {
             const message = await resolveDisparosCampaignListErrorMessage(response, null);
             handleDisparosCampaignListLoadFailure(message, silent);
@@ -31955,14 +32589,13 @@
           list.querySelector(".disparos-list-load-error")?.remove();
           const data = await response.json().catch(() => ({}));
           if (loadSeq !== disparosCampaignsLoadSeq) return;
+          if (resolveDisparosCampaignListScope() !== scope) return;
           const items = Array.isArray(data?.items) ? data.items : [];
           const prevById = new Map(
-            (Array.isArray(disparosCampaignItemsCache) ? disparosCampaignItemsCache : []).map(
-              (item) => [String(item?.id || ""), item]
-            )
+            getDisparosCampaignScopeCache(scope).items.map((item) => [String(item?.id || ""), item])
           );
           const fingerprint = buildDisparosCampaignItemsFingerprint(items);
-          const campaignsChanged = fingerprint !== disparosCampaignItemsFingerprint;
+          const campaignsChanged = fingerprint !== getDisparosCampaignScopeCache(scope).fingerprint;
           const enviadosTotal = computeDisparosEnviadosFinalizados(items);
           const enviadosChanged = enviadosTotal !== disparosEnviadosTotalCache;
           const newlyCompleted = items.some((item) => {
@@ -31972,7 +32605,78 @@
             const prevStatus = prev ? normalizeCampaignIntakeStatus(prev?.status) : "";
             return status === "completed" && prevStatus !== "completed";
           });
-          disparosCampaignItemsCache = items;
+          const runningCount = items.filter(
+            (item) => String(item?.status || "").toLowerCase() === "running"
+          ).length;
+          saveDisparosCampaignScopeCache(scope, items, fingerprint);
+          disparosEnviadosTotalCache = enviadosTotal;
+          disparosHasRunningCampaign = runningCount > 0;
+          syncDisparosResumoSide(items);
+          if (activeTab === "disparo-evo" || isBaselineUi()) {
+            restartDisparosCampaignsPolling(items);
+          }
+          if (campaignsChanged || newlyCompleted || enviadosChanged) {
+            void loadDisparosCredits();
+          }
+          updateDisparosSelectedInstancesSummaryCard();
+          await refreshDisparosActiveInstanceFromServer();
+          if (silent && !campaignsChanged && !newlyCompleted && !enviadosChanged) {
+            return;
+          }
+          renderEvoItems(items);
+        } catch (error) {
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
+          const message = await resolveDisparosCampaignListErrorMessage(null, error);
+          handleDisparosCampaignListLoadFailure(message, silent);
+        }
+      }
+
+      async function loadDisparosTemplates(options = {}) {
+        if (isDisparoEvoUi()) {
+          return loadDisparosEvoCampaigns(options);
+        }
+        const scope = DISPAROS_CAMPAIGN_LIST_SCOPE.OFICIAL;
+        const silent = Boolean(options.silent);
+        const list = document.getElementById("disparos-list");
+        if (!list) return;
+        if (resolveDisparosCampaignListScope() !== scope) return;
+        if (!silent && !getDisparosCampaignScopeCache(scope).items.length) {
+          showDisparosCampaignListLoading("Carregando campanhas da API Oficial…");
+        }
+        const loadSeq = ++disparosCampaignsLoadSeq;
+        try {
+          const response = await fetchDisparosCampaignListWithRetry(
+            "/disparos/campanhas/intake",
+            { cache: "no-store" },
+            15000
+          );
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
+          if (resolveDisparosCampaignListScope() !== scope) return;
+          if (!response.ok) {
+            const message = await resolveDisparosCampaignListErrorMessage(response, null);
+            handleDisparosCampaignListLoadFailure(message, silent);
+            return;
+          }
+          list.querySelector(".disparos-list-load-error")?.remove();
+          const data = await response.json().catch(() => ({}));
+          if (loadSeq !== disparosCampaignsLoadSeq) return;
+          if (resolveDisparosCampaignListScope() !== scope) return;
+          const items = Array.isArray(data?.items) ? data.items : [];
+          const prevById = new Map(
+            getDisparosCampaignScopeCache(scope).items.map((item) => [String(item?.id || ""), item])
+          );
+          const fingerprint = buildDisparosCampaignItemsFingerprint(items);
+          const campaignsChanged = fingerprint !== getDisparosCampaignScopeCache(scope).fingerprint;
+          const enviadosTotal = computeDisparosEnviadosFinalizados(items);
+          const enviadosChanged = enviadosTotal !== disparosEnviadosTotalCache;
+          const newlyCompleted = items.some((item) => {
+            const id = String(item?.id || "");
+            const prev = prevById.get(id);
+            const status = normalizeCampaignIntakeStatus(item?.status);
+            const prevStatus = prev ? normalizeCampaignIntakeStatus(prev?.status) : "";
+            return status === "completed" && prevStatus !== "completed";
+          });
+          saveDisparosCampaignScopeCache(scope, items, fingerprint);
           disparosEnviadosTotalCache = enviadosTotal;
           disparosHasRunningCampaign = items.some(
             (item) => normalizeCampaignIntakeStatus(item?.status) === "in_progress"
@@ -31987,7 +32691,6 @@
           if (silent && !campaignsChanged && !newlyCompleted && !enviadosChanged) {
             return;
           }
-          disparosCampaignItemsFingerprint = fingerprint;
           renderDisparosTemplatesList(items);
         } catch (error) {
           if (loadSeq !== disparosCampaignsLoadSeq) return;
@@ -32714,70 +33417,69 @@
         openDisCampaignMappingModalWithColumns(columns);
       }
 
-      function confirmDisCampaignColumnMapping() {
-        const campaignName = String(
-          document.getElementById("dis-campaign-modal-name")?.value ||
-            document.getElementById("dis-campaign-name")?.value ||
-            ""
+      function applyDisCampaignColumnMapping() {
+        const campaignName = String(document.getElementById("dis-campaign-name")?.value || "").trim();
+        const numberCol = String(
+          document.getElementById("dis-campaign-inline-map-number")?.value || ""
         ).trim();
-        const numberCol = String(document.getElementById("dis-campaign-map-number")?.value || "").trim();
-        const mainNameInput = document.getElementById("dis-campaign-name");
         const statusEl = document.getElementById("dis-campaign-create-status");
         if (!campaignName) {
           showToast("Informe o nome da campanha.", "warning");
-          document.getElementById("dis-campaign-modal-name")?.focus();
+          document.getElementById("dis-campaign-name")?.focus();
           return false;
         }
         if (!numberCol) {
           showToast("Selecione a coluna do número.", "warning");
+          document.getElementById("dis-campaign-inline-map-number")?.focus();
           return false;
         }
-        if (mainNameInput) mainNameInput.value = campaignName;
         disCampaignMappedNumberColumn = numberCol;
         disCampaignMappingConfirmed = true;
         setDisCampaignDedupeCaption(
           countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, numberCol)
         );
-        closeDisCampaignMappingModal(false);
         updateDisCampaignFlowUi();
         if (statusEl) {
           statusEl.textContent = isDisparoEvoUi()
-            ? "Coluna mapeada. Informe a quantidade de envios e clique em Salvar configurações."
-            : "Coluna mapeada. Clique em Salvar configurações para criar a campanha.";
+            ? "Coluna confirmada. Informe a quantidade de envios e clique em Gerar Campanha."
+            : "Coluna confirmada. Clique em Gerar Campanha para criar a campanha.";
           statusEl.style.color = "#a5f3fc";
         }
-        showToast("Coluna mapeada com sucesso.", "success");
+        showToast("Coluna mapeada. Revise a quantidade de envios e clique em Gerar Campanha.", "success");
         if (isDisparoEvoUi()) {
           document.getElementById("dis-evo-planned-send-count")?.focus();
         }
         return true;
       }
 
+      let disCampaignCreateInFlight = false;
+
       async function createCampaignFromMappedSpreadsheet() {
+        if (disCampaignCreateInFlight) return false;
         const campaignName = String(document.getElementById("dis-campaign-name")?.value || "").trim();
         const numberCol = String(disCampaignMappedNumberColumn || "").trim();
         const statusEl = document.getElementById("dis-campaign-create-status");
         if (!disCampaignMappingConfirmed || !numberCol) {
-          showToast("Mapeie a coluna da planilha antes de salvar.", "warning");
-          void openDisCampaignMappingFlow();
-          return;
+          showToast("Confirme a coluna da planilha antes de gerar a campanha.", "warning");
+          document.getElementById("dis-campaign-inline-map-number")?.focus();
+          return false;
         }
         if (!campaignName) {
           showToast("Informe o nome da campanha.", "warning");
           document.getElementById("dis-campaign-name")?.focus();
-          return;
+          return false;
         }
         const plannedSendCount = isDisparoEvoUi() ? getDisEvoPlannedSendCountValue() : 0;
         if (isDisparoEvoUi() && !plannedSendCount) {
           showToast("Informe a quantidade de envios desta campanha.", "warning");
           document.getElementById("dis-evo-planned-send-count")?.focus();
-          return;
+          return false;
         }
         const fileInput = document.getElementById("dis-campaign-file");
         const spreadsheetFile = fileInput?.files?.[0];
         if (!spreadsheetFile) {
           showToast("Selecione a planilha novamente (arquivo ausente).", "warning");
-          return;
+          return false;
         }
         const disForm = getDisparosFormValues();
         const selectedForCampaign = Array.isArray(disForm.selectedDisparadorInstances)
@@ -32788,11 +33490,10 @@
             "Selecione ao menos uma instância na Seção 1 (Números utilizados no disparador). Só essas instâncias poderão enviar esta campanha.",
             "warning"
           );
-          return;
+          return false;
         }
         const localDup = countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, numberCol);
         const configSnapshotJson = JSON.stringify(getDisparosFormValues());
-        closeDisCampaignMappingModal(false);
         setDisCampaignDedupeCaption(localDup);
         const dedupeHost = document.getElementById("dis-campaign-dedupe-caption");
         if (dedupeHost) {
@@ -32816,6 +33517,7 @@
           return formData;
         };
 
+        disCampaignCreateInFlight = true;
         setDisCampaignWorkBusy(
           true,
           "Registrando campanha…",
@@ -32858,18 +33560,18 @@
             const status = Number(lastResponse?.status || 0);
             if (status === 401) {
               showToast("Sessão expirada. Faça login novamente.", "error");
-              return;
+              return false;
             }
             if (status === 404) {
               showToast("Servidor sem a rota de campanhas (API desatualizada). Peça redeploy do Node.", "error");
-              return;
+              return false;
             }
             if (status >= 502) {
               showToast("Servidor temporariamente indisponível. Tente novamente em alguns segundos.", "error");
-              return;
+              return false;
             }
             showToast(data?.error || "Falha ao criar campanha.", "error");
-            return;
+            return false;
           }
           const serverDup = Number(data?.duplicatesRemoved || 0);
           setDisCampaignDedupeCaption(serverDup);
@@ -32883,6 +33585,7 @@
           showToast(data?.message || "Campanha criada com sucesso.", "success");
           await resetDisparosPanelToOriginalAfterCampaignCreate();
           loadDisparosTemplates();
+          return true;
         } catch (error) {
           const raw = String(error?.message || "");
           if (raw === "timeout") {
@@ -32892,7 +33595,9 @@
           } else {
             showToast("Erro ao criar campanha.", "error");
           }
+          return false;
         } finally {
+          disCampaignCreateInFlight = false;
           setDisCampaignWorkBusy(false);
           if (activeTab === "disparos" || activeTab === "disparo-evo") {
             startDisparosCampaignsPolling();
@@ -33344,8 +34049,12 @@
           stopAquecedorEnviosPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
+          syncDisparoEvoMode();
           loadDisparosConfig({
             silent: isProductionUi() && nextTab === "disparos",
+            skipSectionFlowReset:
+              nextTab === "disparo-evo" &&
+              (disparosSectionLayoutInitialized || isDisparosSectionFlowInProgress()),
           });
           void refreshDisparosCampaignsAndResumo();
           startDisparosCampaignsPolling();
@@ -33428,7 +34137,9 @@
         }
 
         syncIntegrationEnvWithTab(nextTab);
-        syncDisparoEvoMode();
+        if (nextTab !== "disparo-evo" && nextTab !== "disparos") {
+          syncDisparoEvoMode();
+        }
         updateAquecedorChatDockVisibility();
         syncAquecedorSectionVisual();
         syncTabButtonMenuSections();
@@ -36146,11 +36857,14 @@
             loadAquecedorRuntimeStatus();
             break;
           case "disparos":
+          case "disparo-evo":
           case "disparos-dashboard":
           case "disparos-lancamento":
             if (activeTab === "disparos-dashboard") {
               await loadDisparosDashboard({ silent: true });
-            } else {
+            } else if (activeTab === "disparos-lancamento") {
+              await loadDisparosCredits();
+            } else if (!shouldSkipDisparosConfigReload()) {
               await loadDisparosCredits();
             }
             break;
@@ -36253,7 +36967,7 @@
                 : "Não foi possível carregar instâncias.";
           }
           await loadInstanceUsageConfig();
-          if (!silent) {
+          if (!silent && !(isDisparosConfigTabActive() && shouldSkipDisparosConfigReload())) {
             syncDisparadorNumberPicker();
           }
 
@@ -38501,7 +39215,10 @@
         disparosRefreshBtn.addEventListener("click", () => {
           disparosRefreshBtn.textContent = "Atualizando...";
           disparosRefreshBtn.setAttribute("disabled", "true");
-          Promise.all([loadDisparosConfig(), refreshDisparosCampaignsAndResumo()]).finally(() => {
+          Promise.all([
+            loadDisparosConfig({ forceReload: true }),
+            refreshDisparosCampaignsAndResumo(),
+          ]).finally(() => {
             disparosRefreshBtn.textContent = "Atualizar";
             disparosRefreshBtn.removeAttribute("disabled");
           });
@@ -38877,11 +39594,12 @@
 
       const disSaveBtn = document.getElementById("dis-save-btn");
       if (disSaveBtn) {
-        disSaveBtn.addEventListener("mousedown", (event) => {
+        disSaveBtn.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) return;
           event.preventDefault();
+          event.stopPropagation();
+          void saveDisparosConfig();
         });
-        disSaveBtn.addEventListener("click", () => saveDisparosConfig());
       }
 
       const disTestShortenerBtn = document.getElementById("dis-test-shortener-btn");
@@ -38938,22 +39656,25 @@
         });
       }
 
-      const disCampaignOpenMappingBtn = document.getElementById("dis-campaign-open-mapping-btn");
-      if (disCampaignOpenMappingBtn) {
-        disCampaignOpenMappingBtn.addEventListener("mousedown", (event) => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-        });
-        disCampaignOpenMappingBtn.addEventListener("click", () => openDisCampaignMappingFlow());
+      const disCampaignApplyMappingBtn = document.getElementById("dis-campaign-apply-mapping-btn");
+      if (disCampaignApplyMappingBtn) {
+        disCampaignApplyMappingBtn.addEventListener("click", () => applyDisCampaignColumnMapping());
       }
-      const disCampaignSaveConfigBtn = document.getElementById("dis-campaign-save-config-btn");
-      if (disCampaignSaveConfigBtn) {
-        disCampaignSaveConfigBtn.addEventListener("mousedown", (event) => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-        });
-        disCampaignSaveConfigBtn.addEventListener("click", () => void createCampaignFromMappedSpreadsheet());
-      }
+      document.getElementById("dis-campaign-inline-map-number")?.addEventListener("change", () => {
+        if (disCampaignMappingConfirmed) {
+          disCampaignMappingConfirmed = false;
+          disCampaignMappedNumberColumn = "";
+        }
+        const col = String(document.getElementById("dis-campaign-inline-map-number")?.value || "").trim();
+        if (col && campaignSpreadsheetRowsCache.length) {
+          setDisCampaignDedupeCaption(
+            countCampaignPhoneDuplicatesInRows(campaignSpreadsheetRowsCache, col)
+          );
+        } else {
+          clearDisCampaignDedupeCaption();
+        }
+        updateDisCampaignFlowUi();
+      });
       document.getElementById("dis-evo-planned-send-count")?.addEventListener("input", () => {
         updateDisCampaignFlowUi();
       });
@@ -38992,6 +39713,7 @@
       }
       initDisPickerWarmthFilter();
       initDisNumberSourceTabs();
+      initDisparosSectionSaveDelegation();
 
       const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");
       if (disDownloadTemplateBtn) {
@@ -39015,11 +39737,40 @@
           validateWhatsappTarget(true);
         });
       }
+      document.querySelectorAll(".dis-link-destination-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          setDisLinkDestinationMode(tab.dataset.mode || "whatsapp");
+          const shortStatus = document.getElementById("dis-shortener-test-status");
+          if (shortStatus) {
+            shortStatus.textContent = "Aguardando teste do encurtador.";
+            shortStatus.style.color = "";
+          }
+        });
+      });
+      const disResponseUrlInput = document.getElementById("dis-response-url");
+      if (disResponseUrlInput) {
+        disResponseUrlInput.addEventListener("input", () => validateResponseUrl(false));
+        disResponseUrlInput.addEventListener("blur", () => validateResponseUrl(true));
+      }
 
       const disMappingOverlay = document.getElementById("dis-mapping-overlay");
       if (disMappingOverlay) {
         disMappingOverlay.addEventListener("click", (e) => {
           if (e.target === disMappingOverlay) closeDisMappingModal();
+        });
+      }
+      const disWarmthWarningOverlay = document.getElementById("dis-warmth-warning-overlay");
+      if (disWarmthWarningOverlay) {
+        disWarmthWarningOverlay.addEventListener("click", (e) => {
+          if (e.target === disWarmthWarningOverlay) {
+            closeDisWarmthWarningOverlay(false);
+          }
+        });
+        document.getElementById("dis-warmth-warning-continue-btn")?.addEventListener("click", () => {
+          closeDisWarmthWarningOverlay(true);
+        });
+        document.getElementById("dis-warmth-warning-reconfig-btn")?.addEventListener("click", () => {
+          closeDisWarmthWarningOverlay(false);
         });
       }
       const disCampaignMappingOverlay = document.getElementById("dis-campaign-mapping-overlay");
@@ -39035,7 +39786,7 @@
           }
           if (e.target.closest("#dis-campaign-map-create-btn")) {
             e.preventDefault();
-            confirmDisCampaignColumnMapping();
+            applyDisCampaignColumnMapping();
           }
         });
       }
