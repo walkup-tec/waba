@@ -713,13 +713,16 @@
         flex-direction: column;
         gap: 12px;
         overflow: hidden;
+        text-align: center;
       }
 
       .waba-support-modal-head {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
         gap: 12px;
+        text-align: center;
       }
 
       .waba-support-modal-subtitle {
@@ -997,7 +1000,7 @@
 
       .waba-support-actions {
         display: flex;
-        justify-content: flex-end;
+        justify-content: center;
         gap: 8px;
         flex-wrap: wrap;
       }
@@ -5137,6 +5140,7 @@
         border-top: 1px solid rgba(148, 163, 184, 0.14);
         flex-wrap: wrap;
         gap: 10px;
+        justify-content: center;
       }
 
       #admin-campanhas-report-overlay .confirm-title,
@@ -5430,7 +5434,7 @@
       @media (max-width: 640px) {
         #admin-campanhas-report-overlay.confirm-overlay.open,
         #dis-campaign-report-overlay.confirm-overlay.open {
-          align-items: flex-end;
+          align-items: center;
         }
 
         .camp-report-modal {
@@ -5460,7 +5464,7 @@
 
         #admin-campanhas-report-overlay .confirm-actions,
         #dis-campaign-report-overlay .confirm-actions {
-          justify-content: stretch;
+          justify-content: center;
         }
 
         #admin-campanhas-report-overlay .confirm-actions .instance-action-btn,
@@ -5899,9 +5903,7 @@
 
       #admin-user-edit-overlay {
         z-index: 2400;
-        overflow-y: auto;
-        padding: 20px 16px;
-        align-items: flex-start;
+        align-items: center;
       }
 
       #admin-user-edit-overlay .confirm-modal {
@@ -5927,6 +5929,7 @@
         padding-top: 12px;
         border-top: 1px solid rgba(148, 163, 184, 0.2);
         background: rgba(15, 23, 42, 0.98);
+        justify-content: center;
       }
 
       .admin-users-role-badge {
@@ -6656,6 +6659,10 @@
         display: none;
         align-items: center;
         justify-content: center;
+        padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+          max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+        box-sizing: border-box;
+        overflow-y: auto;
         z-index: 1200;
       }
 
@@ -6910,7 +6917,7 @@
       .reg-wizard-footer .register-actions {
         margin-top: 0;
         flex: 1 1 auto;
-        justify-content: flex-end;
+        justify-content: center;
         gap: clamp(6px, 1.5vw, 10px);
         flex-wrap: wrap;
       }
@@ -7383,6 +7390,9 @@
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 12px;
         padding: 16px;
+        text-align: center;
+        margin: auto;
+        box-sizing: border-box;
       }
 
       .confirm-title {
@@ -7390,12 +7400,14 @@
         font-weight: 700;
         color: #f8fafc;
         margin-bottom: 8px;
+        text-align: center;
       }
 
       .confirm-text {
         font-size: 0.84rem;
         color: #cbd5e1;
         margin-bottom: 10px;
+        text-align: center;
       }
 
       .confirm-input {
@@ -7410,8 +7422,60 @@
       .confirm-actions {
         margin-top: 12px;
         display: flex;
-        justify-content: flex-end;
+        justify-content: center;
         gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      /* Formulários, tabelas e dashboards dentro de modais: leitura à esquerda, largura total */
+      .confirm-modal :is(
+          form,
+          table,
+          .register-grid,
+          .register-input,
+          .register-select,
+          .confirm-input,
+          .admin-users-edit-form,
+          .admin-chamados-detail-meta,
+          .admin-chamados-detail-description,
+          .admin-chamados-detail-block,
+          .waba-support-form,
+          .camp-report-dashboard,
+          .dis-report-summary,
+          .disparos-pricing-table-wrap,
+          .disparos-pricing-table,
+          .qrcode-preview,
+          .confirm-delete-form
+        ) {
+        text-align: left;
+      }
+
+      .confirm-modal :is(
+          form,
+          table,
+          .register-grid,
+          .admin-users-edit-form,
+          .waba-support-form,
+          .camp-report-dashboard,
+          .dis-report-summary,
+          .disparos-pricing-table-wrap,
+          .confirm-delete-form,
+          .confirm-input,
+          .register-input,
+          .register-select
+        ) {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+
+      .confirm-modal :is(
+          .confirm-actions,
+          .register-actions,
+          .dis-warmth-warning-actions,
+          .waba-support-actions
+        ) {
+        justify-content: center;
       }
 
       .toast-stack {
@@ -7526,8 +7590,9 @@
       .register-actions {
         margin-top: 14px;
         display: flex;
-        justify-content: flex-end;
+        justify-content: center;
         gap: 8px;
+        flex-wrap: wrap;
       }
 
       .qrcode-preview {
@@ -9026,16 +9091,93 @@
         flex-shrink: 0;
         line-height: 0;
       }
+      .disparos-hex-cluster-stage {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 3000 / 4000;
+      }
       .disparos-hex-cluster-art {
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
         max-width: 500px;
         margin: 0;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
         mix-blend-mode: lighten;
+        position: relative;
+        z-index: 1;
+        object-fit: contain;
+      }
+      .disparos-hex-light-lines {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .disparos-hex-light-lines line {
+        fill: none;
+        stroke-linecap: round;
+        opacity: 0;
+      }
+      .disparos-hex-light-lines .hex-light-down {
+        stroke: url(#disparosHexLightGradDown);
+        animation: disparosHexLightTraceDown var(--hex-light-dur, 4.8s) ease-in-out infinite;
+        animation-delay: var(--hex-light-delay, 0s);
+      }
+      .disparos-hex-light-lines .hex-light-up {
+        stroke: url(#disparosHexLightGradUp);
+        animation: disparosHexLightTraceUp var(--hex-light-dur, 5.2s) ease-in-out infinite;
+        animation-delay: var(--hex-light-delay, 0s);
+      }
+      @keyframes disparosHexLightTraceDown {
+        0% {
+          stroke-dashoffset: 4200;
+          opacity: 0;
+        }
+        8% {
+          opacity: var(--hex-light-peak, 0.55);
+        }
+        45% {
+          opacity: var(--hex-light-peak, 0.55);
+        }
+        92% {
+          opacity: 0;
+        }
+        100% {
+          stroke-dashoffset: 0;
+          opacity: 0;
+        }
+      }
+      @keyframes disparosHexLightTraceUp {
+        0% {
+          stroke-dashoffset: 4200;
+          opacity: 0;
+        }
+        8% {
+          opacity: var(--hex-light-peak, 0.5);
+        }
+        45% {
+          opacity: var(--hex-light-peak, 0.5);
+        }
+        92% {
+          opacity: 0;
+        }
+        100% {
+          stroke-dashoffset: 0;
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .disparos-hex-light-lines line {
+          animation: none !important;
+          opacity: 0.12;
+          stroke-dashoffset: 0;
+        }
       }
       .disparos-pricing-lanes {
         display: flex;
@@ -11414,7 +11556,7 @@
       .dis-warmth-warning-actions {
         margin-top: 16px;
         display: flex;
-        justify-content: flex-end;
+        justify-content: center;
         align-items: center;
         gap: 10px;
         flex-wrap: wrap;
@@ -12498,6 +12640,7 @@
         border: 1px solid rgba(125, 211, 252, 0.28);
         background: rgba(15, 23, 42, 0.98);
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        text-align: center;
       }
 
       .waba-forgot-title {
@@ -12505,6 +12648,7 @@
         font-size: 1.05rem;
         font-weight: 700;
         color: #f8fafc;
+        text-align: center;
       }
 
       .waba-forgot-text {
@@ -12512,19 +12656,23 @@
         font-size: 0.86rem;
         line-height: 1.55;
         color: #cbd5e1;
+        text-align: center;
       }
 
       .waba-forgot-list {
-        margin: 0 0 16px 18px;
+        margin: 0 auto 16px;
         padding: 0;
+        list-style-position: inside;
         color: #94a3b8;
         font-size: 0.82rem;
         line-height: 1.5;
+        text-align: center;
+        max-width: 100%;
       }
 
       .waba-forgot-actions {
         display: flex;
-        justify-content: flex-end;
+        justify-content: center;
       }
 
       .waba-forgot-close-btn {
@@ -14177,14 +14325,71 @@
             <div class="disparos-choice-grid">
               <div class="disparos-pricing-board">
                 <div class="disparos-pricing-hex-cluster" aria-label="Pacotes e serviços">
-                  <img
-                    class="disparos-hex-cluster-art"
-                    src="/media/hexa-corrigi-2.png"
-                    alt="Pacotes e serviços, API Oficial e API Alternativa"
-                    width="3000"
-                    height="4000"
-                    decoding="async"
-                  />
+                  <div class="disparos-hex-cluster-stage">
+                    <img
+                      class="disparos-hex-cluster-art"
+                      src="/media/hexa-corrigi-2.png"
+                      alt="Pacotes e serviços, API Oficial e API Alternativa"
+                      width="3000"
+                      height="4000"
+                      decoding="async"
+                    />
+                    <svg
+                      class="disparos-hex-light-lines"
+                      viewBox="0 0 3000 4000"
+                      preserveAspectRatio="xMidYMid meet"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <defs>
+                        <linearGradient
+                          id="disparosHexLightGradDown"
+                          gradientUnits="userSpaceOnUse"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="4000"
+                        >
+                          <stop offset="0%" stop-color="#2ee4a0" stop-opacity="0.95" />
+                          <stop offset="42%" stop-color="#5eead4" stop-opacity="0.45" />
+                          <stop offset="100%" stop-color="#00b1f0" stop-opacity="0.92" />
+                        </linearGradient>
+                        <linearGradient
+                          id="disparosHexLightGradUp"
+                          gradientUnits="userSpaceOnUse"
+                          x1="0"
+                          y1="4000"
+                          x2="0"
+                          y2="0"
+                        >
+                          <stop offset="0%" stop-color="#00b1f0" stop-opacity="0.88" />
+                          <stop offset="55%" stop-color="#38bdf8" stop-opacity="0.35" />
+                          <stop offset="100%" stop-color="#2ee4a0" stop-opacity="0.9" />
+                        </linearGradient>
+                        <filter id="disparosHexLightGlow" x="-20%" y="-5%" width="140%" height="110%">
+                          <feGaussianBlur stdDeviation="2.2" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <g filter="url(#disparosHexLightGlow)">
+                        <line class="hex-light-down" x1="520" y1="80" x2="548" y2="3920" stroke-width="1.1" stroke-dasharray="4200" style="--hex-light-dur: 5.4s; --hex-light-delay: 0s; --hex-light-peak: 0.42" />
+                        <line class="hex-light-up" x1="1180" y1="3940" x2="1154" y2="60" stroke-width="0.9" stroke-dasharray="4200" style="--hex-light-dur: 6.1s; --hex-light-delay: 0.8s; --hex-light-peak: 0.38" />
+                        <line class="hex-light-down" x1="1680" y1="40" x2="1712" y2="3960" stroke-width="1.3" stroke-dasharray="4200" style="--hex-light-dur: 4.6s; --hex-light-delay: 1.6s; --hex-light-peak: 0.5" />
+                        <line class="hex-light-up" x1="2280" y1="3980" x2="2250" y2="30" stroke-width="1" stroke-dasharray="4200" style="--hex-light-dur: 5.8s; --hex-light-delay: 2.2s; --hex-light-peak: 0.4" />
+                        <line class="hex-light-down" x1="860" y1="120" x2="882" y2="3880" stroke-width="0.85" stroke-dasharray="4200" style="--hex-light-dur: 7s; --hex-light-delay: 0.4s; --hex-light-peak: 0.32" />
+                        <line class="hex-light-up" x1="1420" y1="3900" x2="1398" y2="100" stroke-width="1.05" stroke-dasharray="4200" style="--hex-light-dur: 5s; --hex-light-delay: 1.1s; --hex-light-peak: 0.45" />
+                        <line class="hex-light-down" x1="1980" y1="60" x2="1998" y2="3940" stroke-width="0.75" stroke-dasharray="4200" style="--hex-light-dur: 6.4s; --hex-light-delay: 2.8s; --hex-light-peak: 0.3" />
+                        <line class="hex-light-up" x1="680" y1="3960" x2="662" y2="80" stroke-width="1.15" stroke-dasharray="4200" style="--hex-light-dur: 4.9s; --hex-light-delay: 3.2s; --hex-light-peak: 0.48" />
+                        <line class="hex-light-down" x1="2520" y1="100" x2="2496" y2="3900" stroke-width="0.95" stroke-dasharray="4200" style="--hex-light-dur: 5.6s; --hex-light-delay: 1.9s; --hex-light-peak: 0.36" />
+                        <line class="hex-light-up" x1="320" y1="3920" x2="342" y2="120" stroke-width="1.2" stroke-dasharray="4200" style="--hex-light-dur: 6.8s; --hex-light-delay: 0.2s; --hex-light-peak: 0.44" />
+                        <line class="hex-light-down" x1="1320" y1="20" x2="1344" y2="3980" stroke-width="0.8" stroke-dasharray="4200" style="--hex-light-dur: 7.2s; --hex-light-delay: 3.6s; --hex-light-peak: 0.28" />
+                        <line class="hex-light-up" x1="2120" y1="3950" x2="2102" y2="50" stroke-width="1.25" stroke-dasharray="4200" style="--hex-light-dur: 4.4s; --hex-light-delay: 2.5s; --hex-light-peak: 0.52" />
+                      </g>
+                    </svg>
+                  </div>
                 </div>
 
                 <div class="disparos-pricing-lanes">
@@ -30989,9 +31194,8 @@
         if (hiddenBriefing) hiddenBriefing.value = String(config?.aiBriefing || "");
         const notes = document.getElementById("dis-ai-notes");
         if (notes) notes.value = "";
-        pendingSelectedDisparadorInstances = Array.isArray(config?.selectedDisparadorInstances)
-          ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
-          : [];
+        // Seleção de instâncias é sempre manual por campanha — não restaurar do config salvo.
+        pendingSelectedDisparadorInstances = [];
         syncDisparadorNumberPicker();
         setDisparosWorkingDays(config?.workingDays || ["seg", "ter", "qua", "qui", "sex"]);
         const modeAi = document.getElementById("dis-mode-ai");
@@ -31621,6 +31825,8 @@
             flowIdx >= 0 ? flowIdx !== 0 : true;
         });
         disparosActiveSectionIndex = 0;
+        pendingSelectedDisparadorInstances = [];
+        syncDisparadorNumberPicker();
         applyDisparosSectionLayout();
       }
 
