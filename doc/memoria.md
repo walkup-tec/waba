@@ -15,7 +15,7 @@ Como usar:
 ## Última atualização
 2026-06-21
 
-**WABA — Hex cluster linhas de luz:** SVG animado verde→azul sobre arte Contratar. Ver `doc/LOG-2026-06-21__hex-cluster-linhas-luz-verde-azul.md`.
+**WABA — Hex cluster linhas de luz:** órbitas elípticas SVG verde→azul envolvendo arte Contratar (estilo atômico). Ver `doc/LOG-2026-06-21__hex-cluster-linhas-luz-verde-azul.md`.
 
 **WABA — Modais conteúdo centralizado:** títulos, textos e ações centralizados em `.confirm-overlay`; forms/tabelas mantêm leitura à esquerda. Ver `doc/LOG-2026-06-21__modais-conteudo-centralizado.md`.
 

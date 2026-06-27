@@ -11,11 +11,14 @@ Efeito visual sobre a imagem dos hexágonos: linhas finas e delicadas, modernas,
 ## Solução
 
 - Wrapper `.disparos-hex-cluster-stage` com `aspect-ratio: 3000/4000`.
-- Overlay SVG `.disparos-hex-light-lines` com 12 linhas inclinadas levemente.
-- Gradientes `disparosHexLightGradDown` (verde→azul) e `disparosHexLightGradUp` (azul→verde).
-- Animação `stroke-dashoffset` + fade (`disparosHexLightTraceDown` / `Up`), durações e delays escalonados.
-- Filtro `feGaussianBlur` suave para glow.
-- `prefers-reduced-motion`: linhas estáticas discretas.
+- Overlay SVG com **órbitas elípticas** (paths fechados, rotações distintas) envolvendo o cluster — estilo orbital/atômico, não linhas retas.
+- Trechos de luz (`stroke-dasharray`) percorrem cada curva continuamente (sentido horário e anti-horário).
+- Gradientes verde→azul e azul→verde ao longo do eixo vertical da arte.
+- Filtro blur suave; `prefers-reduced-motion` desativa animação.
+
+## Atualização (curvas orbitais)
+
+Substituídas 12 linhas retas por 10 elipses inclinadas (`transform rotate`) com animação `disparosHexOrbitFlow`.
 
 ## Arquivos
 
