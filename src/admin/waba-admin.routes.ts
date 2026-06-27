@@ -449,12 +449,25 @@ export const registerWabaAdminRoutes = (app: Express) => {
       return res.status(503).json({ error: "Monitor CPU desativado neste ambiente." });
     }
     try {
-      const limitRaw = Number(req.query.limit);
-      const limit = Number.isFinite(limitRaw) ? Math.min(240, Math.max(20, limitRaw)) : 120;
-      return res.status(200).json(await vpsCpuMonitorService.getDashboard(limit));
+      const range = String(req.query.range ?? "1h");
+      return res.status(200).json(await vpsCpuMonitorService.getDashboard(range));
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível carregar o monitor CPU.",
+      });
+    }
+  });
+
+  app.get("/admin/infra/cpu/alert-status", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    if (!vpsCpuMonitorService.isEnabled()) {
+      return res.status(200).json({ active: false, alert: null });
+    }
+    try {
+      return res.status(200).json(await vpsCpuMonitorService.getAlertStatus());
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível verificar alerta CPU.",
       });
     }
   });

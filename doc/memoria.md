@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-27
 
+**WABA — Monitor CPU cards + períodos (2026-06-27):** topo CPU/Mem/Disco coloridos; gráfico 1h/24h/all (default 1h); refresh 10s; coletor mem+disk. Ver `doc/LOG-2026-06-27__monitor-cpu-cards-periodos-10s.md`.
+
 **WABA — Monitor CPU master (Suporte):** gráfico CPU VPS, alerta sustentado, top containers, playbook SSH copiável; `GET /admin/infra/cpu/dashboard`; coletor `waba-infra-cpu-collector.timer`. Ver `doc/LOG-2026-06-27__monitor-cpu-master-ui.md`.
 
 **WABA — Remoção Chatwoot + n8n VPS (2026-06-27):** `docker service rm` 4 chatwoot + `walkup_n8n`; WABA HTTPS 200; CPU aliviada. Ver `doc/LOG-2026-06-27__remocao-chatwoot-n8n-vps.md`.

@@ -3086,29 +3086,181 @@
         padding: 28px 24px 32px;
       }
 
-      .admin-monitor-cpu-kpi-grid {
+      .admin-monitor-cpu-host-cards {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-
-      .admin-monitor-cpu-kpi {
-        background: rgba(15, 23, 42, 0.58);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         border: 1px solid var(--border-subtle);
         border-radius: 12px;
-        padding: 12px 14px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        background: rgba(15, 23, 42, 0.35);
       }
 
-      .admin-monitor-cpu-kpi-label {
+      .admin-monitor-cpu-host-card {
+        padding: 22px 24px;
+        border-right: 1px solid rgba(148, 163, 184, 0.14);
+      }
+
+      .admin-monitor-cpu-host-card:last-child {
+        border-right: 0;
+      }
+
+      .admin-monitor-cpu-host-card-label {
         font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        margin-bottom: 8px;
+      }
+
+      .admin-monitor-cpu-host-card-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.1;
+        margin-bottom: 8px;
+      }
+
+      .admin-monitor-cpu-host-card-meta {
+        font-size: 0.82rem;
+        color: #94a3b8;
+        line-height: 1.35;
+      }
+
+      .admin-monitor-cpu-host-card.is-cpu .admin-monitor-cpu-host-card-value {
+        color: #38bdf8;
+      }
+
+      .admin-monitor-cpu-host-card.is-mem .admin-monitor-cpu-host-card-value {
+        color: #a78bfa;
+      }
+
+      .admin-monitor-cpu-host-card.is-disk .admin-monitor-cpu-host-card-value {
+        color: #34d399;
+      }
+
+      .admin-monitor-cpu-chart-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .admin-monitor-cpu-live-badge {
+        font-size: 0.78rem;
+        color: #94a3b8;
+        white-space: nowrap;
+      }
+
+      .admin-monitor-cpu-chart-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin: 0 0 16px;
+        font-size: 0.82rem;
         color: #94a3b8;
       }
 
-      .admin-monitor-cpu-kpi-value {
-        font-size: 1.35rem;
+      .admin-monitor-cpu-chart-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .admin-monitor-cpu-chart-legend i {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+
+      .admin-monitor-cpu-containers-section {
+        margin-top: 8px;
+        margin-bottom: 8px;
+      }
+
+      .admin-monitor-cpu-containers-title {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin: 0 0 12px;
+      }
+
+      .admin-monitor-cpu-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .admin-monitor-cpu-bar-row {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .admin-monitor-cpu-bar-head {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .admin-monitor-cpu-bar-service {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--bar-color, #64748b) 55%, transparent);
+        color: var(--bar-color, #94a3b8);
+        background: color-mix(in srgb, var(--bar-color, #64748b) 14%, transparent);
+        white-space: nowrap;
+      }
+
+      .admin-monitor-cpu-bar-name {
+        font-size: 0.8rem;
+        color: #cbd5e1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .admin-monitor-cpu-bar-pct {
+        font-size: 0.88rem;
         font-weight: 700;
         color: #f1f5f9;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .admin-monitor-cpu-bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        overflow: hidden;
+      }
+
+      .admin-monitor-cpu-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        min-width: 2px;
+        transition: width 0.35s ease;
+        background: var(--bar-color, #64748b);
+        box-shadow: 0 0 12px color-mix(in srgb, var(--bar-color, #64748b) 45%, transparent);
+      }
+
+      .admin-monitor-cpu-bars-empty {
+        margin: 0;
+        padding: 8px 4px;
+        color: #94a3b8;
+        font-size: 0.88rem;
+      }
+
+      .admin-monitor-cpu-kpi-grid {
+        display: none;
       }
 
       .admin-monitor-cpu-alert {
@@ -3173,8 +3325,17 @@
       }
 
       @media (max-width: 900px) {
-        .admin-monitor-cpu-kpi-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+        .admin-monitor-cpu-host-cards {
+          grid-template-columns: 1fr;
+        }
+
+        .admin-monitor-cpu-host-card {
+          border-right: 0;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .admin-monitor-cpu-host-card:last-child {
+          border-bottom: 0;
         }
       }
 
@@ -12817,6 +12978,36 @@
         font-size: 0.76rem;
       }
 
+      .waba-master-cpu-alert-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ef4444;
+        flex-shrink: 0;
+        display: none;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+
+      .waba-master-cpu-alert-dot.is-active {
+        display: inline-block;
+        animation: waba-master-cpu-alert-pulse 1.15s ease-in-out infinite;
+        cursor: pointer;
+      }
+
+      @keyframes waba-master-cpu-alert-pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65);
+        }
+        50% {
+          opacity: 0.45;
+          transform: scale(0.92);
+          box-shadow: 0 0 0 7px rgba(239, 68, 68, 0);
+        }
+      }
+
       .waba-auth-logout-btn {
         border: 0;
         background: transparent;
@@ -13002,6 +13193,15 @@
 
         <div class="controls">
           <div id="waba-auth-user-chip" class="waba-auth-user-chip" hidden>
+            <span
+              id="waba-master-cpu-alert-dot"
+              class="waba-master-cpu-alert-dot"
+              hidden
+              role="status"
+              aria-live="polite"
+              aria-label="Alerta de CPU alta na VPS"
+              title="CPU alta sustentada na VPS"
+            ></span>
             <span id="waba-auth-user-email"></span>
             <button id="waba-auth-logout-btn" class="waba-auth-logout-btn" type="button">Sair</button>
           </div>
@@ -16397,28 +16597,58 @@
                   <ol id="admin-monitor-cpu-setup-list"></ol>
                 </div>
 
-                <div id="admin-monitor-cpu-kpi-grid" class="admin-monitor-cpu-kpi-grid"></div>
+                <div id="admin-monitor-cpu-host-cards" class="admin-monitor-cpu-host-cards" aria-live="polite"></div>
 
                 <div id="admin-monitor-cpu-alert" class="admin-monitor-cpu-alert is-ok" hidden></div>
 
-                <div id="admin-monitor-cpu-chart-wrap" aria-live="polite"></div>
-                <p id="admin-monitor-cpu-chart-legend" class="muted" style="margin: 0 0 16px"></p>
+                <div class="admin-monitor-cpu-chart-toolbar">
+                  <div
+                    id="admin-monitor-cpu-range-group"
+                    class="admin-campanhas-buckets"
+                    role="tablist"
+                    aria-label="Período do gráfico"
+                  >
+                    <button
+                      type="button"
+                      class="admin-campanhas-bucket-btn is-active"
+                      data-monitor-cpu-range="1h"
+                      role="tab"
+                      aria-selected="true"
+                    >
+                      Última hora
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-campanhas-bucket-btn"
+                      data-monitor-cpu-range="24h"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Últimas 24 hrs
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-campanhas-bucket-btn"
+                      data-monitor-cpu-range="all"
+                      role="tab"
+                      aria-selected="false"
+                    >
+                      Todo o tempo
+                    </button>
+                  </div>
+                  <span id="admin-monitor-cpu-live-badge" class="admin-monitor-cpu-live-badge">
+                    Atualização automática a cada 10s
+                  </span>
+                </div>
 
-                <div id="admin-monitor-cpu-containers-wrap" class="admin-subscribers-table-wrap">
-                  <table class="admin-subscribers-table" aria-label="Containers com maior uso de CPU">
-                    <thead>
-                      <tr>
-                        <th scope="col">Container</th>
-                        <th scope="col">Serviço</th>
-                        <th scope="col">CPU %</th>
-                      </tr>
-                    </thead>
-                    <tbody id="admin-monitor-cpu-containers-tbody">
-                      <tr>
-                        <td colspan="3" class="muted">Carregando…</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div id="admin-monitor-cpu-chart-wrap" aria-live="polite"></div>
+                <div id="admin-monitor-cpu-chart-legend" class="admin-monitor-cpu-chart-legend"></div>
+
+                <div id="admin-monitor-cpu-containers-wrap" class="admin-monitor-cpu-containers-section">
+                  <h3 class="admin-monitor-cpu-containers-title">Containers — CPU (última amostra)</h3>
+                  <div id="admin-monitor-cpu-containers-bars" class="admin-monitor-cpu-bars" aria-live="polite">
+                    <p class="admin-monitor-cpu-bars-empty">Carregando…</p>
+                  </div>
                 </div>
 
                 <div id="admin-monitor-cpu-playbook" class="admin-monitor-cpu-playbook" hidden></div>
@@ -18428,6 +18658,7 @@
         syncWabaSupportButtonVisibility();
         void refreshMasterMenuBadges();
         startMasterMenuBadgePolling();
+        startMasterCpuAlertPolling();
         syncWabaCredentialAutocompleteState(false);
       }
 
@@ -18572,8 +18803,61 @@
         "admin-chamados": "suporte",
       };
       let masterMenuBadgePollTimer = null;
+      let masterCpuAlertPollTimer = null;
+      let masterCpuAlertActive = false;
       let lastMasterMenuBadges = {};
       const MASTER_MENU_BADGE_POLL_MS = 60000;
+      const MASTER_CPU_ALERT_POLL_MS = 10 * 1000;
+
+      function syncMasterCpuAlertHeaderDot(active) {
+        const dot = document.getElementById("waba-master-cpu-alert-dot");
+        if (!dot) return;
+        masterCpuAlertActive = Boolean(active);
+        dot.hidden = !masterCpuAlertActive;
+        dot.classList.toggle("is-active", masterCpuAlertActive);
+        dot.setAttribute("aria-hidden", masterCpuAlertActive ? "false" : "true");
+        dot.title = masterCpuAlertActive
+          ? "CPU alta sustentada na VPS — acesse Suporte → Monitor CPU"
+          : "CPU dentro dos parâmetros normais";
+      }
+
+      async function refreshMasterCpuAlertStatus() {
+        if (!hasMasterAccess()) {
+          syncMasterCpuAlertHeaderDot(false);
+          return;
+        }
+        try {
+          const response = await fetchWithTimeout("/admin/infra/cpu/alert-status", {}, 8000);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) return;
+          syncMasterCpuAlertHeaderDot(Boolean(payload.active));
+        } catch {
+          /* ignore transient failures */
+        }
+      }
+
+      function startMasterCpuAlertPolling() {
+        if (masterCpuAlertPollTimer) {
+          clearInterval(masterCpuAlertPollTimer);
+          masterCpuAlertPollTimer = null;
+        }
+        if (!hasMasterAccess()) {
+          syncMasterCpuAlertHeaderDot(false);
+          return;
+        }
+        void refreshMasterCpuAlertStatus();
+        masterCpuAlertPollTimer = window.setInterval(() => {
+          void refreshMasterCpuAlertStatus();
+        }, MASTER_CPU_ALERT_POLL_MS);
+      }
+
+      function stopMasterCpuAlertPolling() {
+        if (masterCpuAlertPollTimer) {
+          clearInterval(masterCpuAlertPollTimer);
+          masterCpuAlertPollTimer = null;
+        }
+        syncMasterCpuAlertHeaderDot(false);
+      }
 
       function syncMasterMenuGroupBadges(badges = lastMasterMenuBadges) {
         const groupTotals = {};
@@ -19173,6 +19457,7 @@
         }
         syncWabaSupportButtonVisibility();
         stopMasterMenuBadgePolling();
+        stopMasterCpuAlertPolling();
         syncMasterMenuBadgeUi({});
         syncWabaCredentialAutocompleteState(true);
       }
@@ -25907,17 +26192,103 @@
         });
       }
 
-      function stopAdminCampanhasPolling() {
-        if (adminCampanhasPollTimer) {
-          clearInterval(adminCampanhasPollTimer);
-          adminCampanhasPollTimer = null;
+      const ADMIN_MONITOR_CPU_SERVICE_COLORS = {
+        traefik: "#f97316",
+        typebot: "#a78bfa",
+        waba: "#38bdf8",
+        evolution: "#34d399",
+        easypanel: "#fbbf24",
+        n8n: "#fb7185",
+        chatwoot: "#f472b6",
+        docker: "#94a3b8",
+        generic: "#64748b",
+      };
+
+      function resolveAdminMonitorCpuServiceColor(serviceKey) {
+        const key = String(serviceKey || "generic").trim().toLowerCase();
+        return ADMIN_MONITOR_CPU_SERVICE_COLORS[key] || ADMIN_MONITOR_CPU_SERVICE_COLORS.generic;
+      }
+
+      function shortAdminMonitorCpuContainerName(name) {
+        const full = String(name || "").trim();
+        if (!full) return "—";
+        const swarmIdx = full.indexOf(".1.");
+        const shortName = swarmIdx > 0 ? full.slice(0, swarmIdx) : full;
+        if (shortName.length <= 48) return shortName;
+        return `${shortName.slice(0, 45)}…`;
+      }
+
+      function renderAdminMonitorCpuContainerBars(topContainers) {
+        const root = document.getElementById("admin-monitor-cpu-containers-bars");
+        if (!root) return;
+
+        const items = Array.isArray(topContainers) ? topContainers : [];
+        if (!items.length) {
+          root.innerHTML =
+            '<p class="admin-monitor-cpu-bars-empty">Nenhum container na última amostra.</p>';
+          return;
         }
+
+        const maxCpu = Math.max(...items.map((item) => Number(item.cpuPctAvg) || 0), 1);
+
+        root.innerHTML = items
+          .map((item) => {
+            const cpu = Number(item.cpuPctAvg) || 0;
+            const serviceKey = String(item.serviceKey || "generic");
+            const color = resolveAdminMonitorCpuServiceColor(serviceKey);
+            const widthPct = Math.max(2, Math.min(100, (cpu / maxCpu) * 100));
+            const fullName = String(item.name || "—");
+            const label = shortAdminMonitorCpuContainerName(fullName);
+            return `
+              <div class="admin-monitor-cpu-bar-row" role="listitem">
+                <div class="admin-monitor-cpu-bar-head">
+                  <span class="admin-monitor-cpu-bar-service" style="--bar-color:${color}">${escapeAdminHtml(serviceKey)}</span>
+                  <span class="admin-monitor-cpu-bar-name" title="${escapeAdminHtml(fullName)}">${escapeAdminHtml(label)}</span>
+                  <span class="admin-monitor-cpu-bar-pct">${formatAdminMonitorCpuPct(cpu)}</span>
+                </div>
+                <div class="admin-monitor-cpu-bar-track" aria-hidden="true">
+                  <div class="admin-monitor-cpu-bar-fill" style="--bar-color:${color};width:${widthPct.toFixed(1)}%"></div>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+        root.setAttribute("role", "list");
+        root.setAttribute("aria-label", "Containers com maior uso de CPU");
       }
 
       function formatAdminMonitorCpuPct(value) {
         const n = Number(value);
         if (!Number.isFinite(n)) return "—";
         return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+      }
+
+      function formatAdminMonitorCpuGb(bytes) {
+        const n = Number(bytes);
+        if (!Number.isFinite(n) || n <= 0) return "—";
+        return `${(n / 1024 ** 3).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} GB`;
+      }
+
+      function formatAdminMonitorCpuLoad(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "—";
+        return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      }
+
+      function syncAdminMonitorCpuRangeButtons() {
+        document.querySelectorAll("[data-monitor-cpu-range]").forEach((btn) => {
+          const range = btn.getAttribute("data-monitor-cpu-range");
+          const active = range === adminMonitorCpuChartRange;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+      }
+
+      function setAdminMonitorCpuRange(nextRange) {
+        const range = String(nextRange || "1h").trim().toLowerCase();
+        adminMonitorCpuChartRange = range === "24h" || range === "all" ? range : "1h";
+        syncAdminMonitorCpuRangeButtons();
+        void loadAdminMonitorCpu({ silent: Boolean(adminMonitorCpuLastPayload) });
       }
 
       function formatAdminMonitorCpuTs(iso) {
@@ -25975,11 +26346,12 @@
         const statusEl = document.getElementById("admin-monitor-cpu-status");
         const setupEl = document.getElementById("admin-monitor-cpu-setup");
         const setupList = document.getElementById("admin-monitor-cpu-setup-list");
-        const kpiGrid = document.getElementById("admin-monitor-cpu-kpi-grid");
+        const hostCards = document.getElementById("admin-monitor-cpu-host-cards");
         const alertEl = document.getElementById("admin-monitor-cpu-alert");
         const chartWrap = document.getElementById("admin-monitor-cpu-chart-wrap");
         const chartLegend = document.getElementById("admin-monitor-cpu-chart-legend");
-        const tbody = document.getElementById("admin-monitor-cpu-containers-tbody");
+        const liveBadge = document.getElementById("admin-monitor-cpu-live-badge");
+        const containersBars = document.getElementById("admin-monitor-cpu-containers-bars");
         const playbookEl = document.getElementById("admin-monitor-cpu-playbook");
 
         const config = payload?.config || {};
@@ -25988,13 +26360,30 @@
         const alert = payload?.alert || null;
         const topContainers = Array.isArray(payload?.topContainers) ? payload.topContainers : [];
         const setupSteps = Array.isArray(payload?.setupSteps) ? payload.setupSteps : [];
+        const refreshSec = Number(config.uiRefreshSec || 10);
+
+        if (payload?.chart?.range) {
+          adminMonitorCpuChartRange = payload.chart.range;
+          syncAdminMonitorCpuRangeButtons();
+        }
+
+        if (liveBadge) {
+          liveBadge.textContent = `Atualização automática a cada ${refreshSec}s`;
+        }
 
         if (statusEl) {
+          const rangeLabel =
+            adminMonitorCpuChartRange === "24h"
+              ? "Últimas 24 hrs"
+              : adminMonitorCpuChartRange === "all"
+                ? "Todo o tempo"
+                : "Última hora";
           const parts = [
             payload?.collectorReady ? "Coletor ativo" : "Coletor aguardando primeira amostra",
             payload?.lastSampleAt ? `Última amostra: ${formatAdminMonitorCpuTs(payload.lastSampleAt)}` : null,
             `${Number(payload?.sampleCount || 0).toLocaleString("pt-BR")} amostras`,
-            `Alerta: ≥${config.thresholdPct ?? 65}% por ${config.sustainedMinutes ?? 10} min`,
+            `Período: ${rangeLabel}`,
+            `Alerta CPU: ≥${config.thresholdPct ?? 65}% por ${config.sustainedMinutes ?? 30} min`,
           ].filter(Boolean);
           statusEl.textContent = parts.join(" · ");
         }
@@ -26009,29 +26398,37 @@
           }
         }
 
-        if (kpiGrid) {
-          kpiGrid.innerHTML = `
-            <div class="admin-monitor-cpu-kpi">
-              <div class="admin-monitor-cpu-kpi-label">CPU VPS (estimada)</div>
-              <div class="admin-monitor-cpu-kpi-value">${formatAdminMonitorCpuPct(current?.hostCpuPctEst)}</div>
-            </div>
-            <div class="admin-monitor-cpu-kpi">
-              <div class="admin-monitor-cpu-kpi-label">Load 1 min</div>
-              <div class="admin-monitor-cpu-kpi-value">${Number(current?.hostLoad1m || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-            </div>
-            <div class="admin-monitor-cpu-kpi">
-              <div class="admin-monitor-cpu-kpi-label">Núcleos CPU</div>
-              <div class="admin-monitor-cpu-kpi-value">${Number(current?.cpuCores || 0).toLocaleString("pt-BR")}</div>
-            </div>
-            <div class="admin-monitor-cpu-kpi">
-              <div class="admin-monitor-cpu-kpi-label">Serviços Swarm</div>
-              <div class="admin-monitor-cpu-kpi-value">${Number(current?.swarmServiceCount || 0).toLocaleString("pt-BR")}</div>
-            </div>
-          `;
+        if (hostCards) {
+          if (!current) {
+            hostCards.innerHTML =
+              '<div class="admin-monitor-cpu-host-card is-cpu"><div class="admin-monitor-cpu-host-card-label">CPU</div><div class="admin-monitor-cpu-host-card-value">—</div><div class="admin-monitor-cpu-host-card-meta">Aguardando coletor</div></div>' +
+              '<div class="admin-monitor-cpu-host-card is-mem"><div class="admin-monitor-cpu-host-card-label">Memória</div><div class="admin-monitor-cpu-host-card-value">—</div><div class="admin-monitor-cpu-host-card-meta">Aguardando coletor</div></div>' +
+              '<div class="admin-monitor-cpu-host-card is-disk"><div class="admin-monitor-cpu-host-card-label">Disco</div><div class="admin-monitor-cpu-host-card-value">—</div><div class="admin-monitor-cpu-host-card-meta">Aguardando coletor</div></div>';
+          } else {
+            const cores = Number(current.cpuCores || 0).toLocaleString("pt-BR");
+            hostCards.innerHTML = `
+              <div class="admin-monitor-cpu-host-card is-cpu">
+                <div class="admin-monitor-cpu-host-card-label">CPU</div>
+                <div class="admin-monitor-cpu-host-card-value">${formatAdminMonitorCpuPct(current.hostCpuPctEst)}</div>
+                <div class="admin-monitor-cpu-host-card-meta">${cores} cores — Carga ${formatAdminMonitorCpuLoad(current.hostLoad1m)}, ${formatAdminMonitorCpuLoad(current.hostLoad5m)}, ${formatAdminMonitorCpuLoad(current.hostLoad15m)}</div>
+              </div>
+              <div class="admin-monitor-cpu-host-card is-mem">
+                <div class="admin-monitor-cpu-host-card-label">Memória</div>
+                <div class="admin-monitor-cpu-host-card-value">${formatAdminMonitorCpuPct(current.hostMemPct)}</div>
+                <div class="admin-monitor-cpu-host-card-meta">${formatAdminMonitorCpuGb(current.hostMemUsedBytes)} / ${formatAdminMonitorCpuGb(current.hostMemTotalBytes)}</div>
+              </div>
+              <div class="admin-monitor-cpu-host-card is-disk">
+                <div class="admin-monitor-cpu-host-card-label">Disco</div>
+                <div class="admin-monitor-cpu-host-card-value">${formatAdminMonitorCpuPct(current.hostDiskPct)}</div>
+                <div class="admin-monitor-cpu-host-card-meta">${formatAdminMonitorCpuGb(current.hostDiskUsedBytes)} / ${formatAdminMonitorCpuGb(current.hostDiskTotalBytes)}</div>
+              </div>
+            `;
+          }
         }
 
         if (alertEl) {
           alertEl.hidden = false;
+          syncMasterCpuAlertHeaderDot(Boolean(alert?.active));
           if (alert?.active) {
             alertEl.classList.remove("is-ok");
             alertEl.innerHTML = `
@@ -26039,7 +26436,7 @@
               <p style="margin:0 0 6px">
                 Média <strong>${formatAdminMonitorCpuPct(alert.hostCpuAvg)}</strong>
                 entre ${formatAdminMonitorCpuTs(alert.since)} e ${formatAdminMonitorCpuTs(alert.until)}
-                (limite ${formatAdminMonitorCpuPct(alert.thresholdPct)} por ${alert.sustainedMinutes} min).
+                (limite ${formatAdminMonitorCpuPct(alert.thresholdPct)} por mais de ${alert.sustainedMinutes} min — não transitório).
               </p>
               <p style="margin:0">
                 Provável causa: <strong>${escapeAdminHtml(alert.culpritName || "desconhecido")}</strong>
@@ -26051,20 +26448,21 @@
             alertEl.classList.add("is-ok");
             alertEl.innerHTML = `
               <div class="admin-monitor-cpu-alert-title">CPU dentro do limite</div>
-              <p style="margin:0">Nenhum período sustentado acima de ${formatAdminMonitorCpuPct(config.thresholdPct ?? 65)} nos últimos ${config.sustainedMinutes ?? 10} minutos.</p>
+              <p style="margin:0">Nenhum período sustentado acima de ${formatAdminMonitorCpuPct(config.thresholdPct ?? 65)} nos últimos ${config.sustainedMinutes ?? 30} minutos.</p>
             `;
             if (playbookEl) {
               playbookEl.hidden = true;
               playbookEl.innerHTML = "";
             }
+            syncMasterCpuAlertHeaderDot(false);
           }
         }
 
         const xLabels = Array.isArray(chart.labels) ? chart.labels : [];
-        const hostSeries = Array.isArray(chart.hostCpuPct) ? chart.hostCpuPct : [];
-        const topName = chart.topContainerName ? String(chart.topContainerName) : "";
-        const topSeries = Array.isArray(chart.topContainerCpuPct) ? chart.topContainerCpuPct : [];
-        const hasChart = xLabels.length > 0 && hostSeries.length > 0;
+        const cpuSeries = Array.isArray(chart.hostCpuPct) ? chart.hostCpuPct : [];
+        const memSeries = Array.isArray(chart.hostMemPct) ? chart.hostMemPct : [];
+        const diskSeries = Array.isArray(chart.hostDiskPct) ? chart.hostDiskPct : [];
+        const hasChart = xLabels.length > 0 && cpuSeries.length > 0;
 
         if (chartWrap) {
           if (!hasChart) {
@@ -26072,16 +26470,15 @@
               '<p class="muted" style="margin:0;padding:12px 4px">Sem amostras suficientes para o gráfico. Instale o coletor no VPS.</p>';
           } else {
             renderAdminDashboardSvgLineChart(chartWrap, {
-              ariaLabel: "Histórico de consumo de CPU da VPS",
+              ariaLabel: "Histórico de CPU, memória e disco da VPS",
               xLabels,
               minY: 0,
               maxY: 100,
-              referenceLines: [{ value: config.thresholdPct ?? 65, color: "rgba(248,113,113,0.55)" }],
+              referenceLines: [{ value: config.thresholdPct ?? 65, color: "rgba(248,113,113,0.45)" }],
               series: [
-                { label: "CPU VPS", color: "#38bdf8", values: hostSeries },
-                ...(topName
-                  ? [{ label: topName, color: "#fbbf24", dashArray: "6 4", values: topSeries }]
-                  : []),
+                { label: "CPU", color: ADMIN_MONITOR_CPU_COLORS.cpu, values: cpuSeries },
+                { label: "Memória", color: ADMIN_MONITOR_CPU_COLORS.mem, values: memSeries },
+                { label: "Disco", color: ADMIN_MONITOR_CPU_COLORS.disk, values: diskSeries, dashArray: "6 4" },
               ],
               formatY: (value) => formatAdminMonitorCpuPct(value),
             });
@@ -26089,52 +26486,44 @@
         }
 
         if (chartLegend) {
-          chartLegend.textContent = topName
-            ? `Linha azul: CPU estimada do host · linha amarela tracejada: ${topName}`
-            : "Linha azul: CPU estimada do host";
+          chartLegend.innerHTML = `
+            <span><i style="background:${ADMIN_MONITOR_CPU_COLORS.cpu}"></i>CPU</span>
+            <span><i style="background:${ADMIN_MONITOR_CPU_COLORS.mem}"></i>Memória</span>
+            <span><i style="background:${ADMIN_MONITOR_CPU_COLORS.disk}"></i>Disco</span>
+            <span class="muted">Linha tracejada vermelha: limite de alerta CPU</span>
+          `;
         }
 
-        if (tbody) {
-          if (!topContainers.length) {
-            tbody.innerHTML =
-              '<tr><td colspan="3" class="muted">Nenhum container na última amostra.</td></tr>';
-          } else {
-            tbody.innerHTML = topContainers
-              .map(
-                (item) => `
-              <tr>
-                <td>${escapeAdminHtml(item.name || "—")}</td>
-                <td>${escapeAdminHtml(item.serviceKey || "—")}</td>
-                <td>${formatAdminMonitorCpuPct(item.cpuPctAvg)}</td>
-              </tr>
-            `
-              )
-              .join("");
-          }
+        if (containersBars) {
+          renderAdminMonitorCpuContainerBars(topContainers);
         }
       }
 
       async function loadAdminMonitorCpu(options = {}) {
         const statusEl = document.getElementById("admin-monitor-cpu-status");
-        const tbody = document.getElementById("admin-monitor-cpu-containers-tbody");
+        const containersBars = document.getElementById("admin-monitor-cpu-containers-bars");
         if (!hasMasterAccess()) {
           if (statusEl) statusEl.textContent = "Acesso negado.";
-          if (tbody) {
-            tbody.innerHTML =
-              '<tr><td colspan="3" class="muted">Área restrita ao usuário master.</td></tr>';
+          if (containersBars) {
+            containersBars.innerHTML =
+              '<p class="admin-monitor-cpu-bars-empty">Área restrita ao usuário master.</p>';
           }
           return;
         }
 
         if (!options.silent) {
           if (statusEl) statusEl.textContent = "Carregando monitor CPU…";
-          if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="3" class="muted">Carregando…</td></tr>';
+          if (containersBars) {
+            containersBars.innerHTML = '<p class="admin-monitor-cpu-bars-empty">Carregando…</p>';
           }
         }
 
         try {
-          const response = await fetchWithTimeout("/admin/infra/cpu/dashboard", {}, 15000);
+          const response = await fetchWithTimeout(
+            `/admin/infra/cpu/dashboard?range=${encodeURIComponent(adminMonitorCpuChartRange)}`,
+            {},
+            15000
+          );
           const payload = await response.json().catch(() => ({}));
           if (response.status === 503) {
             throw new Error(payload.error || "Monitor CPU desativado neste ambiente.");
@@ -26146,10 +26535,10 @@
         } catch (error) {
           if (!options.silent) {
             if (statusEl) statusEl.textContent = "Falha ao carregar.";
-            if (tbody) {
-              tbody.innerHTML = `<tr><td colspan="3" class="muted">${escapeAdminHtml(
+            if (containersBars) {
+              containersBars.innerHTML = `<p class="admin-monitor-cpu-bars-empty">${escapeAdminHtml(
                 error?.message || "Falha ao carregar monitor CPU."
-              )}</td></tr>`;
+              )}</p>`;
             }
             showToast(error?.message || "Falha ao carregar monitor CPU.", "error");
           }
@@ -26159,7 +26548,7 @@
       function startAdminMonitorCpuPolling() {
         if (adminMonitorCpuPollTimer) clearInterval(adminMonitorCpuPollTimer);
         const intervalMs =
-          Number(adminMonitorCpuLastPayload?.config?.sampleIntervalSec || 0) * 1000 ||
+          Number(adminMonitorCpuLastPayload?.config?.uiRefreshSec || 0) * 1000 ||
           ADMIN_MONITOR_CPU_POLL_MS;
         adminMonitorCpuPollTimer = setInterval(() => {
           if (activeTab !== "admin-monitor-cpu") return;
@@ -26176,6 +26565,19 @@
       }
 
       function initAdminMonitorCpuUi() {
+        syncAdminMonitorCpuRangeButtons();
+
+        document.getElementById("admin-monitor-cpu-range-group")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-monitor-cpu-range]");
+          if (!btn) return;
+          setAdminMonitorCpuRange(btn.getAttribute("data-monitor-cpu-range"));
+        });
+
+        document.getElementById("waba-master-cpu-alert-dot")?.addEventListener("click", () => {
+          if (!masterCpuAlertActive || typeof setActiveTab !== "function") return;
+          setActiveTab("admin-monitor-cpu");
+        });
+
         document.getElementById("admin-monitor-cpu-refresh-btn")?.addEventListener("click", () => {
           const btn = document.getElementById("admin-monitor-cpu-refresh-btn");
           if (btn) {
@@ -28827,8 +29229,14 @@
       let adminCampanhasPollTimer = null;
       const ADMIN_CAMPANHAS_POLL_MS = 15 * 60 * 1000;
       let adminMonitorCpuPollTimer = null;
-      const ADMIN_MONITOR_CPU_POLL_MS = 60 * 1000;
+      const ADMIN_MONITOR_CPU_POLL_MS = 10 * 1000;
       let adminMonitorCpuLastPayload = null;
+      let adminMonitorCpuChartRange = "1h";
+      const ADMIN_MONITOR_CPU_COLORS = {
+        cpu: "#38bdf8",
+        mem: "#a78bfa",
+        disk: "#34d399",
+      };
       let aquecedorRuntimeStatusCache = null;
       let aquecedorRuntimeResumeInFlight = false;
       let aquecedorMotorActionInFlight = null;

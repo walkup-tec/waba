@@ -7,11 +7,21 @@ export type VpsCpuContainerSample = {
 export type VpsCpuSample = {
   ts: string;
   hostLoad1m: number;
+  hostLoad5m?: number;
+  hostLoad15m?: number;
   cpuCores: number;
   hostCpuPctEst: number;
+  hostMemPct?: number;
+  hostMemUsedBytes?: number;
+  hostMemTotalBytes?: number;
+  hostDiskPct?: number;
+  hostDiskUsedBytes?: number;
+  hostDiskTotalBytes?: number;
   containers: VpsCpuContainerSample[];
   swarmServiceCount?: number;
 };
+
+export type VpsCpuChartRange = "1h" | "24h" | "all";
 
 export type VpsCpuPlaybookStep = {
   order: number;
@@ -49,17 +59,27 @@ export type VpsCpuDashboardResponse = {
     thresholdPct: number;
     sustainedMinutes: number;
     sampleIntervalSec: number;
+    uiRefreshSec: number;
   };
   chart: {
+    range: VpsCpuChartRange;
     labels: string[];
     hostCpuPct: number[];
-    topContainerCpuPct: number[];
-    topContainerName: string | null;
+    hostMemPct: number[];
+    hostDiskPct: number[];
   };
   current: {
     hostCpuPctEst: number;
     hostLoad1m: number;
+    hostLoad5m: number;
+    hostLoad15m: number;
     cpuCores: number;
+    hostMemPct: number;
+    hostMemUsedBytes: number;
+    hostMemTotalBytes: number;
+    hostDiskPct: number;
+    hostDiskUsedBytes: number;
+    hostDiskTotalBytes: number;
     swarmServiceCount: number;
   } | null;
   topContainers: Array<{

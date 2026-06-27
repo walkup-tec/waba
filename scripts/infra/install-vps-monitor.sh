@@ -83,8 +83,8 @@ Description=Collect VPS CPU metrics every minute for WABA master UI
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=1min
-AccuracySec=15s
+OnUnitActiveSec=10s
+AccuracySec=5s
 Persistent=true
 
 [Install]

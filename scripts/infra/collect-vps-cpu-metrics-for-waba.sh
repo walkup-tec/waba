@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Coleta métricas CPU VPS e grava em /app/data/vps-infra/cpu-samples.jsonl (container WABA)
 # Uso (host root): bash collect-vps-cpu-metrics-for-waba.sh
-# Versão: waba-cpu-collector-2026-06-27-v1
+# Versão: waba-cpu-collector-2026-06-27-v2
 set -euo pipefail
 
 find_waba_container() {
@@ -29,10 +29,43 @@ cid = sys.argv[1]
 def sh(cmd):
     return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
 
-load_s = sh("uptime | awk -F'load average:' '{print $2}' | awk -F, '{print $1}'").strip()
+def parse_loads():
+    part = sh("uptime | awk -F'load average:' '{print $2}'")
+    values = []
+    for chunk in part.split(","):
+        try:
+            values.append(float(chunk.strip()))
+        except ValueError:
+            pass
+    while len(values) < 3:
+        values.append(values[-1] if values else 0.0)
+    return values[:3]
+
+def parse_mem():
+    line = sh("free -b | awk '/^Mem:/ {print $2,$3}'")
+    parts = line.split()
+    if len(parts) < 2:
+        return 0, 0, 0.0
+    total = int(parts[0] or 0)
+    used = int(parts[1] or 0)
+    pct = round(used / total * 100, 2) if total else 0.0
+    return used, total, pct
+
+def parse_disk():
+    line = sh("df -B1 / | awk 'NR==2 {print $2,$3}'")
+    parts = line.split()
+    if len(parts) < 2:
+        return 0, 0, 0.0
+    total = int(parts[0] or 0)
+    used = int(parts[1] or 0)
+    pct = round(used / total * 100, 2) if total else 0.0
+    return used, total, pct
+
+load1, load5, load15 = parse_loads()
 cores = max(1, int(sh("nproc") or "1"))
-load = float(load_s or "0")
-host_cpu = min(100.0, round(load / cores * 100, 2))
+host_cpu = min(100.0, round(load1 / cores * 100, 2))
+mem_used, mem_total, mem_pct = parse_mem()
+disk_used, disk_total, disk_pct = parse_disk()
 
 containers = []
 try:
@@ -64,9 +97,17 @@ except Exception:
 
 sample = {
     "ts": datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-    "hostLoad1m": load,
+    "hostLoad1m": load1,
+    "hostLoad5m": load5,
+    "hostLoad15m": load15,
     "cpuCores": cores,
     "hostCpuPctEst": host_cpu,
+    "hostMemPct": mem_pct,
+    "hostMemUsedBytes": mem_used,
+    "hostMemTotalBytes": mem_total,
+    "hostDiskPct": disk_pct,
+    "hostDiskUsedBytes": disk_used,
+    "hostDiskTotalBytes": disk_total,
     "containers": containers,
     "swarmServiceCount": swarm_count,
 }
@@ -78,12 +119,12 @@ const p = '/app/data/vps-infra/cpu-samples.jsonl';
 fs.mkdirSync('/app/data/vps-infra', {{ recursive: true }});
 fs.appendFileSync(p, {json.dumps(payload)} + '\\n');
 const lines = fs.readFileSync(p, 'utf8').trim().split('\\n').filter(Boolean);
-if (lines.length > 10080) {{
-  fs.writeFileSync(p, lines.slice(-10080).join('\\n') + '\\n');
+if (lines.length > 10000) {{
+  fs.writeFileSync(p, lines.slice(-10000).join('\\n') + '\\n');
 }}
 """
 subprocess.run(["docker", "exec", cid, "node", "-e", node], check=True)
-print(f"[cpu-collector] ok hostCpu={host_cpu}% containers={len(containers)}")
+print(f"[cpu-collector] ok cpu={host_cpu}% mem={mem_pct}% disk={disk_pct}%")
 PY
 }
 

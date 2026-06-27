@@ -8,7 +8,7 @@ const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../data-path");
 const SAMPLES_REL = path_1.default.join("vps-infra", "cpu-samples.jsonl");
-const MAX_LINES = 10080;
+const MAX_LINES = 10000;
 class VpsCpuMonitorRepository {
     constructor() {
         this.samplesPath = (0, data_path_1.resolveDataFile)(SAMPLES_REL);

@@ -4,7 +4,7 @@ import { resolveDataDir, resolveDataFile } from "../data-path";
 import type { VpsCpuSample } from "./vps-cpu-monitor.types";
 
 const SAMPLES_REL = path.join("vps-infra", "cpu-samples.jsonl");
-const MAX_LINES = 10_080;
+const MAX_LINES = 10_000;
 
 export class VpsCpuMonitorRepository {
   private samplesPath = resolveDataFile(SAMPLES_REL);
