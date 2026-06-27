@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-27
 
-**WABA — Monitor CPU cards + períodos (2026-06-27):** topo CPU/Mem/Disco coloridos; gráfico 1h/24h/all (default 1h); refresh 10s; coletor mem+disk. Ver `doc/LOG-2026-06-27__monitor-cpu-cards-periodos-10s.md`.
+**WABA — Monitor CPU refresh 60s (paridade Easypanel/Hostinger, 2026-06-27):** UI, header alert dot e coletor VPS alinhados a **60s/1min** (não tempo real). Env `WABA_VPS_CPU_UI_REFRESH_SEC`, `WABA_VPS_CPU_SAMPLE_INTERVAL_SEC`. Ver `doc/LOG-2026-06-27__monitor-cpu-refresh-60s-easypanel.md`.
+
+**WABA — Monitor CPU cards + períodos (2026-06-27):** topo CPU/Mem/Disco coloridos; gráfico 1h/24h/all (default 1h); coletor mem+disk v3 (`/proc/stat`). Refresh era 10s, depois **60s**. Ver `doc/LOG-2026-06-27__monitor-cpu-cards-periodos-10s.md`.
 
 **WABA — Monitor CPU master (Suporte):** gráfico CPU VPS, alerta sustentado, top containers, playbook SSH copiável; `GET /admin/infra/cpu/dashboard`; coletor `waba-infra-cpu-collector.timer`. Ver `doc/LOG-2026-06-27__monitor-cpu-master-ui.md`.
 

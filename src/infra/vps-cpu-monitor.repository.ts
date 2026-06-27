@@ -63,11 +63,13 @@ export class VpsCpuMonitorRepository {
 
   static resolveSetupInstructions(): string[] {
     return [
-      "No VPS (root): instale o coletor que grava amostras em /app/data/vps-infra/",
+      "No VPS (root): instale/atualize o coletor v3 (CPU via /proc/stat, memória via MemAvailable)",
       "curl -fsSL https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/infra/install-vps-monitor.sh -o /tmp/install-vps-monitor.sh",
       "sed -i 's/\\r$//' /tmp/install-vps-monitor.sh && chmod +x /tmp/install-vps-monitor.sh",
       "/tmp/install-vps-monitor.sh install",
+      "bash /root/waba-infra/collect-vps-cpu-metrics-for-waba.sh  # teste: deve mostrar cpu~40% mem~16% disk~18%",
       "Validar: systemctl status waba-infra-cpu-collector.timer",
+      "Opcional: limpar histórico legado — docker exec $(docker ps -q -f name=waba_waba_disparador | head -1) sh -c ':> /app/data/vps-infra/cpu-samples.jsonl'",
     ];
   }
 

@@ -7,7 +7,8 @@ import type {
 import { resolvePlaybookForServiceKey, resolveServiceKeyFromContainerName } from "./vps-cpu-playbooks";
 import { VpsCpuMonitorRepository } from "./vps-cpu-monitor.repository";
 
-const UI_REFRESH_SEC = 10;
+const UI_REFRESH_SEC = 60;
+const COLLECTOR_INTERVAL_SEC = 60;
 const CHART_MAX_POINTS = 120;
 
 const parseThresholdPct = (): number => {
@@ -23,9 +24,15 @@ const parseSustainedMinutes = (): number => {
 };
 
 const parseSampleIntervalSec = (): number => {
-  const raw = Number(process.env.WABA_VPS_CPU_SAMPLE_INTERVAL_SEC ?? 10);
-  if (!Number.isFinite(raw)) return 10;
-  return Math.min(300, Math.max(10, Math.round(raw)));
+  const raw = Number(process.env.WABA_VPS_CPU_SAMPLE_INTERVAL_SEC ?? COLLECTOR_INTERVAL_SEC);
+  if (!Number.isFinite(raw)) return COLLECTOR_INTERVAL_SEC;
+  return Math.min(300, Math.max(30, Math.round(raw)));
+};
+
+const parseUiRefreshSec = (): number => {
+  const raw = Number(process.env.WABA_VPS_CPU_UI_REFRESH_SEC ?? UI_REFRESH_SEC);
+  if (!Number.isFinite(raw)) return UI_REFRESH_SEC;
+  return Math.min(300, Math.max(30, Math.round(raw)));
 };
 
 const avg = (values: number[]): number => {
@@ -198,6 +205,7 @@ export class VpsCpuMonitorService {
     const thresholdPct = parseThresholdPct();
     const sustainedMinutes = parseSustainedMinutes();
     const sampleIntervalSec = parseSampleIntervalSec();
+    const uiRefreshSec = parseUiRefreshSec();
     const allSamples = await this.repo.listSamples(10_000);
     const status = await this.repo.getCollectorStatus();
     const last = allSamples.length ? allSamples[allSamples.length - 1] : null;
@@ -223,7 +231,7 @@ export class VpsCpuMonitorService {
       collectorReady: status.ready,
       sampleCount: status.sampleCount,
       lastSampleAt: status.lastSampleAt,
-      config: { thresholdPct, sustainedMinutes, sampleIntervalSec, uiRefreshSec: UI_REFRESH_SEC },
+      config: { thresholdPct, sustainedMinutes, sampleIntervalSec, uiRefreshSec },
       chart: {
         range,
         labels: chartSamples.map((s) => formatChartLabel(s.ts, range)),

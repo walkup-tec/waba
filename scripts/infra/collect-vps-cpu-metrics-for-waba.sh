@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Coleta métricas CPU VPS e grava em /app/data/vps-infra/cpu-samples.jsonl (container WABA)
+# Coleta métricas VPS (CPU real, memória, disco) → /app/data/vps-infra/cpu-samples.jsonl
 # Uso (host root): bash collect-vps-cpu-metrics-for-waba.sh
-# Versão: waba-cpu-collector-2026-06-27-v2
+# Versão: waba-cpu-collector-2026-06-27-v3
 set -euo pipefail
 
 find_waba_container() {
@@ -22,7 +22,7 @@ main() {
   fi
 
   python3 - "$cid" <<'PY'
-import json, subprocess, sys, datetime
+import json, subprocess, sys, datetime, time
 
 cid = sys.argv[1]
 
@@ -41,29 +41,87 @@ def parse_loads():
         values.append(values[-1] if values else 0.0)
     return values[:3]
 
-def parse_mem():
-    line = sh("free -b | awk '/^Mem:/ {print $2,$3}'")
+def read_cpu_jiffies():
+    with open("/proc/stat", encoding="utf-8") as f:
+        line = f.readline()
     parts = line.split()
-    if len(parts) < 2:
-        return 0, 0, 0.0
-    total = int(parts[0] or 0)
-    used = int(parts[1] or 0)
+    if len(parts) < 5 or parts[0] != "cpu":
+        return 0, 0
+    nums = [int(x) for x in parts[1:]]
+    while len(nums) < 7:
+        nums.append(0)
+    idle = nums[3] + nums[4]
+    total = sum(nums[:7])
+    return idle, total
+
+def parse_host_cpu_pct():
+    idle1, total1 = read_cpu_jiffies()
+    time.sleep(0.2)
+    idle2, total2 = read_cpu_jiffies()
+    dt_total = total2 - total1
+    dt_idle = idle2 - idle1
+    if dt_total <= 0:
+        return 0.0
+    usage = (1.0 - (dt_idle / dt_total)) * 100.0
+    return round(max(0.0, min(100.0, usage)), 2)
+
+def parse_mem():
+    info = {}
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as f:
+            for line in f:
+                if ":" not in line:
+                    continue
+                key, raw = line.split(":", 1)
+                bits = raw.strip().split()
+                if not bits:
+                    continue
+                info[key.strip()] = int(bits[0]) * 1024
+    except OSError:
+        info = {}
+
+    total = int(info.get("MemTotal") or 0)
+    available = int(info.get("MemAvailable") or info.get("MemFree") or 0)
+    if total <= 0:
+        try:
+            line = sh("free -b | awk '/^Mem:/ {print $2,$7}'")
+            parts = line.split()
+            if len(parts) >= 2:
+                total = int(parts[0])
+                available = int(parts[1])
+        except Exception:
+            pass
+
+    used = max(0, total - available) if total > 0 else 0
     pct = round(used / total * 100, 2) if total else 0.0
     return used, total, pct
 
 def parse_disk():
-    line = sh("df -B1 / | awk 'NR==2 {print $2,$3}'")
-    parts = line.split()
-    if len(parts) < 2:
-        return 0, 0, 0.0
-    total = int(parts[0] or 0)
-    used = int(parts[1] or 0)
-    pct = round(used / total * 100, 2) if total else 0.0
-    return used, total, pct
+    try:
+        line = sh("df -B1 --output=size,used / 2>/dev/null | tail -1")
+        parts = line.split()
+        if len(parts) >= 2:
+            total = int(parts[0])
+            used = int(parts[1])
+            pct = round(used / total * 100, 2) if total else 0.0
+            return used, total, pct
+    except Exception:
+        pass
+    try:
+        line = sh("df -B1 / | awk 'NR==2 {print $2,$3}'")
+        parts = line.split()
+        if len(parts) >= 2:
+            total = int(parts[0])
+            used = int(parts[1])
+            pct = round(used / total * 100, 2) if total else 0.0
+            return used, total, pct
+    except Exception:
+        pass
+    return 0, 0, 0.0
 
 load1, load5, load15 = parse_loads()
 cores = max(1, int(sh("nproc") or "1"))
-host_cpu = min(100.0, round(load1 / cores * 100, 2))
+host_cpu = parse_host_cpu_pct()
 mem_used, mem_total, mem_pct = parse_mem()
 disk_used, disk_total, disk_pct = parse_disk()
 
@@ -110,6 +168,7 @@ sample = {
     "hostDiskTotalBytes": disk_total,
     "containers": containers,
     "swarmServiceCount": swarm_count,
+    "collectorVersion": "v3-procstat",
 }
 
 payload = json.dumps(sample, separators=(",", ":"))
@@ -124,7 +183,7 @@ if (lines.length > 10000) {{
 }}
 """
 subprocess.run(["docker", "exec", cid, "node", "-e", node], check=True)
-print(f"[cpu-collector] ok cpu={host_cpu}% mem={mem_pct}% disk={disk_pct}%")
+print(f"[cpu-collector] ok cpu={host_cpu}% mem={mem_pct}% disk={disk_pct}% load={load1}")
 PY
 }
 
