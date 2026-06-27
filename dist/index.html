@@ -9125,28 +9125,48 @@
         stroke-linecap: round;
         stroke-linejoin: round;
       }
-      .disparos-hex-light-lines .hex-light-orbit {
+      .disparos-hex-light-lines .hex-orbit-comet,
+      .disparos-hex-light-lines .hex-orbit-comet-glow {
         pathLength: 1000;
-        stroke-dasharray: var(--hex-orbit-lit, 72) calc(1000 - var(--hex-orbit-lit, 72));
-        stroke: url(#disparosHexLightGradOrbit);
-        animation: disparosHexOrbitFlow var(--hex-orbit-dur, 10s) linear infinite;
+        stroke-linecap: round;
+        stroke-dasharray: var(--hex-comet-len, 185) calc(1000 - var(--hex-comet-len, 185));
+        animation: disparosHexCometFlow var(--hex-orbit-dur, 10s) linear infinite;
         animation-delay: var(--hex-orbit-delay, 0s);
-        opacity: var(--hex-orbit-peak, 0.62);
       }
-      .disparos-hex-light-lines .hex-light-orbit.is-reverse {
-        stroke: url(#disparosHexLightGradOrbitRev);
+      .disparos-hex-light-lines .hex-orbit-comet-glow {
+        stroke: url(#disparosHexCometTailGrad);
+        stroke-width: calc(var(--hex-comet-width, 1.2) * 2.6);
+        opacity: var(--hex-comet-glow, 0.38);
+        filter: url(#disparosHexCometBlur);
+        stroke-dasharray: calc(var(--hex-comet-len, 185) * 1.28)
+          calc(1000 - var(--hex-comet-len, 185) * 1.28);
+      }
+      .disparos-hex-light-lines .hex-orbit-comet {
+        stroke: url(#disparosHexCometGrad);
+        stroke-width: var(--hex-comet-width, 1.2);
+        opacity: var(--hex-orbit-peak, 0.88);
+      }
+      .disparos-hex-light-lines .hex-orbit-comet.is-reverse,
+      .disparos-hex-light-lines .hex-orbit-comet-glow.is-reverse {
         animation-direction: reverse;
       }
-      @keyframes disparosHexOrbitFlow {
+      .disparos-hex-light-lines .hex-orbit-comet.is-reverse {
+        stroke: url(#disparosHexCometGradRev);
+      }
+      .disparos-hex-light-lines .hex-orbit-comet-glow.is-reverse {
+        stroke: url(#disparosHexCometTailGradRev);
+      }
+      @keyframes disparosHexCometFlow {
         to {
           stroke-dashoffset: -1000;
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .disparos-hex-light-lines .hex-light-orbit {
+        .disparos-hex-light-lines .hex-orbit-comet,
+        .disparos-hex-light-lines .hex-orbit-comet-glow {
           animation: none !important;
           stroke-dasharray: none;
-          opacity: 0.14;
+          opacity: 0.12;
         }
       }
       .disparos-pricing-lanes {
@@ -14313,31 +14333,62 @@
                     >
                       <defs>
                         <linearGradient
-                          id="disparosHexLightGradOrbit"
-                          gradientUnits="userSpaceOnUse"
-                          x1="1500"
-                          y1="280"
-                          x2="1500"
-                          y2="3820"
+                          id="disparosHexCometGrad"
+                          gradientUnits="objectBoundingBox"
+                          x1="0"
+                          y1="0.5"
+                          x2="1"
+                          y2="0.5"
                         >
-                          <stop offset="0%" stop-color="#2ee4a0" stop-opacity="0.98" />
-                          <stop offset="45%" stop-color="#5eead4" stop-opacity="0.42" />
-                          <stop offset="100%" stop-color="#00b1f0" stop-opacity="0.95" />
+                          <stop offset="0%" stop-color="#2ee4a0" stop-opacity="0" />
+                          <stop offset="28%" stop-color="#2ee4a0" stop-opacity="0.06" />
+                          <stop offset="58%" stop-color="#5eead4" stop-opacity="0.28" />
+                          <stop offset="82%" stop-color="#38bdf8" stop-opacity="0.72" />
+                          <stop offset="100%" stop-color="#e0f2fe" stop-opacity="1" />
                         </linearGradient>
                         <linearGradient
-                          id="disparosHexLightGradOrbitRev"
-                          gradientUnits="userSpaceOnUse"
-                          x1="1500"
-                          y1="3820"
-                          x2="1500"
-                          y2="280"
+                          id="disparosHexCometGradRev"
+                          gradientUnits="objectBoundingBox"
+                          x1="1"
+                          y1="0.5"
+                          x2="0"
+                          y2="0.5"
                         >
-                          <stop offset="0%" stop-color="#00b1f0" stop-opacity="0.92" />
-                          <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.38" />
-                          <stop offset="100%" stop-color="#2ee4a0" stop-opacity="0.9" />
+                          <stop offset="0%" stop-color="#00b1f0" stop-opacity="0" />
+                          <stop offset="28%" stop-color="#00b1f0" stop-opacity="0.06" />
+                          <stop offset="58%" stop-color="#38bdf8" stop-opacity="0.26" />
+                          <stop offset="82%" stop-color="#5eead4" stop-opacity="0.68" />
+                          <stop offset="100%" stop-color="#ecfdf5" stop-opacity="1" />
                         </linearGradient>
+                        <linearGradient
+                          id="disparosHexCometTailGrad"
+                          gradientUnits="objectBoundingBox"
+                          x1="0"
+                          y1="0.5"
+                          x2="1"
+                          y2="0.5"
+                        >
+                          <stop offset="0%" stop-color="#2ee4a0" stop-opacity="0" />
+                          <stop offset="45%" stop-color="#2ee4a0" stop-opacity="0.04" />
+                          <stop offset="100%" stop-color="#00b1f0" stop-opacity="0.22" />
+                        </linearGradient>
+                        <linearGradient
+                          id="disparosHexCometTailGradRev"
+                          gradientUnits="objectBoundingBox"
+                          x1="1"
+                          y1="0.5"
+                          x2="0"
+                          y2="0.5"
+                        >
+                          <stop offset="0%" stop-color="#00b1f0" stop-opacity="0" />
+                          <stop offset="45%" stop-color="#00b1f0" stop-opacity="0.04" />
+                          <stop offset="100%" stop-color="#2ee4a0" stop-opacity="0.2" />
+                        </linearGradient>
+                        <filter id="disparosHexCometBlur" x="-30%" y="-30%" width="160%" height="160%">
+                          <feGaussianBlur stdDeviation="2.6" />
+                        </filter>
                         <filter id="disparosHexLightGlow" x="-25%" y="-8%" width="150%" height="116%">
-                          <feGaussianBlur stdDeviation="2.4" result="blur" />
+                          <feGaussianBlur stdDeviation="1.6" result="blur" />
                           <feMerge>
                             <feMergeNode in="blur" />
                             <feMergeNode in="SourceGraphic" />
@@ -14346,84 +14397,44 @@
                       </defs>
                       <g filter="url(#disparosHexLightGlow)">
                         <g transform="rotate(-24 1500 2050)">
-                          <path
-                            class="hex-light-orbit"
-                            d="M 1500 260 A 1220 1780 0 1 1 1499.2 260"
-                            stroke-width="1.15"
-                            style="--hex-orbit-dur: 13s; --hex-orbit-delay: 0s; --hex-orbit-lit: 78; --hex-orbit-peak: 0.58"
-                          />
+                          <path class="hex-orbit-comet-glow" d="M 1500 260 A 1220 1780 0 1 1 1499.2 260" style="--hex-orbit-dur: 13s; --hex-orbit-delay: 0s; --hex-comet-len: 210; --hex-comet-width: 1.15; --hex-orbit-peak: 0.72" />
+                          <path class="hex-orbit-comet" d="M 1500 260 A 1220 1780 0 1 1 1499.2 260" style="--hex-orbit-dur: 13s; --hex-orbit-delay: 0s; --hex-comet-len: 210; --hex-comet-width: 1.15; --hex-orbit-peak: 0.72" />
                         </g>
                         <g transform="rotate(19 1500 2050)">
-                          <path
-                            class="hex-light-orbit is-reverse"
-                            d="M 1500 320 A 1180 1720 0 1 1 1499.3 320"
-                            stroke-width="0.95"
-                            style="--hex-orbit-dur: 11.5s; --hex-orbit-delay: 1.2s; --hex-orbit-lit: 64; --hex-orbit-peak: 0.5"
-                          />
+                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 320 A 1180 1720 0 1 1 1499.3 320" style="--hex-orbit-dur: 11.5s; --hex-orbit-delay: 1.2s; --hex-comet-len: 195; --hex-comet-width: 1; --hex-orbit-peak: 0.68" />
+                          <path class="hex-orbit-comet is-reverse" d="M 1500 320 A 1180 1720 0 1 1 1499.3 320" style="--hex-orbit-dur: 11.5s; --hex-orbit-delay: 1.2s; --hex-comet-len: 195; --hex-comet-width: 1; --hex-orbit-peak: 0.68" />
                         </g>
                         <g transform="rotate(36 1500 1980)">
-                          <path
-                            class="hex-light-orbit"
-                            d="M 1500 420 A 980 1280 0 1 1 1499.4 420"
-                            stroke-width="1.05"
-                            style="--hex-orbit-dur: 9.5s; --hex-orbit-delay: 0.6s; --hex-orbit-lit: 58; --hex-orbit-peak: 0.55"
-                          />
+                          <path class="hex-orbit-comet-glow" d="M 1500 420 A 980 1280 0 1 1 1499.4 420" style="--hex-orbit-dur: 9.5s; --hex-orbit-delay: 0.6s; --hex-comet-len: 175; --hex-comet-width: 1.05; --hex-orbit-peak: 0.74" />
+                          <path class="hex-orbit-comet" d="M 1500 420 A 980 1280 0 1 1 1499.4 420" style="--hex-orbit-dur: 9.5s; --hex-orbit-delay: 0.6s; --hex-comet-len: 175; --hex-comet-width: 1.05; --hex-orbit-peak: 0.74" />
                         </g>
                         <g transform="rotate(-42 1500 2120)">
-                          <path
-                            class="hex-light-orbit is-reverse"
-                            d="M 1500 480 A 1020 1320 0 1 1 1499.5 480"
-                            stroke-width="0.88"
-                            style="--hex-orbit-dur: 10.8s; --hex-orbit-delay: 2.4s; --hex-orbit-lit: 52; --hex-orbit-peak: 0.46"
-                          />
+                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 480 A 1020 1320 0 1 1 1499.5 480" style="--hex-orbit-dur: 10.8s; --hex-orbit-delay: 2.4s; --hex-comet-len: 168; --hex-comet-width: 0.95; --hex-orbit-peak: 0.65" />
+                          <path class="hex-orbit-comet is-reverse" d="M 1500 480 A 1020 1320 0 1 1 1499.5 480" style="--hex-orbit-dur: 10.8s; --hex-orbit-delay: 2.4s; --hex-comet-len: 168; --hex-comet-width: 0.95; --hex-orbit-peak: 0.65" />
                         </g>
                         <g transform="rotate(-58 1500 2050)">
-                          <path
-                            class="hex-light-orbit"
-                            d="M 1500 980 A 1320 760 0 1 1 1499.6 980"
-                            stroke-width="0.82"
-                            style="--hex-orbit-dur: 8.2s; --hex-orbit-delay: 1.8s; --hex-orbit-lit: 48; --hex-orbit-peak: 0.42"
-                          />
+                          <path class="hex-orbit-comet-glow" d="M 1500 980 A 1320 760 0 1 1 1499.6 980" style="--hex-orbit-dur: 8.2s; --hex-orbit-delay: 1.8s; --hex-comet-len: 155; --hex-comet-width: 0.9; --hex-orbit-peak: 0.62" />
+                          <path class="hex-orbit-comet" d="M 1500 980 A 1320 760 0 1 1 1499.6 980" style="--hex-orbit-dur: 8.2s; --hex-orbit-delay: 1.8s; --hex-comet-len: 155; --hex-comet-width: 0.9; --hex-orbit-peak: 0.62" />
                         </g>
                         <g transform="rotate(52 1500 2050)">
-                          <path
-                            class="hex-light-orbit is-reverse"
-                            d="M 1500 1040 A 1280 720 0 1 1 1499.7 1040"
-                            stroke-width="0.9"
-                            style="--hex-orbit-dur: 7.6s; --hex-orbit-delay: 0.3s; --hex-orbit-lit: 44; --hex-orbit-peak: 0.4"
-                          />
+                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 1040 A 1280 720 0 1 1 1499.7 1040" style="--hex-orbit-dur: 7.6s; --hex-orbit-delay: 0.3s; --hex-comet-len: 148; --hex-comet-width: 0.88; --hex-orbit-peak: 0.6" />
+                          <path class="hex-orbit-comet is-reverse" d="M 1500 1040 A 1280 720 0 1 1 1499.7 1040" style="--hex-orbit-dur: 7.6s; --hex-orbit-delay: 0.3s; --hex-comet-len: 148; --hex-comet-width: 0.88; --hex-orbit-peak: 0.6" />
                         </g>
                         <g transform="rotate(-11 1480 1880)">
-                          <path
-                            class="hex-light-orbit"
-                            d="M 1480 620 A 760 980 0 1 1 1479.4 620"
-                            stroke-width="1.2"
-                            style="--hex-orbit-dur: 7.2s; --hex-orbit-delay: 3.1s; --hex-orbit-lit: 56; --hex-orbit-peak: 0.52"
-                          />
+                          <path class="hex-orbit-comet-glow" d="M 1480 620 A 760 980 0 1 1 1479.4 620" style="--hex-orbit-dur: 7.2s; --hex-orbit-delay: 3.1s; --hex-comet-len: 162; --hex-comet-width: 1.1; --hex-orbit-peak: 0.7" />
+                          <path class="hex-orbit-comet" d="M 1480 620 A 760 980 0 1 1 1479.4 620" style="--hex-orbit-dur: 7.2s; --hex-orbit-delay: 3.1s; --hex-comet-len: 162; --hex-comet-width: 1.1; --hex-orbit-peak: 0.7" />
                         </g>
                         <g transform="rotate(28 1520 2220)">
-                          <path
-                            class="hex-light-orbit is-reverse"
-                            d="M 1520 760 A 820 1040 0 1 1 1519.3 760"
-                            stroke-width="1.08"
-                            style="--hex-orbit-dur: 8.8s; --hex-orbit-delay: 2s; --hex-orbit-lit: 60; --hex-orbit-peak: 0.48"
-                          />
+                          <path class="hex-orbit-comet-glow is-reverse" d="M 1520 760 A 820 1040 0 1 1 1519.3 760" style="--hex-orbit-dur: 8.8s; --hex-orbit-delay: 2s; --hex-comet-len: 178; --hex-comet-width: 1.02; --hex-orbit-peak: 0.66" />
+                          <path class="hex-orbit-comet is-reverse" d="M 1520 760 A 820 1040 0 1 1 1519.3 760" style="--hex-orbit-dur: 8.8s; --hex-orbit-delay: 2s; --hex-comet-len: 178; --hex-comet-width: 1.02; --hex-orbit-peak: 0.66" />
                         </g>
                         <g transform="rotate(8 1500 2050)">
-                          <path
-                            class="hex-light-orbit"
-                            d="M 1500 380 A 860 1180 0 1 1 1499.5 380"
-                            stroke-width="0.75"
-                            style="--hex-orbit-dur: 12.4s; --hex-orbit-delay: 3.8s; --hex-orbit-lit: 40; --hex-orbit-peak: 0.34"
-                          />
+                          <path class="hex-orbit-comet-glow" d="M 1500 380 A 860 1180 0 1 1 1499.5 380" style="--hex-orbit-dur: 12.4s; --hex-orbit-delay: 3.8s; --hex-comet-len: 140; --hex-comet-width: 0.82; --hex-orbit-peak: 0.58" />
+                          <path class="hex-orbit-comet" d="M 1500 380 A 860 1180 0 1 1 1499.5 380" style="--hex-orbit-dur: 12.4s; --hex-orbit-delay: 3.8s; --hex-comet-len: 140; --hex-comet-width: 0.82; --hex-orbit-peak: 0.58" />
                         </g>
                         <g transform="rotate(-31 1500 2050)">
-                          <path
-                            class="hex-light-orbit is-reverse"
-                            d="M 1500 340 A 1100 1580 0 1 1 1499.2 340"
-                            stroke-width="1.25"
-                            style="--hex-orbit-dur: 14.2s; --hex-orbit-delay: 4.5s; --hex-orbit-lit: 86; --hex-orbit-peak: 0.6"
-                          />
+                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 340 A 1100 1580 0 1 1 1499.2 340" style="--hex-orbit-dur: 14.2s; --hex-orbit-delay: 4.5s; --hex-comet-len: 225; --hex-comet-width: 1.22; --hex-orbit-peak: 0.76" />
+                          <path class="hex-orbit-comet is-reverse" d="M 1500 340 A 1100 1580 0 1 1 1499.2 340" style="--hex-orbit-dur: 14.2s; --hex-orbit-delay: 4.5s; --hex-comet-len: 225; --hex-comet-width: 1.22; --hex-orbit-peak: 0.76" />
                         </g>
                       </g>
                     </svg>

@@ -20,6 +20,10 @@ Efeito visual sobre a imagem dos hexágonos: linhas finas e delicadas, modernas,
 
 Substituídas 12 linhas retas por 10 elipses inclinadas (`transform rotate`) com animação `disparosHexOrbitFlow`.
 
+## Atualização (cauda de cometa contínua)
+
+Trechos curtos tracejados substituídos por **cometas contínuos**: gradiente transparente→brilhante na traça + camada glow borrada (`hex-orbit-comet` + `hex-orbit-comet-glow`), `stroke-linecap: round`, sem aparência pontilhada.
+
 ## Arquivos
 
 - `index.html`, `dist/index.html`
