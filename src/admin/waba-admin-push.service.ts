@@ -4,7 +4,11 @@ import {
   listPushHistory,
   sendPushMessage,
 } from "../push/waba-push-delivery.service";
-import { getPushCommunityConfig, updatePushCommunityConfig } from "../push/waba-push-community.service";
+import {
+  getPushCommunityConfig,
+  loadPushCommunityConfigForAdmin,
+  updatePushCommunityConfig,
+} from "../push/waba-push-community.service";
 import { savePushImageAttachment } from "../push/waba-push-media.service";
 import type { WabaPushAudience, WabaPushImageAttachment, WabaPushUserRole } from "../push/waba-push.types";
 
@@ -65,6 +69,10 @@ export class WabaAdminPushService {
 
   getCommunityConfig() {
     return getPushCommunityConfig();
+  }
+
+  async loadCommunityConfigForAdmin() {
+    return loadPushCommunityConfigForAdmin();
   }
 
   saveCommunityConfig(input: {

@@ -17268,8 +17268,9 @@
                     </div>
                     <p id="admin-push-send-feedback" class="admin-push-send-feedback" hidden role="status" aria-live="polite"></p>
                     <p id="admin-push-community-hint" class="muted" style="margin-top:10px">
-                      Comunidade: instância <strong>Drax Sistemas 5181077770</strong> (admin). A imagem anexada é publicada <strong>somente</strong> na comunidade; assinantes, usuários e e-mail recebem apenas o texto. Link:
-                      <a href="https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7" target="_blank" rel="noopener noreferrer">entrar na comunidade</a>.
+                      Comunidade: instância <strong id="admin-push-community-instance">—</strong> (admin). A imagem anexada é publicada <strong>somente</strong> na comunidade; assinantes, usuários e e-mail recebem apenas o texto. Link:
+                      <a id="admin-push-community-link" href="https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7" target="_blank" rel="noopener noreferrer">entrar na comunidade</a>.
+                      <span id="admin-push-community-extra" class="muted" style="display:block;margin-top:6px"></span>
                     </p>
                   </div>
                 </div>
@@ -24688,6 +24689,98 @@
         return labels.join(" · ") || "—";
       }
 
+      function formatAdminPushHistoryStatusLabel(row) {
+        const status = String(row?.status || "").trim().toLowerCase();
+        const map = { sent: "Enviado", partial: "Parcial", failed: "Falhou", draft: "Rascunho" };
+        const label = map[status] || String(row?.status || "—");
+        const details = [];
+        const community = row?.deliveryResults?.community;
+        if (community && community.ok === false && community.detail) {
+          details.push(`Comunidade: ${community.detail}`);
+        }
+        const email = row?.deliveryResults?.email;
+        if (email && Number(email.failed) > 0) {
+          details.push(`E-mail: ${email.failed} falha(s)`);
+        }
+        if (!details.length) return escapeAdminHtml(label);
+        return `<span title="${escapeAdminHtml(details.join(" · "))}">${escapeAdminHtml(label)}</span>`;
+      }
+
+      function formatAdminPushSendOutcome(message) {
+        const status = String(message?.status || "").trim().toLowerCase();
+        const results = message?.deliveryResults && typeof message.deliveryResults === "object"
+          ? message.deliveryResults
+          : {};
+        const audiences = Array.isArray(message?.audiences) ? message.audiences : [];
+        const issues = [];
+        if (results.community && results.community.ok === false) {
+          issues.push(`Comunidade: ${String(results.community.detail || "falhou")}`);
+        }
+        if (results.email && Number(results.email.failed) > 0) {
+          issues.push(`E-mail: ${results.email.failed} falha(s)`);
+        }
+        const issueText = issues.join(" · ");
+        const nonCommunityOk =
+          (audiences.includes("subscribers") && results.subscribers) ||
+          (audiences.includes("users") && results.users) ||
+          (audiences.includes("email") && results.email && Number(results.email.failed || 0) === 0);
+
+        if (status === "sent") {
+          return { text: "Push enviado com sucesso.", type: "success", toastType: "success" };
+        }
+        if (status === "partial") {
+          if (nonCommunityOk && issueText) {
+            return {
+              text: `Push enviado parcialmente. ${issueText}`,
+              type: "warning",
+              toastType: "warning",
+            };
+          }
+          return {
+            text: issueText ? `Push falhou. ${issueText}` : "Push falhou em um ou mais destinos.",
+            type: "error",
+            toastType: "error",
+          };
+        }
+        return { text: "Push registrado.", type: "info", toastType: "info" };
+      }
+
+      async function loadAdminPushCommunityConfig() {
+        const instanceEl = document.getElementById("admin-push-community-instance");
+        const linkEl = document.getElementById("admin-push-community-link");
+        const extraEl = document.getElementById("admin-push-community-extra");
+        if (!hasMasterAccess()) return;
+        try {
+          const response = await fetchWithTimeout("/admin/push/community-config", {}, 20000);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha ao carregar config da comunidade.");
+          const cfg = payload.config || payload || {};
+          const instance = String(cfg.communityEvoInstance || "—").trim() || "—";
+          const link = String(cfg.communityInviteLink || "https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7").trim();
+          if (instanceEl) instanceEl.textContent = instance;
+          if (linkEl) linkEl.href = link;
+          if (extraEl) {
+            const available = Array.isArray(payload.evoInstancesAvailable) ? payload.evoInstancesAvailable : [];
+            const jid = String(cfg.communityAnnouncementGroupJid || "").trim();
+            const parts = [];
+            if (jid) parts.push(`Grupo anúncios: ${jid}`);
+            if (available.length) {
+              parts.push(`${available.length} instância(s) na Evolution`);
+            }
+            extraEl.textContent = parts.join(" · ");
+          }
+        } catch (error) {
+          if (instanceEl && instanceEl.textContent === "—") {
+            instanceEl.textContent = "Drax Sistemas 5181077770";
+          }
+          if (extraEl) {
+            extraEl.textContent = error?.message
+              ? `Não foi possível validar a instância: ${error.message}`
+              : "";
+          }
+        }
+      }
+
       function renderAdminPushHistory(items) {
         const tbody = document.getElementById("admin-push-history-tbody");
         const summary = document.getElementById("admin-push-history-summary");
@@ -24703,7 +24796,7 @@
             const when = escapeAdminHtml(formatAdminDateTimeLabel(row?.sentAt || row?.createdAt));
             const title = escapeAdminHtml(row?.title || "Comunicado");
             const destinations = escapeAdminHtml(formatAdminPushAudiencesLabel(row));
-            const status = escapeAdminHtml(String(row?.status || "—"));
+            const status = formatAdminPushHistoryStatusLabel(row);
             return `<tr><td>${when}</td><td>${title}</td><td>${destinations}</td><td>${status}</td></tr>`;
           })
           .join("");
@@ -24850,11 +24943,14 @@
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
-          const successMessage = "Push enviado com sucesso.";
-          setAdminPushSendFeedback(successMessage, "success");
-          showToast(successMessage, "success");
-          clearAdminPushImageAttachment();
+          const outcome = formatAdminPushSendOutcome(payload.message || {});
+          setAdminPushSendFeedback(outcome.text, outcome.type);
+          showToast(outcome.text, outcome.toastType);
+          if (String(payload.message?.status || "").toLowerCase() === "sent") {
+            clearAdminPushImageAttachment();
+          }
           await loadAdminPushHistory();
+          void loadAdminPushCommunityConfig();
           void refreshPushAlerts();
         } catch (error) {
           const message = error?.message || "Falha ao enviar push.";
@@ -36630,6 +36726,7 @@
           stopAdminMonitorCpuPolling();
           initAdminPushUi();
           syncAdminPushUserRolesVisibility();
+          void loadAdminPushCommunityConfig();
           void loadAdminPushHistory();
         } else if (nextTab === "admin-dashboard") {
           stopAquecedorEnviosPolling();

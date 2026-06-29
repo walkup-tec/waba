@@ -49,6 +49,9 @@ class WabaAdminPushService {
     getCommunityConfig() {
         return (0, waba_push_community_service_1.getPushCommunityConfig)();
     }
+    async loadCommunityConfigForAdmin() {
+        return (0, waba_push_community_service_1.loadPushCommunityConfigForAdmin)();
+    }
     saveCommunityConfig(input) {
         return (0, waba_push_community_service_1.updatePushCommunityConfig)(input);
     }

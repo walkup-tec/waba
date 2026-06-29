@@ -539,9 +539,16 @@ export const registerWabaAdminRoutes = (app: Express) => {
     return res.status(200).json({ items: adminPushService.listHistory(limit) });
   });
 
-  app.get("/admin/push/community-config", (req, res) => {
+  app.get("/admin/push/community-config", async (req, res) => {
     if (!rejectNonMaster(req, res)) return;
-    return res.status(200).json({ config: adminPushService.getCommunityConfig() });
+    try {
+      const payload = await adminPushService.loadCommunityConfigForAdmin();
+      return res.status(200).json(payload);
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar config da comunidade.",
+      });
+    }
   });
 
   app.put("/admin/push/community-config", (req, res) => {

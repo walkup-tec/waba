@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.formatWhatsAppCommunityMessage = formatWhatsAppCommunityMessage;
 exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
 exports.getPushCommunityConfig = getPushCommunityConfig;
+exports.loadPushCommunityConfigForAdmin = loadPushCommunityConfigForAdmin;
 exports.updatePushCommunityConfig = updatePushCommunityConfig;
 const evo_http_client_1 = require("../evo-http.client");
 const evo_instance_key_1 = require("../instances/evo-instance-key");
@@ -289,6 +290,20 @@ async function sendPushToWhatsAppCommunity(title, text, image) {
 }
 function getPushCommunityConfig() {
     return pushRepository.readConfig();
+}
+async function loadPushCommunityConfigForAdmin() {
+    const evoInstancesAvailable = await fetchEvoInstanceNames();
+    const config = pushRepository.readConfig();
+    try {
+        await resolvePushCommunityEvoInstance(config.communityEvoInstance);
+    }
+    catch {
+        /* mantém config atual; detalhe aparece no envio */
+    }
+    return {
+        config: pushRepository.readConfig(),
+        evoInstancesAvailable,
+    };
 }
 function updatePushCommunityConfig(input) {
     const current = pushRepository.readConfig();

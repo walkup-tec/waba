@@ -3,7 +3,7 @@ import { resolveEvoInstanceKey } from "../instances/evo-instance-key";
 import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
 import { readPushMediaBase64 } from "./waba-push-media.service";
 import { WabaPushRepository } from "./waba-push.repository";
-import type { WabaPushImageAttachment } from "./waba-push.types";
+import type { WabaPushImageAttachment, WabaPushConfig } from "./waba-push.types";
 import { resolveDefaultPushCommunityEvoInstance } from "./waba-push.types";
 
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
@@ -313,6 +313,23 @@ export async function sendPushToWhatsAppCommunity(
 
 export function getPushCommunityConfig() {
   return pushRepository.readConfig();
+}
+
+export async function loadPushCommunityConfigForAdmin(): Promise<{
+  config: WabaPushConfig;
+  evoInstancesAvailable: string[];
+}> {
+  const evoInstancesAvailable = await fetchEvoInstanceNames();
+  const config = pushRepository.readConfig();
+  try {
+    await resolvePushCommunityEvoInstance(config.communityEvoInstance);
+  } catch {
+    /* mantém config atual; detalhe aparece no envio */
+  }
+  return {
+    config: pushRepository.readConfig(),
+    evoInstancesAvailable,
+  };
 }
 
 export function updatePushCommunityConfig(input: {
