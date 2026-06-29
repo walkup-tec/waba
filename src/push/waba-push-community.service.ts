@@ -1,10 +1,15 @@
+import { existsSync, readFileSync } from "node:fs";
 import { evoHttpRequest } from "../evo-http.client";
+import { resolveDataFile } from "../data-path";
 import { resolveEvoInstanceKey } from "../instances/evo-instance-key";
 import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
 import { readPushMediaBase64 } from "./waba-push-media.service";
 import { WabaPushRepository } from "./waba-push.repository";
 import type { WabaPushImageAttachment, WabaPushConfig } from "./waba-push.types";
-import { resolveDefaultPushCommunityEvoInstance } from "./waba-push.types";
+import {
+  resolveDefaultPushCommunityEvoInstance,
+  resolvePushCommunityEvoInstanceFallbacks,
+} from "./waba-push.types";
 
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
@@ -12,7 +17,7 @@ const EVO_INSTANCES_URL =
   String(process.env.EVO_INSTANCES_URL || "").trim() ||
   `${EVO_API_BASE}/instance/fetchInstances`;
 const PUSH_COMMUNITY_PHONE_HINT = String(
-  process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181077770",
+  process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181076973",
 ).trim();
 const PUSH_COMMUNITY_JID_ENV = String(
   process.env.WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID || "",
@@ -75,8 +80,39 @@ function parseEvoInstancesList(raw: unknown): Array<Record<string, unknown>> {
     const record = raw as Record<string, unknown>;
     if (Array.isArray(record.response)) return record.response as Array<Record<string, unknown>>;
     if (Array.isArray(record.data)) return record.data as Array<Record<string, unknown>>;
+    if (Array.isArray(record.instances)) return record.instances as Array<Record<string, unknown>>;
   }
   return raw ? [raw as Record<string, unknown>] : [];
+}
+
+function loadEvoInstancesFromCache(): string[] {
+  try {
+    const filePath = resolveDataFile("evo-instances-cache.json");
+    if (!existsSync(filePath)) return [];
+    const parsed = JSON.parse(readFileSync(filePath, "utf8")) as {
+      items?: Array<Record<string, unknown>>;
+    };
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    return items
+      .map((row) => resolveEvoInstanceKey(row) || String(row?.name || "").trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function uniqueInstanceNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of names) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
 }
 
 function isEvoInstanceMissingError(result: { status: number; body?: string; json?: unknown | null }): boolean {
@@ -91,6 +127,7 @@ function scorePushCommunityInstance(name: string, preferred: string): number {
   if (!lower) return 0;
   if (lower === prefLower) return 100;
   if (PUSH_COMMUNITY_PHONE_HINT && lower.includes(PUSH_COMMUNITY_PHONE_HINT.toLowerCase())) return 92;
+  if (lower.includes("drax sistemas") && /\d{8,}/.test(lower)) return 90;
   if (prefLower && lower.includes(prefLower)) return 88;
   if (lower.includes("drax sistemas")) return 82;
   if (lower.includes("drax")) return 72;
@@ -99,21 +136,70 @@ function scorePushCommunityInstance(name: string, preferred: string): number {
 }
 
 async function fetchEvoInstanceNames(): Promise<string[]> {
-  if (!EVO_API_BASE || !EVO_API_KEY) return [];
-  const result = await evoHttpRequest(EVO_INSTANCES_URL, "GET", { apiKey: EVO_API_KEY });
-  if (!result.ok) return [];
-  return parseEvoInstancesList(result.json)
-    .map((row) => resolveEvoInstanceKey(row))
-    .filter(Boolean);
+  const names: string[] = [...resolvePushCommunityEvoInstanceFallbacks()];
+  if (EVO_API_BASE && EVO_API_KEY) {
+    const result = await evoHttpRequest(EVO_INSTANCES_URL, "GET", {
+      apiKey: EVO_API_KEY,
+      retries: 2,
+      timeoutMs: 20000,
+    });
+    if (result.ok) {
+      names.push(
+        ...parseEvoInstancesList(result.json)
+          .map((row) => resolveEvoInstanceKey(row))
+          .filter(Boolean),
+      );
+    }
+  }
+  names.push(...loadEvoInstancesFromCache());
+  return uniqueInstanceNames(names);
+}
+
+async function probeAnnouncementGroupForInstance(
+  instanceName: string,
+): Promise<{ instanceName: string; jid: string } | null> {
+  const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
+  const result = await evoHttpRequest(url, "GET", {
+    apiKey: EVO_API_KEY,
+    timeoutMs: 25000,
+    retries: 1,
+  });
+  if (!result.ok) return null;
+  const jid = pickAnnouncementGroupJid(parseGroupsPayload(result.json));
+  if (!jid) return null;
+  return { instanceName, jid };
+}
+
+async function discoverPushCommunityInstanceWithGroups(
+  preferred: string,
+): Promise<{ instanceName: string; jid: string } | null> {
+  const names = await fetchEvoInstanceNames();
+  const ranked = names
+    .map((name) => ({ name, score: scorePushCommunityInstance(name, preferred) }))
+    .sort((a, b) => b.score - a.score);
+  const tryOrder = uniqueInstanceNames([
+    ...ranked.filter((row) => row.score > 0).map((row) => row.name),
+    ...ranked.filter((row) => row.score <= 0).map((row) => row.name),
+  ]);
+  for (const name of tryOrder) {
+    const hit = await probeAnnouncementGroupForInstance(name);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 async function resolvePushCommunityEvoInstance(configured: string): Promise<string> {
   const preferred = String(configured || resolveDefaultPushCommunityEvoInstance()).trim();
   const names = await fetchEvoInstanceNames();
-  if (!names.length) return preferred;
 
   const exact = names.find((name) => name.toLowerCase() === preferred.toLowerCase());
   if (exact) return exact;
+
+  if (!names.length) {
+    throw new Error(
+      `Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: Drax Sistemas 5181076973).`,
+    );
+  }
 
   let best = preferred;
   let bestScore = 0;
@@ -162,12 +248,24 @@ async function fetchAnnouncementGroupJid(
   }
 
   const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
-  const result = await evoHttpRequest(url, "GET", { apiKey: EVO_API_KEY });
+  const result = await evoHttpRequest(url, "GET", { apiKey: EVO_API_KEY, timeoutMs: 25000, retries: 1 });
   if (!result.ok) {
     if (allowInstanceResolve && isEvoInstanceMissingError(result)) {
-      const resolved = await resolvePushCommunityEvoInstance(instanceName);
-      if (resolved.toLowerCase() !== instanceName.toLowerCase()) {
+      const resolved = await resolvePushCommunityEvoInstance(instanceName).catch(() => "");
+      if (resolved && resolved.toLowerCase() !== instanceName.toLowerCase()) {
         return fetchAnnouncementGroupJid(resolved, false);
+      }
+      const discovered = await discoverPushCommunityInstanceWithGroups(instanceName);
+      if (discovered) {
+        pushRepository.writeConfig({
+          ...config,
+          communityEvoInstance: discovered.instanceName,
+          communityAnnouncementGroupJid: discovered.jid,
+        });
+        console.info(
+          `[push] comunidade descoberta via probe: instância "${discovered.instanceName}", jid ${discovered.jid}`,
+        );
+        return discovered;
       }
     }
     throw new Error(

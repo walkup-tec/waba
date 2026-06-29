@@ -3,7 +3,10 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { resolveDataFile } from "../data-path";
 import type { WabaPushConfig, WabaPushMessage } from "./waba-push.types";
-import { resolveDefaultPushCommunityEvoInstance } from "./waba-push.types";
+import {
+  LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES,
+  resolveDefaultPushCommunityEvoInstance,
+} from "./waba-push.types";
 
 const MESSAGES_FILE = "waba-push-messages.json";
 const CONFIG_FILE = "waba-push-config.json";
@@ -96,7 +99,7 @@ export class WabaPushRepository {
         updatedAt: String(parsed.updatedAt || new Date().toISOString()),
       };
       const targetInstance = resolveDefaultPushCommunityEvoInstance();
-      if (config.communityEvoInstance.toLowerCase() === "walkup") {
+      if (LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES.has(config.communityEvoInstance.toLowerCase())) {
         return this.writeConfig({
           ...config,
           communityEvoInstance: targetInstance,

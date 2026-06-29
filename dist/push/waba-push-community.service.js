@@ -5,7 +5,9 @@ exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
 exports.getPushCommunityConfig = getPushCommunityConfig;
 exports.loadPushCommunityConfigForAdmin = loadPushCommunityConfigForAdmin;
 exports.updatePushCommunityConfig = updatePushCommunityConfig;
+const node_fs_1 = require("node:fs");
 const evo_http_client_1 = require("../evo-http.client");
+const data_path_1 = require("../data-path");
 const evo_instance_key_1 = require("../instances/evo-instance-key");
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_push_media_service_1 = require("./waba-push-media.service");
@@ -15,7 +17,7 @@ const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
 const EVO_INSTANCES_URL = String(process.env.EVO_INSTANCES_URL || "").trim() ||
     `${EVO_API_BASE}/instance/fetchInstances`;
-const PUSH_COMMUNITY_PHONE_HINT = String(process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181077770").trim();
+const PUSH_COMMUNITY_PHONE_HINT = String(process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181076973").trim();
 const PUSH_COMMUNITY_JID_ENV = String(process.env.WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID || "").trim();
 const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_MEDIA_URL_TEMPLATE = process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
@@ -74,8 +76,40 @@ function parseEvoInstancesList(raw) {
             return record.response;
         if (Array.isArray(record.data))
             return record.data;
+        if (Array.isArray(record.instances))
+            return record.instances;
     }
     return raw ? [raw] : [];
+}
+function loadEvoInstancesFromCache() {
+    try {
+        const filePath = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
+        if (!(0, node_fs_1.existsSync)(filePath))
+            return [];
+        const parsed = JSON.parse((0, node_fs_1.readFileSync)(filePath, "utf8"));
+        const items = Array.isArray(parsed?.items) ? parsed.items : [];
+        return items
+            .map((row) => (0, evo_instance_key_1.resolveEvoInstanceKey)(row) || String(row?.name || "").trim())
+            .filter(Boolean);
+    }
+    catch {
+        return [];
+    }
+}
+function uniqueInstanceNames(names) {
+    const seen = new Set();
+    const out = [];
+    for (const name of names) {
+        const trimmed = String(name || "").trim();
+        if (!trimmed)
+            continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        out.push(trimmed);
+    }
+    return out;
 }
 function isEvoInstanceMissingError(result) {
     if (result.status !== 404)
@@ -92,6 +126,8 @@ function scorePushCommunityInstance(name, preferred) {
         return 100;
     if (PUSH_COMMUNITY_PHONE_HINT && lower.includes(PUSH_COMMUNITY_PHONE_HINT.toLowerCase()))
         return 92;
+    if (lower.includes("drax sistemas") && /\d{8,}/.test(lower))
+        return 90;
     if (prefLower && lower.includes(prefLower))
         return 88;
     if (lower.includes("drax sistemas"))
@@ -103,23 +139,61 @@ function scorePushCommunityInstance(name, preferred) {
     return 0;
 }
 async function fetchEvoInstanceNames() {
-    if (!EVO_API_BASE || !EVO_API_KEY)
-        return [];
-    const result = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", { apiKey: EVO_API_KEY });
+    const names = [...(0, waba_push_types_1.resolvePushCommunityEvoInstanceFallbacks)()];
+    if (EVO_API_BASE && EVO_API_KEY) {
+        const result = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", {
+            apiKey: EVO_API_KEY,
+            retries: 2,
+            timeoutMs: 20000,
+        });
+        if (result.ok) {
+            names.push(...parseEvoInstancesList(result.json)
+                .map((row) => (0, evo_instance_key_1.resolveEvoInstanceKey)(row))
+                .filter(Boolean));
+        }
+    }
+    names.push(...loadEvoInstancesFromCache());
+    return uniqueInstanceNames(names);
+}
+async function probeAnnouncementGroupForInstance(instanceName) {
+    const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
+    const result = await (0, evo_http_client_1.evoHttpRequest)(url, "GET", {
+        apiKey: EVO_API_KEY,
+        timeoutMs: 25000,
+        retries: 1,
+    });
     if (!result.ok)
-        return [];
-    return parseEvoInstancesList(result.json)
-        .map((row) => (0, evo_instance_key_1.resolveEvoInstanceKey)(row))
-        .filter(Boolean);
+        return null;
+    const jid = pickAnnouncementGroupJid(parseGroupsPayload(result.json));
+    if (!jid)
+        return null;
+    return { instanceName, jid };
+}
+async function discoverPushCommunityInstanceWithGroups(preferred) {
+    const names = await fetchEvoInstanceNames();
+    const ranked = names
+        .map((name) => ({ name, score: scorePushCommunityInstance(name, preferred) }))
+        .sort((a, b) => b.score - a.score);
+    const tryOrder = uniqueInstanceNames([
+        ...ranked.filter((row) => row.score > 0).map((row) => row.name),
+        ...ranked.filter((row) => row.score <= 0).map((row) => row.name),
+    ]);
+    for (const name of tryOrder) {
+        const hit = await probeAnnouncementGroupForInstance(name);
+        if (hit)
+            return hit;
+    }
+    return null;
 }
 async function resolvePushCommunityEvoInstance(configured) {
     const preferred = String(configured || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
     const names = await fetchEvoInstanceNames();
-    if (!names.length)
-        return preferred;
     const exact = names.find((name) => name.toLowerCase() === preferred.toLowerCase());
     if (exact)
         return exact;
+    if (!names.length) {
+        throw new Error(`Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: Drax Sistemas 5181076973).`);
+    }
     let best = preferred;
     let bestScore = 0;
     for (const name of names) {
@@ -157,12 +231,22 @@ async function fetchAnnouncementGroupJid(instanceName, allowInstanceResolve = tr
         return { jid: config.communityAnnouncementGroupJid, instanceName };
     }
     const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
-    const result = await (0, evo_http_client_1.evoHttpRequest)(url, "GET", { apiKey: EVO_API_KEY });
+    const result = await (0, evo_http_client_1.evoHttpRequest)(url, "GET", { apiKey: EVO_API_KEY, timeoutMs: 25000, retries: 1 });
     if (!result.ok) {
         if (allowInstanceResolve && isEvoInstanceMissingError(result)) {
-            const resolved = await resolvePushCommunityEvoInstance(instanceName);
-            if (resolved.toLowerCase() !== instanceName.toLowerCase()) {
+            const resolved = await resolvePushCommunityEvoInstance(instanceName).catch(() => "");
+            if (resolved && resolved.toLowerCase() !== instanceName.toLowerCase()) {
                 return fetchAnnouncementGroupJid(resolved, false);
+            }
+            const discovered = await discoverPushCommunityInstanceWithGroups(instanceName);
+            if (discovered) {
+                pushRepository.writeConfig({
+                    ...config,
+                    communityEvoInstance: discovered.instanceName,
+                    communityAnnouncementGroupJid: discovered.jid,
+                });
+                console.info(`[push] comunidade descoberta via probe: instância "${discovered.instanceName}", jid ${discovered.jid}`);
+                return discovered;
             }
         }
         throw new Error(`Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}`);

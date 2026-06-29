@@ -91,7 +91,7 @@ class WabaPushRepository {
                 updatedAt: String(parsed.updatedAt || new Date().toISOString()),
             };
             const targetInstance = (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)();
-            if (config.communityEvoInstance.toLowerCase() === "walkup") {
+            if (waba_push_types_1.LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES.has(config.communityEvoInstance.toLowerCase())) {
                 return this.writeConfig({
                     ...config,
                     communityEvoInstance: targetInstance,

@@ -44,8 +44,24 @@ export type WabaPushConfig = {
 /** Instância Evolution admin da comunidade WhatsApp (override: WABA_PUSH_COMMUNITY_EVO_INSTANCE). */
 export function resolveDefaultPushCommunityEvoInstance(): string {
   const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE || "").trim();
-  return fromEnv || "Drax Sistemas 5181077770";
+  if (fromEnv) return fromEnv;
+  // Instância Drax admin documentada em produção (5181077770 não existe na Evolution).
+  return "Drax Sistemas 5181076973";
 }
+
+export function resolvePushCommunityEvoInstanceFallbacks(): string[] {
+  const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE_FALLBACKS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (fromEnv.length) return fromEnv;
+  return ["Drax Sistemas 5181076973", "drax-oficial"];
+}
+
+export const LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES = new Set([
+  "walkup",
+  "drax sistemas 5181077770",
+]);
 
 export type WabaPushAlertView = {
   id: string;

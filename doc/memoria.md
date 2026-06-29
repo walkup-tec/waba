@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-29
 
+**WABA — Push instância 5181076973 + probe:** corrige default errado 5181077770; descobre instância/grupo na Evolution. Ver `doc/LOG-2026-06-29__204500__push-comunidade-instancia-5181076973.md`.
+
 **WABA — Push UI instância + parcial:** config comunidade resolve Evolution na aba; feedback sent/partial/error. Ver `doc/LOG-2026-06-29__201000__push-comunidade-ui-feedback-parcial.md`.
 
 **WABA — Push comunidade Evolution auto-resolve:** quando `Drax Sistemas 5181077770` não existe, busca instância Drax na Evolution e persiste em `waba-push-config.json`. Ver `doc/LOG-2026-06-29__193000__push-comunidade-evo-instance-auto-resolve.md`.
