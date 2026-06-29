@@ -25,7 +25,7 @@ function resolveStaffRecipients(roles: WabaPushUserRole[]): string[] {
   const allowed = new Set(roles.length ? roles : (["operacional", "suporte"] as WabaPushUserRole[]));
   return systemUserRepository
     .list()
-    .filter((user) => user.role !== "master" && allowed.has(user.role as WabaPushUserRole))
+    .filter((user) => allowed.has(user.role as WabaPushUserRole))
     .map((user) => normalizeEmail(user.email))
     .filter((email) => email.includes("@"));
 }
@@ -47,10 +47,6 @@ function resolveEmailRecipients(
   }
   if (audiences.includes("users") || audiences.includes("email")) {
     for (const email of resolveStaffRecipients(userRoles)) emails.add(email);
-  }
-  if (audiences.includes("email")) {
-    const master = systemUserRepository.list().find((user) => user.role === "master");
-    if (master?.email) emails.add(normalizeEmail(master.email));
   }
   return Array.from(emails);
 }
@@ -152,7 +148,9 @@ export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[
   if (!isSubscriber && !isStaff) return [];
 
   const staffRole =
-    auth.role === "operacional" || auth.role === "suporte" ? (auth.role as WabaPushUserRole) : null;
+    auth.role === "master" || auth.role === "operacional" || auth.role === "suporte"
+      ? (auth.role as WabaPushUserRole)
+      : null;
 
   return pushRepository
     .listMessages(100)
@@ -165,7 +163,6 @@ export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[
       const roles = row.userRoles?.length
         ? row.userRoles
         : (["operacional", "suporte"] as WabaPushUserRole[]);
-      if (auth.role === "master") return true;
       return staffRole ? roles.includes(staffRole) : false;
     })
     .slice(0, 3)

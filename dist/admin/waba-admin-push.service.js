@@ -12,7 +12,7 @@ function parseAudiences(raw) {
         .filter((value) => allowed.has(value));
 }
 function parseUserRoles(raw) {
-    const allowed = new Set(["operacional", "suporte"]);
+    const allowed = new Set(["master", "operacional", "suporte"]);
     const values = Array.isArray(raw) ? raw : [];
     return values
         .map((value) => String(value || "").trim())

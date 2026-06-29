@@ -20,7 +20,7 @@ function resolveStaffRecipients(roles) {
     const allowed = new Set(roles.length ? roles : ["operacional", "suporte"]);
     return systemUserRepository
         .list()
-        .filter((user) => user.role !== "master" && allowed.has(user.role))
+        .filter((user) => allowed.has(user.role))
         .map((user) => normalizeEmail(user.email))
         .filter((email) => email.includes("@"));
 }
@@ -39,11 +39,6 @@ function resolveEmailRecipients(audiences, userRoles) {
     if (audiences.includes("users") || audiences.includes("email")) {
         for (const email of resolveStaffRecipients(userRoles))
             emails.add(email);
-    }
-    if (audiences.includes("email")) {
-        const master = systemUserRepository.list().find((user) => user.role === "master");
-        if (master?.email)
-            emails.add(normalizeEmail(master.email));
     }
     return Array.from(emails);
 }
@@ -133,7 +128,9 @@ function listPushAlertsForAuth(auth) {
     const isStaff = auth.role === "master" || auth.role === "operacional" || auth.role === "suporte";
     if (!isSubscriber && !isStaff)
         return [];
-    const staffRole = auth.role === "operacional" || auth.role === "suporte" ? auth.role : null;
+    const staffRole = auth.role === "master" || auth.role === "operacional" || auth.role === "suporte"
+        ? auth.role
+        : null;
     return pushRepository
         .listMessages(100)
         .filter((row) => row.status === "sent" || row.status === "partial")
@@ -148,8 +145,6 @@ function listPushAlertsForAuth(auth) {
         const roles = row.userRoles?.length
             ? row.userRoles
             : ["operacional", "suporte"];
-        if (auth.role === "master")
-            return true;
         return staffRole ? roles.includes(staffRole) : false;
     })
         .slice(0, 3)

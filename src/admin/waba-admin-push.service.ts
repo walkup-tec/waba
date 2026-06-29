@@ -16,7 +16,7 @@ function parseAudiences(raw: unknown): WabaPushAudience[] {
 }
 
 function parseUserRoles(raw: unknown): WabaPushUserRole[] {
-  const allowed = new Set<WabaPushUserRole>(["operacional", "suporte"]);
+  const allowed = new Set<WabaPushUserRole>(["master", "operacional", "suporte"]);
   const values = Array.isArray(raw) ? raw : [];
   return values
     .map((value) => String(value || "").trim() as WabaPushUserRole)

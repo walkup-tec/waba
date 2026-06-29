@@ -17036,6 +17036,7 @@
                         <span class="field-label">Tipos de usuário</span>
                         <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-role-operacional" checked /> Operacional</label>
                         <label class="admin-push-audience-item" style="margin-top:8px"><input type="checkbox" id="admin-push-role-suporte" checked /> Suporte</label>
+                        <label class="admin-push-audience-item" style="margin-top:8px"><input type="checkbox" id="admin-push-role-master" /> Master</label>
                       </div>
                     </div>
                     <div class="admin-push-actions">
@@ -24258,6 +24259,7 @@
 
       function collectAdminPushUserRoles() {
         const roles = [];
+        if (document.getElementById("admin-push-role-master")?.checked) roles.push("master");
         if (document.getElementById("admin-push-role-operacional")?.checked) roles.push("operacional");
         if (document.getElementById("admin-push-role-suporte")?.checked) roles.push("suporte");
         return roles;
@@ -24269,11 +24271,14 @@
           users: "Usuários",
           community: "Comunidade",
           email: "E-mail",
+          master: "Master",
+          operacional: "Operacional",
+          suporte: "Suporte",
         };
         const items = Array.isArray(row?.audiences) ? row.audiences : [];
         const labels = items.map((item) => map[item] || item);
         if (items.includes("users") && Array.isArray(row?.userRoles) && row.userRoles.length) {
-          labels.push(`(${row.userRoles.join(", ")})`);
+          labels.push(`(${row.userRoles.map((role) => map[role] || role).join(", ")})`);
         }
         return labels.join(" · ") || "—";
       }

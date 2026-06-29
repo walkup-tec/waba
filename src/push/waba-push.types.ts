@@ -1,6 +1,6 @@
 export type WabaPushAudience = "subscribers" | "users" | "community" | "email";
 
-export type WabaPushUserRole = "operacional" | "suporte";
+export type WabaPushUserRole = "master" | "operacional" | "suporte";
 
 export type WabaPushStatus = "draft" | "sent" | "partial" | "failed";
 
