@@ -1547,18 +1547,26 @@
       #tab-dashboard .summary-warmth-fires {
         display: inline-flex;
         align-items: center;
-        gap: 2px;
+        gap: 3px;
         min-width: 54px;
       }
 
-      #tab-dashboard .summary-warmth-fires .instance-warmth-fire {
-        font-size: 0.85rem;
+      #tab-dashboard .summary-warmth-fires .summary-warmth-flame-icon {
+        width: 13px;
+        height: 13px;
+        color: rgba(251, 146, 60, 0.78);
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.65;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
       }
 
       #tab-dashboard .summary-warmth-qty {
         font-size: 1.05rem;
         font-weight: 700;
-        color: #fb923c;
+        color: rgba(253, 186, 116, 0.95);
         font-variant-numeric: tabular-nums;
         min-width: 1.5ch;
         text-align: right;
@@ -14216,22 +14224,40 @@
               <div class="summary-warmth-levels" id="instances-warmed-levels">
                 <div class="summary-warmth-row">
                   <span class="summary-warmth-fires" aria-label="Nível 1 de aquecimento">
-                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <svg class="summary-warmth-flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
                   </span>
                   <span class="summary-warmth-qty" id="instances-warmed-level-1">—</span>
                 </div>
                 <div class="summary-warmth-row">
                   <span class="summary-warmth-fires" aria-label="Nível 2 de aquecimento">
-                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
-                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <svg class="summary-warmth-flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                    <svg class="summary-warmth-flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
                   </span>
                   <span class="summary-warmth-qty" id="instances-warmed-level-2">—</span>
                 </div>
                 <div class="summary-warmth-row">
                   <span class="summary-warmth-fires" aria-label="Nível 3 de aquecimento">
-                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
-                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
-                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <svg class="summary-warmth-flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                    <svg class="summary-warmth-flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                    <svg class="summary-warmth-flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
                   </span>
                   <span class="summary-warmth-qty" id="instances-warmed-level-3">—</span>
                 </div>
