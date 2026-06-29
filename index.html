@@ -1530,35 +1530,38 @@
         border-left: 2px solid rgba(249, 115, 22, 0.65);
       }
 
-      #tab-dashboard .summary-card-warmth .summary-label {
-        display: inline-flex;
+      #tab-dashboard .summary-warmth-levels {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        margin-top: 2px;
+      }
+
+      #tab-dashboard .summary-warmth-row {
+        display: flex;
         align-items: center;
-        gap: 5px;
+        justify-content: space-between;
+        gap: 10px;
       }
 
-      #tab-dashboard .summary-warmth-icon {
-        font-size: 0.9rem;
-        line-height: 1;
-        filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.45));
-      }
-
-      #tab-dashboard .summary-value-warmth {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: #fb923c;
-      }
-
-      #tab-dashboard .summary-warmth-visual {
+      #tab-dashboard .summary-warmth-fires {
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        font-size: 0.95rem;
-        line-height: 1;
+        min-width: 54px;
       }
 
-      #tab-dashboard .summary-warmth-visual .instance-warmth-fire {
+      #tab-dashboard .summary-warmth-fires .instance-warmth-fire {
         font-size: 0.85rem;
+      }
+
+      #tab-dashboard .summary-warmth-qty {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #fb923c;
+        font-variant-numeric: tabular-nums;
+        min-width: 1.5ch;
+        text-align: right;
       }
 
       .summary-sub {
@@ -14209,15 +14212,30 @@
               <div class="summary-sub" id="instances-total">Total: —</div>
             </div>
             <div class="summary-card summary-card-warmth">
-              <div class="summary-label">
-                <span class="summary-warmth-icon" aria-hidden="true">🔥</span>
-                Números aquecidos
+              <div class="summary-label">Números Aquecidos</div>
+              <div class="summary-warmth-levels" id="instances-warmed-levels">
+                <div class="summary-warmth-row">
+                  <span class="summary-warmth-fires" aria-label="Nível 1 de aquecimento">
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                  </span>
+                  <span class="summary-warmth-qty" id="instances-warmed-level-1">—</span>
+                </div>
+                <div class="summary-warmth-row">
+                  <span class="summary-warmth-fires" aria-label="Nível 2 de aquecimento">
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                  </span>
+                  <span class="summary-warmth-qty" id="instances-warmed-level-2">—</span>
+                </div>
+                <div class="summary-warmth-row">
+                  <span class="summary-warmth-fires" aria-label="Nível 3 de aquecimento">
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                  </span>
+                  <span class="summary-warmth-qty" id="instances-warmed-level-3">—</span>
+                </div>
               </div>
-              <div class="summary-value summary-value-warmth" id="instances-warmed">
-                <span class="summary-warmth-count" id="instances-warmed-count">—</span>
-                <span class="summary-warmth-visual" id="instances-warmed-visual" aria-hidden="true"></span>
-              </div>
-              <div class="summary-sub" id="instances-warmed-breakdown">No aquecedor</div>
             </div>
             <div class="summary-card">
               <div class="summary-label">Total de eventos</div>
@@ -36341,7 +36359,6 @@
       function computeWarmthSummary(instances) {
         const summary = {
           inAquecedor: 0,
-          warmed: 0,
           level1: 0,
           level2: 0,
           level3: 0,
@@ -36351,7 +36368,6 @@
           if (!usage.useAquecedor) return;
           summary.inAquecedor += 1;
           const level = usage.warmthLevel || 0;
-          if (level >= 1) summary.warmed += 1;
           if (level === 1) summary.level1 += 1;
           else if (level === 2) summary.level2 += 1;
           else if (level >= 3) summary.level3 += 1;
@@ -36359,34 +36375,17 @@
         return summary;
       }
 
-      function buildDashboardWarmthVisual(count) {
-        const safeCount = Math.max(0, Math.min(8, Number(count) || 0));
-        if (!safeCount) return "";
-        return Array.from({ length: safeCount }, () => '<span class="instance-warmth-fire active">🔥</span>').join("");
-      }
-
-      function formatWarmthBreakdown(summary) {
-        const parts = [];
-        if (summary.level3 > 0) parts.push(`Total ${summary.level3}`);
-        if (summary.level2 > 0) parts.push(`Médio ${summary.level2}`);
-        if (summary.level1 > 0) parts.push(`Pouco ${summary.level1}`);
-        if (!parts.length) {
-          if (summary.inAquecedor > 0) return `${summary.inAquecedor} no aquecedor · nenhum aquecido ainda`;
-          return "Nenhuma instância no aquecedor";
-        }
-        return `${summary.warmed} de ${summary.inAquecedor} no aquecedor · ${parts.join(" · ")}`;
-      }
-
       function updateDashboardWarmthIndicators(base) {
-        const countEl = document.getElementById("instances-warmed-count");
-        const visualEl = document.getElementById("instances-warmed-visual");
-        const breakdownEl = document.getElementById("instances-warmed-breakdown");
-        if (!countEl && !visualEl && !breakdownEl) return;
+        const levelsRoot = document.getElementById("instances-warmed-levels");
+        if (!levelsRoot) return;
 
         const summary = computeWarmthSummary(base);
-        if (countEl) countEl.textContent = String(summary.warmed);
-        if (visualEl) visualEl.innerHTML = buildDashboardWarmthVisual(summary.warmed);
-        if (breakdownEl) breakdownEl.textContent = formatWarmthBreakdown(summary);
+        const level1El = document.getElementById("instances-warmed-level-1");
+        const level2El = document.getElementById("instances-warmed-level-2");
+        const level3El = document.getElementById("instances-warmed-level-3");
+        if (level1El) level1El.textContent = String(summary.level1);
+        if (level2El) level2El.textContent = String(summary.level2);
+        if (level3El) level3El.textContent = String(summary.level3);
       }
 
       function formatPreparingCountdown(promoteAtIso) {

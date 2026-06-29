@@ -15,7 +15,7 @@ Como usar:
 ## Última atualização
 2026-06-27
 
-**WABA — Card números aquecidos Visão Geral:** indicador 🔥 na Visão Geral do aquecedor; `warmthLevel >= 1`; breakdown pouco/médio/total. Ver `doc/LOG-2026-06-27__aquecedor-card-numeros-aquecidos.md`.
+**WABA — Card Números Aquecidos Visão Geral:** título sem ícone; 3 linhas (1/2/3 🔥 + quantidade por nível). Ver `doc/LOG-2026-06-27__aquecedor-card-numeros-aquecidos.md`.
 
 **WABA — Monitor CPU refresh 60s (paridade Easypanel/Hostinger, 2026-06-27):** UI, header alert dot e coletor VPS alinhados a **60s/1min** (não tempo real). Env `WABA_VPS_CPU_UI_REFRESH_SEC`, `WABA_VPS_CPU_SAMPLE_INTERVAL_SEC`. Ver `doc/LOG-2026-06-27__monitor-cpu-refresh-60s-easypanel.md`.
 

@@ -1530,35 +1530,38 @@
         border-left: 2px solid rgba(249, 115, 22, 0.65);
       }
 
-      #tab-dashboard .summary-card-warmth .summary-label {
-        display: inline-flex;
+      #tab-dashboard .summary-warmth-levels {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        margin-top: 2px;
+      }
+
+      #tab-dashboard .summary-warmth-row {
+        display: flex;
         align-items: center;
-        gap: 5px;
+        justify-content: space-between;
+        gap: 10px;
       }
 
-      #tab-dashboard .summary-warmth-icon {
-        font-size: 0.9rem;
-        line-height: 1;
-        filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.45));
-      }
-
-      #tab-dashboard .summary-value-warmth {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: #fb923c;
-      }
-
-      #tab-dashboard .summary-warmth-visual {
+      #tab-dashboard .summary-warmth-fires {
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        font-size: 0.95rem;
-        line-height: 1;
+        min-width: 54px;
       }
 
-      #tab-dashboard .summary-warmth-visual .instance-warmth-fire {
+      #tab-dashboard .summary-warmth-fires .instance-warmth-fire {
         font-size: 0.85rem;
+      }
+
+      #tab-dashboard .summary-warmth-qty {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #fb923c;
+        font-variant-numeric: tabular-nums;
+        min-width: 1.5ch;
+        text-align: right;
       }
 
       .summary-sub {
@@ -2625,11 +2628,11 @@
           gap: 8px;
           position: fixed;
           left: 14px;
-          top: 130px;
+          top: var(--waba-sidebar-top, 130px);
           bottom: 14px;
           width: 70px;
           z-index: 30;
-          transition: width 0.2s ease;
+          transition: width 0.2s ease, top 0.2s ease;
         }
 
         body.sidebar-expanded .waba-sidebar-stack {
@@ -3129,6 +3132,29 @@
 
       #tab-admin-monitor-cpu .panel {
         padding: 28px 24px 32px;
+      }
+
+      .admin-monitor-cpu-panel-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .admin-monitor-cpu-panel-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #38bdf8;
+      }
+
+      .admin-monitor-cpu-panel-icon svg {
+        width: 22px;
+        height: 22px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
       .admin-monitor-cpu-host-cards {
@@ -6096,6 +6122,27 @@
         body.admin-section-active.has-sidebar.sidebar-expanded #waba-main > #tab-admin-dashboard:not(.tab-hidden) {
           max-width: min(1760px, calc(100vw - 242px - 32px));
         }
+      }
+
+      /* Monitor CPU: usar toda a largura útil à direita da sidebar */
+      body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
+      body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden) {
+        max-width: none;
+        width: 100%;
+        margin-inline: 0;
+      }
+
+      body.suporte-section-active #waba-main.aquecedor-section-shell {
+        align-items: stretch;
+      }
+
+      #tab-admin-monitor-cpu .panel.col-12 {
+        max-width: none;
+      }
+
+      #admin-monitor-cpu-chart-wrap svg {
+        width: 100%;
+        max-width: 100%;
       }
 
       .admin-users-form {
@@ -13791,9 +13838,20 @@
                 >
                   <span class="tab-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24">
-                      <path d="M4 18V6"></path>
-                      <path d="M4 18h16"></path>
-                      <path d="M7 14l3-4 3 2 4-6"></path>
+                      <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                      <rect x="10" y="10" width="4" height="4" rx="0.5"></rect>
+                      <path d="M9 7V5"></path>
+                      <path d="M12 7V4"></path>
+                      <path d="M15 7V5"></path>
+                      <path d="M9 17v2"></path>
+                      <path d="M12 17v3"></path>
+                      <path d="M15 17v2"></path>
+                      <path d="M7 9H5"></path>
+                      <path d="M7 12H4"></path>
+                      <path d="M7 15H5"></path>
+                      <path d="M17 9h2"></path>
+                      <path d="M17 12h3"></path>
+                      <path d="M17 15h2"></path>
                     </svg>
                   </span>
                   <span class="tab-label">Monitor CPU</span>
@@ -14154,15 +14212,30 @@
               <div class="summary-sub" id="instances-total">Total: —</div>
             </div>
             <div class="summary-card summary-card-warmth">
-              <div class="summary-label">
-                <span class="summary-warmth-icon" aria-hidden="true">🔥</span>
-                Números aquecidos
+              <div class="summary-label">Números Aquecidos</div>
+              <div class="summary-warmth-levels" id="instances-warmed-levels">
+                <div class="summary-warmth-row">
+                  <span class="summary-warmth-fires" aria-label="Nível 1 de aquecimento">
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                  </span>
+                  <span class="summary-warmth-qty" id="instances-warmed-level-1">—</span>
+                </div>
+                <div class="summary-warmth-row">
+                  <span class="summary-warmth-fires" aria-label="Nível 2 de aquecimento">
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                  </span>
+                  <span class="summary-warmth-qty" id="instances-warmed-level-2">—</span>
+                </div>
+                <div class="summary-warmth-row">
+                  <span class="summary-warmth-fires" aria-label="Nível 3 de aquecimento">
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                    <span class="instance-warmth-fire active" aria-hidden="true">🔥</span>
+                  </span>
+                  <span class="summary-warmth-qty" id="instances-warmed-level-3">—</span>
+                </div>
               </div>
-              <div class="summary-value summary-value-warmth" id="instances-warmed">
-                <span class="summary-warmth-count" id="instances-warmed-count">—</span>
-                <span class="summary-warmth-visual" id="instances-warmed-visual" aria-hidden="true"></span>
-              </div>
-              <div class="summary-sub" id="instances-warmed-breakdown">No aquecedor</div>
             </div>
             <div class="summary-card">
               <div class="summary-label">Total de eventos</div>
@@ -16629,7 +16702,27 @@
           <div class="row g-3">
             <section class="panel col-12">
               <div class="panel-header">
-                <div class="panel-title">Suporte · Monitor CPU</div>
+                <div class="panel-title admin-monitor-cpu-panel-title">
+                  <span class="admin-monitor-cpu-panel-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                      <rect x="10" y="10" width="4" height="4" rx="0.5"></rect>
+                      <path d="M9 7V5"></path>
+                      <path d="M12 7V4"></path>
+                      <path d="M15 7V5"></path>
+                      <path d="M9 17v2"></path>
+                      <path d="M12 17v3"></path>
+                      <path d="M15 17v2"></path>
+                      <path d="M7 9H5"></path>
+                      <path d="M7 12H4"></path>
+                      <path d="M7 15H5"></path>
+                      <path d="M17 9h2"></path>
+                      <path d="M17 12h3"></path>
+                      <path d="M17 15h2"></path>
+                    </svg>
+                  </span>
+                  <span>Suporte · Monitor CPU</span>
+                </div>
                 <span id="admin-monitor-cpu-summary" class="muted">
                   Consumo da VPS em tempo quase real — alerta quando a CPU permanece alta por período sustentado.
                 </span>
@@ -16693,7 +16786,7 @@
                     </button>
                   </div>
                   <span id="admin-monitor-cpu-live-badge" class="admin-monitor-cpu-live-badge">
-                    Atualização automática a cada 10s
+                    Atualização automática a cada 60s (paridade Easypanel/Hostinger)
                   </span>
                 </div>
 
@@ -18716,6 +18809,7 @@
         startMasterMenuBadgePolling();
         startMasterCpuAlertPolling();
         syncWabaCredentialAutocompleteState(false);
+        initWabaSidebarStackLayoutSync();
       }
 
       function applyStaffSessionMenuAccess(sessionLike) {
@@ -18863,7 +18957,7 @@
       let masterCpuAlertActive = false;
       let lastMasterMenuBadges = {};
       const MASTER_MENU_BADGE_POLL_MS = 60000;
-      const MASTER_CPU_ALERT_POLL_MS = 10 * 1000;
+      const MASTER_CPU_ALERT_POLL_MS = 60 * 1000;
 
       function syncMasterCpuAlertHeaderDot(active) {
         const dot = document.getElementById("waba-master-cpu-alert-dot");
@@ -19336,6 +19430,7 @@
           strip.hidden = !showAquecedor && !showOficial;
         }
         syncProductionIntegrationStripLabels();
+        syncWabaSidebarStackTop();
       }
 
       function syncStaffNoMenusState() {
@@ -26416,7 +26511,7 @@
         const alert = payload?.alert || null;
         const topContainers = Array.isArray(payload?.topContainers) ? payload.topContainers : [];
         const setupSteps = Array.isArray(payload?.setupSteps) ? payload.setupSteps : [];
-        const refreshSec = Number(config.uiRefreshSec || 10);
+        const refreshSec = Number(config.uiRefreshSec || 60);
 
         if (payload?.chart?.range) {
           adminMonitorCpuChartRange = payload.chart.range;
@@ -26424,8 +26519,13 @@
         }
 
         if (liveBadge) {
-          liveBadge.textContent = `Atualização automática a cada ${refreshSec}s`;
+          liveBadge.textContent = `Atualização automática a cada ${refreshSec}s (paridade Easypanel/Hostinger)`;
         }
+
+        const hasMemMetric = Number(current?.hostMemTotalBytes) > 0;
+        const hasDiskMetric = Number(current?.hostDiskTotalBytes) > 0;
+        const needsCollectorUpgrade =
+          Boolean(current) && payload?.collectorReady && (!hasMemMetric || !hasDiskMetric);
 
         if (statusEl) {
           const rangeLabel =
@@ -26440,6 +26540,9 @@
             `${Number(payload?.sampleCount || 0).toLocaleString("pt-BR")} amostras`,
             `Período: ${rangeLabel}`,
             `Alerta CPU: ≥${config.thresholdPct ?? 65}% por ${config.sustainedMinutes ?? 30} min`,
+            needsCollectorUpgrade
+              ? "Coletor legado — atualize para v3 no VPS (CPU/mem/disco alinhados ao painel)"
+              : null,
           ].filter(Boolean);
           statusEl.textContent = parts.join(" · ");
         }
@@ -26470,13 +26573,13 @@
               </div>
               <div class="admin-monitor-cpu-host-card is-mem">
                 <div class="admin-monitor-cpu-host-card-label">Memória</div>
-                <div class="admin-monitor-cpu-host-card-value">${formatAdminMonitorCpuPct(current.hostMemPct)}</div>
-                <div class="admin-monitor-cpu-host-card-meta">${formatAdminMonitorCpuGb(current.hostMemUsedBytes)} / ${formatAdminMonitorCpuGb(current.hostMemTotalBytes)}</div>
+                <div class="admin-monitor-cpu-host-card-value">${hasMemMetric ? formatAdminMonitorCpuPct(current.hostMemPct) : "—"}</div>
+                <div class="admin-monitor-cpu-host-card-meta">${hasMemMetric ? `${formatAdminMonitorCpuGb(current.hostMemUsedBytes)} / ${formatAdminMonitorCpuGb(current.hostMemTotalBytes)}` : "Aguardando coletor v3"}</div>
               </div>
               <div class="admin-monitor-cpu-host-card is-disk">
                 <div class="admin-monitor-cpu-host-card-label">Disco</div>
-                <div class="admin-monitor-cpu-host-card-value">${formatAdminMonitorCpuPct(current.hostDiskPct)}</div>
-                <div class="admin-monitor-cpu-host-card-meta">${formatAdminMonitorCpuGb(current.hostDiskUsedBytes)} / ${formatAdminMonitorCpuGb(current.hostDiskTotalBytes)}</div>
+                <div class="admin-monitor-cpu-host-card-value">${hasDiskMetric ? formatAdminMonitorCpuPct(current.hostDiskPct) : "—"}</div>
+                <div class="admin-monitor-cpu-host-card-meta">${hasDiskMetric ? `${formatAdminMonitorCpuGb(current.hostDiskUsedBytes)} / ${formatAdminMonitorCpuGb(current.hostDiskTotalBytes)}` : "Aguardando coletor v3"}</div>
               </div>
             `;
           }
@@ -26996,6 +27099,47 @@
           }
           setWabaSupportFeedback(message, "error");
         }
+      }
+
+      function syncWabaSidebarStackTop() {
+        const stack = document.querySelector(".waba-sidebar-stack");
+        if (!stack || !document.body.classList.contains("has-sidebar")) return;
+        if (!window.matchMedia("(min-width: 992px)").matches) {
+          stack.style.removeProperty("top");
+          return;
+        }
+
+        const strip = document.querySelector(".integration-env-strip");
+        const stripVisible =
+          strip &&
+          !strip.hidden &&
+          window.getComputedStyle(strip).display !== "none" &&
+          window.getComputedStyle(strip).visibility !== "hidden";
+
+        const anchorEl = stripVisible ? strip : document.getElementById("waba-main");
+        if (!anchorEl) return;
+
+        const topPx = Math.max(0, Math.round(anchorEl.getBoundingClientRect().top));
+        stack.style.setProperty("top", `${topPx}px`);
+      }
+
+      let wabaSidebarLayoutObserver = null;
+
+      function initWabaSidebarStackLayoutSync() {
+        const run = () => {
+          window.requestAnimationFrame(() => syncWabaSidebarStackTop());
+        };
+        run();
+        if (wabaSidebarLayoutObserver) return;
+        window.addEventListener("resize", run);
+        if (typeof ResizeObserver === "undefined") return;
+        wabaSidebarLayoutObserver = new ResizeObserver(run);
+        const header = document.querySelector(".shell > header");
+        const strip = document.querySelector(".integration-env-strip");
+        const main = document.getElementById("waba-main");
+        if (header) wabaSidebarLayoutObserver.observe(header);
+        if (strip) wabaSidebarLayoutObserver.observe(strip);
+        if (main) wabaSidebarLayoutObserver.observe(main);
       }
 
       function syncWabaSupportFabPosition() {
@@ -29285,7 +29429,7 @@
       let adminCampanhasPollTimer = null;
       const ADMIN_CAMPANHAS_POLL_MS = 15 * 60 * 1000;
       let adminMonitorCpuPollTimer = null;
-      const ADMIN_MONITOR_CPU_POLL_MS = 10 * 1000;
+      const ADMIN_MONITOR_CPU_POLL_MS = 60 * 1000;
       let adminMonitorCpuLastPayload = null;
       let adminMonitorCpuChartRange = "1h";
       const ADMIN_MONITOR_CPU_COLORS = {
@@ -35360,6 +35504,7 @@
 
         document.body.classList.toggle("admin-section-active", isMasterWorkspaceTab(nextTab));
         document.body.classList.toggle("suporte-section-active", isSuporteTab(nextTab));
+        syncWabaSidebarStackTop();
 
         if (dashboardFilters) {
           dashboardFilters.classList.toggle(
@@ -36214,7 +36359,6 @@
       function computeWarmthSummary(instances) {
         const summary = {
           inAquecedor: 0,
-          warmed: 0,
           level1: 0,
           level2: 0,
           level3: 0,
@@ -36224,7 +36368,6 @@
           if (!usage.useAquecedor) return;
           summary.inAquecedor += 1;
           const level = usage.warmthLevel || 0;
-          if (level >= 1) summary.warmed += 1;
           if (level === 1) summary.level1 += 1;
           else if (level === 2) summary.level2 += 1;
           else if (level >= 3) summary.level3 += 1;
@@ -36232,34 +36375,17 @@
         return summary;
       }
 
-      function buildDashboardWarmthVisual(count) {
-        const safeCount = Math.max(0, Math.min(8, Number(count) || 0));
-        if (!safeCount) return "";
-        return Array.from({ length: safeCount }, () => '<span class="instance-warmth-fire active">🔥</span>').join("");
-      }
-
-      function formatWarmthBreakdown(summary) {
-        const parts = [];
-        if (summary.level3 > 0) parts.push(`Total ${summary.level3}`);
-        if (summary.level2 > 0) parts.push(`Médio ${summary.level2}`);
-        if (summary.level1 > 0) parts.push(`Pouco ${summary.level1}`);
-        if (!parts.length) {
-          if (summary.inAquecedor > 0) return `${summary.inAquecedor} no aquecedor · nenhum aquecido ainda`;
-          return "Nenhuma instância no aquecedor";
-        }
-        return `${summary.warmed} de ${summary.inAquecedor} no aquecedor · ${parts.join(" · ")}`;
-      }
-
       function updateDashboardWarmthIndicators(base) {
-        const countEl = document.getElementById("instances-warmed-count");
-        const visualEl = document.getElementById("instances-warmed-visual");
-        const breakdownEl = document.getElementById("instances-warmed-breakdown");
-        if (!countEl && !visualEl && !breakdownEl) return;
+        const levelsRoot = document.getElementById("instances-warmed-levels");
+        if (!levelsRoot) return;
 
         const summary = computeWarmthSummary(base);
-        if (countEl) countEl.textContent = String(summary.warmed);
-        if (visualEl) visualEl.innerHTML = buildDashboardWarmthVisual(summary.warmed);
-        if (breakdownEl) breakdownEl.textContent = formatWarmthBreakdown(summary);
+        const level1El = document.getElementById("instances-warmed-level-1");
+        const level2El = document.getElementById("instances-warmed-level-2");
+        const level3El = document.getElementById("instances-warmed-level-3");
+        if (level1El) level1El.textContent = String(summary.level1);
+        if (level2El) level2El.textContent = String(summary.level2);
+        if (level3El) level3El.textContent = String(summary.level3);
       }
 
       function formatPreparingCountdown(promoteAtIso) {
@@ -38506,6 +38632,7 @@
         }
         syncWabaSupportFabPosition();
         window.setTimeout(syncWabaSupportFabPosition, 220);
+        syncWabaSidebarStackTop();
       }
 
       function resolveMenuGroupForTab(tabName) {
@@ -38638,6 +38765,7 @@
 
       const savedSidebarState = localStorage.getItem("waba.sidebar.collapsed");
       setSidebarCollapsed(savedSidebarState !== "0");
+      initWabaSidebarStackLayoutSync();
       if (!document.body.classList.contains("sidebar-collapsed")) {
         focusDesktopMenuGroupForActiveTab();
       }
