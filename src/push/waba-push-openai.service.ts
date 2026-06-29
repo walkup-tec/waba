@@ -20,6 +20,14 @@ function extractOpenAiText(payload: unknown): string {
   return chunks.join("\n").trim();
 }
 
+export function sanitizeReviewedPushText(text: string): string {
+  return String(text || "")
+    .replace(/^\s*t[ií]tulo de refer[eê]ncia:\s*.+(\r?\n)*/i, "")
+    .replace(/^\s*t[ií]tulo:\s*.+(\r?\n)*/i, "")
+    .replace(/^\s*texto:\s*/i, "")
+    .trim();
+}
+
 export async function reviewPushMessageWithOpenAi(input: {
   title?: string;
   text: string;
@@ -39,9 +47,12 @@ export async function reviewPushMessageWithOpenAi(input: {
     "- Melhore clareza e tom profissional",
     "- Mantenha o sentido original e fatos",
     "- Não invente informações novas",
-    "- Retorne APENAS o texto revisado, sem explicações",
-    title ? `Título de referência: ${title}` : "",
-    "Texto:",
+    "- Retorne APENAS o corpo do comunicado revisado, sem explicações",
+    "- Não inclua rótulos, cabeçalhos ou o título na resposta (ex.: não escreva 'Título de referência', 'Título:' ou 'Texto:')",
+    title
+      ? `Contexto interno (não repetir na resposta): o assunto do comunicado é "${title}".`
+      : "",
+    "Texto a revisar:",
     original,
   ]
     .filter(Boolean)
@@ -79,7 +90,7 @@ export async function reviewPushMessageWithOpenAi(input: {
       );
       throw new Error(`OpenAI HTTP ${response.status}${message ? `: ${message}` : ""}`);
     }
-    const reviewedText = extractOpenAiText(json);
+    const reviewedText = sanitizeReviewedPushText(extractOpenAiText(json));
     if (!reviewedText) {
       throw new Error("OpenAI retornou resposta vazia.");
     }

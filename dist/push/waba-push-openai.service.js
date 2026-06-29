@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.sanitizeReviewedPushText = sanitizeReviewedPushText;
 exports.reviewPushMessageWithOpenAi = reviewPushMessageWithOpenAi;
 const OPENAI_API_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/responses";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
@@ -23,6 +24,13 @@ function extractOpenAiText(payload) {
     }
     return chunks.join("\n").trim();
 }
+function sanitizeReviewedPushText(text) {
+    return String(text || "")
+        .replace(/^\s*t[ií]tulo de refer[eê]ncia:\s*.+(\r?\n)*/i, "")
+        .replace(/^\s*t[ií]tulo:\s*.+(\r?\n)*/i, "")
+        .replace(/^\s*texto:\s*/i, "")
+        .trim();
+}
 async function reviewPushMessageWithOpenAi(input) {
     if (!OPENAI_API_KEY) {
         throw new Error("OPENAI_API_KEY não configurada no servidor.");
@@ -39,9 +47,12 @@ async function reviewPushMessageWithOpenAi(input) {
         "- Melhore clareza e tom profissional",
         "- Mantenha o sentido original e fatos",
         "- Não invente informações novas",
-        "- Retorne APENAS o texto revisado, sem explicações",
-        title ? `Título de referência: ${title}` : "",
-        "Texto:",
+        "- Retorne APENAS o corpo do comunicado revisado, sem explicações",
+        "- Não inclua rótulos, cabeçalhos ou o título na resposta (ex.: não escreva 'Título de referência', 'Título:' ou 'Texto:')",
+        title
+            ? `Contexto interno (não repetir na resposta): o assunto do comunicado é "${title}".`
+            : "",
+        "Texto a revisar:",
         original,
     ]
         .filter(Boolean)
@@ -76,7 +87,7 @@ async function reviewPushMessageWithOpenAi(input) {
             const message = String(err?.error?.message || bodyText).slice(0, 240);
             throw new Error(`OpenAI HTTP ${response.status}${message ? `: ${message}` : ""}`);
         }
-        const reviewedText = extractOpenAiText(json);
+        const reviewedText = sanitizeReviewedPushText(extractOpenAiText(json));
         if (!reviewedText) {
             throw new Error("OpenAI retornou resposta vazia.");
         }

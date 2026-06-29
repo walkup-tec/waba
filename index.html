@@ -3196,6 +3196,13 @@
         background: rgba(15, 23, 42, 0.22);
       }
 
+      .admin-push-select-all-item {
+        grid-column: 1 / -1;
+        font-weight: 600;
+        border-color: rgba(56, 189, 248, 0.45);
+        background: rgba(14, 116, 144, 0.12);
+      }
+
       .admin-push-role-wrap {
         margin-top: 10px;
         padding: 12px;
@@ -3216,57 +3223,174 @@
       }
 
       .waba-push-alert-banner {
-        display: none;
-        margin: 0 0 16px;
-        padding: 14px 16px;
-        border-radius: 12px;
-        border: 1px solid rgba(56, 189, 248, 0.35);
-        background: linear-gradient(135deg, rgba(14, 116, 144, 0.22), rgba(30, 64, 175, 0.18));
+        display: none !important;
+      }
+
+      .waba-push-bell-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .waba-push-bell-btn {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(15, 23, 42, 0.55);
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 0;
+        transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+      }
+
+      .waba-push-bell-btn:hover,
+      .waba-push-bell-btn:focus-visible {
         color: #e2e8f0;
+        border-color: rgba(56, 189, 248, 0.45);
+        background: rgba(14, 116, 144, 0.22);
+        outline: none;
       }
 
-      body.waba-push-alert-visible .waba-push-alert-banner {
-        display: block;
+      .waba-push-bell-btn svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
-      .waba-push-alert-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 8px;
+      .waba-push-bell-btn.has-unread {
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.55);
+        background: rgba(14, 116, 144, 0.28);
+        animation: waba-push-bell-pulse 1.2s ease-in-out infinite;
       }
 
-      .waba-push-alert-title {
+      .waba-push-bell-count {
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: #0ea5e9;
+        color: #0f172a;
+        font-size: 0.62rem;
         font-weight: 700;
-        color: #f8fafc;
+        line-height: 16px;
+        text-align: center;
+        pointer-events: none;
       }
 
-      .waba-push-alert-dismiss {
+      @keyframes waba-push-bell-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.55);
+          transform: scale(1);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(56, 189, 248, 0);
+          transform: scale(1.04);
+        }
+      }
+
+      .waba-push-bell-panel {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        z-index: 5200;
+        width: min(360px, calc(100vw - 24px));
+        max-height: min(70vh, 420px);
+        overflow: auto;
+        border-radius: 14px;
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.94));
+        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
+      }
+
+      .waba-push-bell-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        color: #f8fafc;
+        font-weight: 700;
+        font-size: 0.88rem;
+      }
+
+      .waba-push-bell-panel-close {
         border: 0;
         background: transparent;
-        color: #cbd5e1;
+        color: #94a3b8;
         cursor: pointer;
-        font-size: 18px;
+        font-size: 1.1rem;
         line-height: 1;
+        padding: 2px 4px;
       }
 
-      .waba-push-alert-message {
+      .waba-push-bell-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .waba-push-bell-item {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .waba-push-bell-item:last-child {
+        border-bottom: 0;
+      }
+
+      .waba-push-bell-item-title {
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 6px;
+        font-size: 0.86rem;
+      }
+
+      .waba-push-bell-item-message {
         white-space: pre-wrap;
-        line-height: 1.5;
-        color: #dbeafe;
+        line-height: 1.45;
+        color: #cbd5e1;
+        font-size: 0.8rem;
+        margin-bottom: 10px;
       }
 
-      .waba-push-alert-image {
-        display: block;
-        max-width: min(100%, 420px);
-        max-height: 220px;
-        width: auto;
-        height: auto;
-        margin: 0 0 10px;
-        border-radius: 10px;
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        object-fit: contain;
+      .waba-push-bell-item-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .waba-push-bell-item-dismiss {
+        border: 0;
+        background: transparent;
+        color: #38bdf8;
+        cursor: pointer;
+        font-size: 0.74rem;
+        font-weight: 600;
+        padding: 0;
+      }
+
+      .waba-push-bell-empty {
+        padding: 18px 14px;
+        color: #94a3b8;
+        font-size: 0.8rem;
+      }
+
+      body:not(.waba-auth-enabled) .waba-push-bell-wrap {
+        display: none !important;
       }
 
       .admin-push-image-wrap {
@@ -13456,6 +13580,39 @@
         </div>
 
         <div class="controls">
+          <div id="waba-push-bell-wrap" class="waba-push-bell-wrap" hidden>
+            <button
+              id="waba-push-bell-btn"
+              class="waba-push-bell-btn"
+              type="button"
+              aria-label="Comunicados push"
+              aria-expanded="false"
+              aria-controls="waba-push-bell-panel"
+              title="Comunicados"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3a5 5 0 0 0-5 5v2.1c0 .5-.2 1-.5 1.4L5 13.2a1 1 0 0 0 .8 1.6h12.4a1 1 0 0 0 .8-1.6l-1.5-1.7c-.3-.4-.5-.9-.5-1.4V8a5 5 0 0 0-5-5z"></path>
+                <path d="M10 18a2 2 0 0 0 4 0"></path>
+              </svg>
+              <span id="waba-push-bell-count" class="waba-push-bell-count" hidden>0</span>
+            </button>
+            <div id="waba-push-bell-panel" class="waba-push-bell-panel" hidden>
+              <div class="waba-push-bell-panel-head">
+                <span>Comunicados</span>
+                <button
+                  id="waba-push-bell-panel-close"
+                  class="waba-push-bell-panel-close"
+                  type="button"
+                  aria-label="Fechar comunicados"
+                >
+                  ×
+                </button>
+              </div>
+              <div id="waba-push-bell-list" class="waba-push-bell-list">
+                <p class="waba-push-bell-empty">Nenhum comunicado no momento.</p>
+              </div>
+            </div>
+          </div>
           <div id="waba-auth-user-chip" class="waba-auth-user-chip" hidden>
             <span
               id="waba-master-cpu-alert-dot"
@@ -14374,14 +14531,6 @@
       </div>
 
       <main id="waba-main" class="container-fluid aquecedor-section-shell">
-        <div id="waba-push-alert-banner" class="waba-push-alert-banner" role="status" aria-live="polite" hidden>
-          <div class="waba-push-alert-head">
-            <div class="waba-push-alert-title" id="waba-push-alert-title">Comunicado</div>
-            <button type="button" class="waba-push-alert-dismiss" id="waba-push-alert-dismiss" title="Dispensar alerta">×</button>
-          </div>
-          <img id="waba-push-alert-image" class="waba-push-alert-image" alt="" hidden />
-          <div class="waba-push-alert-message" id="waba-push-alert-message"></div>
-        </div>
         <div id="waba-staff-no-menus-banner" class="waba-staff-no-menus-banner" role="status">
           Sua conta não tem nenhum menu liberado. Peça ao usuário master para ajustar suas permissões.
         </div>
@@ -17047,14 +17196,15 @@
                   <div>
                     <div class="admin-push-field">
                       <label class="field-label" for="admin-push-title">Título</label>
-                      <input id="admin-push-title" class="admin-push-input" type="text" maxlength="120" placeholder="Ex.: Atualização do sistema" />
+                      <input id="admin-push-title" class="admin-push-input" type="text" maxlength="120" placeholder="Ex.: Atualização do sistema" required />
+                      <span class="muted" style="font-size:12px;margin-top:4px;display:block">Na comunidade WhatsApp, o título é enviado em <strong>negrito</strong> acima do texto.</span>
                     </div>
                     <div class="admin-push-field" style="margin-top:12px">
                       <label class="field-label" for="admin-push-original">Mensagem original</label>
                       <textarea id="admin-push-original" class="admin-push-textarea" placeholder="Escreva o comunicado…"></textarea>
                     </div>
                     <div class="admin-push-image-wrap">
-                      <span class="field-label">Imagem (opcional)</span>
+                      <span class="field-label">Imagem (opcional — só comunidade WhatsApp)</span>
                       <div class="admin-push-image-actions">
                         <input id="admin-push-image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
                         <button id="admin-push-image-btn" class="instance-action-btn btn-refresh enabled" type="button">Selecionar imagem</button>
@@ -17075,6 +17225,10 @@
                     <div class="admin-push-field" style="margin-top:12px">
                       <span class="field-label">Destinatários</span>
                       <div class="admin-push-audience-grid">
+                        <label class="admin-push-audience-item admin-push-select-all-item">
+                          <input type="checkbox" id="admin-push-select-all" />
+                          Selecionar todos
+                        </label>
                         <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-subscribers" checked /> Assinantes (alerta no painel)</label>
                         <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-users" /> Usuários (alerta no painel)</label>
                         <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-community" /> Comunidade WhatsApp</label>
@@ -17091,7 +17245,7 @@
                       <button id="admin-push-send-btn" class="instance-action-btn btn-qrcode enabled" type="button">Enviar push</button>
                     </div>
                     <p id="admin-push-community-hint" class="muted" style="margin-top:10px">
-                      Comunidade: instância <strong>walkup</strong> (admin). Link:
+                      Comunidade: instância <strong>Drax Sistemas 5181077770</strong> (admin). A imagem anexada é publicada <strong>somente</strong> na comunidade; assinantes, usuários e e-mail recebem apenas o texto. Link:
                       <a href="https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7" target="_blank" rel="noopener noreferrer">entrar na comunidade</a>.
                     </p>
                   </div>
@@ -24289,7 +24443,8 @@
         }
       }
 
-      let wabaPushActiveAlert = null;
+      let wabaPushAlertsCache = [];
+      let wabaPushBellPanelOpen = false;
       let adminPushImageAttachment = null;
       let adminPushSendInFlight = false;
 
@@ -24362,6 +24517,48 @@
         const usersChecked = document.getElementById("admin-push-aud-users")?.checked;
         const wrap = document.getElementById("admin-push-user-roles-wrap");
         if (wrap) wrap.hidden = !usersChecked;
+        syncAdminPushSelectAllState();
+      }
+
+      const ADMIN_PUSH_AUDIENCE_IDS = [
+        "admin-push-aud-subscribers",
+        "admin-push-aud-users",
+        "admin-push-aud-community",
+        "admin-push-aud-email",
+      ];
+      const ADMIN_PUSH_ROLE_IDS = [
+        "admin-push-role-operacional",
+        "admin-push-role-suporte",
+        "admin-push-role-master",
+      ];
+
+      function setAdminPushCheckboxChecked(id, checked) {
+        const el = document.getElementById(id);
+        if (el) el.checked = checked;
+      }
+
+      function isAdminPushFullySelected() {
+        return (
+          ADMIN_PUSH_AUDIENCE_IDS.every((id) => document.getElementById(id)?.checked) &&
+          ADMIN_PUSH_ROLE_IDS.every((id) => document.getElementById(id)?.checked)
+        );
+      }
+
+      function syncAdminPushSelectAllState() {
+        const selectAll = document.getElementById("admin-push-select-all");
+        if (!selectAll) return;
+        selectAll.checked = isAdminPushFullySelected();
+      }
+
+      function applyAdminPushSelectAll(checked) {
+        for (const id of ADMIN_PUSH_AUDIENCE_IDS) setAdminPushCheckboxChecked(id, checked);
+        for (const id of ADMIN_PUSH_ROLE_IDS) setAdminPushCheckboxChecked(id, checked);
+        syncAdminPushUserRolesVisibility();
+      }
+
+      function handleAdminPushSelectAllChange() {
+        const selectAll = document.getElementById("admin-push-select-all");
+        applyAdminPushSelectAll(Boolean(selectAll?.checked));
       }
 
       function collectAdminPushAudiences() {
@@ -24494,6 +24691,24 @@
           showToast("Informe a mensagem ou uma imagem para enviar.", "warning");
           return;
         }
+        const hasNonCommunityAudience = audiences.some(
+          (audience) => audience === "subscribers" || audience === "users" || audience === "email"
+        );
+        if (!finalText && hasNonCommunityAudience) {
+          showToast(
+            "Informe o texto para assinantes, usuários e e-mail. A imagem é enviada apenas à comunidade WhatsApp.",
+            "warning"
+          );
+          return;
+        }
+        if (adminPushImageAttachment?.id && !audiences.includes("community")) {
+          showToast("Marque Comunidade WhatsApp para enviar imagem, ou remova a imagem.", "warning");
+          return;
+        }
+        if (audiences.includes("community") && !title) {
+          showToast("Informe o título para publicar na comunidade WhatsApp.", "warning");
+          return;
+        }
         if (!audiences.length) {
           showToast("Selecione ao menos um destino.", "warning");
           return;
@@ -24545,62 +24760,91 @@
         }
       }
 
-      function hideWabaPushAlertBanner() {
-        const banner = document.getElementById("waba-push-alert-banner");
-        const imageEl = document.getElementById("waba-push-alert-image");
-        document.body.classList.remove("waba-push-alert-visible");
-        if (banner) banner.hidden = true;
-        if (imageEl) {
-          imageEl.removeAttribute("src");
-          imageEl.hidden = true;
-        }
-        wabaPushActiveAlert = null;
+      function sanitizePushAlertMessage(text) {
+        return String(text || "")
+          .replace(/^\s*t[ií]tulo de refer[eê]ncia:\s*.+(\r?\n)*/i, "")
+          .replace(/^\s*t[ií]tulo:\s*.+(\r?\n)*/i, "")
+          .replace(/^\s*texto:\s*/i, "")
+          .trim();
       }
 
-      function showWabaPushAlertBanner(alert) {
-        const banner = document.getElementById("waba-push-alert-banner");
-        const titleEl = document.getElementById("waba-push-alert-title");
-        const messageEl = document.getElementById("waba-push-alert-message");
-        const imageEl = document.getElementById("waba-push-alert-image");
-        if (!banner || !alert) return;
-        wabaPushActiveAlert = alert;
-        if (titleEl) titleEl.textContent = String(alert.title || "Comunicado");
-        if (messageEl) messageEl.textContent = String(alert.message || "");
-        if (imageEl) {
-          const imageUrl = alert.imageUrl ? resolveWabaPublicPath(String(alert.imageUrl)) : "";
-          if (imageUrl) {
-            imageEl.src = imageUrl;
-            imageEl.alt = String(alert.title || "Comunicado");
-            imageEl.hidden = false;
-          } else {
-            imageEl.removeAttribute("src");
-            imageEl.hidden = true;
-          }
-        }
-        banner.hidden = false;
-        document.body.classList.add("waba-push-alert-visible");
+      function setWabaPushBellPanelOpen(open) {
+        wabaPushBellPanelOpen = Boolean(open);
+        const panel = document.getElementById("waba-push-bell-panel");
+        const btn = document.getElementById("waba-push-bell-btn");
+        if (panel) panel.hidden = !wabaPushBellPanelOpen;
+        if (btn) btn.setAttribute("aria-expanded", wabaPushBellPanelOpen ? "true" : "false");
       }
 
-      async function dismissWabaPushAlert() {
-        if (!wabaPushActiveAlert?.id) {
-          hideWabaPushAlertBanner();
+      function renderWabaPushBellList(items) {
+        const list = document.getElementById("waba-push-bell-list");
+        if (!list) return;
+        const rows = Array.isArray(items) ? items : [];
+        if (!rows.length) {
+          list.innerHTML = '<p class="waba-push-bell-empty">Nenhum comunicado no momento.</p>';
           return;
         }
+        list.innerHTML = rows
+          .map((alert) => {
+            const title = escapeAdminHtml(String(alert?.title || "Comunicado"));
+            const message = escapeAdminHtml(sanitizePushAlertMessage(alert?.message || ""));
+            const id = escapeAdminHtml(String(alert?.id || ""));
+            return `
+              <article class="waba-push-bell-item" data-push-alert-id="${id}">
+                <div class="waba-push-bell-item-title">${title}</div>
+                <div class="waba-push-bell-item-message">${message || "—"}</div>
+                <div class="waba-push-bell-item-actions">
+                  <button type="button" class="waba-push-bell-item-dismiss" data-push-dismiss-id="${id}">
+                    Marcar como lido
+                  </button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function syncWabaPushBellUi() {
+        const wrap = document.getElementById("waba-push-bell-wrap");
+        const btn = document.getElementById("waba-push-bell-btn");
+        const countEl = document.getElementById("waba-push-bell-count");
+        const unreadCount = wabaPushAlertsCache.length;
+        if (wrap) wrap.hidden = !wabaAuthEnabled;
+        if (btn) btn.classList.toggle("has-unread", unreadCount > 0);
+        if (countEl) {
+          if (unreadCount > 0) {
+            countEl.hidden = false;
+            countEl.textContent = String(Math.min(unreadCount, 9));
+          } else {
+            countEl.hidden = true;
+            countEl.textContent = "0";
+          }
+        }
+        renderWabaPushBellList(wabaPushAlertsCache);
+        if (!unreadCount) setWabaPushBellPanelOpen(false);
+      }
+
+      async function dismissWabaPushAlertById(alertId) {
+        const id = String(alertId || "").trim();
+        if (!id) return;
         try {
           await fetchWithTimeout(
-            `/push/alerts/${encodeURIComponent(wabaPushActiveAlert.id)}/dismiss`,
-            { method: "POST" },
+            `/push/alerts/${encodeURIComponent(id)}/dismiss`,
+            { method: "POST", credentials: "same-origin" },
             10000
           );
         } catch {
           /* ignore */
         }
-        hideWabaPushAlertBanner();
         void refreshPushAlerts();
       }
 
       async function refreshPushAlerts() {
-        if (!wabaAuthEnabled) return;
+        if (!wabaAuthEnabled) {
+          wabaPushAlertsCache = [];
+          syncWabaPushBellUi();
+          return;
+        }
         try {
           const response = await fetchWithTimeout(
             "/push/alerts",
@@ -24609,12 +24853,8 @@
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) return;
-          const items = Array.isArray(payload.items) ? payload.items : [];
-          if (!items.length) {
-            hideWabaPushAlertBanner();
-            return;
-          }
-          showWabaPushAlertBanner(items[0]);
+          wabaPushAlertsCache = Array.isArray(payload.items) ? payload.items : [];
+          syncWabaPushBellUi();
         } catch {
           /* ignore */
         }
@@ -27460,6 +27700,10 @@
           void loadAdminPushHistory();
         });
         document.getElementById("admin-push-aud-users")?.addEventListener("change", syncAdminPushUserRolesVisibility);
+        document.getElementById("admin-push-select-all")?.addEventListener("change", handleAdminPushSelectAllChange);
+        for (const id of [...ADMIN_PUSH_AUDIENCE_IDS, ...ADMIN_PUSH_ROLE_IDS]) {
+          document.getElementById(id)?.addEventListener("change", syncAdminPushSelectAllState);
+        }
         document.getElementById("admin-push-image-btn")?.addEventListener("click", () => {
           document.getElementById("admin-push-image-input")?.click();
         });
@@ -27470,8 +27714,24 @@
         document.getElementById("admin-push-image-clear-btn")?.addEventListener("click", () => {
           clearAdminPushImageAttachment();
         });
-        document.getElementById("waba-push-alert-dismiss")?.addEventListener("click", () => {
-          void dismissWabaPushAlert();
+        document.getElementById("waba-push-bell-btn")?.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setWabaPushBellPanelOpen(!wabaPushBellPanelOpen);
+        });
+        document.getElementById("waba-push-bell-panel-close")?.addEventListener("click", () => {
+          setWabaPushBellPanelOpen(false);
+        });
+        document.getElementById("waba-push-bell-list")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-push-dismiss-id]");
+          if (!btn) return;
+          void dismissWabaPushAlertById(btn.getAttribute("data-push-dismiss-id"));
+        });
+        document.addEventListener("click", (event) => {
+          if (!wabaPushBellPanelOpen) return;
+          const wrap = document.getElementById("waba-push-bell-wrap");
+          if (wrap && !wrap.contains(event.target)) {
+            setWabaPushBellPanelOpen(false);
+          }
         });
 
         document.getElementById("admin-chamados-detail-close-btn")?.addEventListener("click", () => {

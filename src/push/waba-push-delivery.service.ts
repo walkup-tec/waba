@@ -3,8 +3,8 @@ import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.reposit
 import { WabaSystemUserRepository } from "../users/waba-system-user.repository";
 import { wabaMailService } from "../mail/waba-mail.service";
 import { buildPushAnnouncementTemplate } from "../mail/waba-mail.templates";
-import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
 import { sendPushToWhatsAppCommunity } from "./waba-push-community.service";
+import { sanitizeReviewedPushText } from "./waba-push-openai.service";
 import { WabaPushRepository } from "./waba-push.repository";
 import type {
   WabaPushAlertView,
@@ -64,13 +64,6 @@ function resolveEmailRecipients(
     }
   }
   return Array.from(emails);
-}
-
-function buildPushImagePublicUrl(image: WabaPushImageAttachment | null | undefined): string | null {
-  if (!image?.id) return null;
-  const base = resolveWabaPublicBaseUrl().replace(/\/+$/, "");
-  if (!base) return null;
-  return `${base}/push/public-media/${encodeURIComponent(image.id)}`;
 }
 
 function findRecentDuplicate(input: {
@@ -148,9 +141,26 @@ export async function sendPushMessage(input: {
   }
 
   const image = input.image?.id ? input.image : null;
-  const reviewedText = String(input.reviewedText || input.originalText || "").trim();
+  const pushTitle = String(input.title || "Comunicado").trim() || "Comunicado";
+  const reviewedText = sanitizeReviewedPushText(
+    String(input.reviewedText || input.originalText || "").trim(),
+  );
+  const hasNonCommunityAudience = audiences.some(
+    (audience) => audience === "subscribers" || audience === "users" || audience === "email",
+  );
   if (!reviewedText && !image) {
     throw new Error("Informe a mensagem ou uma imagem para o push.");
+  }
+  if (!reviewedText && hasNonCommunityAudience) {
+    throw new Error(
+      "Informe o texto para assinantes, usuários e e-mail. A imagem é enviada apenas à comunidade WhatsApp.",
+    );
+  }
+  if (image && !audiences.includes("community")) {
+    throw new Error("A imagem só pode ser enviada quando o destino Comunidade WhatsApp estiver marcado.");
+  }
+  if (audiences.includes("community") && !String(input.title || "").trim()) {
+    throw new Error("Informe o título para publicar na comunidade WhatsApp.");
   }
 
   const duplicate = findRecentDuplicate({
@@ -178,7 +188,7 @@ export async function sendPushMessage(input: {
     };
   }
   if (audiences.includes("community")) {
-    const community = await sendPushToWhatsAppCommunity(reviewedText, image);
+    const community = await sendPushToWhatsAppCommunity(pushTitle, reviewedText, image);
     deliveryResults.community = {
       ok: community.ok,
       detail: community.detail,
@@ -188,12 +198,7 @@ export async function sendPushMessage(input: {
   }
   if (audiences.includes("email")) {
     const recipients = resolveEmailRecipients(audiences, input.userRoles || []);
-    const email = await deliverEmails(
-      input.title,
-      reviewedText,
-      recipients,
-      buildPushImagePublicUrl(image),
-    );
+    const email = await deliverEmails(pushTitle, reviewedText, recipients, null);
     deliveryResults.email = email;
     if (email.failed > 0) hasFailure = true;
   }
@@ -201,7 +206,7 @@ export async function sendPushMessage(input: {
   const now = new Date().toISOString();
   const message: WabaPushMessage = {
     id: pushRepository.createId(),
-    title: String(input.title || "Comunicado").trim() || "Comunicado",
+    title: pushTitle,
     originalText: String(input.originalText || "").trim(),
     reviewedText,
     image,
@@ -247,7 +252,7 @@ export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[
       title: row.title,
       message: row.reviewedText,
       sentAt: row.sentAt || row.createdAt,
-      imageUrl: buildPushImagePublicUrl(row.image),
+      imageUrl: null,
     }));
 }
 

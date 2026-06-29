@@ -8,8 +8,8 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_system_user_repository_1 = require("../users/waba-system-user.repository");
 const waba_mail_service_1 = require("../mail/waba-mail.service");
 const waba_mail_templates_1 = require("../mail/waba-mail.templates");
-const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_push_community_service_1 = require("./waba-push-community.service");
+const waba_push_openai_service_1 = require("./waba-push-openai.service");
 const waba_push_repository_1 = require("./waba-push.repository");
 const pushRepository = new waba_push_repository_1.WabaPushRepository();
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
@@ -50,14 +50,6 @@ function resolveEmailRecipients(audiences, userRoles) {
         }
     }
     return Array.from(emails);
-}
-function buildPushImagePublicUrl(image) {
-    if (!image?.id)
-        return null;
-    const base = (0, waba_public_base_url_1.resolveWabaPublicBaseUrl)().replace(/\/+$/, "");
-    if (!base)
-        return null;
-    return `${base}/push/public-media/${encodeURIComponent(image.id)}`;
 }
 function findRecentDuplicate(input) {
     const cutoff = Date.now() - DEDUPE_WINDOW_MS;
@@ -115,9 +107,20 @@ async function sendPushMessage(input) {
         throw new Error("Selecione ao menos um destino para o push.");
     }
     const image = input.image?.id ? input.image : null;
-    const reviewedText = String(input.reviewedText || input.originalText || "").trim();
+    const pushTitle = String(input.title || "Comunicado").trim() || "Comunicado";
+    const reviewedText = (0, waba_push_openai_service_1.sanitizeReviewedPushText)(String(input.reviewedText || input.originalText || "").trim());
+    const hasNonCommunityAudience = audiences.some((audience) => audience === "subscribers" || audience === "users" || audience === "email");
     if (!reviewedText && !image) {
         throw new Error("Informe a mensagem ou uma imagem para o push.");
+    }
+    if (!reviewedText && hasNonCommunityAudience) {
+        throw new Error("Informe o texto para assinantes, usuários e e-mail. A imagem é enviada apenas à comunidade WhatsApp.");
+    }
+    if (image && !audiences.includes("community")) {
+        throw new Error("A imagem só pode ser enviada quando o destino Comunidade WhatsApp estiver marcado.");
+    }
+    if (audiences.includes("community") && !String(input.title || "").trim()) {
+        throw new Error("Informe o título para publicar na comunidade WhatsApp.");
     }
     const duplicate = findRecentDuplicate({
         reviewedText,
@@ -142,7 +145,7 @@ async function sendPushMessage(input) {
         };
     }
     if (audiences.includes("community")) {
-        const community = await (0, waba_push_community_service_1.sendPushToWhatsAppCommunity)(reviewedText, image);
+        const community = await (0, waba_push_community_service_1.sendPushToWhatsAppCommunity)(pushTitle, reviewedText, image);
         deliveryResults.community = {
             ok: community.ok,
             detail: community.detail,
@@ -153,7 +156,7 @@ async function sendPushMessage(input) {
     }
     if (audiences.includes("email")) {
         const recipients = resolveEmailRecipients(audiences, input.userRoles || []);
-        const email = await deliverEmails(input.title, reviewedText, recipients, buildPushImagePublicUrl(image));
+        const email = await deliverEmails(pushTitle, reviewedText, recipients, null);
         deliveryResults.email = email;
         if (email.failed > 0)
             hasFailure = true;
@@ -161,7 +164,7 @@ async function sendPushMessage(input) {
     const now = new Date().toISOString();
     const message = {
         id: pushRepository.createId(),
-        title: String(input.title || "Comunicado").trim() || "Comunicado",
+        title: pushTitle,
         originalText: String(input.originalText || "").trim(),
         reviewedText,
         image,
@@ -207,7 +210,7 @@ function listPushAlertsForAuth(auth) {
         title: row.title,
         message: row.reviewedText,
         sentAt: row.sentAt || row.createdAt,
-        imageUrl: buildPushImagePublicUrl(row.image),
+        imageUrl: null,
     }));
 }
 function dismissPushAlert(pushId, email) {

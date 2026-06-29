@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.formatWhatsAppCommunityMessage = formatWhatsAppCommunityMessage;
 exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
 exports.getPushCommunityConfig = getPushCommunityConfig;
 exports.updatePushCommunityConfig = updatePushCommunityConfig;
@@ -7,6 +8,7 @@ const evo_http_client_1 = require("../evo-http.client");
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_push_media_service_1 = require("./waba-push-media.service");
 const waba_push_repository_1 = require("./waba-push.repository");
+const waba_push_types_1 = require("./waba-push.types");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
 const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
@@ -87,13 +89,24 @@ function resolvePublicMediaUrl(imageId) {
     const base = (0, waba_public_base_url_1.resolveWabaPublicBaseUrl)().replace(/\/+$/, "");
     return `${base}/push/public-media/${encodeURIComponent(imageId)}`;
 }
-async function sendPushToWhatsAppCommunity(text, image) {
+/** WhatsApp: *negrito* */
+function formatWhatsAppCommunityMessage(title, body) {
+    const safeTitle = String(title || "").trim();
+    const safeBody = String(body || "").trim();
+    const boldTitle = safeTitle ? `*${safeTitle.replace(/\*/g, "")}*` : "";
+    if (boldTitle && safeBody)
+        return `${boldTitle}\n\n${safeBody}`;
+    if (boldTitle)
+        return boldTitle;
+    return safeBody;
+}
+async function sendPushToWhatsAppCommunity(title, text, image) {
     const config = pushRepository.readConfig();
-    const instanceName = String(config.communityEvoInstance || "walkup").trim();
-    const message = String(text || "").trim();
+    const instanceName = String(config.communityEvoInstance || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
+    const message = formatWhatsAppCommunityMessage(title, text);
     const hasImage = Boolean(image?.id);
     if (!message && !hasImage) {
-        return { ok: false, detail: "Informe texto ou imagem para a comunidade." };
+        return { ok: false, detail: "Informe título/texto ou imagem para a comunidade." };
     }
     if (!EVO_API_BASE || !EVO_API_KEY) {
         return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };

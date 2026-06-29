@@ -8,12 +8,13 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const data_path_1 = require("../data-path");
+const waba_push_types_1 = require("./waba-push.types");
 const MESSAGES_FILE = "waba-push-messages.json";
 const CONFIG_FILE = "waba-push-config.json";
 const DEFAULT_CONFIG = {
     communityInviteLink: "https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7",
     communityAnnouncementGroupJid: "",
-    communityEvoInstance: "walkup",
+    communityEvoInstance: (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)(),
     updatedAt: new Date().toISOString(),
 };
 const emptyStore = () => ({ version: 1, messages: [] });
@@ -83,12 +84,21 @@ class WabaPushRepository {
         }
         try {
             const parsed = JSON.parse((0, node_fs_1.readFileSync)(filePath, "utf8"));
-            return {
+            const config = {
                 communityInviteLink: String(parsed.communityInviteLink || DEFAULT_CONFIG.communityInviteLink).trim(),
                 communityAnnouncementGroupJid: String(parsed.communityAnnouncementGroupJid || "").trim(),
                 communityEvoInstance: String(parsed.communityEvoInstance || DEFAULT_CONFIG.communityEvoInstance).trim(),
                 updatedAt: String(parsed.updatedAt || new Date().toISOString()),
             };
+            const targetInstance = (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)();
+            if (config.communityEvoInstance.toLowerCase() === "walkup") {
+                return this.writeConfig({
+                    ...config,
+                    communityEvoInstance: targetInstance,
+                    communityAnnouncementGroupJid: "",
+                });
+            }
+            return config;
         }
         catch {
             return { ...DEFAULT_CONFIG };

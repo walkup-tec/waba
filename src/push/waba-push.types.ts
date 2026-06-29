@@ -41,6 +41,12 @@ export type WabaPushConfig = {
   updatedAt: string;
 };
 
+/** Instância Evolution admin da comunidade WhatsApp (override: WABA_PUSH_COMMUNITY_EVO_INSTANCE). */
+export function resolveDefaultPushCommunityEvoInstance(): string {
+  const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE || "").trim();
+  return fromEnv || "Drax Sistemas 5181077770";
+}
+
 export type WabaPushAlertView = {
   id: string;
   title: string;

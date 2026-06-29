@@ -3,6 +3,7 @@ import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
 import { readPushMediaBase64 } from "./waba-push-media.service";
 import { WabaPushRepository } from "./waba-push.repository";
 import type { WabaPushImageAttachment } from "./waba-push.types";
+import { resolveDefaultPushCommunityEvoInstance } from "./waba-push.types";
 
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
@@ -95,7 +96,18 @@ function resolvePublicMediaUrl(imageId: string): string {
   return `${base}/push/public-media/${encodeURIComponent(imageId)}`;
 }
 
+/** WhatsApp: *negrito* */
+export function formatWhatsAppCommunityMessage(title: string, body: string): string {
+  const safeTitle = String(title || "").trim();
+  const safeBody = String(body || "").trim();
+  const boldTitle = safeTitle ? `*${safeTitle.replace(/\*/g, "")}*` : "";
+  if (boldTitle && safeBody) return `${boldTitle}\n\n${safeBody}`;
+  if (boldTitle) return boldTitle;
+  return safeBody;
+}
+
 export async function sendPushToWhatsAppCommunity(
+  title: string,
   text: string,
   image?: WabaPushImageAttachment | null,
 ): Promise<{
@@ -104,11 +116,13 @@ export async function sendPushToWhatsAppCommunity(
   groupJid?: string;
 }> {
   const config = pushRepository.readConfig();
-  const instanceName = String(config.communityEvoInstance || "walkup").trim();
-  const message = String(text || "").trim();
+  const instanceName = String(
+    config.communityEvoInstance || resolveDefaultPushCommunityEvoInstance(),
+  ).trim();
+  const message = formatWhatsAppCommunityMessage(title, text);
   const hasImage = Boolean(image?.id);
   if (!message && !hasImage) {
-    return { ok: false, detail: "Informe texto ou imagem para a comunidade." };
+    return { ok: false, detail: "Informe título/texto ou imagem para a comunidade." };
   }
   if (!EVO_API_BASE || !EVO_API_KEY) {
     return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
