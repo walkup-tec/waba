@@ -202,12 +202,13 @@ class WabaAdminMasterPromoteService {
         if (!ownersStore.instances || typeof ownersStore.instances !== "object")
             ownersStore.instances = {};
         const now = new Date().toISOString();
+        const forceTransfer = bundle.forceInstanceOwnerTransfer === true;
         for (const [name, meta] of Object.entries(bundle.instanceOwners || {})) {
             const key = String(name || "").trim();
             if (!key || normalizeEmail(String(meta?.ownerEmail || "")) !== email)
                 continue;
             const existingOwner = normalizeEmail(String(ownersStore.instances[key]?.ownerEmail || ""));
-            if (existingOwner && existingOwner !== email)
+            if (existingOwner && existingOwner !== email && !forceTransfer)
                 continue;
             ownersStore.instances[key] = {
                 ownerEmail: email,
@@ -215,6 +216,9 @@ class WabaAdminMasterPromoteService {
                 ...(meta?.syncedFromWalkupProdAt
                     ? { syncedFromWalkupProdAt: String(meta.syncedFromWalkupProdAt) }
                     : { promotedFromV02At: now }),
+                ...(forceTransfer && existingOwner && existingOwner !== email
+                    ? { transferredAt: now, transferredFrom: existingOwner }
+                    : {}),
             };
             summary.instanceOwners = Number(summary.instanceOwners) + 1;
         }

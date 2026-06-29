@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs, statSync } from "fs";
 import path from "path";
 import { isWabaAuthConfigured, isWabaMasterEmail } from "../auth/waba-auth.service";
 import type { WabaRequestAuth } from "../auth/waba-request-auth";import { resolveDataFile } from "../data-path";
@@ -20,6 +20,7 @@ const normalizeInstanceName = (value: string): string => String(value || "").tri
 
 export class WabaInstanceOwnershipService {
   private cache: InstanceOwnersStore | null = null;
+  private cacheLoadedAtMs = 0;
   private writeChain: Promise<void> = Promise.resolve();
 
   private runLocked<T>(fn: () => Promise<T>): Promise<T> {
@@ -31,17 +32,33 @@ export class WabaInstanceOwnershipService {
     return next;
   }
 
+  private shouldReloadCacheFromDisk(): boolean {
+    if (!this.cache) return true;
+    try {
+      const fileMtimeMs = statSync(OWNERS_FILE).mtimeMs;
+      return fileMtimeMs > this.cacheLoadedAtMs + 1;
+    } catch {
+      return false;
+    }
+  }
+
   private async loadStore(): Promise<InstanceOwnersStore> {
-    if (this.cache) return this.cache;
+    if (this.cache && !this.shouldReloadCacheFromDisk()) return this.cache;
     try {
       const raw = await fs.readFile(OWNERS_FILE, "utf-8");
       const parsed = JSON.parse(raw || "{}") as Partial<InstanceOwnersStore>;
       const instances =
         parsed?.instances && typeof parsed.instances === "object" ? parsed.instances : {};
       this.cache = { instances };
+      try {
+        this.cacheLoadedAtMs = statSync(OWNERS_FILE).mtimeMs;
+      } catch {
+        this.cacheLoadedAtMs = Date.now();
+      }
       return this.cache;
     } catch {
       this.cache = { instances: {} };
+      this.cacheLoadedAtMs = Date.now();
       return this.cache;
     }
   }
@@ -50,6 +67,11 @@ export class WabaInstanceOwnershipService {
     this.cache = store;
     await fs.mkdir(path.dirname(OWNERS_FILE), { recursive: true });
     await fs.writeFile(OWNERS_FILE, JSON.stringify(store, null, 2), "utf-8");
+    try {
+      this.cacheLoadedAtMs = statSync(OWNERS_FILE).mtimeMs;
+    } catch {
+      this.cacheLoadedAtMs = Date.now();
+    }
   }
 
   private findStoreKey(store: InstanceOwnersStore, instanceName: string): string | null {

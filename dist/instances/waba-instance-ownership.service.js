@@ -14,6 +14,7 @@ const normalizeInstanceName = (value) => String(value || "").trim();
 class WabaInstanceOwnershipService {
     constructor() {
         this.cache = null;
+        this.cacheLoadedAtMs = 0;
         this.writeChain = Promise.resolve();
     }
     runLocked(fn) {
@@ -21,18 +22,36 @@ class WabaInstanceOwnershipService {
         this.writeChain = next.then(() => undefined, () => undefined);
         return next;
     }
+    shouldReloadCacheFromDisk() {
+        if (!this.cache)
+            return true;
+        try {
+            const fileMtimeMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
+            return fileMtimeMs > this.cacheLoadedAtMs + 1;
+        }
+        catch {
+            return false;
+        }
+    }
     async loadStore() {
-        if (this.cache)
+        if (this.cache && !this.shouldReloadCacheFromDisk())
             return this.cache;
         try {
             const raw = await fs_1.promises.readFile(OWNERS_FILE, "utf-8");
             const parsed = JSON.parse(raw || "{}");
             const instances = parsed?.instances && typeof parsed.instances === "object" ? parsed.instances : {};
             this.cache = { instances };
+            try {
+                this.cacheLoadedAtMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
+            }
+            catch {
+                this.cacheLoadedAtMs = Date.now();
+            }
             return this.cache;
         }
         catch {
             this.cache = { instances: {} };
+            this.cacheLoadedAtMs = Date.now();
             return this.cache;
         }
     }
@@ -40,6 +59,12 @@ class WabaInstanceOwnershipService {
         this.cache = store;
         await fs_1.promises.mkdir(path_1.default.dirname(OWNERS_FILE), { recursive: true });
         await fs_1.promises.writeFile(OWNERS_FILE, JSON.stringify(store, null, 2), "utf-8");
+        try {
+            this.cacheLoadedAtMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
+        }
+        catch {
+            this.cacheLoadedAtMs = Date.now();
+        }
     }
     findStoreKey(store, instanceName) {
         const target = normalizeInstanceName(instanceName).toLowerCase();

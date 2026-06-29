@@ -16,6 +16,8 @@ export type MasterPromoteFromV02Bundle = {
   creditUsage?: Record<string, unknown> | null;
   bonusBalance?: Record<string, unknown> | null;
   instanceOwners?: Record<string, { ownerEmail: string; createdAt?: string; syncedFromWalkupProdAt?: string }>;
+  /** Quando true, sobrescreve dono existente em instance-owners.json (transferência admin). */
+  forceInstanceOwnerTransfer?: boolean;
   alternativaActivations?: Record<string, unknown> | null;
   campaigns?: Array<Record<string, unknown>>;
   campaignIntakes?: Array<Record<string, unknown>>;
@@ -233,17 +235,21 @@ export class WabaAdminMasterPromoteService {
     });
     if (!ownersStore.instances || typeof ownersStore.instances !== "object") ownersStore.instances = {};
     const now = new Date().toISOString();
+    const forceTransfer = bundle.forceInstanceOwnerTransfer === true;
     for (const [name, meta] of Object.entries(bundle.instanceOwners || {})) {
       const key = String(name || "").trim();
       if (!key || normalizeEmail(String(meta?.ownerEmail || "")) !== email) continue;
       const existingOwner = normalizeEmail(String(ownersStore.instances[key]?.ownerEmail || ""));
-      if (existingOwner && existingOwner !== email) continue;
+      if (existingOwner && existingOwner !== email && !forceTransfer) continue;
       ownersStore.instances[key] = {
         ownerEmail: email,
         createdAt: String(meta?.createdAt || now),
         ...(meta?.syncedFromWalkupProdAt
           ? { syncedFromWalkupProdAt: String(meta.syncedFromWalkupProdAt) }
           : { promotedFromV02At: now }),
+        ...(forceTransfer && existingOwner && existingOwner !== email
+          ? { transferredAt: now, transferredFrom: existingOwner }
+          : {}),
       };
       summary.instanceOwners = Number(summary.instanceOwners) + 1;
     }
