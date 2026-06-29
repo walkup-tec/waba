@@ -6192,7 +6192,8 @@
       }
 
       /* Admin: centralizar painel na área útil (à direita da sidebar) */
-      body.admin-section-active #waba-main.aquecedor-section-shell {
+      body.admin-section-active #waba-main.aquecedor-section-shell,
+      body.suporte-section-active #waba-main.aquecedor-section-shell {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -6204,31 +6205,36 @@
         box-sizing: border-box;
       }
 
-      body.admin-section-active #waba-main > .tab-panel:not(.tab-hidden) {
+      body.admin-section-active #waba-main > .tab-panel:not(.tab-hidden),
+      body.suporte-section-active #waba-main > .tab-panel:not(.tab-hidden) {
         width: 100%;
         max-width: min(1180px, 100%);
         margin-inline: auto;
         flex-shrink: 0;
       }
 
-      body.admin-section-active #waba-main > .tab-panel:not(.tab-hidden) > .row.g-3 {
+      body.admin-section-active #waba-main > .tab-panel:not(.tab-hidden) > .row.g-3,
+      body.suporte-section-active #waba-main > .tab-panel:not(.tab-hidden) > .row.g-3 {
         width: 100%;
         margin-inline: 0;
         --bs-gutter-x: 0;
       }
 
-      body.admin-section-active #waba-main > .tab-panel:not(.tab-hidden) .panel.col-12 {
+      body.admin-section-active #waba-main > .tab-panel:not(.tab-hidden) .panel.col-12,
+      body.suporte-section-active #waba-main > .tab-panel:not(.tab-hidden) .panel.col-12 {
         width: 100%;
         max-width: 100%;
         margin-inline: 0;
       }
 
       @media (min-width: 992px) {
-        body.admin-section-active.has-sidebar #waba-main > .tab-panel:not(.tab-hidden) {
+        body.admin-section-active.has-sidebar #waba-main > .tab-panel:not(.tab-hidden),
+        body.suporte-section-active.has-sidebar #waba-main > .tab-panel:not(.tab-hidden) {
           max-width: min(1180px, calc(100vw - 92px - 48px));
         }
 
-        body.admin-section-active.has-sidebar.sidebar-expanded #waba-main > .tab-panel:not(.tab-hidden) {
+        body.admin-section-active.has-sidebar.sidebar-expanded #waba-main > .tab-panel:not(.tab-hidden),
+        body.suporte-section-active.has-sidebar.sidebar-expanded #waba-main > .tab-panel:not(.tab-hidden) {
           max-width: min(1180px, calc(100vw - 242px - 48px));
         }
       }
@@ -19552,6 +19558,7 @@
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
         if (tabName === "admin-monitor-cpu") return !hasMasterAccess();
+        if (tabName === "admin-push") return !hasMasterAccess();
         if (tabName === "disparos-lancamento" && !shouldShowDisparosLancamentoMenu()) {
           return true;
         }
@@ -35860,6 +35867,7 @@
         const adminFinanceiroPanel = document.getElementById("tab-admin-financeiro");
         const adminChamadosPanel = document.getElementById("tab-admin-chamados");
         const adminMonitorCpuPanel = document.getElementById("tab-admin-monitor-cpu");
+        const adminPushPanel = document.getElementById("tab-admin-push");
         const dashboardFilters = document.getElementById("dashboard-filters");
 
         if (nextTab !== "admin-monitor-cpu") {
@@ -36004,6 +36012,14 @@
           adminMonitorCpuPanel.setAttribute(
             "aria-hidden",
             nextTab !== "admin-monitor-cpu" ? "true" : "false"
+          );
+        }
+
+        if (adminPushPanel) {
+          adminPushPanel.classList.toggle("tab-hidden", nextTab !== "admin-push");
+          adminPushPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "admin-push" ? "true" : "false"
           );
         }
 
