@@ -3,7 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.VpsCpuMonitorService = void 0;
 const vps_cpu_playbooks_1 = require("./vps-cpu-playbooks");
 const vps_cpu_monitor_repository_1 = require("./vps-cpu-monitor.repository");
-const UI_REFRESH_SEC = 10;
+const UI_REFRESH_SEC = 60;
+const COLLECTOR_INTERVAL_SEC = 60;
 const CHART_MAX_POINTS = 120;
 const parseThresholdPct = () => {
     const raw = Number(process.env.WABA_VPS_CPU_ALERT_THRESHOLD_PCT ?? 65);
@@ -18,10 +19,16 @@ const parseSustainedMinutes = () => {
     return Math.min(120, Math.max(15, Math.round(raw)));
 };
 const parseSampleIntervalSec = () => {
-    const raw = Number(process.env.WABA_VPS_CPU_SAMPLE_INTERVAL_SEC ?? 10);
+    const raw = Number(process.env.WABA_VPS_CPU_SAMPLE_INTERVAL_SEC ?? COLLECTOR_INTERVAL_SEC);
     if (!Number.isFinite(raw))
-        return 10;
-    return Math.min(300, Math.max(10, Math.round(raw)));
+        return COLLECTOR_INTERVAL_SEC;
+    return Math.min(300, Math.max(30, Math.round(raw)));
+};
+const parseUiRefreshSec = () => {
+    const raw = Number(process.env.WABA_VPS_CPU_UI_REFRESH_SEC ?? UI_REFRESH_SEC);
+    if (!Number.isFinite(raw))
+        return UI_REFRESH_SEC;
+    return Math.min(300, Math.max(30, Math.round(raw)));
 };
 const avg = (values) => {
     if (!values.length)
@@ -187,6 +194,7 @@ class VpsCpuMonitorService {
         const thresholdPct = parseThresholdPct();
         const sustainedMinutes = parseSustainedMinutes();
         const sampleIntervalSec = parseSampleIntervalSec();
+        const uiRefreshSec = parseUiRefreshSec();
         const allSamples = await this.repo.listSamples(10000);
         const status = await this.repo.getCollectorStatus();
         const last = allSamples.length ? allSamples[allSamples.length - 1] : null;
@@ -208,7 +216,7 @@ class VpsCpuMonitorService {
             collectorReady: status.ready,
             sampleCount: status.sampleCount,
             lastSampleAt: status.lastSampleAt,
-            config: { thresholdPct, sustainedMinutes, sampleIntervalSec, uiRefreshSec: UI_REFRESH_SEC },
+            config: { thresholdPct, sustainedMinutes, sampleIntervalSec, uiRefreshSec },
             chart: {
                 range,
                 labels: chartSamples.map((s) => formatChartLabel(s.ts, range)),

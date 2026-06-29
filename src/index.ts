@@ -95,6 +95,7 @@ import {
   getAquecedorLifecycleStatusForInstance,
 } from "./services/aquecedor-instance-lifecycle.service";
 import { getAquecedorWarmthMapForInstances } from "./services/aquecedor-instance-warmth.service";
+import { getAquecedorMessageStatsForInstances } from "./services/aquecedor-instance-message-stats.service";
 import { getProductionDataPersistenceSnapshot } from "./services/production-data-persistence.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -4964,7 +4965,21 @@ app.get("/instancias", async (req, res) => {
       baseItems.map((row) => ({ ...row })) as Array<Record<string, unknown>>,
     );
 
-    return res.json({ total: items.length, ativas, desconectadas, items });
+    const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
+      items as Array<Record<string, unknown>>,
+      auth.email || "",
+    );
+    ativas = enrichedItems.filter((row) =>
+      String(row?.connectionStatus || "").toLowerCase().includes("open"),
+    ).length;
+    desconectadas = enrichedItems.length - ativas;
+
+    return res.json({
+      total: enrichedItems.length,
+      ativas,
+      desconectadas,
+      items: enrichedItems,
+    });
   } catch (error) {
     console.error("Erro ao consultar Evolution API:", error);
     return res
@@ -6161,6 +6176,32 @@ function canDeleteInstanceLocallyAfterEvoFailure(status: number, body: string): 
   );
 }
 
+async function attachAquecedorMessageStatsToInstanceItems(
+  items: Array<Record<string, unknown>>,
+  ownerEmail: string,
+): Promise<Array<Record<string, unknown>>> {
+  const names = items.map((row) => String(row?.name || "").trim()).filter(Boolean);
+  if (!names.length) return items;
+  const stats = await getAquecedorMessageStatsForInstances(names, {
+    ownerEmail,
+    supabase: getSupabaseClient(),
+  });
+  return items.map((row) => {
+    const name = String(row?.name || "").trim();
+    const hit = stats.get(name) || stats.get(name.toLowerCase()) || {
+      sent: 0,
+      received: 0,
+      total: 0,
+    };
+    return {
+      ...row,
+      aquecedorMessagesSent: hit.sent,
+      aquecedorMessagesReceived: hit.received,
+      messages: hit.total,
+    };
+  });
+}
+
 async function buildInstancesSnapshotForAuth(
   auth: ReturnType<typeof resolveWabaRequestAuth>,
 ): Promise<{
@@ -6214,11 +6255,16 @@ async function buildInstancesSnapshotForAuth(
     String(row?.connectionStatus || "").toLowerCase().includes("open"),
   ).length;
 
+  const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
+    items as Array<Record<string, unknown>>,
+    auth.email || "",
+  );
+
   return {
-    total: items.length,
+    total: enrichedItems.length,
     ativas,
-    desconectadas: items.length - ativas,
-    items,
+    desconectadas: enrichedItems.length - ativas,
+    items: enrichedItems,
     fromCache: true,
     cacheUpdatedAt: String(cache?.updatedAt || ""),
   };

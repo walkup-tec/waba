@@ -13,6 +13,10 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-29
+
+**WABA — Coluna Mensagens (Instâncias) = aquecedor:** total enviadas + recebidas via `logs_envios` (EVO no ciclo aquecedor); não usa mais contador Evolution. Serviço `aquecedor-instance-message-stats.service.ts`. Ver `doc/LOG-2026-06-29__124611__instancias-mensagens-aquecedor.md`.
+
 2026-06-27
 
 **WABA — Card Números Aquecidos Visão Geral:** título sem ícone; 3 linhas (1/2/3 🔥 + quantidade por nível). Ver `doc/LOG-2026-06-27__aquecedor-card-numeros-aquecidos.md`.
@@ -162,6 +166,8 @@ Palavras-chave: `infra-agent`, `waba-infrastructure-specialist`, `vps-cpu-report
 **WABA — Comparativo campanhas com data:** data de criação abaixo do nome no gráfico do dashboard Disparos. Ver `doc/LOG-2026-06-24__disparos-dashboard-compare-data-criacao.md`.
 
 **WABA — Aquecedor paywall falso em deploy:** entitlement resiliente (sessionStorage + créditos + não bloquear durante loading); backend libera por saldo de créditos. Marker `DEPLOY-2026-06-24-aquecedor-entitlement-resilience`. Ver `doc/LOG-2026-06-24__aquecedor-paywall-falso-entitlement-resilience.md`.
+
+**WABA — Preservação dados no deploy:** volume `/app/data`, health `dataPersistence`, backup script, FTP não envia `data/`. Ver `doc/deploy-preservacao-dados-producao.md`.
 
 **WABA — Login Mozart produção:** conta só no V02; promote pendente no Easypanel. Ver `doc/LOG-2026-06-24__mozart-login-producao-assinante-nao-migrado.md`.
 

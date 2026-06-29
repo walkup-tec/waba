@@ -83,6 +83,7 @@ const instance_integration_probe_1 = require("./instance-integration-probe");
 const instance_inbound_validation_service_1 = require("./instance-inbound-validation.service");
 const aquecedor_instance_lifecycle_service_1 = require("./services/aquecedor-instance-lifecycle.service");
 const aquecedor_instance_warmth_service_1 = require("./services/aquecedor-instance-warmth.service");
+const aquecedor_instance_message_stats_service_1 = require("./services/aquecedor-instance-message-stats.service");
 const production_data_persistence_service_1 = require("./services/production-data-persistence.service");
 const deploy_marker_1 = require("./deploy-marker");
 const waba_campaign_intake_constants_1 = require("./disparos/waba-campaign-intake.constants");
@@ -3968,7 +3969,15 @@ app.get("/instancias", async (req, res) => {
             .length;
         desconectadas = items.length - ativas;
         void saveEvoInstancesCache(baseItems.map((row) => ({ ...row })));
-        return res.json({ total: items.length, ativas, desconectadas, items });
+        const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(items, auth.email || "");
+        ativas = enrichedItems.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open")).length;
+        desconectadas = enrichedItems.length - ativas;
+        return res.json({
+            total: enrichedItems.length,
+            ativas,
+            desconectadas,
+            items: enrichedItems,
+        });
     }
     catch (error) {
         console.error("Erro ao consultar Evolution API:", error);
@@ -5064,6 +5073,29 @@ function canDeleteInstanceLocallyAfterEvoFailure(status, body) {
         normalized.includes("não encontr") ||
         normalized.includes("nao encontr"));
 }
+async function attachAquecedorMessageStatsToInstanceItems(items, ownerEmail) {
+    const names = items.map((row) => String(row?.name || "").trim()).filter(Boolean);
+    if (!names.length)
+        return items;
+    const stats = await (0, aquecedor_instance_message_stats_service_1.getAquecedorMessageStatsForInstances)(names, {
+        ownerEmail,
+        supabase: getSupabaseClient(),
+    });
+    return items.map((row) => {
+        const name = String(row?.name || "").trim();
+        const hit = stats.get(name) || stats.get(name.toLowerCase()) || {
+            sent: 0,
+            received: 0,
+            total: 0,
+        };
+        return {
+            ...row,
+            aquecedorMessagesSent: hit.sent,
+            aquecedorMessagesReceived: hit.received,
+            messages: hit.total,
+        };
+    });
+}
 async function buildInstancesSnapshotForAuth(auth) {
     const ownedNames = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(auth.email);
     const cache = await loadEvoInstancesCache();
@@ -5102,11 +5134,12 @@ async function buildInstancesSnapshotForAuth(auth) {
         };
     });
     const ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open")).length;
+    const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(items, auth.email || "");
     return {
-        total: items.length,
+        total: enrichedItems.length,
         ativas,
-        desconectadas: items.length - ativas,
-        items,
+        desconectadas: enrichedItems.length - ativas,
+        items: enrichedItems,
         fromCache: true,
         cacheUpdatedAt: String(cache?.updatedAt || ""),
     };

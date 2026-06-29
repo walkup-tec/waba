@@ -36248,14 +36248,20 @@
               inst?.stats?.contacts
           );
 
-          const messages = toInt(
-            inst?.messages ??
-              inst?.messagesCount ??
-              inst?.totalMessages ??
-              inst?.chatsCount ??
-              inst?._count?.messages ??
-              inst?.stats?.messages
-          );
+          const aquecedorMessagesSent = toInt(inst?.aquecedorMessagesSent);
+          const aquecedorMessagesReceived = toInt(inst?.aquecedorMessagesReceived);
+          const hasAquecedorMessageStats =
+            inst?.aquecedorMessagesSent != null || inst?.aquecedorMessagesReceived != null;
+          const messages = hasAquecedorMessageStats
+            ? aquecedorMessagesSent + aquecedorMessagesReceived
+            : toInt(
+                inst?.messages ??
+                  inst?.messagesCount ??
+                  inst?.totalMessages ??
+                  inst?.chatsCount ??
+                  inst?._count?.messages ??
+                  inst?.stats?.messages
+              );
 
           return {
             idx,
@@ -36269,6 +36275,8 @@
             instanceLabel,
             contacts,
             messages,
+            aquecedorMessagesSent,
+            aquecedorMessagesReceived,
             profilePicUrl: sanitizeInstanceProfilePicUrl(inst?.profilePicUrl),
             avatarVersion: String(inst?.avatarVersion || "").trim(),
             createdAt: String(inst?.createdAt || "").trim(),
@@ -36708,7 +36716,7 @@
               <th>Nome (WhatsApp)</th>
               <th>Nome da Instância</th>
               <th>Contatos</th>
-              <th>Mensagens</th>
+              <th title="Total enviadas + recebidas pelo aquecedor (mensagens confirmadas via EVO)">Mensagens</th>
               <th>Aquecedor</th>
               <th>Disparador</th>
               ${showFazendaColumn ? "<th>Fazenda</th>" : ""}
@@ -36805,7 +36813,7 @@
             <td>${whatsappNameCell}</td>
             <td>${instanceNameCell}</td>
             <td>${inst.contacts.toLocaleString("pt-BR")}</td>
-            <td>${inst.messages.toLocaleString("pt-BR")}</td>
+            <td title="Enviadas: ${inst.aquecedorMessagesSent.toLocaleString("pt-BR")} · Recebidas: ${inst.aquecedorMessagesReceived.toLocaleString("pt-BR")} (aquecedor)">${inst.messages.toLocaleString("pt-BR")}</td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
                 <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
