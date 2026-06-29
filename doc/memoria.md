@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-29
 
+**WABA — Push comunidade Evolution auto-resolve:** quando `Drax Sistemas 5181077770` não existe, busca instância Drax na Evolution e persiste em `waba-push-config.json`. Ver `doc/LOG-2026-06-29__193000__push-comunidade-evo-instance-auto-resolve.md`.
+
 **WABA — Push Enviar no 1º clique:** `pointerdown` + feedback inline; `initAdminPushUi()`. Ver `doc/LOG-2026-06-29__191000__push-enviar-primeiro-clique-fix.md`.
 
 **WABA — Push sino + comunidade Drax 5181077770:** notificações no header; instância Evolution `Drax Sistemas 5181077770`. Ver `doc/LOG-2026-06-29__push-bell-comunidade-drax-instance.md`.

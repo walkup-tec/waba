@@ -5,12 +5,17 @@ exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
 exports.getPushCommunityConfig = getPushCommunityConfig;
 exports.updatePushCommunityConfig = updatePushCommunityConfig;
 const evo_http_client_1 = require("../evo-http.client");
+const evo_instance_key_1 = require("../instances/evo-instance-key");
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_push_media_service_1 = require("./waba-push-media.service");
 const waba_push_repository_1 = require("./waba-push.repository");
 const waba_push_types_1 = require("./waba-push.types");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
+const EVO_INSTANCES_URL = String(process.env.EVO_INSTANCES_URL || "").trim() ||
+    `${EVO_API_BASE}/instance/fetchInstances`;
+const PUSH_COMMUNITY_PHONE_HINT = String(process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181077770").trim();
+const PUSH_COMMUNITY_JID_ENV = String(process.env.WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID || "").trim();
 const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_MEDIA_URL_TEMPLATE = process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
@@ -59,26 +64,119 @@ function pickAnnouncementGroupJid(groups) {
     }
     return "";
 }
-async function fetchAnnouncementGroupJid(instanceName) {
+function parseEvoInstancesList(raw) {
+    if (Array.isArray(raw))
+        return raw;
+    if (raw && typeof raw === "object") {
+        const record = raw;
+        if (Array.isArray(record.response))
+            return record.response;
+        if (Array.isArray(record.data))
+            return record.data;
+    }
+    return raw ? [raw] : [];
+}
+function isEvoInstanceMissingError(result) {
+    if (result.status !== 404)
+        return false;
+    const text = `${String(result.body || "")} ${JSON.stringify(result.json ?? "")}`.toLowerCase();
+    return text.includes("does not exist") || text.includes("not found") || text.includes("instance");
+}
+function scorePushCommunityInstance(name, preferred) {
+    const lower = name.toLowerCase();
+    const prefLower = preferred.toLowerCase();
+    if (!lower)
+        return 0;
+    if (lower === prefLower)
+        return 100;
+    if (PUSH_COMMUNITY_PHONE_HINT && lower.includes(PUSH_COMMUNITY_PHONE_HINT.toLowerCase()))
+        return 92;
+    if (prefLower && lower.includes(prefLower))
+        return 88;
+    if (lower.includes("drax sistemas"))
+        return 82;
+    if (lower.includes("drax"))
+        return 72;
+    if (lower === "walkup")
+        return 62;
+    return 0;
+}
+async function fetchEvoInstanceNames() {
+    if (!EVO_API_BASE || !EVO_API_KEY)
+        return [];
+    const result = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", { apiKey: EVO_API_KEY });
+    if (!result.ok)
+        return [];
+    return parseEvoInstancesList(result.json)
+        .map((row) => (0, evo_instance_key_1.resolveEvoInstanceKey)(row))
+        .filter(Boolean);
+}
+async function resolvePushCommunityEvoInstance(configured) {
+    const preferred = String(configured || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
+    const names = await fetchEvoInstanceNames();
+    if (!names.length)
+        return preferred;
+    const exact = names.find((name) => name.toLowerCase() === preferred.toLowerCase());
+    if (exact)
+        return exact;
+    let best = preferred;
+    let bestScore = 0;
+    for (const name of names) {
+        const score = scorePushCommunityInstance(name, preferred);
+        if (score > bestScore) {
+            bestScore = score;
+            best = name;
+        }
+    }
+    if (bestScore <= 0) {
+        throw new Error(`Instância "${preferred}" não existe na Evolution. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`);
+    }
+    if (best !== preferred) {
+        const config = pushRepository.readConfig();
+        pushRepository.writeConfig({
+            ...config,
+            communityEvoInstance: best,
+            communityAnnouncementGroupJid: "",
+        });
+        console.info(`[push] instância comunidade ajustada automaticamente: "${preferred}" → "${best}"`);
+    }
+    return best;
+}
+function resolveAnnouncementGroupJidOverride() {
+    if (PUSH_COMMUNITY_JID_ENV.includes("@g.us"))
+        return PUSH_COMMUNITY_JID_ENV;
+    return "";
+}
+async function fetchAnnouncementGroupJid(instanceName, allowInstanceResolve = true) {
+    const overrideJid = resolveAnnouncementGroupJidOverride();
+    if (overrideJid)
+        return { jid: overrideJid, instanceName };
     const config = pushRepository.readConfig();
     if (config.communityAnnouncementGroupJid) {
-        return config.communityAnnouncementGroupJid;
+        return { jid: config.communityAnnouncementGroupJid, instanceName };
     }
     const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
     const result = await (0, evo_http_client_1.evoHttpRequest)(url, "GET", { apiKey: EVO_API_KEY });
     if (!result.ok) {
-        throw new Error(`Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 180)}`);
+        if (allowInstanceResolve && isEvoInstanceMissingError(result)) {
+            const resolved = await resolvePushCommunityEvoInstance(instanceName);
+            if (resolved.toLowerCase() !== instanceName.toLowerCase()) {
+                return fetchAnnouncementGroupJid(resolved, false);
+            }
+        }
+        throw new Error(`Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}`);
     }
     const groups = parseGroupsPayload(result.json);
     const jid = pickAnnouncementGroupJid(groups);
     if (!jid) {
-        throw new Error("Grupo de Anúncios da comunidade não encontrado. Configure communityAnnouncementGroupJid em waba-push-config.json ou envie uma mensagem manual no grupo e copie o JID do webhook.");
+        throw new Error("Grupo de Anúncios da comunidade não encontrado. Configure communityAnnouncementGroupJid em waba-push-config.json ou WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no .env.");
     }
     pushRepository.writeConfig({
         ...config,
+        communityEvoInstance: instanceName,
         communityAnnouncementGroupJid: jid,
     });
-    return jid;
+    return { jid, instanceName };
 }
 function buildEvoTextBody(number, text) {
     return EVO_SEND_TEXT_V1
@@ -102,7 +200,16 @@ function formatWhatsAppCommunityMessage(title, body) {
 }
 async function sendPushToWhatsAppCommunity(title, text, image) {
     const config = pushRepository.readConfig();
-    const instanceName = String(config.communityEvoInstance || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
+    let instanceName = String(config.communityEvoInstance || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
+    try {
+        instanceName = await resolvePushCommunityEvoInstance(instanceName);
+    }
+    catch (error) {
+        return {
+            ok: false,
+            detail: error instanceof Error ? error.message : "Falha ao resolver instância Evolution da comunidade.",
+        };
+    }
     const message = formatWhatsAppCommunityMessage(title, text);
     const hasImage = Boolean(image?.id);
     if (!message && !hasImage) {
@@ -111,7 +218,18 @@ async function sendPushToWhatsAppCommunity(title, text, image) {
     if (!EVO_API_BASE || !EVO_API_KEY) {
         return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
     }
-    const groupJid = await fetchAnnouncementGroupJid(instanceName);
+    let groupJid = "";
+    try {
+        const resolved = await fetchAnnouncementGroupJid(instanceName);
+        groupJid = resolved.jid;
+        instanceName = resolved.instanceName;
+    }
+    catch (error) {
+        return {
+            ok: false,
+            detail: error instanceof Error ? error.message : "Falha ao listar grupos na Evolution.",
+        };
+    }
     if (hasImage && image) {
         const mediaData = (0, waba_push_media_service_1.readPushMediaBase64)(image.id);
         if (!mediaData) {
