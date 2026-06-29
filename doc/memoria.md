@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-06-29
 
+**WABA — Push fixes (duplicidade, alertas, imagem):** EVO um payload, e-mail por destino correto, alertas no login, dedupe 45s, upload imagem. Ver `doc/LOG-2026-06-29__150500__push-duplicidade-alertas-imagem.md`.
+
+**WABA — Fix tela Push vazia:** painel não removia `tab-hidden` no switch de abas. Ver `doc/LOG-2026-06-29__143800__suporte-push-tela-vazia-fix.md`.
+
 **WABA — Master Suporte Push:** menu Push com revisão IA (GPT), destinos Assinantes/Usuários/Comunidade/E-mail, alertas in-app e histórico. Módulo `src/push/`, rotas `/admin/push/*` e `/push/alerts`. Comunidade via instância `walkup`. Ver `doc/LOG-2026-06-29__142542__master-suporte-push-menu.md`.
 
 **WABA — Coluna Mensagens (Instâncias) = aquecedor:** total enviadas + recebidas via `logs_envios` (EVO no ciclo aquecedor); não usa mais contador Evolution. Serviço `aquecedor-instance-message-stats.service.ts`. Ver `doc/LOG-2026-06-29__124611__instancias-mensagens-aquecedor.md`.
