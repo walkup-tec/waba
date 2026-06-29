@@ -19,6 +19,7 @@ import {
   getAsaasIntegrationMonitorStatus,
 } from "../monitoring/asaas-integration-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
+import { WabaAdminInstancesService } from "./waba-admin-instances.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
@@ -31,6 +32,7 @@ const adminFinanceiroService = new WabaAdminFinanceiroService();
 const adminDashboardService = new WabaAdminDashboardService();
 const adminSupportService = new WabaAdminSupportService();
 const adminPushService = new WabaAdminPushService();
+const adminInstancesService = new WabaAdminInstancesService();
 const adminMasterMenuBadgesService = new WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new WabaFinanceiroSplitService();
 const vpsCpuMonitorService = new VpsCpuMonitorService();
@@ -78,6 +80,36 @@ export const registerWabaAdminRoutes = (app: Express) => {
     if (!rejectNonMaster(req, res)) return;
     const items = adminSubscribersService.listSubscribers();
     return res.status(200).json({ items });
+  });
+
+  app.get("/admin/instances/lookup", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const phone = String(req.query.phone || "").trim();
+      const items = await adminInstancesService.lookupByPhone(phone);
+      return res.status(200).json({ items });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível localizar a instância.",
+      });
+    }
+  });
+
+  app.post("/admin/instances/transfer-owner", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = await adminInstancesService.transferOwner({
+        instanceName: body.instanceName !== undefined ? String(body.instanceName) : undefined,
+        phone: body.phone !== undefined ? String(body.phone) : undefined,
+        targetEmail: String(body.targetEmail || ""),
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível transferir a instância.",
+      });
+    }
   });
 
   app.post("/admin/subscribers/promote-from-v02", (req, res) => {

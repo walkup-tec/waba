@@ -20,6 +20,7 @@ const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-men
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integration-monitor.service");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
+const waba_admin_instances_service_1 = require("./waba-admin-instances.service");
 const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
@@ -30,6 +31,7 @@ const adminFinanceiroService = new waba_admin_financeiro_service_1.WabaAdminFina
 const adminDashboardService = new waba_admin_dashboard_service_1.WabaAdminDashboardService();
 const adminSupportService = new waba_admin_support_service_1.WabaAdminSupportService();
 const adminPushService = new waba_admin_push_service_1.WabaAdminPushService();
+const adminInstancesService = new waba_admin_instances_service_1.WabaAdminInstancesService();
 const adminMasterMenuBadgesService = new waba_admin_master_menu_badges_service_1.WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService();
 const vpsCpuMonitorService = new vps_cpu_monitor_service_1.VpsCpuMonitorService();
@@ -74,6 +76,38 @@ const registerWabaAdminRoutes = (app) => {
             return;
         const items = adminSubscribersService.listSubscribers();
         return res.status(200).json({ items });
+    });
+    app.get("/admin/instances/lookup", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const phone = String(req.query.phone || "").trim();
+            const items = await adminInstancesService.lookupByPhone(phone);
+            return res.status(200).json({ items });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível localizar a instância.",
+            });
+        }
+    });
+    app.post("/admin/instances/transfer-owner", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const body = req.body;
+            const result = await adminInstancesService.transferOwner({
+                instanceName: body.instanceName !== undefined ? String(body.instanceName) : undefined,
+                phone: body.phone !== undefined ? String(body.phone) : undefined,
+                targetEmail: String(body.targetEmail || ""),
+            });
+            return res.status(200).json(result);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível transferir a instância.",
+            });
+        }
     });
     app.post("/admin/subscribers/promote-from-v02", (req, res) => {
         if (!rejectNonMaster(req, res))
