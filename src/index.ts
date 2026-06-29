@@ -39,6 +39,7 @@ import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
+import { registerWabaPushRoutes } from "./push/waba-push.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integration-monitor.service";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
@@ -11214,6 +11215,7 @@ configureWabaFazendaPool({ loadInstanceUsageMap });
 registerWabaBillingRoutes(app);
 registerWabaCampaignIntakeRoutes(app);
 registerWabaSupportRoutes(app);
+registerWabaPushRoutes(app);
 registerWabaAdminRoutes(app);
 registerWabaOperacionalCampanhasRoutes(app);
 

@@ -9,6 +9,7 @@ import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminSubscriberPromoteService } from "./waba-admin-subscriber-promote.service";
 import { WabaAdminMasterPromoteService } from "./waba-admin-master-promote.service";
 import { WabaAdminSupportService } from "./waba-admin-support.service";
+import { WabaAdminPushService } from "./waba-admin-push.service";
 import { WabaAdminMasterMenuBadgesService } from "./waba-admin-master-menu-badges.service";
 import { MASTER_MENU_BADGE_KEYS, type MasterMenuBadgeKey } from "./waba-admin-master-menu-badges.repository";
 import {
@@ -28,6 +29,7 @@ const adminUsersService = new WabaAdminUsersService();
 const adminFinanceiroService = new WabaAdminFinanceiroService();
 const adminDashboardService = new WabaAdminDashboardService();
 const adminSupportService = new WabaAdminSupportService();
+const adminPushService = new WabaAdminPushService();
 const adminMasterMenuBadgesService = new WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new WabaFinanceiroSplitService();
 const vpsCpuMonitorService = new VpsCpuMonitorService();
@@ -441,6 +443,72 @@ export const registerWabaAdminRoutes = (app: Express) => {
       `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`,
     );
     return res.sendFile(path.resolve(resolved.absolutePath));
+  });
+
+  app.post("/admin/push/review", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = await adminPushService.reviewMessage({
+        title: String(body.title || "").trim(),
+        text: String(body.text || "").trim(),
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível revisar a mensagem.",
+      });
+    }
+  });
+
+  app.post("/admin/push/send", async (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const audiences = Array.isArray(body.audiences) ? body.audiences : [];
+      const userRoles = Array.isArray(body.userRoles) ? body.userRoles : [];
+      const message = await adminPushService.publishMessage({
+        title: String(body.title || "").trim(),
+        originalText: String(body.originalText || "").trim(),
+        reviewedText: String(body.reviewedText || "").trim(),
+        audiences: audiences as never[],
+        userRoles: userRoles as never[],
+        createdByEmail: auth.email,
+      });
+      return res.status(200).json({ message });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível enviar o push.",
+      });
+    }
+  });
+
+  app.get("/admin/push/history", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+    return res.status(200).json({ items: adminPushService.listHistory(limit) });
+  });
+
+  app.get("/admin/push/community-config", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    return res.status(200).json({ config: adminPushService.getCommunityConfig() });
+  });
+
+  app.put("/admin/push/community-config", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const body = req.body as Record<string, unknown>;
+    const config = adminPushService.saveCommunityConfig({
+      communityInviteLink:
+        body.communityInviteLink !== undefined ? String(body.communityInviteLink) : undefined,
+      communityAnnouncementGroupJid:
+        body.communityAnnouncementGroupJid !== undefined
+          ? String(body.communityAnnouncementGroupJid)
+          : undefined,
+      communityEvoInstance:
+        body.communityEvoInstance !== undefined ? String(body.communityEvoInstance) : undefined,
+    });
+    return res.status(200).json({ config });
   });
 
   app.get("/admin/infra/cpu/dashboard", async (req, res) => {

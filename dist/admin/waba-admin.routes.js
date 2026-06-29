@@ -14,6 +14,7 @@ const waba_admin_subscribers_service_1 = require("./waba-admin-subscribers.servi
 const waba_admin_subscriber_promote_service_1 = require("./waba-admin-subscriber-promote.service");
 const waba_admin_master_promote_service_1 = require("./waba-admin-master-promote.service");
 const waba_admin_support_service_1 = require("./waba-admin-support.service");
+const waba_admin_push_service_1 = require("./waba-admin-push.service");
 const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-menu-badges.service");
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integration-monitor.service");
@@ -27,6 +28,7 @@ const adminUsersService = new waba_admin_users_service_1.WabaAdminUsersService()
 const adminFinanceiroService = new waba_admin_financeiro_service_1.WabaAdminFinanceiroService();
 const adminDashboardService = new waba_admin_dashboard_service_1.WabaAdminDashboardService();
 const adminSupportService = new waba_admin_support_service_1.WabaAdminSupportService();
+const adminPushService = new waba_admin_push_service_1.WabaAdminPushService();
 const adminMasterMenuBadgesService = new waba_admin_master_menu_badges_service_1.WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService();
 const vpsCpuMonitorService = new vps_cpu_monitor_service_1.VpsCpuMonitorService();
@@ -428,6 +430,71 @@ const registerWabaAdminRoutes = (app) => {
         res.type(resolved.attachment.mimeType);
         res.setHeader("Content-Disposition", `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`);
         return res.sendFile(node_path_1.default.resolve(resolved.absolutePath));
+    });
+    app.post("/admin/push/review", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const body = req.body;
+            const result = await adminPushService.reviewMessage({
+                title: String(body.title || "").trim(),
+                text: String(body.text || "").trim(),
+            });
+            return res.status(200).json(result);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível revisar a mensagem.",
+            });
+        }
+    });
+    app.post("/admin/push/send", async (req, res) => {
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = req.body;
+            const audiences = Array.isArray(body.audiences) ? body.audiences : [];
+            const userRoles = Array.isArray(body.userRoles) ? body.userRoles : [];
+            const message = await adminPushService.publishMessage({
+                title: String(body.title || "").trim(),
+                originalText: String(body.originalText || "").trim(),
+                reviewedText: String(body.reviewedText || "").trim(),
+                audiences: audiences,
+                userRoles: userRoles,
+                createdByEmail: auth.email,
+            });
+            return res.status(200).json({ message });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível enviar o push.",
+            });
+        }
+    });
+    app.get("/admin/push/history", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+        return res.status(200).json({ items: adminPushService.listHistory(limit) });
+    });
+    app.get("/admin/push/community-config", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        return res.status(200).json({ config: adminPushService.getCommunityConfig() });
+    });
+    app.put("/admin/push/community-config", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        const body = req.body;
+        const config = adminPushService.saveCommunityConfig({
+            communityInviteLink: body.communityInviteLink !== undefined ? String(body.communityInviteLink) : undefined,
+            communityAnnouncementGroupJid: body.communityAnnouncementGroupJid !== undefined
+                ? String(body.communityAnnouncementGroupJid)
+                : undefined,
+            communityEvoInstance: body.communityEvoInstance !== undefined ? String(body.communityEvoInstance) : undefined,
+        });
+        return res.status(200).json({ config });
     });
     app.get("/admin/infra/cpu/dashboard", async (req, res) => {
         if (!rejectNonMaster(req, res))

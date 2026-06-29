@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-29
 
+**WABA — Master Suporte Push:** menu Push com revisão IA (GPT), destinos Assinantes/Usuários/Comunidade/E-mail, alertas in-app e histórico. Módulo `src/push/`, rotas `/admin/push/*` e `/push/alerts`. Comunidade via instância `walkup`. Ver `doc/LOG-2026-06-29__142542__master-suporte-push-menu.md`.
+
 **WABA — Coluna Mensagens (Instâncias) = aquecedor:** total enviadas + recebidas via `logs_envios` (EVO no ciclo aquecedor); não usa mais contador Evolution. Serviço `aquecedor-instance-message-stats.service.ts`. Ver `doc/LOG-2026-06-29__124611__instancias-mensagens-aquecedor.md`.
 
 2026-06-27

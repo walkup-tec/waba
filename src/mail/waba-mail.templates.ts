@@ -289,3 +289,24 @@ export const buildCampaignErrorReportedTemplate = (input: CampaignErrorReportedT
 
   return { subject, html };
 };
+
+export const buildPushAnnouncementTemplate = (input: { title: string; message: string }) => {
+  const title = String(input.title || "Comunicado WABA").trim() || "Comunicado WABA";
+  const message = String(input.message || "").trim();
+  const subject = title;
+  const html = baseEmailShell(
+    title,
+    `
+    <p style="margin:0 0 12px;color:#1e293b;">Olá,</p>
+    <p style="margin:0 0 12px;color:#1e293b;">Temos um comunicado importante sobre o sistema WABA:</p>
+    <div style="margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;color:#1e293b;line-height:1.5;">
+      ${formatMultilineHtml(message)}
+    </div>
+    <p style="margin:16px 0 0;color:#1e293b;">
+      Atenciosamente,<br />
+      <strong>Equipe Drax Sistemas</strong>
+    </p>
+  `,
+  );
+  return { subject, html };
+};

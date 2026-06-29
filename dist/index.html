@@ -3135,8 +3135,126 @@
       body.admin-section-active #waba-main > #tab-admin-chamados:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-chamados:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
-      body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden) {
+      body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
+      body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
+      body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
         display: block;
+      }
+
+      #tab-admin-push .panel {
+        padding: 28px 24px 32px;
+      }
+
+      .admin-push-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      @media (max-width: 991px) {
+        .admin-push-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .admin-push-field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .admin-push-textarea,
+      .admin-push-input {
+        width: 100%;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.35);
+        color: #e2e8f0;
+        padding: 12px 14px;
+        font: inherit;
+        line-height: 1.45;
+      }
+
+      .admin-push-textarea {
+        min-height: 180px;
+        resize: vertical;
+      }
+
+      .admin-push-audience-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .admin-push-audience-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.22);
+      }
+
+      .admin-push-role-wrap {
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px dashed rgba(148, 163, 184, 0.35);
+      }
+
+      .admin-push-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .admin-push-history-table td,
+      .admin-push-history-table th {
+        vertical-align: top;
+      }
+
+      .waba-push-alert-banner {
+        display: none;
+        margin: 0 0 16px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        background: linear-gradient(135deg, rgba(14, 116, 144, 0.22), rgba(30, 64, 175, 0.18));
+        color: #e2e8f0;
+      }
+
+      body.waba-push-alert-visible .waba-push-alert-banner {
+        display: block;
+      }
+
+      .waba-push-alert-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .waba-push-alert-title {
+        font-weight: 700;
+        color: #f8fafc;
+      }
+
+      .waba-push-alert-dismiss {
+        border: 0;
+        background: transparent;
+        color: #cbd5e1;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .waba-push-alert-message {
+        white-space: pre-wrap;
+        line-height: 1.5;
+        color: #dbeafe;
       }
 
       #tab-admin-monitor-cpu .panel {
@@ -6133,9 +6251,11 @@
         }
       }
 
-      /* Monitor CPU: usar toda a largura útil à direita da sidebar */
+      /* Monitor CPU / Push: usar toda a largura útil à direita da sidebar */
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
-      body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden) {
+      body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
+      body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
+      body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
         max-width: none;
         width: 100%;
         margin-inline: 0;
@@ -13865,6 +13985,25 @@
                   </span>
                   <span class="tab-label">Monitor CPU</span>
                 </button>
+                <button
+                  id="tab-btn-admin-push"
+                  class="tab-button admin-tab-button admin-master-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-admin-push"
+                  data-tab="admin-push"
+                  data-menu-key="admin-push"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M4 12h10"></path>
+                      <path d="M12 6l6 6-6 6"></path>
+                      <path d="M18 4v16"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Push</span>
+                </button>
               </div>
             </div>
           </div>
@@ -14122,6 +14261,16 @@
             >
               <span>Monitor CPU</span>
             </button>
+            <button
+              class="tab-button admin-tab-button admin-master-only"
+              type="button"
+              data-tab="admin-push"
+              data-menu-key="admin-push"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              <span>Push</span>
+            </button>
           </div>
         </div>
       </div>
@@ -14182,6 +14331,13 @@
       </div>
 
       <main id="waba-main" class="container-fluid aquecedor-section-shell">
+        <div id="waba-push-alert-banner" class="waba-push-alert-banner" role="status" aria-live="polite" hidden>
+          <div class="waba-push-alert-head">
+            <div class="waba-push-alert-title" id="waba-push-alert-title">Comunicado</div>
+            <button type="button" class="waba-push-alert-dismiss" id="waba-push-alert-dismiss" title="Dispensar alerta">×</button>
+          </div>
+          <div class="waba-push-alert-message" id="waba-push-alert-message"></div>
+        </div>
         <div id="waba-staff-no-menus-banner" class="waba-staff-no-menus-banner" role="status">
           Sua conta não tem nenhum menu liberado. Peça ao usuário master para ajustar suas permissões.
         </div>
@@ -16833,6 +16989,85 @@
           </div>
         </div>
 
+        <div id="tab-admin-push" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Suporte · Push</div>
+                <span class="muted">
+                  Comunique atualizações para assinantes, usuários, comunidade WhatsApp ou e-mail. Revise o texto com IA antes de enviar.
+                </span>
+              </div>
+              <div class="aquecedor-section">
+                <div class="admin-push-grid">
+                  <div>
+                    <div class="admin-push-field">
+                      <label class="field-label" for="admin-push-title">Título</label>
+                      <input id="admin-push-title" class="admin-push-input" type="text" maxlength="120" placeholder="Ex.: Atualização do sistema" />
+                    </div>
+                    <div class="admin-push-field" style="margin-top:12px">
+                      <label class="field-label" for="admin-push-original">Mensagem original</label>
+                      <textarea id="admin-push-original" class="admin-push-textarea" placeholder="Escreva o comunicado…"></textarea>
+                    </div>
+                    <div class="admin-push-actions">
+                      <button id="admin-push-review-btn" class="instance-action-btn btn-refresh enabled" type="button">Revisar com IA</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="admin-push-field">
+                      <label class="field-label" for="admin-push-reviewed">Mensagem revisada (IA)</label>
+                      <textarea id="admin-push-reviewed" class="admin-push-textarea" placeholder="Após revisar, edite aqui se necessário…"></textarea>
+                    </div>
+                    <div class="admin-push-field" style="margin-top:12px">
+                      <span class="field-label">Destinatários</span>
+                      <div class="admin-push-audience-grid">
+                        <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-subscribers" checked /> Assinantes (alerta no painel)</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-users" /> Usuários (alerta no painel)</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-community" /> Comunidade WhatsApp</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-aud-email" /> E-mail</label>
+                      </div>
+                      <div id="admin-push-user-roles-wrap" class="admin-push-role-wrap" hidden>
+                        <span class="field-label">Tipos de usuário</span>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="admin-push-role-operacional" checked /> Operacional</label>
+                        <label class="admin-push-audience-item" style="margin-top:8px"><input type="checkbox" id="admin-push-role-suporte" checked /> Suporte</label>
+                      </div>
+                    </div>
+                    <div class="admin-push-actions">
+                      <button id="admin-push-send-btn" class="instance-action-btn btn-qrcode enabled" type="button">Enviar push</button>
+                    </div>
+                    <p id="admin-push-community-hint" class="muted" style="margin-top:10px">
+                      Comunidade: instância <strong>walkup</strong> (admin). Link:
+                      <a href="https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7" target="_blank" rel="noopener noreferrer">entrar na comunidade</a>.
+                    </p>
+                  </div>
+                </div>
+
+                <div style="margin-top:28px">
+                  <div class="admin-subscribers-toolbar">
+                    <span id="admin-push-history-summary" class="admin-subscribers-summary">Histórico de envios</span>
+                    <button id="admin-push-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">Atualizar</button>
+                  </div>
+                  <div class="admin-subscribers-table-wrap">
+                    <table class="admin-subscribers-table admin-push-history-table" aria-label="Histórico de push">
+                      <thead>
+                        <tr>
+                          <th>Data</th>
+                          <th>Título</th>
+                          <th>Destinos</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-push-history-tbody">
+                        <tr><td colspan="4" class="muted">Carregando…</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <div id="tab-admin-campanhas" class="tab-panel tab-hidden" aria-hidden="true">
           <div class="row g-3">
             <section class="panel col-12">
@@ -19303,7 +19538,7 @@
       }
 
       function isSuporteTab(tabName) {
-        return tabName === "admin-chamados" || tabName === "admin-monitor-cpu";
+        return tabName === "admin-chamados" || tabName === "admin-monitor-cpu" || tabName === "admin-push";
       }
 
       function isMenuSectionLocked(section) {
@@ -23997,6 +24232,234 @@
         }
       }
 
+      let wabaPushActiveAlert = null;
+
+      function syncAdminPushUserRolesVisibility() {
+        const usersChecked = document.getElementById("admin-push-aud-users")?.checked;
+        const wrap = document.getElementById("admin-push-user-roles-wrap");
+        if (wrap) wrap.hidden = !usersChecked;
+      }
+
+      function collectAdminPushAudiences() {
+        const audiences = [];
+        if (document.getElementById("admin-push-aud-subscribers")?.checked) audiences.push("subscribers");
+        if (document.getElementById("admin-push-aud-users")?.checked) audiences.push("users");
+        if (document.getElementById("admin-push-aud-community")?.checked) audiences.push("community");
+        if (document.getElementById("admin-push-aud-email")?.checked) audiences.push("email");
+        return audiences;
+      }
+
+      function collectAdminPushUserRoles() {
+        const roles = [];
+        if (document.getElementById("admin-push-role-operacional")?.checked) roles.push("operacional");
+        if (document.getElementById("admin-push-role-suporte")?.checked) roles.push("suporte");
+        return roles;
+      }
+
+      function formatAdminPushAudiencesLabel(row) {
+        const map = {
+          subscribers: "Assinantes",
+          users: "Usuários",
+          community: "Comunidade",
+          email: "E-mail",
+        };
+        const items = Array.isArray(row?.audiences) ? row.audiences : [];
+        const labels = items.map((item) => map[item] || item);
+        if (items.includes("users") && Array.isArray(row?.userRoles) && row.userRoles.length) {
+          labels.push(`(${row.userRoles.join(", ")})`);
+        }
+        return labels.join(" · ") || "—";
+      }
+
+      function renderAdminPushHistory(items) {
+        const tbody = document.getElementById("admin-push-history-tbody");
+        const summary = document.getElementById("admin-push-history-summary");
+        const rows = Array.isArray(items) ? items : [];
+        if (summary) summary.textContent = `${rows.length} envio(s) no histórico`;
+        if (!tbody) return;
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted">Nenhum push enviado ainda.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows
+          .map((row) => {
+            const when = escapeAdminHtml(formatAdminDateTimeLabel(row?.sentAt || row?.createdAt));
+            const title = escapeAdminHtml(row?.title || "Comunicado");
+            const destinations = escapeAdminHtml(formatAdminPushAudiencesLabel(row));
+            const status = escapeAdminHtml(String(row?.status || "—"));
+            return `<tr><td>${when}</td><td>${title}</td><td>${destinations}</td><td>${status}</td></tr>`;
+          })
+          .join("");
+      }
+
+      async function loadAdminPushHistory() {
+        const tbody = document.getElementById("admin-push-history-tbody");
+        if (!hasMasterAccess()) {
+          if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="4" class="muted">Área restrita ao usuário master.</td></tr>';
+          }
+          return;
+        }
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="muted">Carregando…</td></tr>';
+        try {
+          const response = await fetchWithTimeout("/admin/push/history", {}, 15000);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha ao carregar histórico.");
+          renderAdminPushHistory(payload.items);
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="4" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar histórico."
+            )}</td></tr>`;
+          }
+          showToast(error?.message || "Falha ao carregar histórico de push.", "error");
+        }
+      }
+
+      async function reviewAdminPushWithAi() {
+        const title = String(document.getElementById("admin-push-title")?.value || "").trim();
+        const text = String(document.getElementById("admin-push-original")?.value || "").trim();
+        const reviewedEl = document.getElementById("admin-push-reviewed");
+        const btn = document.getElementById("admin-push-review-btn");
+        if (!text) {
+          showToast("Escreva a mensagem antes de revisar com IA.", "warning");
+          return;
+        }
+        if (btn) {
+          btn.textContent = "Revisando…";
+          btn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/push/review",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title, text }),
+            },
+            30000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha na revisão com IA.");
+          if (reviewedEl) reviewedEl.value = String(payload.reviewedText || "");
+          showToast("Texto revisado pela IA. Confira antes de enviar.", "success");
+        } catch (error) {
+          showToast(error?.message || "Falha na revisão com IA.", "error");
+        } finally {
+          if (btn) {
+            btn.textContent = "Revisar com IA";
+            btn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      async function sendAdminPush() {
+        const title = String(document.getElementById("admin-push-title")?.value || "").trim();
+        const originalText = String(document.getElementById("admin-push-original")?.value || "").trim();
+        const reviewedText = String(document.getElementById("admin-push-reviewed")?.value || "").trim();
+        const audiences = collectAdminPushAudiences();
+        const userRoles = collectAdminPushUserRoles();
+        const btn = document.getElementById("admin-push-send-btn");
+        if (!originalText && !reviewedText) {
+          showToast("Informe a mensagem para enviar.", "warning");
+          return;
+        }
+        if (!audiences.length) {
+          showToast("Selecione ao menos um destino.", "warning");
+          return;
+        }
+        if (audiences.includes("users") && !userRoles.length) {
+          showToast("Selecione ao menos um tipo de usuário.", "warning");
+          return;
+        }
+        if (btn) {
+          btn.textContent = "Enviando…";
+          btn.setAttribute("disabled", "true");
+        }
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/push/send",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title,
+                originalText,
+                reviewedText: reviewedText || originalText,
+                audiences,
+                userRoles,
+              }),
+            },
+            60000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
+          showToast("Push enviado com sucesso.", "success");
+          await loadAdminPushHistory();
+        } catch (error) {
+          showToast(error?.message || "Falha ao enviar push.", "error");
+        } finally {
+          if (btn) {
+            btn.textContent = "Enviar push";
+            btn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      function hideWabaPushAlertBanner() {
+        const banner = document.getElementById("waba-push-alert-banner");
+        document.body.classList.remove("waba-push-alert-visible");
+        if (banner) banner.hidden = true;
+        wabaPushActiveAlert = null;
+      }
+
+      function showWabaPushAlertBanner(alert) {
+        const banner = document.getElementById("waba-push-alert-banner");
+        const titleEl = document.getElementById("waba-push-alert-title");
+        const messageEl = document.getElementById("waba-push-alert-message");
+        if (!banner || !alert) return;
+        wabaPushActiveAlert = alert;
+        if (titleEl) titleEl.textContent = String(alert.title || "Comunicado");
+        if (messageEl) messageEl.textContent = String(alert.message || "");
+        banner.hidden = false;
+        document.body.classList.add("waba-push-alert-visible");
+      }
+
+      async function dismissWabaPushAlert() {
+        if (!wabaPushActiveAlert?.id) {
+          hideWabaPushAlertBanner();
+          return;
+        }
+        try {
+          await fetchWithTimeout(
+            `/push/alerts/${encodeURIComponent(wabaPushActiveAlert.id)}/dismiss`,
+            { method: "POST" },
+            10000
+          );
+        } catch {
+          /* ignore */
+        }
+        hideWabaPushAlertBanner();
+        void refreshPushAlerts();
+      }
+
+      async function refreshPushAlerts() {
+        if (!wabaAuthEnabled) return;
+        try {
+          const response = await fetchWithTimeout("/push/alerts", {}, 10000);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) return;
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!items.length) {
+            hideWabaPushAlertBanner();
+            return;
+          }
+          showWabaPushAlertBanner(items[0]);
+        } catch {
+          /* ignore */
+        }
+      }
+
       function renderAdminChamadosDetailAttachments(attachments) {
         const items = Array.isArray(attachments) ? attachments : [];
         if (!items.length) return '<p class="muted">Nenhum anexo enviado.</p>';
@@ -26827,6 +27290,20 @@
           void saveAdminChamadosDetail();
         });
 
+        document.getElementById("admin-push-review-btn")?.addEventListener("click", () => {
+          void reviewAdminPushWithAi();
+        });
+        document.getElementById("admin-push-send-btn")?.addEventListener("click", () => {
+          void sendAdminPush();
+        });
+        document.getElementById("admin-push-refresh-btn")?.addEventListener("click", () => {
+          void loadAdminPushHistory();
+        });
+        document.getElementById("admin-push-aud-users")?.addEventListener("change", syncAdminPushUserRolesVisibility);
+        document.getElementById("waba-push-alert-dismiss")?.addEventListener("click", () => {
+          void dismissWabaPushAlert();
+        });
+
         document.getElementById("admin-chamados-detail-close-btn")?.addEventListener("click", () => {
           closeAdminChamadosDetail();
         });
@@ -27239,6 +27716,7 @@
               Boolean(String(session.email || "").trim());
           }
           syncWabaSupportButtonVisibility();
+          void refreshPushAlerts();
         } catch {
           /* ignore */
         }
@@ -35640,6 +36118,14 @@
           stopAdminCampanhasPolling();
           void loadAdminMonitorCpu();
           startAdminMonitorCpuPolling();
+        } else if (nextTab === "admin-push") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          stopAdminMonitorCpuPolling();
+          syncAdminPushUserRolesVisibility();
+          void loadAdminPushHistory();
         } else if (nextTab === "admin-dashboard") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
