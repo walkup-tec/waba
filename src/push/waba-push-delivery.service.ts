@@ -3,12 +3,14 @@ import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.reposit
 import { WabaSystemUserRepository } from "../users/waba-system-user.repository";
 import { wabaMailService } from "../mail/waba-mail.service";
 import { buildPushAnnouncementTemplate } from "../mail/waba-mail.templates";
+import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
 import { sendPushToWhatsAppCommunity } from "./waba-push-community.service";
 import { WabaPushRepository } from "./waba-push.repository";
 import type {
   WabaPushAlertView,
   WabaPushAudience,
   WabaPushDeliveryResults,
+  WabaPushImageAttachment,
   WabaPushMessage,
   WabaPushUserRole,
 } from "./waba-push.types";
@@ -16,6 +18,8 @@ import type {
 const pushRepository = new WabaPushRepository();
 const subscriberRepository = new WabaSubscriberRepository();
 const systemUserRepository = new WabaSystemUserRepository();
+
+const DEDUPE_WINDOW_MS = 45_000;
 
 function normalizeEmail(value: string): string {
   return String(value || "").trim().toLowerCase();
@@ -37,21 +41,71 @@ function resolveSubscriberRecipients(): string[] {
     .filter((email) => email.includes("@"));
 }
 
+function resolveDefaultUserRoles(userRoles: WabaPushUserRole[]): WabaPushUserRole[] {
+  return userRoles?.length ? userRoles : (["operacional", "suporte"] as WabaPushUserRole[]);
+}
+
 function resolveEmailRecipients(
   audiences: WabaPushAudience[],
   userRoles: WabaPushUserRole[],
 ): string[] {
+  if (!audiences.includes("email")) return [];
+
   const emails = new Set<string>();
-  if (audiences.includes("subscribers") || audiences.includes("email")) {
+  const broadcastEmailOnly =
+    !audiences.includes("subscribers") && !audiences.includes("users");
+
+  if (audiences.includes("subscribers") || broadcastEmailOnly) {
     for (const email of resolveSubscriberRecipients()) emails.add(email);
   }
-  if (audiences.includes("users") || audiences.includes("email")) {
-    for (const email of resolveStaffRecipients(userRoles)) emails.add(email);
+  if (audiences.includes("users") || broadcastEmailOnly) {
+    for (const email of resolveStaffRecipients(resolveDefaultUserRoles(userRoles))) {
+      emails.add(email);
+    }
   }
   return Array.from(emails);
 }
 
-async function deliverEmails(title: string, text: string, recipients: string[]) {
+function buildPushImagePublicUrl(image: WabaPushImageAttachment | null | undefined): string | null {
+  if (!image?.id) return null;
+  const base = resolveWabaPublicBaseUrl().replace(/\/+$/, "");
+  if (!base) return null;
+  return `${base}/push/public-media/${encodeURIComponent(image.id)}`;
+}
+
+function findRecentDuplicate(input: {
+  reviewedText: string;
+  audiences: WabaPushAudience[];
+  userRoles: WabaPushUserRole[];
+  createdByEmail: string;
+  image: WabaPushImageAttachment | null;
+}): WabaPushMessage | null {
+  const cutoff = Date.now() - DEDUPE_WINDOW_MS;
+  const audienceKey = [...input.audiences].sort().join(",");
+  const rolesKey = [...input.userRoles].sort().join(",");
+  const imageId = String(input.image?.id || "");
+
+  return (
+    pushRepository
+      .listMessages(10)
+      .find((row) => {
+        if (normalizeEmail(row.createdByEmail) !== normalizeEmail(input.createdByEmail)) return false;
+        if (new Date(row.createdAt).getTime() < cutoff) return false;
+        if (row.reviewedText !== input.reviewedText) return false;
+        if ([...row.audiences].sort().join(",") !== audienceKey) return false;
+        if ([...row.userRoles].sort().join(",") !== rolesKey) return false;
+        if (String(row.image?.id || "") !== imageId) return false;
+        return row.status === "sent" || row.status === "partial";
+      }) ?? null
+  );
+}
+
+async function deliverEmails(
+  title: string,
+  text: string,
+  recipients: string[],
+  imageUrl: string | null,
+) {
   let sent = 0;
   let skipped = 0;
   let failed = 0;
@@ -60,7 +114,11 @@ async function deliverEmails(title: string, text: string, recipients: string[]) 
     return { sent: 0, skipped: recipients.length, failed: 0 };
   }
   const subject = String(title || "Comunicado WABA").trim() || "Comunicado WABA";
-  const template = buildPushAnnouncementTemplate({ title: subject, message: text });
+  const template = buildPushAnnouncementTemplate({
+    title: subject,
+    message: text,
+    imageUrl,
+  });
   for (const toEmail of recipients) {
     try {
       await wabaMailService.send({ to: toEmail, subject: template.subject, html: template.html });
@@ -80,6 +138,7 @@ export async function sendPushMessage(input: {
   audiences: WabaPushAudience[];
   userRoles: WabaPushUserRole[];
   createdByEmail: string;
+  image?: WabaPushImageAttachment | null;
 }): Promise<WabaPushMessage> {
   const audiences = Array.from(
     new Set((input.audiences || []).filter((value): value is WabaPushAudience => !!value)),
@@ -87,9 +146,22 @@ export async function sendPushMessage(input: {
   if (!audiences.length) {
     throw new Error("Selecione ao menos um destino para o push.");
   }
+
+  const image = input.image?.id ? input.image : null;
   const reviewedText = String(input.reviewedText || input.originalText || "").trim();
-  if (!reviewedText) {
-    throw new Error("Mensagem revisada vazia.");
+  if (!reviewedText && !image) {
+    throw new Error("Informe a mensagem ou uma imagem para o push.");
+  }
+
+  const duplicate = findRecentDuplicate({
+    reviewedText,
+    audiences,
+    userRoles: input.userRoles || [],
+    createdByEmail: input.createdByEmail,
+    image,
+  });
+  if (duplicate) {
+    return duplicate;
   }
 
   const deliveryResults: WabaPushDeliveryResults = {};
@@ -99,14 +171,14 @@ export async function sendPushMessage(input: {
     deliveryResults.subscribers = { targeted: resolveSubscriberRecipients().length };
   }
   if (audiences.includes("users")) {
-    const roles = input.userRoles?.length ? input.userRoles : (["operacional", "suporte"] as WabaPushUserRole[]);
+    const roles = resolveDefaultUserRoles(input.userRoles || []);
     deliveryResults.users = {
       targeted: resolveStaffRecipients(roles).length,
       roles,
     };
   }
   if (audiences.includes("community")) {
-    const community = await sendPushToWhatsAppCommunity(reviewedText);
+    const community = await sendPushToWhatsAppCommunity(reviewedText, image);
     deliveryResults.community = {
       ok: community.ok,
       detail: community.detail,
@@ -116,7 +188,12 @@ export async function sendPushMessage(input: {
   }
   if (audiences.includes("email")) {
     const recipients = resolveEmailRecipients(audiences, input.userRoles || []);
-    const email = await deliverEmails(input.title, reviewedText, recipients);
+    const email = await deliverEmails(
+      input.title,
+      reviewedText,
+      recipients,
+      buildPushImagePublicUrl(image),
+    );
     deliveryResults.email = email;
     if (email.failed > 0) hasFailure = true;
   }
@@ -127,6 +204,7 @@ export async function sendPushMessage(input: {
     title: String(input.title || "Comunicado").trim() || "Comunicado",
     originalText: String(input.originalText || "").trim(),
     reviewedText,
+    image,
     audiences,
     userRoles: input.userRoles || [],
     status: hasFailure ? "partial" : "sent",
@@ -160,9 +238,7 @@ export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[
       if (dismissed.has(email)) return false;
       if (isSubscriber && row.audiences.includes("subscribers")) return true;
       if (!isStaff || !row.audiences.includes("users")) return false;
-      const roles = row.userRoles?.length
-        ? row.userRoles
-        : (["operacional", "suporte"] as WabaPushUserRole[]);
+      const roles = resolveDefaultUserRoles(row.userRoles || []);
       return staffRole ? roles.includes(staffRole) : false;
     })
     .slice(0, 3)
@@ -171,6 +247,7 @@ export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[
       title: row.title,
       message: row.reviewedText,
       sentAt: row.sentAt || row.createdAt,
+      imageUrl: buildPushImagePublicUrl(row.image),
     }));
 }
 
@@ -179,5 +256,8 @@ export function dismissPushAlert(pushId: string, email: string): boolean {
 }
 
 export function listPushHistory(limit = 30): WabaPushMessage[] {
-  return pushRepository.listMessages(limit);
+  return pushRepository.listMessages(limit).map((row) => ({
+    ...row,
+    image: row.image?.id ? row.image : null,
+  }));
 }

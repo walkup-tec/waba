@@ -15,6 +15,8 @@ export const PRODUCTION_PERSISTENCE_CATALOG = [
   { id: "campaignIntakes", file: "waba-campaign-intakes.json", label: "Campanhas (wizard)" },
   { id: "disparosLocal", file: "disparos-local-state.json", label: "Campanhas / fila local" },
   { id: "supportTickets", file: "waba-support-tickets.json", label: "Chamados de suporte" },
+  { id: "pushMessages", file: "waba-push-messages.json", label: "Push / comunicados" },
+  { id: "pushConfig", file: "waba-push-config.json", label: "Push / config comunidade" },
   { id: "instanceOwners", file: "instance-owners.json", label: "Instâncias por assinante" },
   { id: "instanceAliases", file: "instance-aliases.json", label: "Aliases de instâncias" },
   { id: "aquecedorLifecycle", file: "aquecedor-instance-lifecycle.json", label: "Aquecedor / lifecycle" },

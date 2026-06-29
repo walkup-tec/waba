@@ -4,6 +4,7 @@ exports.WabaAdminPushService = void 0;
 const waba_push_openai_service_1 = require("../push/waba-push-openai.service");
 const waba_push_delivery_service_1 = require("../push/waba-push-delivery.service");
 const waba_push_community_service_1 = require("../push/waba-push-community.service");
+const waba_push_media_service_1 = require("../push/waba-push-media.service");
 function parseAudiences(raw) {
     const allowed = new Set(["subscribers", "users", "community", "email"]);
     const values = Array.isArray(raw) ? raw : [];
@@ -23,13 +24,23 @@ class WabaAdminPushService {
         return (0, waba_push_openai_service_1.reviewPushMessageWithOpenAi)(input);
     }
     async publishMessage(input) {
+        const audiences = parseAudiences(input.audiences);
+        const image = input.image?.id ? input.image : null;
         return (0, waba_push_delivery_service_1.sendPushMessage)({
             title: String(input.title || "Comunicado WABA").trim(),
             originalText: String(input.originalText || "").trim(),
             reviewedText: String(input.reviewedText || "").trim(),
-            audiences: parseAudiences(input.audiences),
+            audiences,
             userRoles: parseUserRoles(input.userRoles),
             createdByEmail: input.createdByEmail,
+            image,
+        });
+    }
+    uploadImage(file) {
+        return (0, waba_push_media_service_1.savePushImageAttachment)({
+            buffer: file.buffer,
+            fileName: file.originalname,
+            mimeType: file.mimetype,
         });
     }
     listHistory(limit = 30) {

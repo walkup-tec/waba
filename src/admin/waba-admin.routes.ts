@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import path from "node:path";
+import multer from "multer";
 import { rejectUnlessStaffMenu } from "../auth/waba-staff-menu-auth";
 import { resolveWabaRequestAuth } from "../auth/waba-request-auth";
 import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
@@ -33,6 +34,18 @@ const adminPushService = new WabaAdminPushService();
 const adminMasterMenuBadgesService = new WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new WabaFinanceiroSplitService();
 const vpsCpuMonitorService = new VpsCpuMonitorService();
+
+const uploadPushImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype || "").toLowerCase().startsWith("image/")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Envie apenas imagens (JPEG, PNG, WebP ou GIF)."));
+  },
+});
 
 const rejectNonMaster = (req: Request, res: Response) => {
   const auth = resolveWabaRequestAuth(req);
@@ -461,6 +474,33 @@ export const registerWabaAdminRoutes = (app: Express) => {
     }
   });
 
+  app.post("/admin/push/upload-image", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    uploadPushImage.single("image")(req, res, (err) => {
+      if (err) {
+        const message =
+          err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE"
+            ? "Imagem maior que 5 MB."
+            : err instanceof Error
+              ? err.message
+              : "Falha no upload da imagem.";
+        return res.status(400).json({ error: message });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "Selecione uma imagem para enviar." });
+      }
+      try {
+        const image = adminPushService.uploadImage(file);
+        return res.status(200).json({ image });
+      } catch (error) {
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Não foi possível salvar a imagem.",
+        });
+      }
+    });
+  });
+
   app.post("/admin/push/send", async (req, res) => {
     const auth = rejectNonMaster(req, res);
     if (!auth) return;
@@ -468,6 +508,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
       const body = req.body as Record<string, unknown>;
       const audiences = Array.isArray(body.audiences) ? body.audiences : [];
       const userRoles = Array.isArray(body.userRoles) ? body.userRoles : [];
+      const imageRaw = body.image && typeof body.image === "object" ? (body.image as Record<string, unknown>) : null;
       const message = await adminPushService.publishMessage({
         title: String(body.title || "").trim(),
         originalText: String(body.originalText || "").trim(),
@@ -475,8 +516,16 @@ export const registerWabaAdminRoutes = (app: Express) => {
         audiences: audiences as never[],
         userRoles: userRoles as never[],
         createdByEmail: auth.email,
+        image: imageRaw?.id
+          ? {
+              id: String(imageRaw.id || "").trim(),
+              fileName: String(imageRaw.fileName || "imagem").trim(),
+              mimeType: String(imageRaw.mimeType || "image/jpeg").trim(),
+              sizeBytes: Number(imageRaw.sizeBytes) || 0,
+            }
+          : null,
       });
-      return res.status(200).json({ message });
+      return res.status(200).json({ message, deduplicated: false });
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Não foi possível enviar o push.",

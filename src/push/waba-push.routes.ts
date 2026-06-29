@@ -1,9 +1,21 @@
 import type { Express } from "express";
+import path from "node:path";
 import { resolveWabaRequestAuth } from "../auth/waba-request-auth";
 import { wabaRequireAuthMiddleware } from "../auth/waba-auth.routes";
 import { listPushAlertsForAuth, dismissPushAlert } from "./waba-push-delivery.service";
+import { resolvePushMediaFile } from "./waba-push-media.service";
 
 export const registerWabaPushRoutes = (app: Express) => {
+  app.get("/push/public-media/:id", (req, res) => {
+    const resolved = resolvePushMediaFile(String(req.params.id || "").trim());
+    if (!resolved) {
+      return res.status(404).json({ error: "Imagem não encontrada." });
+    }
+    res.type(resolved.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    return res.sendFile(path.resolve(resolved.absolutePath));
+  });
+
   app.get("/push/alerts", wabaRequireAuthMiddleware, (req, res) => {
     try {
       const auth = resolveWabaRequestAuth(req);

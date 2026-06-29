@@ -1,10 +1,17 @@
 import { evoHttpRequest } from "../evo-http.client";
+import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
+import { readPushMediaBase64 } from "./waba-push-media.service";
 import { WabaPushRepository } from "./waba-push.repository";
+import type { WabaPushImageAttachment } from "./waba-push.types";
 
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
 const EVO_SEND_TEXT_URL_TEMPLATE =
   process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
+const EVO_SEND_MEDIA_URL_TEMPLATE =
+  process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
+const EVO_SEND_TEXT_V1 =
+  process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
 
 const pushRepository = new WabaPushRepository();
 
@@ -77,7 +84,21 @@ async function fetchAnnouncementGroupJid(instanceName: string): Promise<string> 
   return jid;
 }
 
-export async function sendPushToWhatsAppCommunity(text: string): Promise<{
+function buildEvoTextBody(number: string, text: string): Record<string, unknown> {
+  return EVO_SEND_TEXT_V1
+    ? { number, textMessage: { text } }
+    : { number, text };
+}
+
+function resolvePublicMediaUrl(imageId: string): string {
+  const base = resolveWabaPublicBaseUrl().replace(/\/+$/, "");
+  return `${base}/push/public-media/${encodeURIComponent(imageId)}`;
+}
+
+export async function sendPushToWhatsAppCommunity(
+  text: string,
+  image?: WabaPushImageAttachment | null,
+): Promise<{
   ok: boolean;
   detail: string;
   groupJid?: string;
@@ -85,23 +106,60 @@ export async function sendPushToWhatsAppCommunity(text: string): Promise<{
   const config = pushRepository.readConfig();
   const instanceName = String(config.communityEvoInstance || "walkup").trim();
   const message = String(text || "").trim();
-  if (!message) {
-    return { ok: false, detail: "Texto vazio para comunidade." };
+  const hasImage = Boolean(image?.id);
+  if (!message && !hasImage) {
+    return { ok: false, detail: "Informe texto ou imagem para a comunidade." };
   }
   if (!EVO_API_BASE || !EVO_API_KEY) {
     return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
   }
 
   const groupJid = await fetchAnnouncementGroupJid(instanceName);
+
+  if (hasImage && image) {
+    const mediaData = readPushMediaBase64(image.id);
+    if (!mediaData) {
+      return { ok: false, detail: "Imagem do push não encontrada no servidor.", groupJid };
+    }
+    const sendUrl = buildTemplateUrl(EVO_SEND_MEDIA_URL_TEMPLATE, instanceName);
+    const publicUrl = resolvePublicMediaUrl(image.id);
+    const sendBody: Record<string, unknown> = {
+      number: groupJid,
+      mediatype: "image",
+      mimetype: mediaData.mimeType,
+      caption: message || undefined,
+      fileName: image.fileName || "push-image.jpg",
+      media: publicUrl,
+    };
+    let sendResult = await evoHttpRequest(sendUrl, "POST", {
+      apiKey: EVO_API_KEY,
+      body: sendBody,
+    });
+    if (!sendResult.ok) {
+      sendBody.media = mediaData.base64;
+      sendResult = await evoHttpRequest(sendUrl, "POST", {
+        apiKey: EVO_API_KEY,
+        body: sendBody,
+      });
+    }
+    if (!sendResult.ok) {
+      return {
+        ok: false,
+        detail: `Falha ao publicar imagem na comunidade (HTTP ${sendResult.status}): ${String(sendResult.body || sendResult.error || "").slice(0, 220)}`,
+        groupJid,
+      };
+    }
+    return {
+      ok: true,
+      detail: `Imagem publicada no grupo de anúncios (${groupJid}).`,
+      groupJid,
+    };
+  }
+
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instanceName);
-  const sendBody = {
-    number: groupJid,
-    text: message,
-    textMessage: { text: message },
-  };
   const sendResult = await evoHttpRequest(sendUrl, "POST", {
     apiKey: EVO_API_KEY,
-    body: sendBody,
+    body: buildEvoTextBody(groupJid, message),
   });
   if (!sendResult.ok) {
     return {

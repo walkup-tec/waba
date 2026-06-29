@@ -1,10 +1,24 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaPushRoutes = void 0;
+const node_path_1 = __importDefault(require("node:path"));
 const waba_request_auth_1 = require("../auth/waba-request-auth");
 const waba_auth_routes_1 = require("../auth/waba-auth.routes");
 const waba_push_delivery_service_1 = require("./waba-push-delivery.service");
+const waba_push_media_service_1 = require("./waba-push-media.service");
 const registerWabaPushRoutes = (app) => {
+    app.get("/push/public-media/:id", (req, res) => {
+        const resolved = (0, waba_push_media_service_1.resolvePushMediaFile)(String(req.params.id || "").trim());
+        if (!resolved) {
+            return res.status(404).json({ error: "Imagem não encontrada." });
+        }
+        res.type(resolved.mimeType);
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        return res.sendFile(node_path_1.default.resolve(resolved.absolutePath));
+    });
     app.get("/push/alerts", waba_auth_routes_1.wabaRequireAuthMiddleware, (req, res) => {
         try {
             const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);

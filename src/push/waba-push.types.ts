@@ -2,6 +2,13 @@ export type WabaPushAudience = "subscribers" | "users" | "community" | "email";
 
 export type WabaPushUserRole = "master" | "operacional" | "suporte";
 
+export type WabaPushImageAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
 export type WabaPushStatus = "draft" | "sent" | "partial" | "failed";
 
 export type WabaPushDeliveryResults = {
@@ -16,6 +23,7 @@ export type WabaPushMessage = {
   title: string;
   originalText: string;
   reviewedText: string;
+  image: WabaPushImageAttachment | null;
   audiences: WabaPushAudience[];
   userRoles: WabaPushUserRole[];
   status: WabaPushStatus;
@@ -38,4 +46,5 @@ export type WabaPushAlertView = {
   title: string;
   message: string;
   sentAt: string;
+  imageUrl?: string | null;
 };

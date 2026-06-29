@@ -4,10 +4,14 @@ exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
 exports.getPushCommunityConfig = getPushCommunityConfig;
 exports.updatePushCommunityConfig = updatePushCommunityConfig;
 const evo_http_client_1 = require("../evo-http.client");
+const waba_public_base_url_1 = require("../lib/waba-public-base-url");
+const waba_push_media_service_1 = require("./waba-push-media.service");
 const waba_push_repository_1 = require("./waba-push.repository");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "").replace(/\/+$/, "");
 const EVO_API_KEY = process.env.EVO_API_KEY || "";
 const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
+const EVO_SEND_MEDIA_URL_TEMPLATE = process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
+const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
 const pushRepository = new waba_push_repository_1.WabaPushRepository();
 function buildTemplateUrl(template, instanceName) {
     return String(template || "").replace(/\{instance\}/gi, encodeURIComponent(instanceName));
@@ -74,26 +78,70 @@ async function fetchAnnouncementGroupJid(instanceName) {
     });
     return jid;
 }
-async function sendPushToWhatsAppCommunity(text) {
+function buildEvoTextBody(number, text) {
+    return EVO_SEND_TEXT_V1
+        ? { number, textMessage: { text } }
+        : { number, text };
+}
+function resolvePublicMediaUrl(imageId) {
+    const base = (0, waba_public_base_url_1.resolveWabaPublicBaseUrl)().replace(/\/+$/, "");
+    return `${base}/push/public-media/${encodeURIComponent(imageId)}`;
+}
+async function sendPushToWhatsAppCommunity(text, image) {
     const config = pushRepository.readConfig();
     const instanceName = String(config.communityEvoInstance || "walkup").trim();
     const message = String(text || "").trim();
-    if (!message) {
-        return { ok: false, detail: "Texto vazio para comunidade." };
+    const hasImage = Boolean(image?.id);
+    if (!message && !hasImage) {
+        return { ok: false, detail: "Informe texto ou imagem para a comunidade." };
     }
     if (!EVO_API_BASE || !EVO_API_KEY) {
         return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
     }
     const groupJid = await fetchAnnouncementGroupJid(instanceName);
+    if (hasImage && image) {
+        const mediaData = (0, waba_push_media_service_1.readPushMediaBase64)(image.id);
+        if (!mediaData) {
+            return { ok: false, detail: "Imagem do push não encontrada no servidor.", groupJid };
+        }
+        const sendUrl = buildTemplateUrl(EVO_SEND_MEDIA_URL_TEMPLATE, instanceName);
+        const publicUrl = resolvePublicMediaUrl(image.id);
+        const sendBody = {
+            number: groupJid,
+            mediatype: "image",
+            mimetype: mediaData.mimeType,
+            caption: message || undefined,
+            fileName: image.fileName || "push-image.jpg",
+            media: publicUrl,
+        };
+        let sendResult = await (0, evo_http_client_1.evoHttpRequest)(sendUrl, "POST", {
+            apiKey: EVO_API_KEY,
+            body: sendBody,
+        });
+        if (!sendResult.ok) {
+            sendBody.media = mediaData.base64;
+            sendResult = await (0, evo_http_client_1.evoHttpRequest)(sendUrl, "POST", {
+                apiKey: EVO_API_KEY,
+                body: sendBody,
+            });
+        }
+        if (!sendResult.ok) {
+            return {
+                ok: false,
+                detail: `Falha ao publicar imagem na comunidade (HTTP ${sendResult.status}): ${String(sendResult.body || sendResult.error || "").slice(0, 220)}`,
+                groupJid,
+            };
+        }
+        return {
+            ok: true,
+            detail: `Imagem publicada no grupo de anúncios (${groupJid}).`,
+            groupJid,
+        };
+    }
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instanceName);
-    const sendBody = {
-        number: groupJid,
-        text: message,
-        textMessage: { text: message },
-    };
     const sendResult = await (0, evo_http_client_1.evoHttpRequest)(sendUrl, "POST", {
         apiKey: EVO_API_KEY,
-        body: sendBody,
+        body: buildEvoTextBody(groupJid, message),
     });
     if (!sendResult.ok) {
         return {

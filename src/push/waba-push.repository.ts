@@ -47,7 +47,10 @@ export class WabaPushRepository {
 
   listMessages(limit = 50): WabaPushMessage[] {
     return this.readMessages()
-      .messages.slice()
+      .messages.map((row) => ({
+        ...row,
+        image: row.image?.id ? row.image : null,
+      }))
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
       .slice(0, Math.max(1, limit));
   }

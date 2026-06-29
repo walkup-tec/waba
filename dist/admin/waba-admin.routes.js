@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaAdminRoutes = void 0;
 const node_path_1 = __importDefault(require("node:path"));
+const multer_1 = __importDefault(require("multer"));
 const waba_staff_menu_auth_1 = require("../auth/waba-staff-menu-auth");
 const waba_request_auth_1 = require("../auth/waba-request-auth");
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
@@ -32,6 +33,17 @@ const adminPushService = new waba_admin_push_service_1.WabaAdminPushService();
 const adminMasterMenuBadgesService = new waba_admin_master_menu_badges_service_1.WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService();
 const vpsCpuMonitorService = new vps_cpu_monitor_service_1.VpsCpuMonitorService();
+const uploadPushImage = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, cb) => {
+        if (String(file.mimetype || "").toLowerCase().startsWith("image/")) {
+            cb(null, true);
+            return;
+        }
+        cb(new Error("Envie apenas imagens (JPEG, PNG, WebP ou GIF)."));
+    },
+});
 const rejectNonMaster = (req, res) => {
     const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
     if (auth.role !== "master") {
@@ -448,6 +460,33 @@ const registerWabaAdminRoutes = (app) => {
             });
         }
     });
+    app.post("/admin/push/upload-image", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        uploadPushImage.single("image")(req, res, (err) => {
+            if (err) {
+                const message = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE"
+                    ? "Imagem maior que 5 MB."
+                    : err instanceof Error
+                        ? err.message
+                        : "Falha no upload da imagem.";
+                return res.status(400).json({ error: message });
+            }
+            const file = req.file;
+            if (!file) {
+                return res.status(400).json({ error: "Selecione uma imagem para enviar." });
+            }
+            try {
+                const image = adminPushService.uploadImage(file);
+                return res.status(200).json({ image });
+            }
+            catch (error) {
+                return res.status(400).json({
+                    error: error instanceof Error ? error.message : "Não foi possível salvar a imagem.",
+                });
+            }
+        });
+    });
     app.post("/admin/push/send", async (req, res) => {
         const auth = rejectNonMaster(req, res);
         if (!auth)
@@ -456,6 +495,7 @@ const registerWabaAdminRoutes = (app) => {
             const body = req.body;
             const audiences = Array.isArray(body.audiences) ? body.audiences : [];
             const userRoles = Array.isArray(body.userRoles) ? body.userRoles : [];
+            const imageRaw = body.image && typeof body.image === "object" ? body.image : null;
             const message = await adminPushService.publishMessage({
                 title: String(body.title || "").trim(),
                 originalText: String(body.originalText || "").trim(),
@@ -463,8 +503,16 @@ const registerWabaAdminRoutes = (app) => {
                 audiences: audiences,
                 userRoles: userRoles,
                 createdByEmail: auth.email,
+                image: imageRaw?.id
+                    ? {
+                        id: String(imageRaw.id || "").trim(),
+                        fileName: String(imageRaw.fileName || "imagem").trim(),
+                        mimeType: String(imageRaw.mimeType || "image/jpeg").trim(),
+                        sizeBytes: Number(imageRaw.sizeBytes) || 0,
+                    }
+                    : null,
             });
-            return res.status(200).json({ message });
+            return res.status(200).json({ message, deduplicated: false });
         }
         catch (error) {
             return res.status(400).json({

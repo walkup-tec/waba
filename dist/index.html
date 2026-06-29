@@ -3257,6 +3257,43 @@
         color: #dbeafe;
       }
 
+      .waba-push-alert-image {
+        display: block;
+        max-width: min(100%, 420px);
+        max-height: 220px;
+        width: auto;
+        height: auto;
+        margin: 0 0 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        object-fit: contain;
+      }
+
+      .admin-push-image-wrap {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .admin-push-image-preview {
+        display: none;
+        max-width: 280px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+      }
+
+      .admin-push-image-preview.is-visible {
+        display: block;
+      }
+
+      .admin-push-image-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
       #tab-admin-monitor-cpu .panel {
         padding: 28px 24px 32px;
       }
@@ -14342,6 +14379,7 @@
             <div class="waba-push-alert-title" id="waba-push-alert-title">Comunicado</div>
             <button type="button" class="waba-push-alert-dismiss" id="waba-push-alert-dismiss" title="Dispensar alerta">×</button>
           </div>
+          <img id="waba-push-alert-image" class="waba-push-alert-image" alt="" hidden />
           <div class="waba-push-alert-message" id="waba-push-alert-message"></div>
         </div>
         <div id="waba-staff-no-menus-banner" class="waba-staff-no-menus-banner" role="status">
@@ -17015,6 +17053,16 @@
                       <label class="field-label" for="admin-push-original">Mensagem original</label>
                       <textarea id="admin-push-original" class="admin-push-textarea" placeholder="Escreva o comunicado…"></textarea>
                     </div>
+                    <div class="admin-push-image-wrap">
+                      <span class="field-label">Imagem (opcional)</span>
+                      <div class="admin-push-image-actions">
+                        <input id="admin-push-image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+                        <button id="admin-push-image-btn" class="instance-action-btn btn-refresh enabled" type="button">Selecionar imagem</button>
+                        <button id="admin-push-image-clear-btn" class="instance-action-btn" type="button" hidden>Remover imagem</button>
+                        <span id="admin-push-image-status" class="muted"></span>
+                      </div>
+                      <img id="admin-push-image-preview" class="admin-push-image-preview" alt="Prévia da imagem do push" />
+                    </div>
                     <div class="admin-push-actions">
                       <button id="admin-push-review-btn" class="instance-action-btn btn-refresh enabled" type="button">Revisar com IA</button>
                     </div>
@@ -19074,6 +19122,7 @@
         void loadAquecedorEntitlement();
         void loadDisparosCredits();
         syncWabaSupportButtonVisibility();
+        void refreshPushAlerts();
         void refreshMasterMenuBadges();
         startMasterMenuBadgePolling();
         startMasterCpuAlertPolling();
@@ -24241,6 +24290,73 @@
       }
 
       let wabaPushActiveAlert = null;
+      let adminPushImageAttachment = null;
+      let adminPushSendInFlight = false;
+
+      function setAdminPushImageStatus(text) {
+        const status = document.getElementById("admin-push-image-status");
+        if (status) status.textContent = String(text || "");
+      }
+
+      function renderAdminPushImagePreview() {
+        const preview = document.getElementById("admin-push-image-preview");
+        const clearBtn = document.getElementById("admin-push-image-clear-btn");
+        if (!preview) return;
+        if (adminPushImageAttachment?.id) {
+          preview.src = resolveWabaPublicPath(
+            `/push/public-media/${encodeURIComponent(adminPushImageAttachment.id)}`
+          );
+          preview.classList.add("is-visible");
+          if (clearBtn) clearBtn.hidden = false;
+          setAdminPushImageStatus(adminPushImageAttachment.fileName || "Imagem anexada");
+        } else {
+          preview.removeAttribute("src");
+          preview.classList.remove("is-visible");
+          if (clearBtn) clearBtn.hidden = true;
+          setAdminPushImageStatus("");
+        }
+      }
+
+      function clearAdminPushImageAttachment() {
+        adminPushImageAttachment = null;
+        const input = document.getElementById("admin-push-image-input");
+        if (input) input.value = "";
+        renderAdminPushImagePreview();
+      }
+
+      async function uploadAdminPushImage(file) {
+        const formData = new FormData();
+        formData.append("image", file);
+        const response = await fetchWithTimeout(
+          "/admin/push/upload-image",
+          {
+            method: "POST",
+            body: formData,
+            credentials: "same-origin",
+          },
+          60000
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || "Falha ao enviar a imagem.");
+        }
+        return payload.image || null;
+      }
+
+      async function handleAdminPushImageSelected(file) {
+        if (!file) return;
+        setAdminPushImageStatus("Enviando imagem…");
+        try {
+          const image = await uploadAdminPushImage(file);
+          if (!image?.id) throw new Error("Resposta inválida do upload de imagem.");
+          adminPushImageAttachment = image;
+          renderAdminPushImagePreview();
+          showToast("Imagem anexada ao push.", "success");
+        } catch (error) {
+          clearAdminPushImageAttachment();
+          showToast(error?.message || "Falha ao enviar a imagem.", "error");
+        }
+      }
 
       function syncAdminPushUserRolesVisibility() {
         const usersChecked = document.getElementById("admin-push-aud-users")?.checked;
@@ -24366,14 +24482,16 @@
       }
 
       async function sendAdminPush() {
+        if (adminPushSendInFlight) return;
         const title = String(document.getElementById("admin-push-title")?.value || "").trim();
         const originalText = String(document.getElementById("admin-push-original")?.value || "").trim();
         const reviewedText = String(document.getElementById("admin-push-reviewed")?.value || "").trim();
+        const finalText = reviewedText || originalText;
         const audiences = collectAdminPushAudiences();
         const userRoles = collectAdminPushUserRoles();
         const btn = document.getElementById("admin-push-send-btn");
-        if (!originalText && !reviewedText) {
-          showToast("Informe a mensagem para enviar.", "warning");
+        if (!finalText && !adminPushImageAttachment?.id) {
+          showToast("Informe a mensagem ou uma imagem para enviar.", "warning");
           return;
         }
         if (!audiences.length) {
@@ -24384,6 +24502,7 @@
           showToast("Selecione ao menos um tipo de usuário.", "warning");
           return;
         }
+        adminPushSendInFlight = true;
         if (btn) {
           btn.textContent = "Enviando…";
           btn.setAttribute("disabled", "true");
@@ -24394,23 +24513,31 @@
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
               body: JSON.stringify({
                 title,
                 originalText,
-                reviewedText: reviewedText || originalText,
+                reviewedText: finalText,
                 audiences,
                 userRoles,
+                image: adminPushImageAttachment,
               }),
             },
             60000
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
-          showToast("Push enviado com sucesso.", "success");
+          showToast(
+            payload?.message?.id ? "Push enviado com sucesso." : "Push enviado com sucesso.",
+            "success"
+          );
+          clearAdminPushImageAttachment();
           await loadAdminPushHistory();
+          void refreshPushAlerts();
         } catch (error) {
           showToast(error?.message || "Falha ao enviar push.", "error");
         } finally {
+          adminPushSendInFlight = false;
           if (btn) {
             btn.textContent = "Enviar push";
             btn.removeAttribute("disabled");
@@ -24420,8 +24547,13 @@
 
       function hideWabaPushAlertBanner() {
         const banner = document.getElementById("waba-push-alert-banner");
+        const imageEl = document.getElementById("waba-push-alert-image");
         document.body.classList.remove("waba-push-alert-visible");
         if (banner) banner.hidden = true;
+        if (imageEl) {
+          imageEl.removeAttribute("src");
+          imageEl.hidden = true;
+        }
         wabaPushActiveAlert = null;
       }
 
@@ -24429,10 +24561,22 @@
         const banner = document.getElementById("waba-push-alert-banner");
         const titleEl = document.getElementById("waba-push-alert-title");
         const messageEl = document.getElementById("waba-push-alert-message");
+        const imageEl = document.getElementById("waba-push-alert-image");
         if (!banner || !alert) return;
         wabaPushActiveAlert = alert;
         if (titleEl) titleEl.textContent = String(alert.title || "Comunicado");
         if (messageEl) messageEl.textContent = String(alert.message || "");
+        if (imageEl) {
+          const imageUrl = alert.imageUrl ? resolveWabaPublicPath(String(alert.imageUrl)) : "";
+          if (imageUrl) {
+            imageEl.src = imageUrl;
+            imageEl.alt = String(alert.title || "Comunicado");
+            imageEl.hidden = false;
+          } else {
+            imageEl.removeAttribute("src");
+            imageEl.hidden = true;
+          }
+        }
         banner.hidden = false;
         document.body.classList.add("waba-push-alert-visible");
       }
@@ -24458,7 +24602,11 @@
       async function refreshPushAlerts() {
         if (!wabaAuthEnabled) return;
         try {
-          const response = await fetchWithTimeout("/push/alerts", {}, 10000);
+          const response = await fetchWithTimeout(
+            "/push/alerts",
+            { credentials: "same-origin" },
+            10000
+          );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) return;
           const items = Array.isArray(payload.items) ? payload.items : [];
@@ -27312,6 +27460,16 @@
           void loadAdminPushHistory();
         });
         document.getElementById("admin-push-aud-users")?.addEventListener("change", syncAdminPushUserRolesVisibility);
+        document.getElementById("admin-push-image-btn")?.addEventListener("click", () => {
+          document.getElementById("admin-push-image-input")?.click();
+        });
+        document.getElementById("admin-push-image-input")?.addEventListener("change", (event) => {
+          const file = event.target?.files?.[0];
+          void handleAdminPushImageSelected(file);
+        });
+        document.getElementById("admin-push-image-clear-btn")?.addEventListener("click", () => {
+          clearAdminPushImageAttachment();
+        });
         document.getElementById("waba-push-alert-dismiss")?.addEventListener("click", () => {
           void dismissWabaPushAlert();
         });

@@ -5,7 +5,8 @@ import {
   sendPushMessage,
 } from "../push/waba-push-delivery.service";
 import { getPushCommunityConfig, updatePushCommunityConfig } from "../push/waba-push-community.service";
-import type { WabaPushAudience, WabaPushUserRole } from "../push/waba-push.types";
+import { savePushImageAttachment } from "../push/waba-push-media.service";
+import type { WabaPushAudience, WabaPushImageAttachment, WabaPushUserRole } from "../push/waba-push.types";
 
 function parseAudiences(raw: unknown): WabaPushAudience[] {
   const allowed = new Set<WabaPushAudience>(["subscribers", "users", "community", "email"]);
@@ -35,14 +36,26 @@ export class WabaAdminPushService {
     audiences: WabaPushAudience[];
     userRoles?: WabaPushUserRole[];
     createdByEmail: string;
+    image?: WabaPushImageAttachment | null;
   }) {
+    const audiences = parseAudiences(input.audiences);
+    const image = input.image?.id ? input.image : null;
     return sendPushMessage({
       title: String(input.title || "Comunicado WABA").trim(),
       originalText: String(input.originalText || "").trim(),
       reviewedText: String(input.reviewedText || "").trim(),
-      audiences: parseAudiences(input.audiences),
+      audiences,
       userRoles: parseUserRoles(input.userRoles),
       createdByEmail: input.createdByEmail,
+      image,
+    });
+  }
+
+  uploadImage(file: { buffer: Buffer; originalname: string; mimetype: string }): WabaPushImageAttachment {
+    return savePushImageAttachment({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
     });
   }
 
