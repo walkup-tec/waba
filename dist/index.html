@@ -3217,6 +3217,28 @@
         margin-top: 16px;
       }
 
+      .admin-push-send-feedback {
+        margin: 10px 0 0;
+        font-size: 0.84rem;
+        line-height: 1.45;
+      }
+
+      .admin-push-send-feedback.info {
+        color: #7dd3fc;
+      }
+
+      .admin-push-send-feedback.success {
+        color: #86efac;
+      }
+
+      .admin-push-send-feedback.warning {
+        color: #fde68a;
+      }
+
+      .admin-push-send-feedback.error {
+        color: #fda4af;
+      }
+
       .admin-push-history-table td,
       .admin-push-history-table th {
         vertical-align: top;
@@ -17196,7 +17218,7 @@
                   <div>
                     <div class="admin-push-field">
                       <label class="field-label" for="admin-push-title">Título</label>
-                      <input id="admin-push-title" class="admin-push-input" type="text" maxlength="120" placeholder="Ex.: Atualização do sistema" required />
+                      <input id="admin-push-title" class="admin-push-input" type="text" maxlength="120" placeholder="Ex.: Atualização do sistema" />
                       <span class="muted" style="font-size:12px;margin-top:4px;display:block">Na comunidade WhatsApp, o título é enviado em <strong>negrito</strong> acima do texto.</span>
                     </div>
                     <div class="admin-push-field" style="margin-top:12px">
@@ -17244,6 +17266,7 @@
                     <div class="admin-push-actions">
                       <button id="admin-push-send-btn" class="instance-action-btn btn-qrcode enabled" type="button">Enviar push</button>
                     </div>
+                    <p id="admin-push-send-feedback" class="admin-push-send-feedback" hidden role="status" aria-live="polite"></p>
                     <p id="admin-push-community-hint" class="muted" style="margin-top:10px">
                       Comunidade: instância <strong>Drax Sistemas 5181077770</strong> (admin). A imagem anexada é publicada <strong>somente</strong> na comunidade; assinantes, usuários e e-mail recebem apenas o texto. Link:
                       <a href="https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7" target="_blank" rel="noopener noreferrer">entrar na comunidade</a>.
@@ -24453,6 +24476,75 @@
         if (status) status.textContent = String(text || "");
       }
 
+      function setAdminPushSendFeedback(message, type = "info") {
+        const el = document.getElementById("admin-push-send-feedback");
+        if (!el) return;
+        const text = String(message || "").trim();
+        el.textContent = text;
+        el.hidden = !text;
+        el.className = `admin-push-send-feedback${text ? ` ${type}` : ""}`;
+      }
+
+      function bindAdminPushPrimaryAction(buttonId, handler) {
+        const btn = document.getElementById(buttonId);
+        if (!btn || btn.dataset.pushPrimaryBound === "1") return;
+        btn.dataset.pushPrimaryBound = "1";
+        btn.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void handler();
+        });
+      }
+
+      let adminPushUiReady = false;
+
+      function initAdminPushUi() {
+        if (adminPushUiReady) return;
+        adminPushUiReady = true;
+
+        bindAdminPushPrimaryAction("admin-push-send-btn", sendAdminPush);
+        bindAdminPushPrimaryAction("admin-push-review-btn", reviewAdminPushWithAi);
+
+        document.getElementById("admin-push-refresh-btn")?.addEventListener("click", () => {
+          void loadAdminPushHistory();
+        });
+        document.getElementById("admin-push-aud-users")?.addEventListener("change", syncAdminPushUserRolesVisibility);
+        document.getElementById("admin-push-select-all")?.addEventListener("change", handleAdminPushSelectAllChange);
+        for (const id of [...ADMIN_PUSH_AUDIENCE_IDS, ...ADMIN_PUSH_ROLE_IDS]) {
+          document.getElementById(id)?.addEventListener("change", syncAdminPushSelectAllState);
+        }
+        document.getElementById("admin-push-image-btn")?.addEventListener("click", () => {
+          document.getElementById("admin-push-image-input")?.click();
+        });
+        document.getElementById("admin-push-image-input")?.addEventListener("change", (event) => {
+          const file = event.target?.files?.[0];
+          void handleAdminPushImageSelected(file);
+        });
+        document.getElementById("admin-push-image-clear-btn")?.addEventListener("click", () => {
+          clearAdminPushImageAttachment();
+        });
+        document.getElementById("waba-push-bell-btn")?.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setWabaPushBellPanelOpen(!wabaPushBellPanelOpen);
+        });
+        document.getElementById("waba-push-bell-panel-close")?.addEventListener("click", () => {
+          setWabaPushBellPanelOpen(false);
+        });
+        document.getElementById("waba-push-bell-list")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-push-dismiss-id]");
+          if (!btn) return;
+          void dismissWabaPushAlertById(btn.getAttribute("data-push-dismiss-id"));
+        });
+        document.addEventListener("click", (event) => {
+          if (!wabaPushBellPanelOpen) return;
+          const wrap = document.getElementById("waba-push-bell-wrap");
+          if (wrap && !wrap.contains(event.target)) {
+            setWabaPushBellPanelOpen(false);
+          }
+        });
+      }
+
       function renderAdminPushImagePreview() {
         const preview = document.getElementById("admin-push-image-preview");
         const clearBtn = document.getElementById("admin-push-image-clear-btn");
@@ -24679,42 +24771,57 @@
       }
 
       async function sendAdminPush() {
-        if (adminPushSendInFlight) return;
+        const btn = document.getElementById("admin-push-send-btn");
+        if (adminPushSendInFlight) {
+          setAdminPushSendFeedback("Aguarde o envio anterior concluir.", "warning");
+          showToast("Aguarde o envio anterior concluir.", "warning");
+          return;
+        }
+        setAdminPushSendFeedback("");
         const title = String(document.getElementById("admin-push-title")?.value || "").trim();
         const originalText = String(document.getElementById("admin-push-original")?.value || "").trim();
         const reviewedText = String(document.getElementById("admin-push-reviewed")?.value || "").trim();
         const finalText = reviewedText || originalText;
         const audiences = collectAdminPushAudiences();
         const userRoles = collectAdminPushUserRoles();
-        const btn = document.getElementById("admin-push-send-btn");
         if (!finalText && !adminPushImageAttachment?.id) {
-          showToast("Informe a mensagem ou uma imagem para enviar.", "warning");
+          const message = "Informe a mensagem ou uma imagem para enviar.";
+          setAdminPushSendFeedback(message, "warning");
+          showToast(message, "warning");
           return;
         }
         const hasNonCommunityAudience = audiences.some(
           (audience) => audience === "subscribers" || audience === "users" || audience === "email"
         );
         if (!finalText && hasNonCommunityAudience) {
-          showToast(
-            "Informe o texto para assinantes, usuários e e-mail. A imagem é enviada apenas à comunidade WhatsApp.",
-            "warning"
-          );
+          const message =
+            "Informe o texto para assinantes, usuários e e-mail. A imagem é enviada apenas à comunidade WhatsApp.";
+          setAdminPushSendFeedback(message, "warning");
+          showToast(message, "warning");
           return;
         }
         if (adminPushImageAttachment?.id && !audiences.includes("community")) {
-          showToast("Marque Comunidade WhatsApp para enviar imagem, ou remova a imagem.", "warning");
+          const message = "Marque Comunidade WhatsApp para enviar imagem, ou remova a imagem.";
+          setAdminPushSendFeedback(message, "warning");
+          showToast(message, "warning");
           return;
         }
         if (audiences.includes("community") && !title) {
-          showToast("Informe o título para publicar na comunidade WhatsApp.", "warning");
+          const message = "Informe o título para publicar na comunidade WhatsApp.";
+          setAdminPushSendFeedback(message, "warning");
+          showToast(message, "warning");
           return;
         }
         if (!audiences.length) {
-          showToast("Selecione ao menos um destino.", "warning");
+          const message = "Selecione ao menos um destino.";
+          setAdminPushSendFeedback(message, "warning");
+          showToast(message, "warning");
           return;
         }
         if (audiences.includes("users") && !userRoles.length) {
-          showToast("Selecione ao menos um tipo de usuário.", "warning");
+          const message = "Selecione ao menos um tipo de usuário.";
+          setAdminPushSendFeedback(message, "warning");
+          showToast(message, "warning");
           return;
         }
         adminPushSendInFlight = true;
@@ -24722,6 +24829,7 @@
           btn.textContent = "Enviando…";
           btn.setAttribute("disabled", "true");
         }
+        setAdminPushSendFeedback("Enviando push…", "info");
         try {
           const response = await fetchWithTimeout(
             "/admin/push/send",
@@ -24742,15 +24850,16 @@
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
-          showToast(
-            payload?.message?.id ? "Push enviado com sucesso." : "Push enviado com sucesso.",
-            "success"
-          );
+          const successMessage = "Push enviado com sucesso.";
+          setAdminPushSendFeedback(successMessage, "success");
+          showToast(successMessage, "success");
           clearAdminPushImageAttachment();
           await loadAdminPushHistory();
           void refreshPushAlerts();
         } catch (error) {
-          showToast(error?.message || "Falha ao enviar push.", "error");
+          const message = error?.message || "Falha ao enviar push.";
+          setAdminPushSendFeedback(message, "error");
+          showToast(message, "error");
         } finally {
           adminPushSendInFlight = false;
           if (btn) {
@@ -27688,50 +27797,6 @@
 
         document.getElementById("admin-chamados-detail-save-btn")?.addEventListener("click", () => {
           void saveAdminChamadosDetail();
-        });
-
-        document.getElementById("admin-push-review-btn")?.addEventListener("click", () => {
-          void reviewAdminPushWithAi();
-        });
-        document.getElementById("admin-push-send-btn")?.addEventListener("click", () => {
-          void sendAdminPush();
-        });
-        document.getElementById("admin-push-refresh-btn")?.addEventListener("click", () => {
-          void loadAdminPushHistory();
-        });
-        document.getElementById("admin-push-aud-users")?.addEventListener("change", syncAdminPushUserRolesVisibility);
-        document.getElementById("admin-push-select-all")?.addEventListener("change", handleAdminPushSelectAllChange);
-        for (const id of [...ADMIN_PUSH_AUDIENCE_IDS, ...ADMIN_PUSH_ROLE_IDS]) {
-          document.getElementById(id)?.addEventListener("change", syncAdminPushSelectAllState);
-        }
-        document.getElementById("admin-push-image-btn")?.addEventListener("click", () => {
-          document.getElementById("admin-push-image-input")?.click();
-        });
-        document.getElementById("admin-push-image-input")?.addEventListener("change", (event) => {
-          const file = event.target?.files?.[0];
-          void handleAdminPushImageSelected(file);
-        });
-        document.getElementById("admin-push-image-clear-btn")?.addEventListener("click", () => {
-          clearAdminPushImageAttachment();
-        });
-        document.getElementById("waba-push-bell-btn")?.addEventListener("click", (event) => {
-          event.stopPropagation();
-          setWabaPushBellPanelOpen(!wabaPushBellPanelOpen);
-        });
-        document.getElementById("waba-push-bell-panel-close")?.addEventListener("click", () => {
-          setWabaPushBellPanelOpen(false);
-        });
-        document.getElementById("waba-push-bell-list")?.addEventListener("click", (event) => {
-          const btn = event.target.closest("[data-push-dismiss-id]");
-          if (!btn) return;
-          void dismissWabaPushAlertById(btn.getAttribute("data-push-dismiss-id"));
-        });
-        document.addEventListener("click", (event) => {
-          if (!wabaPushBellPanelOpen) return;
-          const wrap = document.getElementById("waba-push-bell-wrap");
-          if (wrap && !wrap.contains(event.target)) {
-            setWabaPushBellPanelOpen(false);
-          }
         });
 
         document.getElementById("admin-chamados-detail-close-btn")?.addEventListener("click", () => {
@@ -36563,6 +36628,7 @@
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
           stopAdminMonitorCpuPolling();
+          initAdminPushUi();
           syncAdminPushUserRolesVisibility();
           void loadAdminPushHistory();
         } else if (nextTab === "admin-dashboard") {
@@ -42325,6 +42391,7 @@
       initAdminFinanceiroUi();
       initAdminCampanhasUi();
       initAdminChamadosUi();
+      initAdminPushUi();
       initAdminMonitorCpuUi();
       initAdminUsersUi();
       initDisCampaignWizard();

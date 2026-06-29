@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-29
 
+**WABA — Push Enviar no 1º clique:** `pointerdown` + feedback inline; `initAdminPushUi()`. Ver `doc/LOG-2026-06-29__191000__push-enviar-primeiro-clique-fix.md`.
+
 **WABA — Push sino + comunidade Drax 5181077770:** notificações no header; instância Evolution `Drax Sistemas 5181077770`. Ver `doc/LOG-2026-06-29__push-bell-comunidade-drax-instance.md`.
 
 **WABA — Push fixes (duplicidade, alertas, imagem):** EVO um payload, e-mail por destino correto, alertas no login, dedupe 45s, upload imagem. Ver `doc/LOG-2026-06-29__150500__push-duplicidade-alertas-imagem.md`.
