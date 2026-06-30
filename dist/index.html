@@ -7438,6 +7438,7 @@
         overflow: hidden;
         box-sizing: border-box;
         font-size: 1rem;
+        text-align: left;
         --reg-text-xs: 0.875rem;
         --reg-text-sm: 0.9375rem;
         --reg-text-md: 1rem;
@@ -7450,6 +7451,7 @@
         margin-bottom: 6px;
         font-size: var(--reg-text-2xl);
         line-height: 1.3;
+        text-align: left;
       }
 
       .register-wizard-modal .reg-wizard-subtitle {
@@ -7457,6 +7459,7 @@
         font-size: var(--reg-text-sm);
         color: #94a3b8;
         line-height: 1.45;
+        text-align: left;
       }
 
       .reg-wizard-header {
@@ -7540,6 +7543,7 @@
         min-height: 0;
         padding: 0 1px;
         box-sizing: border-box;
+        text-align: left;
       }
 
       .reg-wizard-pane.active {
@@ -7585,6 +7589,7 @@
         color: #f1f5f9;
         margin: 0 0 8px;
         line-height: 1.35;
+        text-align: left;
       }
 
       .reg-wizard-pane-lead {
@@ -7592,6 +7597,7 @@
         font-size: var(--reg-text-sm);
         color: #94a3b8;
         line-height: 1.5;
+        text-align: left;
       }
 
       .reg-wizard-compact-grid {
@@ -7703,6 +7709,10 @@
         padding: clamp(10px, 2.5vw, 14px);
         max-height: min(200px, 32dvh);
         font-size: var(--reg-text-sm);
+        text-align: left;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
       }
 
       .register-wizard-modal .qrcode-preview.open {
@@ -7713,6 +7723,13 @@
         max-width: min(200px, 42vw);
         max-height: 180px;
         object-fit: contain;
+        align-self: center;
+      }
+
+      .register-wizard-modal .qrcode-preview .muted,
+      .register-wizard-modal .qrcode-preview span {
+        width: 100%;
+        text-align: left;
       }
 
       .register-wizard-modal .connect-status {
@@ -7722,6 +7739,7 @@
         font-size: var(--reg-text-sm);
         padding: 11px 13px;
         line-height: 1.45;
+        text-align: left;
       }
 
       .reg-instruction-card {
@@ -7730,6 +7748,7 @@
         background: rgba(8, 47, 73, 0.28);
         padding: clamp(10px, 2.5vw, 14px) clamp(12px, 3vw, 16px);
         margin-bottom: clamp(10px, 2.5vw, 14px);
+        text-align: left;
       }
 
       .reg-instruction-card ol {
@@ -7782,6 +7801,10 @@
           opacity: 1;
           transform: translateY(0);
         }
+      }
+
+      .reg-val-check {
+        text-align: left;
       }
 
       .reg-inbound-waiting {
@@ -7950,7 +7973,7 @@
       }
 
       .reg-success-panel {
-        text-align: center;
+        text-align: left;
         padding: 16px 8px 8px;
       }
 
@@ -37066,7 +37089,10 @@
               clearTimeout(timer);
               const path = String(url || "");
               const resilience = window.wabaDeployResilience;
-              const skipDeployRecovery = /\/admin\/push\//.test(path) || /\/push\/alerts/.test(path);
+              const skipDeployRecovery =
+                /\/admin\/push\//.test(path) ||
+                /\/push\/alerts/.test(path) ||
+                /\/instancias\//.test(path);
               if (
                 !skipDeployRecovery &&
                 resilience &&
@@ -39195,6 +39221,90 @@
         return visit(data);
       }
 
+      async function pollRegistrarQrcodeJob(jobId, maxWaitMs = 180000) {
+        const started = Date.now();
+        const intervalMs = 2000;
+        let networkFailures = 0;
+        while (Date.now() - started < maxWaitMs) {
+          try {
+            const response = await fetchWithTimeout(
+              `/instancias/registrar-qrcode/jobs/${encodeURIComponent(jobId)}`,
+              { credentials: "same-origin" },
+              20000,
+            );
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(payload?.error || "Falha ao consultar geração do QRCode.");
+            }
+            networkFailures = 0;
+            if (payload.status === "done") {
+              return {
+                ok: true,
+                message: payload.message,
+                qrCode: payload.qrCode,
+                warning: payload.warning,
+              };
+            }
+            if (payload.status === "error") {
+              const err = new Error(payload.error || "Falha ao gerar QRCode.");
+              if (payload.detail) err.detail = payload.detail;
+              throw err;
+            }
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          } catch (error) {
+            if (
+              /failed to fetch|network|load failed|timeout/i.test(String(error?.message || "")) &&
+              networkFailures < 15
+            ) {
+              networkFailures += 1;
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+              continue;
+            }
+            throw error;
+          }
+        }
+        throw new Error("timeout");
+      }
+
+      async function submitAndPollRegistrarQrcode(body, maxWaitMs = 180000) {
+        const response = await fetchWithTimeout(
+          "/instancias/registrar-qrcode",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(body),
+          },
+          45000,
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const err = new Error(
+            data?.error ||
+              data?.detail ||
+              (response.status === 502
+                ? "Evolution API indisponível. Verifique EVO_API_URL no servidor."
+                : "Falha ao solicitar QRCode."),
+          );
+          throw err;
+        }
+        if (response.status === 202 && data.jobId) {
+          return pollRegistrarQrcodeJob(data.jobId, maxWaitMs);
+        }
+        return data;
+      }
+
+      function resolveRegistrarQrcodeErrorMessage(error) {
+        if (error instanceof Error) {
+          if (error.message === "timeout") {
+            return "Tempo esgotado ao gerar o QRCode (Evolution API lenta). Tente «Atualizar QR» novamente.";
+          }
+          if (error.detail) return String(error.detail);
+          if (error.message.trim()) return error.message.trim();
+        }
+        return "Erro ao gerar QRCode da instância.";
+      }
+
       async function refreshQrCodeInRegisterModal() {
         const nameInput = document.getElementById("register-name-input");
         const tokenInput = document.getElementById("register-token-input");
@@ -39244,36 +39354,18 @@
             '<span class="muted">Gerando novo QRCode de conexão...</span>';
           setRegisterConnectStatus("loading", "Gerando QRCode…");
 
-          const response = await fetchWithTimeout(
-            "/instancias/registrar-qrcode",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: normalizedName, token, number }),
-            },
-            120000
-          );
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            const errMsg =
-              data?.error ||
-              data?.detail ||
-              (response.status === 502
-                ? "Evolution API indisponível. Verifique EVO_API_URL no servidor."
-                : "Falha ao atualizar QRCode.");
-            showToast(errMsg, "error");
-            setRegisterConnectStatus("error", errMsg);
-            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
-            return;
-          }
-
-          const imgSrc = resolveQrImageSrcFromPayload(data);
-          if (!imgSrc) {
+          const data = await submitAndPollRegistrarQrcode({
+            name: normalizedName,
+            token,
+            number,
+          });
+          if (!data?.qrCode && !resolveQrImageSrcFromPayload(data)) {
             const warnMsg =
               "QRCode solicitado, mas a Evolution não retornou imagem nesta resposta.";
             qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(warnMsg)}</span>`;
             setRegisterConnectStatus("error", warnMsg);
           } else {
+            const imgSrc = resolveQrImageSrcFromPayload(data);
             qrPreview.innerHTML = `<img src="${escapeAdminHtml(imgSrc)}" alt="QRCode de conexão" />`;
             setRegisterConnectStatus("loading", "Escaneie o QR Code no WhatsApp do celular.");
           }
@@ -39281,18 +39373,7 @@
           startRegisterConnectPolling(normalizedName);
           beginRegisterWizardHide(normalizedName);
         } catch (error) {
-          let errMsg = "Erro ao atualizar QRCode da instância.";
-          if (error instanceof Error) {
-            if (error.message === "timeout") {
-              errMsg =
-                "Tempo esgotado ao gerar o QRCode (Evolution API lenta). Tente «Atualizar QR» novamente.";
-            } else if (/failed to fetch|network|load failed|aborted/i.test(error.message)) {
-              errMsg =
-                "Conexão com o servidor interrompida durante a geração do QRCode. Aguarde alguns segundos e clique em «Atualizar QR».";
-            } else if (error.message.trim()) {
-              errMsg = error.message.trim();
-            }
-          }
+          const errMsg = resolveRegistrarQrcodeErrorMessage(error);
           showToast(errMsg, "error");
           setRegisterConnectStatus("error", errMsg);
           qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
@@ -39430,28 +39511,11 @@
         actionBtn.setAttribute("disabled", "true");
 
         try {
-          const response = await fetchWithTimeout(
-            "/instancias/registrar-qrcode",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: normalizedName, token, number }),
-            },
-            120000
-          );
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            const errMsg =
-              data?.error ||
-              data?.detail ||
-              (response.status === 502
-                ? "Evolution API indisponível. Verifique EVO_API_URL no servidor."
-                : "Falha ao gerar QRCode.");
-            showToast(errMsg, "error");
-            setRegisterConnectStatus("error", errMsg);
-            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;
-            return;
-          }
+          const data = await submitAndPollRegistrarQrcode({
+            name: normalizedName,
+            token,
+            number,
+          });
 
           const imgSrc = resolveQrImageSrcFromPayload(data);
           if (!imgSrc) {
@@ -39467,10 +39531,7 @@
           setRegisterConnectStatus("loading", "Escaneie o QR Code no WhatsApp do celular.");
           beginRegisterWizardHide(normalizedName);
         } catch (error) {
-          const errMsg =
-            error instanceof Error && error.message === "timeout"
-              ? "Tempo esgotado ao contactar a Evolution API."
-              : "Erro ao registrar e gerar QRCode.";
+          const errMsg = resolveRegistrarQrcodeErrorMessage(error);
           showToast(errMsg, "error");
           setRegisterConnectStatus("error", errMsg);
           qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(errMsg)}</span>`;

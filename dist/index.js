@@ -5945,12 +5945,116 @@ async function prepareEvoInstanceForQrConnect(instanceName) {
         { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
         { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
     ];
-    for (const step of steps) {
-        await callEvoAction(step.url, step.method, undefined, {
-            timeoutMs: 12000,
-            retries: 1,
-        });
+    await Promise.all(steps.map((step) => callEvoAction(step.url, step.method, undefined, {
+        timeoutMs: 10000,
+        retries: 1,
+    })));
+}
+const qrRegisterJobs = new Map();
+function pruneQrRegisterJobs() {
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    for (const [id, job] of qrRegisterJobs) {
+        if (job.updatedAt < cutoff)
+            qrRegisterJobs.delete(id);
     }
+}
+async function runRegistrarQrcode(input) {
+    const name = String(input.name || "").trim();
+    const number = String(input.number || "").trim();
+    const token = String(input.token || "").trim();
+    const ownerEmail = String(input.ownerEmail || "").trim().toLowerCase();
+    if (!input.ownershipAlreadyClaimed && (0, waba_auth_service_1.isWabaAuthConfigured)()) {
+        if (!ownerEmail.includes("@")) {
+            return { ok: false, httpStatus: 401, error: "Faça login para registrar uma instância." };
+        }
+        const reserve = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, ownerEmail);
+        if (!reserve.ok) {
+            return { ok: false, httpStatus: 409, error: reserve.error };
+        }
+        void ensureAquecedorInstanceRegistered(name);
+    }
+    const createPayload = {
+        instanceName: name,
+        name,
+        qrcode: true,
+        integration: "WHATSAPP-BAILEYS",
+    };
+    if (number)
+        createPayload.number = number;
+    const createUrls = [
+        EVO_CREATE_INSTANCE_URL,
+        `${EVO_API_BASE}/instance/create`,
+        `${EVO_API_BASE}/instance/create/${encodeURIComponent(name)}`,
+    ].filter(Boolean);
+    let createOk = false;
+    let lastCreateStatus = 0;
+    let lastCreateDetail = "";
+    let qrFromCreate = null;
+    let instanceWasNew = false;
+    for (const createUrl of createUrls) {
+        const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+            timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
+            retries: 2,
+        });
+        lastCreateStatus = createResult.status;
+        lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
+        if (createResult.ok) {
+            createOk = true;
+            instanceWasNew = true;
+            qrFromCreate =
+                tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+            if (qrFromCreate)
+                break;
+            break;
+        }
+        if (createResult.status === 409) {
+            createOk = true;
+            qrFromCreate =
+                tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+            if (qrFromCreate)
+                break;
+            break;
+        }
+    }
+    let createWarning = null;
+    if (!createOk) {
+        createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
+    }
+    if (qrFromCreate) {
+        return {
+            ok: true,
+            message: createWarning
+                ? "QRCode gerado com sucesso para a instância existente."
+                : "Dados salvos e QRCode gerado com sucesso.",
+            warning: createWarning,
+            qrCode: qrFromCreate,
+        };
+    }
+    const shouldPrepareSession = !instanceWasNew || !createOk;
+    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+        retries: 3,
+        prepareSession: shouldPrepareSession,
+    });
+    if (!qrFetch.ok) {
+        return {
+            ok: false,
+            httpStatus: 502,
+            error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
+            detail: qrFetch.lastQrDetail || lastCreateDetail,
+            evoCreateStatus: lastCreateStatus,
+            evoQrStatus: qrFetch.lastQrStatus,
+        };
+    }
+    return {
+        ok: true,
+        message: createWarning
+            ? "QRCode gerado com sucesso para a instância existente."
+            : "Dados salvos e QRCode gerado com sucesso.",
+        warning: createWarning,
+        qrCode: qrFetch.qrCode,
+        providerResponse: qrFetch.providerResponse,
+    };
 }
 async function fetchInstanceQrCodeFromEvo(instanceName, number = "", options = {}) {
     const timeoutMs = options.timeoutMs ?? (0, evo_http_client_1.defaultEvoHttpTimeoutMs)();
@@ -5960,9 +6064,9 @@ async function fetchInstanceQrCodeFromEvo(instanceName, number = "", options = {
     }
     const enc = encodeURIComponent(instanceName);
     const connectCandidates = [
+        { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "POST" },
         { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "GET" },
         { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" },
-        { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "POST" },
         { url: `${EVO_API_BASE}/instance/qrcode/${enc}`, method: "GET" },
     ].filter((candidate) => candidate.url);
     let lastQrStatus = 0;
@@ -6064,8 +6168,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: "Campo 'name' é obrigatório." });
         }
+        const ownerEmail = String(auth.email || "").trim().toLowerCase();
         if ((0, waba_auth_service_1.isWabaAuthConfigured)()) {
-            const ownerEmail = String(auth.email || "").trim().toLowerCase();
             if (!ownerEmail.includes("@")) {
                 return res.status(401).json({ error: "Faça login para registrar uma instância." });
             }
@@ -6075,9 +6179,6 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             }
             void ensureAquecedorInstanceRegistered(name);
         }
-        // Regra de segurança operacional:
-        // não permitir criar instância com nome já usado por outra instância ativa/conectada.
-        // Instâncias desconectadas são desconsideradas nesse comparativo.
         try {
             const checkResult = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", {
                 apiKey: EVO_API_KEY,
@@ -6119,91 +6220,60 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             }
         }
         catch {
-            // Se a verificação falhar por indisponibilidade externa, não bloqueamos o fluxo.
+            /* verificação opcional */
         }
-        // Payload aceito pela Evolution API v2 (sem channel/number vazio — causam HTTP 400).
-        const createPayload = {
-            instanceName: name,
-            name,
-            qrcode: true,
-            integration: "WHATSAPP-BAILEYS",
-        };
-        if (number) {
-            createPayload.number = number;
-        }
-        // Fallbacks para versões diferentes da Evolution API
-        const createUrls = [
-            EVO_CREATE_INSTANCE_URL,
-            `${EVO_API_BASE}/instance/create`,
-            `${EVO_API_BASE}/instance/create/${encodeURIComponent(name)}`,
-        ].filter(Boolean);
-        let createOk = false;
-        let lastCreateStatus = 0;
-        let lastCreateDetail = "";
-        let qrFromCreate = null;
-        for (const createUrl of createUrls) {
-            const createResult = await callEvoAction(createUrl, "POST", createPayload, {
-                timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
-                retries: 2,
-            });
-            lastCreateStatus = createResult.status;
-            lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
-            if (createResult.ok || createResult.status === 409) {
-                // 409 pode ocorrer quando instância já existe; seguimos para QRCode
-                createOk = true;
-                qrFromCreate =
-                    tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
-                if (qrFromCreate)
-                    break;
-                break;
-            }
-        }
-        let createWarning = null;
-        if (!createOk) {
-            createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
-        }
-        if (qrFromCreate) {
-            const claim = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, auth.email);
-            if (!claim.ok) {
-                return res.status(409).json({ error: claim.error });
-            }
-            void ensureAquecedorInstanceRegistered(name);
-            return res.json({
-                ok: true,
-                message: createWarning
-                    ? "QRCode gerado com sucesso para a instância existente."
-                    : "Dados salvos e QRCode gerado com sucesso.",
-                warning: createWarning,
-                qrCode: qrFromCreate,
-            });
-        }
-        const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
-            timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
-            retries: 2,
-            prepareSession: true,
-        });
-        if (!qrFetch.ok) {
-            return res.status(502).json({
-                error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
-                evoCreateStatus: lastCreateStatus,
-                evoQrStatus: qrFetch.lastQrStatus,
-                detail: qrFetch.lastQrDetail || lastCreateDetail,
-            });
-        }
-        const claim = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, auth.email);
-        if (!claim.ok) {
-            return res.status(409).json({ error: claim.error });
-        }
-        void ensureAquecedorInstanceRegistered(name);
-        return res.json({
+        pruneQrRegisterJobs();
+        const jobId = crypto_1.default.randomUUID();
+        const now = Date.now();
+        qrRegisterJobs.set(jobId, { status: "pending", createdAt: now, updatedAt: now });
+        res.status(202).json({
             ok: true,
-            message: createWarning
-                ? "QRCode gerado com sucesso para a instância existente."
-                : "Dados salvos e QRCode gerado com sucesso.",
-            warning: createWarning,
-            qrCode: qrFetch.qrCode,
-            providerResponse: qrFetch.providerResponse,
+            accepted: true,
+            jobId,
+            status: "pending",
         });
+        void (async () => {
+            try {
+                const result = await runRegistrarQrcode({
+                    name,
+                    token,
+                    number,
+                    ownerEmail,
+                    ownershipAlreadyClaimed: true,
+                });
+                const updatedAt = Date.now();
+                if (result.ok) {
+                    qrRegisterJobs.set(jobId, {
+                        status: "done",
+                        createdAt: now,
+                        updatedAt,
+                        message: result.message,
+                        qrCode: result.qrCode,
+                        warning: result.warning ?? null,
+                    });
+                    return;
+                }
+                qrRegisterJobs.set(jobId, {
+                    status: "error",
+                    createdAt: now,
+                    updatedAt,
+                    error: result.error,
+                    detail: result.detail,
+                    evoCreateStatus: result.evoCreateStatus,
+                    evoQrStatus: result.evoQrStatus,
+                });
+            }
+            catch (error) {
+                qrRegisterJobs.set(jobId, {
+                    status: "error",
+                    createdAt: now,
+                    updatedAt: Date.now(),
+                    error: "Erro ao gerar QRCode da instância.",
+                    detail: error instanceof Error ? error.message : String(error),
+                });
+            }
+        })();
+        return;
     }
     catch (error) {
         console.error("Erro ao registrar instância e gerar QRCode:", error);
@@ -6213,6 +6283,17 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             detail,
         });
     }
+});
+app.get("/instancias/registrar-qrcode/jobs/:jobId", async (req, res) => {
+    const jobId = String(req.params.jobId || "").trim();
+    if (!jobId) {
+        return res.status(400).json({ error: "jobId é obrigatório." });
+    }
+    const job = qrRegisterJobs.get(jobId);
+    if (!job) {
+        return res.status(404).json({ error: "Geração de QRCode não encontrada ou expirada." });
+    }
+    return res.status(200).json({ jobId, ...job });
 });
 app.delete("/instancias/:name", async (req, res) => {
     try {

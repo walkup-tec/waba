@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — QRCode async + modal align:** POST 202 job poll; prepare EVO otimizado; wizard texto à esquerda. Marker `DEPLOY-2026-06-30-qrcode-async-modal-align-fix`. Ver `doc/LOG-2026-06-30__qrcode-async-modal-align-fix.md`.
+
 **WABA — Push comunidade waUploadToServer:** base64 primeiro; instância Evolution conectada; drax-oficial + walkup fallback. Marker `DEPLOY-2026-06-30-push-comunidade-media-base64-open-instance`. Ver `doc/LOG-2026-06-30__push-comunidade-waupload-base64-open-instance.md`.
 
 **WABA — Push connection recovery:** POST 202 + entrega setImmediate; poll resiliente; recupera status do histórico; sem mensagem de falha de conexão. Marker `DEPLOY-2026-06-30-push-connection-recovery-fix`. Ver `doc/LOG-2026-06-30__push-connection-recovery-fix.md`.
