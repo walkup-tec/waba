@@ -15,9 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-30
 
-**WABA — QRCode Evolution GET connect:** remove POST em `/instance/connect` (404 Evolution v2); só GET com `?number=` opcional. Marker `DEPLOY-2026-06-30-qrcode-evo-connect-get-only`. Ver `doc/LOG-2026-06-30__qrcode-evo-connect-get-only-fix.md`.
+**WABA — QRCode count:0 + Prisma recovery:** retry longo connect; reset logout+delete+recreate; UI sem JSON bruto. Marker `DEPLOY-2026-06-30-qrcode-evo-count0-prisma-recovery`. Ver `doc/LOG-2026-06-30__qrcode-evo-count0-prisma-recovery.md`.
 
-**WABA — QRCode connect only (superseded):** tentativa anterior ainda usava POST connect. Ver `doc/LOG-2026-06-30__qrcode-evo-connect-only-fix.md`.
+**WABA — QRCode Evolution GET connect:** remove POST em `/instance/connect`. Marker `DEPLOY-2026-06-30-qrcode-evo-connect-get-only`. Ver `doc/LOG-2026-06-30__qrcode-evo-connect-get-only-fix.md`.
 
 **WABA — QRCode async + modal align:** POST 202 job poll; prepare EVO otimizado; wizard texto à esquerda. Marker `DEPLOY-2026-06-30-qrcode-async-modal-align-fix`. Ver `doc/LOG-2026-06-30__qrcode-async-modal-align-fix.md`.
 

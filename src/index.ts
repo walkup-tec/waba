@@ -6017,6 +6017,9 @@ function describeEvoQrFailure(
     }
     return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o serviço Evolution está no ar.`;
   }
+  if (isEvoConnectEmptyQrDetail(detail)) {
+    return "Evolution não retornou QRCode (count:0). A sessão pode estar iniciando — aguarde e use «Atualizar QR». Se persistir, reinicie o container Evolution no Easypanel.";
+  }
   const summarized = summarizeEvolutionErrorDetail(detail, qrStatus || createStatus);
   if (summarized && summarized !== detail) return summarized;
   if (detail) return `Evolution API: ${detail}`;
@@ -7154,6 +7157,27 @@ function isIgnorableEvoQrFetchError(status: number, detail: string): boolean {
   return false;
 }
 
+function isEvoConnectEmptyQrDetail(detail: string): boolean {
+  const text = String(detail || "").trim();
+  if (!text) return false;
+  if (/^\s*\{\s*"count"\s*:\s*0\s*\}\s*$/i.test(text)) return true;
+  if (!text.startsWith("{")) return false;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (Number(parsed?.count) !== 0) return false;
+    const keys = Object.keys(parsed);
+    return keys.length <= 2 && keys.every((key) => key === "count" || key === "status");
+  } catch {
+    return /"count"\s*:\s*0/.test(text);
+  }
+}
+
+function isEvoQrRecoverableFailure(detail: string, status: number): boolean {
+  if (isEvoConnectEmptyQrDetail(detail)) return true;
+  if (status >= 500 || /integrationSession|prisma/i.test(detail)) return true;
+  return false;
+}
+
 function rememberEvoQrFetchError(
   current: { status: number; detail: string },
   status: number,
@@ -7161,8 +7185,17 @@ function rememberEvoQrFetchError(
 ): { status: number; detail: string } {
   const nextDetail = String(detail || "").slice(0, 400);
   if (isIgnorableEvoQrFetchError(status, nextDetail)) return current;
+  if (isEvoConnectEmptyQrDetail(nextDetail)) {
+    if (!current.detail || (current.status >= 200 && current.status < 300)) {
+      return { status: status || 200, detail: nextDetail };
+    }
+    return current;
+  }
   if (!current.detail) return { status, detail: nextDetail };
   if (current.status === 404 && status !== 404) return { status, detail: nextDetail };
+  if (isEvoConnectEmptyQrDetail(current.detail) && status >= 400) {
+    return { status, detail: nextDetail };
+  }
   return { status, detail: nextDetail };
 }
 
@@ -7202,7 +7235,21 @@ async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<voi
       retries: 1,
     });
   }
-  await sleepMs(1500);
+  await sleepMs(4000);
+}
+
+async function resetEvoInstanceForQr(instanceName: string): Promise<void> {
+  const enc = encodeURIComponent(String(instanceName || "").trim());
+  if (!enc) return;
+  await callEvoAction(`${EVO_API_BASE}/instance/logout/${enc}`, "DELETE", undefined, {
+    timeoutMs: 12000,
+    retries: 1,
+  });
+  await callEvoAction(`${EVO_API_BASE}/instance/delete/${enc}`, "DELETE", undefined, {
+    timeoutMs: 15000,
+    retries: 1,
+  });
+  await sleepMs(2500);
 }
 
 type EvoQrFetchOptions = {
@@ -7344,25 +7391,88 @@ async function runRegistrarQrcode(
     retries: 3,
     prepareSession: shouldPrepareSession,
   });
-  if (!qrFetch.ok) {
+  if (qrFetch.ok) {
     return {
-      ok: false,
-      httpStatus: 502,
-      error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
-      detail: qrFetch.lastQrDetail || lastCreateDetail,
-      evoCreateStatus: lastCreateStatus,
-      evoQrStatus: qrFetch.lastQrStatus,
+      ok: true,
+      message: createWarning
+        ? "QRCode gerado com sucesso para a instância existente."
+        : "Dados salvos e QRCode gerado com sucesso.",
+      warning: createWarning,
+      qrCode: qrFetch.qrCode,
+      providerResponse: qrFetch.providerResponse,
     };
   }
 
+  if (isEvoQrRecoverableFailure(qrFetch.lastQrDetail, qrFetch.lastQrStatus)) {
+    await resetEvoInstanceForQr(name);
+    let retryCreateOk = false;
+    let retryCreateStatus = 0;
+    let retryCreateDetail = "";
+    let retryQrFromCreate: string | null = null;
+    for (const createUrl of createUrls) {
+      const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000),
+        retries: 2,
+      });
+      retryCreateStatus = createResult.status;
+      retryCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
+      if (createResult.ok || createResult.status === 409) {
+        retryCreateOk = true;
+        retryQrFromCreate =
+          tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+        break;
+      }
+    }
+    if (retryQrFromCreate) {
+      return {
+        ok: true,
+        message: "Instância recriada na Evolution e QRCode gerado com sucesso.",
+        warning: createWarning,
+        qrCode: retryQrFromCreate,
+      };
+    }
+    if (retryCreateOk) {
+      const qrRetry = await fetchInstanceQrCodeFromEvo(name, number, {
+        timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 90000),
+        retries: 4,
+        prepareSession: false,
+      });
+      if (qrRetry.ok) {
+        return {
+          ok: true,
+          message: "Instância recriada na Evolution e QRCode gerado com sucesso.",
+          warning: createWarning,
+          qrCode: qrRetry.qrCode,
+          providerResponse: qrRetry.providerResponse,
+        };
+      }
+      lastCreateStatus = retryCreateStatus || lastCreateStatus;
+      lastCreateDetail = qrRetry.lastQrDetail || retryCreateDetail || lastCreateDetail;
+      return {
+        ok: false,
+        httpStatus: 502,
+        error: describeEvoQrFailure(
+          lastCreateStatus,
+          qrRetry.lastQrStatus,
+          lastCreateDetail,
+          qrRetry.lastQrDetail,
+        ),
+        detail: qrRetry.lastQrDetail || lastCreateDetail,
+        evoCreateStatus: lastCreateStatus,
+        evoQrStatus: qrRetry.lastQrStatus,
+      };
+    }
+    lastCreateStatus = retryCreateStatus || lastCreateStatus;
+    lastCreateDetail = retryCreateDetail || lastCreateDetail;
+  }
+
   return {
-    ok: true,
-    message: createWarning
-      ? "QRCode gerado com sucesso para a instância existente."
-      : "Dados salvos e QRCode gerado com sucesso.",
-    warning: createWarning,
-    qrCode: qrFetch.qrCode,
-    providerResponse: qrFetch.providerResponse,
+    ok: false,
+    httpStatus: 502,
+    error: describeEvoQrFailure(lastCreateStatus, qrFetch.lastQrStatus, lastCreateDetail, qrFetch.lastQrDetail),
+    detail: qrFetch.lastQrDetail || lastCreateDetail,
+    evoCreateStatus: lastCreateStatus,
+    evoQrStatus: qrFetch.lastQrStatus,
   };
 }
 
@@ -7382,8 +7492,16 @@ async function fetchInstanceQrCodeFromEvo(
 
   const connectCandidates = buildEvoConnectQrCandidates(instanceName, number);
   let lastError = { status: 0, detail: "" };
+  const roundDelaysMs = [0, 2500, 3500, 4500, 5500, 6500];
 
-  for (let round = 0; round < 2; round += 1) {
+  for (let round = 0; round < roundDelaysMs.length; round += 1) {
+    if (round > 0) {
+      if (round === 3) {
+        await prepareEvoInstanceForQrConnect(instanceName);
+      } else {
+        await sleepMs(roundDelaysMs[round]);
+      }
+    }
     for (const candidate of connectCandidates) {
       const result = await callEvoAction(candidate.url, candidate.method, undefined, {
         timeoutMs,
@@ -7406,7 +7524,6 @@ async function fetchInstanceQrCodeFromEvo(
         return { ok: true, qrCode: normalized, providerResponse: result.json ?? null };
       }
     }
-    if (round === 0) await sleepMs(2500);
   }
 
   return { ok: false, lastQrStatus: lastError.status, lastQrDetail: lastError.detail };

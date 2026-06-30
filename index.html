@@ -39295,13 +39295,34 @@
       }
 
       function resolveRegistrarQrcodeErrorMessage(error) {
-        if (error instanceof Error) {
-          if (error.message === "timeout") {
-            return "Tempo esgotado ao gerar o QRCode (Evolution API lenta). Tente «Atualizar QR» novamente.";
-          }
-          if (error.detail) return String(error.detail);
-          if (error.message.trim()) return error.message.trim();
+        if (!(error instanceof Error)) return "Erro ao gerar QRCode da instância.";
+        if (error.message === "timeout") {
+          return "Tempo esgotado ao gerar o QRCode (Evolution API lenta). Tente «Atualizar QR» novamente.";
         }
+        const msg = String(error.message || "").trim();
+        const detail = String(error.detail || "").trim();
+        if (msg && msg !== "Falha ao gerar QRCode." && !/^\s*\{/.test(msg)) {
+          return msg;
+        }
+        if (/integrationSession|prisma/i.test(detail)) {
+          return "Evolution API com erro interno no banco (Prisma/integrationSession). Reinicie o serviço Evolution no Easypanel e confira o PostgreSQL da EVO.";
+        }
+        if (/"count"\s*:\s*0/.test(detail)) {
+          return "Evolution não retornou QRCode (count:0). Aguarde alguns segundos e use «Atualizar QR». Se persistir, reinicie o container Evolution.";
+        }
+        if (detail.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(detail);
+            const nested = parsed?.response?.message ?? parsed?.message ?? parsed?.error;
+            if (typeof nested === "string" && /integrationSession|prisma/i.test(nested)) {
+              return "Evolution API com erro interno no banco (Prisma). Reinicie o serviço Evolution no Easypanel.";
+            }
+          } catch {
+            /* mantém fallback */
+          }
+        }
+        if (msg) return msg;
+        if (detail && !/^\s*\{/.test(detail)) return detail.slice(0, 400);
         return "Erro ao gerar QRCode da instância.";
       }
 
