@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-30
 
-**WABA — Validação inbound número no passo 3:** exibe número integrado (Evo + hint + lista instâncias); backend aceita `open` sem ownerJid. Marker `DEPLOY-2026-06-30-validacao-inbound-numero-display`. Ver `doc/LOG-2026-06-30__validacao-inbound-numero-display-fix.md`.
+**WABA — Validação inbound ownerJid wrapper:** telefone no objeto pai da Evolution; resolveEvoInstancePhone; status-conexao retorna instanceNumber. Marker `DEPLOY-2026-06-30-validacao-inbound-ownerjid-wrapper-fix`. Ver `doc/LOG-2026-06-30__validacao-inbound-ownerjid-wrapper-fix.md`.
+
+**WABA — Validação inbound número no passo 3:** exibe número integrado (Evo + hint + lista instâncias). Marker `DEPLOY-2026-06-30-validacao-inbound-numero-display`. Ver `doc/LOG-2026-06-30__validacao-inbound-numero-display-fix.md`.
 
 **WABA — Validação CONFIRMAR + deploy guard:** nudge findMessages; overlay não reload no wizard; poll 800ms. Marker `DEPLOY-2026-06-30-validacao-inbound-fast-nudge`. Ver `doc/LOG-2026-06-30__validacao-inbound-fast-nudge-reload-guard.md`.
 

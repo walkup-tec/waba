@@ -60,6 +60,7 @@ const waba_alternativa_numbers_service_1 = require("./billing/waba-alternativa-n
 const alternativa_dispatch_rules_1 = require("./disparos/alternativa-dispatch-rules");
 const waba_instance_ownership_service_1 = require("./instances/waba-instance-ownership.service");
 const evo_instance_key_1 = require("./instances/evo-instance-key");
+const evo_instance_phone_service_1 = require("./instances/evo-instance-phone.service");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
 const waba_admin_routes_1 = require("./admin/waba-admin.routes");
@@ -3920,7 +3921,7 @@ app.get("/instancias", async (req, res) => {
                 : "unknown";
             const contacts = pickNumeric(inst.contacts, inst.contactsCount, inst.totalContacts, inst._count?.Contact, inst._count?.contacts, inst.profile?.contacts, inst.stats?.contacts);
             const messages = pickNumeric(inst.messages, inst.messagesCount, inst.totalMessages, inst.chatsCount, inst._count?.Message, inst._count?.messages, inst.profile?.messages, inst.stats?.messages);
-            const number = extractInstanceNumber(inst);
+            const number = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(inst)?.phone || extractInstanceNumber(inst);
             const profilePicUrl = typeof inst.profilePicUrl === "string" ? inst.profilePicUrl : "";
             const avatarVersion = typeof inst.updatedAt === "string" ? inst.updatedAt : "";
             const createdAt = typeof inst.createdAt === "string"
@@ -4264,11 +4265,27 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
             return;
         const live = await fetchEvoInstanceConnectionState(name);
         if (live.ok) {
+            let instanceNumber = "";
+            if (live.open) {
+                instanceNumber = await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(name);
+                if (!instanceNumber) {
+                    const supabase = getSupabaseClient();
+                    if (supabase) {
+                        const { data } = await supabase
+                            .from("controle_instancia")
+                            .select("numero_whatsapp")
+                            .eq("instancia", name)
+                            .maybeSingle();
+                        instanceNumber = (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(String(data?.numero_whatsapp || "").trim());
+                    }
+                }
+            }
             return res.json({
                 ok: true,
                 name,
                 connectionStatus: live.state,
                 open: live.open,
+                instanceNumber: instanceNumber || null,
                 source: "connectionState",
             });
         }
@@ -4285,11 +4302,17 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
                 const state = String(match.connectionStatus ?? match.status ?? "unknown")
                     .trim()
                     .toLowerCase();
+                const phoneRow = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(match);
+                let instanceNumber = phoneRow?.phone || "";
+                if (!instanceNumber && state.includes("open")) {
+                    instanceNumber = await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(name);
+                }
                 return res.json({
                     ok: true,
                     name,
                     connectionStatus: state || "unknown",
                     open: state.includes("open"),
+                    instanceNumber: instanceNumber || null,
                     source: "fetchInstances",
                 });
             }
@@ -4422,6 +4445,9 @@ function extractNumbersFromXlsxBuffer(buffer, numberColumn) {
     return deduplicateCampaignDestinationPhones(bucket);
 }
 function extractInstanceNumber(inst) {
+    const row = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(inst?.instance ? inst : { instance: inst });
+    if (row?.phone)
+        return row.phone;
     const raw = inst?.ownerJid ??
         inst?.owner ??
         inst?.number ??
@@ -4668,15 +4694,13 @@ function buildConnectedFromEvoResponse(instances) {
     const list = Array.isArray(instances) ? instances : [instances];
     return list
         .map((item) => {
-        const inst = item?.instance ?? item;
-        const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
-        if (!status.includes("open"))
+        const row = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(item);
+        if (!row || !row.open || !row.instanceName)
             return null;
-        const instancia = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
-        const numero = extractInstanceNumber(inst);
-        if (!instancia || !numero)
+        const numero = row.phone;
+        if (!numero)
             return null;
-        return { instancia, numero };
+        return { instancia: row.instanceName, numero };
     })
         .filter((x) => x != null);
 }

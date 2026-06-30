@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import { evoHttpRequest } from "./evo-http.client";
-import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
+import {
+  extractPhoneFromEvoListItem,
+  isEvoInstanceOpen,
+  normalizeEvoWhatsAppNumber,
+  resolveEvoInstancePhone,
+} from "./instances/evo-instance-phone.service";
 
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
   .replace(/\/$/, "");
@@ -142,14 +147,7 @@ function notifyFinished(record: ValidationRecord): void {
 }
 
 function normalizeWhatsAppNumber(num: string): string {
-  const raw = String(num || "").trim();
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return raw;
-  if (digits.length >= 12 && digits.startsWith("55")) return digits;
-  if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
-    return "55" + digits;
-  }
-  return digits;
+  return normalizeEvoWhatsAppNumber(num);
 }
 
 function jidToNumber(jid: string): string {
@@ -182,40 +180,6 @@ function buildTemplateUrl(template: string, instanceName: string): string {
     .replace("{name}", encodeURIComponent(instanceName));
 }
 
-function extractInstanceNumber(inst: Record<string, unknown>): string {
-  const raw =
-    inst?.ownerJid ??
-    inst?.owner ??
-    inst?.number ??
-    inst?.phone ??
-    inst?.ownerNumber ??
-    inst?.wid ??
-    (inst?.profile as Record<string, unknown> | undefined)?.owner ??
-    (inst?.profile as Record<string, unknown> | undefined)?.number ??
-    "";
-  const s = String(raw).trim();
-  if (!s) return "";
-  const base = s.includes("@") ? s.split("@")[0] || s : s;
-  return normalizeWhatsAppNumber(base);
-}
-
-function resolveValidationInstanceNumber(
-  evoNumber: string,
-  numberHint: string,
-  instanceName: string
-): string {
-  const fromEvo = normalizeWhatsAppNumber(String(evoNumber || "").trim());
-  if (fromEvo) return fromEvo;
-  const fromHint = normalizeWhatsAppNumber(String(numberHint || "").trim());
-  if (fromHint) return fromHint;
-  const tail = String(instanceName || "").match(/(\d{10,13})$/);
-  if (tail?.[1]) {
-    const derived = normalizeWhatsAppNumber(tail[1]);
-    if (derived.length >= 12) return derived;
-  }
-  return "";
-}
-
 function resolveSendTarget(referenceJid: string | null, referenceNumber: string | null): string {
   const jid = String(referenceJid || "").trim();
   if (jid.includes("@")) return jid;
@@ -235,17 +199,12 @@ async function fetchConnectedInstance(
       : Array.isArray((raw as Record<string, unknown>)?.data)
         ? ((raw as Record<string, unknown>).data as unknown[])
         : [];
+  const needle = instanceName.trim().toLowerCase();
   for (const item of list) {
-    const inst = ((item as Record<string, unknown>)?.instance ?? item) as Record<
-      string,
-      unknown
-    >;
-    const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
-    if (!status.includes("open")) continue;
-    const instancia = resolveEvoInstanceKey(inst);
-    if (instancia !== instanceName) continue;
-    const numero = extractInstanceNumber(inst);
-    return { instancia, numero };
+    const row = extractPhoneFromEvoListItem(item);
+    if (!row || row.instanceName.toLowerCase() !== needle) continue;
+    if (!row.open) return null;
+    return { instancia: row.instanceName, numero: row.phone };
   }
   return null;
 }
@@ -825,21 +784,14 @@ export async function startInboundValidation(input: {
   }
 
   const numberHint = normalizeWhatsAppNumber(String(input.instanceNumberHint || "").trim());
-  let connected = await fetchConnectedInstance(instanceName);
-  if (!connected && numberHint) {
-    connected = { instancia: instanceName, numero: numberHint };
-  }
-  if (!connected) {
+  const open = (await fetchConnectedInstance(instanceName)) != null || (await isEvoInstanceOpen(instanceName));
+  if (!open) {
     return {
       error: `Instância "${instanceName}" não está conectada (status open) na Evolution.`,
     };
   }
-  const resolvedNumber = resolveValidationInstanceNumber(
-    connected.numero,
-    numberHint,
-    instanceName
-  );
-  connected = { instancia: connected.instancia, numero: resolvedNumber };
+  const resolvedNumber = await resolveEvoInstancePhone(instanceName, { hint: numberHint });
+  const connected = { instancia: instanceName, numero: resolvedNumber };
 
   const existing = getActiveValidationForInstance(connected.instancia);
   if (existing) {

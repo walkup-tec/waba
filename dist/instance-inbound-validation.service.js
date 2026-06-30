@@ -12,7 +12,7 @@ exports.startInboundValidation = startInboundValidation;
 exports.pruneInboundValidations = pruneInboundValidations;
 const crypto_1 = __importDefault(require("crypto"));
 const evo_http_client_1 = require("./evo-http.client");
-const evo_instance_key_1 = require("./instances/evo-instance-key");
+const evo_instance_phone_service_1 = require("./instances/evo-instance-phone.service");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
     .replace(/\/$/, "");
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
@@ -88,16 +88,7 @@ function notifyFinished(record) {
     }
 }
 function normalizeWhatsAppNumber(num) {
-    const raw = String(num || "").trim();
-    const digits = raw.replace(/\D/g, "");
-    if (!digits)
-        return raw;
-    if (digits.length >= 12 && digits.startsWith("55"))
-        return digits;
-    if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
-        return "55" + digits;
-    }
-    return digits;
+    return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(num);
 }
 function jidToNumber(jid) {
     const s = String(jid || "").trim();
@@ -123,37 +114,6 @@ function buildTemplateUrl(template, instanceName) {
         .replace("{instance}", encodeURIComponent(instanceName))
         .replace("{name}", encodeURIComponent(instanceName));
 }
-function extractInstanceNumber(inst) {
-    const raw = inst?.ownerJid ??
-        inst?.owner ??
-        inst?.number ??
-        inst?.phone ??
-        inst?.ownerNumber ??
-        inst?.wid ??
-        inst?.profile?.owner ??
-        inst?.profile?.number ??
-        "";
-    const s = String(raw).trim();
-    if (!s)
-        return "";
-    const base = s.includes("@") ? s.split("@")[0] || s : s;
-    return normalizeWhatsAppNumber(base);
-}
-function resolveValidationInstanceNumber(evoNumber, numberHint, instanceName) {
-    const fromEvo = normalizeWhatsAppNumber(String(evoNumber || "").trim());
-    if (fromEvo)
-        return fromEvo;
-    const fromHint = normalizeWhatsAppNumber(String(numberHint || "").trim());
-    if (fromHint)
-        return fromHint;
-    const tail = String(instanceName || "").match(/(\d{10,13})$/);
-    if (tail?.[1]) {
-        const derived = normalizeWhatsAppNumber(tail[1]);
-        if (derived.length >= 12)
-            return derived;
-    }
-    return "";
-}
 function resolveSendTarget(referenceJid, referenceNumber) {
     const jid = String(referenceJid || "").trim();
     if (jid.includes("@"))
@@ -172,16 +132,14 @@ async function fetchConnectedInstance(instanceName) {
             : Array.isArray(raw?.data)
                 ? raw.data
                 : [];
+    const needle = instanceName.trim().toLowerCase();
     for (const item of list) {
-        const inst = (item?.instance ?? item);
-        const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
-        if (!status.includes("open"))
+        const row = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(item);
+        if (!row || row.instanceName.toLowerCase() !== needle)
             continue;
-        const instancia = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
-        if (instancia !== instanceName)
-            continue;
-        const numero = extractInstanceNumber(inst);
-        return { instancia, numero };
+        if (!row.open)
+            return null;
+        return { instancia: row.instanceName, numero: row.phone };
     }
     return null;
 }
@@ -723,17 +681,14 @@ async function startInboundValidation(input) {
         return { error: "Nome da instância é obrigatório." };
     }
     const numberHint = normalizeWhatsAppNumber(String(input.instanceNumberHint || "").trim());
-    let connected = await fetchConnectedInstance(instanceName);
-    if (!connected && numberHint) {
-        connected = { instancia: instanceName, numero: numberHint };
-    }
-    if (!connected) {
+    const open = (await fetchConnectedInstance(instanceName)) != null || (await (0, evo_instance_phone_service_1.isEvoInstanceOpen)(instanceName));
+    if (!open) {
         return {
             error: `Instância "${instanceName}" não está conectada (status open) na Evolution.`,
         };
     }
-    const resolvedNumber = resolveValidationInstanceNumber(connected.numero, numberHint, instanceName);
-    connected = { instancia: connected.instancia, numero: resolvedNumber };
+    const resolvedNumber = await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(instanceName, { hint: numberHint });
+    const connected = { instancia: instanceName, numero: resolvedNumber };
     const existing = getActiveValidationForInstance(connected.instancia);
     if (existing) {
         if (!existing.instanceNumber && resolvedNumber) {

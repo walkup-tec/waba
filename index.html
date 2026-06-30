@@ -30800,6 +30800,7 @@
       let registerConnectPollTimer = null;
       let registerConnectPollStartedAt = 0;
       let registerConnectedInstanceName = "";
+      let registerConnectedInstanceNumber = "";
       let registerInboundPollTimer = null;
       let registerInboundValidationId = "";
       let registerInboundStartInFlight = false;
@@ -38571,6 +38572,7 @@
         const statusEl = document.getElementById("register-connect-status");
         if (!overlay || !nameInput || !numberInput || !qrPreview) return;
         const safeNumber = String(number || "").trim();
+        rememberRegisterConnectedNumber(safeNumber === "—" ? "" : safeNumber);
         const showRefreshQr = options?.showRefreshQr !== false;
         const startAtQr = Boolean(instanceName && options?.showRefreshQr !== false);
         nameInput.value = instanceName || "";
@@ -38617,6 +38619,7 @@
         }
         registerConnectPollStartedAt = 0;
         registerConnectedInstanceName = "";
+        registerConnectedInstanceNumber = "";
         registerInboundValidationId = "";
         registerWizardStep = 1;
         const hadHiddenInstance = Boolean(registerWizardHideInstanceName);
@@ -38678,6 +38681,8 @@
       }
 
       function resolveRegisterInboundDisplayNumber(instanceName, status) {
+        const cached = String(registerConnectedInstanceNumber || "").trim();
+        if (cached) return formatRegisterInboundPhone(cached);
         const fromStatus = String(status?.instanceNumber || "").trim();
         if (fromStatus) return formatRegisterInboundPhone(fromStatus);
         const formNumber = String(
@@ -38694,11 +38699,18 @@
         });
         if (match) {
           const candidate =
-            match.number ?? match.phone ?? match.owner ?? match.ownerNumber ?? "";
+            match.number ?? match.phone ?? match.owner ?? match.ownerNumber ?? match.ownerJid ?? "";
           const formatted = formatRegisterInboundPhone(candidate);
           if (formatted) return formatted;
         }
         return "";
+      }
+
+      function rememberRegisterConnectedNumber(raw) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (digits.length >= 10) {
+          registerConnectedInstanceNumber = digits;
+        }
       }
 
       function setRegisterInboundNumberDisplay(instanceName, status) {
@@ -38753,6 +38765,7 @@
 
       function applyRegisterInboundStatus(status, instanceName) {
         if (!status) return;
+        if (status.instanceNumber) rememberRegisterConnectedNumber(status.instanceNumber);
         const keywordEl = document.getElementById("register-inbound-keyword");
         setRegisterInboundNumberDisplay(
           instanceName || registerConnectedInstanceName || "",
@@ -38834,6 +38847,7 @@
 
         const numberInput = document.getElementById("register-number-input");
         const formNumber = String(numberInput?.value || "").trim();
+        rememberRegisterConnectedNumber(formNumber);
         setRegisterInboundNumberDisplay(instanceName, { instanceNumber: formNumber });
 
         if (registerInboundPollTimer) {
@@ -38843,6 +38857,19 @@
 
         let validationId = "";
         try {
+          try {
+            const statusRes = await fetchWithTimeout(
+              `/instancias/${encodeURIComponent(instanceName)}/status-conexao`,
+              { credentials: "same-origin" },
+              15000
+            );
+            if (statusRes.ok) {
+              const statusPayload = await statusRes.json().catch(() => null);
+              rememberRegisterConnectedNumber(statusPayload?.instanceNumber || "");
+            }
+          } catch {
+            /* status opcional */
+          }
           try {
             const listRes = await fetchWithTimeout("/instancias?refresh=1", {}, 25000);
             if (listRes.ok) {
@@ -39267,6 +39294,7 @@
             clearInterval(registerConnectPollTimer);
             registerConnectPollTimer = null;
             registerConnectedInstanceName = instanceName;
+            rememberRegisterConnectedNumber(payload?.instanceNumber || "");
             setRegisterConnectStatus("success", "Dispositivo conectado. Iniciando validação segura…");
             beginRegisterWizardHide(instanceName);
             await startRegisterInboundValidation(instanceName);
@@ -39456,6 +39484,7 @@
         const name = String(nameInput.value || "").trim();
         const token = String(tokenInput?.value || "").trim() || generateTokenLike();
         const number = String(numberInput.value || "").trim();
+        rememberRegisterConnectedNumber(number);
         const normalizedName = normalizeInstanceRegisterName(name);
         if (!name) {
           showToast("Informe o Nome da instância.", "warning");
@@ -39597,6 +39626,7 @@
           if (tokenInput) tokenInput.value = token;
         }
         const number = String(numberInput.value || "").trim();
+        rememberRegisterConnectedNumber(number);
         const normalizedName = normalizeInstanceRegisterName(name);
 
         if (!name) {
