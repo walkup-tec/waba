@@ -162,15 +162,15 @@ export class WabaFazendaPoolService {
     const email = normalizeEmail(subscriberEmail);
     const name = normalizeInstanceName(instanceName);
     if (!email.includes("@") || !name) {
-      throw new Error("Sess├úo ou inst├óncia inv├ílida.");
+      throw new Error("Sessão ou instância inválida.");
     }
     const isFazenda = await this.isMasterFazendaInstance(name);
     if (!isFazenda) {
-      throw new Error("Este n├║mero n├úo est├í dispon├¡vel na fazenda master.");
+      throw new Error("Este número não está disponível na fazenda master.");
     }
     const assignedTo = this.activationRepository.findSubscriberEmailForInstance(name);
     if (assignedTo && assignedTo !== email) {
-      throw new Error("Este n├║mero da fazenda j├í est├í vinculado a outro assinante.");
+      throw new Error("Este número da fazenda já está vinculado a outro assinante.");
     }
   }
 

@@ -1,7 +1,8 @@
 import { promises as fs, statSync } from "fs";
 import path from "path";
 import { isWabaAuthConfigured, isWabaMasterEmail } from "../auth/waba-auth.service";
-import type { WabaRequestAuth } from "../auth/waba-request-auth";import { resolveDataFile } from "../data-path";
+import type { WabaRequestAuth } from "../auth/waba-request-auth";
+import { resolveDataFile } from "../data-path";
 
 export type InstanceOwnerRecord = {
   ownerEmail: string;
@@ -51,7 +52,11 @@ export class WabaInstanceOwnershipService {
       const parsed = JSON.parse(raw || "{}") as Partial<InstanceOwnersStore>;
       const instances =
         parsed?.instances && typeof parsed.instances === "object" ? parsed.instances : {};
-      this.cache = { instances };
+      const deletedInstances =
+        parsed?.deletedInstances && typeof parsed.deletedInstances === "object"
+          ? parsed.deletedInstances
+          : {};
+      this.cache = { instances, deletedInstances };
       try {
         this.cacheLoadedAtMs = statSync(OWNERS_FILE).mtimeMs;
       } catch {
@@ -134,12 +139,81 @@ export class WabaInstanceOwnershipService {
     return !isWabaAuthConfigured();
   }
 
+  async canAccessInstance(
+    auth: WabaRequestAuth,
+    instanceName: string,
+    extraCandidates: string[] = [],
+  ): Promise<boolean> {
+    if (this.bypassOwnershipFilter(auth)) return true;
+
+    const email = normalizeEmail(auth.email);
+    if (!email.includes("@")) return false;
+
+    if (auth.role === "master" || isWabaMasterEmail(email)) return true;
+
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of [instanceName, ...extraCandidates]) {
+      const name = normalizeInstanceName(raw);
+      const lower = name.toLowerCase();
+      if (!name || seen.has(lower)) continue;
+      seen.add(lower);
+      names.push(name);
+    }
+
+    for (const name of names) {
+      const owner = await this.getOwnerEmail(name);
+      if (owner === email) return true;
+    }
+
+    const primaryOwner = await this.getOwnerEmail(instanceName);
+    if (primaryOwner) return primaryOwner === email;
+
+    const owner = await this.resolveOwnerEmailForCandidates(names);
+    if (!owner) return false;
+    return owner === email;
+  }
+
+  /** Dono registrado para o nome técnico (case-insensitive). */
   async getOwnerEmail(instanceName: string): Promise<string | null> {
     const store = await this.loadStore();
     const key = this.findStoreKey(store, instanceName);
     if (!key) return null;
     const owner = normalizeEmail(store.instances[key]?.ownerEmail || "");
     return owner.includes("@") ? owner : null;
+  }
+
+  /** Resolve dono tentando várias chaves (alias, nome EVO, sufixo numérico). */
+  async resolveOwnerEmailForCandidates(instanceNames: string[]): Promise<string | null> {
+    const seen = new Set<string>();
+    for (const raw of instanceNames) {
+      const name = normalizeInstanceName(raw);
+      if (!name) continue;
+      const lower = name.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      const owner = await this.getOwnerEmail(name);
+      if (owner) return owner;
+    }
+    const store = await this.loadStore();
+    const digitsFromQuery = instanceNames
+      .map((n) => String(n || "").replace(/\D/g, ""))
+      .filter((d) => d.length >= 8);
+    if (!digitsFromQuery.length) return null;
+    for (const [key, record] of Object.entries(store.instances)) {
+      const keyDigits = String(key || "").replace(/\D/g, "");
+      if (!keyDigits || keyDigits.length < 8) continue;
+      const matches = digitsFromQuery.some(
+        (d) =>
+          keyDigits === d ||
+          keyDigits.endsWith(d.slice(-8)) ||
+          d.endsWith(keyDigits.slice(-8)),
+      );
+      if (!matches) continue;
+      const owner = normalizeEmail(record?.ownerEmail || "");
+      if (owner.includes("@")) return owner;
+    }
+    return null;
   }
 
   async assignOwner(instanceName: string, ownerEmail: string): Promise<void> {
@@ -238,17 +312,6 @@ export class WabaInstanceOwnershipService {
     });
   }
 
-  async canAccessInstance(auth: WabaRequestAuth, instanceName: string): Promise<boolean> {
-    if (this.bypassOwnershipFilter(auth)) return true;
-
-    const email = normalizeEmail(auth.email);
-    if (!email.includes("@")) return false;
-
-    const owner = await this.getOwnerEmail(instanceName);
-    if (!owner) return false;
-    return owner === email;
-  }
-
   async filterItemsForAuth<T>(
     auth: WabaRequestAuth,
     items: T[],
@@ -303,6 +366,11 @@ export class WabaInstanceOwnershipService {
       }
     }
     return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+
+  async listAllRegisteredInstanceNames(): Promise<string[]> {
+    const store = await this.loadStore();
+    return Object.keys(store.instances).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }
 
   async listInstancesOwnedByEmails(ownerEmails: string[]): Promise<string[]> {

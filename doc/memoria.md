@@ -15,9 +15,11 @@ Como usar:
 ## Última atualização
 2026-06-21
 
-**WABA — Validação inbound híbrida (revert):** serviço `a41ba4b` (19/06 + dedupe 22/06); poll 2,5s sem nudge; UI/número passo 3 mantidos. Marker `DEPLOY-2026-06-21-validacao-inbound-hybrid-a41ba4b`. Ver `doc/LOG-2026-06-21__validacao-inbound-hybrid-revert.md`.
+**WABA — Fix exclusão 5182006011 / ownership alias:** `canAccessInstance` permite delete se o usuário possui qualquer candidato (nome técnico vs chave numérica); `resolveInstanceDeletionKeys` inclui chaves do `instance-owners.json` por dígitos. Script `remove-instance-from-subscriber-docker.cjs`. Marker `DEPLOY-2026-06-21-instance-ownership-delete-fix`. Ver `doc/LOG-2026-06-21__instance-ownership-delete-5182006011-mozart.md`.
 
-**WABA — Fix exclusão de instância (modal + backend):** confirmação case-insensitive; purge local; delete EVO resiliente. Ver `doc/LOG-2026-06-21__exclusao-instancia-fix.md`.
+**WABA — Validação passo 3 UI cleanup:** removidos links «Já enviei CONFIRMAR» e «Abrir conversa no WhatsApp». Ver `doc/LOG-2026-06-21__validacao-inbound-ui-cleanup.md`.
+
+**WABA — Fix exclusão instância tombstone (7193069):** purge garantido; tombstone anti-órfã. Ver `doc/LOG-2026-06-21__exclusao-instancia-tombstone-fix.md`.
 
 2026-06-30
 

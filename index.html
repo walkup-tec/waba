@@ -7829,19 +7829,6 @@
         text-decoration: none;
       }
 
-      .reg-inbound-wa-open {
-        display: inline-block;
-        margin-top: 8px;
-        font-size: var(--reg-text-sm);
-        color: #93c5fd;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-      }
-
-      .reg-inbound-wa-open:hover {
-        color: #bfdbfe;
-      }
-
       .reg-val-checks {
         display: flex;
         flex-direction: column;
@@ -18069,14 +18056,6 @@
                   <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span></li>
                   <li>Aguarde a resposta automática: <em>Validação WABA concluída…</em></li>
                 </ol>
-                <a
-                  id="register-inbound-wa-open"
-                  class="reg-inbound-wa-open"
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  hidden
-                >Abrir conversa no WhatsApp</a>
               </div>
             </div>
             <div class="reg-wizard-pane-progress" id="register-inbound-progress">
@@ -18119,9 +18098,6 @@
         </div>
 
         <div class="reg-wizard-footer">
-          <button id="register-inbound-sent-btn" class="reg-wizard-link-btn" type="button" hidden>
-            Já enviei CONFIRMAR
-          </button>
           <button id="register-inbound-retry-btn" class="reg-wizard-link-btn" type="button" hidden>
             Tentar validação novamente
           </button>
@@ -18155,7 +18131,7 @@
             </button>
           </div>
         </div>
-        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-08-validacao-inbound-v1</span>
+        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-21-validacao-inbound-confirmar-v3</span>
       </div>
     </div>
 
@@ -38629,42 +38605,6 @@
           });
         }
 
-        const inboundSentBtn = document.getElementById("register-inbound-sent-btn");
-        if (inboundSentBtn && inboundSentBtn.dataset.boundRegisterQr !== "1") {
-          inboundSentBtn.dataset.boundRegisterQr = "1";
-          inboundSentBtn.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const validationId = registerInboundValidationId;
-            const instanceName = registerConnectedInstanceName || "";
-            if (!validationId || !instanceName) return;
-            void (async () => {
-              try {
-                setInboundWaitingVisible(
-                  true,
-                  "Verificando CONFIRMAR na Evolution (outro WhatsApp)…"
-                );
-                const pollRes = await fetchWithTimeout(
-                  `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`,
-                  { credentials: "same-origin" },
-                  15000
-                );
-                if (!pollRes.ok) return;
-                const status = await pollRes.json().catch(() => null);
-                applyRegisterInboundStatus(status, instanceName);
-                if (status?.finished && status.receiveTest?.success && status.sendTest?.success) {
-                  setRegisterConnectStatus("success", "Número validado com sucesso.");
-                  finishRegisterWizardSuccess(
-                    "Número conectado e testado com sucesso. Pode usar em campanhas."
-                  );
-                }
-              } catch {
-                showToast("Não foi possível verificar agora. Aguarde alguns segundos.", "warning");
-              }
-            })();
-          });
-        }
-
         const inboundRetryBtn = document.getElementById("register-inbound-retry-btn");
         if (inboundRetryBtn && inboundRetryBtn.dataset.boundRegisterQr !== "1") {
           inboundRetryBtn.dataset.boundRegisterQr = "1";
@@ -38734,9 +38674,7 @@
         if (doneBtn) doneBtn.hidden = n !== 4;
         if (skipBtn) skipBtn.hidden = n !== 3;
         const retryBtn = document.getElementById("register-inbound-retry-btn");
-        const sentBtn = document.getElementById("register-inbound-sent-btn");
         if (retryBtn && n !== 3) retryBtn.hidden = true;
-        if (sentBtn && n !== 3) sentBtn.hidden = true;
         scrollRegisterWizardPaneToTop();
       }
 
@@ -38927,28 +38865,15 @@
 
       function setRegisterInboundNumberDisplay(instanceName, status) {
         const numberEl = document.getElementById("register-inbound-number");
-        const waOpen = document.getElementById("register-inbound-wa-open");
         if (!numberEl) return;
         const display = resolveRegisterInboundDisplayNumber(instanceName, status);
-        const digits = String(registerConnectedInstanceNumber || status?.instanceNumber || "")
-          .replace(/\D/g, "");
         numberEl.textContent = display || "—";
         numberEl.className = "reg-instruction-highlight";
-        if (waOpen) {
-          if (digits.length >= 10) {
-            waOpen.href = `https://wa.me/${digits}`;
-            waOpen.hidden = false;
-          } else {
-            waOpen.hidden = true;
-          }
-        }
       }
 
-      function setRegisterInboundActionButtons({ retry = false, sent = false } = {}) {
+      function setRegisterInboundActionButtons({ retry = false } = {}) {
         const retryBtn = document.getElementById("register-inbound-retry-btn");
-        const sentBtn = document.getElementById("register-inbound-sent-btn");
         if (retryBtn) retryBtn.hidden = !retry;
-        if (sentBtn) sentBtn.hidden = !sent;
       }
 
       function resetRegisterInboundPanel() {
@@ -38974,8 +38899,6 @@
           numberEl.textContent = "—";
           numberEl.className = "reg-instruction-highlight";
         }
-        const waOpen = document.getElementById("register-inbound-wa-open");
-        if (waOpen) waOpen.hidden = true;
         if (keywordEl) keywordEl.textContent = "CONFIRMAR";
         setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
         const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
@@ -39017,9 +38940,9 @@
           setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
           setInboundCheckVisible("register-inbound-receive-row", false, false);
           setInboundCheckVisible("register-inbound-send-row", false, false);
-          setRegisterInboundActionButtons({ retry: false, sent: true });
+          setRegisterInboundActionButtons({ retry: false });
         } else {
-          setRegisterInboundActionButtons({ retry: false, sent: false });
+          setRegisterInboundActionButtons({ retry: false });
           setInboundCheckVisible("register-inbound-receive-row", true, true);
           updateRegisterInboundRow(
             "register-inbound-receive-row",
@@ -39063,7 +38986,7 @@
         const failed =
           status.finished === true &&
           (status.receiveTest?.success !== true || status.sendTest?.success !== true);
-        setRegisterInboundActionButtons({ retry: failed, sent: !failed && !status.finished });
+        setRegisterInboundActionButtons({ retry: failed });
         syncRegisterValidationPaneLayout(status);
       }
 
@@ -39144,6 +39067,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 number: formNumber || registerConnectedInstanceNumber,
+                forceRestart: Boolean(registerInboundValidationId),
               }),
             },
             30000
@@ -39195,11 +39119,11 @@
                 "loading",
                 "Validação expirou. Envie CONFIRMAR pelo outro WhatsApp ou pule (não recomendado)."
               );
-              setRegisterInboundActionButtons({ retry: true, sent: true });
+              setRegisterInboundActionButtons({ retry: true });
               return;
             }
             const pollRes = await fetchWithTimeout(
-              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`,
+              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=2`,
               { credentials: "same-origin" },
               12000
             );
@@ -39225,11 +39149,11 @@
               "loading",
               "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
             );
-            setRegisterInboundActionButtons({ retry: true, sent: true });
+            setRegisterInboundActionButtons({ retry: true });
           } catch {
             // mantém polling
           }
-        }, 2500);
+        }, 800);
       }
 
       function openRenameInstanceModal(instanceName) {

@@ -85,6 +85,7 @@ import {
 import {
   getInboundValidationStatus,
   handleInboundValidationWebhook,
+  refreshInboundValidation,
   setInboundValidationFinishedHandler,
   startInboundValidation,
 } from "./instance-inbound-validation.service";
@@ -530,13 +531,21 @@ async function rejectForeignInstance(
   instanceName: string
 ): Promise<boolean> {
   const auth = resolveWabaRequestAuth(req);
-  if (!(await wabaInstanceOwnershipService.canAccessInstance(auth, instanceName))) {
-    res.status(403).json({
-      error: "Esta instância pertence a outro usuário ou você não tem permissão para acessá-la.",
-    });
-    return true;
-  }
-  return false;
+  const candidates = await resolveInstanceDeletionKeys(instanceName);
+  const allowed = await wabaInstanceOwnershipService.canAccessInstance(
+    auth,
+    instanceName,
+    candidates,
+  );
+  if (allowed) return false;
+
+  const owner = await wabaInstanceOwnershipService.resolveOwnerEmailForCandidates(candidates);
+  res.status(403).json({
+    error: "Esta instância pertence a outro usuário ou você não tem permissão para acessá-la.",
+    ownerEmail: owner || undefined,
+    instanceName: String(instanceName || "").trim() || undefined,
+  });
+  return true;
 }
 
 function rejectForeignInstanceNames(req: express.Request, instanceNames: string[]): Promise<Set<string>> {
@@ -5371,9 +5380,11 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
     const name = String(req.params.name || "").trim();
     if (await rejectForeignInstance(req, res, name)) return;
     const instanceNumberHint = String(req.body?.number || req.body?.instanceNumberHint || "").trim();
+    const forceRestart = Boolean(req.body?.forceRestart);
     const started = await startInboundValidation({
       instanceName: name,
       instanceNumberHint,
+      forceRestart,
     });
     if (started.error) {
       return res.status(400).json({ ok: false, error: started.error });
@@ -5387,10 +5398,18 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
   }
 });
 
-app.get("/instancias/validacao-inbound/:validationId", (req, res) => {
+app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
   const validationId = String(req.params.validationId || "").trim();
   if (!validationId) {
     return res.status(400).json({ error: "validationId é obrigatório." });
+  }
+  const nudge = String(req.query.nudge || "").trim();
+  if (nudge === "1" || nudge === "2") {
+    try {
+      await refreshInboundValidation(validationId, nudge === "2");
+    } catch (error) {
+      console.warn("[validacao-inbound] refresh on GET nudge:", error);
+    }
   }
   const status = getInboundValidationStatus(validationId);
   if (!status) {
@@ -6298,7 +6317,78 @@ async function resolveInstanceDeletionKeys(instanceName: string): Promise<string
   } catch {
     // lista EVO opcional
   }
+
+  const queryDigits = String(name || "").replace(/\D/g, "");
+  if (queryDigits.length >= 8) {
+    for (const registeredKey of await wabaInstanceOwnershipService.listAllRegisteredInstanceNames()) {
+      const keyDigits = String(registeredKey || "").replace(/\D/g, "");
+      if (!keyDigits || keyDigits.length < 8) continue;
+      const matched =
+        keyDigits === queryDigits ||
+        keyDigits.endsWith(queryDigits.slice(-8)) ||
+        queryDigits.endsWith(keyDigits.slice(-8));
+      if (matched) keys.add(registeredKey);
+    }
+  }
+
   return Array.from(keys).filter(Boolean);
+}
+
+async function resolveInstanceNamesByPhone(phone: string): Promise<string[]> {
+  const query = String(phone || "").replace(/\D/g, "");
+  if (query.length < 8) return [];
+  const names = new Set<string>();
+  if (query) names.add(query);
+  if (query.startsWith("55") && query.length > 2) names.add(query.slice(2));
+  if (!query.startsWith("55") && query.length >= 10) names.add(`55${query}`);
+
+  const evoList = await fetchEvoInstancesList();
+  if (evoList.ok) {
+    for (const inst of evoList.instances) {
+      const instanceName = resolveEvoInstanceKey(inst);
+      const number =
+        extractPhoneFromEvoListItem(inst)?.phone || extractInstanceNumber(inst);
+      if (!instanceName || !number) continue;
+      const instanceDigits = String(number).replace(/\D/g, "");
+      const queryVariants = new Set([query, query.slice(-11), query.slice(-10), query.slice(-8)]);
+      const instanceVariants = new Set([
+        instanceDigits,
+        instanceDigits.slice(-11),
+        instanceDigits.slice(-10),
+        instanceDigits.slice(-8),
+      ]);
+      let match = false;
+      for (const q of queryVariants) {
+        if (!q) continue;
+        for (const i of instanceVariants) {
+          if (!i) continue;
+          if (q === i || q.endsWith(i) || i.endsWith(q)) {
+            match = true;
+            break;
+          }
+        }
+        if (match) break;
+      }
+      if (match) names.add(instanceName);
+    }
+  }
+
+  for (const key of await wabaInstanceOwnershipService.listAllRegisteredInstanceNames()) {
+    const keyDigits = String(key || "").replace(/\D/g, "");
+    if (!keyDigits || keyDigits.length < 8) continue;
+    const queryVariants = [query, query.slice(-11), query.slice(-10), query.slice(-8)];
+    const matched = queryVariants.some(
+      (q) =>
+        q &&
+        (keyDigits === q ||
+          keyDigits.endsWith(q.slice(-8)) ||
+          q.endsWith(keyDigits.slice(-8)) ||
+          key.toLowerCase().includes(q.slice(-8))),
+    );
+    if (matched) names.add(key);
+  }
+
+  return Array.from(names).filter(Boolean);
 }
 
 async function filterDeletedInstancesFromItems<T>(
@@ -8052,42 +8142,155 @@ app.get("/instancias/registrar-qrcode/jobs/:jobId", async (req, res) => {
   return res.status(200).json({ jobId, ...job });
 });
 
+type InstanceDeletionResult =
+  | {
+      ok: true;
+      message: string;
+      degraded: boolean;
+      evoStatus?: number;
+      evoDetail?: string;
+    }
+  | { ok: false; status: number; error: string };
+
+async function performInstanceDeletion(instanceName: string): Promise<InstanceDeletionResult> {
+  const name = String(instanceName || "").trim();
+  if (!name) {
+    return { ok: false, status: 400, error: "Nome da instância é obrigatório." };
+  }
+  if (!buildEvoDeleteCandidateUrls(name).length) {
+    return {
+      ok: false,
+      status: 501,
+      error: "Ação deletar não configurada. Defina EVO_DELETE_URL_TEMPLATE no backend.",
+    };
+  }
+
+  const evoResult = await tryDeleteEvoInstance(name);
+  await purgeInstanceLocalState(name);
+
+  const message = evoResult.evoDeleted
+    ? "Instância deletada com sucesso."
+    : evoResult.status === 404
+      ? "Instância removida do painel (não encontrada na Evolution)."
+      : "Instância removida do painel. Se ainda existir na Evolution, remova manualmente no servidor EVO.";
+
+  return {
+    ok: true,
+    message,
+    degraded: !evoResult.evoDeleted,
+    evoStatus: evoResult.status || undefined,
+    evoDetail: evoResult.evoDeleted
+      ? undefined
+      : summarizeEvolutionErrorDetail(evoResult.body, evoResult.status),
+  };
+}
+
 app.delete("/instancias/:name", async (req, res) => {
   try {
     const instanceName = String(req.params.name || "").trim();
-    if (!instanceName) {
-      return res.status(400).json({ error: "Nome da instância é obrigatório." });
-    }
     if (await rejectForeignInstance(req, res, instanceName)) return;
 
-    if (!buildEvoDeleteCandidateUrls(instanceName).length) {
-      return res.status(501).json({
-        error:
-          "Ação deletar não configurada. Defina EVO_DELETE_URL_TEMPLATE no backend.",
-      });
+    const result = await performInstanceDeletion(instanceName);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
     }
-
-    const evoResult = await tryDeleteEvoInstance(instanceName);
-    await purgeInstanceLocalState(instanceName);
-
-    const message = evoResult.evoDeleted
-      ? "Instância deletada com sucesso."
-      : evoResult.status === 404
-        ? "Instância removida do painel (não encontrada na Evolution)."
-        : "Instância removida do painel. Se ainda existir na Evolution, remova manualmente no servidor EVO.";
-
     return res.json({
       ok: true,
-      message,
-      degraded: !evoResult.evoDeleted,
-      evoStatus: evoResult.status || undefined,
-      evoDetail: evoResult.evoDeleted
-        ? undefined
-        : summarizeEvolutionErrorDetail(evoResult.body, evoResult.status),
+      message: result.message,
+      degraded: result.degraded,
+      evoStatus: result.evoStatus,
+      evoDetail: result.evoDetail,
     });
   } catch (error) {
     console.error("Erro ao deletar instância:", error);
     return res.status(500).json({ error: "Erro ao deletar instância." });
+  }
+});
+
+app.delete("/admin/instances/:name", async (req, res) => {
+  try {
+    const auth = resolveWabaRequestAuth(req);
+    if (auth.role !== "master" && !isWabaMasterEmail(auth.email)) {
+      return res.status(403).json({ error: "Somente usuário master pode excluir instâncias pelo admin." });
+    }
+    const instanceName = String(req.params.name || "").trim();
+    const result = await performInstanceDeletion(instanceName);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json({
+      ok: true,
+      message: result.message,
+      degraded: result.degraded,
+      evoStatus: result.evoStatus,
+      evoDetail: result.evoDetail,
+      deletedBy: auth.email,
+    });
+  } catch (error) {
+    console.error("Erro ao deletar instância (admin):", error);
+    return res.status(500).json({ error: "Erro ao deletar instância." });
+  }
+});
+
+app.post("/admin/instances/delete-by-phone", async (req, res) => {
+  try {
+    const auth = resolveWabaRequestAuth(req);
+    if (auth.role !== "master" && !isWabaMasterEmail(auth.email)) {
+      return res.status(403).json({ error: "Somente usuário master pode excluir instâncias pelo admin." });
+    }
+    const phone = String(req.body?.phone || "").trim();
+    const fromEmail = String(req.body?.fromEmail || "")
+      .trim()
+      .toLowerCase();
+    if (!phone) {
+      return res.status(400).json({ error: "Informe phone." });
+    }
+
+    const instanceNames = await resolveInstanceNamesByPhone(phone);
+    if (!instanceNames.length) {
+      return res.status(404).json({ error: "Nenhuma instância encontrada para esse número." });
+    }
+
+    const deleted: Array<{ instanceName: string; message: string; degraded: boolean }> = [];
+    const skipped: Array<{ instanceName: string; reason: string; ownerEmail?: string }> = [];
+
+    for (const instanceName of instanceNames) {
+      if (fromEmail.includes("@")) {
+        const owner = await wabaInstanceOwnershipService.resolveOwnerEmailForCandidates(
+          await resolveInstanceDeletionKeys(instanceName),
+        );
+        if (owner && owner !== fromEmail) {
+          skipped.push({
+            instanceName,
+            reason: "Instância pertence a outro usuário.",
+            ownerEmail: owner,
+          });
+          continue;
+        }
+      }
+      const result = await performInstanceDeletion(instanceName);
+      if (!result.ok) {
+        skipped.push({ instanceName, reason: result.error });
+        continue;
+      }
+      deleted.push({
+        instanceName,
+        message: result.message,
+        degraded: result.degraded,
+      });
+    }
+
+    if (!deleted.length) {
+      return res.status(409).json({
+        error: "Nenhuma instância foi excluída.",
+        skipped,
+      });
+    }
+
+    return res.json({ ok: true, deleted, skipped });
+  } catch (error) {
+    console.error("Erro ao excluir instância por telefone (admin):", error);
+    return res.status(500).json({ error: "Erro ao excluir instância." });
   }
 });
 
