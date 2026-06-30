@@ -80,6 +80,7 @@ import {
 import {
   getInboundValidationStatus,
   handleInboundValidationWebhook,
+  refreshInboundValidation,
   setInboundValidationFinishedHandler,
   startInboundValidation,
 } from "./instance-inbound-validation.service";
@@ -5350,10 +5351,14 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
   }
 });
 
-app.get("/instancias/validacao-inbound/:validationId", (req, res) => {
+app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
   const validationId = String(req.params.validationId || "").trim();
   if (!validationId) {
     return res.status(400).json({ error: "validationId é obrigatório." });
+  }
+  const nudge = String(req.query.nudge ?? "").trim() === "1";
+  if (nudge) {
+    await refreshInboundValidation(validationId);
   }
   const status = getInboundValidationStatus(validationId);
   if (!status) {

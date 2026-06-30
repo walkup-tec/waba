@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.INBOUND_VALIDATION_KEYWORD = void 0;
 exports.setInboundValidationFinishedHandler = setInboundValidationFinishedHandler;
+exports.refreshInboundValidation = refreshInboundValidation;
 exports.handleInboundValidationWebhook = handleInboundValidationWebhook;
 exports.getInboundValidationStatus = getInboundValidationStatus;
 exports.startInboundValidation = startInboundValidation;
@@ -25,8 +26,8 @@ const WABA_PUBLIC_BASE_URL = String(process.env.WABA_PUBLIC_BASE_URL || process.
     .replace(/\/+$/, "");
 exports.INBOUND_VALIDATION_KEYWORD = String(process.env.INBOUND_VALIDATION_KEYWORD || "CONFIRMAR").trim() || "CONFIRMAR";
 const VALIDATION_TIMEOUT_MS = Math.max(60000, Math.min(600000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 300000) || 300000));
-const VALIDATION_POLL_MS = Math.max(2000, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 3000) || 3000));
-const REPLY_DELAY_MS = Math.max(2000, Math.min(30000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 4000) || 4000));
+const VALIDATION_POLL_MS = Math.max(800, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 1000) || 1000));
+const REPLY_DELAY_MS = Math.max(500, Math.min(30000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 1000) || 1000));
 const validations = new Map();
 /** Uma validação ativa por instância — evita loops órfãos após novo POST. */
 const activeValidationByInstance = new Map();
@@ -196,11 +197,28 @@ function collectMessageTexts(node, out, depth = 0) {
             collectMessageTexts(value, out, depth + 1);
     }
 }
+function normalizeKeywordText(text) {
+    return String(text || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .replace(/[^\p{L}\p{N}]/gu, "");
+}
 function textMatchesKeyword(texts, keyword) {
-    const needle = keyword.trim().toLowerCase();
+    const needle = normalizeKeywordText(keyword);
     if (!needle)
         return false;
-    return texts.some((t) => t.trim().toLowerCase() === needle);
+    return texts.some((t) => {
+        const normalized = normalizeKeywordText(t);
+        if (!normalized)
+            return false;
+        if (normalized === needle)
+            return true;
+        if (normalized.includes(needle) && normalized.length <= needle.length + 6)
+            return true;
+        return false;
+    });
 }
 function extractMessageTimestampMs(node) {
     const message = node.message;
@@ -325,22 +343,36 @@ function isInboundHitFresh(hit, options) {
         return false;
     return true;
 }
-function walkInboundHits(node, out, keyword, options, depth = 0) {
+function isInboundCandidate(node, strictFromMe) {
+    const fromMe = extractFromMe(node);
+    if (fromMe === true)
+        return false;
+    if (strictFromMe && fromMe !== false)
+        return false;
+    return true;
+}
+function walkInboundHits(node, out, keyword, options, depth = 0, strictFromMe = true) {
     if (depth > 14 || node == null)
         return;
     if (Array.isArray(node)) {
         for (const item of node)
-            walkInboundHits(item, out, keyword, options, depth + 1);
+            walkInboundHits(item, out, keyword, options, depth + 1, strictFromMe);
         return;
     }
     if (typeof node !== "object")
         return;
     const obj = node;
-    const fromMe = extractFromMe(obj);
+    if (!isInboundCandidate(obj, strictFromMe)) {
+        for (const value of Object.values(obj)) {
+            if (value && typeof value === "object")
+                walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
+        }
+        return;
+    }
     const remoteJid = extractRemoteJid(obj);
     const texts = [];
     collectMessageTexts(obj.message ?? obj, texts);
-    if (fromMe === false && remoteJid && textMatchesKeyword(texts, keyword)) {
+    if (remoteJid && textMatchesKeyword(texts, keyword)) {
         const hit = {
             remoteJid,
             referenceNumber: jidToNumber(remoteJid),
@@ -352,12 +384,15 @@ function walkInboundHits(node, out, keyword, options, depth = 0) {
     }
     for (const value of Object.values(obj)) {
         if (value && typeof value === "object")
-            walkInboundHits(value, out, keyword, options, depth + 1);
+            walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
     }
 }
-function findInboundInPayload(payload, keyword, options) {
+function findInboundInPayload(payload, keyword, options, strictFromMe = true) {
     const hits = [];
-    walkInboundHits(payload, hits, keyword, options);
+    walkInboundHits(payload, hits, keyword, options, 0, strictFromMe);
+    if (!hits.length && strictFromMe) {
+        return findInboundInPayload(payload, keyword, options, false);
+    }
     if (!hits.length)
         return null;
     hits.sort((a, b) => (b.messageTimestampMs ?? 0) - (a.messageTimestampMs ?? 0));
@@ -388,16 +423,26 @@ function extractRemoteJid(node) {
 }
 async function findInboundViaApi(instanceName, keyword, minTimestampMs) {
     const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
-    const bodies = [{ limit: 40 }, { take: 40 }, {}];
-    const searchOptions = {
-        minTimestampMs: minTimestampMs - 3000,
+    const bodies = [
+        { limit: 80 },
+        { take: 80 },
+        { limit: 40 },
+        {},
+    ];
+    const strictOptions = {
+        minTimestampMs: minTimestampMs - 5000,
         requireTimestamp: true,
+    };
+    const looseOptions = {
+        minTimestampMs: minTimestampMs - 5000,
+        requireTimestamp: false,
     };
     for (const body of bodies) {
         const result = await callEvo(url, "POST", body);
         if (!result.ok)
             continue;
-        const hit = findInboundInPayload(result.json, keyword, searchOptions);
+        const hit = findInboundInPayload(result.json, keyword, strictOptions) ||
+            findInboundInPayload(result.json, keyword, looseOptions);
         if (hit)
             return hit;
     }
@@ -434,6 +479,35 @@ function markInboundReceived(record, hit, via) {
         success: true,
         detail: `Mensagem "${record.keyword}" recebida (${via}).`,
     };
+    scheduleValidationFollowUp(record);
+}
+function scheduleValidationFollowUp(record) {
+    if (record.replyFollowUpScheduled || record.cancelled || record.finished)
+        return;
+    record.replyFollowUpScheduled = true;
+    setTimeout(() => {
+        void runValidationFollowUp(record);
+    }, REPLY_DELAY_MS);
+}
+async function runValidationFollowUp(record) {
+    if (record.cancelled || record.finished)
+        return;
+    if (record.receiveTest.success === true && !record.sendAttempted) {
+        await sendContextualReply(record);
+    }
+    if (record.sendAttempted &&
+        record.sendHttpOk &&
+        record.sendTest.success !== true &&
+        record.referenceJid) {
+        const found = await findReplyInChat(record.instanceName, record.referenceJid, record.replyMarker);
+        if (found) {
+            record.sendTest = {
+                success: true,
+                detail: "Resposta confirmada no histórico da conversa.",
+            };
+            tryFinalize(record);
+        }
+    }
 }
 async function sendContextualReply(record) {
     if (record.cancelled || record.finished || !record.referenceNumber || record.sendAttempted)
@@ -557,6 +631,41 @@ async function runValidationLoop(record) {
             finalizeExpired(record);
     }
 }
+function unwrapEvolutionWebhookPayload(body) {
+    if (!body || typeof body !== "object")
+        return [body];
+    const payload = body;
+    const data = payload.data;
+    if (Array.isArray(data))
+        return data.length ? data : [body];
+    if (data && typeof data === "object") {
+        const nested = data;
+        if (Array.isArray(nested.messages))
+            return nested.messages;
+        return [data];
+    }
+    return [body];
+}
+async function refreshInboundValidation(validationId) {
+    const record = validations.get(validationId);
+    if (!record || record.finished || record.cancelled) {
+        return getInboundValidationStatus(validationId);
+    }
+    if (record.receiveTest.success !== true) {
+        try {
+            const hit = await findInboundViaApi(record.instanceName, record.keyword, record.validationStartedAtMs);
+            if (hit)
+                markInboundReceived(record, hit, "nudge");
+        }
+        catch {
+            /* falha transitória */
+        }
+    }
+    else {
+        await runValidationFollowUp(record);
+    }
+    return getInboundValidationStatus(validationId);
+}
 function handleInboundValidationWebhook(body) {
     if (!body || typeof body !== "object")
         return;
@@ -565,6 +674,7 @@ function handleInboundValidationWebhook(body) {
     const event = String(payload.event || "").toUpperCase();
     if (event && event !== "MESSAGES_UPSERT" && event !== "MESSAGES.UPSERT")
         return;
+    const chunks = unwrapEvolutionWebhookPayload(body);
     const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
     const candidates = active
         ? [active]
@@ -572,13 +682,19 @@ function handleInboundValidationWebhook(body) {
     for (const record of candidates) {
         if (instanceName && instanceName !== record.instanceName)
             continue;
-        const hit = findInboundInPayload(payload, record.keyword, {
-            minTimestampMs: record.validationStartedAtMs - 3000,
-        });
-        if (!hit)
-            continue;
-        markInboundReceived(record, hit, "webhook");
-        break;
+        let matched = false;
+        for (const chunk of chunks) {
+            const hit = findInboundInPayload(chunk, record.keyword, {
+                minTimestampMs: record.validationStartedAtMs - 5000,
+            });
+            if (!hit)
+                continue;
+            markInboundReceived(record, hit, "webhook");
+            matched = true;
+            break;
+        }
+        if (matched)
+            break;
     }
 }
 function getInboundValidationStatus(validationId) {
@@ -641,6 +757,7 @@ async function startInboundValidation(input) {
         sendDetail: "",
         loopRunning: false,
         cancelled: false,
+        replyFollowUpScheduled: false,
         startedAt,
         finishedAt: null,
     };

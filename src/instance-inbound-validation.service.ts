@@ -29,11 +29,11 @@ const VALIDATION_TIMEOUT_MS = Math.max(
 );
 const VALIDATION_POLL_MS = Math.max(
   800,
-  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 1200) || 1200)
+  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 1000) || 1000)
 );
 const REPLY_DELAY_MS = Math.max(
-  800,
-  Math.min(30_000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 1200) || 1200)
+  500,
+  Math.min(30_000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 1000) || 1000)
 );
 
 export type ValidationTestResult = {
@@ -252,10 +252,25 @@ function collectMessageTexts(node: unknown, out: string[], depth = 0): void {
   }
 }
 
+function normalizeKeywordText(text: string): string {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 function textMatchesKeyword(texts: string[], keyword: string): boolean {
-  const needle = keyword.trim().toLowerCase();
+  const needle = normalizeKeywordText(keyword);
   if (!needle) return false;
-  return texts.some((t) => t.trim().toLowerCase() === needle);
+  return texts.some((t) => {
+    const normalized = normalizeKeywordText(t);
+    if (!normalized) return false;
+    if (normalized === needle) return true;
+    if (normalized.includes(needle) && normalized.length <= needle.length + 6) return true;
+    return false;
+  });
 }
 
 function extractMessageTimestampMs(node: Record<string, unknown>): number | null {
@@ -391,25 +406,38 @@ function isInboundHitFresh(hit: InboundHit, options?: InboundHitSearchOptions): 
   return true;
 }
 
+function isInboundCandidate(node: Record<string, unknown>, strictFromMe: boolean): boolean {
+  const fromMe = extractFromMe(node);
+  if (fromMe === true) return false;
+  if (strictFromMe && fromMe !== false) return false;
+  return true;
+}
+
 function walkInboundHits(
   node: unknown,
   out: InboundHit[],
   keyword: string,
   options?: InboundHitSearchOptions,
-  depth = 0
+  depth = 0,
+  strictFromMe = true
 ): void {
   if (depth > 14 || node == null) return;
   if (Array.isArray(node)) {
-    for (const item of node) walkInboundHits(item, out, keyword, options, depth + 1);
+    for (const item of node) walkInboundHits(item, out, keyword, options, depth + 1, strictFromMe);
     return;
   }
   if (typeof node !== "object") return;
   const obj = node as Record<string, unknown>;
-  const fromMe = extractFromMe(obj);
+  if (!isInboundCandidate(obj, strictFromMe)) {
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === "object") walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
+    }
+    return;
+  }
   const remoteJid = extractRemoteJid(obj);
   const texts: string[] = [];
   collectMessageTexts(obj.message ?? obj, texts);
-  if (fromMe === false && remoteJid && textMatchesKeyword(texts, keyword)) {
+  if (remoteJid && textMatchesKeyword(texts, keyword)) {
     const hit: InboundHit = {
       remoteJid,
       referenceNumber: jidToNumber(remoteJid),
@@ -419,17 +447,21 @@ function walkInboundHits(
     if (isInboundHitFresh(hit, options)) out.push(hit);
   }
   for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") walkInboundHits(value, out, keyword, options, depth + 1);
+    if (value && typeof value === "object") walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
   }
 }
 
 function findInboundInPayload(
   payload: unknown,
   keyword: string,
-  options?: InboundHitSearchOptions
+  options?: InboundHitSearchOptions,
+  strictFromMe = true
 ): InboundHit | null {
   const hits: InboundHit[] = [];
-  walkInboundHits(payload, hits, keyword, options);
+  walkInboundHits(payload, hits, keyword, options, 0, strictFromMe);
+  if (!hits.length && strictFromMe) {
+    return findInboundInPayload(payload, keyword, options, false);
+  }
   if (!hits.length) return null;
   hits.sort((a, b) => (b.messageTimestampMs ?? 0) - (a.messageTimestampMs ?? 0));
   return hits[0];
@@ -463,13 +495,18 @@ async function findInboundViaApi(
   minTimestampMs: number
 ): Promise<InboundHit | null> {
   const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
-  const bodies: Record<string, unknown>[] = [{ limit: 40 }, { take: 40 }, {}];
+  const bodies: Record<string, unknown>[] = [
+    { limit: 80 },
+    { take: 80 },
+    { limit: 40 },
+    {},
+  ];
   const strictOptions: InboundHitSearchOptions = {
-    minTimestampMs: minTimestampMs - 3000,
+    minTimestampMs: minTimestampMs - 5000,
     requireTimestamp: true,
   };
   const looseOptions: InboundHitSearchOptions = {
-    minTimestampMs: minTimestampMs - 3000,
+    minTimestampMs: minTimestampMs - 5000,
     requireTimestamp: false,
   };
   for (const body of bodies) {
@@ -523,37 +560,34 @@ function scheduleValidationFollowUp(record: ValidationRecord): void {
   if (record.replyFollowUpScheduled || record.cancelled || record.finished) return;
   record.replyFollowUpScheduled = true;
   setTimeout(() => {
-    void (async () => {
-      if (record.cancelled || record.finished) return;
-      if (
-        record.receiveTest.success === true &&
-        record.inboundReceivedAt &&
-        Date.now() >= record.inboundReceivedAt + REPLY_DELAY_MS &&
-        !record.sendAttempted
-      ) {
-        await sendContextualReply(record);
-      }
-      if (
-        record.sendAttempted &&
-        record.sendHttpOk &&
-        record.sendTest.success !== true &&
-        record.referenceJid
-      ) {
-        const found = await findReplyInChat(
-          record.instanceName,
-          record.referenceJid,
-          record.replyMarker
-        );
-        if (found) {
-          record.sendTest = {
-            success: true,
-            detail: "Resposta confirmada no histórico da conversa.",
-          };
-          tryFinalize(record);
-        }
-      }
-    })();
+    void runValidationFollowUp(record);
   }, REPLY_DELAY_MS);
+}
+
+async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
+  if (record.cancelled || record.finished) return;
+  if (record.receiveTest.success === true && !record.sendAttempted) {
+    await sendContextualReply(record);
+  }
+  if (
+    record.sendAttempted &&
+    record.sendHttpOk &&
+    record.sendTest.success !== true &&
+    record.referenceJid
+  ) {
+    const found = await findReplyInChat(
+      record.instanceName,
+      record.referenceJid,
+      record.replyMarker
+    );
+    if (found) {
+      record.sendTest = {
+        success: true,
+        detail: "Resposta confirmada no histórico da conversa.",
+      };
+      tryFinalize(record);
+    }
+  }
 }
 
 async function sendContextualReply(record: ValidationRecord): Promise<void> {
@@ -687,6 +721,45 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
   }
 }
 
+function unwrapEvolutionWebhookPayload(body: unknown): unknown[] {
+  if (!body || typeof body !== "object") return [body];
+  const payload = body as Record<string, unknown>;
+  const data = payload.data;
+  if (Array.isArray(data)) return data.length ? data : [body];
+  if (data && typeof data === "object") {
+    const nested = data as Record<string, unknown>;
+    if (Array.isArray(nested.messages)) return nested.messages;
+    return [data];
+  }
+  return [body];
+}
+
+export async function refreshInboundValidation(
+  validationId: string
+): Promise<InboundValidationStatus | null> {
+  const record = validations.get(validationId);
+  if (!record || record.finished || record.cancelled) {
+    return getInboundValidationStatus(validationId);
+  }
+
+  if (record.receiveTest.success !== true) {
+    try {
+      const hit = await findInboundViaApi(
+        record.instanceName,
+        record.keyword,
+        record.validationStartedAtMs
+      );
+      if (hit) markInboundReceived(record, hit, "nudge");
+    } catch {
+      /* falha transitória */
+    }
+  } else {
+    await runValidationFollowUp(record);
+  }
+
+  return getInboundValidationStatus(validationId);
+}
+
 export function handleInboundValidationWebhook(body: unknown): void {
   if (!body || typeof body !== "object") return;
   const payload = body as Record<string, unknown>;
@@ -694,6 +767,7 @@ export function handleInboundValidationWebhook(body: unknown): void {
   const event = String(payload.event || "").toUpperCase();
   if (event && event !== "MESSAGES_UPSERT" && event !== "MESSAGES.UPSERT") return;
 
+  const chunks = unwrapEvolutionWebhookPayload(body);
   const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
   const candidates = active
     ? [active]
@@ -701,12 +775,17 @@ export function handleInboundValidationWebhook(body: unknown): void {
 
   for (const record of candidates) {
     if (instanceName && instanceName !== record.instanceName) continue;
-    const hit = findInboundInPayload(payload, record.keyword, {
-      minTimestampMs: record.validationStartedAtMs - 3000,
-    });
-    if (!hit) continue;
-    markInboundReceived(record, hit, "webhook");
-    break;
+    let matched = false;
+    for (const chunk of chunks) {
+      const hit = findInboundInPayload(chunk, record.keyword, {
+        minTimestampMs: record.validationStartedAtMs - 5000,
+      });
+      if (!hit) continue;
+      markInboundReceived(record, hit, "webhook");
+      matched = true;
+      break;
+    }
+    if (matched) break;
   }
 }
 

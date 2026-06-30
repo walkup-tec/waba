@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-30
 
-**WABA — Wizard QR/conexão/CONFIRMAR rápido:** status-conexao 1s; QR fast path; validação poll 1,2s + webhook follow-up. Marker `DEPLOY-2026-06-30-wizard-qr-connect-validation-fast`. Ver `doc/LOG-2026-06-30__wizard-qr-connect-validation-fast.md`.
+**WABA — Validação CONFIRMAR + deploy guard:** nudge findMessages; overlay não reload no wizard; poll 800ms. Marker `DEPLOY-2026-06-30-validacao-inbound-fast-nudge`. Ver `doc/LOG-2026-06-30__validacao-inbound-fast-nudge-reload-guard.md`.
+
+**WABA — Wizard QR/conexão/CONFIRMAR rápido:** status-conexao 1s; QR fast path. Marker `DEPLOY-2026-06-30-wizard-qr-connect-validation-fast`. Ver `doc/LOG-2026-06-30__wizard-qr-connect-validation-fast.md`.
 
 **WABA — QRCode count:0 + Prisma recovery:** Ver `doc/LOG-2026-06-30__qrcode-evo-count0-prisma-recovery.md`.
 

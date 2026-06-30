@@ -227,7 +227,22 @@
           return pollStartedAt > 0;
         }
 
+        function isRegisterWizardBlockingDeploy() {
+          try {
+            return sessionStorage.getItem("waba.registerWizardActive") === "1";
+          } catch (_) {
+            return false;
+          }
+        }
+
         function completeDeployRecovery() {
+          if (isRegisterWizardBlockingDeploy()) {
+            try {
+              sessionStorage.setItem("waba.deployReloadPending", "1");
+            } catch (_) {}
+            dismissDeployRecoveryWithoutReload();
+            return;
+          }
           setOverlayPhase("complete");
           try {
             sessionStorage.setItem("waba.deployReload", "1");
@@ -371,6 +386,12 @@
 
         function startDeployRecovery(force) {
           if (!isDeployResilienceEnabled()) return;
+          if (isRegisterWizardBlockingDeploy()) {
+            try {
+              sessionStorage.setItem("waba.deployReloadPending", "1");
+            } catch (_) {}
+            return;
+          }
           sawDeploySignal = true;
           deployRecoveryActive = true;
           void captureDeployBaselineIfEmpty().finally(function () {
@@ -380,6 +401,7 @@
 
         async function watchDeployInBackground() {
           if (!isDeployResilienceEnabled() || deployRecoveryActive) return;
+          if (isRegisterWizardBlockingDeploy()) return;
           var probe = await probeHealthDetailed();
           if (probe.deploySignal) {
             startDeployRecovery(false);
@@ -403,6 +425,17 @@
             }
           });
         }
+
+        window.wabaFlushPendingDeployReload = function wabaFlushPendingDeployReload() {
+          try {
+            if (sessionStorage.getItem("waba.deployReloadPending") === "1") {
+              sessionStorage.removeItem("waba.deployReloadPending");
+              sessionStorage.removeItem("waba.registerWizardActive");
+              purgeDeployServiceWorkerCache();
+              window.location.reload();
+            }
+          } catch (_) {}
+        };
 
         window.wabaDeployResilience = {
           show: showDeployOverlay,
@@ -30773,6 +30806,15 @@
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
       let registerWizardValidationComplete = false;
+
+      function setRegisterWizardLock(active) {
+        try {
+          if (active) sessionStorage.setItem("waba.registerWizardActive", "1");
+          else sessionStorage.removeItem("waba.registerWizardActive");
+        } catch {
+          /* ignore */
+        }
+      }
       let aquecedorEnviosPollTimer = null;
       let aquecedorEnviosLastItems = [];
       let aquecedorEnviosLoadSeq = 0;
@@ -38548,6 +38590,7 @@
         if (instanceName) beginRegisterWizardHide(instanceName);
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
+        setRegisterWizardLock(true);
         bindRegisterInstanceModalActions();
         if (registerWizardStep === 1) nameInput.focus();
       }
@@ -38588,6 +38631,8 @@
           if (activeTab === "instancias") renderInstancesList();
           else updateInstancesIndicators();
         }
+        setRegisterWizardLock(false);
+        window.wabaFlushPendingDeployReload?.();
       }
 
       function setInboundCheckVisible(rowId, visible, animate) {
@@ -38724,6 +38769,8 @@
         if (msgEl && message) msgEl.textContent = message;
         markRegisterWizardValidationComplete();
         setRegisterWizardStep(4);
+        setRegisterWizardLock(false);
+        window.wabaFlushPendingDeployReload?.();
         if (alternativaNumbersPendingActivation && registerConnectedInstanceName) {
           alternativaNumbersPendingActivation = false;
           void registerAlternativaNumberActivation(registerConnectedInstanceName);
@@ -38808,9 +38855,9 @@
               return;
             }
             const pollRes = await fetchWithTimeout(
-              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`,
-              {},
-              12000
+              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=1`,
+              { credentials: "same-origin" },
+              15000
             );
             if (!pollRes.ok) return;
             const status = await pollRes.json().catch(() => null);
@@ -38840,7 +38887,7 @@
         };
 
         void pollValidationOnce();
-        registerInboundPollTimer = setInterval(pollValidationOnce, 1000);
+        registerInboundPollTimer = setInterval(pollValidationOnce, 800);
       }
 
       function openRenameInstanceModal(instanceName) {

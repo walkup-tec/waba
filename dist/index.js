@@ -4322,10 +4322,14 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
         return res.status(500).json({ error: error?.message || "Erro ao iniciar validação inbound." });
     }
 });
-app.get("/instancias/validacao-inbound/:validationId", (req, res) => {
+app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     const validationId = String(req.params.validationId || "").trim();
     if (!validationId) {
         return res.status(400).json({ error: "validationId é obrigatório." });
+    }
+    const nudge = String(req.query.nudge ?? "").trim() === "1";
+    if (nudge) {
+        await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId);
     }
     const status = (0, instance_inbound_validation_service_1.getInboundValidationStatus)(validationId);
     if (!status) {
