@@ -5278,6 +5278,60 @@ app.get("/instancias/probe-integracao/:probeId", (req, res) => {
   return res.json({ ok: true, ...status });
 });
 
+app.get("/instancias/:name/status-conexao", async (req, res) => {
+  try {
+    const name = String(req.params.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ error: "Nome da instância é obrigatório." });
+    }
+    if (await rejectForeignInstance(req, res, name)) return;
+
+    const live = await fetchEvoInstanceConnectionState(name);
+    if (live.ok) {
+      return res.json({
+        ok: true,
+        name,
+        connectionStatus: live.state,
+        open: live.open,
+        source: "connectionState",
+      });
+    }
+
+    const evoList = await fetchEvoInstancesList();
+    if (evoList.ok) {
+      const needle = name.toLowerCase();
+      const match = evoList.instances.find((inst: Record<string, unknown>) => {
+        const key = String(
+          inst?.instanceName ?? inst?.name ?? inst?.instance ?? "",
+        )
+          .trim()
+          .toLowerCase();
+        return key === needle;
+      });
+      if (match) {
+        const state = String(match.connectionStatus ?? match.status ?? "unknown")
+          .trim()
+          .toLowerCase();
+        return res.json({
+          ok: true,
+          name,
+          connectionStatus: state || "unknown",
+          open: state.includes("open"),
+          source: "fetchInstances",
+        });
+      }
+    }
+
+    return res.status(502).json({
+      ok: false,
+      error: "Não foi possível consultar o status da instância na Evolution.",
+    });
+  } catch (error) {
+    console.error("GET /instancias/:name/status-conexao", error);
+    return res.status(500).json({ error: "Erro ao consultar status da instância." });
+  }
+});
+
 app.post("/instancias/:name/validacao-inbound", async (req, res) => {
   try {
     const name = String(req.params.name || "").trim();
@@ -7235,7 +7289,44 @@ async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<voi
       retries: 1,
     });
   }
-  await sleepMs(4000);
+  await sleepMs(2500);
+}
+
+function pickEvoConnectionState(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const root = payload as Record<string, unknown>;
+  const inst = (root.instance as Record<string, unknown> | undefined) ?? root;
+  const raw =
+    inst.state ??
+    inst.connectionStatus ??
+    inst.status ??
+    root.state ??
+    root.connectionStatus ??
+    "";
+  return String(raw || "").trim().toLowerCase();
+}
+
+async function fetchEvoInstanceConnectionState(
+  instanceName: string,
+): Promise<{ ok: boolean; state: string; open: boolean }> {
+  const enc = encodeURIComponent(String(instanceName || "").trim());
+  if (!enc) return { ok: false, state: "", open: false };
+  const urls = [
+    `${EVO_API_BASE}/instance/connectionState/${enc}`,
+    `${EVO_API_BASE}/instance/connection-state/${enc}`,
+  ];
+  for (const url of urls) {
+    const result = await callEvoAction(url, "GET", undefined, {
+      timeoutMs: 8000,
+      retries: 1,
+    });
+    if (!result.ok && result.status === 404) continue;
+    const state = pickEvoConnectionState(result.json);
+    if (state) {
+      return { ok: true, state, open: state.includes("open") };
+    }
+  }
+  return { ok: false, state: "", open: false };
 }
 
 async function resetEvoInstanceForQr(instanceName: string): Promise<void> {
@@ -7257,6 +7348,8 @@ type EvoQrFetchOptions = {
   retries?: number;
   /** Logout/restart na EVO antes do connect (instância já existente desconectada). */
   prepareSession?: boolean;
+  /** Rodadas extras lentas (após reset/recovery). */
+  extended?: boolean;
 };
 
 type QrRegisterJobRecord = {
@@ -7436,6 +7529,7 @@ async function runRegistrarQrcode(
         timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 90000),
         retries: 4,
         prepareSession: false,
+        extended: true,
       });
       if (qrRetry.ok) {
         return {
@@ -7492,11 +7586,13 @@ async function fetchInstanceQrCodeFromEvo(
 
   const connectCandidates = buildEvoConnectQrCandidates(instanceName, number);
   let lastError = { status: 0, detail: "" };
-  const roundDelaysMs = [0, 2500, 3500, 4500, 5500, 6500];
+  const fastRoundDelaysMs = [0, 700, 1100, 1600, 2200];
+  const slowRoundDelaysMs = options.extended ? [3000, 4500, 6000] : [2800];
+  const roundDelaysMs = [...fastRoundDelaysMs, ...slowRoundDelaysMs];
 
   for (let round = 0; round < roundDelaysMs.length; round += 1) {
     if (round > 0) {
-      if (round === 3) {
+      if (options.extended && round === fastRoundDelaysMs.length) {
         await prepareEvoInstanceForQrConnect(instanceName);
       } else {
         await sleepMs(roundDelaysMs[round]);

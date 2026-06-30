@@ -28,12 +28,12 @@ const VALIDATION_TIMEOUT_MS = Math.max(
   Math.min(600_000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 300_000) || 300_000)
 );
 const VALIDATION_POLL_MS = Math.max(
-  2000,
-  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 3000) || 3000)
+  800,
+  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 1200) || 1200)
 );
 const REPLY_DELAY_MS = Math.max(
-  2000,
-  Math.min(30_000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 4000) || 4000)
+  800,
+  Math.min(30_000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 1200) || 1200)
 );
 
 export type ValidationTestResult = {
@@ -75,6 +75,7 @@ type ValidationRecord = InboundValidationStatus & {
   sendDetail: string;
   loopRunning: boolean;
   cancelled: boolean;
+  replyFollowUpScheduled: boolean;
 };
 
 const validations = new Map<string, ValidationRecord>();
@@ -463,14 +464,20 @@ async function findInboundViaApi(
 ): Promise<InboundHit | null> {
   const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
   const bodies: Record<string, unknown>[] = [{ limit: 40 }, { take: 40 }, {}];
-  const searchOptions: InboundHitSearchOptions = {
+  const strictOptions: InboundHitSearchOptions = {
     minTimestampMs: minTimestampMs - 3000,
     requireTimestamp: true,
+  };
+  const looseOptions: InboundHitSearchOptions = {
+    minTimestampMs: minTimestampMs - 3000,
+    requireTimestamp: false,
   };
   for (const body of bodies) {
     const result = await callEvo(url, "POST", body);
     if (!result.ok) continue;
-    const hit = findInboundInPayload(result.json, keyword, searchOptions);
+    const hit =
+      findInboundInPayload(result.json, keyword, strictOptions) ||
+      findInboundInPayload(result.json, keyword, looseOptions);
     if (hit) return hit;
   }
   return null;
@@ -509,6 +516,44 @@ function markInboundReceived(record: ValidationRecord, hit: InboundHit, via: str
     success: true,
     detail: `Mensagem "${record.keyword}" recebida (${via}).`,
   };
+  scheduleValidationFollowUp(record);
+}
+
+function scheduleValidationFollowUp(record: ValidationRecord): void {
+  if (record.replyFollowUpScheduled || record.cancelled || record.finished) return;
+  record.replyFollowUpScheduled = true;
+  setTimeout(() => {
+    void (async () => {
+      if (record.cancelled || record.finished) return;
+      if (
+        record.receiveTest.success === true &&
+        record.inboundReceivedAt &&
+        Date.now() >= record.inboundReceivedAt + REPLY_DELAY_MS &&
+        !record.sendAttempted
+      ) {
+        await sendContextualReply(record);
+      }
+      if (
+        record.sendAttempted &&
+        record.sendHttpOk &&
+        record.sendTest.success !== true &&
+        record.referenceJid
+      ) {
+        const found = await findReplyInChat(
+          record.instanceName,
+          record.referenceJid,
+          record.replyMarker
+        );
+        if (found) {
+          record.sendTest = {
+            success: true,
+            detail: "Resposta confirmada no histórico da conversa.",
+          };
+          tryFinalize(record);
+        }
+      }
+    })();
+  }, REPLY_DELAY_MS);
 }
 
 async function sendContextualReply(record: ValidationRecord): Promise<void> {
@@ -735,6 +780,7 @@ export async function startInboundValidation(input: {
     sendDetail: "",
     loopRunning: false,
     cancelled: false,
+    replyFollowUpScheduled: false,
     startedAt,
     finishedAt: null,
   };

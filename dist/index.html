@@ -38796,7 +38796,7 @@
         if (!validationId) return;
 
         const validationStartedAt = Date.now();
-        registerInboundPollTimer = setInterval(async () => {
+        const pollValidationOnce = async () => {
           try {
             if (Date.now() - validationStartedAt > 360000) {
               clearInterval(registerInboundPollTimer);
@@ -38837,7 +38837,10 @@
           } catch {
             // mantém polling
           }
-        }, 2500);
+        };
+
+        void pollValidationOnce();
+        registerInboundPollTimer = setInterval(pollValidationOnce, 1000);
       }
 
       function openRenameInstanceModal(instanceName) {
@@ -39129,10 +39132,10 @@
         registerConnectPollStartedAt = Date.now();
         setRegisterConnectStatus("loading", "Aguardando leitura do QR Code…");
 
-        registerConnectPollTimer = setInterval(async () => {
+        const pollConnectOnce = async () => {
           try {
             const elapsed = Date.now() - registerConnectPollStartedAt;
-            if (elapsed > 120000) {
+            if (elapsed > 180000) {
               clearInterval(registerConnectPollTimer);
               registerConnectPollTimer = null;
               setRegisterConnectStatus(
@@ -39142,28 +39145,31 @@
               return;
             }
 
-            const response = await fetchWithTimeout("/instancias?refresh=1", {}, 50000);
+            const response = await fetchWithTimeout(
+              `/instancias/${encodeURIComponent(instanceName)}/status-conexao`,
+              { credentials: "same-origin" },
+              12000,
+            );
             if (!response.ok) return;
             const payload = await response.json().catch(() => null);
-            const items = Array.isArray(payload?.items) ? payload.items : [];
-            const match = items.find((item) => {
-              const itemName = String(item?.name || item?.instanceName || "").trim();
-              return itemName === instanceName;
-            });
-            if (!match) return;
-            const status = String(match?.connectionStatus || "").toLowerCase();
-            if (status.includes("open")) {
-              clearInterval(registerConnectPollTimer);
-              registerConnectPollTimer = null;
-              registerConnectedInstanceName = instanceName;
-              setRegisterConnectStatus("success", "Dispositivo conectado. Iniciando validação segura…");
-              beginRegisterWizardHide(instanceName);
-              await startRegisterInboundValidation(instanceName);
-            }
+            const isOpen =
+              payload?.open === true ||
+              String(payload?.connectionStatus || "").toLowerCase().includes("open");
+            if (!isOpen) return;
+
+            clearInterval(registerConnectPollTimer);
+            registerConnectPollTimer = null;
+            registerConnectedInstanceName = instanceName;
+            setRegisterConnectStatus("success", "Dispositivo conectado. Iniciando validação segura…");
+            beginRegisterWizardHide(instanceName);
+            await startRegisterInboundValidation(instanceName);
           } catch {
             // silencioso para não poluir UX durante polling
           }
-        }, 3000);
+        };
+
+        void pollConnectOnce();
+        registerConnectPollTimer = setInterval(pollConnectOnce, 1000);
       }
 
       function resolveQrImageSrcFromPayload(data) {
@@ -39223,7 +39229,7 @@
 
       async function pollRegistrarQrcodeJob(jobId, maxWaitMs = 180000) {
         const started = Date.now();
-        const intervalMs = 2000;
+        const intervalMs = 1000;
         let networkFailures = 0;
         while (Date.now() - started < maxWaitMs) {
           try {
