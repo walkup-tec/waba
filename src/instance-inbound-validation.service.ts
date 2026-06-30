@@ -275,7 +275,7 @@ function textMatchesKeyword(texts: string[], keyword: string): boolean {
     const normalized = normalizeKeywordText(t);
     if (!normalized) return false;
     if (normalized === needle) return true;
-    if (normalized.includes(needle) && normalized.length <= needle.length + 6) return true;
+    if (normalized.includes(needle) && normalized.length <= needle.length + 12) return true;
     return false;
   });
 }
@@ -356,7 +356,33 @@ function tryFinalize(record: ValidationRecord): void {
 }
 
 function finalizeExpired(record: ValidationRecord): void {
+  void finalizeExpiredAsync(record);
+}
+
+async function finalizeExpiredAsync(record: ValidationRecord): Promise<void> {
   if (record.finished) return;
+
+  if (record.receiveTest.success === null) {
+    try {
+      const hit = await resolveInboundHit(
+        record.instanceName,
+        record.keyword,
+        record.validationStartedAtMs,
+        true
+      );
+      if (hit) {
+        markInboundReceived(record, hit, "expire-rescan");
+        await runValidationFollowUp(record);
+        await new Promise((r) => setTimeout(r, REPLY_DELAY_MS + 1000));
+        await runValidationFollowUp(record);
+      }
+    } catch {
+      /* última tentativa antes de expirar */
+    }
+  }
+
+  if (record.finished) return;
+
   const phoneLabel = formatPhoneHint(record.instanceNumber) || "número integrado";
   if (record.receiveTest.success === null) {
     record.receiveTest = {
@@ -820,7 +846,7 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
             record.instanceName,
             record.keyword,
             record.validationStartedAtMs,
-            false
+            true
           );
           if (hit) markInboundReceived(record, hit, "findMessages");
         } catch {

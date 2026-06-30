@@ -18168,7 +18168,7 @@
             </button>
           </div>
         </div>
-        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-30-wizard-step3-ux-connection-fallback</span>
+        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-30-validacao-inbound-detect-fallback</span>
       </div>
     </div>
 
@@ -30869,7 +30869,7 @@
       let registerInboundPollFailCount = 0;
       let registerInboundPollUseNudge = true;
       let registerInboundConnectionAdvanceTimer = null;
-      const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 45000;
+      const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 30000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
@@ -39009,11 +39009,29 @@
           return true;
         }
 
-        setRegisterConnectStatus(
-          "loading",
-          "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
-        );
-        setRegisterInboundActionButtons({ retry: true, skip: true });
+        const name = String(instanceName || registerConnectedInstanceName || "").trim();
+        void (async () => {
+          const open = name ? await confirmRegisterInstanceOpenInEvo(name) : false;
+          if (open) {
+            const receiveDetail = String(status.receiveTest?.detail || "");
+            const timedOut = /tempo esgotado|recepção não confirmada|não testada/i.test(
+              receiveDetail
+            );
+            finishRegisterWizardConnectionOnly(
+              name,
+              timedOut
+                ? "WhatsApp conectado. CONFIRMAR não detectado a tempo — instância liberada (pode validar depois)."
+                : "WhatsApp conectado. Validação incompleta — instância liberada para uso."
+            );
+            return;
+          }
+          setRegisterConnectStatus(
+            "loading",
+            status.receiveTest?.detail ||
+              "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
+          );
+          setRegisterInboundActionButtons({ retry: true, skip: true });
+        })();
         return true;
       }
 
