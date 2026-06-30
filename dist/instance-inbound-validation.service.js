@@ -5,15 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.INBOUND_VALIDATION_KEYWORD = void 0;
 exports.setInboundValidationFinishedHandler = setInboundValidationFinishedHandler;
-exports.refreshInboundValidation = refreshInboundValidation;
 exports.handleInboundValidationWebhook = handleInboundValidationWebhook;
 exports.getInboundValidationStatus = getInboundValidationStatus;
 exports.startInboundValidation = startInboundValidation;
 exports.pruneInboundValidations = pruneInboundValidations;
 const crypto_1 = __importDefault(require("crypto"));
 const evo_http_client_1 = require("./evo-http.client");
-const evo_instance_phone_service_1 = require("./instances/evo-instance-phone.service");
-const waba_public_base_url_1 = require("./lib/waba-public-base-url");
+const evo_instance_key_1 = require("./instances/evo-instance-key");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
     .replace(/\/$/, "");
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
@@ -22,14 +20,17 @@ const EVO_INSTANCES_URL = String(process.env.EVO_INSTANCES_URL || "").trim() ||
 const EVO_SEND_TEXT_URL_TEMPLATE = String(process.env.EVO_SEND_TEXT_URL_TEMPLATE || "").trim() ||
     `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
+const WABA_PUBLIC_BASE_URL = String(process.env.WABA_PUBLIC_BASE_URL || process.env.WABA_WEBHOOK_BASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
 exports.INBOUND_VALIDATION_KEYWORD = String(process.env.INBOUND_VALIDATION_KEYWORD || "CONFIRMAR").trim() || "CONFIRMAR";
-const VALIDATION_TIMEOUT_MS = Math.max(120000, Math.min(900000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 600000) || 600000));
-const VALIDATION_POLL_MS = Math.max(400, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 600) || 600));
-const REPLY_DELAY_MS = Math.max(500, Math.min(30000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 1000) || 1000));
+const VALIDATION_TIMEOUT_MS = Math.max(60000, Math.min(600000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 300000) || 300000));
+const VALIDATION_POLL_MS = Math.max(2000, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 3000) || 3000));
+const REPLY_DELAY_MS = Math.max(2000, Math.min(30000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 4000) || 4000));
 const validations = new Map();
-/** Uma validação ativa por instância — evita loops órfãos após novo POST. */
+/** Uma valida├º├úo ativa por inst├óncia ÔÇö evita loops ├│rf├úos ap├│s novo POST. */
 const activeValidationByInstance = new Map();
-/** Uma resposta por conversa (instância + chat) dentro da janela. */
+/** Uma resposta por conversa (inst├óncia + chat) dentro da janela. */
 const recentReplyByConversation = new Map();
 const REPLY_DEDUPE_MS = 15 * 60 * 1000;
 const replyInFlight = new Set();
@@ -86,30 +87,16 @@ function notifyFinished(record) {
     }
 }
 function normalizeWhatsAppNumber(num) {
-    return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(num);
-}
-function formatPhoneHint(num) {
-    const digits = normalizeWhatsAppNumber(num);
+    const raw = String(num || "").trim();
+    const digits = raw.replace(/\D/g, "");
     if (!digits)
-        return "";
-    if (digits.length >= 12 && digits.startsWith("55")) {
-        const ddd = digits.slice(2, 4);
-        const rest = digits.slice(4);
-        if (rest.length === 9) {
-            return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
-        }
-        if (rest.length === 8) {
-            return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
-        }
-        if (rest.length > 4) {
-            return `+55 ${ddd} ${rest.slice(0, rest.length - 4)}-${rest.slice(-4)}`;
-        }
-        return `+55 ${ddd} ${rest}`;
+        return raw;
+    if (digits.length >= 12 && digits.startsWith("55"))
+        return digits;
+    if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
+        return "55" + digits;
     }
-    return `+${digits}`;
-}
-function resolvePublicWebhookBase() {
-    return String((0, waba_public_base_url_1.resolveWabaPublicBaseUrl)() || "").trim().replace(/\/+$/, "");
+    return digits;
 }
 function jidToNumber(jid) {
     const s = String(jid || "").trim();
@@ -135,6 +122,21 @@ function buildTemplateUrl(template, instanceName) {
         .replace("{instance}", encodeURIComponent(instanceName))
         .replace("{name}", encodeURIComponent(instanceName));
 }
+function extractInstanceNumber(inst) {
+    const raw = inst?.ownerJid ??
+        inst?.owner ??
+        inst?.number ??
+        inst?.phone ??
+        inst?.ownerNumber ??
+        inst?.profile?.owner ??
+        "";
+    const s = String(raw).trim();
+    if (!s)
+        return "";
+    if (s.includes("@"))
+        return s.split("@")[0] || s;
+    return s;
+}
 function resolveSendTarget(referenceJid, referenceNumber) {
     const jid = String(referenceJid || "").trim();
     if (jid.includes("@"))
@@ -153,14 +155,18 @@ async function fetchConnectedInstance(instanceName) {
             : Array.isArray(raw?.data)
                 ? raw.data
                 : [];
-    const needle = instanceName.trim().toLowerCase();
     for (const item of list) {
-        const row = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(item);
-        if (!row || row.instanceName.toLowerCase() !== needle)
+        const inst = (item?.instance ?? item);
+        const status = String(inst?.connectionStatus ?? inst?.status ?? "").toLowerCase();
+        if (!status.includes("open"))
             continue;
-        if (!row.open)
+        const instancia = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
+        if (instancia !== instanceName)
+            continue;
+        const numero = extractInstanceNumber(inst);
+        if (!numero)
             return null;
-        return { instancia: row.instanceName, numero: row.phone };
+        return { instancia, numero };
     }
     return null;
 }
@@ -185,46 +191,16 @@ function collectMessageTexts(node, out, depth = 0) {
         out.push(ext.text.trim());
     if (typeof obj.text === "string" && obj.text.trim())
         out.push(obj.text.trim());
-    if (typeof obj.body === "string" && obj.body.trim())
-        out.push(obj.body.trim());
-    const buttons = obj.buttonsResponseMessage;
-    if (typeof buttons?.selectedDisplayText === "string" && buttons.selectedDisplayText.trim()) {
-        out.push(buttons.selectedDisplayText.trim());
-    }
-    const template = obj.templateButtonReplyMessage;
-    if (typeof template?.selectedDisplayText === "string" && template.selectedDisplayText.trim()) {
-        out.push(template.selectedDisplayText.trim());
-    }
-    const image = obj.imageMessage;
-    if (typeof image?.caption === "string" && image.caption.trim())
-        out.push(image.caption.trim());
     for (const value of Object.values(obj)) {
         if (value && typeof value === "object")
             collectMessageTexts(value, out, depth + 1);
     }
 }
-function normalizeKeywordText(text) {
-    return String(text || "")
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/\p{M}/gu, "")
-        .replace(/[^\p{L}\p{N}]/gu, "");
-}
 function textMatchesKeyword(texts, keyword) {
-    const needle = normalizeKeywordText(keyword);
+    const needle = keyword.trim().toLowerCase();
     if (!needle)
         return false;
-    return texts.some((t) => {
-        const normalized = normalizeKeywordText(t);
-        if (!normalized)
-            return false;
-        if (normalized === needle)
-            return true;
-        if (normalized.includes(needle) && normalized.length <= needle.length + 6)
-            return true;
-        return false;
-    });
+    return texts.some((t) => t.trim().toLowerCase() === needle);
 }
 function extractMessageTimestampMs(node) {
     const message = node.message;
@@ -306,11 +282,10 @@ function tryFinalize(record) {
 function finalizeExpired(record) {
     if (record.finished)
         return;
-    const phoneLabel = formatPhoneHint(record.instanceNumber) || "número integrado";
     if (record.receiveTest.success === null) {
         record.receiveTest = {
             success: false,
-            detail: `Tempo esgotado sem receber "${record.keyword}" de outro WhatsApp para ${phoneLabel}. Abra o chat com esse número (não o celular que escaneou o QR) e envie só a palavra ${record.keyword}.`,
+            detail: `Tempo esgotado sem receber "${record.keyword}" no n├║mero da inst├óncia.`,
         };
         record.phase = "expired";
     }
@@ -319,36 +294,27 @@ function finalizeExpired(record) {
             success: false,
             detail: record.receiveTest.success
                 ? "Tempo esgotado sem confirmar resposta na conversa."
-                : "Resposta não testada — recepção não confirmada.",
+                : "Resposta n├úo testada ÔÇö recep├º├úo n├úo confirmada.",
         };
     }
     tryFinalize(record);
 }
 async function ensureInstanceWebhook(instanceName) {
-    const publicBase = resolvePublicWebhookBase();
-    if (!publicBase)
+    if (!WABA_PUBLIC_BASE_URL)
         return false;
-    const webhookUrl = `${publicBase}/webhooks/evolution`;
-    const enc = encodeURIComponent(instanceName);
-    const setUrls = [
-        `${EVO_API_BASE}/webhook/set/${enc}`,
-        `${EVO_API_BASE}/webhook/set/${enc}/webhook`,
-    ];
+    const webhookUrl = `${WABA_PUBLIC_BASE_URL}/webhooks/evolution`;
+    const setUrl = `${EVO_API_BASE}/webhook/set/${encodeURIComponent(instanceName)}`;
     const body = {
         webhook: {
             enabled: true,
             url: webhookUrl,
             webhookByEvents: false,
             webhookBase64: false,
-            events: ["MESSAGES_UPSERT", "messages.upsert"],
+            events: ["MESSAGES_UPSERT"],
         },
     };
-    for (const setUrl of setUrls) {
-        const result = await callEvo(setUrl, "POST", body);
-        if (result.ok)
-            return true;
-    }
-    return false;
+    const result = await callEvo(setUrl, "POST", body);
+    return result.ok;
 }
 function isInboundHitFresh(hit, options) {
     const minTs = options?.minTimestampMs;
@@ -359,44 +325,8 @@ function isInboundHitFresh(hit, options) {
         return false;
     return true;
 }
-function isInboundCandidate(node) {
-    const fromMe = extractFromMe(node);
-    return fromMe !== true;
-}
-function findJidInSubtree(node, depth = 0) {
-    if (depth > 8 || node == null)
-        return "";
-    if (typeof node !== "object")
-        return "";
-    const jid = extractRemoteJid(node);
-    if (jid)
-        return jid;
-    if (Array.isArray(node)) {
-        for (const item of node) {
-            const found = findJidInSubtree(item, depth + 1);
-            if (found)
-                return found;
-        }
-        return "";
-    }
-    for (const value of Object.values(node)) {
-        if (value && typeof value === "object") {
-            const found = findJidInSubtree(value, depth + 1);
-            if (found)
-                return found;
-        }
-    }
-    return "";
-}
-function collectInboundTexts(node) {
-    const texts = [];
-    collectMessageTexts(node.message ?? node, texts);
-    if (!texts.length)
-        collectMessageTexts(node, texts);
-    return texts;
-}
 function walkInboundHits(node, out, keyword, options, depth = 0) {
-    if (depth > 16 || node == null)
+    if (depth > 14 || node == null)
         return;
     if (Array.isArray(node)) {
         for (const item of node)
@@ -406,21 +336,19 @@ function walkInboundHits(node, out, keyword, options, depth = 0) {
     if (typeof node !== "object")
         return;
     const obj = node;
-    if (isInboundCandidate(obj)) {
-        const texts = collectInboundTexts(obj);
-        if (textMatchesKeyword(texts, keyword)) {
-            const remoteJid = extractRemoteJid(obj) || findJidInSubtree(obj);
-            if (remoteJid) {
-                const hit = {
-                    remoteJid,
-                    referenceNumber: jidToNumber(remoteJid),
-                    texts,
-                    messageTimestampMs: extractMessageTimestampMs(obj),
-                };
-                if (isInboundHitFresh(hit, options))
-                    out.push(hit);
-            }
-        }
+    const fromMe = extractFromMe(obj);
+    const remoteJid = extractRemoteJid(obj);
+    const texts = [];
+    collectMessageTexts(obj.message ?? obj, texts);
+    if (fromMe === false && remoteJid && textMatchesKeyword(texts, keyword)) {
+        const hit = {
+            remoteJid,
+            referenceNumber: jidToNumber(remoteJid),
+            texts,
+            messageTimestampMs: extractMessageTimestampMs(obj),
+        };
+        if (isInboundHitFresh(hit, options))
+            out.push(hit);
     }
     for (const value of Object.values(obj)) {
         if (value && typeof value === "object")
@@ -429,7 +357,7 @@ function walkInboundHits(node, out, keyword, options, depth = 0) {
 }
 function findInboundInPayload(payload, keyword, options) {
     const hits = [];
-    walkInboundHits(payload, hits, keyword, options, 0);
+    walkInboundHits(payload, hits, keyword, options);
     if (!hits.length)
         return null;
     hits.sort((a, b) => (b.messageTimestampMs ?? 0) - (a.messageTimestampMs ?? 0));
@@ -449,10 +377,7 @@ function extractRemoteJid(node) {
         key?.remoteJid,
         key?.remoteJidAlt,
         node.remoteJid,
-        node.remoteJidAlt,
         node.chatId,
-        key?.participant,
-        node.participant,
     ];
     for (const c of candidates) {
         const s = String(c || "").trim();
@@ -461,150 +386,40 @@ function extractRemoteJid(node) {
     }
     return "";
 }
-function buildFindMessagesUrls(instanceName) {
-    const enc = encodeURIComponent(instanceName);
-    return [
-        `${EVO_API_BASE}/chat/findMessages/${enc}`,
-        `${EVO_API_BASE}/message/findMessages/${enc}`,
-        `${EVO_API_BASE}/chat/findMessages/${enc}/messages`,
-    ];
-}
-function buildFindChatsUrls(instanceName) {
-    const enc = encodeURIComponent(instanceName);
-    return [
-        `${EVO_API_BASE}/chat/findChats/${enc}`,
-        `${EVO_API_BASE}/chat/findChats`,
-    ];
-}
-function extractChatRemoteJids(payload) {
-    const out = new Set();
-    const visit = (node, depth = 0) => {
-        if (depth > 10 || node == null)
-            return;
-        if (Array.isArray(node)) {
-            for (const item of node)
-                visit(item, depth + 1);
-            return;
-        }
-        if (typeof node !== "object")
-            return;
-        const obj = node;
-        const jid = extractRemoteJid(obj);
-        if (jid)
-            out.add(jid);
-        const id = String(obj.id || obj.jid || obj.wuid || "").trim();
-        if (id && id.includes("@"))
-            out.add(id);
-        for (const value of Object.values(obj)) {
-            if (value && typeof value === "object")
-                visit(value, depth + 1);
-        }
+async function findInboundViaApi(instanceName, keyword, minTimestampMs) {
+    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
+    const bodies = [{ limit: 40 }, { take: 40 }, {}];
+    const searchOptions = {
+        minTimestampMs: minTimestampMs - 3000,
+        requireTimestamp: true,
     };
-    visit(payload);
-    return Array.from(out);
-}
-async function findInboundViaRecentChats(instanceName, keyword, minTimestampMs) {
-    const minTs = minTimestampMs - 20000;
-    for (const url of buildFindChatsUrls(instanceName)) {
-        const result = await callEvo(url, "POST", { limit: 30 });
+    for (const body of bodies) {
+        const result = await callEvo(url, "POST", body);
         if (!result.ok)
             continue;
-        const jids = extractChatRemoteJids(result.json).slice(0, 15);
-        for (const remoteJid of jids) {
-            for (const msgUrl of buildFindMessagesUrls(instanceName)) {
-                const bodies = [
-                    { where: { key: { remoteJid } }, limit: 40 },
-                    { where: { key: { remoteJid } }, take: 40 },
-                ];
-                for (const body of bodies) {
-                    const msgRes = await callEvo(msgUrl, "POST", body);
-                    if (!msgRes.ok)
-                        continue;
-                    const hit = findInboundInPayload(msgRes.json, keyword, { minTimestampMs: minTs }) ||
-                        findInboundInPayload(msgRes.json, keyword, { requireTimestamp: false });
-                    if (hit)
-                        return hit;
-                }
-            }
-        }
-    }
-    return null;
-}
-async function resolveInboundHit(instanceName, keyword, minTimestampMs, aggressive = false) {
-    const hit = await findInboundViaApi(instanceName, keyword, minTimestampMs);
-    if (hit)
-        return hit;
-    if (!aggressive)
-        return null;
-    const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
-    if (viaChats)
-        return viaChats;
-    return findInboundViaApi(instanceName, keyword, minTimestampMs - 120000);
-}
-async function findInboundViaApi(instanceName, keyword, minTimestampMs) {
-    const urls = buildFindMessagesUrls(instanceName);
-    const bodies = [
-        { limit: 100 },
-        { take: 100 },
-        { limit: 80 },
-        { limit: 50, page: 1 },
-        {},
-    ];
-    const timestampGraceMs = 20000;
-    const minTs = minTimestampMs - timestampGraceMs;
-    for (const url of urls) {
-        for (let i = 0; i < bodies.length; i += 1) {
-            const result = await callEvo(url, "POST", bodies[i]);
-            if (!result.ok)
-                continue;
-            const strictHit = findInboundInPayload(result.json, keyword, {
-                minTimestampMs: minTs,
-                requireTimestamp: true,
-            });
-            if (strictHit)
-                return strictHit;
-            const looseHit = findInboundInPayload(result.json, keyword, {
-                minTimestampMs: minTs,
-                requireTimestamp: false,
-            });
-            if (looseHit)
-                return looseHit;
-            if (i >= bodies.length - 2) {
-                const fallbackHit = findInboundInPayload(result.json, keyword, {
-                    requireTimestamp: false,
-                });
-                if (fallbackHit &&
-                    (fallbackHit.messageTimestampMs == null || fallbackHit.messageTimestampMs >= minTs)) {
-                    return fallbackHit;
-                }
-            }
-        }
+        const hit = findInboundInPayload(result.json, keyword, searchOptions);
+        if (hit)
+            return hit;
     }
     return null;
 }
 async function findReplyInChat(instanceName, referenceJid, replyMarker) {
     const remoteJid = referenceJid.includes("@") ? referenceJid : `${referenceJid}@s.whatsapp.net`;
-    const digits = normalizeWhatsAppNumber(referenceJid.split("@")[0] || referenceJid);
+    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
     const bodies = [
-        { where: { key: { remoteJid } }, limit: 40 },
-        { where: { key: { remoteJid } }, take: 40 },
-        { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 40 },
-        { limit: 80 },
-        {},
+        { where: { key: { remoteJid } }, limit: 30 },
+        { where: { key: { remoteJid } }, take: 30 },
+        { limit: 40 },
     ];
-    for (const url of buildFindMessagesUrls(instanceName)) {
-        for (const body of bodies) {
-            const result = await callEvo(url, "POST", body);
-            if (!result.ok)
-                continue;
-            const texts = [];
-            collectMessageTexts(result.json, texts);
-            const needle = replyMarker.toLowerCase();
-            if (texts.some((t) => t.toLowerCase().includes(needle)))
-                return true;
-            if (digits && texts.some((t) => t.toLowerCase().includes("validação waba")))
-                return true;
-        }
+    for (const body of bodies) {
+        const result = await callEvo(url, "POST", body);
+        if (!result.ok)
+            continue;
+        const texts = [];
+        collectMessageTexts(result.json, texts);
+        const needle = replyMarker.toLowerCase();
+        if (texts.some((t) => t.toLowerCase().includes(needle)))
+            return true;
     }
     return false;
 }
@@ -619,35 +434,6 @@ function markInboundReceived(record, hit, via) {
         success: true,
         detail: `Mensagem "${record.keyword}" recebida (${via}).`,
     };
-    scheduleValidationFollowUp(record);
-}
-function scheduleValidationFollowUp(record) {
-    if (record.replyFollowUpScheduled || record.cancelled || record.finished)
-        return;
-    record.replyFollowUpScheduled = true;
-    setTimeout(() => {
-        void runValidationFollowUp(record);
-    }, REPLY_DELAY_MS);
-}
-async function runValidationFollowUp(record) {
-    if (record.cancelled || record.finished)
-        return;
-    if (record.receiveTest.success === true && !record.sendAttempted) {
-        await sendContextualReply(record);
-    }
-    if (record.sendAttempted &&
-        record.sendHttpOk &&
-        record.sendTest.success !== true &&
-        record.referenceJid) {
-        const found = await findReplyInChat(record.instanceName, record.referenceJid, record.replyMarker);
-        if (found) {
-            record.sendTest = {
-                success: true,
-                detail: "Resposta confirmada no histórico da conversa.",
-            };
-            tryFinalize(record);
-        }
-    }
 }
 async function sendContextualReply(record) {
     if (record.cancelled || record.finished || !record.referenceNumber || record.sendAttempted)
@@ -662,7 +448,7 @@ async function sendContextualReply(record) {
             record.sendDetail = "dedupe";
             record.sendTest = {
                 success: true,
-                detail: "Resposta já enviada nesta conversa (validação única).",
+                detail: "Resposta j├í enviada nesta conversa (valida├º├úo ├║nica).",
             };
             tryFinalize(record);
             return;
@@ -673,17 +459,17 @@ async function sendContextualReply(record) {
     }
     record.phase = "sending_reply";
     record.sendAttempted = true;
-    const text = `Validação WABA concluída. ${record.replyMarker}`;
+    const text = `Valida├º├úo WABA conclu├¡da. ${record.replyMarker}`;
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
     const numero = resolveSendTarget(record.referenceJid, record.referenceNumber);
     if (!numero) {
         if (convKey)
             replyInFlight.delete(convKey);
         record.sendHttpOk = false;
-        record.sendDetail = "Destino da resposta não identificado.";
+        record.sendDetail = "Destino da resposta n├úo identificado.";
         record.sendTest = {
             success: false,
-            detail: "Não foi possível identificar o chat do outro WhatsApp para responder.",
+            detail: "N├úo foi poss├¡vel identificar o chat do outro WhatsApp para responder.",
         };
         tryFinalize(record);
         return;
@@ -705,7 +491,7 @@ async function sendContextualReply(record) {
                 success: false,
                 detail: restricted
                     ? `Evolution recusou a resposta: ${record.sendDetail}`
-                    : `Falha técnica ao responder: ${record.sendDetail}`,
+                    : `Falha t├®cnica ao responder: ${record.sendDetail}`,
             };
             tryFinalize(record);
             return;
@@ -715,7 +501,7 @@ async function sendContextualReply(record) {
         record.sendDetail = "sendText OK";
         record.sendTest = {
             success: true,
-            detail: "Resposta enviada na mesma conversa (após mensagem recebida).",
+            detail: "Resposta enviada na mesma conversa (ap├│s mensagem recebida).",
         };
         tryFinalize(record);
     }
@@ -733,12 +519,12 @@ async function runValidationLoop(record) {
         while (Date.now() < deadline && !record.finished && !record.cancelled) {
             if (record.receiveTest.success !== true) {
                 try {
-                    const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, false);
+                    const hit = await findInboundViaApi(record.instanceName, record.keyword, record.validationStartedAtMs);
                     if (hit)
                         markInboundReceived(record, hit, "findMessages");
                 }
                 catch {
-                    // mantém polling — falha transitória na Evolution
+                    // mant├®m polling ÔÇö falha transit├│ria na Evolution
                 }
             }
             if (record.receiveTest.success === true &&
@@ -755,7 +541,7 @@ async function runValidationLoop(record) {
                 if (found) {
                     record.sendTest = {
                         success: true,
-                        detail: "Resposta confirmada no histórico da conversa.",
+                        detail: "Resposta confirmada no hist├│rico da conversa.",
                     };
                     tryFinalize(record);
                 }
@@ -771,50 +557,14 @@ async function runValidationLoop(record) {
             finalizeExpired(record);
     }
 }
-function unwrapEvolutionWebhookPayload(body) {
-    if (!body || typeof body !== "object")
-        return [body];
-    const payload = body;
-    const data = payload.data;
-    if (Array.isArray(data))
-        return data.length ? data : [body];
-    if (data && typeof data === "object") {
-        const nested = data;
-        if (Array.isArray(nested.messages))
-            return nested.messages;
-        return [data];
-    }
-    return [body];
-}
-async function refreshInboundValidation(validationId, aggressive = false) {
-    const record = validations.get(validationId);
-    if (!record || record.finished || record.cancelled) {
-        return getInboundValidationStatus(validationId);
-    }
-    if (record.receiveTest.success !== true) {
-        try {
-            const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, aggressive);
-            if (hit)
-                markInboundReceived(record, hit, aggressive ? "nudge-aggressive" : "nudge");
-        }
-        catch {
-            /* falha transitória */
-        }
-    }
-    else {
-        await runValidationFollowUp(record);
-    }
-    return getInboundValidationStatus(validationId);
-}
 function handleInboundValidationWebhook(body) {
     if (!body || typeof body !== "object")
         return;
     const payload = body;
-    const instanceName = extractWebhookInstanceName(payload);
-    const event = String(payload.event || "").toUpperCase().replace(/\./g, "_");
-    if (event && event !== "MESSAGES_UPSERT")
+    const instanceName = String(payload.instance || payload.instanceName || "").trim();
+    const event = String(payload.event || "").toUpperCase();
+    if (event && event !== "MESSAGES_UPSERT" && event !== "MESSAGES.UPSERT")
         return;
-    const chunks = unwrapEvolutionWebhookPayload(body);
     const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
     const candidates = active
         ? [active]
@@ -822,36 +572,14 @@ function handleInboundValidationWebhook(body) {
     for (const record of candidates) {
         if (instanceName && instanceName !== record.instanceName)
             continue;
-        let matched = false;
-        for (const chunk of chunks) {
-            const hit = findInboundInPayload(chunk, record.keyword, {
-                minTimestampMs: record.validationStartedAtMs - 20000,
-                requireTimestamp: false,
-            });
-            if (!hit)
-                continue;
-            markInboundReceived(record, hit, "webhook");
-            matched = true;
-            break;
-        }
-        if (matched)
-            break;
+        const hit = findInboundInPayload(payload, record.keyword, {
+            minTimestampMs: record.validationStartedAtMs - 3000,
+        });
+        if (!hit)
+            continue;
+        markInboundReceived(record, hit, "webhook");
+        break;
     }
-}
-function extractWebhookInstanceName(payload) {
-    const candidates = [
-        payload.instance,
-        payload.instanceName,
-        payload.data?.instance,
-        payload.data?.instanceName,
-        payload.sender?.instance,
-    ];
-    for (const value of candidates) {
-        const s = String(value || "").trim();
-        if (s)
-            return s;
-    }
-    return "";
 }
 function getInboundValidationStatus(validationId) {
     const record = validations.get(validationId);
@@ -862,25 +590,21 @@ function getInboundValidationStatus(validationId) {
 async function startInboundValidation(input) {
     const instanceName = String(input.instanceName || "").trim();
     if (!instanceName) {
-        return { error: "Nome da instância é obrigatório." };
+        return { error: "Nome da inst├óncia ├® obrigat├│rio." };
     }
     const numberHint = normalizeWhatsAppNumber(String(input.instanceNumberHint || "").trim());
-    const open = (await fetchConnectedInstance(instanceName)) != null || (await (0, evo_instance_phone_service_1.isEvoInstanceOpen)(instanceName));
-    if (!open) {
+    let connected = await fetchConnectedInstance(instanceName);
+    if (!connected && numberHint) {
+        connected = { instancia: instanceName, numero: numberHint };
+    }
+    if (!connected) {
         return {
-            error: `Instância "${instanceName}" não está conectada (status open) na Evolution.`,
+            error: `Inst├óncia "${instanceName}" n├úo est├í conectada (status open) na Evolution.`,
         };
     }
-    const resolvedNumber = await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(instanceName, { hint: numberHint });
-    const connected = { instancia: instanceName, numero: resolvedNumber };
-    if (!input.forceRestart) {
-        const existing = getActiveValidationForInstance(connected.instancia);
-        if (existing) {
-            if (!existing.instanceNumber && resolvedNumber) {
-                existing.instanceNumber = resolvedNumber;
-            }
-            return { validationId: existing.validationId, status: publicStatus(existing) };
-        }
+    const existing = getActiveValidationForInstance(connected.instancia);
+    if (existing) {
+        return { validationId: existing.validationId, status: publicStatus(existing) };
     }
     stopValidationsForInstance(connected.instancia);
     const validationId = crypto_1.default.randomUUID();
@@ -888,7 +612,6 @@ async function startInboundValidation(input) {
     const validationStartedAtMs = Date.now();
     const startedAt = new Date(validationStartedAtMs).toISOString();
     const webhookOk = await ensureInstanceWebhook(instanceName);
-    const phoneLabel = formatPhoneHint(connected.numero);
     const record = {
         validationId,
         instanceName: connected.instancia,
@@ -898,17 +621,13 @@ async function startInboundValidation(input) {
         phase: "awaiting_inbound",
         receiveTest: {
             success: null,
-            detail: phoneLabel
-                ? webhookOk
-                    ? `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}…`
-                    : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}… (consulta periódica na Evolution).`
-                : webhookOk
-                    ? `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp (não o que está integrando)…`
-                    : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}"… (consulta periódica na Evolution).`,
+            detail: webhookOk
+                ? `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp (n├úo o que est├í integrando)ÔÇª`
+                : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsAppÔÇª (webhook p├║blico indispon├¡vel; usando consulta peri├│dica).`,
         },
         sendTest: {
             success: null,
-            detail: "Aguardando mensagem do outro WhatsApp para responder na mesma conversa…",
+            detail: "Aguardando mensagem do outro WhatsApp para responder na mesma conversaÔÇª",
         },
         finished: false,
         restrictionSuspected: false,
@@ -922,7 +641,6 @@ async function startInboundValidation(input) {
         sendDetail: "",
         loopRunning: false,
         cancelled: false,
-        replyFollowUpScheduled: false,
         startedAt,
         finishedAt: null,
     };

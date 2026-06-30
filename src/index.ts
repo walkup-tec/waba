@@ -85,7 +85,6 @@ import {
 import {
   getInboundValidationStatus,
   handleInboundValidationWebhook,
-  refreshInboundValidation,
   setInboundValidationFinishedHandler,
   startInboundValidation,
 } from "./instance-inbound-validation.service";
@@ -98,6 +97,7 @@ import {
   markAquecedorInstanceRestricted,
   recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
+  removeAquecedorInstanceLifecycle,
   syncAquecedorPreparingPromotions,
   getAquecedorLifecycleStatusForInstance,
 } from "./services/aquecedor-instance-lifecycle.service";
@@ -4932,10 +4932,13 @@ app.get("/instancias", async (req, res) => {
       };
     });
 
-    let items = baseItems;
+    const visibleBaseItems = await filterDeletedInstancesFromItems(baseItems, (row) =>
+      String(row?.name || ""),
+    );
+    let items = visibleBaseItems;
     if (EVO_LIVE_PROFILE_SYNC) {
       items = await Promise.all(
-        baseItems.map(async (row: any) => {
+        visibleBaseItems.map(async (row: any) => {
           const status = String(row?.connectionStatus || "").toLowerCase();
           if (!status.includes("open")) return row;
           const live = await fetchLiveWhatsappProfile(
@@ -4953,7 +4956,7 @@ app.get("/instancias", async (req, res) => {
       );
     }
 
-    const allNames = baseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
+    const allNames = visibleBaseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
     const reconciled = await wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(
       auth,
       allNames,
@@ -4971,7 +4974,7 @@ app.get("/instancias", async (req, res) => {
     desconectadas = items.length - ativas;
 
     void saveEvoInstancesCache(
-      baseItems.map((row) => ({ ...row })) as Array<Record<string, unknown>>,
+      visibleBaseItems.map((row) => ({ ...row })) as Array<Record<string, unknown>>,
     );
 
     const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
@@ -5368,12 +5371,9 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
     const name = String(req.params.name || "").trim();
     if (await rejectForeignInstance(req, res, name)) return;
     const instanceNumberHint = String(req.body?.number || req.body?.instanceNumberHint || "").trim();
-    const forceRestart =
-      req.body?.forceRestart === true || String(req.body?.forceRestart ?? "").trim() === "1";
     const started = await startInboundValidation({
       instanceName: name,
       instanceNumberHint,
-      forceRestart,
     });
     if (started.error) {
       return res.status(400).json({ ok: false, error: started.error });
@@ -5387,15 +5387,10 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
   }
 });
 
-app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
+app.get("/instancias/validacao-inbound/:validationId", (req, res) => {
   const validationId = String(req.params.validationId || "").trim();
   if (!validationId) {
     return res.status(400).json({ error: "validationId é obrigatório." });
-  }
-  const nudge = String(req.query.nudge ?? "").trim();
-  if (nudge) {
-    const aggressive = nudge === "2" || nudge === "aggressive";
-    await refreshInboundValidation(validationId, aggressive);
   }
   const status = getInboundValidationStatus(validationId);
   if (!status) {
@@ -6261,26 +6256,194 @@ async function saveEvoInstancesCache(items: Array<Record<string, unknown>>): Pro
 }
 
 async function removeInstanceFromEvoCache(instanceName: string): Promise<void> {
-  const normalized = String(instanceName || "").trim().toLowerCase();
-  if (!normalized) return;
+  const keys = await resolveInstanceDeletionKeys(instanceName);
+  if (!keys.length) return;
   const cache = await loadEvoInstancesCache();
   if (!cache?.items?.length) return;
+  const blocked = new Set(keys.map((k) => k.toLowerCase()));
   const nextItems = cache.items.filter(
-    (row) => String(row?.name || "").trim().toLowerCase() !== normalized,
+    (row) => !blocked.has(String(row?.name || "").trim().toLowerCase()),
   );
   if (nextItems.length === cache.items.length) return;
   await saveEvoInstancesCache(nextItems);
 }
 
+async function resolveInstanceDeletionKeys(instanceName: string): Promise<string[]> {
+  const name = String(instanceName || "").trim();
+  if (!name) return [];
+  const keys = new Set<string>([name]);
+  const aliasesMap = await loadInstanceAliasesMap();
+  const alias = mapGetInsensitive(aliasesMap, name);
+  if (alias) keys.add(alias);
+  for (const [technical, technicalAlias] of aliasesMap.entries()) {
+    const comparable = [technical, technicalAlias].map((v) => String(v || "").trim().toLowerCase());
+    const nameLower = name.toLowerCase();
+    if (comparable.includes(nameLower)) {
+      keys.add(technical);
+      if (technicalAlias) keys.add(technicalAlias);
+    }
+  }
+  const candidates = await resolveEvoInstanceNameCandidates(name);
+  for (const candidate of candidates) keys.add(candidate);
+  try {
+    const evoList = await fetchEvoInstancesList();
+    if (evoList.ok) {
+      for (const inst of evoList.instances) {
+        const evoKey = resolveEvoInstanceKey(inst);
+        if (!evoKey) continue;
+        const evoLower = evoKey.toLowerCase();
+        if ([...keys].some((k) => k.toLowerCase() === evoLower)) keys.add(evoKey);
+      }
+    }
+  } catch {
+    // lista EVO opcional
+  }
+  return Array.from(keys).filter(Boolean);
+}
+
+async function filterDeletedInstancesFromItems<T>(
+  items: T[],
+  readName: (item: T) => string,
+): Promise<T[]> {
+  const filtered: T[] = [];
+  for (const item of items) {
+    const name = String(readName(item) || "").trim();
+    if (!name) continue;
+    if (await wabaInstanceOwnershipService.isInstanceDeleted(name)) continue;
+    filtered.push(item);
+  }
+  return filtered;
+}
+
 function canDeleteInstanceLocallyAfterEvoFailure(status: number, body: string): boolean {
   if (status === 0) return true;
   if (status === 404) return true;
+  if (status >= 400 && status <= 599) return true;
   const normalized = String(body || "").toLowerCase();
   return (
     normalized.includes("not found") ||
     normalized.includes("não encontr") ||
-    normalized.includes("nao encontr")
+    normalized.includes("nao encontr") ||
+    normalized.includes("does not exist") ||
+    normalized.includes("instance not")
   );
+}
+
+function mapDeleteInsensitive(map: Map<string, string>, rawKey: string): boolean {
+  const target = String(rawKey || "").trim().toLowerCase();
+  if (!target) return false;
+  let removed = false;
+  for (const key of [...map.keys()]) {
+    if (key.toLowerCase() === target) {
+      map.delete(key);
+      removed = true;
+    }
+  }
+  return removed;
+}
+
+async function removeInstanceUsageConfig(instanceName: string): Promise<void> {
+  const target = String(instanceName || "").trim().toLowerCase();
+  if (!target) return;
+  for (const key of [...instanceUsageMemory.keys()]) {
+    if (key.toLowerCase() === target) instanceUsageMemory.delete(key);
+  }
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const usageMap = await loadInstanceUsageMap();
+    const keysToDelete = [...usageMap.keys()].filter((key) => key.toLowerCase() === target);
+    for (const key of keysToDelete) {
+      await (supabase.from("instancias_uso_config" as any) as any)
+        .delete()
+        .eq("instance_name", key);
+    }
+  } catch {
+    // fallback em memória
+  }
+}
+
+async function purgeInstanceLocalState(instanceName: string): Promise<void> {
+  const purgeKeys = await resolveInstanceDeletionKeys(instanceName);
+  if (!purgeKeys.length) return;
+
+  const aliasesMap = await loadInstanceAliasesMap();
+  const purgeLower = new Set(purgeKeys.map((k) => k.toLowerCase()));
+
+  let aliasesChanged = false;
+  for (const [technical, technicalAlias] of [...aliasesMap.entries()]) {
+    const comparable = [technical, technicalAlias].map((v) => String(v || "").trim().toLowerCase());
+    const shouldRemove = comparable.some((key) => purgeLower.has(key));
+    if (shouldRemove) {
+      aliasesMap.delete(technical);
+      aliasesChanged = true;
+    }
+  }
+  if (aliasesChanged) await persistInstanceAliasesMap(aliasesMap);
+
+  const whatsappMap = await loadWhatsappProfileNamesMap();
+  let whatsappChanged = false;
+  for (const key of purgeKeys) {
+    if (mapDeleteInsensitive(whatsappMap, key)) whatsappChanged = true;
+  }
+  if (whatsappChanged) await persistWhatsappProfileNamesMap(whatsappMap);
+
+  for (const key of purgeKeys) {
+    await removeInstanceUsageConfig(key);
+    await removeAquecedorInstanceLifecycle(key);
+    await wabaInstanceOwnershipService.removeOwner(key);
+  }
+  await wabaInstanceOwnershipService.markInstancesDeleted(purgeKeys);
+  await removeInstanceFromEvoCache(instanceName);
+}
+
+function buildEvoDeleteCandidateUrls(instanceName: string): string[] {
+  const enc = encodeURIComponent(String(instanceName || "").trim());
+  const templateUrl = buildTemplateUrl(EVO_DELETE_URL_TEMPLATE, instanceName);
+  return Array.from(
+    new Set(
+      [
+        templateUrl,
+        `${EVO_API_BASE}/instance/delete/${enc}`,
+        `${EVO_API_BASE}/instance/deleteInstance/${enc}`,
+      ].filter(Boolean),
+    ),
+  );
+}
+
+async function tryDeleteEvoInstance(instanceName: string): Promise<{
+  ok: boolean;
+  status: number;
+  body: string;
+  evoDeleted: boolean;
+}> {
+  const candidates = await resolveInstanceDeletionKeys(instanceName);
+  if (!candidates.length) {
+    return { ok: false, status: 400, body: "Nome inválido.", evoDeleted: false };
+  }
+
+  let last = { ok: false, status: 0, body: "" };
+  for (const candidate of candidates) {
+    const enc = encodeURIComponent(candidate);
+    await callEvoAction(`${EVO_API_BASE}/instance/logout/${enc}`, "DELETE", undefined, {
+      timeoutMs: 8000,
+      retries: 0,
+    });
+
+    const urls = buildEvoDeleteCandidateUrls(candidate);
+    for (const url of urls) {
+      const result = await callEvoAction(url, "DELETE", undefined, {
+        timeoutMs: 12000,
+        retries: 1,
+      });
+      const body = String(result.body || result.error || "");
+      last = { ok: result.ok, status: result.status, body };
+      if (result.ok) {
+        return { ok: true, status: result.status, body, evoDeleted: true };
+      }
+    }
+  }
+  return { ...last, evoDeleted: false };
 }
 
 async function attachAquecedorMessageStatsToInstanceItems(
@@ -7897,49 +8060,30 @@ app.delete("/instancias/:name", async (req, res) => {
     }
     if (await rejectForeignInstance(req, res, instanceName)) return;
 
-    const url = buildTemplateUrl(EVO_DELETE_URL_TEMPLATE, instanceName);
-    if (!url) {
+    if (!buildEvoDeleteCandidateUrls(instanceName).length) {
       return res.status(501).json({
         error:
           "Ação deletar não configurada. Defina EVO_DELETE_URL_TEMPLATE no backend.",
       });
     }
 
-    const result = await callEvoAction(url, "DELETE", undefined, {
-      timeoutMs: 12000,
-      retries: 1,
-    });
+    const evoResult = await tryDeleteEvoInstance(instanceName);
+    await purgeInstanceLocalState(instanceName);
 
-    const evoDeleted = result.ok;
-    const evoSoftDelete = !evoDeleted && canDeleteInstanceLocallyAfterEvoFailure(
-      result.status,
-      String(result.body || result.error || ""),
-    );
-
-    if (!evoDeleted && !evoSoftDelete) {
-      return res.status(502).json({
-        error: "Falha ao deletar instância na Evolution API.",
-        status: result.status,
-        detail: summarizeEvolutionErrorDetail(
-          String(result.body || result.error || ""),
-          result.status,
-        ),
-      });
-    }
-
-    await wabaInstanceOwnershipService.removeOwner(instanceName);
-    await removeInstanceFromEvoCache(instanceName);
-
-    const message = evoDeleted
+    const message = evoResult.evoDeleted
       ? "Instância deletada com sucesso."
-      : result.status === 404
+      : evoResult.status === 404
         ? "Instância removida do painel (não encontrada na Evolution)."
-        : "Instância removida do painel. A Evolution está offline — remova na EVO quando voltar, se ainda existir.";
+        : "Instância removida do painel. Se ainda existir na Evolution, remova manualmente no servidor EVO.";
 
     return res.json({
       ok: true,
       message,
-      degraded: !evoDeleted,
+      degraded: !evoResult.evoDeleted,
+      evoStatus: evoResult.status || undefined,
+      evoDetail: evoResult.evoDeleted
+        ? undefined
+        : summarizeEvolutionErrorDetail(evoResult.body, evoResult.status),
     });
   } catch (error) {
     console.error("Erro ao deletar instância:", error);

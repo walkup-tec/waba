@@ -10,6 +10,7 @@ exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForI
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
+exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
 exports.registerAquecedorInstancePreparing = registerAquecedorInstancePreparing;
 exports.grandfatherAquecedorInstanceActive = grandfatherAquecedorInstanceActive;
 exports.markAquecedorInstanceRestricted = markAquecedorInstanceRestricted;
@@ -278,6 +279,22 @@ async function getAquecedorLifecycleRow(instanceName) {
         return null;
     refreshRestrictionPhase(found.row);
     return { ...found.row };
+}
+async function removeAquecedorInstanceLifecycle(instanceName) {
+    const aliasesMap = await loadAliasesMap();
+    const keys = collectInstanceNameKeys(instanceName, aliasesMap);
+    if (!keys.length)
+        return;
+    const store = await loadStore();
+    let changed = false;
+    for (const key of keys) {
+        if (store.instances[key]) {
+            delete store.instances[key];
+            changed = true;
+        }
+    }
+    if (changed)
+        await saveStore(store);
 }
 async function registerAquecedorInstancePreparing(instanceName, preparingSince) {
     const name = String(instanceName || "").trim();

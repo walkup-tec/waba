@@ -10,6 +10,8 @@ export type InstanceOwnerRecord = {
 
 type InstanceOwnersStore = {
   instances: Record<string, InstanceOwnerRecord>;
+  /** Instâncias excluídas pelo usuário — não re-vincular órfãs da Evolution. */
+  deletedInstances?: Record<string, { deletedAt: string }>;
 };
 
 const OWNERS_FILE = resolveDataFile("instance-owners.json");
@@ -83,6 +85,50 @@ export class WabaInstanceOwnershipService {
     return null;
   }
 
+  private findDeletedKey(store: InstanceOwnersStore, instanceName: string): string | null {
+    const deleted = store.deletedInstances || {};
+    const target = normalizeInstanceName(instanceName).toLowerCase();
+    if (!target) return null;
+    for (const key of Object.keys(deleted)) {
+      if (key.toLowerCase() === target) return key;
+    }
+    return null;
+  }
+
+  async isInstanceDeleted(instanceName: string): Promise<boolean> {
+    const store = await this.loadStore();
+    return Boolean(this.findDeletedKey(store, instanceName));
+  }
+
+  async markInstancesDeleted(instanceNames: string[]): Promise<void> {
+    const names = instanceNames.map((n) => normalizeInstanceName(n)).filter(Boolean);
+    if (!names.length) return;
+    await this.runLocked(async () => {
+      const store = await this.loadStore();
+      if (!store.deletedInstances) store.deletedInstances = {};
+      const now = new Date().toISOString();
+      let changed = false;
+      for (const name of names) {
+        const existingKey = this.findDeletedKey(store, name);
+        const key = existingKey || name;
+        if (!store.deletedInstances[key]) {
+          store.deletedInstances[key] = { deletedAt: now };
+          changed = true;
+        }
+      }
+      if (changed) await this.saveStore(store);
+    });
+  }
+
+  private clearDeletedMark(store: InstanceOwnersStore, instanceName: string): boolean {
+    const deleted = store.deletedInstances || {};
+    const key = this.findDeletedKey(store, instanceName);
+    if (!key) return false;
+    delete deleted[key];
+    store.deletedInstances = deleted;
+    return true;
+  }
+
   /** Sem login configurado (dev local): não filtra. Com auth: estrito por dono. */
   private bypassOwnershipFilter(auth: WabaRequestAuth): boolean {
     return !isWabaAuthConfigured();
@@ -115,6 +161,7 @@ export class WabaInstanceOwnershipService {
           createdAt: new Date().toISOString(),
         };
       }
+      this.clearDeletedMark(store, name);
       await this.saveStore(store);
     });
   }
@@ -301,6 +348,7 @@ export class WabaInstanceOwnershipService {
       for (const rawName of instanceNames) {
         const name = normalizeInstanceName(rawName);
         if (!name) continue;
+        if (this.findDeletedKey(store, name)) continue;
         const existingKey = this.findStoreKey(store, name);
         if (existingKey) continue;
         store.instances[name] = {

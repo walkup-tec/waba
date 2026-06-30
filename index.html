@@ -7440,6 +7440,23 @@
         line-height: 1.45;
       }
 
+      .confirm-delete-error {
+        margin-top: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        color: #fecdd3;
+        background: rgba(127, 29, 29, 0.45);
+        border: 1px solid rgba(251, 113, 133, 0.4);
+      }
+
+      .confirm-instance-alias-hint {
+        display: block;
+        margin-top: 6px;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+      }
+
       .confirm-overlay {
         position: fixed;
         inset: 0;
@@ -17945,13 +17962,16 @@
           <div class="confirm-text">
             Digite o nome da instância para confirmar:
             <strong id="confirm-instance-name">—</strong>
+            <span id="confirm-instance-alias-hint" class="confirm-instance-alias-hint" hidden></span>
           </div>
           <input
             id="confirm-instance-input"
             class="confirm-input"
             type="text"
             placeholder="Digite o nome da instância"
+            autocomplete="off"
           />
+          <div id="confirm-delete-error" class="confirm-delete-error" role="alert" hidden></div>
           <div class="confirm-actions">
             <button id="confirm-cancel-btn" class="instance-action-btn" type="button">
               Cancelar
@@ -30822,6 +30842,7 @@
       let instancesSearchTerm = "";
       let instancesStatusFilter = "all";
       let deleteConfirmInstanceName = "";
+      let deleteConfirmAcceptedNames = [];
       let deleteConfirmProcessing = false;
       const instancesDeleting = new Set();
       let registerModalDefaultName = "";
@@ -38232,7 +38253,7 @@
                 <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="1">
                   Número Seguro
                 </button>
-                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-enabled="1">Deletar</button>
+                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-instance-label="${String(inst.instanceLabel || inst.instanceName || "").replace(/"/g, "&quot;")}" data-enabled="1">Deletar</button>
               </div>`;
 
           tr.innerHTML = `
@@ -38340,6 +38361,73 @@
         }
       }
 
+      function normalizeDeleteConfirmName(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function collectDeleteConfirmAcceptedNames(instanceName, instanceLabel) {
+        const names = [];
+        const seen = new Set();
+        const add = (value) => {
+          const normalized = normalizeDeleteConfirmName(value);
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          names.push(String(value || "").trim());
+        };
+        add(instanceName);
+        add(instanceLabel);
+        return names;
+      }
+
+      function isDeleteConfirmNameValid(inputValue) {
+        const typed = normalizeDeleteConfirmName(inputValue);
+        if (!typed) return false;
+        return deleteConfirmAcceptedNames.some(
+          (name) => normalizeDeleteConfirmName(name) === typed
+        );
+      }
+
+      function showDeleteConfirmError(message) {
+        const errorEl = document.getElementById("confirm-delete-error");
+        if (!errorEl) return;
+        const text = String(message || "").trim();
+        if (!text) {
+          errorEl.hidden = true;
+          errorEl.textContent = "";
+          return;
+        }
+        errorEl.hidden = false;
+        errorEl.textContent = text;
+      }
+
+      function clearDeleteConfirmError() {
+        showDeleteConfirmError("");
+      }
+
+      function removeInstanceFromLocalList(instanceName) {
+        const keys = new Set();
+        const addKey = (value) => {
+          const normalized = normalizeDeleteConfirmName(value);
+          if (normalized) keys.add(normalized);
+        };
+        addKey(instanceName);
+        for (const accepted of deleteConfirmAcceptedNames) addKey(accepted);
+        if (!keys.size || !Array.isArray(instancesData?.items)) return;
+        instancesData.items = instancesData.items.filter((item) => {
+          const itemKeys = [
+            item?.name,
+            item?.instanceName,
+            item?.instanceAlias,
+            item?.instanceLabel,
+          ];
+          return !itemKeys.some((value) => keys.has(normalizeDeleteConfirmName(value)));
+        });
+        instancesData.total = instancesData.items.length;
+        persistInstancesLocalCache(instancesData);
+        if (activeTab === "instancias") renderInstancesList();
+        updateInstancesIndicators();
+      }
+
       function setDeleteConfirmProcessing(processing) {
         deleteConfirmProcessing = Boolean(processing);
         const overlay = document.getElementById("confirm-delete-overlay");
@@ -38356,8 +38444,7 @@
           inputEl.toggleAttribute("disabled", deleteConfirmProcessing);
         }
         if (confirmBtn) {
-          const nameOk =
-            String(inputEl?.value || "").trim() === deleteConfirmInstanceName;
+          const nameOk = isDeleteConfirmNameValid(inputEl?.value);
           const shouldDisable = deleteConfirmProcessing || !nameOk;
           confirmBtn.classList.toggle("disabled", shouldDisable);
           confirmBtn.toggleAttribute("disabled", shouldDisable);
@@ -38373,80 +38460,119 @@
         if (activeTab === "instancias") renderInstancesList();
       }
 
-      function openDeleteConfirm(instanceName) {
-        if (deleteConfirmProcessing) return;
-        deleteConfirmInstanceName = instanceName;
+      function openDeleteConfirm(instanceName, instanceLabel = "") {
         const overlay = document.getElementById("confirm-delete-overlay");
+        if (!overlay) return;
+        if (deleteConfirmProcessing && !overlay.classList.contains("open")) {
+          deleteConfirmProcessing = false;
+        }
+        if (deleteConfirmProcessing) return;
+        deleteConfirmInstanceName = String(instanceName || "").trim();
+        if (!deleteConfirmInstanceName) return;
+        deleteConfirmAcceptedNames = collectDeleteConfirmAcceptedNames(
+          deleteConfirmInstanceName,
+          instanceLabel
+        );
         const nameEl = document.getElementById("confirm-instance-name");
+        const hintEl = document.getElementById("confirm-instance-alias-hint");
         const inputEl = document.getElementById("confirm-instance-input");
         const confirmBtn = document.getElementById("confirm-delete-btn");
-        if (!overlay || !nameEl || !inputEl || !confirmBtn) return;
-        nameEl.textContent = instanceName;
+        if (!nameEl || !inputEl || !confirmBtn) return;
+        nameEl.textContent = deleteConfirmInstanceName;
+        if (hintEl) {
+          const label = String(instanceLabel || "").trim();
+          const showHint =
+            label &&
+            normalizeDeleteConfirmName(label) !==
+              normalizeDeleteConfirmName(deleteConfirmInstanceName);
+          hintEl.textContent = showHint ? `Também aceito: ${label}` : "";
+          hintEl.hidden = !showHint;
+        }
         inputEl.value = "";
+        clearDeleteConfirmError();
         confirmBtn.classList.add("disabled");
+        confirmBtn.toggleAttribute("disabled", true);
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
+        setDeleteConfirmProcessing(false);
         inputEl.focus();
       }
 
-      function closeDeleteConfirm() {
-        if (deleteConfirmProcessing) return;
+      function closeDeleteConfirm(options = {}) {
+        const force = options?.force === true;
+        if (deleteConfirmProcessing && !force) return;
         const overlay = document.getElementById("confirm-delete-overlay");
         if (!overlay) return;
         overlay.classList.remove("open", "is-processing");
         overlay.setAttribute("aria-hidden", "true");
         deleteConfirmInstanceName = "";
-        setDeleteConfirmProcessing(false);
+        deleteConfirmAcceptedNames = [];
+        deleteConfirmProcessing = false;
+        clearDeleteConfirmError();
+        const inputEl = document.getElementById("confirm-instance-input");
+        if (inputEl) inputEl.value = "";
         const confirmBtn = document.getElementById("confirm-delete-btn");
-        if (confirmBtn) confirmBtn.textContent = "Deletar";
+        if (confirmBtn) {
+          confirmBtn.classList.add("disabled");
+          confirmBtn.toggleAttribute("disabled", true);
+          confirmBtn.textContent = "Deletar";
+        }
+        const processingEl = document.getElementById("confirm-delete-processing");
+        if (processingEl) processingEl.hidden = true;
       }
 
       async function confirmInstanceDelete() {
         const instanceName = deleteConfirmInstanceName;
         if (!instanceName || deleteConfirmProcessing) return;
+        const inputEl = document.getElementById("confirm-instance-input");
+        if (!isDeleteConfirmNameValid(inputEl?.value)) {
+          showDeleteConfirmError(
+            "Digite o nome exato da instância (técnico ou como na coluna «Nome da Instância»)."
+          );
+          return;
+        }
+
         setDeleteConfirmProcessing(true);
         markInstanceDeleting(instanceName, true);
+        clearDeleteConfirmError();
+
         try {
           const response = await fetchWithTimeout(
             `/instancias/${encodeURIComponent(instanceName)}`,
-            { method: "DELETE", headers: { "Content-Type": "application/json" } },
+            {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+            },
             60000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showToast(data?.error || data?.detail || "Falha ao excluir instância.", "error", 5200);
+            const msg = data?.error || data?.detail || "Falha ao excluir instância.";
+            showDeleteConfirmError(msg);
+            showToast(msg, "error", 5200);
             return;
           }
+
           showToast(
             data?.message || "Instância excluída com sucesso.",
             data?.degraded ? "warning" : "success",
             data?.degraded ? 6200 : 4200
           );
-          deleteConfirmInstanceName = "";
-          setDeleteConfirmProcessing(false);
-          const overlay = document.getElementById("confirm-delete-overlay");
-          if (overlay) {
-            overlay.classList.remove("open", "is-processing");
-            overlay.setAttribute("aria-hidden", "true");
-          }
-          const inputEl = document.getElementById("confirm-instance-input");
-          if (inputEl) inputEl.value = "";
-          const confirmBtn = document.getElementById("confirm-delete-btn");
-          if (confirmBtn) confirmBtn.textContent = "Deletar";
+          removeInstanceFromLocalList(instanceName);
+          closeDeleteConfirm({ force: true });
           markInstanceDeleting(instanceName, false);
-          if (Array.isArray(instancesData?.items)) {
-            instancesData.items = instancesData.items.filter(
-              (item) =>
-                String(item?.name || item?.instanceName || "").trim().toLowerCase() !==
-                instanceName.trim().toLowerCase()
+          try {
+            await carregar();
+          } catch (_refreshError) {
+            showToast(
+              "Instância excluída. Atualize a página se a lista não refletir a mudança.",
+              "warning",
+              5000
             );
-            instancesData.total = instancesData.items.length;
-            persistInstancesLocalCache(instancesData);
-            if (activeTab === "instancias") renderInstancesList();
-            updateInstancesIndicators();
           }
-          await carregar();
-        } catch (error) {
+        } catch (_error) {
+          showDeleteConfirmError("Erro de rede ao excluir. Tente novamente.");
           showToast("Erro ao excluir instância.", "error");
         } finally {
           setDeleteConfirmProcessing(false);
@@ -38519,13 +38645,19 @@
                   "Verificando CONFIRMAR na Evolution (outro WhatsApp)…"
                 );
                 const pollRes = await fetchWithTimeout(
-                  `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=2`,
+                  `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`,
                   { credentials: "same-origin" },
-                  25000
+                  15000
                 );
                 if (!pollRes.ok) return;
                 const status = await pollRes.json().catch(() => null);
                 applyRegisterInboundStatus(status, instanceName);
+                if (status?.finished && status.receiveTest?.success && status.sendTest?.success) {
+                  setRegisterConnectStatus("success", "Número validado com sucesso.");
+                  finishRegisterWizardSuccess(
+                    "Número conectado e testado com sucesso. Pode usar em campanhas."
+                  );
+                }
               } catch {
                 showToast("Não foi possível verificar agora. Aguarde alguns segundos.", "warning");
               }
@@ -38882,7 +39014,7 @@
         const sendDone = status.sendTest?.success !== null && status.sendTest?.success !== undefined;
 
         if (!receiveDone) {
-          setInboundWaitingVisible(true, status.receiveTest?.detail || REGISTER_INBOUND_WAIT_STEP1);
+          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
           setInboundCheckVisible("register-inbound-receive-row", false, false);
           setInboundCheckVisible("register-inbound-send-row", false, false);
           setRegisterInboundActionButtons({ retry: false, sent: true });
@@ -38942,7 +39074,7 @@
         }
         registerInboundValidationId = "";
         registerInboundStartInFlight = false;
-        await startRegisterInboundValidation(instanceName, { forceRestart: true });
+        await startRegisterInboundValidation(instanceName);
       }
 
       function finishRegisterWizardSuccess(message) {
@@ -38958,14 +39090,12 @@
         }
       }
 
-      async function startRegisterInboundValidation(instanceName, options = {}) {
-        const forceRestart = options?.forceRestart === true;
+      async function startRegisterInboundValidation(instanceName) {
         if (registerInboundStartInFlight) return;
-        if (!forceRestart && registerInboundValidationId && registerInboundPollTimer) return;
+        if (registerInboundValidationId && registerInboundPollTimer) return;
         registerInboundStartInFlight = true;
         setRegisterWizardStep(3);
-        if (!forceRestart) resetRegisterInboundPanel();
-        else setRegisterInboundActionButtons({ retry: false, sent: true });
+        resetRegisterInboundPanel();
 
         const numberInput = document.getElementById("register-number-input");
         const formNumber = String(
@@ -39014,7 +39144,6 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 number: formNumber || registerConnectedInstanceNumber,
-                forceRestart,
               }),
             },
             30000
@@ -39057,8 +39186,7 @@
         if (!validationId) return;
 
         const validationStartedAt = Date.now();
-        let pollTick = 0;
-        const pollValidationOnce = async () => {
+        registerInboundPollTimer = setInterval(async () => {
           try {
             if (Date.now() - validationStartedAt > 360000) {
               clearInterval(registerInboundPollTimer);
@@ -39067,14 +39195,13 @@
                 "loading",
                 "Validação expirou. Envie CONFIRMAR pelo outro WhatsApp ou pule (não recomendado)."
               );
+              setRegisterInboundActionButtons({ retry: true, sent: true });
               return;
             }
-            pollTick += 1;
-            const nudge = pollTick % 4 === 0 ? "2" : "1";
             const pollRes = await fetchWithTimeout(
-              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=${nudge}`,
+              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`,
               { credentials: "same-origin" },
-              15000
+              12000
             );
             if (!pollRes.ok) return;
             const status = await pollRes.json().catch(() => null);
@@ -39098,13 +39225,11 @@
               "loading",
               "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
             );
+            setRegisterInboundActionButtons({ retry: true, sent: true });
           } catch {
             // mantém polling
           }
-        };
-
-        void pollValidationOnce();
-        registerInboundPollTimer = setInterval(pollValidationOnce, 600);
+        }, 2500);
       }
 
       function openRenameInstanceModal(instanceName) {
@@ -42187,7 +42312,9 @@
           return;
         }
         if (action === "delete") {
-          openDeleteConfirm(instanceName);
+          e.stopPropagation();
+          const label = btn.getAttribute("data-instance-label") || "";
+          openDeleteConfirm(instanceName, label);
           return;
         }
         callInstanceAction(action, instanceName, number);
@@ -42201,10 +42328,16 @@
       if (confirmInput && confirmDeleteBtn) {
         confirmInput.addEventListener("input", () => {
           if (deleteConfirmProcessing) return;
-          const ok =
-            String(confirmInput.value || "").trim() === deleteConfirmInstanceName;
+          clearDeleteConfirmError();
+          const ok = isDeleteConfirmNameValid(confirmInput.value);
           confirmDeleteBtn.classList.toggle("disabled", !ok);
           confirmDeleteBtn.toggleAttribute("disabled", !ok);
+        });
+        confirmInput.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" || deleteConfirmProcessing) return;
+          if (confirmDeleteBtn.classList.contains("disabled")) return;
+          e.preventDefault();
+          void confirmInstanceDelete();
         });
       }
 

@@ -76,6 +76,52 @@ class WabaInstanceOwnershipService {
         }
         return null;
     }
+    findDeletedKey(store, instanceName) {
+        const deleted = store.deletedInstances || {};
+        const target = normalizeInstanceName(instanceName).toLowerCase();
+        if (!target)
+            return null;
+        for (const key of Object.keys(deleted)) {
+            if (key.toLowerCase() === target)
+                return key;
+        }
+        return null;
+    }
+    async isInstanceDeleted(instanceName) {
+        const store = await this.loadStore();
+        return Boolean(this.findDeletedKey(store, instanceName));
+    }
+    async markInstancesDeleted(instanceNames) {
+        const names = instanceNames.map((n) => normalizeInstanceName(n)).filter(Boolean);
+        if (!names.length)
+            return;
+        await this.runLocked(async () => {
+            const store = await this.loadStore();
+            if (!store.deletedInstances)
+                store.deletedInstances = {};
+            const now = new Date().toISOString();
+            let changed = false;
+            for (const name of names) {
+                const existingKey = this.findDeletedKey(store, name);
+                const key = existingKey || name;
+                if (!store.deletedInstances[key]) {
+                    store.deletedInstances[key] = { deletedAt: now };
+                    changed = true;
+                }
+            }
+            if (changed)
+                await this.saveStore(store);
+        });
+    }
+    clearDeletedMark(store, instanceName) {
+        const deleted = store.deletedInstances || {};
+        const key = this.findDeletedKey(store, instanceName);
+        if (!key)
+            return false;
+        delete deleted[key];
+        store.deletedInstances = deleted;
+        return true;
+    }
     /** Sem login configurado (dev local): não filtra. Com auth: estrito por dono. */
     bypassOwnershipFilter(auth) {
         return !(0, waba_auth_service_1.isWabaAuthConfigured)();
@@ -108,6 +154,7 @@ class WabaInstanceOwnershipService {
                     createdAt: new Date().toISOString(),
                 };
             }
+            this.clearDeletedMark(store, name);
             await this.saveStore(store);
         });
     }
@@ -282,6 +329,8 @@ class WabaInstanceOwnershipService {
             for (const rawName of instanceNames) {
                 const name = normalizeInstanceName(rawName);
                 if (!name)
+                    continue;
+                if (this.findDeletedKey(store, name))
                     continue;
                 const existingKey = this.findStoreKey(store, name);
                 if (existingKey)

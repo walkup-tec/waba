@@ -13,6 +13,12 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-21
+
+**WABA — Validação inbound híbrida (revert):** serviço `a41ba4b` (19/06 + dedupe 22/06); poll 2,5s sem nudge; UI/número passo 3 mantidos. Marker `DEPLOY-2026-06-21-validacao-inbound-hybrid-a41ba4b`. Ver `doc/LOG-2026-06-21__validacao-inbound-hybrid-revert.md`.
+
+**WABA — Fix exclusão de instância (modal + backend):** confirmação case-insensitive; purge local; delete EVO resiliente. Ver `doc/LOG-2026-06-21__exclusao-instancia-fix.md`.
+
 2026-06-30
 
 **WABA — Validação passo 3 estilo + CONFIRMAR v2:** badge highlight; nudge=2 + findChats; fromMe fix. Marker `DEPLOY-2026-06-30-validacao-inbound-style-confirmar-v2`. Ver `doc/LOG-2026-06-30__validacao-inbound-style-confirmar-v2.md`.

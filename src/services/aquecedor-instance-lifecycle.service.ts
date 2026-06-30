@@ -306,6 +306,21 @@ export async function getAquecedorLifecycleRow(
   return { ...found.row };
 }
 
+export async function removeAquecedorInstanceLifecycle(instanceName: string): Promise<void> {
+  const aliasesMap = await loadAliasesMap();
+  const keys = collectInstanceNameKeys(instanceName, aliasesMap);
+  if (!keys.length) return;
+  const store = await loadStore();
+  let changed = false;
+  for (const key of keys) {
+    if (store.instances[key]) {
+      delete store.instances[key];
+      changed = true;
+    }
+  }
+  if (changed) await saveStore(store);
+}
+
 export async function registerAquecedorInstancePreparing(
   instanceName: string,
   preparingSince?: string | null,
