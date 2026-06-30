@@ -95,7 +95,13 @@ function formatPhoneHint(num) {
     if (digits.length >= 12 && digits.startsWith("55")) {
         const ddd = digits.slice(2, 4);
         const rest = digits.slice(4);
-        if (rest.length >= 8) {
+        if (rest.length === 9) {
+            return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+        }
+        if (rest.length === 8) {
+            return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+        }
+        if (rest.length > 4) {
             return `+55 ${ddd} ${rest.slice(0, rest.length - 4)}-${rest.slice(-4)}`;
         }
         return `+55 ${ddd} ${rest}`;
@@ -353,56 +359,77 @@ function isInboundHitFresh(hit, options) {
         return false;
     return true;
 }
-function isInboundCandidate(node, strictFromMe) {
+function isInboundCandidate(node) {
     const fromMe = extractFromMe(node);
-    if (fromMe === true)
-        return false;
-    if (strictFromMe && fromMe !== false)
-        return false;
-    return true;
+    return fromMe !== true;
 }
-function walkInboundHits(node, out, keyword, options, depth = 0, strictFromMe = true) {
-    if (depth > 14 || node == null)
+function findJidInSubtree(node, depth = 0) {
+    if (depth > 8 || node == null)
+        return "";
+    if (typeof node !== "object")
+        return "";
+    const jid = extractRemoteJid(node);
+    if (jid)
+        return jid;
+    if (Array.isArray(node)) {
+        for (const item of node) {
+            const found = findJidInSubtree(item, depth + 1);
+            if (found)
+                return found;
+        }
+        return "";
+    }
+    for (const value of Object.values(node)) {
+        if (value && typeof value === "object") {
+            const found = findJidInSubtree(value, depth + 1);
+            if (found)
+                return found;
+        }
+    }
+    return "";
+}
+function collectInboundTexts(node) {
+    const texts = [];
+    collectMessageTexts(node.message ?? node, texts);
+    if (!texts.length)
+        collectMessageTexts(node, texts);
+    return texts;
+}
+function walkInboundHits(node, out, keyword, options, depth = 0) {
+    if (depth > 16 || node == null)
         return;
     if (Array.isArray(node)) {
         for (const item of node)
-            walkInboundHits(item, out, keyword, options, depth + 1, strictFromMe);
+            walkInboundHits(item, out, keyword, options, depth + 1);
         return;
     }
     if (typeof node !== "object")
         return;
     const obj = node;
-    if (!isInboundCandidate(obj, strictFromMe)) {
-        for (const value of Object.values(obj)) {
-            if (value && typeof value === "object")
-                walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
+    if (isInboundCandidate(obj)) {
+        const texts = collectInboundTexts(obj);
+        if (textMatchesKeyword(texts, keyword)) {
+            const remoteJid = extractRemoteJid(obj) || findJidInSubtree(obj);
+            if (remoteJid) {
+                const hit = {
+                    remoteJid,
+                    referenceNumber: jidToNumber(remoteJid),
+                    texts,
+                    messageTimestampMs: extractMessageTimestampMs(obj),
+                };
+                if (isInboundHitFresh(hit, options))
+                    out.push(hit);
+            }
         }
-        return;
-    }
-    const remoteJid = extractRemoteJid(obj);
-    const texts = [];
-    collectMessageTexts(obj.message ?? obj, texts);
-    if (remoteJid && textMatchesKeyword(texts, keyword)) {
-        const hit = {
-            remoteJid,
-            referenceNumber: jidToNumber(remoteJid),
-            texts,
-            messageTimestampMs: extractMessageTimestampMs(obj),
-        };
-        if (isInboundHitFresh(hit, options))
-            out.push(hit);
     }
     for (const value of Object.values(obj)) {
         if (value && typeof value === "object")
-            walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
+            walkInboundHits(value, out, keyword, options, depth + 1);
     }
 }
-function findInboundInPayload(payload, keyword, options, strictFromMe = true) {
+function findInboundInPayload(payload, keyword, options) {
     const hits = [];
-    walkInboundHits(payload, hits, keyword, options, 0, strictFromMe);
-    if (!hits.length && strictFromMe) {
-        return findInboundInPayload(payload, keyword, options, false);
-    }
+    walkInboundHits(payload, hits, keyword, options, 0);
     if (!hits.length)
         return null;
     hits.sort((a, b) => (b.messageTimestampMs ?? 0) - (a.messageTimestampMs ?? 0));
@@ -439,7 +466,80 @@ function buildFindMessagesUrls(instanceName) {
     return [
         `${EVO_API_BASE}/chat/findMessages/${enc}`,
         `${EVO_API_BASE}/message/findMessages/${enc}`,
+        `${EVO_API_BASE}/chat/findMessages/${enc}/messages`,
     ];
+}
+function buildFindChatsUrls(instanceName) {
+    const enc = encodeURIComponent(instanceName);
+    return [
+        `${EVO_API_BASE}/chat/findChats/${enc}`,
+        `${EVO_API_BASE}/chat/findChats`,
+    ];
+}
+function extractChatRemoteJids(payload) {
+    const out = new Set();
+    const visit = (node, depth = 0) => {
+        if (depth > 10 || node == null)
+            return;
+        if (Array.isArray(node)) {
+            for (const item of node)
+                visit(item, depth + 1);
+            return;
+        }
+        if (typeof node !== "object")
+            return;
+        const obj = node;
+        const jid = extractRemoteJid(obj);
+        if (jid)
+            out.add(jid);
+        const id = String(obj.id || obj.jid || obj.wuid || "").trim();
+        if (id && id.includes("@"))
+            out.add(id);
+        for (const value of Object.values(obj)) {
+            if (value && typeof value === "object")
+                visit(value, depth + 1);
+        }
+    };
+    visit(payload);
+    return Array.from(out);
+}
+async function findInboundViaRecentChats(instanceName, keyword, minTimestampMs) {
+    const minTs = minTimestampMs - 20000;
+    for (const url of buildFindChatsUrls(instanceName)) {
+        const result = await callEvo(url, "POST", { limit: 30 });
+        if (!result.ok)
+            continue;
+        const jids = extractChatRemoteJids(result.json).slice(0, 15);
+        for (const remoteJid of jids) {
+            for (const msgUrl of buildFindMessagesUrls(instanceName)) {
+                const bodies = [
+                    { where: { key: { remoteJid } }, limit: 40 },
+                    { where: { key: { remoteJid } }, take: 40 },
+                ];
+                for (const body of bodies) {
+                    const msgRes = await callEvo(msgUrl, "POST", body);
+                    if (!msgRes.ok)
+                        continue;
+                    const hit = findInboundInPayload(msgRes.json, keyword, { minTimestampMs: minTs }) ||
+                        findInboundInPayload(msgRes.json, keyword, { requireTimestamp: false });
+                    if (hit)
+                        return hit;
+                }
+            }
+        }
+    }
+    return null;
+}
+async function resolveInboundHit(instanceName, keyword, minTimestampMs, aggressive = false) {
+    const hit = await findInboundViaApi(instanceName, keyword, minTimestampMs);
+    if (hit)
+        return hit;
+    if (!aggressive)
+        return null;
+    const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
+    if (viaChats)
+        return viaChats;
+    return findInboundViaApi(instanceName, keyword, minTimestampMs - 120000);
 }
 async function findInboundViaApi(instanceName, keyword, minTimestampMs) {
     const urls = buildFindMessagesUrls(instanceName);
@@ -633,7 +733,7 @@ async function runValidationLoop(record) {
         while (Date.now() < deadline && !record.finished && !record.cancelled) {
             if (record.receiveTest.success !== true) {
                 try {
-                    const hit = await findInboundViaApi(record.instanceName, record.keyword, record.validationStartedAtMs);
+                    const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, false);
                     if (hit)
                         markInboundReceived(record, hit, "findMessages");
                 }
@@ -686,16 +786,16 @@ function unwrapEvolutionWebhookPayload(body) {
     }
     return [body];
 }
-async function refreshInboundValidation(validationId) {
+async function refreshInboundValidation(validationId, aggressive = false) {
     const record = validations.get(validationId);
     if (!record || record.finished || record.cancelled) {
         return getInboundValidationStatus(validationId);
     }
     if (record.receiveTest.success !== true) {
         try {
-            const hit = await findInboundViaApi(record.instanceName, record.keyword, record.validationStartedAtMs);
+            const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, aggressive);
             if (hit)
-                markInboundReceived(record, hit, "nudge");
+                markInboundReceived(record, hit, aggressive ? "nudge-aggressive" : "nudge");
         }
         catch {
             /* falha transitória */

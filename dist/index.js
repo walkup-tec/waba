@@ -4355,9 +4355,10 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     if (!validationId) {
         return res.status(400).json({ error: "validationId é obrigatório." });
     }
-    const nudge = String(req.query.nudge ?? "").trim() === "1";
+    const nudge = String(req.query.nudge ?? "").trim();
     if (nudge) {
-        await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId);
+        const aggressive = nudge === "2" || nudge === "aggressive";
+        await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, aggressive);
     }
     const status = (0, instance_inbound_validation_service_1.getInboundValidationStatus)(validationId);
     if (!status) {

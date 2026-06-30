@@ -151,7 +151,13 @@ function formatPhoneHint(num: string): string {
   if (digits.length >= 12 && digits.startsWith("55")) {
     const ddd = digits.slice(2, 4);
     const rest = digits.slice(4);
-    if (rest.length >= 8) {
+    if (rest.length === 9) {
+      return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    }
+    if (rest.length === 8) {
+      return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+    if (rest.length > 4) {
       return `+55 ${ddd} ${rest.slice(0, rest.length - 4)}-${rest.slice(-4)}`;
     }
     return `+55 ${ddd} ${rest}`;
@@ -416,11 +422,37 @@ function isInboundHitFresh(hit: InboundHit, options?: InboundHitSearchOptions): 
   return true;
 }
 
-function isInboundCandidate(node: Record<string, unknown>, strictFromMe: boolean): boolean {
+function isInboundCandidate(node: Record<string, unknown>): boolean {
   const fromMe = extractFromMe(node);
-  if (fromMe === true) return false;
-  if (strictFromMe && fromMe !== false) return false;
-  return true;
+  return fromMe !== true;
+}
+
+function findJidInSubtree(node: unknown, depth = 0): string {
+  if (depth > 8 || node == null) return "";
+  if (typeof node !== "object") return "";
+  const jid = extractRemoteJid(node as Record<string, unknown>);
+  if (jid) return jid;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findJidInSubtree(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  for (const value of Object.values(node as Record<string, unknown>)) {
+    if (value && typeof value === "object") {
+      const found = findJidInSubtree(value, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
+function collectInboundTexts(node: Record<string, unknown>): string[] {
+  const texts: string[] = [];
+  collectMessageTexts(node.message ?? node, texts);
+  if (!texts.length) collectMessageTexts(node, texts);
+  return texts;
 }
 
 function walkInboundHits(
@@ -428,50 +460,44 @@ function walkInboundHits(
   out: InboundHit[],
   keyword: string,
   options?: InboundHitSearchOptions,
-  depth = 0,
-  strictFromMe = true
+  depth = 0
 ): void {
-  if (depth > 14 || node == null) return;
+  if (depth > 16 || node == null) return;
   if (Array.isArray(node)) {
-    for (const item of node) walkInboundHits(item, out, keyword, options, depth + 1, strictFromMe);
+    for (const item of node) walkInboundHits(item, out, keyword, options, depth + 1);
     return;
   }
   if (typeof node !== "object") return;
   const obj = node as Record<string, unknown>;
-  if (!isInboundCandidate(obj, strictFromMe)) {
-    for (const value of Object.values(obj)) {
-      if (value && typeof value === "object") walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
+
+  if (isInboundCandidate(obj)) {
+    const texts = collectInboundTexts(obj);
+    if (textMatchesKeyword(texts, keyword)) {
+      const remoteJid = extractRemoteJid(obj) || findJidInSubtree(obj);
+      if (remoteJid) {
+        const hit: InboundHit = {
+          remoteJid,
+          referenceNumber: jidToNumber(remoteJid),
+          texts,
+          messageTimestampMs: extractMessageTimestampMs(obj),
+        };
+        if (isInboundHitFresh(hit, options)) out.push(hit);
+      }
     }
-    return;
   }
-  const remoteJid = extractRemoteJid(obj);
-  const texts: string[] = [];
-  collectMessageTexts(obj.message ?? obj, texts);
-  if (remoteJid && textMatchesKeyword(texts, keyword)) {
-    const hit: InboundHit = {
-      remoteJid,
-      referenceNumber: jidToNumber(remoteJid),
-      texts,
-      messageTimestampMs: extractMessageTimestampMs(obj),
-    };
-    if (isInboundHitFresh(hit, options)) out.push(hit);
-  }
+
   for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") walkInboundHits(value, out, keyword, options, depth + 1, strictFromMe);
+    if (value && typeof value === "object") walkInboundHits(value, out, keyword, options, depth + 1);
   }
 }
 
 function findInboundInPayload(
   payload: unknown,
   keyword: string,
-  options?: InboundHitSearchOptions,
-  strictFromMe = true
+  options?: InboundHitSearchOptions
 ): InboundHit | null {
   const hits: InboundHit[] = [];
-  walkInboundHits(payload, hits, keyword, options, 0, strictFromMe);
-  if (!hits.length && strictFromMe) {
-    return findInboundInPayload(payload, keyword, options, false);
-  }
+  walkInboundHits(payload, hits, keyword, options, 0);
   if (!hits.length) return null;
   hits.sort((a, b) => (b.messageTimestampMs ?? 0) - (a.messageTimestampMs ?? 0));
   return hits[0];
@@ -507,7 +533,82 @@ function buildFindMessagesUrls(instanceName: string): string[] {
   return [
     `${EVO_API_BASE}/chat/findMessages/${enc}`,
     `${EVO_API_BASE}/message/findMessages/${enc}`,
+    `${EVO_API_BASE}/chat/findMessages/${enc}/messages`,
   ];
+}
+
+function buildFindChatsUrls(instanceName: string): string[] {
+  const enc = encodeURIComponent(instanceName);
+  return [
+    `${EVO_API_BASE}/chat/findChats/${enc}`,
+    `${EVO_API_BASE}/chat/findChats`,
+  ];
+}
+
+function extractChatRemoteJids(payload: unknown): string[] {
+  const out = new Set<string>();
+  const visit = (node: unknown, depth = 0) => {
+    if (depth > 10 || node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    const jid = extractRemoteJid(obj);
+    if (jid) out.add(jid);
+    const id = String(obj.id || obj.jid || obj.wuid || "").trim();
+    if (id && id.includes("@")) out.add(id);
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === "object") visit(value, depth + 1);
+    }
+  };
+  visit(payload);
+  return Array.from(out);
+}
+
+async function findInboundViaRecentChats(
+  instanceName: string,
+  keyword: string,
+  minTimestampMs: number
+): Promise<InboundHit | null> {
+  const minTs = minTimestampMs - 20_000;
+  for (const url of buildFindChatsUrls(instanceName)) {
+    const result = await callEvo(url, "POST", { limit: 30 });
+    if (!result.ok) continue;
+    const jids = extractChatRemoteJids(result.json).slice(0, 15);
+    for (const remoteJid of jids) {
+      for (const msgUrl of buildFindMessagesUrls(instanceName)) {
+        const bodies = [
+          { where: { key: { remoteJid } }, limit: 40 },
+          { where: { key: { remoteJid } }, take: 40 },
+        ];
+        for (const body of bodies) {
+          const msgRes = await callEvo(msgUrl, "POST", body);
+          if (!msgRes.ok) continue;
+          const hit =
+            findInboundInPayload(msgRes.json, keyword, { minTimestampMs: minTs }) ||
+            findInboundInPayload(msgRes.json, keyword, { requireTimestamp: false });
+          if (hit) return hit;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+async function resolveInboundHit(
+  instanceName: string,
+  keyword: string,
+  minTimestampMs: number,
+  aggressive = false
+): Promise<InboundHit | null> {
+  const hit = await findInboundViaApi(instanceName, keyword, minTimestampMs);
+  if (hit) return hit;
+  if (!aggressive) return null;
+  const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
+  if (viaChats) return viaChats;
+  return findInboundViaApi(instanceName, keyword, minTimestampMs - 120_000);
 }
 
 async function findInboundViaApi(
@@ -715,10 +816,11 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
     while (Date.now() < deadline && !record.finished && !record.cancelled) {
       if (record.receiveTest.success !== true) {
         try {
-          const hit = await findInboundViaApi(
+          const hit = await resolveInboundHit(
             record.instanceName,
             record.keyword,
-            record.validationStartedAtMs
+            record.validationStartedAtMs,
+            false
           );
           if (hit) markInboundReceived(record, hit, "findMessages");
         } catch {
@@ -779,7 +881,8 @@ function unwrapEvolutionWebhookPayload(body: unknown): unknown[] {
 }
 
 export async function refreshInboundValidation(
-  validationId: string
+  validationId: string,
+  aggressive = false
 ): Promise<InboundValidationStatus | null> {
   const record = validations.get(validationId);
   if (!record || record.finished || record.cancelled) {
@@ -788,12 +891,13 @@ export async function refreshInboundValidation(
 
   if (record.receiveTest.success !== true) {
     try {
-      const hit = await findInboundViaApi(
+      const hit = await resolveInboundHit(
         record.instanceName,
         record.keyword,
-        record.validationStartedAtMs
+        record.validationStartedAtMs,
+        aggressive
       );
-      if (hit) markInboundReceived(record, hit, "nudge");
+      if (hit) markInboundReceived(record, hit, aggressive ? "nudge-aggressive" : "nudge");
     } catch {
       /* falha transitória */
     }
