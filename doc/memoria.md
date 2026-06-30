@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — Push connection recovery:** POST 202 + entrega setImmediate; poll resiliente; recupera status do histórico; sem mensagem de falha de conexão. Marker `DEPLOY-2026-06-30-push-connection-recovery-fix`. Ver `doc/LOG-2026-06-30__push-connection-recovery-fix.md`.
+
 **WABA — Push async + dedupe + comunidade texto primeiro:** POST 202 + poll; dedupe 90s com título; texto antes da imagem na comunidade; remove JID/contagem Evolution da UI. Ver `doc/LOG-2026-06-30__push-async-dedupe-comunidade-texto-primeiro.md`.
 
 **WABA — Push comunidade Connection Closed:** URL interna 30180 primeiro; base64 só imagem pequena; fallback instâncias + texto. Marker `DEPLOY-2026-06-30-push-comunidade-connection-closed-fix`. Ver `doc/LOG-2026-06-30__push-comunidade-connection-closed-fix.md`.
