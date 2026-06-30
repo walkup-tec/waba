@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.acceptPushMessage = acceptPushMessage;
+exports.deliverPushMessageById = deliverPushMessageById;
 exports.sendPushMessage = sendPushMessage;
 exports.getPushMessageById = getPushMessageById;
 exports.listPushAlertsForAuth = listPushAlertsForAuth;
@@ -17,11 +18,11 @@ const pushRepository = new waba_push_repository_1.WabaPushRepository();
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
 const systemUserRepository = new waba_system_user_repository_1.WabaSystemUserRepository();
 const DEDUPE_WINDOW_MS = 90000;
-let pushSendChain = Promise.resolve();
+let preparePushChain = Promise.resolve();
 const pushInFlightFingerprints = new Set();
-function runPushSendLocked(fn) {
-    const next = pushSendChain.then(fn, fn);
-    pushSendChain = next.then(() => undefined, () => undefined);
+function runPreparePushLocked(fn) {
+    const next = preparePushChain.then(() => Promise.resolve().then(fn));
+    preparePushChain = next.then(() => undefined, () => undefined);
     return next;
 }
 function normalizeEmail(value) {
@@ -278,27 +279,30 @@ async function deliverPreparedPushMessage(messageId, fingerprint) {
     }
 }
 async function acceptPushMessage(input) {
-    return runPushSendLocked(async () => {
+    return runPreparePushLocked(async () => {
         const prepared = preparePushMessage(input);
         if (prepared.deduplicated) {
             return { message: prepared.message, deduplicated: true };
         }
-        const fingerprint = String(prepared.fingerprint || "");
-        void deliverPreparedPushMessage(prepared.message.id, fingerprint);
-        return { message: prepared.message, deduplicated: false, accepted: true };
+        return {
+            message: prepared.message,
+            deduplicated: false,
+            accepted: true,
+            fingerprint: String(prepared.fingerprint || ""),
+        };
     });
 }
+function deliverPushMessageById(messageId, fingerprint) {
+    void deliverPreparedPushMessage(messageId, fingerprint);
+}
 async function sendPushMessage(input) {
-    return runPushSendLocked(async () => {
-        const prepared = preparePushMessage(input);
-        if (prepared.deduplicated) {
-            return { message: prepared.message, deduplicated: true };
-        }
-        const fingerprint = String(prepared.fingerprint || "");
-        await deliverPreparedPushMessage(prepared.message.id, fingerprint);
-        const finalMessage = pushRepository.getById(prepared.message.id) || prepared.message;
-        return { message: finalMessage, deduplicated: false };
-    });
+    const accepted = await acceptPushMessage(input);
+    if (accepted.deduplicated || !accepted.fingerprint) {
+        return accepted;
+    }
+    await deliverPreparedPushMessage(accepted.message.id, accepted.fingerprint);
+    const finalMessage = pushRepository.getById(accepted.message.id) || accepted.message;
+    return { message: finalMessage, deduplicated: false };
 }
 function getPushMessageById(id) {
     return pushRepository.getById(id);

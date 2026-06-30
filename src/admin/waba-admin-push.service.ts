@@ -1,6 +1,7 @@
 import { reviewPushMessageWithOpenAi } from "../push/waba-push-openai.service";
 import {
   dismissPushAlert,
+  deliverPushMessageById,
   getPushMessageById,
   listPushHistory,
   acceptPushMessage,
@@ -58,6 +59,10 @@ export class WabaAdminPushService {
 
   getMessageById(id: string) {
     return getPushMessageById(id);
+  }
+
+  deliverMessage(messageId: string, fingerprint: string) {
+    deliverPushMessageById(messageId, fingerprint);
   }
 
   uploadImage(file: { buffer: Buffer; originalname: string; mimetype: string }): WabaPushImageAttachment {

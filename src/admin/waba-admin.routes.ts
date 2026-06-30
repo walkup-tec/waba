@@ -563,11 +563,19 @@ export const registerWabaAdminRoutes = (app: Express) => {
           deduplicated: true,
         });
       }
-      return res.status(202).json({
+      res.status(202).json({
         message: result.message,
         deduplicated: false,
         accepted: true,
       });
+      const messageId = String(result.message?.id || "").trim();
+      const fingerprint = String(result.fingerprint || "").trim();
+      if (messageId && fingerprint) {
+        setImmediate(() => {
+          adminPushService.deliverMessage(messageId, fingerprint);
+        });
+      }
+      return;
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Não foi possível enviar o push.",

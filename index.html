@@ -24835,6 +24835,13 @@
             toastType: "error",
           };
         }
+        if (status === "sending") {
+          return {
+            text: "Push em envio. O histórico será atualizado em instantes.",
+            type: "info",
+            toastType: "info",
+          };
+        }
         return { text: "Push registrado.", type: "info", toastType: "info" };
       }
 
@@ -24945,36 +24952,108 @@
         }
       }
 
-      function resolveAdminPushFetchError(error, payload) {
-        if (error?.message === "timeout") {
-          return "O envio ainda está em andamento. Confira o histórico abaixo em instantes.";
+      function isAdminPushTerminalStatus(status) {
+        const value = String(status || "").trim().toLowerCase();
+        return value === "sent" || value === "partial" || value === "failed";
+      }
+
+      function isAdminPushTransientFetchError(error) {
+        const raw = String(error?.message || "").trim().toLowerCase();
+        if (error?.message === "timeout") return true;
+        return (
+          raw === "failed to fetch" ||
+          /networkerror|load failed|fetch failed|econnreset|socket hang up|other side closed|aborted/.test(raw)
+        );
+      }
+
+      async function fetchAdminPushMessageFromHistory(messageId) {
+        const response = await fetchWithTimeout(
+          "/admin/push/history?limit=30",
+          { credentials: "same-origin" },
+          20000,
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) return null;
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        return items.find((row) => String(row?.id || "") === String(messageId || "")) || null;
+      }
+
+      async function fetchAdminPushMessageById(messageId) {
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/push/messages/${encodeURIComponent(messageId)}`,
+            { credentials: "same-origin" },
+            20000,
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.message) return payload.message;
+        } catch (_) {
+          /* fallback via histórico */
         }
+        return fetchAdminPushMessageFromHistory(messageId);
+      }
+
+      async function recoverLatestAdminPushFromHistory({ title, audiences, messageId }) {
+        if (messageId) {
+          const direct = await fetchAdminPushMessageById(messageId);
+          if (direct) return direct;
+        }
+        const response = await fetchWithTimeout(
+          "/admin/push/history?limit=12",
+          { credentials: "same-origin" },
+          20000,
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) return null;
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        const titleKey = String(title || "").trim().toLowerCase();
+        const audKey = [...(audiences || [])].sort().join(",");
+        const cutoff = Date.now() - 5 * 60 * 1000;
+        for (const row of items) {
+          if (messageId && String(row?.id || "") === String(messageId)) return row;
+          const createdAt = new Date(row?.createdAt || row?.sentAt || 0).getTime();
+          if (!Number.isFinite(createdAt) || createdAt < cutoff) continue;
+          if (String(row?.title || "").trim().toLowerCase() !== titleKey) continue;
+          if ([...(row?.audiences || [])].sort().join(",") !== audKey) continue;
+          return row;
+        }
+        return items[0] || null;
+      }
+
+      function resolveAdminPushFetchError(error, payload) {
         const raw = String(error?.message || payload?.error || "").trim();
-        if (!raw) return "Falha ao enviar push.";
-        if (raw === "Failed to fetch" || /networkerror|load failed|fetch failed|econnreset|socket hang up|other side closed/i.test(raw)) {
-          return "Falha de conexão com o servidor. Confira o histórico abaixo — o envio pode ter sido registrado.";
+        if (!raw || isAdminPushTransientFetchError(error)) {
+          return "Não foi possível confirmar o envio agora. Veja o histórico abaixo.";
         }
         return raw;
       }
 
-      async function pollAdminPushMessageUntilDone(messageId, maxWaitMs = 180000) {
+      async function pollAdminPushMessageUntilDone(messageId, maxWaitMs = 240000) {
         const started = Date.now();
-        const intervalMs = 2000;
+        const intervalMs = 2500;
+        let transientFailures = 0;
         while (Date.now() - started < maxWaitMs) {
-          const response = await fetchWithTimeout(
-            `/admin/push/messages/${encodeURIComponent(messageId)}`,
-            {},
-            15000,
-          );
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(payload?.error || "Falha ao consultar status do push.");
-          const message = payload.message || {};
-          const status = String(message.status || "").trim().toLowerCase();
-          if (status && status !== "sending" && status !== "draft") {
-            return message;
+          try {
+            const message = await fetchAdminPushMessageById(messageId);
+            transientFailures = 0;
+            if (message && isAdminPushTerminalStatus(message.status)) {
+              return message;
+            }
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          } catch (error) {
+            if (isAdminPushTransientFetchError(error) && transientFailures < 15) {
+              transientFailures += 1;
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+              continue;
+            }
+            const recovered = await fetchAdminPushMessageFromHistory(messageId);
+            if (recovered && isAdminPushTerminalStatus(recovered.status)) return recovered;
+            throw error;
           }
-          await new Promise((resolve) => setTimeout(resolve, intervalMs));
         }
+        const recovered = await fetchAdminPushMessageFromHistory(messageId);
+        if (recovered && isAdminPushTerminalStatus(recovered.status)) return recovered;
+        if (recovered) return recovered;
         const timeoutError = new Error("timeout");
         timeoutError.name = "PushPollTimeout";
         throw timeoutError;
@@ -25051,6 +25130,7 @@
             : "Enviando push…",
           "info",
         );
+        let acceptedPushMessageId = "";
         try {
           const response = await fetchWithTimeout(
             "/admin/push/send",
@@ -25067,7 +25147,7 @@
                 image: adminPushImageAttachment,
               }),
             },
-            30000
+            60000
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
@@ -25079,9 +25159,11 @@
             return;
           }
           let finalMessage = payload.message || {};
-          if (response.status === 202 && finalMessage.id) {
+          acceptedPushMessageId = String(finalMessage.id || "").trim();
+          const initialStatus = String(finalMessage.status || "").trim().toLowerCase();
+          if (acceptedPushMessageId && (response.status === 202 || initialStatus === "sending")) {
             setAdminPushSendFeedback("Push aceito. Aguardando conclusão do envio…", "info");
-            finalMessage = await pollAdminPushMessageUntilDone(finalMessage.id, 180000);
+            finalMessage = await pollAdminPushMessageUntilDone(acceptedPushMessageId, 240000);
           }
           const outcome = formatAdminPushSendOutcome(finalMessage);
           setAdminPushSendFeedback(outcome.text, outcome.type);
@@ -25093,9 +25175,28 @@
           void loadAdminPushCommunityConfig();
           void refreshPushAlerts();
         } catch (error) {
-          const message = resolveAdminPushFetchError(error);
-          setAdminPushSendFeedback(message, "error");
-          showToast(message, "error");
+          let recovered = null;
+          try {
+            recovered = await recoverLatestAdminPushFromHistory({
+              title,
+              audiences,
+              messageId: acceptedPushMessageId,
+            });
+          } catch (_) {
+            recovered = null;
+          }
+          if (recovered) {
+            const outcome = formatAdminPushSendOutcome(recovered);
+            setAdminPushSendFeedback(outcome.text, outcome.type);
+            showToast(outcome.text, outcome.toastType);
+            if (String(recovered?.status || "").toLowerCase() === "sent") {
+              clearAdminPushImageAttachment();
+            }
+          } else {
+            const message = resolveAdminPushFetchError(error);
+            setAdminPushSendFeedback(message, "warning");
+            showToast(message, "warning");
+          }
           await loadAdminPushHistory();
         } finally {
           adminPushSendInFlight = false;
@@ -36965,7 +37066,9 @@
               clearTimeout(timer);
               const path = String(url || "");
               const resilience = window.wabaDeployResilience;
+              const skipDeployRecovery = /\/admin\/push\//.test(path) || /\/push\/alerts/.test(path);
               if (
+                !skipDeployRecovery &&
                 resilience &&
                 typeof resilience.isEnabled === "function" &&
                 resilience.isEnabled() &&

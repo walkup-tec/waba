@@ -21,12 +21,12 @@ const systemUserRepository = new WabaSystemUserRepository();
 
 const DEDUPE_WINDOW_MS = 90_000;
 
-let pushSendChain: Promise<unknown> = Promise.resolve();
+let preparePushChain: Promise<unknown> = Promise.resolve();
 const pushInFlightFingerprints = new Set<string>();
 
-function runPushSendLocked<T>(fn: () => Promise<T>): Promise<T> {
-  const next = pushSendChain.then(fn, fn);
-  pushSendChain = next.then(
+function runPreparePushLocked<T>(fn: () => Promise<T> | T): Promise<T> {
+  const next = preparePushChain.then(() => Promise.resolve().then(fn));
+  preparePushChain = next.then(
     () => undefined,
     () => undefined,
   );
@@ -37,6 +37,7 @@ export type SendPushMessageResult = {
   message: WabaPushMessage;
   deduplicated: boolean;
   accepted?: boolean;
+  fingerprint?: string;
 };
 
 type PreparedPushMessage = {
@@ -364,15 +365,22 @@ export async function acceptPushMessage(input: {
   createdByEmail: string;
   image?: WabaPushImageAttachment | null;
 }): Promise<SendPushMessageResult> {
-  return runPushSendLocked(async () => {
+  return runPreparePushLocked(async () => {
     const prepared = preparePushMessage(input);
     if (prepared.deduplicated) {
       return { message: prepared.message, deduplicated: true };
     }
-    const fingerprint = String(prepared.fingerprint || "");
-    void deliverPreparedPushMessage(prepared.message.id, fingerprint);
-    return { message: prepared.message, deduplicated: false, accepted: true };
+    return {
+      message: prepared.message,
+      deduplicated: false,
+      accepted: true,
+      fingerprint: String(prepared.fingerprint || ""),
+    };
   });
+}
+
+export function deliverPushMessageById(messageId: string, fingerprint: string): void {
+  void deliverPreparedPushMessage(messageId, fingerprint);
 }
 
 export async function sendPushMessage(input: {
@@ -384,16 +392,13 @@ export async function sendPushMessage(input: {
   createdByEmail: string;
   image?: WabaPushImageAttachment | null;
 }): Promise<SendPushMessageResult> {
-  return runPushSendLocked(async () => {
-    const prepared = preparePushMessage(input);
-    if (prepared.deduplicated) {
-      return { message: prepared.message, deduplicated: true };
-    }
-    const fingerprint = String(prepared.fingerprint || "");
-    await deliverPreparedPushMessage(prepared.message.id, fingerprint);
-    const finalMessage = pushRepository.getById(prepared.message.id) || prepared.message;
-    return { message: finalMessage, deduplicated: false };
-  });
+  const accepted = await acceptPushMessage(input);
+  if (accepted.deduplicated || !accepted.fingerprint) {
+    return accepted;
+  }
+  await deliverPreparedPushMessage(accepted.message.id, accepted.fingerprint);
+  const finalMessage = pushRepository.getById(accepted.message.id) || accepted.message;
+  return { message: finalMessage, deduplicated: false };
 }
 
 export function getPushMessageById(id: string): WabaPushMessage | null {

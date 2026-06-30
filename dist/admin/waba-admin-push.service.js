@@ -39,6 +39,9 @@ class WabaAdminPushService {
     getMessageById(id) {
         return (0, waba_push_delivery_service_1.getPushMessageById)(id);
     }
+    deliverMessage(messageId, fingerprint) {
+        (0, waba_push_delivery_service_1.deliverPushMessageById)(messageId, fingerprint);
+    }
     uploadImage(file) {
         return (0, waba_push_media_service_1.savePushImageAttachment)({
             buffer: file.buffer,
