@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — Aquecedor sendText timeout (HTTP 0):** timeout 90s, retries resilientes, checagem connectionState antes do envio. Marker `DEPLOY-2026-06-30-aquecedor-evo-sendtext-timeout-fix`. Ver `doc/LOG-2026-06-30__aquecedor-evo-sendtext-timeout-fix.md`.
+
 **WABA — Validação inbound detect + fallback EVO open:** loop agressivo findChats; rescan antes de expirar; terminal status não trava se EVO open; fallback 30s. Marker `DEPLOY-2026-06-30-validacao-inbound-detect-fallback`. Ver `doc/LOG-2026-06-30__validacao-inbound-detect-fallback.md`.
 
 **WABA — Wizard passo 3 UX (2026-06-30):** banner EVO conectado, checklist visível, poll resiliente, fallback 45s e skip libera instância. Marker `DEPLOY-2026-06-30-wizard-step3-ux-connection-fallback`. Ver `doc/LOG-2026-06-30__wizard-step3-ux-connection-fallback.md`.

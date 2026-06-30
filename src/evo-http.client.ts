@@ -16,6 +16,16 @@ export const defaultEvoHttpTimeoutMs = (): number => {
   return Number.isFinite(raw) && raw >= 5000 ? Math.round(raw) : 45000;
 };
 
+/** sendText na Evolution costuma demorar mais que fetchInstances / connectionState. */
+export const defaultEvoSendTextTimeoutMs = (): number => {
+  const raw = Number(
+    process.env.EVO_SEND_TEXT_TIMEOUT_MS ??
+      process.env.EVO_HTTP_TIMEOUT_MS ??
+      90000,
+  );
+  return Number.isFinite(raw) && raw >= 10000 ? Math.round(raw) : 90000;
+};
+
 const parseJson = (text: string): unknown | null => {
   if (!text) return null;
   try {

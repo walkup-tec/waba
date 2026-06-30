@@ -47,7 +47,7 @@ import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaPushRoutes } from "./push/waba-push.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integration-monitor.service";
-import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
+import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, defaultEvoSendTextTimeoutMs, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
 import {
   createWabaShortUrl,
   fetchWabaShortUrlClicks,
@@ -4338,6 +4338,15 @@ async function runAquecedorCycle(forceTest = false) {
     const deliveryTag = buildAquecedorDeliveryTag();
     const textoEnvio = appendAquecedorDeliveryTag(texto, deliveryTag);
 
+    const openCheck = await assertAquecedorInstancesOpenForSend(
+      chosen.instancia_origem,
+      chosen.instancia_destino,
+    );
+    if (!openCheck.ok) {
+      deferAquecedorRetryOrWindow(config, nowSp, 180, openCheck.reason);
+      return;
+    }
+
     await (supabase.from("aquecedor" as any) as any)
       .update({
         status: "PROCESSANDO",
@@ -4370,11 +4379,15 @@ async function runAquecedorCycle(forceTest = false) {
         sendResult.status,
         detailStr,
       );
-      const detail = evoDetail ? ` (${String(evoDetail).slice(0, 120)})` : "";
+      const detail = evoDetail
+        ? ` (${String(evoDetail).slice(0, 120)})`
+        : sendResult.status === 0
+          ? ` (${String((sendResult as { error?: string }).error || sendResult.body || "timeout").slice(0, 120)})`
+          : "";
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
-        120,
+        sendResult.status === 0 ? 180 : 120,
         `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`,
       );
       aquecedorRuntime.lastEvoError = {
@@ -6655,9 +6668,10 @@ async function callEvoSendTextWithRetry(
   body: Record<string, any>,
   maxAttempts = 3
 ) {
+  const timeoutMs = defaultEvoSendTextTimeoutMs();
   let last: Awaited<ReturnType<typeof callEvoAction>> | null = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const result = await callEvoAction(url, "POST", body);
+    const result = await callEvoAction(url, "POST", body, { timeoutMs, retries: 2 });
     last = result;
     const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
     if (accepted) return result;
@@ -6671,17 +6685,20 @@ async function callEvoSendTextWithRetry(
         ),
       };
     }
-    const bodyLc = String(last.body || "").toLowerCase();
+    const bodyLc = String(last.body || last.error || "").toLowerCase();
     const isTransient =
+      last.status === 0 ||
       last.status === 429 ||
       last.status === 500 ||
       last.status === 502 ||
       last.status === 503 ||
       last.status === 504 ||
       bodyLc.includes("connection closed") ||
-      bodyLc.includes("timeout");
+      bodyLc.includes("timeout") ||
+      bodyLc.includes("econnreset") ||
+      bodyLc.includes("socket hang up");
     if (!isTransient || attempt >= maxAttempts) break;
-    const waitMs = Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180);
+    const waitMs = Math.floor(500 * Math.pow(2, attempt - 1) + Math.random() * 250);
     await new Promise((r) => setTimeout(r, waitMs));
   }
   return (
@@ -6692,6 +6709,29 @@ async function callEvoSendTextWithRetry(
       json: null,
     }
   );
+}
+
+async function assertAquecedorInstancesOpenForSend(
+  origem: string,
+  destino: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const [originState, destState] = await Promise.all([
+    fetchEvoInstanceConnectionState(origem),
+    fetchEvoInstanceConnectionState(destino),
+  ]);
+  if (originState.ok && !originState.open) {
+    return {
+      ok: false,
+      reason: `${origem} não está conectada na Evolution (${originState.state || "desconectada"}). Reconecte o WhatsApp antes do aquecedor enviar.`,
+    };
+  }
+  if (destState.ok && !destState.open) {
+    return {
+      ok: false,
+      reason: `${destino} não está conectada na Evolution (${destState.state || "desconectada"}). Reconecte o WhatsApp do destino.`,
+    };
+  }
+  return { ok: true };
 }
 
 function isEvoSendTextAccepted(json: unknown, body: string): boolean {
@@ -12018,7 +12058,7 @@ const httpServer = app.listen(PORT, () => {
     `[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING} aquecedorProcessing=${ENABLE_AQUECEDOR_PROCESSING}`
   );
   console.log(
-    `[evo] base=${describeEvoApiBaseForOps(EVO_API_BASE)} tlsInsecure=${isEvoTlsInsecure()} timeoutMs=${defaultEvoHttpTimeoutMs()}`
+    `[evo] base=${describeEvoApiBaseForOps(EVO_API_BASE)} tlsInsecure=${isEvoTlsInsecure()} timeoutMs=${defaultEvoHttpTimeoutMs()} sendTextTimeoutMs=${defaultEvoSendTextTimeoutMs()}`
   );
   if (/walkup[-_]evo|evo-walkup-api:8080/i.test(EVO_API_BASE)) {
     console.warn(
