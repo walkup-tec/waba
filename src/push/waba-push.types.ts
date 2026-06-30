@@ -45,8 +45,7 @@ export type WabaPushConfig = {
 export function resolveDefaultPushCommunityEvoInstance(): string {
   const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE || "").trim();
   if (fromEnv) return fromEnv;
-  // Instância Drax admin documentada em produção (5181077770 não existe na Evolution).
-  return "Drax Sistemas 5181076973";
+  return "Drax Sistemas 5181077770";
 }
 
 export function resolvePushCommunityEvoInstanceFallbacks(): string[] {
@@ -55,12 +54,12 @@ export function resolvePushCommunityEvoInstanceFallbacks(): string[] {
     .map((value) => value.trim())
     .filter(Boolean);
   if (fromEnv.length) return fromEnv;
-  return ["Drax Sistemas 5181076973", "drax-oficial"];
+  return ["Drax Sistemas 5181077770", "drax-oficial"];
 }
 
 export const LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES = new Set([
   "walkup",
-  "drax sistemas 5181077770",
+  "drax sistemas 5181076973",
 ]);
 
 export type WabaPushAlertView = {

@@ -8,8 +8,7 @@ function resolveDefaultPushCommunityEvoInstance() {
     const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE || "").trim();
     if (fromEnv)
         return fromEnv;
-    // Instância Drax admin documentada em produção (5181077770 não existe na Evolution).
-    return "Drax Sistemas 5181076973";
+    return "Drax Sistemas 5181077770";
 }
 function resolvePushCommunityEvoInstanceFallbacks() {
     const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE_FALLBACKS || "")
@@ -18,9 +17,9 @@ function resolvePushCommunityEvoInstanceFallbacks() {
         .filter(Boolean);
     if (fromEnv.length)
         return fromEnv;
-    return ["Drax Sistemas 5181076973", "drax-oficial"];
+    return ["Drax Sistemas 5181077770", "drax-oficial"];
 }
 exports.LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES = new Set([
     "walkup",
-    "drax sistemas 5181077770",
+    "drax sistemas 5181076973",
 ]);

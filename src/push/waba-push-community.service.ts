@@ -17,7 +17,7 @@ const EVO_INSTANCES_URL =
   String(process.env.EVO_INSTANCES_URL || "").trim() ||
   `${EVO_API_BASE}/instance/fetchInstances`;
 const PUSH_COMMUNITY_PHONE_HINT = String(
-  process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181076973",
+  process.env.WABA_PUSH_COMMUNITY_PHONE_HINT || "5181077770",
 ).trim();
 const PUSH_COMMUNITY_JID_ENV = String(
   process.env.WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID || "",
@@ -177,22 +177,44 @@ async function recoverAnnouncementGroupAfterEvoFailure(
   return discovered;
 }
 
-function scorePushCommunityInstance(name: string, preferred: string): number {
+function extractEvoInstanceNumber(inst: Record<string, unknown>): string {
+  const raw =
+    inst.ownerJid ??
+    inst.owner ??
+    inst.number ??
+    inst.phone ??
+    inst.ownerNumber ??
+    (inst.profile as Record<string, unknown> | undefined)?.owner ??
+    "";
+  const text = String(raw).trim();
+  if (!text) return "";
+  if (text.includes("@")) return text.split("@")[0].replace(/\D/g, "");
+  return text.replace(/\D/g, "");
+}
+
+function scorePushCommunityInstance(name: string, preferred: string, numberDigits = ""): number {
   const lower = name.toLowerCase();
   const prefLower = preferred.toLowerCase();
-  if (!lower) return 0;
-  if (lower === prefLower) return 100;
-  if (PUSH_COMMUNITY_PHONE_HINT && lower.includes(PUSH_COMMUNITY_PHONE_HINT.toLowerCase())) return 92;
+  const hint = PUSH_COMMUNITY_PHONE_HINT.replace(/\D/g, "");
+  if (!lower && !numberDigits) return 0;
+  if (lower && lower === prefLower) return 100;
+  if (hint && numberDigits.includes(hint)) return 98;
+  if (hint && lower.includes(hint)) return 92;
   if (lower.includes("drax sistemas") && /\d{8,}/.test(lower)) return 90;
   if (prefLower && lower.includes(prefLower)) return 88;
   if (lower.includes("drax sistemas")) return 82;
   if (lower.includes("drax")) return 72;
+  if (lower === "drax-oficial" && hint && numberDigits.endsWith(hint)) return 97;
   if (lower === "walkup") return 62;
   return 0;
 }
 
-async function fetchEvoInstanceNames(): Promise<string[]> {
-  const names: string[] = [...resolvePushCommunityEvoInstanceFallbacks()];
+async function fetchEvoInstanceCatalog(): Promise<Array<{ name: string; number: string }>> {
+  const catalog = new Map<string, { name: string; number: string }>();
+  for (const name of resolvePushCommunityEvoInstanceFallbacks()) {
+    const trimmed = String(name || "").trim();
+    if (trimmed) catalog.set(trimmed.toLowerCase(), { name: trimmed, number: "" });
+  }
   if (EVO_API_BASE && EVO_API_KEY) {
     const result = await evoHttpRequest(EVO_INSTANCES_URL, "GET", {
       apiKey: EVO_API_KEY,
@@ -200,15 +222,27 @@ async function fetchEvoInstanceNames(): Promise<string[]> {
       timeoutMs: 20000,
     });
     if (result.ok) {
-      names.push(
-        ...parseEvoInstancesList(result.json)
-          .map((row) => resolveEvoInstanceKey(row))
-          .filter(Boolean),
-      );
+      for (const row of parseEvoInstancesList(result.json)) {
+        const name = resolveEvoInstanceKey(row);
+        if (!name) continue;
+        catalog.set(name.toLowerCase(), {
+          name,
+          number: extractEvoInstanceNumber(row),
+        });
+      }
     }
   }
-  names.push(...loadEvoInstancesFromCache());
-  return uniqueInstanceNames(names);
+  for (const name of loadEvoInstancesFromCache()) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed || catalog.has(trimmed.toLowerCase())) continue;
+    catalog.set(trimmed.toLowerCase(), { name: trimmed, number: "" });
+  }
+  return Array.from(catalog.values());
+}
+
+async function fetchEvoInstanceNames(): Promise<string[]> {
+  const catalog = await fetchEvoInstanceCatalog();
+  return uniqueInstanceNames(catalog.map((row) => row.name));
 }
 
 async function probeAnnouncementGroupForInstance(
@@ -229,9 +263,12 @@ async function probeAnnouncementGroupForInstance(
 async function discoverPushCommunityInstanceWithGroups(
   preferred: string,
 ): Promise<{ instanceName: string; jid: string } | null> {
-  const names = await fetchEvoInstanceNames();
-  const ranked = names
-    .map((name) => ({ name, score: scorePushCommunityInstance(name, preferred) }))
+  const catalog = await fetchEvoInstanceCatalog();
+  const ranked = catalog
+    .map((row) => ({
+      name: row.name,
+      score: scorePushCommunityInstance(row.name, preferred, row.number),
+    }))
     .sort((a, b) => b.score - a.score);
   const tryOrder = uniqueInstanceNames([
     ...ranked.filter((row) => row.score > 0).map((row) => row.name),
@@ -246,24 +283,25 @@ async function discoverPushCommunityInstanceWithGroups(
 
 async function resolvePushCommunityEvoInstance(configured: string): Promise<string> {
   const preferred = String(configured || resolveDefaultPushCommunityEvoInstance()).trim();
-  const names = await fetchEvoInstanceNames();
+  const catalog = await fetchEvoInstanceCatalog();
+  const names = catalog.map((row) => row.name);
 
   const exact = names.find((name) => name.toLowerCase() === preferred.toLowerCase());
   if (exact) return exact;
 
   if (!names.length) {
     throw new Error(
-      `Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: Drax Sistemas 5181076973).`,
+      `Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: Drax Sistemas 5181077770).`,
     );
   }
 
   let best = preferred;
   let bestScore = 0;
-  for (const name of names) {
-    const score = scorePushCommunityInstance(name, preferred);
+  for (const row of catalog) {
+    const score = scorePushCommunityInstance(row.name, preferred, row.number);
     if (score > bestScore) {
       bestScore = score;
-      best = name;
+      best = row.name;
     }
   }
 
@@ -274,12 +312,19 @@ async function resolvePushCommunityEvoInstance(configured: string): Promise<stri
   }
 
   if (best !== preferred) {
-    const config = pushRepository.readConfig();
-    pushRepository.writeConfig({
-      ...config,
-      communityEvoInstance: best,
-      communityAnnouncementGroupJid: "",
-    });
+    const hint = PUSH_COMMUNITY_PHONE_HINT.replace(/\D/g, "");
+    const preferredDigits = preferred.replace(/\D/g, "");
+    const keepPreferredInConfig =
+      Boolean(hint) &&
+      (preferredDigits.includes(hint) || preferred.toLowerCase().includes(hint));
+    if (!keepPreferredInConfig) {
+      const config = pushRepository.readConfig();
+      pushRepository.writeConfig({
+        ...config,
+        communityEvoInstance: best,
+        communityAnnouncementGroupJid: "",
+      });
+    }
     console.info(`[push] instância comunidade ajustada automaticamente: "${preferred}" → "${best}"`);
   }
 
