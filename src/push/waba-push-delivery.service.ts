@@ -21,6 +21,22 @@ const systemUserRepository = new WabaSystemUserRepository();
 
 const DEDUPE_WINDOW_MS = 45_000;
 
+let pushSendChain: Promise<unknown> = Promise.resolve();
+
+function runPushSendLocked<T>(fn: () => Promise<T>): Promise<T> {
+  const next = pushSendChain.then(fn, fn);
+  pushSendChain = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
+export type SendPushMessageResult = {
+  message: WabaPushMessage;
+  deduplicated: boolean;
+};
+
 function normalizeEmail(value: string): string {
   return String(value || "").trim().toLowerCase();
 }
@@ -52,13 +68,14 @@ function resolveEmailRecipients(
   if (!audiences.includes("email")) return [];
 
   const emails = new Set<string>();
-  const broadcastEmailOnly =
-    !audiences.includes("subscribers") && !audiences.includes("users");
+  const wantsSubscribers = audiences.includes("subscribers");
+  const wantsUsers = audiences.includes("users");
+  const broadcastEmailOnly = !wantsSubscribers && !wantsUsers;
 
-  if (audiences.includes("subscribers") || broadcastEmailOnly) {
+  if (wantsSubscribers || broadcastEmailOnly) {
     for (const email of resolveSubscriberRecipients()) emails.add(email);
   }
-  if (audiences.includes("users") || broadcastEmailOnly) {
+  if (wantsUsers || broadcastEmailOnly) {
     for (const email of resolveStaffRecipients(resolveDefaultUserRoles(userRoles))) {
       emails.add(email);
     }
@@ -113,11 +130,13 @@ async function deliverEmails(
     imageUrl,
   });
   for (const toEmail of recipients) {
+    const normalized = normalizeEmail(toEmail);
+    if (!normalized.includes("@")) continue;
     try {
-      await wabaMailService.send({ to: toEmail, subject: template.subject, html: template.html });
+      await wabaMailService.send({ to: normalized, subject: template.subject, html: template.html });
       sent += 1;
     } catch (error) {
-      console.error(`[push] falha e-mail para ${toEmail}:`, error);
+      console.error(`[push] falha e-mail para ${normalized}:`, error);
       failed += 1;
     }
   }
@@ -132,7 +151,19 @@ export async function sendPushMessage(input: {
   userRoles: WabaPushUserRole[];
   createdByEmail: string;
   image?: WabaPushImageAttachment | null;
-}): Promise<WabaPushMessage> {
+}): Promise<SendPushMessageResult> {
+  return runPushSendLocked(async () => sendPushMessageInner(input));
+}
+
+async function sendPushMessageInner(input: {
+  title: string;
+  originalText: string;
+  reviewedText: string;
+  audiences: WabaPushAudience[];
+  userRoles: WabaPushUserRole[];
+  createdByEmail: string;
+  image?: WabaPushImageAttachment | null;
+}): Promise<SendPushMessageResult> {
   const audiences = Array.from(
     new Set((input.audiences || []).filter((value): value is WabaPushAudience => !!value)),
   );
@@ -171,8 +202,27 @@ export async function sendPushMessage(input: {
     image,
   });
   if (duplicate) {
-    return duplicate;
+    return { message: duplicate, deduplicated: true };
   }
+
+  const now = new Date().toISOString();
+  const messageId = pushRepository.createId();
+  const pendingMessage: WabaPushMessage = {
+    id: messageId,
+    title: pushTitle,
+    originalText: String(input.originalText || "").trim(),
+    reviewedText,
+    image,
+    audiences,
+    userRoles: input.userRoles || [],
+    status: "partial",
+    createdByEmail: normalizeEmail(input.createdByEmail),
+    createdAt: now,
+    sentAt: now,
+    deliveryResults: {},
+    dismissedBy: [],
+  };
+  pushRepository.save(pendingMessage);
 
   const deliveryResults: WabaPushDeliveryResults = {};
   let hasFailure = false;
@@ -203,23 +253,13 @@ export async function sendPushMessage(input: {
     if (email.failed > 0) hasFailure = true;
   }
 
-  const now = new Date().toISOString();
   const message: WabaPushMessage = {
-    id: pushRepository.createId(),
-    title: pushTitle,
-    originalText: String(input.originalText || "").trim(),
-    reviewedText,
-    image,
-    audiences,
-    userRoles: input.userRoles || [],
+    ...pendingMessage,
     status: hasFailure ? "partial" : "sent",
-    createdByEmail: normalizeEmail(input.createdByEmail),
-    createdAt: now,
     sentAt: now,
     deliveryResults,
-    dismissedBy: [],
   };
-  return pushRepository.save(message);
+  return { message: pushRepository.save(message), deduplicated: false };
 }
 
 export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[] {

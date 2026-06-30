@@ -530,7 +530,7 @@ const registerWabaAdminRoutes = (app) => {
             const audiences = Array.isArray(body.audiences) ? body.audiences : [];
             const userRoles = Array.isArray(body.userRoles) ? body.userRoles : [];
             const imageRaw = body.image && typeof body.image === "object" ? body.image : null;
-            const message = await adminPushService.publishMessage({
+            const result = await adminPushService.publishMessage({
                 title: String(body.title || "").trim(),
                 originalText: String(body.originalText || "").trim(),
                 reviewedText: String(body.reviewedText || "").trim(),
@@ -546,7 +546,10 @@ const registerWabaAdminRoutes = (app) => {
                     }
                     : null,
             });
-            return res.status(200).json({ message, deduplicated: false });
+            return res.status(200).json({
+                message: result.message,
+                deduplicated: result.deduplicated,
+            });
         }
         catch (error) {
             return res.status(400).json({

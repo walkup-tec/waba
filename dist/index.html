@@ -24943,6 +24943,13 @@
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
+          if (payload.deduplicated) {
+            const text = "Este push já foi enviado há instantes (duplicata ignorada).";
+            setAdminPushSendFeedback(text, "warning");
+            showToast(text, "warning");
+            await loadAdminPushHistory();
+            return;
+          }
           const outcome = formatAdminPushSendOutcome(payload.message || {});
           setAdminPushSendFeedback(outcome.text, outcome.type);
           showToast(outcome.text, outcome.toastType);

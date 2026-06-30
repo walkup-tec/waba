@@ -15,6 +15,12 @@ const pushRepository = new waba_push_repository_1.WabaPushRepository();
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
 const systemUserRepository = new waba_system_user_repository_1.WabaSystemUserRepository();
 const DEDUPE_WINDOW_MS = 45000;
+let pushSendChain = Promise.resolve();
+function runPushSendLocked(fn) {
+    const next = pushSendChain.then(fn, fn);
+    pushSendChain = next.then(() => undefined, () => undefined);
+    return next;
+}
 function normalizeEmail(value) {
     return String(value || "").trim().toLowerCase();
 }
@@ -39,12 +45,14 @@ function resolveEmailRecipients(audiences, userRoles) {
     if (!audiences.includes("email"))
         return [];
     const emails = new Set();
-    const broadcastEmailOnly = !audiences.includes("subscribers") && !audiences.includes("users");
-    if (audiences.includes("subscribers") || broadcastEmailOnly) {
+    const wantsSubscribers = audiences.includes("subscribers");
+    const wantsUsers = audiences.includes("users");
+    const broadcastEmailOnly = !wantsSubscribers && !wantsUsers;
+    if (wantsSubscribers || broadcastEmailOnly) {
         for (const email of resolveSubscriberRecipients())
             emails.add(email);
     }
-    if (audiences.includes("users") || broadcastEmailOnly) {
+    if (wantsUsers || broadcastEmailOnly) {
         for (const email of resolveStaffRecipients(resolveDefaultUserRoles(userRoles))) {
             emails.add(email);
         }
@@ -90,18 +98,24 @@ async function deliverEmails(title, text, recipients, imageUrl) {
         imageUrl,
     });
     for (const toEmail of recipients) {
+        const normalized = normalizeEmail(toEmail);
+        if (!normalized.includes("@"))
+            continue;
         try {
-            await waba_mail_service_1.wabaMailService.send({ to: toEmail, subject: template.subject, html: template.html });
+            await waba_mail_service_1.wabaMailService.send({ to: normalized, subject: template.subject, html: template.html });
             sent += 1;
         }
         catch (error) {
-            console.error(`[push] falha e-mail para ${toEmail}:`, error);
+            console.error(`[push] falha e-mail para ${normalized}:`, error);
             failed += 1;
         }
     }
     return { sent, skipped, failed };
 }
 async function sendPushMessage(input) {
+    return runPushSendLocked(async () => sendPushMessageInner(input));
+}
+async function sendPushMessageInner(input) {
     const audiences = Array.from(new Set((input.audiences || []).filter((value) => !!value)));
     if (!audiences.length) {
         throw new Error("Selecione ao menos um destino para o push.");
@@ -130,8 +144,26 @@ async function sendPushMessage(input) {
         image,
     });
     if (duplicate) {
-        return duplicate;
+        return { message: duplicate, deduplicated: true };
     }
+    const now = new Date().toISOString();
+    const messageId = pushRepository.createId();
+    const pendingMessage = {
+        id: messageId,
+        title: pushTitle,
+        originalText: String(input.originalText || "").trim(),
+        reviewedText,
+        image,
+        audiences,
+        userRoles: input.userRoles || [],
+        status: "partial",
+        createdByEmail: normalizeEmail(input.createdByEmail),
+        createdAt: now,
+        sentAt: now,
+        deliveryResults: {},
+        dismissedBy: [],
+    };
+    pushRepository.save(pendingMessage);
     const deliveryResults = {};
     let hasFailure = false;
     if (audiences.includes("subscribers")) {
@@ -161,23 +193,13 @@ async function sendPushMessage(input) {
         if (email.failed > 0)
             hasFailure = true;
     }
-    const now = new Date().toISOString();
     const message = {
-        id: pushRepository.createId(),
-        title: pushTitle,
-        originalText: String(input.originalText || "").trim(),
-        reviewedText,
-        image,
-        audiences,
-        userRoles: input.userRoles || [],
+        ...pendingMessage,
         status: hasFailure ? "partial" : "sent",
-        createdByEmail: normalizeEmail(input.createdByEmail),
-        createdAt: now,
         sentAt: now,
         deliveryResults,
-        dismissedBy: [],
     };
-    return pushRepository.save(message);
+    return { message: pushRepository.save(message), deduplicated: false };
 }
 function listPushAlertsForAuth(auth) {
     const email = normalizeEmail(auth.email);

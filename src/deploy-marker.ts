@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-29-instancias-mensagens-aquecedor";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-29-push-comunidade-500-email-dedupe";

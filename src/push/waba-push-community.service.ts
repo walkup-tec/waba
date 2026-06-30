@@ -121,6 +121,62 @@ function isEvoInstanceMissingError(result: { status: number; body?: string; json
   return text.includes("does not exist") || text.includes("not found") || text.includes("instance");
 }
 
+function describeEvoError(result: { status: number; body?: string; json?: unknown | null; error?: string }): string {
+  return `${String(result.body || result.error || "")} ${JSON.stringify(result.json ?? "")}`.toLowerCase();
+}
+
+/** Evolution instável (404 instância ou 500 Prisma/integrationSession) — tentar outra instância ou probe. */
+function isEvoGroupListRecoverableError(result: {
+  status: number;
+  body?: string;
+  json?: unknown | null;
+  error?: string;
+}): boolean {
+  if (isEvoInstanceMissingError(result)) return true;
+  if (result.status >= 500) return true;
+  const text = describeEvoError(result);
+  return (
+    text.includes("integrationsession") ||
+    text.includes("prismaclient") ||
+    text.includes("internal server error")
+  );
+}
+
+async function recoverAnnouncementGroupAfterEvoFailure(
+  instanceName: string,
+  config: WabaPushConfig,
+): Promise<{ jid: string; instanceName: string } | null> {
+  const preferred = String(instanceName || "").trim();
+  if (config.communityEvoInstance.toLowerCase() === preferred.toLowerCase()) {
+    pushRepository.writeConfig({
+      ...config,
+      communityAnnouncementGroupJid: "",
+    });
+  }
+
+  const resolved = await resolvePushCommunityEvoInstance(preferred).catch(() => "");
+  if (resolved && resolved.toLowerCase() !== preferred.toLowerCase()) {
+    try {
+      return await fetchAnnouncementGroupJid(resolved, false);
+    } catch {
+      /* continua probe */
+    }
+  }
+
+  const discovered = await discoverPushCommunityInstanceWithGroups(preferred);
+  if (!discovered) return null;
+
+  pushRepository.writeConfig({
+    ...pushRepository.readConfig(),
+    communityEvoInstance: discovered.instanceName,
+    communityAnnouncementGroupJid: discovered.jid,
+  });
+  console.info(
+    `[push] comunidade recuperada após falha Evolution: instância "${discovered.instanceName}", jid ${discovered.jid}`,
+  );
+  return discovered;
+}
+
 function scorePushCommunityInstance(name: string, preferred: string): number {
   const lower = name.toLowerCase();
   const prefLower = preferred.toLowerCase();
@@ -250,26 +306,12 @@ async function fetchAnnouncementGroupJid(
   const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
   const result = await evoHttpRequest(url, "GET", { apiKey: EVO_API_KEY, timeoutMs: 25000, retries: 1 });
   if (!result.ok) {
-    if (allowInstanceResolve && isEvoInstanceMissingError(result)) {
-      const resolved = await resolvePushCommunityEvoInstance(instanceName).catch(() => "");
-      if (resolved && resolved.toLowerCase() !== instanceName.toLowerCase()) {
-        return fetchAnnouncementGroupJid(resolved, false);
-      }
-      const discovered = await discoverPushCommunityInstanceWithGroups(instanceName);
-      if (discovered) {
-        pushRepository.writeConfig({
-          ...config,
-          communityEvoInstance: discovered.instanceName,
-          communityAnnouncementGroupJid: discovered.jid,
-        });
-        console.info(
-          `[push] comunidade descoberta via probe: instância "${discovered.instanceName}", jid ${discovered.jid}`,
-        );
-        return discovered;
-      }
+    if (allowInstanceResolve && isEvoGroupListRecoverableError(result)) {
+      const recovered = await recoverAnnouncementGroupAfterEvoFailure(instanceName, config);
+      if (recovered) return recovered;
     }
     throw new Error(
-      `Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}`,
+      `Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}. Configure WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel ou reconecte a instância na Evolution.`,
     );
   }
   const groups = parseGroupsPayload(result.json);

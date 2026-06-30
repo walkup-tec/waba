@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-29
 
+**WABA — Push comunidade 500 + e-mail dedupe:** fallback Evolution em erro 500/Prisma; lock + reserva antes do envio; UI deduplicated. Marker `DEPLOY-2026-06-29-push-comunidade-500-email-dedupe`. Ver `doc/LOG-2026-06-29__push-comunidade-500-email-dedupe-fix.md`.
+
 **WABA — Transferência atendimento-6019 → walkup:** número `51982006019` / Evolution `555182006019`; dono era **mozart.pmo@gmail.com**; disco produção atualizado para **walkup@walkuptec.com.br**; **restart container Easypanel** necessário (cache ownership). Fix cache mtime + `forceInstanceOwnerTransfer` local. Ver `doc/LOG-2026-06-29__transferencia-atendimento-6019-walkup.md`.
 
 **WABA — Push instância 5181076973 + probe:** corrige default errado 5181077770; descobre instância/grupo na Evolution. Ver `doc/LOG-2026-06-29__204500__push-comunidade-instancia-5181076973.md`.
