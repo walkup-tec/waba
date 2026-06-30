@@ -45,7 +45,7 @@ export type WabaPushConfig = {
 export function resolveDefaultPushCommunityEvoInstance(): string {
   const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE || "").trim();
   if (fromEnv) return fromEnv;
-  return "Drax Sistemas 5181077770";
+  return "drax-oficial";
 }
 
 export function resolvePushCommunityEvoInstanceFallbacks(): string[] {
@@ -54,7 +54,7 @@ export function resolvePushCommunityEvoInstanceFallbacks(): string[] {
     .map((value) => value.trim())
     .filter(Boolean);
   if (fromEnv.length) return fromEnv;
-  return ["Drax Sistemas 5181077770", "drax-oficial"];
+  return ["drax-oficial", "Drax Sistemas 5181077770", "walkup"];
 }
 
 export const LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES = new Set([

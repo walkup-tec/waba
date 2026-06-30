@@ -30,8 +30,9 @@ const EVO_SEND_MEDIA_URL_TEMPLATE =
 const PUSH_COMMUNITY_PROBE_MAX = 3;
 const PUSH_COMMUNITY_GROUP_FETCH_TIMEOUT_MS = 15000;
 const PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS = 60_000;
-/** Base64 inline só para imagens pequenas — payload grande derruba conexão com a Evolution. */
-const PUSH_COMMUNITY_MEDIA_INLINE_BASE64_MAX_CHARS = 400_000;
+/** Base64 inline — evita Evolution buscar URL (falha comum → waUploadToServer undefined). */
+const PUSH_COMMUNITY_MEDIA_INLINE_BASE64_MAX_CHARS = 1_400_000;
+const PUSH_COMMUNITY_MAX_INLINE_IMAGE_BYTES = 1_000_000;
 const PUSH_COMMUNITY_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const PUSH_COMMUNITY_SEND_MEDIA_RETRIES = 2;
 const PUSH_COMMUNITY_INSTANCE_SEND_MAX = 3;
@@ -325,49 +326,39 @@ async function resolvePushCommunityEvoInstance(configured: string): Promise<stri
   const catalog = await fetchEvoInstanceCatalog();
   const names = catalog.map((row) => row.name);
 
-  const exact = names.find((name) => name.toLowerCase() === preferred.toLowerCase());
-  if (exact) return exact;
-
   if (!names.length) {
     throw new Error(
-      `Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: Drax Sistemas 5181077770).`,
+      `Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: drax-oficial).`,
     );
   }
 
-  let best = preferred;
-  let bestScore = 0;
-  for (const row of catalog) {
-    const score = scorePushCommunityInstance(row.name, preferred, row.number);
-    if (score > bestScore) {
-      bestScore = score;
-      best = row.name;
+  const exact = catalog.find((row) => row.name.toLowerCase() === preferred.toLowerCase());
+  const ranked = catalog
+    .map((row) => ({
+      name: row.name,
+      score: scorePushCommunityInstance(row.name, preferred, row.number) + (row.isOpen ? 20 : 0),
+      isOpen: row.isOpen,
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const bestOpen = ranked.find((row) => row.isOpen && row.score > 0);
+  if (bestOpen) {
+    if (bestOpen.name !== preferred && exact && !exact.isOpen) {
+      console.info(
+        `[push] instância preferida "${preferred}" desconectada; usando "${bestOpen.name}" (conectada).`,
+      );
     }
+    return bestOpen.name;
   }
 
-  if (bestScore <= 0) {
-    throw new Error(
-      `Instância "${preferred}" não existe na Evolution. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`,
-    );
-  }
+  if (exact) return exact.name;
 
-  if (best !== preferred) {
-    const hint = PUSH_COMMUNITY_PHONE_HINT.replace(/\D/g, "");
-    const preferredDigits = preferred.replace(/\D/g, "");
-    const keepPreferredInConfig =
-      Boolean(hint) &&
-      (preferredDigits.includes(hint) || preferred.toLowerCase().includes(hint));
-    if (!keepPreferredInConfig) {
-      const config = pushRepository.readConfig();
-      pushRepository.writeConfig({
-        ...config,
-        communityEvoInstance: best,
-        communityAnnouncementGroupJid: "",
-      });
-    }
-    console.info(`[push] instância comunidade ajustada automaticamente: "${preferred}" → "${best}"`);
-  }
+  const best = ranked.find((row) => row.score > 0);
+  if (best) return best.name;
 
-  return best;
+  throw new Error(
+    `Instância "${preferred}" não existe na Evolution. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`,
+  );
 }
 
 function resolveAnnouncementGroupJidOverride(): string {
@@ -486,6 +477,20 @@ function describeEvoMediaError(result: {
   return `${String(result.body || result.error || "")} ${JSON.stringify(result.json ?? "")}`.toLowerCase();
 }
 
+function isEvoWaUploadRecoverableError(result: {
+  status: number;
+  body?: string;
+  error?: string;
+  json?: unknown | null;
+}): boolean {
+  const text = describeEvoMediaError(result);
+  return (
+    text.includes("wauploadtoserver") ||
+    text.includes("cannot read properties of undefined") ||
+    text.includes("media upload failed")
+  );
+}
+
 function isEvoMediaUrlFetchRecoverableError(result: {
   status: number;
   body?: string;
@@ -519,12 +524,15 @@ function isEvoSendRecoverableError(result: {
 }): boolean {
   if (result.status >= 500) return true;
   if (isEvoMediaUrlFetchRecoverableError(result)) return true;
+  if (isEvoWaUploadRecoverableError(result)) return true;
   const text = describeEvoMediaError(result);
   return text.includes("connection closed") || text.includes("integrationsession");
 }
 
 function rankPushCommunityInstances(preferred: string, catalog: EvoCatalogRow[]): string[] {
-  const ranked = catalog
+  const openCatalog = catalog.filter((row) => row.isOpen);
+  const pool = openCatalog.length ? openCatalog : catalog;
+  const ranked = pool
     .map((row) => ({
       name: row.name,
       score: scorePushCommunityInstance(row.name, preferred, row.number) + (row.isOpen ? 12 : 0),
@@ -543,17 +551,18 @@ function buildEvoMediaVariants(
 ): string[] {
   const raw = String(mediaData.base64 || "").replace(/\s+/g, "");
   const mime = String(mediaData.mimeType || "image/jpeg").trim() || "image/jpeg";
-  const variants = [raw, `data:${mime};base64,${raw}`];
-  return Array.from(new Set(variants.filter(Boolean)));
+  if (!raw) return [];
+  return [`data:${mime};base64,${raw}`];
 }
 
 function canSendPushCommunityMediaAsBase64(
   image: WabaPushImageAttachment,
   mediaData: { base64: string; mimeType: string },
 ): boolean {
-  const sizeBytes = Number(image.sizeBytes) || 0;
+  const sizeBytes =
+    Number(image.sizeBytes) || Math.max(0, Math.ceil(mediaData.base64.length * 0.75));
+  if (sizeBytes > PUSH_COMMUNITY_MAX_INLINE_IMAGE_BYTES) return false;
   if (sizeBytes > PUSH_COMMUNITY_MAX_IMAGE_BYTES) return false;
-  if (sizeBytes > 0 && sizeBytes <= 300_000) return true;
   return mediaData.base64.length <= PUSH_COMMUNITY_MEDIA_INLINE_BASE64_MAX_CHARS;
 }
 
@@ -561,10 +570,7 @@ function buildEvoMediaBodyVariants(
   baseBody: Record<string, unknown>,
   media: string,
 ): Array<Record<string, unknown>> {
-  const withCaption = { ...baseBody, media };
-  if (!baseBody.caption) return [withCaption];
-  const { caption: _caption, ...rest } = baseBody;
-  return [withCaption, { ...rest, media }];
+  return [{ ...baseBody, media }];
 }
 
 async function postPushCommunityMedia(
@@ -590,29 +596,37 @@ async function sendPushCommunityMediaToEvo(input: {
   const baseBody: Record<string, unknown> = {
     number: groupJid,
     mediatype: "image",
-    mimetype: mediaData.mimeType,
-    caption: message || undefined,
+    mimetype: mediaData.mimeType || "image/jpeg",
+    caption: message ?? "",
     fileName: image.fileName || "push-image.jpg",
   };
   const canSendBase64 = canSendPushCommunityMediaAsBase64(image, mediaData);
   let lastResult: Awaited<ReturnType<typeof evoHttpRequest>> | null = null;
 
-  for (const mediaUrl of listPushMediaUrlsForEvo(image.id)) {
-    for (const body of buildEvoMediaBodyVariants(baseBody, mediaUrl)) {
-      const result = await postPushCommunityMedia(sendUrl, body);
+  if (canSendBase64) {
+    for (const media of buildEvoMediaVariants(mediaData)) {
+      const result = await postPushCommunityMedia(sendUrl, buildEvoMediaBodyVariants(baseBody, media)[0]);
       lastResult = result;
       if (result.ok) return result;
+      if (!isEvoSendRecoverableError(result)) break;
     }
   }
 
-  if (canSendBase64) {
-    for (const media of buildEvoMediaVariants(mediaData)) {
-      for (const body of buildEvoMediaBodyVariants(baseBody, media)) {
-        const result = await postPushCommunityMedia(sendUrl, body);
-        lastResult = result;
-        if (result.ok) return result;
-      }
+  const mediaUrls = listPushMediaUrlsForEvo(image.id);
+  if (mediaUrls.length) {
+    console.info(`[push] sendMedia fallback URL(s): ${mediaUrls.join(" | ")}`);
+  }
+  for (const mediaUrl of mediaUrls) {
+    const result = await postPushCommunityMedia(
+      sendUrl,
+      buildEvoMediaBodyVariants(baseBody, mediaUrl)[0],
+    );
+    lastResult = result;
+    if (result.ok) return result;
+    if (isEvoWaUploadRecoverableError(result) && canSendBase64) {
+      continue;
     }
+    if (!isEvoSendRecoverableError(result)) break;
   }
 
   return (
@@ -739,7 +753,6 @@ export async function sendPushToWhatsAppCommunity(
     }
 
     const catalog = await fetchEvoInstanceCatalog();
-    const instanceCandidates = rankPushCommunityInstances(instanceName, catalog);
     let textSent = false;
     let textInstance = instanceName;
 
@@ -758,6 +771,11 @@ export async function sendPushToWhatsAppCommunity(
         );
       }
     }
+
+    const instanceCandidates = uniqueInstanceNames([
+      textInstance,
+      ...rankPushCommunityInstances(instanceName, catalog),
+    ]).slice(0, PUSH_COMMUNITY_INSTANCE_SEND_MAX);
 
     let lastError = "";
     let lastStatus = 0;
@@ -795,12 +813,11 @@ export async function sendPushToWhatsAppCommunity(
       };
     }
 
-    const hint = isEvoMediaUrlFetchRecoverableError({
-      status: lastStatus,
-      body: lastError,
-    })
-      ? " Verifique conexão da instância na Evolution (Connection Closed) ou use imagem JPEG até ~300 KB."
-      : "";
+    const hint =
+      isEvoWaUploadRecoverableError({ status: lastStatus, body: lastError }) ||
+      isEvoMediaUrlFetchRecoverableError({ status: lastStatus, body: lastError })
+        ? " Reconecte a instância na Evolution ou use imagem JPEG/PNG até ~1 MB."
+        : "";
     return {
       ok: false,
       detail: `Falha ao publicar na comunidade (HTTP ${lastStatus}): ${lastError}.${hint}`,

@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — Push comunidade waUploadToServer:** base64 primeiro; instância Evolution conectada; drax-oficial + walkup fallback. Marker `DEPLOY-2026-06-30-push-comunidade-media-base64-open-instance`. Ver `doc/LOG-2026-06-30__push-comunidade-waupload-base64-open-instance.md`.
+
 **WABA — Push connection recovery:** POST 202 + entrega setImmediate; poll resiliente; recupera status do histórico; sem mensagem de falha de conexão. Marker `DEPLOY-2026-06-30-push-connection-recovery-fix`. Ver `doc/LOG-2026-06-30__push-connection-recovery-fix.md`.
 
 **WABA — Push async + dedupe + comunidade texto primeiro:** POST 202 + poll; dedupe 90s com título; texto antes da imagem na comunidade; remove JID/contagem Evolution da UI. Ver `doc/LOG-2026-06-30__push-async-dedupe-comunidade-texto-primeiro.md`.

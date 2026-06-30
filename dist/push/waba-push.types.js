@@ -8,7 +8,7 @@ function resolveDefaultPushCommunityEvoInstance() {
     const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE || "").trim();
     if (fromEnv)
         return fromEnv;
-    return "Drax Sistemas 5181077770";
+    return "drax-oficial";
 }
 function resolvePushCommunityEvoInstanceFallbacks() {
     const fromEnv = String(process.env.WABA_PUSH_COMMUNITY_EVO_INSTANCE_FALLBACKS || "")
@@ -17,7 +17,7 @@ function resolvePushCommunityEvoInstanceFallbacks() {
         .filter(Boolean);
     if (fromEnv.length)
         return fromEnv;
-    return ["Drax Sistemas 5181077770", "drax-oficial"];
+    return ["drax-oficial", "Drax Sistemas 5181077770", "walkup"];
 }
 exports.LEGACY_WRONG_PUSH_COMMUNITY_INSTANCES = new Set([
     "walkup",
