@@ -38662,6 +38662,52 @@
         if (waitingText && text) waitingText.textContent = text;
       }
 
+      function formatRegisterInboundPhone(raw) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (!digits) return "";
+        if (digits.length >= 12 && digits.startsWith("55")) {
+          const ddd = digits.slice(2, 4);
+          const rest = digits.slice(4);
+          if (rest.length >= 8) {
+            return `+55 ${ddd} ${rest.slice(0, rest.length - 4)}-${rest.slice(-4)}`;
+          }
+          return `+55 ${ddd} ${rest}`;
+        }
+        if (digits.length >= 10) return `+${digits}`;
+        return digits;
+      }
+
+      function resolveRegisterInboundDisplayNumber(instanceName, status) {
+        const fromStatus = String(status?.instanceNumber || "").trim();
+        if (fromStatus) return formatRegisterInboundPhone(fromStatus);
+        const formNumber = String(
+          document.getElementById("register-number-input")?.value || ""
+        ).trim();
+        if (formNumber) return formatRegisterInboundPhone(formNumber);
+        const needle = String(instanceName || "").trim().toLowerCase();
+        const items = Array.isArray(instancesData?.items) ? instancesData.items : [];
+        const match = items.find((item) => {
+          const name = String(item?.name || item?.instanceName || "")
+            .trim()
+            .toLowerCase();
+          return name && name === needle;
+        });
+        if (match) {
+          const candidate =
+            match.number ?? match.phone ?? match.owner ?? match.ownerNumber ?? "";
+          const formatted = formatRegisterInboundPhone(candidate);
+          if (formatted) return formatted;
+        }
+        return "";
+      }
+
+      function setRegisterInboundNumberDisplay(instanceName, status) {
+        const numberEl = document.getElementById("register-inbound-number");
+        if (!numberEl) return;
+        const display = resolveRegisterInboundDisplayNumber(instanceName, status);
+        numberEl.textContent = display || "—";
+      }
+
       function resetRegisterInboundPanel() {
         const receiveRow = document.getElementById("register-inbound-receive-row");
         const sendRow = document.getElementById("register-inbound-send-row");
@@ -38705,11 +38751,13 @@
         if (detail && detailText) detail.textContent = detailText;
       }
 
-      function applyRegisterInboundStatus(status) {
+      function applyRegisterInboundStatus(status, instanceName) {
         if (!status) return;
-        const numberEl = document.getElementById("register-inbound-number");
         const keywordEl = document.getElementById("register-inbound-keyword");
-        if (numberEl && status.instanceNumber) numberEl.textContent = status.instanceNumber;
+        setRegisterInboundNumberDisplay(
+          instanceName || registerConnectedInstanceName || "",
+          status
+        );
         if (keywordEl && status.keyword) keywordEl.textContent = status.keyword;
 
         const receiveDone = status.receiveTest?.success !== null && status.receiveTest?.success !== undefined;
@@ -38786,8 +38834,7 @@
 
         const numberInput = document.getElementById("register-number-input");
         const formNumber = String(numberInput?.value || "").trim();
-        const numberEl = document.getElementById("register-inbound-number");
-        if (numberEl && formNumber) numberEl.textContent = formNumber;
+        setRegisterInboundNumberDisplay(instanceName, { instanceNumber: formNumber });
 
         if (registerInboundPollTimer) {
           clearInterval(registerInboundPollTimer);
@@ -38796,6 +38843,19 @@
 
         let validationId = "";
         try {
+          try {
+            const listRes = await fetchWithTimeout("/instancias?refresh=1", {}, 25000);
+            if (listRes.ok) {
+              const listPayload = await listRes.json().catch(() => null);
+              if (Array.isArray(listPayload?.items)) {
+                instancesData = listPayload;
+              }
+            }
+          } catch {
+            /* lista opcional para exibir número */
+          }
+          setRegisterInboundNumberDisplay(instanceName, { instanceNumber: formNumber });
+
           const response = await fetchWithTimeout(
             `/instancias/${encodeURIComponent(instanceName)}/validacao-inbound`,
             {
@@ -38817,7 +38877,7 @@
           }
           validationId = String(data?.validationId || "").trim();
           registerInboundValidationId = validationId;
-          applyRegisterInboundStatus(data);
+          applyRegisterInboundStatus(data, instanceName);
           if (data?.finished) {
             if (data?.restrictionSuspected) {
               setRegisterConnectStatus(
@@ -38861,7 +38921,7 @@
             );
             if (!pollRes.ok) return;
             const status = await pollRes.json().catch(() => null);
-            applyRegisterInboundStatus(status);
+            applyRegisterInboundStatus(status, instanceName);
             if (!status?.finished) return;
             clearInterval(registerInboundPollTimer);
             registerInboundPollTimer = null;

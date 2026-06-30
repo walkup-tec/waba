@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — Validação inbound número no passo 3:** exibe número integrado (Evo + hint + lista instâncias); backend aceita `open` sem ownerJid. Marker `DEPLOY-2026-06-30-validacao-inbound-numero-display`. Ver `doc/LOG-2026-06-30__validacao-inbound-numero-display-fix.md`.
+
 **WABA — Validação CONFIRMAR + deploy guard:** nudge findMessages; overlay não reload no wizard; poll 800ms. Marker `DEPLOY-2026-06-30-validacao-inbound-fast-nudge`. Ver `doc/LOG-2026-06-30__validacao-inbound-fast-nudge-reload-guard.md`.
 
 **WABA — Wizard QR/conexão/CONFIRMAR rápido:** status-conexao 1s; QR fast path. Marker `DEPLOY-2026-06-30-wizard-qr-connect-validation-fast`. Ver `doc/LOG-2026-06-30__wizard-qr-connect-validation-fast.md`.

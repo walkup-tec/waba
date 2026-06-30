@@ -129,14 +129,30 @@ function extractInstanceNumber(inst) {
         inst?.number ??
         inst?.phone ??
         inst?.ownerNumber ??
+        inst?.wid ??
         inst?.profile?.owner ??
+        inst?.profile?.number ??
         "";
     const s = String(raw).trim();
     if (!s)
         return "";
-    if (s.includes("@"))
-        return s.split("@")[0] || s;
-    return s;
+    const base = s.includes("@") ? s.split("@")[0] || s : s;
+    return normalizeWhatsAppNumber(base);
+}
+function resolveValidationInstanceNumber(evoNumber, numberHint, instanceName) {
+    const fromEvo = normalizeWhatsAppNumber(String(evoNumber || "").trim());
+    if (fromEvo)
+        return fromEvo;
+    const fromHint = normalizeWhatsAppNumber(String(numberHint || "").trim());
+    if (fromHint)
+        return fromHint;
+    const tail = String(instanceName || "").match(/(\d{10,13})$/);
+    if (tail?.[1]) {
+        const derived = normalizeWhatsAppNumber(tail[1]);
+        if (derived.length >= 12)
+            return derived;
+    }
+    return "";
 }
 function resolveSendTarget(referenceJid, referenceNumber) {
     const jid = String(referenceJid || "").trim();
@@ -165,8 +181,6 @@ async function fetchConnectedInstance(instanceName) {
         if (instancia !== instanceName)
             continue;
         const numero = extractInstanceNumber(inst);
-        if (!numero)
-            return null;
         return { instancia, numero };
     }
     return null;
@@ -718,8 +732,13 @@ async function startInboundValidation(input) {
             error: `Instância "${instanceName}" não está conectada (status open) na Evolution.`,
         };
     }
+    const resolvedNumber = resolveValidationInstanceNumber(connected.numero, numberHint, instanceName);
+    connected = { instancia: connected.instancia, numero: resolvedNumber };
     const existing = getActiveValidationForInstance(connected.instancia);
     if (existing) {
+        if (!existing.instanceNumber && resolvedNumber) {
+            existing.instanceNumber = resolvedNumber;
+        }
         return { validationId: existing.validationId, status: publicStatus(existing) };
     }
     stopValidationsForInstance(connected.instancia);
