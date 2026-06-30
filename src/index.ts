@@ -6002,8 +6002,8 @@ function describeEvoQrFailure(
   qrDetail: string,
 ): string {
   const detail = String(qrDetail || createDetail || "").trim();
-  if (isDeprecatedEvoQrRouteError(qrStatus, detail)) {
-    return "Evolution não expõe /instance/qrcode — use /instance/connect. Tente «Atualizar QR» novamente.";
+  if (isIgnorableEvoQrFetchError(qrStatus, detail)) {
+    return "Evolution: use GET /instance/connect para QR. Tente «Atualizar QR» novamente.";
   }
   if (createStatus === 404 || qrStatus === 404 || /404 page not found/i.test(detail)) {
     return "Evolution API indisponível (404). Verifique EVO_API_URL e se o serviço Evolution está no ar.";
@@ -7146,12 +7146,12 @@ function tryExtractQrCode(payload: any): string | null {
   return visit(payload);
 }
 
-function isDeprecatedEvoQrRouteError(status: number, detail: string): boolean {
+function isIgnorableEvoQrFetchError(status: number, detail: string): boolean {
   const text = String(detail || "").toLowerCase();
-  return (
-    status === 404 &&
-    (text.includes("/instance/qrcode/") || text.includes("cannot get /instance/qrcode"))
-  );
+  if (status === 404 && text.includes("/instance/qrcode/")) return true;
+  if (status === 404 && text.includes("cannot get /instance/qrcode")) return true;
+  if (status === 404 && text.includes("cannot post /instance/connect")) return true;
+  return false;
 }
 
 function rememberEvoQrFetchError(
@@ -7160,28 +7160,30 @@ function rememberEvoQrFetchError(
   detail: string,
 ): { status: number; detail: string } {
   const nextDetail = String(detail || "").slice(0, 400);
-  if (isDeprecatedEvoQrRouteError(status, nextDetail)) return current;
+  if (isIgnorableEvoQrFetchError(status, nextDetail)) return current;
   if (!current.detail) return { status, detail: nextDetail };
   if (current.status === 404 && status !== 404) return { status, detail: nextDetail };
   return { status, detail: nextDetail };
 }
 
+/** Evolution API v2: QR só via GET /instance/connect/{instance} (?number= opcional). */
 function buildEvoConnectQrCandidates(
   instanceName: string,
   number: string,
-): Array<{ url: string; method: "GET" | "POST"; body?: Record<string, unknown> }> {
+): Array<{ url: string; method: "GET" }> {
   const enc = encodeURIComponent(instanceName);
   const connectBase = `${EVO_API_BASE}/instance/connect/${enc}`;
   const templateUrl = buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName);
   const bases = Array.from(new Set([connectBase, templateUrl].filter(Boolean)));
 
-  const candidates: Array<{ url: string; method: "GET" | "POST"; body?: Record<string, unknown> }> =
-    [];
+  const candidates: Array<{ url: string; method: "GET" }> = [];
   for (const base of bases) {
     candidates.push({ url: base, method: "GET" });
-    candidates.push({ url: base, method: "POST" });
     if (number) {
-      candidates.push({ url: base, method: "POST", body: { number } });
+      candidates.push({
+        url: `${base}?number=${encodeURIComponent(number)}`,
+        method: "GET",
+      });
     }
   }
   return candidates;
@@ -7383,7 +7385,7 @@ async function fetchInstanceQrCodeFromEvo(
 
   for (let round = 0; round < 2; round += 1) {
     for (const candidate of connectCandidates) {
-      const result = await callEvoAction(candidate.url, candidate.method, candidate.body, {
+      const result = await callEvoAction(candidate.url, candidate.method, undefined, {
         timeoutMs,
         retries,
       });
