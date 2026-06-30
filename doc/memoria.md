@@ -15,6 +15,12 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — Push comunidade imagem TLS:** base64 até 5 MB + data URI + URL interna opcional; Evolution não depende de HTTPS público. Marker `DEPLOY-2026-06-30-push-comunidade-imagem-tls-base64`. Ver `doc/LOG-2026-06-30__push-comunidade-imagem-tls-base64-fix.md`.
+
+**WABA — Deploy overlay watch poll:** polling 8s + baseline preservado; modal confiável com aba ociosa. Marker `DEPLOY-2026-06-30-deploy-overlay-watch-poll-fix`. Ver `doc/LOG-2026-06-30__deploy-overlay-watch-poll-fix.md`.
+
+**WABA — Push comunidade imagem 401:** `/push/public-media` liberado sem auth; base64 primeiro no sendMedia. Marker `DEPLOY-2026-06-30-push-comunidade-imagem-401-fix`. Ver `doc/LOG-2026-06-30__push-comunidade-imagem-401-fix.md`.
+
 **WABA — Push Failed to fetch:** timeout 180s + e-mail/comunidade paralelos + JID cache fast path. Ver `doc/LOG-2026-06-30__push-failed-to-fetch-timeout-fix.md`.
 
 **WABA — Push comunidade instância 7770:** default admin `Drax Sistemas 5181077770`; migra 6973 legado. Ver `doc/LOG-2026-06-29__push-comunidade-instancia-7770-correcao.md`.

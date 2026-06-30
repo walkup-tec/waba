@@ -382,6 +382,7 @@ app.get("/health", (_req, res) => {
         port: PORT,
         maintenanceMode: MAINTENANCE_MODE,
         runtimeMode: RUNTIME_MODE,
+        deployResilienceEnabled: (0, base_path_1.resolveDeployResilienceForClient)(),
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
         aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),

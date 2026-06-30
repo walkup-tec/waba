@@ -8,6 +8,7 @@ exports.updatePushCommunityConfig = updatePushCommunityConfig;
 const node_fs_1 = require("node:fs");
 const evo_http_client_1 = require("../evo-http.client");
 const data_path_1 = require("../data-path");
+const base_path_1 = require("../base-path");
 const evo_instance_key_1 = require("../instances/evo-instance-key");
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_push_media_service_1 = require("./waba-push-media.service");
@@ -23,8 +24,10 @@ const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${
 const EVO_SEND_MEDIA_URL_TEMPLATE = process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
 const PUSH_COMMUNITY_PROBE_MAX = 3;
 const PUSH_COMMUNITY_GROUP_FETCH_TIMEOUT_MS = 15000;
-const PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS = 30000;
-const PUSH_COMMUNITY_MEDIA_BASE64_MAX_BYTES = 900000;
+const PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS = 60000;
+/** Até 5 MB de arquivo (~6,8 MB em base64) — evita URL pública que a Evolution não alcança via TLS. */
+const PUSH_COMMUNITY_MEDIA_BASE64_MAX_BYTES = 7200000;
+const PUSH_COMMUNITY_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
 const pushRepository = new waba_push_repository_1.WabaPushRepository();
 function buildTemplateUrl(template, instanceName) {
@@ -359,7 +362,101 @@ function buildEvoTextBody(number, text) {
 }
 function resolvePublicMediaUrl(imageId) {
     const base = (0, waba_public_base_url_1.resolveWabaPublicBaseUrl)().replace(/\/+$/, "");
-    return `${base}/push/public-media/${encodeURIComponent(imageId)}`;
+    const prefix = base_path_1.BASE_PATH ? base_path_1.BASE_PATH.replace(/\/+$/, "") : "";
+    return `${base}${prefix}/push/public-media/${encodeURIComponent(imageId)}`;
+}
+function resolvePushMediaUrlForEvo(imageId) {
+    const internal = String(process.env.WABA_PUSH_MEDIA_INTERNAL_BASE_URL || process.env.WABA_INTERNAL_BASE_URL || "")
+        .trim()
+        .replace(/\/+$/, "");
+    const prefix = base_path_1.BASE_PATH ? base_path_1.BASE_PATH.replace(/\/+$/, "") : "";
+    const path = `${prefix}/push/public-media/${encodeURIComponent(imageId)}`;
+    if (internal)
+        return `${internal}${path}`;
+    return resolvePublicMediaUrl(imageId);
+}
+function describeEvoMediaError(result) {
+    return `${String(result.body || result.error || "")} ${JSON.stringify(result.json ?? "")}`.toLowerCase();
+}
+function isEvoMediaUrlFetchRecoverableError(result) {
+    const text = describeEvoMediaError(result);
+    return (text.includes("401") ||
+        text.includes("403") ||
+        text.includes("unauthorized") ||
+        text.includes("não autenticado") ||
+        text.includes("tls") ||
+        text.includes("socket disconnected") ||
+        text.includes("econnreset") ||
+        text.includes("etimedout") ||
+        text.includes("network") ||
+        text.includes("getaddrinfo") ||
+        text.includes("certificate") ||
+        text.includes("axioserror"));
+}
+function buildEvoMediaVariants(mediaData) {
+    const raw = String(mediaData.base64 || "").replace(/\s+/g, "");
+    const mime = String(mediaData.mimeType || "image/jpeg").trim() || "image/jpeg";
+    const variants = [raw, `data:${mime};base64,${raw}`];
+    return Array.from(new Set(variants.filter(Boolean)));
+}
+function canSendPushCommunityMediaAsBase64(image, mediaData) {
+    const sizeBytes = Number(image.sizeBytes) || 0;
+    if (sizeBytes > 0 && sizeBytes <= PUSH_COMMUNITY_MAX_IMAGE_BYTES)
+        return true;
+    return mediaData.base64.length <= PUSH_COMMUNITY_MEDIA_BASE64_MAX_BYTES;
+}
+async function postPushCommunityMedia(sendUrl, body) {
+    return (0, evo_http_client_1.evoHttpRequest)(sendUrl, "POST", {
+        apiKey: EVO_API_KEY,
+        body,
+        timeoutMs: PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS,
+        retries: 0,
+    });
+}
+async function sendPushCommunityMediaToEvo(input) {
+    const { sendUrl, groupJid, message, image, mediaData } = input;
+    const baseBody = {
+        number: groupJid,
+        mediatype: "image",
+        mimetype: mediaData.mimeType,
+        caption: message || undefined,
+        fileName: image.fileName || "push-image.jpg",
+    };
+    const canSendBase64 = canSendPushCommunityMediaAsBase64(image, mediaData);
+    let lastResult = null;
+    if (canSendBase64) {
+        for (const media of buildEvoMediaVariants(mediaData)) {
+            const result = await postPushCommunityMedia(sendUrl, { ...baseBody, media });
+            lastResult = result;
+            if (result.ok)
+                return result;
+        }
+    }
+    const mediaUrls = Array.from(new Set([resolvePushMediaUrlForEvo(image.id), resolvePublicMediaUrl(image.id)]));
+    for (const mediaUrl of mediaUrls) {
+        const result = await postPushCommunityMedia(sendUrl, { ...baseBody, media: mediaUrl });
+        lastResult = result;
+        if (result.ok)
+            return result;
+        if (canSendBase64 && isEvoMediaUrlFetchRecoverableError(result)) {
+            break;
+        }
+    }
+    if (canSendBase64 && lastResult && isEvoMediaUrlFetchRecoverableError(lastResult)) {
+        for (const media of buildEvoMediaVariants(mediaData)) {
+            const result = await postPushCommunityMedia(sendUrl, { ...baseBody, media });
+            if (result.ok)
+                return result;
+            lastResult = result;
+        }
+    }
+    return (lastResult || {
+        ok: false,
+        status: 0,
+        body: "Falha ao enviar mídia para a Evolution.",
+        json: null,
+        error: "empty_result",
+    });
 }
 /** WhatsApp: *negrito* */
 function formatWhatsAppCommunityMessage(title, body) {
@@ -426,35 +523,20 @@ async function sendPushToWhatsAppCommunity(title, text, image) {
             return { ok: false, detail: "Imagem do push não encontrada no servidor.", groupJid };
         }
         const sendUrl = buildTemplateUrl(EVO_SEND_MEDIA_URL_TEMPLATE, instanceName);
-        const publicUrl = resolvePublicMediaUrl(image.id);
-        const sendBody = {
-            number: groupJid,
-            mediatype: "image",
-            mimetype: mediaData.mimeType,
-            caption: message || undefined,
-            fileName: image.fileName || "push-image.jpg",
-            media: publicUrl,
-        };
-        let sendResult = await (0, evo_http_client_1.evoHttpRequest)(sendUrl, "POST", {
-            apiKey: EVO_API_KEY,
-            body: sendBody,
-            timeoutMs: PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS,
-            retries: 0,
+        const sendResult = await sendPushCommunityMediaToEvo({
+            sendUrl,
+            groupJid,
+            message,
+            image,
+            mediaData,
         });
-        if (!sendResult.ok &&
-            mediaData.base64.length <= PUSH_COMMUNITY_MEDIA_BASE64_MAX_BYTES) {
-            sendBody.media = mediaData.base64;
-            sendResult = await (0, evo_http_client_1.evoHttpRequest)(sendUrl, "POST", {
-                apiKey: EVO_API_KEY,
-                body: sendBody,
-                timeoutMs: PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS,
-                retries: 0,
-            });
-        }
         if (!sendResult.ok) {
+            const hint = isEvoMediaUrlFetchRecoverableError(sendResult)
+                ? " A Evolution não conseguiu baixar a URL da imagem — use imagem até 5 MB ou configure WABA_PUSH_MEDIA_INTERNAL_BASE_URL no Easypanel."
+                : "";
             return {
                 ok: false,
-                detail: `Falha ao publicar imagem na comunidade (HTTP ${sendResult.status}): ${String(sendResult.body || sendResult.error || "").slice(0, 220)}`,
+                detail: `Falha ao publicar imagem na comunidade (HTTP ${sendResult.status}): ${String(sendResult.body || sendResult.error || "").slice(0, 220)}.${hint}`,
                 groupJid,
             };
         }

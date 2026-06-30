@@ -128,6 +128,7 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
     p === "/logo.png" ||
     p === "/drax-logo.png" ||
     p.startsWith("/media/") ||
+    p.startsWith("/push/public-media/") ||
     p === "/instancias/avatar"
   ) {
     return true;

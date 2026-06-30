@@ -13,6 +13,7 @@
     <script>
       (function () {
         var POLL_MS = 2000;
+        var DEPLOY_WATCH_MS = 8000;
         var STABLE_PROBES_REQUIRED = 3;
         var STABLE_COMPLETE_MS = 500;
         var FALSE_ALARM_MS = 45000;
@@ -23,6 +24,7 @@
         var sawDeploySignal = false;
         var baselineDeployMarker = "";
         var baselineServerBootId = "";
+        var serverDeployResilienceFromHealth = null;
 
         function isProductionDeployHost() {
           var host = String(window.location.hostname || "").toLowerCase();
@@ -40,7 +42,37 @@
         }
 
         function isDeployResilienceEnabled() {
+          if (serverDeployResilienceFromHealth === false) return false;
           return isServerDeployResilienceEnabled() && isProductionDeployHost();
+        }
+
+        function applyDeployResilienceFromHealth(data) {
+          if (!data || typeof data !== "object") return;
+          if (typeof data.deployResilienceEnabled === "boolean") {
+            serverDeployResilienceFromHealth = data.deployResilienceEnabled;
+            if (!data.deployResilienceEnabled) purgeDeployServiceWorkerCache();
+          }
+        }
+
+        function shouldTriggerDeployRecoveryFromHttp(status, payload) {
+          if (status === 502 || status === 504) return true;
+          if (status !== 503) return false;
+          if (payload && payload.shuttingDown === true) return true;
+          if (payload && payload.maintenanceMode === true) return true;
+          return false;
+        }
+
+        async function shouldTriggerDeployRecoveryFromResponse(response) {
+          if (!response) return false;
+          var status = response.status;
+          if (status === 502 || status === 504) return true;
+          if (status !== 503) return false;
+          try {
+            var payload = await response.clone().json();
+            return shouldTriggerDeployRecoveryFromHttp(status, payload);
+          } catch (_) {
+            return true;
+          }
         }
 
         function purgeDeployServiceWorkerCache() {
@@ -162,15 +194,37 @@
           } catch (_) {}
         }
 
-        function isDeployVersionReady(probe) {
+        function hasDeployVersionDrift(probe) {
           if (!probe || !probe.stable) return false;
-          if (!sawDeploySignal) return false;
           var nextMarker = String(probe.deployMarker || "");
           var nextBootId = String(probe.serverBootId || "");
           if (baselineDeployMarker && nextMarker && nextMarker !== baselineDeployMarker) return true;
           if (baselineServerBootId && nextBootId && nextBootId !== baselineServerBootId) return true;
-          if (!baselineServerBootId && nextBootId) return true;
           return false;
+        }
+
+        function rememberDeployBaseline(probe) {
+          if (!probe) return;
+          if (probe.deployMarker) baselineDeployMarker = String(probe.deployMarker);
+          if (probe.serverBootId) baselineServerBootId = String(probe.serverBootId);
+        }
+
+        async function captureDeployBaselineIfEmpty() {
+          if (baselineDeployMarker || baselineServerBootId) return;
+          await captureDeployBaseline();
+        }
+
+        function isDeployVersionReady(probe) {
+          if (!probe || !probe.stable || !sawDeploySignal) return false;
+          if (hasDeployVersionDrift(probe)) return true;
+          if (!baselineServerBootId && probe.serverBootId) return true;
+          return false;
+        }
+
+        function shouldCompleteDeployAfterStableProbe(probe) {
+          if (!probe || !probe.stable || !sawDeploySignal) return false;
+          if (isDeployVersionReady(probe)) return true;
+          return pollStartedAt > 0;
         }
 
         function completeDeployRecovery() {
@@ -217,14 +271,27 @@
               cache: "no-store",
               credentials: "same-origin",
             });
-            if (isGatewayStatus(response.status)) {
-              return { stable: false, deploySignal: true, reason: "gateway" };
-            }
             var data = null;
             try {
               data = await response.json();
             } catch (_) {
               data = null;
+            }
+            applyDeployResilienceFromHealth(data);
+            if (shouldTriggerDeployRecoveryFromHttp(response.status, data)) {
+              return {
+                stable: false,
+                deploySignal: true,
+                reason:
+                  data && data.shuttingDown
+                    ? "shutdown"
+                    : data && data.maintenanceMode
+                      ? "maintenance"
+                      : "gateway",
+              };
+            }
+            if (isGatewayStatus(response.status)) {
+              return { stable: false, deploySignal: false, reason: "gateway_without_deploy_signal" };
             }
             if (data && data.shuttingDown) {
               return { stable: false, deploySignal: true, reason: "shutdown" };
@@ -276,7 +343,7 @@
           showDeployOverlay();
           var probe = await probeHealthDetailed();
           if (probe.deploySignal) sawDeploySignal = true;
-          if (probe.stable && isDeployVersionReady(probe)) {
+          if (probe.stable && shouldCompleteDeployAfterStableProbe(probe)) {
             stableProbeStreak += 1;
             setOverlayPhase("stabilizing");
             if (stableProbeStreak >= STABLE_PROBES_REQUIRED) {
@@ -286,14 +353,6 @@
           } else if (probe.stable) {
             stableProbeStreak = 0;
             setOverlayPhase("stabilizing");
-            if (
-              sawDeploySignal &&
-              pollStartedAt &&
-              Date.now() - pollStartedAt >= FALSE_ALARM_MS
-            ) {
-              dismissDeployRecoveryWithoutReload();
-              return;
-            }
           } else {
             stableProbeStreak = 0;
             setOverlayPhase(probe.deploySignal ? "deploying" : "waiting");
@@ -314,8 +373,34 @@
           if (!isDeployResilienceEnabled()) return;
           sawDeploySignal = true;
           deployRecoveryActive = true;
-          void captureDeployBaseline().finally(function () {
+          void captureDeployBaselineIfEmpty().finally(function () {
             void pollUntilReady(!!force);
+          });
+        }
+
+        async function watchDeployInBackground() {
+          if (!isDeployResilienceEnabled() || deployRecoveryActive) return;
+          var probe = await probeHealthDetailed();
+          if (probe.deploySignal) {
+            startDeployRecovery(false);
+            return;
+          }
+          if (probe.stable && hasDeployVersionDrift(probe)) {
+            startDeployRecovery(true);
+            return;
+          }
+          rememberDeployBaseline(probe);
+        }
+
+        function scheduleDeployBackgroundWatch() {
+          if (!isDeployResilienceEnabled()) return;
+          window.setInterval(function () {
+            void watchDeployInBackground();
+          }, DEPLOY_WATCH_MS);
+          document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "visible") {
+              void watchDeployInBackground();
+            }
           });
         }
 
@@ -325,6 +410,7 @@
           pollUntilReady: pollUntilReady,
           startDeployRecovery: startDeployRecovery,
           isGatewayStatus: isGatewayStatus,
+          shouldTriggerDeployRecoveryFromResponse: shouldTriggerDeployRecoveryFromResponse,
           isEnabled: isDeployResilienceEnabled,
         };
 
@@ -339,14 +425,14 @@
         }
 
         document.addEventListener("DOMContentLoaded", function () {
-          if (!isDeployResilienceEnabled()) return;
           void probeHealthDetailed().then(function (probe) {
+            if (!isDeployResilienceEnabled()) return;
+            rememberDeployBaseline(probe);
             if (probe.deploySignal) {
               startDeployRecovery(false);
               return;
             }
-            baselineDeployMarker = String(probe.deployMarker || "");
-            baselineServerBootId = String(probe.serverBootId || "");
+            scheduleDeployBackgroundWatch();
           });
         });
       })();
@@ -36851,7 +36937,7 @@
           }, timeoutMs);
 
           fetch(url, options)
-            .then((res) => {
+            .then(async (res) => {
               clearTimeout(timer);
               const path = String(url || "");
               const resilience = window.wabaDeployResilience;
@@ -36859,13 +36945,13 @@
                 resilience &&
                 typeof resilience.isEnabled === "function" &&
                 resilience.isEnabled() &&
-                typeof resilience.isGatewayStatus === "function" &&
-                resilience.isGatewayStatus(res.status) &&
                 !/\/health(\?|$)/.test(path) &&
                 !/\/ready(\?|$)/.test(path) &&
+                typeof resilience.shouldTriggerDeployRecoveryFromResponse === "function" &&
                 typeof resilience.startDeployRecovery === "function"
               ) {
-                resilience.startDeployRecovery(false);
+                const shouldStart = await resilience.shouldTriggerDeployRecoveryFromResponse(res);
+                if (shouldStart) resilience.startDeployRecovery(false);
               }
               resolve(res);
             })
