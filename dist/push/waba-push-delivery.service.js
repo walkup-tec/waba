@@ -97,19 +97,21 @@ async function deliverEmails(title, text, recipients, imageUrl) {
         message: text,
         imageUrl,
     });
-    for (const toEmail of recipients) {
+    const outcomes = await Promise.all(recipients.map(async (toEmail) => {
         const normalized = normalizeEmail(toEmail);
         if (!normalized.includes("@"))
-            continue;
+            return "skip";
         try {
             await waba_mail_service_1.wabaMailService.send({ to: normalized, subject: template.subject, html: template.html });
-            sent += 1;
+            return "sent";
         }
         catch (error) {
             console.error(`[push] falha e-mail para ${normalized}:`, error);
-            failed += 1;
+            return "failed";
         }
-    }
+    }));
+    sent = outcomes.filter((row) => row === "sent").length;
+    failed = outcomes.filter((row) => row === "failed").length;
     return { sent, skipped, failed };
 }
 async function sendPushMessage(input) {
@@ -176,23 +178,28 @@ async function sendPushMessageInner(input) {
             roles,
         };
     }
+    const parallelTasks = [];
     if (audiences.includes("community")) {
-        const community = await (0, waba_push_community_service_1.sendPushToWhatsAppCommunity)(pushTitle, reviewedText, image);
-        deliveryResults.community = {
-            ok: community.ok,
-            detail: community.detail,
-            groupJid: community.groupJid,
-        };
-        if (!community.ok)
-            hasFailure = true;
+        parallelTasks.push((0, waba_push_community_service_1.sendPushToWhatsAppCommunity)(pushTitle, reviewedText, image).then((community) => {
+            deliveryResults.community = {
+                ok: community.ok,
+                detail: community.detail,
+                groupJid: community.groupJid,
+            };
+            if (!community.ok)
+                hasFailure = true;
+        }));
     }
     if (audiences.includes("email")) {
         const recipients = resolveEmailRecipients(audiences, input.userRoles || []);
-        const email = await deliverEmails(pushTitle, reviewedText, recipients, null);
-        deliveryResults.email = email;
-        if (email.failed > 0)
-            hasFailure = true;
+        parallelTasks.push(deliverEmails(pushTitle, reviewedText, recipients, null).then((email) => {
+            deliveryResults.email = email;
+            if (email.failed > 0)
+                hasFailure = true;
+        }));
     }
+    if (parallelTasks.length)
+        await Promise.all(parallelTasks);
     const message = {
         ...pendingMessage,
         status: hasFailure ? "partial" : "sent",

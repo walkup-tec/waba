@@ -13,7 +13,9 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-29
+2026-06-30
+
+**WABA — Push Failed to fetch:** timeout 180s + e-mail/comunidade paralelos + JID cache fast path. Ver `doc/LOG-2026-06-30__push-failed-to-fetch-timeout-fix.md`.
 
 **WABA — Push comunidade instância 7770:** default admin `Drax Sistemas 5181077770`; migra 6973 legado. Ver `doc/LOG-2026-06-29__push-comunidade-instancia-7770-correcao.md`.
 

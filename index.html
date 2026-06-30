@@ -24863,6 +24863,24 @@
         }
       }
 
+      function resolveAdminPushFetchError(error, payload) {
+        if (error?.message === "timeout") {
+          return "O envio demorou demais. O push pode ter sido registrado — confira o histórico abaixo.";
+        }
+        const raw = String(error?.message || payload?.error || "").trim();
+        if (!raw) return "Falha ao enviar push.";
+        if (raw === "Failed to fetch" || /networkerror|load failed|fetch failed|econnreset|socket hang up|other side closed/i.test(raw)) {
+          return "Conexão interrompida com o servidor. Se marcou Comunidade ou E-mail, aguarde e confira o histórico — o envio pode ter concluído em segundo plano.";
+        }
+        return raw;
+      }
+
+      function resolveAdminPushSendTimeoutMs(audiences) {
+        const list = Array.isArray(audiences) ? audiences : [];
+        if (list.includes("community") || list.includes("email")) return 180000;
+        return 60000;
+      }
+
       async function sendAdminPush() {
         const btn = document.getElementById("admin-push-send-btn");
         if (adminPushSendInFlight) {
@@ -24922,7 +24940,12 @@
           btn.textContent = "Enviando…";
           btn.setAttribute("disabled", "true");
         }
-        setAdminPushSendFeedback("Enviando push…", "info");
+        setAdminPushSendFeedback(
+          audiences.includes("community") || audiences.includes("email")
+            ? "Enviando push… pode levar até 2 minutos (comunidade/e-mail)."
+            : "Enviando push…",
+          "info",
+        );
         try {
           const response = await fetchWithTimeout(
             "/admin/push/send",
@@ -24939,7 +24962,7 @@
                 image: adminPushImageAttachment,
               }),
             },
-            60000
+            resolveAdminPushSendTimeoutMs(audiences)
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload?.error || "Falha ao enviar push.");
@@ -24960,9 +24983,10 @@
           void loadAdminPushCommunityConfig();
           void refreshPushAlerts();
         } catch (error) {
-          const message = error?.message || "Falha ao enviar push.";
+          const message = resolveAdminPushFetchError(error);
           setAdminPushSendFeedback(message, "error");
           showToast(message, "error");
+          await loadAdminPushHistory();
         } finally {
           adminPushSendInFlight = false;
           if (btn) {

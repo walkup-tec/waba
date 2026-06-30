@@ -26,6 +26,10 @@ const EVO_SEND_TEXT_URL_TEMPLATE =
   process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_MEDIA_URL_TEMPLATE =
   process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
+const PUSH_COMMUNITY_PROBE_MAX = 3;
+const PUSH_COMMUNITY_GROUP_FETCH_TIMEOUT_MS = 15000;
+const PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS = 30000;
+const PUSH_COMMUNITY_MEDIA_BASE64_MAX_BYTES = 900_000;
 const EVO_SEND_TEXT_V1 =
   process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
 
@@ -251,8 +255,8 @@ async function probeAnnouncementGroupForInstance(
   const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
   const result = await evoHttpRequest(url, "GET", {
     apiKey: EVO_API_KEY,
-    timeoutMs: 25000,
-    retries: 1,
+    timeoutMs: PUSH_COMMUNITY_GROUP_FETCH_TIMEOUT_MS,
+    retries: 0,
   });
   if (!result.ok) return null;
   const jid = pickAnnouncementGroupJid(parseGroupsPayload(result.json));
@@ -273,7 +277,7 @@ async function discoverPushCommunityInstanceWithGroups(
   const tryOrder = uniqueInstanceNames([
     ...ranked.filter((row) => row.score > 0).map((row) => row.name),
     ...ranked.filter((row) => row.score <= 0).map((row) => row.name),
-  ]);
+  ]).slice(0, PUSH_COMMUNITY_PROBE_MAX);
   for (const name of tryOrder) {
     const hit = await probeAnnouncementGroupForInstance(name);
     if (hit) return hit;
@@ -349,7 +353,11 @@ async function fetchAnnouncementGroupJid(
   }
 
   const url = `${EVO_API_BASE}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`;
-  const result = await evoHttpRequest(url, "GET", { apiKey: EVO_API_KEY, timeoutMs: 25000, retries: 1 });
+  const result = await evoHttpRequest(url, "GET", {
+    apiKey: EVO_API_KEY,
+    timeoutMs: PUSH_COMMUNITY_GROUP_FETCH_TIMEOUT_MS,
+    retries: 0,
+  });
   if (!result.ok) {
     if (allowInstanceResolve && isEvoGroupListRecoverableError(result)) {
       const recovered = await recoverAnnouncementGroupAfterEvoFailure(instanceName, config);
@@ -395,6 +403,36 @@ export function formatWhatsAppCommunityMessage(title: string, body: string): str
   return safeBody;
 }
 
+async function resolvePushCommunitySendTarget(): Promise<{ instanceName: string; groupJid: string }> {
+  const config = pushRepository.readConfig();
+  const preferred = String(
+    config.communityEvoInstance || resolveDefaultPushCommunityEvoInstance(),
+  ).trim();
+  const overrideJid = resolveAnnouncementGroupJidOverride();
+  const cachedJid = overrideJid || String(config.communityAnnouncementGroupJid || "").trim();
+
+  let instanceName = preferred;
+  try {
+    instanceName = await resolvePushCommunityEvoInstance(preferred);
+  } catch {
+    const catalog = await fetchEvoInstanceCatalog();
+    const ranked = catalog
+      .map((row) => ({
+        name: row.name,
+        score: scorePushCommunityInstance(row.name, preferred, row.number),
+      }))
+      .sort((a, b) => b.score - a.score);
+    if (ranked[0]?.name) instanceName = ranked[0].name;
+  }
+
+  if (cachedJid.includes("@g.us")) {
+    return { instanceName, groupJid: cachedJid };
+  }
+
+  const resolved = await fetchAnnouncementGroupJid(instanceName);
+  return { instanceName: resolved.instanceName, groupJid: resolved.jid };
+}
+
 export async function sendPushToWhatsAppCommunity(
   title: string,
   text: string,
@@ -404,18 +442,6 @@ export async function sendPushToWhatsAppCommunity(
   detail: string;
   groupJid?: string;
 }> {
-  const config = pushRepository.readConfig();
-  let instanceName = String(
-    config.communityEvoInstance || resolveDefaultPushCommunityEvoInstance(),
-  ).trim();
-  try {
-    instanceName = await resolvePushCommunityEvoInstance(instanceName);
-  } catch (error) {
-    return {
-      ok: false,
-      detail: error instanceof Error ? error.message : "Falha ao resolver instância Evolution da comunidade.",
-    };
-  }
   const message = formatWhatsAppCommunityMessage(title, text);
   const hasImage = Boolean(image?.id);
   if (!message && !hasImage) {
@@ -425,15 +451,16 @@ export async function sendPushToWhatsAppCommunity(
     return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
   }
 
+  let instanceName = "";
   let groupJid = "";
   try {
-    const resolved = await fetchAnnouncementGroupJid(instanceName);
-    groupJid = resolved.jid;
-    instanceName = resolved.instanceName;
+    const target = await resolvePushCommunitySendTarget();
+    instanceName = target.instanceName;
+    groupJid = target.groupJid;
   } catch (error) {
     return {
       ok: false,
-      detail: error instanceof Error ? error.message : "Falha ao listar grupos na Evolution.",
+      detail: error instanceof Error ? error.message : "Falha ao resolver instância/grupo da comunidade.",
     };
   }
 
@@ -455,12 +482,19 @@ export async function sendPushToWhatsAppCommunity(
     let sendResult = await evoHttpRequest(sendUrl, "POST", {
       apiKey: EVO_API_KEY,
       body: sendBody,
+      timeoutMs: PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS,
+      retries: 0,
     });
-    if (!sendResult.ok) {
+    if (
+      !sendResult.ok &&
+      mediaData.base64.length <= PUSH_COMMUNITY_MEDIA_BASE64_MAX_BYTES
+    ) {
       sendBody.media = mediaData.base64;
       sendResult = await evoHttpRequest(sendUrl, "POST", {
         apiKey: EVO_API_KEY,
         body: sendBody,
+        timeoutMs: PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS,
+        retries: 0,
       });
     }
     if (!sendResult.ok) {
@@ -481,6 +515,8 @@ export async function sendPushToWhatsAppCommunity(
   const sendResult = await evoHttpRequest(sendUrl, "POST", {
     apiKey: EVO_API_KEY,
     body: buildEvoTextBody(groupJid, message),
+    timeoutMs: PUSH_COMMUNITY_SEND_MEDIA_TIMEOUT_MS,
+    retries: 0,
   });
   if (!sendResult.ok) {
     return {

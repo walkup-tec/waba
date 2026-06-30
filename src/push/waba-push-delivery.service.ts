@@ -129,17 +129,21 @@ async function deliverEmails(
     message: text,
     imageUrl,
   });
-  for (const toEmail of recipients) {
-    const normalized = normalizeEmail(toEmail);
-    if (!normalized.includes("@")) continue;
-    try {
-      await wabaMailService.send({ to: normalized, subject: template.subject, html: template.html });
-      sent += 1;
-    } catch (error) {
-      console.error(`[push] falha e-mail para ${normalized}:`, error);
-      failed += 1;
-    }
-  }
+  const outcomes = await Promise.all(
+    recipients.map(async (toEmail) => {
+      const normalized = normalizeEmail(toEmail);
+      if (!normalized.includes("@")) return "skip" as const;
+      try {
+        await wabaMailService.send({ to: normalized, subject: template.subject, html: template.html });
+        return "sent" as const;
+      } catch (error) {
+        console.error(`[push] falha e-mail para ${normalized}:`, error);
+        return "failed" as const;
+      }
+    }),
+  );
+  sent = outcomes.filter((row) => row === "sent").length;
+  failed = outcomes.filter((row) => row === "failed").length;
   return { sent, skipped, failed };
 }
 
@@ -237,21 +241,30 @@ async function sendPushMessageInner(input: {
       roles,
     };
   }
+
+  const parallelTasks: Promise<void>[] = [];
   if (audiences.includes("community")) {
-    const community = await sendPushToWhatsAppCommunity(pushTitle, reviewedText, image);
-    deliveryResults.community = {
-      ok: community.ok,
-      detail: community.detail,
-      groupJid: community.groupJid,
-    };
-    if (!community.ok) hasFailure = true;
+    parallelTasks.push(
+      sendPushToWhatsAppCommunity(pushTitle, reviewedText, image).then((community) => {
+        deliveryResults.community = {
+          ok: community.ok,
+          detail: community.detail,
+          groupJid: community.groupJid,
+        };
+        if (!community.ok) hasFailure = true;
+      }),
+    );
   }
   if (audiences.includes("email")) {
     const recipients = resolveEmailRecipients(audiences, input.userRoles || []);
-    const email = await deliverEmails(pushTitle, reviewedText, recipients, null);
-    deliveryResults.email = email;
-    if (email.failed > 0) hasFailure = true;
+    parallelTasks.push(
+      deliverEmails(pushTitle, reviewedText, recipients, null).then((email) => {
+        deliveryResults.email = email;
+        if (email.failed > 0) hasFailure = true;
+      }),
+    );
   }
+  if (parallelTasks.length) await Promise.all(parallelTasks);
 
   const message: WabaPushMessage = {
     ...pendingMessage,
