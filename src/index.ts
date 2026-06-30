@@ -6002,6 +6002,9 @@ function describeEvoQrFailure(
   qrDetail: string,
 ): string {
   const detail = String(qrDetail || createDetail || "").trim();
+  if (isDeprecatedEvoQrRouteError(qrStatus, detail)) {
+    return "Evolution não expõe /instance/qrcode — use /instance/connect. Tente «Atualizar QR» novamente.";
+  }
   if (createStatus === 404 || qrStatus === 404 || /404 page not found/i.test(detail)) {
     return "Evolution API indisponível (404). Verifique EVO_API_URL e se o serviço Evolution está no ar.";
   }
@@ -6014,7 +6017,10 @@ function describeEvoQrFailure(
     }
     return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o serviço Evolution está no ar.`;
   }
-  return "Dados salvos, mas falha ao gerar QRCode na EVO.";
+  const summarized = summarizeEvolutionErrorDetail(detail, qrStatus || createStatus);
+  if (summarized && summarized !== detail) return summarized;
+  if (detail) return `Evolution API: ${detail}`;
+  return "Dados salvos, mas falha ao gerar QRCode na EVO. Tente «Atualizar QR».";
 }
 
 function summarizeEvolutionErrorDetail(detail: string, status = 0): string {
@@ -7110,6 +7116,7 @@ function tryExtractQrCode(payload: any): string | null {
     if (typeof node !== "object") return null;
 
     const priorityKeys = [
+      "response",
       "qrcode",
       "qrCode",
       "qr",
@@ -7139,12 +7146,46 @@ function tryExtractQrCode(payload: any): string | null {
   return visit(payload);
 }
 
-type EvoQrFetchOptions = {
-  timeoutMs?: number;
-  retries?: number;
-  /** Logout/restart na EVO antes do connect (instância já existente desconectada). */
-  prepareSession?: boolean;
-};
+function isDeprecatedEvoQrRouteError(status: number, detail: string): boolean {
+  const text = String(detail || "").toLowerCase();
+  return (
+    status === 404 &&
+    (text.includes("/instance/qrcode/") || text.includes("cannot get /instance/qrcode"))
+  );
+}
+
+function rememberEvoQrFetchError(
+  current: { status: number; detail: string },
+  status: number,
+  detail: string,
+): { status: number; detail: string } {
+  const nextDetail = String(detail || "").slice(0, 400);
+  if (isDeprecatedEvoQrRouteError(status, nextDetail)) return current;
+  if (!current.detail) return { status, detail: nextDetail };
+  if (current.status === 404 && status !== 404) return { status, detail: nextDetail };
+  return { status, detail: nextDetail };
+}
+
+function buildEvoConnectQrCandidates(
+  instanceName: string,
+  number: string,
+): Array<{ url: string; method: "GET" | "POST"; body?: Record<string, unknown> }> {
+  const enc = encodeURIComponent(instanceName);
+  const connectBase = `${EVO_API_BASE}/instance/connect/${enc}`;
+  const templateUrl = buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName);
+  const bases = Array.from(new Set([connectBase, templateUrl].filter(Boolean)));
+
+  const candidates: Array<{ url: string; method: "GET" | "POST"; body?: Record<string, unknown> }> =
+    [];
+  for (const base of bases) {
+    candidates.push({ url: base, method: "GET" });
+    candidates.push({ url: base, method: "POST" });
+    if (number) {
+      candidates.push({ url: base, method: "POST", body: { number } });
+    }
+  }
+  return candidates;
+}
 
 async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<void> {
   const enc = encodeURIComponent(String(instanceName || "").trim());
@@ -7153,15 +7194,21 @@ async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<voi
     { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
     { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
   ];
-  await Promise.all(
-    steps.map((step) =>
-      callEvoAction(step.url, step.method, undefined, {
-        timeoutMs: 10000,
-        retries: 1,
-      }),
-    ),
-  );
+  for (const step of steps) {
+    await callEvoAction(step.url, step.method, undefined, {
+      timeoutMs: 12000,
+      retries: 1,
+    });
+  }
+  await sleepMs(1500);
 }
+
+type EvoQrFetchOptions = {
+  timeoutMs?: number;
+  retries?: number;
+  /** Logout/restart na EVO antes do connect (instância já existente desconectada). */
+  prepareSession?: boolean;
+};
 
 type QrRegisterJobRecord = {
   status: "pending" | "done" | "error";
@@ -7331,38 +7378,36 @@ async function fetchInstanceQrCodeFromEvo(
     await prepareEvoInstanceForQrConnect(instanceName);
   }
 
-  const enc = encodeURIComponent(instanceName);
-  const connectCandidates: Array<{ url: string; method: "GET" | "POST" }> = [
-    { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "POST" as const },
-    { url: `${EVO_API_BASE}/instance/connect/${enc}`, method: "GET" as const },
-    { url: buildTemplateUrl(EVO_QRCODE_URL_TEMPLATE, instanceName), method: "GET" as const },
-    { url: `${EVO_API_BASE}/instance/qrcode/${enc}`, method: "GET" as const },
-  ].filter((candidate) => candidate.url);
+  const connectCandidates = buildEvoConnectQrCandidates(instanceName, number);
+  let lastError = { status: 0, detail: "" };
 
-  let lastQrStatus = 0;
-  let lastQrDetail = "";
+  for (let round = 0; round < 2; round += 1) {
+    for (const candidate of connectCandidates) {
+      const result = await callEvoAction(candidate.url, candidate.method, candidate.body, {
+        timeoutMs,
+        retries,
+      });
+      lastError = rememberEvoQrFetchError(
+        lastError,
+        result.status,
+        String(result.body || result.error || ""),
+      );
 
-  for (const candidate of connectCandidates) {
-    const targetUrl = number
-      ? `${candidate.url}${candidate.url.includes("?") ? "&" : "?"}number=${encodeURIComponent(number)}`
-      : candidate.url;
+      if (!result.ok) continue;
 
-    const result = await callEvoAction(targetUrl, candidate.method, undefined, {
-      timeoutMs,
-      retries,
-    });
-    lastQrStatus = result.status;
-    lastQrDetail = String(result.body || result.error || "").slice(0, 400);
-
-    if (!result.ok) continue;
-
-    const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
-    if (qrCode) {
-      return { ok: true, qrCode, providerResponse: result.json ?? null };
+      const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
+      if (qrCode) {
+        const normalized =
+          qrCode.startsWith("data:image") || qrCode.startsWith("http")
+            ? qrCode
+            : `data:image/png;base64,${qrCode.replace(/\s+/g, "")}`;
+        return { ok: true, qrCode: normalized, providerResponse: result.json ?? null };
+      }
     }
+    if (round === 0) await sleepMs(2500);
   }
 
-  return { ok: false, lastQrStatus, lastQrDetail };
+  return { ok: false, lastQrStatus: lastError.status, lastQrDetail: lastError.detail };
 }
 
 app.post("/instancias/:name/atualizar", async (req, res) => {
