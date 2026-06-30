@@ -9,7 +9,7 @@ export type WabaPushImageAttachment = {
   sizeBytes: number;
 };
 
-export type WabaPushStatus = "draft" | "sent" | "partial" | "failed";
+export type WabaPushStatus = "draft" | "sending" | "sent" | "partial" | "failed";
 
 export type WabaPushDeliveryResults = {
   subscribers?: { targeted: number };

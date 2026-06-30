@@ -626,6 +626,27 @@ async function sendPushCommunityMediaToEvo(input: {
   );
 }
 
+async function sendPushCommunityTextWithFallbacks(
+  instanceName: string,
+  groupJid: string,
+  message: string,
+  catalog: Awaited<ReturnType<typeof fetchEvoInstanceCatalog>>,
+): Promise<{ ok: boolean; status: number; body: string; instanceUsed?: string }> {
+  const candidates = rankPushCommunityInstances(instanceName, catalog);
+  let lastStatus = 0;
+  let lastBody = "";
+  for (const candidate of candidates) {
+    const sendResult = await sendPushCommunityTextToEvo(candidate, groupJid, message);
+    if (sendResult.ok) {
+      return { ok: true, status: sendResult.status, body: "", instanceUsed: candidate };
+    }
+    lastStatus = sendResult.status;
+    lastBody = String(sendResult.body || sendResult.error || "").slice(0, 220);
+    if (!isEvoSendRecoverableError(sendResult)) break;
+  }
+  return { ok: false, status: lastStatus, body: lastBody };
+}
+
 async function sendPushCommunityTextToEvo(
   instanceName: string,
   groupJid: string,
@@ -719,6 +740,25 @@ export async function sendPushToWhatsAppCommunity(
 
     const catalog = await fetchEvoInstanceCatalog();
     const instanceCandidates = rankPushCommunityInstances(instanceName, catalog);
+    let textSent = false;
+    let textInstance = instanceName;
+
+    if (message) {
+      const textResult = await sendPushCommunityTextWithFallbacks(
+        instanceName,
+        groupJid,
+        message,
+        catalog,
+      );
+      textSent = textResult.ok;
+      if (textResult.instanceUsed) textInstance = textResult.instanceUsed;
+      if (textSent && textInstance.toLowerCase() !== instanceName.toLowerCase()) {
+        console.info(
+          `[push] texto comunidade enviado via instância fallback "${textInstance}" (preferida: "${instanceName}")`,
+        );
+      }
+    }
+
     let lastError = "";
     let lastStatus = 0;
 
@@ -727,7 +767,7 @@ export async function sendPushToWhatsAppCommunity(
       const sendResult = await sendPushCommunityMediaToEvo({
         sendUrl,
         groupJid,
-        message,
+        message: "",
         image,
         mediaData,
       });
@@ -737,26 +777,22 @@ export async function sendPushToWhatsAppCommunity(
             `[push] imagem comunidade enviada via instância fallback "${candidate}" (preferida: "${instanceName}")`,
           );
         }
-        return {
-          ok: true,
-          detail: `Imagem publicada no grupo de anúncios (${groupJid}) via ${candidate}.`,
-          groupJid,
-        };
+        const detail = textSent
+          ? `Texto e imagem publicados no grupo de anúncios via ${candidate}.`
+          : `Imagem publicada no grupo de anúncios (${groupJid}) via ${candidate}.`;
+        return { ok: true, detail, groupJid };
       }
       lastStatus = sendResult.status;
       lastError = String(sendResult.body || sendResult.error || "").slice(0, 220);
       if (!isEvoSendRecoverableError(sendResult)) break;
     }
 
-    if (message) {
-      const textFallback = await sendPushCommunityTextToEvo(instanceName, groupJid, message);
-      if (textFallback.ok) {
-        return {
-          ok: false,
-          detail: `Imagem não publicada (HTTP ${lastStatus}: ${lastError}). Texto enviado ao grupo como fallback.`,
-          groupJid,
-        };
-      }
+    if (textSent) {
+      return {
+        ok: true,
+        detail: `Texto publicado no grupo. Imagem não publicada (HTTP ${lastStatus}: ${lastError}).`,
+        groupJid,
+      };
     }
 
     const hint = isEvoMediaUrlFetchRecoverableError({
@@ -767,16 +803,17 @@ export async function sendPushToWhatsAppCommunity(
       : "";
     return {
       ok: false,
-      detail: `Falha ao publicar imagem na comunidade (HTTP ${lastStatus}): ${lastError}.${hint}`,
+      detail: `Falha ao publicar na comunidade (HTTP ${lastStatus}): ${lastError}.${hint}`,
       groupJid,
     };
   }
 
-  const sendResult = await sendPushCommunityTextToEvo(instanceName, groupJid, message);
-  if (!sendResult.ok) {
+  const catalog = await fetchEvoInstanceCatalog();
+  const textResult = await sendPushCommunityTextWithFallbacks(instanceName, groupJid, message, catalog);
+  if (!textResult.ok) {
     return {
       ok: false,
-      detail: `Falha ao publicar na comunidade (HTTP ${sendResult.status}): ${String(sendResult.body || sendResult.error || "").slice(0, 220)}`,
+      detail: `Falha ao publicar na comunidade (HTTP ${textResult.status}): ${textResult.body}`,
       groupJid,
     };
   }

@@ -557,9 +557,16 @@ export const registerWabaAdminRoutes = (app: Express) => {
             }
           : null,
       });
-      return res.status(200).json({
+      if (result.deduplicated) {
+        return res.status(200).json({
+          message: result.message,
+          deduplicated: true,
+        });
+      }
+      return res.status(202).json({
         message: result.message,
-        deduplicated: result.deduplicated,
+        deduplicated: false,
+        accepted: true,
       });
     } catch (error) {
       return res.status(400).json({
@@ -572,6 +579,15 @@ export const registerWabaAdminRoutes = (app: Express) => {
     if (!rejectNonMaster(req, res)) return;
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
     return res.status(200).json({ items: adminPushService.listHistory(limit) });
+  });
+
+  app.get("/admin/push/messages/:id", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const message = adminPushService.getMessageById(String(req.params.id || "").trim());
+    if (!message) {
+      return res.status(404).json({ error: "Push não encontrado." });
+    }
+    return res.status(200).json({ message });
   });
 
   app.get("/admin/push/community-config", async (req, res) => {

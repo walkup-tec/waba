@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.acceptPushMessage = acceptPushMessage;
 exports.sendPushMessage = sendPushMessage;
+exports.getPushMessageById = getPushMessageById;
 exports.listPushAlertsForAuth = listPushAlertsForAuth;
 exports.dismissPushAlert = dismissPushAlert;
 exports.listPushHistory = listPushHistory;
@@ -14,8 +16,9 @@ const waba_push_repository_1 = require("./waba-push.repository");
 const pushRepository = new waba_push_repository_1.WabaPushRepository();
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
 const systemUserRepository = new waba_system_user_repository_1.WabaSystemUserRepository();
-const DEDUPE_WINDOW_MS = 45000;
+const DEDUPE_WINDOW_MS = 90000;
 let pushSendChain = Promise.resolve();
+const pushInFlightFingerprints = new Set();
 function runPushSendLocked(fn) {
     const next = pushSendChain.then(fn, fn);
     pushSendChain = next.then(() => undefined, () => undefined);
@@ -59,17 +62,30 @@ function resolveEmailRecipients(audiences, userRoles) {
     }
     return Array.from(emails);
 }
+function buildPushFingerprint(input) {
+    return [
+        normalizeEmail(input.createdByEmail),
+        String(input.title || "").trim().toLowerCase(),
+        String(input.reviewedText || "").trim(),
+        [...input.audiences].sort().join(","),
+        [...input.userRoles].sort().join(","),
+        String(input.image?.id || ""),
+    ].join("||");
+}
 function findRecentDuplicate(input) {
     const cutoff = Date.now() - DEDUPE_WINDOW_MS;
     const audienceKey = [...input.audiences].sort().join(",");
     const rolesKey = [...input.userRoles].sort().join(",");
     const imageId = String(input.image?.id || "");
+    const titleKey = String(input.title || "").trim().toLowerCase();
     return (pushRepository
-        .listMessages(10)
+        .listMessages(20)
         .find((row) => {
         if (normalizeEmail(row.createdByEmail) !== normalizeEmail(input.createdByEmail))
             return false;
         if (new Date(row.createdAt).getTime() < cutoff)
+            return false;
+        if (String(row.title || "").trim().toLowerCase() !== titleKey)
             return false;
         if (row.reviewedText !== input.reviewedText)
             return false;
@@ -79,7 +95,7 @@ function findRecentDuplicate(input) {
             return false;
         if (String(row.image?.id || "") !== imageId)
             return false;
-        return row.status === "sent" || row.status === "partial";
+        return row.status === "sent" || row.status === "partial" || row.status === "sending";
     }) ?? null);
 }
 async function deliverEmails(title, text, recipients, imageUrl) {
@@ -114,51 +130,74 @@ async function deliverEmails(title, text, recipients, imageUrl) {
     failed = outcomes.filter((row) => row === "failed").length;
     return { sent, skipped, failed };
 }
-async function sendPushMessage(input) {
-    return runPushSendLocked(async () => sendPushMessageInner(input));
-}
-async function sendPushMessageInner(input) {
+function validatePushInput(input) {
     const audiences = Array.from(new Set((input.audiences || []).filter((value) => !!value)));
     if (!audiences.length) {
         throw new Error("Selecione ao menos um destino para o push.");
     }
-    const image = input.image?.id ? input.image : null;
-    const pushTitle = String(input.title || "Comunicado").trim() || "Comunicado";
-    const reviewedText = (0, waba_push_openai_service_1.sanitizeReviewedPushText)(String(input.reviewedText || input.originalText || "").trim());
     const hasNonCommunityAudience = audiences.some((audience) => audience === "subscribers" || audience === "users" || audience === "email");
-    if (!reviewedText && !image) {
+    if (!input.reviewedText && !input.image) {
         throw new Error("Informe a mensagem ou uma imagem para o push.");
     }
-    if (!reviewedText && hasNonCommunityAudience) {
+    if (!input.reviewedText && hasNonCommunityAudience) {
         throw new Error("Informe o texto para assinantes, usuários e e-mail. A imagem é enviada apenas à comunidade WhatsApp.");
     }
-    if (image && !audiences.includes("community")) {
+    if (input.image && !audiences.includes("community")) {
         throw new Error("A imagem só pode ser enviada quando o destino Comunidade WhatsApp estiver marcado.");
     }
     if (audiences.includes("community") && !String(input.title || "").trim()) {
         throw new Error("Informe o título para publicar na comunidade WhatsApp.");
     }
-    const duplicate = findRecentDuplicate({
+    return audiences;
+}
+function preparePushMessage(input) {
+    const image = input.image?.id ? input.image : null;
+    const pushTitle = String(input.title || "Comunicado").trim() || "Comunicado";
+    const reviewedText = (0, waba_push_openai_service_1.sanitizeReviewedPushText)(String(input.reviewedText || input.originalText || "").trim());
+    const audiences = validatePushInput({ title: pushTitle, audiences: input.audiences, reviewedText, image });
+    const userRoles = input.userRoles || [];
+    const fingerprint = buildPushFingerprint({
+        title: pushTitle,
         reviewedText,
         audiences,
-        userRoles: input.userRoles || [],
+        userRoles,
+        createdByEmail: input.createdByEmail,
+        image,
+    });
+    if (pushInFlightFingerprints.has(fingerprint)) {
+        const duplicate = findRecentDuplicate({
+            title: pushTitle,
+            reviewedText,
+            audiences,
+            userRoles,
+            createdByEmail: input.createdByEmail,
+            image,
+        }) ?? null;
+        if (duplicate)
+            return { deduplicated: true, message: duplicate };
+    }
+    const duplicate = findRecentDuplicate({
+        title: pushTitle,
+        reviewedText,
+        audiences,
+        userRoles,
         createdByEmail: input.createdByEmail,
         image,
     });
     if (duplicate) {
-        return { message: duplicate, deduplicated: true };
+        return { deduplicated: true, message: duplicate };
     }
+    pushInFlightFingerprints.add(fingerprint);
     const now = new Date().toISOString();
-    const messageId = pushRepository.createId();
     const pendingMessage = {
-        id: messageId,
+        id: pushRepository.createId(),
         title: pushTitle,
         originalText: String(input.originalText || "").trim(),
         reviewedText,
         image,
         audiences,
-        userRoles: input.userRoles || [],
-        status: "partial",
+        userRoles,
+        status: "sending",
         createdByEmail: normalizeEmail(input.createdByEmail),
         createdAt: now,
         sentAt: now,
@@ -166,47 +205,103 @@ async function sendPushMessageInner(input) {
         dismissedBy: [],
     };
     pushRepository.save(pendingMessage);
-    const deliveryResults = {};
-    let hasFailure = false;
-    if (audiences.includes("subscribers")) {
-        deliveryResults.subscribers = { targeted: resolveSubscriberRecipients().length };
-    }
-    if (audiences.includes("users")) {
-        const roles = resolveDefaultUserRoles(input.userRoles || []);
-        deliveryResults.users = {
-            targeted: resolveStaffRecipients(roles).length,
-            roles,
-        };
-    }
-    const parallelTasks = [];
-    if (audiences.includes("community")) {
-        parallelTasks.push((0, waba_push_community_service_1.sendPushToWhatsAppCommunity)(pushTitle, reviewedText, image).then((community) => {
-            deliveryResults.community = {
-                ok: community.ok,
-                detail: community.detail,
-                groupJid: community.groupJid,
+    return { deduplicated: false, message: pendingMessage, fingerprint };
+}
+async function deliverPreparedPushMessage(messageId, fingerprint) {
+    try {
+        const current = pushRepository.getById(messageId);
+        if (!current || current.status !== "sending")
+            return;
+        const deliveryResults = {};
+        let hasFailure = false;
+        const audiences = current.audiences;
+        const userRoles = current.userRoles || [];
+        if (audiences.includes("subscribers")) {
+            deliveryResults.subscribers = { targeted: resolveSubscriberRecipients().length };
+        }
+        if (audiences.includes("users")) {
+            const roles = resolveDefaultUserRoles(userRoles);
+            deliveryResults.users = {
+                targeted: resolveStaffRecipients(roles).length,
+                roles,
             };
-            if (!community.ok)
-                hasFailure = true;
-        }));
+        }
+        const parallelTasks = [];
+        if (audiences.includes("community")) {
+            parallelTasks.push((0, waba_push_community_service_1.sendPushToWhatsAppCommunity)(current.title, current.reviewedText, current.image).then((community) => {
+                deliveryResults.community = {
+                    ok: community.ok,
+                    detail: community.detail,
+                    groupJid: community.groupJid,
+                };
+                if (!community.ok)
+                    hasFailure = true;
+            }));
+        }
+        if (audiences.includes("email")) {
+            const recipients = resolveEmailRecipients(audiences, userRoles);
+            parallelTasks.push(deliverEmails(current.title, current.reviewedText, recipients, null).then((email) => {
+                deliveryResults.email = email;
+                if (email.failed > 0)
+                    hasFailure = true;
+            }));
+        }
+        if (parallelTasks.length)
+            await Promise.all(parallelTasks);
+        pushRepository.save({
+            ...current,
+            status: hasFailure ? "partial" : "sent",
+            sentAt: current.sentAt || new Date().toISOString(),
+            deliveryResults,
+        });
     }
-    if (audiences.includes("email")) {
-        const recipients = resolveEmailRecipients(audiences, input.userRoles || []);
-        parallelTasks.push(deliverEmails(pushTitle, reviewedText, recipients, null).then((email) => {
-            deliveryResults.email = email;
-            if (email.failed > 0)
-                hasFailure = true;
-        }));
+    catch (error) {
+        const current = pushRepository.getById(messageId);
+        if (current) {
+            pushRepository.save({
+                ...current,
+                status: "failed",
+                sentAt: current.sentAt || new Date().toISOString(),
+                deliveryResults: {
+                    ...(current.deliveryResults || {}),
+                    community: {
+                        ok: false,
+                        detail: error instanceof Error ? error.message : "Falha inesperada no envio do push.",
+                    },
+                },
+            });
+        }
+        console.error(`[push] falha ao entregar push ${messageId}:`, error);
     }
-    if (parallelTasks.length)
-        await Promise.all(parallelTasks);
-    const message = {
-        ...pendingMessage,
-        status: hasFailure ? "partial" : "sent",
-        sentAt: now,
-        deliveryResults,
-    };
-    return { message: pushRepository.save(message), deduplicated: false };
+    finally {
+        pushInFlightFingerprints.delete(fingerprint);
+    }
+}
+async function acceptPushMessage(input) {
+    return runPushSendLocked(async () => {
+        const prepared = preparePushMessage(input);
+        if (prepared.deduplicated) {
+            return { message: prepared.message, deduplicated: true };
+        }
+        const fingerprint = String(prepared.fingerprint || "");
+        void deliverPreparedPushMessage(prepared.message.id, fingerprint);
+        return { message: prepared.message, deduplicated: false, accepted: true };
+    });
+}
+async function sendPushMessage(input) {
+    return runPushSendLocked(async () => {
+        const prepared = preparePushMessage(input);
+        if (prepared.deduplicated) {
+            return { message: prepared.message, deduplicated: true };
+        }
+        const fingerprint = String(prepared.fingerprint || "");
+        await deliverPreparedPushMessage(prepared.message.id, fingerprint);
+        const finalMessage = pushRepository.getById(prepared.message.id) || prepared.message;
+        return { message: finalMessage, deduplicated: false };
+    });
+}
+function getPushMessageById(id) {
+    return pushRepository.getById(id);
 }
 function listPushAlertsForAuth(auth) {
     const email = normalizeEmail(auth.email);

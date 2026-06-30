@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-30
 
+**WABA — Push async + dedupe + comunidade texto primeiro:** POST 202 + poll; dedupe 90s com título; texto antes da imagem na comunidade; remove JID/contagem Evolution da UI. Ver `doc/LOG-2026-06-30__push-async-dedupe-comunidade-texto-primeiro.md`.
+
 **WABA — Push comunidade Connection Closed:** URL interna 30180 primeiro; base64 só imagem pequena; fallback instâncias + texto. Marker `DEPLOY-2026-06-30-push-comunidade-connection-closed-fix`. Ver `doc/LOG-2026-06-30__push-comunidade-connection-closed-fix.md`.
 
 **WABA — Push comunidade imagem TLS:** base64 até 5 MB + data URI + URL interna opcional; Evolution não depende de HTTPS público. Marker `DEPLOY-2026-06-30-push-comunidade-imagem-tls-base64`. Ver `doc/LOG-2026-06-30__push-comunidade-imagem-tls-base64-fix.md`.

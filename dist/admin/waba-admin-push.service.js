@@ -26,7 +26,7 @@ class WabaAdminPushService {
     async publishMessage(input) {
         const audiences = parseAudiences(input.audiences);
         const image = input.image?.id ? input.image : null;
-        return (0, waba_push_delivery_service_1.sendPushMessage)({
+        return (0, waba_push_delivery_service_1.acceptPushMessage)({
             title: String(input.title || "Comunicado WABA").trim(),
             originalText: String(input.originalText || "").trim(),
             reviewedText: String(input.reviewedText || "").trim(),
@@ -35,6 +35,9 @@ class WabaAdminPushService {
             createdByEmail: input.createdByEmail,
             image,
         });
+    }
+    getMessageById(id) {
+        return (0, waba_push_delivery_service_1.getPushMessageById)(id);
     }
     uploadImage(file) {
         return (0, waba_push_media_service_1.savePushImageAttachment)({

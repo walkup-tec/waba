@@ -1,8 +1,9 @@
 import { reviewPushMessageWithOpenAi } from "../push/waba-push-openai.service";
 import {
   dismissPushAlert,
+  getPushMessageById,
   listPushHistory,
-  sendPushMessage,
+  acceptPushMessage,
 } from "../push/waba-push-delivery.service";
 import {
   getPushCommunityConfig,
@@ -44,7 +45,7 @@ export class WabaAdminPushService {
   }) {
     const audiences = parseAudiences(input.audiences);
     const image = input.image?.id ? input.image : null;
-    return sendPushMessage({
+    return acceptPushMessage({
       title: String(input.title || "Comunicado WABA").trim(),
       originalText: String(input.originalText || "").trim(),
       reviewedText: String(input.reviewedText || "").trim(),
@@ -53,6 +54,10 @@ export class WabaAdminPushService {
       createdByEmail: input.createdByEmail,
       image,
     });
+  }
+
+  getMessageById(id: string) {
+    return getPushMessageById(id);
   }
 
   uploadImage(file: { buffer: Buffer; originalname: string; mimetype: string }): WabaPushImageAttachment {
