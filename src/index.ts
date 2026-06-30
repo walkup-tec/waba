@@ -5368,7 +5368,13 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
     const name = String(req.params.name || "").trim();
     if (await rejectForeignInstance(req, res, name)) return;
     const instanceNumberHint = String(req.body?.number || req.body?.instanceNumberHint || "").trim();
-    const started = await startInboundValidation({ instanceName: name, instanceNumberHint });
+    const forceRestart =
+      req.body?.forceRestart === true || String(req.body?.forceRestart ?? "").trim() === "1";
+    const started = await startInboundValidation({
+      instanceName: name,
+      instanceNumberHint,
+      forceRestart,
+    });
     if (started.error) {
       return res.status(400).json({ ok: false, error: started.error });
     }

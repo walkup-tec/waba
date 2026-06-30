@@ -18077,6 +18077,9 @@
         </div>
 
         <div class="reg-wizard-footer">
+          <button id="register-inbound-retry-btn" class="reg-wizard-link-btn" type="button" hidden>
+            Tentar validação novamente
+          </button>
           <button id="register-inbound-skip-btn" class="reg-wizard-link-btn" type="button" hidden>
             Pular validação
           </button>
@@ -38475,6 +38478,18 @@
           });
         }
 
+        const inboundRetryBtn = document.getElementById("register-inbound-retry-btn");
+        if (inboundRetryBtn && inboundRetryBtn.dataset.boundRegisterQr !== "1") {
+          inboundRetryBtn.dataset.boundRegisterQr = "1";
+          inboundRetryBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const name = registerConnectedInstanceName || "";
+            if (!name) return;
+            void restartRegisterInboundValidation(name);
+          });
+        }
+
         const inboundSkipBtn = document.getElementById("register-inbound-skip-btn");
         if (inboundSkipBtn && inboundSkipBtn.dataset.boundRegisterQr !== "1") {
           inboundSkipBtn.dataset.boundRegisterQr = "1";
@@ -38531,6 +38546,8 @@
         if (refBtn) refBtn.hidden = n !== 2;
         if (doneBtn) doneBtn.hidden = n !== 4;
         if (skipBtn) skipBtn.hidden = n !== 3;
+        const retryBtn = document.getElementById("register-inbound-retry-btn");
+        if (retryBtn && n !== 3) retryBtn.hidden = true;
         scrollRegisterWizardPaneToTop();
       }
 
@@ -38717,7 +38734,19 @@
         const numberEl = document.getElementById("register-inbound-number");
         if (!numberEl) return;
         const display = resolveRegisterInboundDisplayNumber(instanceName, status);
-        numberEl.textContent = display || "—";
+        const digits = String(registerConnectedInstanceNumber || status?.instanceNumber || "")
+          .replace(/\D/g, "");
+        if (display && digits.length >= 10) {
+          numberEl.innerHTML = `<a href="https://wa.me/${escapeAdminHtml(digits)}" target="_blank" rel="noopener noreferrer" class="reg-instruction-highlight-link">${escapeAdminHtml(display)}</a>`;
+        } else {
+          numberEl.textContent = display || "—";
+        }
+      }
+
+      function setRegisterInboundRetryVisible(visible) {
+        const retryBtn = document.getElementById("register-inbound-retry-btn");
+        if (!retryBtn) return;
+        retryBtn.hidden = !visible;
       }
 
       function resetRegisterInboundPanel() {
@@ -38778,9 +38807,10 @@
         const sendDone = status.sendTest?.success !== null && status.sendTest?.success !== undefined;
 
         if (!receiveDone) {
-          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+          setInboundWaitingVisible(true, status.receiveTest?.detail || REGISTER_INBOUND_WAIT_STEP1);
           setInboundCheckVisible("register-inbound-receive-row", false, false);
           setInboundCheckVisible("register-inbound-send-row", false, false);
+          setRegisterInboundRetryVisible(false);
         } else {
           setInboundCheckVisible("register-inbound-receive-row", true, true);
           updateRegisterInboundRow(
@@ -38822,7 +38852,21 @@
           if (status.finished && status.restrictionSuspected) alertEl.classList.add("open");
           else alertEl.classList.remove("open");
         }
+        const failed =
+          status.finished === true &&
+          (status.receiveTest?.success !== true || status.sendTest?.success !== true);
+        setRegisterInboundRetryVisible(failed);
         syncRegisterValidationPaneLayout(status);
+      }
+
+      async function restartRegisterInboundValidation(instanceName) {
+        if (registerInboundPollTimer) {
+          clearInterval(registerInboundPollTimer);
+          registerInboundPollTimer = null;
+        }
+        registerInboundValidationId = "";
+        registerInboundStartInFlight = false;
+        await startRegisterInboundValidation(instanceName, { forceRestart: true });
       }
 
       function finishRegisterWizardSuccess(message) {
@@ -38838,15 +38882,19 @@
         }
       }
 
-      async function startRegisterInboundValidation(instanceName) {
+      async function startRegisterInboundValidation(instanceName, options = {}) {
+        const forceRestart = options?.forceRestart === true;
         if (registerInboundStartInFlight) return;
-        if (registerInboundValidationId && registerInboundPollTimer) return;
+        if (!forceRestart && registerInboundValidationId && registerInboundPollTimer) return;
         registerInboundStartInFlight = true;
         setRegisterWizardStep(3);
-        resetRegisterInboundPanel();
+        if (!forceRestart) resetRegisterInboundPanel();
+        else setRegisterInboundRetryVisible(false);
 
         const numberInput = document.getElementById("register-number-input");
-        const formNumber = String(numberInput?.value || "").trim();
+        const formNumber = String(
+          numberInput?.value || registerConnectedInstanceNumber || ""
+        ).trim();
         rememberRegisterConnectedNumber(formNumber);
         setRegisterInboundNumberDisplay(instanceName, { instanceNumber: formNumber });
 
@@ -38888,7 +38936,10 @@
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ number: formNumber }),
+              body: JSON.stringify({
+                number: formNumber || registerConnectedInstanceNumber,
+                forceRestart,
+              }),
             },
             30000
           );
@@ -38974,7 +39025,7 @@
         };
 
         void pollValidationOnce();
-        registerInboundPollTimer = setInterval(pollValidationOnce, 800);
+        registerInboundPollTimer = setInterval(pollValidationOnce, 600);
       }
 
       function openRenameInstanceModal(instanceName) {

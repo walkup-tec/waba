@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-30-validacao-inbound-ownerjid-wrapper-fix";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-06-30-validacao-inbound-confirmar-detect-fix";

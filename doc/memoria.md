@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-06-30
 
-**WABA — Validação inbound ownerJid wrapper:** telefone no objeto pai da Evolution; resolveEvoInstancePhone; status-conexao retorna instanceNumber. Marker `DEPLOY-2026-06-30-validacao-inbound-ownerjid-wrapper-fix`. Ver `doc/LOG-2026-06-30__validacao-inbound-ownerjid-wrapper-fix.md`.
+**WABA — Validação CONFIRMAR detect + retry:** findMessages reforçado, webhook público, wa.me, forceRestart, 10min timeout. Marker `DEPLOY-2026-06-30-validacao-inbound-confirmar-detect-fix`. Ver `doc/LOG-2026-06-30__validacao-inbound-confirmar-detect-fix.md`.
+
+**WABA — Validação inbound ownerJid wrapper:** telefone no objeto pai da Evolution. Marker `DEPLOY-2026-06-30-validacao-inbound-ownerjid-wrapper-fix`. Ver `doc/LOG-2026-06-30__validacao-inbound-ownerjid-wrapper-fix.md`.
 
 **WABA — Validação inbound número no passo 3:** exibe número integrado (Evo + hint + lista instâncias). Marker `DEPLOY-2026-06-30-validacao-inbound-numero-display`. Ver `doc/LOG-2026-06-30__validacao-inbound-numero-display-fix.md`.
 
