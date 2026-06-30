@@ -15,7 +15,11 @@ Como usar:
 ## Última atualização
 2026-06-21
 
-**WABA — Fix exclusão 5182006011 / ownership alias:** `canAccessInstance` permite delete se o usuário possui qualquer candidato (nome técnico vs chave numérica); `resolveInstanceDeletionKeys` inclui chaves do `instance-owners.json` por dígitos. Script `remove-instance-from-subscriber-docker.cjs`. Marker `DEPLOY-2026-06-21-instance-ownership-delete-fix`. Ver `doc/LOG-2026-06-21__instance-ownership-delete-5182006011-mozart.md`.
+**WABA — Wizard passo 3 UX (2026-06-30):** banner EVO conectado, checklist visível, poll resiliente, fallback 45s e skip libera instância. Marker `DEPLOY-2026-06-30-wizard-step3-ux-connection-fallback`. Ver `doc/LOG-2026-06-30__wizard-step3-ux-connection-fallback.md`.
+
+**WABA — Consolidar 5182006019 → mozart:** removida duplicata EVO `02-0916` (ex quantumivst); mantida `6841` open só em mozart.pmo@gmail.com. Ver `doc/LOG-2026-06-30__consolidar-5182006019-mozart.md`.
+
+**WABA — Validação CONFIRMAR v3 (13959f5):** restaurado findChats + nudge=2 + UTF-8; UI passo 3 sem links; marker `DEPLOY-2026-06-21-validacao-inbound-confirmar-v3`. Ver `doc/LOG-2026-06-21__validacao-inbound-confirmar-v3-fix.md`.
 
 **WABA — Validação passo 3 UI cleanup:** removidos links «Já enviei CONFIRMAR» e «Abrir conversa no WhatsApp». Ver `doc/LOG-2026-06-21__validacao-inbound-ui-cleanup.md`.
 

@@ -7875,6 +7875,37 @@
         display: none !important;
       }
 
+      .reg-inbound-evo-connected {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(34, 197, 94, 0.45);
+        background: rgba(20, 83, 45, 0.28);
+        color: #bbf7d0;
+        font-size: var(--reg-text-sm);
+        line-height: 1.45;
+      }
+
+      .reg-inbound-evo-connected[hidden] {
+        display: none !important;
+      }
+
+      .reg-inbound-evo-connected .reg-evo-connected-icon {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(34, 197, 94, 0.25);
+        color: #4ade80;
+        font-weight: 700;
+      }
+
       .reg-val-spinner {
         width: 20px;
         height: 20px;
@@ -18059,6 +18090,12 @@
               </div>
             </div>
             <div class="reg-wizard-pane-progress" id="register-inbound-progress">
+              <div id="register-inbound-evo-connected" class="reg-inbound-evo-connected" hidden>
+                <span class="reg-evo-connected-icon" aria-hidden="true">✓</span>
+                <span id="register-inbound-evo-connected-text">
+                  WhatsApp conectado na Evolution. A validação CONFIRMAR é opcional — você pode concluir abaixo.
+                </span>
+              </div>
               <div id="register-inbound-waiting" class="reg-inbound-waiting" aria-live="polite">
                 <span class="reg-val-spinner" aria-hidden="true"></span>
                 <span id="register-inbound-waiting-text">Aguardando envio de CONFIRMAR pelo outro WhatsApp (não o que está integrando)…</span>
@@ -18131,7 +18168,7 @@
             </button>
           </div>
         </div>
-        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-21-validacao-inbound-confirmar-v3</span>
+        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-30-wizard-step3-ux-connection-fallback</span>
       </div>
     </div>
 
@@ -30829,6 +30866,11 @@
       let registerInboundPollTimer = null;
       let registerInboundValidationId = "";
       let registerInboundStartInFlight = false;
+      let registerInboundPollFailCount = 0;
+      let registerInboundPollUseNudge = true;
+      let registerInboundConnectionAdvanceTimer = null;
+      const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 45000;
+      const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
       let registerWizardValidationComplete = false;
@@ -38625,12 +38667,18 @@
             event.stopPropagation();
             if (
               !window.confirm(
-                "Pular a validação significa integrar sem confirmar envio/recepção.\n\nIsso aumenta o risco de usar um número com problema.\n\nDeseja pular mesmo assim?"
+                "Concluir sem validar CONFIRMAR?\n\nO WhatsApp já está conectado na Evolution. Você pode usar a instância; a validação de envio/recepção ficará pendente.\n\nDeseja concluir mesmo assim?"
               )
             ) {
               return;
             }
-            closeRegisterModal();
+            const name =
+              String(registerConnectedInstanceName || "").trim() ||
+              String(document.getElementById("register-name-input")?.value || "").trim();
+            finishRegisterWizardConnectionOnly(
+              name,
+              "WhatsApp conectado. Validação CONFIRMAR pendente — pode repetir depois pelo QRCode se quiser."
+            );
           });
         }
 
@@ -38757,10 +38805,7 @@
           clearInterval(registerConnectPollTimer);
           registerConnectPollTimer = null;
         }
-        if (registerInboundPollTimer) {
-          clearInterval(registerInboundPollTimer);
-          registerInboundPollTimer = null;
-        }
+        clearRegisterInboundTimers();
         registerConnectPollStartedAt = 0;
         registerConnectedInstanceName = "";
         registerConnectedInstanceNumber = "";
@@ -38871,9 +38916,152 @@
         numberEl.className = "reg-instruction-highlight";
       }
 
-      function setRegisterInboundActionButtons({ retry = false } = {}) {
+      function setRegisterInboundActionButtons({ retry = false, skip = null } = {}) {
         const retryBtn = document.getElementById("register-inbound-retry-btn");
+        const skipBtn = document.getElementById("register-inbound-skip-btn");
         if (retryBtn) retryBtn.hidden = !retry;
+        if (skipBtn && skip !== null) skipBtn.hidden = !skip;
+      }
+
+      function clearRegisterInboundTimers() {
+        if (registerInboundPollTimer) {
+          clearInterval(registerInboundPollTimer);
+          registerInboundPollTimer = null;
+        }
+        if (registerInboundConnectionAdvanceTimer) {
+          clearTimeout(registerInboundConnectionAdvanceTimer);
+          registerInboundConnectionAdvanceTimer = null;
+        }
+      }
+
+      function showRegisterInboundEvoConnectedBanner(visible, text) {
+        const banner = document.getElementById("register-inbound-evo-connected");
+        const textEl = document.getElementById("register-inbound-evo-connected-text");
+        if (!banner) return;
+        banner.hidden = !visible;
+        if (textEl && text) textEl.textContent = text;
+      }
+
+      async function confirmRegisterInstanceOpenInEvo(instanceName) {
+        const name = String(instanceName || "").trim();
+        if (!name) return false;
+        try {
+          const response = await fetchWithTimeout(
+            `/instancias/${encodeURIComponent(name)}/status-conexao`,
+            { credentials: "same-origin" },
+            12000
+          );
+          if (!response.ok) return false;
+          const payload = await response.json().catch(() => null);
+          rememberRegisterConnectedNumber(payload?.instanceNumber || "");
+          return (
+            payload?.open === true ||
+            String(payload?.connectionStatus || "").toLowerCase().includes("open")
+          );
+        } catch {
+          return false;
+        }
+      }
+
+      function isRegisterInboundFullyValidated(status) {
+        return (
+          status?.finished === true &&
+          status?.receiveTest?.success === true &&
+          status?.sendTest?.success === true &&
+          !status?.restrictionSuspected
+        );
+      }
+
+      function finishRegisterWizardConnectionOnly(instanceName, message) {
+        clearRegisterInboundTimers();
+        registerInboundStartInFlight = false;
+        registerInboundPollFailCount = 0;
+        showRegisterInboundEvoConnectedBanner(true);
+        setInboundWaitingVisible(false);
+        setRegisterConnectStatus("success", "WhatsApp conectado na Evolution.");
+        if (instanceName) registerConnectedInstanceName = instanceName;
+        finishRegisterWizardSuccess(
+          message ||
+            "WhatsApp conectado. Você já pode usar a instância; a validação CONFIRMAR pode ser refeita depois."
+        );
+      }
+
+      function handleRegisterInboundTerminalStatus(status, instanceName) {
+        if (!status || status.finished !== true) return false;
+
+        clearRegisterInboundTimers();
+        registerInboundPollFailCount = 0;
+
+        if (status.restrictionSuspected) {
+          setRegisterConnectStatus(
+            "error",
+            "Validação concluída com indício de restrição no envio."
+          );
+          setRegisterInboundActionButtons({ retry: true, skip: true });
+          return true;
+        }
+
+        if (status.receiveTest?.success === true && status.sendTest?.success === true) {
+          setRegisterConnectStatus("success", "Número validado com sucesso.");
+          finishRegisterWizardSuccess(
+            "Número conectado e testado com sucesso. Pode usar em campanhas."
+          );
+          return true;
+        }
+
+        setRegisterConnectStatus(
+          "loading",
+          "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
+        );
+        setRegisterInboundActionButtons({ retry: true, skip: true });
+        return true;
+      }
+
+      function scheduleRegisterInboundConnectionAdvance(instanceName) {
+        if (registerInboundConnectionAdvanceTimer) {
+          clearTimeout(registerInboundConnectionAdvanceTimer);
+          registerInboundConnectionAdvanceTimer = null;
+        }
+        registerInboundConnectionAdvanceTimer = setTimeout(async () => {
+          registerInboundConnectionAdvanceTimer = null;
+          const name = String(instanceName || registerConnectedInstanceName || "").trim();
+          if (!name || registerWizardStep !== 3) return;
+
+          const open = await confirmRegisterInstanceOpenInEvo(name);
+          if (!open) return;
+
+          if (registerInboundValidationId) {
+            try {
+              const pollRes = await fetchWithTimeout(
+                `/instancias/validacao-inbound/${encodeURIComponent(registerInboundValidationId)}`,
+                { credentials: "same-origin" },
+                12000
+              );
+              if (pollRes.ok) {
+                const status = await pollRes.json().catch(() => null);
+                if (isRegisterInboundFullyValidated(status)) {
+                  handleRegisterInboundTerminalStatus(status, name);
+                  return;
+                }
+                if (status?.receiveTest?.success === true && status?.finished !== true) {
+                  scheduleRegisterInboundConnectionAdvance(name);
+                  return;
+                }
+              }
+            } catch {
+              /* segue fallback */
+            }
+          }
+
+          showRegisterInboundEvoConnectedBanner(
+            true,
+            "WhatsApp conectado na Evolution. A validação CONFIRMAR não concluiu — concluindo integração para liberar a instância."
+          );
+          finishRegisterWizardConnectionOnly(
+            name,
+            "WhatsApp conectado na Evolution. Validação CONFIRMAR pendente — instância liberada para uso."
+          );
+        }, REGISTER_INBOUND_CONNECTION_ADVANCE_MS);
       }
 
       function resetRegisterInboundPanel() {
@@ -38900,6 +39088,7 @@
           numberEl.className = "reg-instruction-highlight";
         }
         if (keywordEl) keywordEl.textContent = "CONFIRMAR";
+        showRegisterInboundEvoConnectedBanner(false);
         setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
         const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
         if (pane) pane.classList.remove("reg-pane-validating");
@@ -38938,11 +39127,25 @@
 
         if (!receiveDone) {
           setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
-          setInboundCheckVisible("register-inbound-receive-row", false, false);
-          setInboundCheckVisible("register-inbound-send-row", false, false);
-          setRegisterInboundActionButtons({ retry: false });
+          setInboundCheckVisible("register-inbound-receive-row", true, true);
+          updateRegisterInboundRow(
+            "register-inbound-receive-row",
+            "register-inbound-receive-result",
+            null,
+            "register-inbound-receive-detail",
+            status.receiveTest?.detail || REGISTER_INBOUND_WAIT_STEP1
+          );
+          setInboundCheckVisible("register-inbound-send-row", true, false);
+          updateRegisterInboundRow(
+            "register-inbound-send-row",
+            "register-inbound-send-result",
+            null,
+            "register-inbound-send-detail",
+            "Aguardando recepção de CONFIRMAR para enviar resposta automática…"
+          );
+          setRegisterInboundActionButtons({ retry: false, skip: true });
         } else {
-          setRegisterInboundActionButtons({ retry: false });
+          setRegisterInboundActionButtons({ retry: false, skip: true });
           setInboundCheckVisible("register-inbound-receive-row", true, true);
           updateRegisterInboundRow(
             "register-inbound-receive-row",
@@ -38986,15 +39189,12 @@
         const failed =
           status.finished === true &&
           (status.receiveTest?.success !== true || status.sendTest?.success !== true);
-        setRegisterInboundActionButtons({ retry: failed });
+        setRegisterInboundActionButtons({ retry: failed, skip: true });
         syncRegisterValidationPaneLayout(status);
       }
 
       async function restartRegisterInboundValidation(instanceName) {
-        if (registerInboundPollTimer) {
-          clearInterval(registerInboundPollTimer);
-          registerInboundPollTimer = null;
-        }
+        clearRegisterInboundTimers();
         registerInboundValidationId = "";
         registerInboundStartInFlight = false;
         await startRegisterInboundValidation(instanceName);
@@ -39031,8 +39231,11 @@
           clearInterval(registerInboundPollTimer);
           registerInboundPollTimer = null;
         }
+        registerInboundPollFailCount = 0;
+        registerInboundPollUseNudge = true;
 
         let validationId = "";
+        let evoAlreadyOpen = false;
         try {
           try {
             const statusRes = await fetchWithTimeout(
@@ -39043,9 +39246,22 @@
             if (statusRes.ok) {
               const statusPayload = await statusRes.json().catch(() => null);
               rememberRegisterConnectedNumber(statusPayload?.instanceNumber || "");
+              evoAlreadyOpen =
+                statusPayload?.open === true ||
+                String(statusPayload?.connectionStatus || "")
+                  .toLowerCase()
+                  .includes("open");
             }
           } catch {
             /* status opcional */
+          }
+          if (evoAlreadyOpen) {
+            showRegisterInboundEvoConnectedBanner(
+              true,
+              "WhatsApp conectado na Evolution. Validando envio/recepção (CONFIRMAR)…"
+            );
+            setRegisterInboundActionButtons({ retry: false, skip: true });
+            scheduleRegisterInboundConnectionAdvance(instanceName);
           }
           try {
             const listRes = await fetchWithTimeout("/instancias?refresh=1", {}, 25000);
@@ -39075,83 +39291,107 @@
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
             const errMsg = String(data?.error || "Não foi possível iniciar a validação.");
+            if (evoAlreadyOpen || (await confirmRegisterInstanceOpenInEvo(instanceName))) {
+              showRegisterInboundEvoConnectedBanner(
+                true,
+                "WhatsApp conectado na Evolution. Validação automática indisponível — concluindo integração."
+              );
+              scheduleRegisterInboundConnectionAdvance(instanceName);
+              return;
+            }
             setRegisterConnectStatus("error", errMsg);
             showToast(errMsg, "error");
             const receiveDetail = document.getElementById("register-inbound-receive-detail");
             if (receiveDetail) receiveDetail.textContent = errMsg;
             setInboundWaitingVisible(false);
+            setRegisterInboundActionButtons({ retry: true, skip: true });
             return;
           }
           validationId = String(data?.validationId || "").trim();
           registerInboundValidationId = validationId;
           applyRegisterInboundStatus(data, instanceName);
-          if (data?.finished) {
-            if (data?.restrictionSuspected) {
-              setRegisterConnectStatus(
-                "error",
-                "Validação concluída com indício de restrição no envio."
-              );
-              return;
-            }
-            if (data?.receiveTest?.success && data?.sendTest?.success) {
-              setRegisterConnectStatus("success", "Número validado com sucesso.");
-              finishRegisterWizardSuccess("Número conectado e testado com sucesso. Pode usar em campanhas.");
-            }
-            return;
-          }
+          if (handleRegisterInboundTerminalStatus(data, instanceName)) return;
         } catch {
           const receiveDetail = document.getElementById("register-inbound-receive-detail");
           if (receiveDetail) receiveDetail.textContent = "Erro ao iniciar validação. Tente novamente.";
+          if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
+            showRegisterInboundEvoConnectedBanner(
+              true,
+              "WhatsApp conectado, mas a validação não iniciou. Concluindo integração em instantes…"
+            );
+            scheduleRegisterInboundConnectionAdvance(instanceName);
+          }
           return;
         } finally {
           registerInboundStartInFlight = false;
         }
 
-        if (!validationId) return;
+        if (!validationId) {
+          if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
+            finishRegisterWizardConnectionOnly(
+              instanceName,
+              "WhatsApp conectado na Evolution. Validação CONFIRMAR não foi iniciada — instância liberada."
+            );
+          }
+          return;
+        }
 
         const validationStartedAt = Date.now();
         registerInboundPollTimer = setInterval(async () => {
           try {
             if (Date.now() - validationStartedAt > 360000) {
-              clearInterval(registerInboundPollTimer);
-              registerInboundPollTimer = null;
+              clearRegisterInboundTimers();
+              if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
+                finishRegisterWizardConnectionOnly(
+                  instanceName,
+                  "WhatsApp conectado. Validação CONFIRMAR expirou — instância liberada para uso."
+                );
+                return;
+              }
               setRegisterConnectStatus(
                 "loading",
-                "Validação expirou. Envie CONFIRMAR pelo outro WhatsApp ou pule (não recomendado)."
+                "Validação expirou. Envie CONFIRMAR pelo outro WhatsApp ou conclua sem validar."
               );
-              setRegisterInboundActionButtons({ retry: true });
+              setRegisterInboundActionButtons({ retry: true, skip: true });
               return;
             }
+
+            const nudgeQs = registerInboundPollUseNudge ? "?nudge=2" : "";
+            registerInboundPollUseNudge = !registerInboundPollUseNudge;
             const pollRes = await fetchWithTimeout(
-              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=2`,
+              `/instancias/validacao-inbound/${encodeURIComponent(validationId)}${nudgeQs}`,
               { credentials: "same-origin" },
               12000
             );
-            if (!pollRes.ok) return;
+
+            if (!pollRes.ok) {
+              registerInboundPollFailCount += 1;
+              if (pollRes.status === 404 && registerInboundPollFailCount >= 2) {
+                clearRegisterInboundTimers();
+                registerInboundValidationId = "";
+                registerInboundStartInFlight = false;
+                void startRegisterInboundValidation(instanceName);
+                return;
+              }
+              if (registerInboundPollFailCount >= REGISTER_INBOUND_MAX_POLL_FAILS) {
+                const receiveDetail = document.getElementById("register-inbound-receive-detail");
+                if (receiveDetail) {
+                  receiveDetail.textContent =
+                    "Perdemos contato com a sessão de validação. Reconectando…";
+                }
+                if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
+                  scheduleRegisterInboundConnectionAdvance(instanceName);
+                }
+              }
+              return;
+            }
+
+            registerInboundPollFailCount = 0;
             const status = await pollRes.json().catch(() => null);
             applyRegisterInboundStatus(status, instanceName);
-            if (!status?.finished) return;
-            clearInterval(registerInboundPollTimer);
-            registerInboundPollTimer = null;
-            if (status.restrictionSuspected) {
-              setRegisterConnectStatus(
-                "error",
-                "Validação concluída com indício de restrição no envio."
-              );
-              return;
-            }
-            if (status.receiveTest?.success && status.sendTest?.success) {
-              setRegisterConnectStatus("success", "Número validado com sucesso.");
-              finishRegisterWizardSuccess("Número conectado e testado com sucesso. Pode usar em campanhas.");
-              return;
-            }
-            setRegisterConnectStatus(
-              "loading",
-              "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
-            );
-            setRegisterInboundActionButtons({ retry: true });
+            if (handleRegisterInboundTerminalStatus(status, instanceName)) return;
           } catch {
-            // mantém polling
+            registerInboundPollFailCount += 1;
           }
         }, 800);
       }
