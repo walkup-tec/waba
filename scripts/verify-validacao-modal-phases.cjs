@@ -10,7 +10,7 @@ const html = fs.readFileSync(htmlPath, "utf8");
 
 const required = [
   "registerInboundUiPhase",
-  "registerInboundUserConfirmed",
+  "registerInboundUserAwaitingConfirm",
   "registerInboundConfirmInFlight",
   "setRegisterInboundPhase",
   "resolveRegisterInboundPhase",

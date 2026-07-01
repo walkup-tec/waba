@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-01
 
-**WABA — Validação CONFIRMAR modal fases progressivas:** passo 3 exibe uma etapa por vez (instruções → prompt Sim/Não → recepção → resposta); corrige travamento ao clicar Sim e scroll que escondia instruções. Marker `DEPLOY-2026-07-01-validacao-confirmar-modal-fases-progressivas`. Ver `doc/LOG-2026-07-01__validacao-confirmar-modal-fases-progressivas.md`.
+**WABA — Validação CONFIRMAR Sim busca persistente:** 1º clique com feedback imediato; não volta ao prompt após 1 falha; poll nudge=2 + re-scan confirmar-envio; backend 4 tentativas. Marker `DEPLOY-2026-07-01-validacao-confirmar-sim-busca-persistente`. Ver `doc/LOG-2026-07-01__validacao-confirmar-sim-busca-persistente.md`.
+
+**WABA — Modal wizard altura +20%:** `max-height` 640px → 768px.
 
 **WABA — Validação CONFIRMAR modal Sim/Não (20s):** pergunta no passo 3 após 20s; Sim → `POST .../confirmar-envio` busca agressiva EVO; remove auto-conclusão sem validar. Marker `DEPLOY-2026-07-01-validacao-confirmar-modal-sim-nao`. Ver `doc/LOG-2026-07-01__validacao-confirmar-modal-sim-nao.md`.
 

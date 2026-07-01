@@ -7481,7 +7481,7 @@
 
       .register-wizard-modal {
         width: min(94vw, 520px);
-        max-height: min(92dvh, 640px);
+        max-height: min(calc(92dvh * 1.2), 768px);
         display: flex;
         flex-direction: column;
         padding: clamp(14px, 2.5vw, 20px) clamp(16px, 3vw, 22px) clamp(12px, 2vw, 16px);
@@ -8168,7 +8168,7 @@
       @media (max-width: 520px) {
         .register-wizard-modal {
           width: min(100%, 94vw);
-          max-height: min(94dvh, 640px);
+          max-height: min(calc(94dvh * 1.2), 768px);
         }
 
         .reg-wizard-compact-grid {
@@ -30981,13 +30981,15 @@
       let registerInboundSentPromptTimer = null;
       let registerInboundSentPromptRetryTimer = null;
       let registerInboundUiPhase = "instructions";
-      let registerInboundUserConfirmed = false;
+      let registerInboundUserAwaitingConfirm = false;
+      let registerInboundAwaitingConfirmSince = 0;
       let registerInboundConfirmInFlight = false;
       const REGISTER_INBOUND_POLL_MS = 300;
       const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
       const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 20000;
       const REGISTER_INBOUND_SENT_PROMPT_RETRY_MS = 20000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
+      const REGISTER_INBOUND_AWAIT_CONFIRM_MS = 120000;
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
       let registerWizardValidationComplete = false;
@@ -38909,12 +38911,19 @@
         if (receiveOk && sendDone) return "complete";
         if (receiveOk) return "verify-send";
         if (receiveDone && !receiveOk) return "verify-receive";
-        if (registerInboundUserConfirmed) return "verify-receive";
+        if (registerInboundUserAwaitingConfirm) return "verify-receive";
         if (registerInboundUiPhase === "prompt") return "prompt";
         return "instructions";
       }
 
-      function setRegisterInboundPhase(phase) {
+      function setRegisterInboundPhase(phase, options = {}) {
+        if (
+          registerInboundUserAwaitingConfirm &&
+          (phase === "prompt" || phase === "instructions") &&
+          !options.force
+        ) {
+          phase = "verify-receive";
+        }
         registerInboundUiPhase = phase;
         const progress = document.getElementById("register-inbound-progress");
         if (progress) progress.setAttribute("data-phase", phase);
@@ -39110,6 +39119,71 @@
         numberEl.className = "reg-instruction-highlight";
       }
 
+      function setRegisterInboundConfirmUiBusy(busy) {
+        const yesBtn = document.getElementById("register-inbound-sent-yes-btn");
+        const noBtn = document.getElementById("register-inbound-sent-no-btn");
+        const prompt = document.getElementById("register-inbound-sent-prompt");
+        if (yesBtn) {
+          yesBtn.disabled = busy;
+          yesBtn.textContent = busy ? "Buscando na Evolution…" : "Sim, já enviei";
+        }
+        if (noBtn) noBtn.disabled = busy;
+        if (prompt) prompt.classList.toggle("is-busy", busy);
+      }
+
+      function enterRegisterInboundVerifyReceive(detailText) {
+        setRegisterInboundPhase("verify-receive");
+        setInboundCheckVisible("register-inbound-receive-row", true, true);
+        updateRegisterInboundRow(
+          "register-inbound-receive-row",
+          "register-inbound-receive-result",
+          null,
+          "register-inbound-receive-detail",
+          detailText || "Consultando a Evolution para confirmar CONFIRMAR…"
+        );
+        setInboundCheckVisible("register-inbound-send-row", false, false);
+      }
+
+      function clearRegisterInboundAwaitingConfirm() {
+        registerInboundUserAwaitingConfirm = false;
+        registerInboundAwaitingConfirmSince = 0;
+        setRegisterInboundConfirmUiBusy(false);
+      }
+
+      function maybeExpireRegisterInboundAwaitingConfirm() {
+        if (!registerInboundUserAwaitingConfirm || !registerInboundAwaitingConfirmSince) return false;
+        if (Date.now() - registerInboundAwaitingConfirmSince < REGISTER_INBOUND_AWAIT_CONFIRM_MS) {
+          return false;
+        }
+        clearRegisterInboundAwaitingConfirm();
+        showToast(
+          "CONFIRMAR não localizado após 2 minutos. Confira o outro WhatsApp e tente novamente.",
+          "warning"
+        );
+        setInboundCheckVisible("register-inbound-receive-row", false, false);
+        setInboundCheckVisible("register-inbound-send-row", false, false);
+        setRegisterInboundPhase("prompt", { force: true });
+        return true;
+      }
+
+      async function requestRegisterInboundConfirmScan(validationId, instanceName) {
+        const res = await fetchWithTimeout(
+          `/instancias/validacao-inbound/${encodeURIComponent(validationId)}/confirmar-envio`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+          },
+          60000
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok && !data?.receiveTest) {
+          throw new Error(data?.error || "Falha ao consultar a Evolution.");
+        }
+        applyRegisterInboundStatus(data, instanceName);
+        return data;
+      }
+
       function setRegisterInboundActionButtons({ retry = false, skip = null, nudge = null } = {}) {
         const retryBtn = document.getElementById("register-inbound-retry-btn");
         const skipBtn = document.getElementById("register-inbound-skip-btn");
@@ -39120,6 +39194,7 @@
       }
 
       function clearRegisterInboundTimers() {
+        clearRegisterInboundAwaitingConfirm();
         if (registerInboundPollTimer) {
           clearInterval(registerInboundPollTimer);
           registerInboundPollTimer = null;
@@ -39157,6 +39232,8 @@
         registerInboundSentPromptTimer = setTimeout(() => {
           registerInboundSentPromptTimer = null;
           if (registerWizardStep !== 3) return;
+          if (!String(registerInboundValidationId || "").trim()) return;
+          if (registerInboundUserAwaitingConfirm) return;
           const receiveRow = document.getElementById("register-inbound-receive-row");
           if (receiveRow?.classList.contains("success")) return;
           setRegisterInboundPhase("prompt");
@@ -39166,60 +39243,57 @@
       async function handleRegisterInboundUserConfirmSent() {
         const validationId = String(registerInboundValidationId || "").trim();
         const instanceName = String(registerConnectedInstanceName || "").trim();
-        if (!validationId || registerInboundConfirmInFlight) return;
+
+        if (registerInboundConfirmInFlight) {
+          showToast("Aguarde — já estamos buscando CONFIRMAR na Evolution.", "info");
+          return;
+        }
+
+        if (!validationId) {
+          showToast(
+            "A validação ainda está iniciando. Aguarde alguns segundos e tente de novo.",
+            "warning"
+          );
+          if (instanceName && !registerInboundStartInFlight) {
+            void startRegisterInboundValidation(instanceName);
+          }
+          return;
+        }
 
         registerInboundConfirmInFlight = true;
-        registerInboundUserConfirmed = true;
-        setRegisterInboundPhase("verify-receive");
-        setInboundCheckVisible("register-inbound-receive-row", true, true);
-        updateRegisterInboundRow(
-          "register-inbound-receive-row",
-          "register-inbound-receive-result",
-          null,
-          "register-inbound-receive-detail",
-          "Consultando a Evolution para confirmar CONFIRMAR…"
-        );
-        setInboundCheckVisible("register-inbound-send-row", false, false);
+        registerInboundUserAwaitingConfirm = true;
+        registerInboundAwaitingConfirmSince = Date.now();
+        setRegisterInboundConfirmUiBusy(true);
+        enterRegisterInboundVerifyReceive("Consultando a Evolution para confirmar CONFIRMAR…");
 
         try {
-          const res = await fetchWithTimeout(
-            `/instancias/validacao-inbound/${encodeURIComponent(validationId)}/confirmar-envio`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "same-origin",
-            },
-            45000
-          );
-          const data = await res.json().catch(() => ({}));
+          const data = await requestRegisterInboundConfirmScan(validationId, instanceName);
           if (data?.receiveTest?.success === true) {
-            registerInboundUserConfirmed = false;
-            applyRegisterInboundStatus(data, instanceName);
+            clearRegisterInboundAwaitingConfirm();
             if (handleRegisterInboundTerminalStatus(data, instanceName)) return;
             return;
           }
 
-          registerInboundUserConfirmed = false;
-          const errMsg =
+          enterRegisterInboundVerifyReceive(
             data?.error ||
-            "CONFIRMAR não encontrado na Evolution. Verifique o outro WhatsApp e tente novamente.";
-          showToast(errMsg, "warning");
-          setInboundCheckVisible("register-inbound-receive-row", false, false);
-          setInboundCheckVisible("register-inbound-send-row", false, false);
-          setRegisterInboundPhase("prompt");
-        } catch {
-          registerInboundUserConfirmed = false;
-          showToast("Falha ao consultar a Evolution. Tente novamente.", "error");
-          setInboundCheckVisible("register-inbound-receive-row", false, false);
-          setInboundCheckVisible("register-inbound-send-row", false, false);
-          setRegisterInboundPhase("prompt");
+              "CONFIRMAR ainda não localizado — continuamos buscando na Evolution. Aguarde nesta tela."
+          );
+        } catch (err) {
+          const msg =
+            err?.message || "Falha ao consultar a Evolution. Continuamos tentando automaticamente.";
+          enterRegisterInboundVerifyReceive(msg);
+          showToast(msg, "error");
         } finally {
           registerInboundConfirmInFlight = false;
+          if (registerInboundUserAwaitingConfirm) {
+            setRegisterInboundConfirmUiBusy(false);
+          }
         }
       }
 
       function handleRegisterInboundUserConfirmNotSent() {
-        setRegisterInboundPhase("instructions");
+        clearRegisterInboundAwaitingConfirm();
+        setRegisterInboundPhase("instructions", { force: true });
         setInboundWaitingVisible(
           true,
           "Envie CONFIRMAR pelo outro WhatsApp. A pergunta voltará em alguns segundos."
@@ -39352,7 +39426,7 @@
         const numberEl = document.getElementById("register-inbound-number");
         const keywordEl = document.getElementById("register-inbound-keyword");
         registerInboundUiPhase = "instructions";
-        registerInboundUserConfirmed = false;
+        clearRegisterInboundAwaitingConfirm();
         registerInboundConfirmInFlight = false;
         setInboundCheckVisible("register-inbound-receive-row", false, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
@@ -39409,8 +39483,10 @@
         const phase = resolveRegisterInboundPhase(status);
 
         if (receiveOk) {
-          registerInboundUserConfirmed = false;
+          clearRegisterInboundAwaitingConfirm();
         }
+
+        if (maybeExpireRegisterInboundAwaitingConfirm()) return;
 
         if (!receiveDone) {
           if (phase === "verify-receive") {
@@ -39640,8 +39716,10 @@
             }
 
             registerInboundPollTick += 1;
+            if (maybeExpireRegisterInboundAwaitingConfirm()) return;
+
             let pollPath = `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`;
-            if (registerInboundPollTick % REGISTER_INBOUND_DEEP_NUDGE_EVERY === 0) {
+            if (registerInboundUserAwaitingConfirm || registerInboundPollTick % REGISTER_INBOUND_DEEP_NUDGE_EVERY === 0) {
               pollPath += "?nudge=2";
             } else if (registerInboundPollTick % 2 === 0) {
               pollPath += "?nudge=1";
@@ -39678,6 +39756,20 @@
             const status = await pollRes.json().catch(() => null);
             applyRegisterInboundStatus(status, instanceName);
             if (handleRegisterInboundTerminalStatus(status, instanceName)) return;
+
+            if (
+              registerInboundUserAwaitingConfirm &&
+              !registerInboundConfirmInFlight &&
+              registerInboundPollTick % 12 === 0 &&
+              status?.receiveTest?.success !== true
+            ) {
+              void requestRegisterInboundConfirmScan(validationId, instanceName).then((data) => {
+                if (data?.receiveTest?.success === true) {
+                  clearRegisterInboundAwaitingConfirm();
+                  handleRegisterInboundTerminalStatus(data, instanceName);
+                }
+              });
+            }
           } catch {
             registerInboundPollFailCount += 1;
           }

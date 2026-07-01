@@ -1338,8 +1338,15 @@ export async function confirmUserSentInbound(validationId: string): Promise<{
   }
 
   try {
-    const status = await refreshInboundValidation(id, { aggressive: true, deep: true });
-    const found = status?.receiveTest?.success === true;
+    let status: InboundValidationStatus | null = null;
+    let found = false;
+    for (let attempt = 0; attempt < 4 && !found; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      status = await refreshInboundValidation(id, { aggressive: true, deep: true });
+      found = status?.receiveTest?.success === true;
+    }
     return {
       ok: true,
       found,
