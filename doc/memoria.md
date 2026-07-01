@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-01
 
+**WABA — Validação CONFIRMAR modal fases progressivas:** passo 3 exibe uma etapa por vez (instruções → prompt Sim/Não → recepção → resposta); corrige travamento ao clicar Sim e scroll que escondia instruções. Marker `DEPLOY-2026-07-01-validacao-confirmar-modal-fases-progressivas`. Ver `doc/LOG-2026-07-01__validacao-confirmar-modal-fases-progressivas.md`.
+
 **WABA — Validação CONFIRMAR modal Sim/Não (20s):** pergunta no passo 3 após 20s; Sim → `POST .../confirmar-envio` busca agressiva EVO; remove auto-conclusão sem validar. Marker `DEPLOY-2026-07-01-validacao-confirmar-modal-sim-nao`. Ver `doc/LOG-2026-07-01__validacao-confirmar-modal-sim-nao.md`.
 
 **WABA — QRCode reconexão ghost open (5181082477):** `registrar-qrcode` bloqueava por `fetchInstances=open` com live `connecting`; alias `Final--2477` ≠ nome técnico `digital-corban-2477`. Marker `DEPLOY-2026-07-01-qrcode-reconnect-live-open-guard`. Ver `doc/LOG-2026-07-01__qrcode-reconnect-5181082477-ghost-open.md`.

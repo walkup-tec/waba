@@ -7624,6 +7624,21 @@
         display: none;
       }
 
+      #register-inbound-progress[data-phase="instructions"] .reg-val-checks,
+      #register-inbound-progress[data-phase="prompt"] .reg-val-checks {
+        display: none;
+      }
+
+      #register-inbound-progress[data-phase="prompt"] .reg-inbound-waiting,
+      #register-inbound-progress[data-phase="verify-receive"] .reg-inbound-waiting,
+      #register-inbound-progress[data-phase="verify-receive"] .reg-inbound-sent-prompt,
+      #register-inbound-progress[data-phase="verify-send"] .reg-inbound-waiting,
+      #register-inbound-progress[data-phase="verify-send"] .reg-inbound-sent-prompt,
+      #register-inbound-progress[data-phase="complete"] .reg-inbound-waiting,
+      #register-inbound-progress[data-phase="complete"] .reg-inbound-sent-prompt {
+        display: none !important;
+      }
+
       .reg-wizard-pane[data-pane="3"].reg-pane-validating .reg-wizard-pane-title {
         margin-bottom: 4px;
         font-size: var(--reg-text-lg);
@@ -18152,7 +18167,7 @@
                 </ol>
               </div>
             </div>
-            <div class="reg-wizard-pane-progress" id="register-inbound-progress">
+            <div class="reg-wizard-pane-progress" id="register-inbound-progress" data-phase="instructions">
               <div id="register-inbound-evo-connected" class="reg-inbound-evo-connected" hidden>
                 <span class="reg-evo-connected-icon" aria-hidden="true">✓</span>
                 <span id="register-inbound-evo-connected-text">
@@ -30965,6 +30980,9 @@
       let registerInboundConnectionAdvanceTimer = null;
       let registerInboundSentPromptTimer = null;
       let registerInboundSentPromptRetryTimer = null;
+      let registerInboundUiPhase = "instructions";
+      let registerInboundUserConfirmed = false;
+      let registerInboundConfirmInFlight = false;
       const REGISTER_INBOUND_POLL_MS = 300;
       const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
       const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 20000;
@@ -38860,26 +38878,72 @@
         if (pane) pane.scrollTop = 0;
       }
 
-      function scrollRegisterWizardToProgress() {
+      function scrollRegisterInboundActivePhase() {
         const pane = document.querySelector('.reg-wizard-pane[data-pane="3"].active');
         if (!pane) return;
         requestAnimationFrame(() => {
-          const anchor =
-            pane.querySelector(".reg-val-check:not(.is-hidden):last-of-type") ||
-            pane.querySelector(".reg-inbound-waiting:not(.is-hidden)") ||
-            pane.querySelector(".reg-wizard-pane-progress");
-          if (!anchor) return;
-          anchor.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          const phase = registerInboundUiPhase;
+          let anchor = null;
+          if (phase === "verify-receive") {
+            anchor = document.getElementById("register-inbound-receive-row");
+          } else if (phase === "verify-send" || phase === "complete") {
+            const sendRow = document.getElementById("register-inbound-send-row");
+            anchor =
+              sendRow && !sendRow.classList.contains("is-hidden") && !sendRow.hidden
+                ? sendRow
+                : document.getElementById("register-inbound-receive-row");
+          }
+          if (anchor && !anchor.hidden && !anchor.classList.contains("is-hidden")) {
+            anchor.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
         });
       }
 
-      function syncRegisterValidationPaneLayout(status) {
-        const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
-        if (!pane) return;
+      function resolveRegisterInboundPhase(status) {
         const receiveDone =
           status?.receiveTest?.success !== null && status?.receiveTest?.success !== undefined;
-        pane.classList.toggle("reg-pane-validating", Boolean(receiveDone));
-        scrollRegisterWizardToProgress();
+        const receiveOk = status?.receiveTest?.success === true;
+        const sendDone =
+          status?.sendTest?.success !== null && status?.sendTest?.success !== undefined;
+
+        if (receiveOk && sendDone) return "complete";
+        if (receiveOk) return "verify-send";
+        if (receiveDone && !receiveOk) return "verify-receive";
+        if (registerInboundUserConfirmed) return "verify-receive";
+        if (registerInboundUiPhase === "prompt") return "prompt";
+        return "instructions";
+      }
+
+      function setRegisterInboundPhase(phase) {
+        registerInboundUiPhase = phase;
+        const progress = document.getElementById("register-inbound-progress");
+        if (progress) progress.setAttribute("data-phase", phase);
+
+        const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
+        if (pane) {
+          pane.classList.toggle(
+            "reg-pane-validating",
+            phase === "verify-send" || phase === "complete"
+          );
+        }
+
+        if (phase === "instructions") {
+          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+        } else {
+          setInboundWaitingVisible(false);
+        }
+
+        if (phase === "prompt") {
+          setRegisterInboundSentPromptVisible(true);
+        } else if (phase !== "verify-receive" || !registerInboundConfirmInFlight) {
+          setRegisterInboundSentPromptVisible(false);
+        }
+
+        if (phase === "instructions" || phase === "prompt") {
+          scrollRegisterWizardPaneToTop();
+        } else {
+          scrollRegisterInboundActivePhase();
+        }
       }
 
       function openRegisterModal(instanceName, number, options = {}) {
@@ -39095,18 +39159,28 @@
           if (registerWizardStep !== 3) return;
           const receiveRow = document.getElementById("register-inbound-receive-row");
           if (receiveRow?.classList.contains("success")) return;
-          setRegisterInboundSentPromptVisible(true);
-          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+          setRegisterInboundPhase("prompt");
         }, delayMs);
       }
 
       async function handleRegisterInboundUserConfirmSent() {
         const validationId = String(registerInboundValidationId || "").trim();
         const instanceName = String(registerConnectedInstanceName || "").trim();
-        const prompt = document.getElementById("register-inbound-sent-prompt");
-        if (!validationId) return;
-        if (prompt) prompt.classList.add("is-busy");
-        setInboundWaitingVisible(true, "Consultando a Evolution para confirmar CONFIRMAR…");
+        if (!validationId || registerInboundConfirmInFlight) return;
+
+        registerInboundConfirmInFlight = true;
+        registerInboundUserConfirmed = true;
+        setRegisterInboundPhase("verify-receive");
+        setInboundCheckVisible("register-inbound-receive-row", true, true);
+        updateRegisterInboundRow(
+          "register-inbound-receive-row",
+          "register-inbound-receive-result",
+          null,
+          "register-inbound-receive-detail",
+          "Consultando a Evolution para confirmar CONFIRMAR…"
+        );
+        setInboundCheckVisible("register-inbound-send-row", false, false);
+
         try {
           const res = await fetchWithTimeout(
             `/instancias/validacao-inbound/${encodeURIComponent(validationId)}/confirmar-envio`,
@@ -39118,29 +39192,34 @@
             45000
           );
           const data = await res.json().catch(() => ({}));
-          applyRegisterInboundStatus(data, instanceName);
           if (data?.receiveTest?.success === true) {
-            setRegisterInboundSentPromptVisible(false);
+            registerInboundUserConfirmed = false;
+            applyRegisterInboundStatus(data, instanceName);
             if (handleRegisterInboundTerminalStatus(data, instanceName)) return;
             return;
           }
+
+          registerInboundUserConfirmed = false;
           const errMsg =
             data?.error ||
             "CONFIRMAR não encontrado na Evolution. Verifique o outro WhatsApp e tente novamente.";
           showToast(errMsg, "warning");
-          setInboundWaitingVisible(true, errMsg);
-          if (prompt) prompt.classList.remove("is-busy");
-          setRegisterInboundSentPromptVisible(true);
+          setInboundCheckVisible("register-inbound-receive-row", false, false);
+          setInboundCheckVisible("register-inbound-send-row", false, false);
+          setRegisterInboundPhase("prompt");
         } catch {
+          registerInboundUserConfirmed = false;
           showToast("Falha ao consultar a Evolution. Tente novamente.", "error");
-          if (prompt) prompt.classList.remove("is-busy");
-          setRegisterInboundSentPromptVisible(true);
-          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+          setInboundCheckVisible("register-inbound-receive-row", false, false);
+          setInboundCheckVisible("register-inbound-send-row", false, false);
+          setRegisterInboundPhase("prompt");
+        } finally {
+          registerInboundConfirmInFlight = false;
         }
       }
 
       function handleRegisterInboundUserConfirmNotSent() {
-        setRegisterInboundSentPromptVisible(false);
+        setRegisterInboundPhase("instructions");
         setInboundWaitingVisible(
           true,
           "Envie CONFIRMAR pelo outro WhatsApp. A pergunta voltará em alguns segundos."
@@ -39272,6 +39351,9 @@
         const alertEl = document.getElementById("register-inbound-alert");
         const numberEl = document.getElementById("register-inbound-number");
         const keywordEl = document.getElementById("register-inbound-keyword");
+        registerInboundUiPhase = "instructions";
+        registerInboundUserConfirmed = false;
+        registerInboundConfirmInFlight = false;
         setInboundCheckVisible("register-inbound-receive-row", false, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
         if (receiveRow) receiveRow.className = "reg-val-check is-hidden";
@@ -39287,10 +39369,9 @@
         }
         if (keywordEl) keywordEl.textContent = "CONFIRMAR";
         showRegisterInboundEvoConnectedBanner(false);
-        setRegisterInboundSentPromptVisible(false);
-        setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
         const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
         if (pane) pane.classList.remove("reg-pane-validating");
+        setRegisterInboundPhase("instructions");
       }
 
       function updateRegisterInboundRow(rowId, resultId, success, detailId, detailText) {
@@ -39320,36 +39401,36 @@
         );
         if (keywordEl && status.keyword) keywordEl.textContent = status.keyword;
 
-        const receiveDone = status.receiveTest?.success !== null && status.receiveTest?.success !== undefined;
+        const receiveDone =
+          status.receiveTest?.success !== null && status.receiveTest?.success !== undefined;
         const receiveOk = status.receiveTest?.success === true;
-        const sendDone = status.sendTest?.success !== null && status.sendTest?.success !== undefined;
+        const sendDone =
+          status.sendTest?.success !== null && status.sendTest?.success !== undefined;
+        const phase = resolveRegisterInboundPhase(status);
 
         if (receiveOk) {
-          setRegisterInboundSentPromptVisible(false);
+          registerInboundUserConfirmed = false;
         }
 
         if (!receiveDone) {
-          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
-          setInboundCheckVisible("register-inbound-receive-row", true, true);
-          updateRegisterInboundRow(
-            "register-inbound-receive-row",
-            "register-inbound-receive-result",
-            null,
-            "register-inbound-receive-detail",
-            status.receiveTest?.detail || REGISTER_INBOUND_WAIT_STEP1
-          );
-          setInboundCheckVisible("register-inbound-send-row", true, false);
-          updateRegisterInboundRow(
-            "register-inbound-send-row",
-            "register-inbound-send-result",
-            null,
-            "register-inbound-send-detail",
-            "Aguardando recepção de CONFIRMAR para enviar resposta automática…"
-          );
+          if (phase === "verify-receive") {
+            setInboundCheckVisible("register-inbound-receive-row", true, false);
+            updateRegisterInboundRow(
+              "register-inbound-receive-row",
+              "register-inbound-receive-result",
+              null,
+              "register-inbound-receive-detail",
+              status.receiveTest?.detail || REGISTER_INBOUND_WAIT_STEP1
+            );
+            setInboundCheckVisible("register-inbound-send-row", false, false);
+          } else {
+            setInboundCheckVisible("register-inbound-receive-row", false, false);
+            setInboundCheckVisible("register-inbound-send-row", false, false);
+          }
           setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
         } else {
           setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
-          setInboundCheckVisible("register-inbound-receive-row", true, true);
+          setInboundCheckVisible("register-inbound-receive-row", true, phase === "verify-send");
           updateRegisterInboundRow(
             "register-inbound-receive-row",
             "register-inbound-receive-result",
@@ -39359,7 +39440,6 @@
           );
 
           if (receiveOk && !sendDone) {
-            setInboundWaitingVisible(false);
             setInboundCheckVisible("register-inbound-send-row", true, true);
             updateRegisterInboundRow(
               "register-inbound-send-row",
@@ -39369,7 +39449,6 @@
               REGISTER_INBOUND_WAIT_STEP2
             );
           } else if (sendDone) {
-            setInboundWaitingVisible(false);
             setInboundCheckVisible("register-inbound-send-row", true, !receiveOk);
             updateRegisterInboundRow(
               "register-inbound-send-row",
@@ -39379,7 +39458,6 @@
               status.sendTest?.detail || ""
             );
           } else {
-            setInboundWaitingVisible(false);
             setInboundCheckVisible("register-inbound-send-row", false, false);
           }
         }
@@ -39393,7 +39471,7 @@
           status.finished === true &&
           (status.receiveTest?.success !== true || status.sendTest?.success !== true);
         setRegisterInboundActionButtons({ retry: failed, skip: true });
-        syncRegisterValidationPaneLayout(status);
+        setRegisterInboundPhase(phase);
       }
 
       async function restartRegisterInboundValidation(instanceName) {
