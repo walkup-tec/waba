@@ -30985,6 +30985,7 @@
       let registerInboundUserAwaitingConfirm = false;
       let registerInboundAwaitingConfirmSince = 0;
       let registerInboundReceiveConfirmed = false;
+      let registerInboundPromptAnsweredYes = false;
       let registerInboundConfirmInFlight = false;
       const REGISTER_INBOUND_POLL_MS = 300;
       const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
@@ -38913,17 +38914,37 @@
         if (receiveOk && sendDone) return "complete";
         if (receiveOk || registerInboundReceiveConfirmed) return "verify-send";
         if (receiveDone && !receiveOk) return "verify-receive";
-        if (registerInboundUserAwaitingConfirm) return "verify-receive";
+        if (
+          registerInboundUserAwaitingConfirm ||
+          registerInboundPromptAnsweredYes ||
+          registerInboundUiPhase === "verify-receive"
+        ) {
+          return "verify-receive";
+        }
         if (registerInboundUiPhase === "verify-send" || registerInboundUiPhase === "complete") {
           return registerInboundUiPhase;
         }
-        if (registerInboundUiPhase === "prompt") return "prompt";
+        if (registerInboundUiPhase === "prompt" && !registerInboundPromptAnsweredYes) return "prompt";
         return "instructions";
       }
 
+      function cancelRegisterInboundPromptTimers() {
+        if (registerInboundSentPromptTimer) {
+          clearTimeout(registerInboundSentPromptTimer);
+          registerInboundSentPromptTimer = null;
+        }
+        if (registerInboundSentPromptRetryTimer) {
+          clearTimeout(registerInboundSentPromptRetryTimer);
+          registerInboundSentPromptRetryTimer = null;
+        }
+      }
+
       function setRegisterInboundPhase(phase, options = {}) {
+        if (registerInboundPromptAnsweredYes && phase === "prompt") {
+          phase = "verify-receive";
+        }
         if (
-          registerInboundUserAwaitingConfirm &&
+          (registerInboundUserAwaitingConfirm || registerInboundPromptAnsweredYes) &&
           (phase === "prompt" || phase === "instructions") &&
           !options.force &&
           !registerInboundReceiveConfirmed
@@ -38953,8 +38974,12 @@
 
         if (phase === "prompt") {
           setRegisterInboundSentPromptVisible(true);
+          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
         } else {
           setRegisterInboundSentPromptVisible(false);
+          if (phase === "verify-receive" || phase === "verify-send" || phase === "complete") {
+            setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+          }
         }
 
         if (phase === "instructions" || phase === "prompt") {
@@ -39170,18 +39195,30 @@
       }
 
       function maybeExpireRegisterInboundAwaitingConfirm() {
-        if (!registerInboundUserAwaitingConfirm || !registerInboundAwaitingConfirmSince) return false;
+        if (!registerInboundUserAwaitingConfirm && !registerInboundPromptAnsweredYes) return false;
+        if (!registerInboundAwaitingConfirmSince) return false;
         if (Date.now() - registerInboundAwaitingConfirmSince < REGISTER_INBOUND_AWAIT_CONFIRM_MS) {
           return false;
         }
-        clearRegisterInboundAwaitingConfirm();
+        registerInboundUserAwaitingConfirm = false;
+        registerInboundPromptAnsweredYes = false;
+        registerInboundAwaitingConfirmSince = 0;
+        setRegisterInboundConfirmUiBusy(false);
         showToast(
-          "CONFIRMAR não localizado após 2 minutos. Confira o outro WhatsApp e tente novamente.",
+          "CONFIRMAR não localizado após 2 minutos. Confira o outro WhatsApp ou pule a validação.",
           "warning"
         );
-        setInboundCheckVisible("register-inbound-receive-row", false, false);
+        updateRegisterInboundRow(
+          "register-inbound-receive-row",
+          "register-inbound-receive-result",
+          false,
+          "register-inbound-receive-detail",
+          "CONFIRMAR não detectado a tempo. Envie novamente ou pule a validação."
+        );
+        setInboundCheckVisible("register-inbound-receive-row", true, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
-        setRegisterInboundPhase("prompt", { force: true });
+        setRegisterInboundPhase("verify-receive", { force: true });
+        setRegisterInboundActionButtons({ retry: true, skip: true, nudge: false });
         return true;
       }
 
@@ -39213,7 +39250,6 @@
       }
 
       function clearRegisterInboundTimers() {
-        clearRegisterInboundAwaitingConfirm();
         if (registerInboundPollTimer) {
           clearInterval(registerInboundPollTimer);
           registerInboundPollTimer = null;
@@ -39244,15 +39280,13 @@
       }
 
       function scheduleRegisterInboundSentPrompt(delayMs = REGISTER_INBOUND_CONNECTION_ADVANCE_MS) {
-        if (registerInboundSentPromptTimer) {
-          clearTimeout(registerInboundSentPromptTimer);
-          registerInboundSentPromptTimer = null;
-        }
+        if (registerInboundPromptAnsweredYes || registerInboundUserAwaitingConfirm) return;
+        cancelRegisterInboundPromptTimers();
         registerInboundSentPromptTimer = setTimeout(() => {
           registerInboundSentPromptTimer = null;
           if (registerWizardStep !== 3) return;
           if (!String(registerInboundValidationId || "").trim()) return;
-          if (registerInboundUserAwaitingConfirm) return;
+          if (registerInboundPromptAnsweredYes || registerInboundUserAwaitingConfirm) return;
           const receiveRow = document.getElementById("register-inbound-receive-row");
           if (receiveRow?.classList.contains("success")) return;
           setRegisterInboundPhase("prompt");
@@ -39280,8 +39314,10 @@
         }
 
         registerInboundConfirmInFlight = true;
+        registerInboundPromptAnsweredYes = true;
         registerInboundUserAwaitingConfirm = true;
         registerInboundAwaitingConfirmSince = Date.now();
+        cancelRegisterInboundPromptTimers();
         setRegisterInboundConfirmUiBusy(true);
         enterRegisterInboundVerifyReceive("Consultando a Evolution para confirmar CONFIRMAR…");
 
@@ -39313,7 +39349,9 @@
       }
 
       function handleRegisterInboundUserConfirmNotSent() {
+        registerInboundPromptAnsweredYes = false;
         clearRegisterInboundAwaitingConfirm();
+        cancelRegisterInboundPromptTimers();
         setRegisterInboundPhase("instructions", { force: true });
         setInboundWaitingVisible(
           true,
@@ -39448,7 +39486,9 @@
         const keywordEl = document.getElementById("register-inbound-keyword");
         registerInboundUiPhase = "instructions";
         registerInboundReceiveConfirmed = false;
+        registerInboundPromptAnsweredYes = false;
         clearRegisterInboundAwaitingConfirm();
+        cancelRegisterInboundPromptTimers();
         registerInboundConfirmInFlight = false;
         setInboundCheckVisible("register-inbound-receive-row", false, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
