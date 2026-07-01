@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-01
 
+**WABA — Validação CONFIRMAR receive-ok:** detecção records+120s; recepção OK libera mesmo se sendText falhar; botão「Já enviei CONFIRMAR」; **commit dist/** obrigatório + redeploy Easypanel. walkup/mozart 5197462102 webhook OK, QR pendente. Marker `DEPLOY-2026-07-01-validacao-confirmar-receive-ok`. Ver `doc/LOG-2026-07-01__validacao-confirmar-receive-ok-mozart-walkup.md`.
+
 **WABA — Validação QR + connectionState fresh:** cache 4s + bypass no poll QR; waitFor open antes CONFIRMAR; findChats primeiro; sendText timeout libera se recepção OK. Marker `DEPLOY-2026-07-01-validacao-qr-fast-connectionstate`. Ver `doc/LOG-2026-07-01__validacao-qr-fast-connectionstate.md`.
 
 **WABA — Desconectar todas instâncias EVO:** logout em massa falhou (HTTP 500 Connection Closed) em 6 instâncias; restart API não muda state. **Usuário deve reiniciar `evo-walkup-api` no Easypanel** antes de reconectar QR. Ver `doc/LOG-2026-07-01__desconectar-todas-instancias-evo-logout-falhou.md`.

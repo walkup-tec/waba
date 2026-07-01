@@ -1,7 +1,9 @@
 import crypto from "crypto";
 import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "./evo-http.client";
 import {
-  waitForEvoInstanceLiveOpen,
+  fetchEvoInstanceLiveState,
+  invalidateEvoLiveStateCache,
+  isEvoLiveStateOpen,
 } from "./instances/evo-connection-state.service";
 import {
   normalizeEvoWhatsAppNumber,
@@ -203,7 +205,8 @@ function buildTemplateUrl(template: string, instanceName: string): string {
 function resolveSendTarget(referenceJid: string | null, referenceNumber: string | null): string {
   const jid = String(referenceJid || "").trim();
   if (jid.includes("@")) return jid;
-  return normalizeWhatsAppNumber(String(referenceNumber || "").trim());
+  const digits = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
+  return digits;
 }
 
 function collectMessageTexts(node: unknown, out: string[], depth = 0): void {
@@ -273,6 +276,7 @@ function extractMessageTimestampMs(node: Record<string, unknown>): number | null
 function isSendFailureTechnical(detail: string, httpStatus?: number): boolean {
   const d = String(detail || "").toLowerCase();
   if (httpStatus === 0) return true;
+  if (httpStatus === 400 && (d.includes("exists") || d.includes("bad request"))) return true;
   if (
     d.includes("timeout") ||
     d.includes("socket hang up") ||
@@ -591,23 +595,26 @@ async function findInboundViaRecentChats(
   keyword: string,
   minTimestampMs: number
 ): Promise<InboundHit | null> {
-  const minTs = minTimestampMs - 20_000;
+  const minTs = minTimestampMs - 120_000;
   for (const url of buildFindChatsUrls(instanceName)) {
-    const result = await callEvo(url, "POST", { limit: 30 });
+    const result = await callEvo(url, "POST", { limit: 40 });
     if (!result.ok) continue;
-    const jids = extractChatRemoteJids(result.json).slice(0, 15);
+    const jids = extractChatRemoteJids(result.json).slice(0, 20);
     for (const remoteJid of jids) {
       for (const msgUrl of buildFindMessagesUrls(instanceName)) {
         const bodies = [
-          { where: { key: { remoteJid } }, limit: 40 },
-          { where: { key: { remoteJid } }, take: 40 },
+          { where: { key: { remoteJid } }, limit: 50 },
+          { where: { key: { remoteJid } }, take: 50 },
         ];
         for (const body of bodies) {
           const msgRes = await callEvo(msgUrl, "POST", body);
           if (!msgRes.ok) continue;
-          const hit =
-            findInboundInPayload(msgRes.json, keyword, { minTimestampMs: minTs }) ||
-            findInboundInPayload(msgRes.json, keyword, { requireTimestamp: false });
+          const records = extractEvoMessageRecords(msgRes.json);
+          const payload = records.length ? records : msgRes.json;
+          const hit = findInboundInPayload(payload, keyword, {
+            minTimestampMs: minTs,
+            requireTimestamp: false,
+          });
           if (hit) return hit;
         }
       }
@@ -631,6 +638,17 @@ async function resolveInboundHit(
   return findInboundViaApi(instanceName, keyword, minTimestampMs - 120_000);
 }
 
+function extractEvoMessageRecords(payload: unknown): unknown[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const messages = root.messages as Record<string, unknown> | undefined;
+  if (messages && Array.isArray(messages.records)) return messages.records;
+  if (Array.isArray(root.records)) return root.records;
+  if (Array.isArray(root.response)) return root.response as unknown[];
+  if (Array.isArray(root.data)) return root.data as unknown[];
+  return [];
+}
+
 async function findInboundViaApi(
   instanceName: string,
   keyword: string,
@@ -638,19 +656,29 @@ async function findInboundViaApi(
 ): Promise<InboundHit | null> {
   const urls = buildFindMessagesUrls(instanceName);
   const bodies: Record<string, unknown>[] = [
+    { where: { key: { fromMe: false } }, limit: 100 },
     { limit: 100 },
     { take: 100 },
     { limit: 80 },
     { limit: 50, page: 1 },
     {},
   ];
-  const timestampGraceMs = 20_000;
+  const timestampGraceMs = 120_000;
   const minTs = minTimestampMs - timestampGraceMs;
 
   for (const url of urls) {
     for (let i = 0; i < bodies.length; i += 1) {
       const result = await callEvo(url, "POST", bodies[i]);
       if (!result.ok) continue;
+
+      const records = extractEvoMessageRecords(result.json);
+      if (records.length) {
+        const recordsHit = findInboundInPayload(records, keyword, {
+          minTimestampMs: minTs,
+          requireTimestamp: false,
+        });
+        if (recordsHit) return recordsHit;
+      }
 
       const strictHit = findInboundInPayload(result.json, keyword, {
         minTimestampMs: minTs,
@@ -691,6 +719,7 @@ async function findReplyInChat(
     { where: { key: { remoteJid } }, limit: 40 },
     { where: { key: { remoteJid } }, take: 40 },
     { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 40 },
+    { where: { key: { fromMe: false } }, limit: 60 },
     { limit: 80 },
     {},
   ];
@@ -698,11 +727,15 @@ async function findReplyInChat(
     for (const body of bodies) {
       const result = await callEvo(url, "POST", body);
       if (!result.ok) continue;
-      const texts: string[] = [];
-      collectMessageTexts(result.json, texts);
-      const needle = replyMarker.toLowerCase();
-      if (texts.some((t) => t.toLowerCase().includes(needle))) return true;
-      if (digits && texts.some((t) => t.toLowerCase().includes("validação waba"))) return true;
+      const records = extractEvoMessageRecords(result.json);
+      const nodes = records.length ? records : [result.json];
+      for (const node of nodes) {
+        const texts: string[] = [];
+        collectMessageTexts(node, texts);
+        const needle = replyMarker.toLowerCase();
+        if (texts.some((t) => t.toLowerCase().includes(needle))) return true;
+        if (digits && texts.some((t) => t.toLowerCase().includes("validação waba"))) return true;
+      }
     }
   }
   return false;
@@ -756,7 +789,7 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
 }
 
 async function sendContextualReply(record: ValidationRecord): Promise<void> {
-  if (record.cancelled || record.finished || !record.referenceNumber || record.sendAttempted) return;
+  if (record.cancelled || record.finished || record.sendAttempted) return;
 
   const convKey = conversationReplyKey(record);
   if (convKey) {
@@ -808,11 +841,12 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
       record.sendDetail = String(detail);
       const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
       const technical = isSendFailureTechnical(record.sendDetail, result.status);
-      if (!restricted && technical) {
+      if (!restricted && (technical || record.receiveTest.success === true)) {
         record.sendTest = {
           success: true,
-          detail:
-            "Recepção confirmada. Resposta automática indisponível (Evolution lenta/timeout) — integração liberada.",
+          detail: technical
+            ? "Recepção confirmada. Resposta automática indisponível (Evolution lenta/timeout) — integração liberada."
+            : "Recepção confirmada. Resposta automática não enviada — integração liberada.",
         };
         tryFinalize(record);
         return;
@@ -838,11 +872,45 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   }
 }
 
+async function ensureValidationInstanceOpen(record: ValidationRecord): Promise<boolean> {
+  const maxWaitMs = Math.max(
+    10_000,
+    Math.min(90_000, Number(process.env.INBOUND_VALIDATION_OPEN_WAIT_MS || 45_000) || 45_000),
+  );
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline && !record.cancelled && !record.finished) {
+    invalidateEvoLiveStateCache(record.instanceName);
+    const state = await fetchEvoInstanceLiveState(record.instanceName, { fresh: true });
+    if (isEvoLiveStateOpen(state)) return true;
+    if (state === "close") return false;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  const state = await fetchEvoInstanceLiveState(record.instanceName, { fresh: true });
+  return isEvoLiveStateOpen(state);
+}
+
 async function runValidationLoop(record: ValidationRecord): Promise<void> {
   if (record.loopRunning) return;
   record.loopRunning = true;
   const deadline = Date.now() + VALIDATION_TIMEOUT_MS;
   try {
+    const open = await ensureValidationInstanceOpen(record);
+    if (!open) {
+      record.receiveTest = {
+        success: false,
+        detail: `Instância não conectou na Evolution a tempo. Escaneie o QR novamente.`,
+      };
+      record.sendTest = {
+        success: false,
+        detail: "Validação cancelada — instância desconectada.",
+      };
+      record.phase = "failed";
+      record.finished = true;
+      record.finishedAt = new Date().toISOString();
+      notifyFinished(record);
+      return;
+    }
+
     while (Date.now() < deadline && !record.finished && !record.cancelled) {
       if (record.receiveTest.success !== true) {
         try {
@@ -1002,19 +1070,6 @@ export async function startInboundValidation(input: {
   }
 
   const numberHint = normalizeWhatsAppNumber(String(input.instanceNumberHint || "").trim());
-
-  const liveWait = await waitForEvoInstanceLiveOpen(instanceName, {
-    maxWaitMs: Math.max(
-      15_000,
-      Math.min(90_000, Number(process.env.INBOUND_VALIDATION_OPEN_WAIT_MS || 50_000) || 50_000),
-    ),
-    pollMs: 500,
-  });
-  if (!liveWait.open) {
-    return {
-      error: `Instância "${instanceName}" não está conectada na Evolution (connectionState=${liveWait.state || "close"}). Aguarde a conexão ou escaneie o QR novamente.`,
-    };
-  }
 
   const resolvedNumber = await resolveEvoInstancePhone(instanceName, { hint: numberHint });
   const connected = { instancia: instanceName, numero: resolvedNumber };

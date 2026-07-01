@@ -11,6 +11,7 @@ const promises_1 = __importDefault(require("fs/promises"));
 const data_path_1 = require("../data-path");
 const evo_http_client_1 = require("../evo-http.client");
 const evo_instance_key_1 = require("./evo-instance-key");
+const evo_connection_state_service_1 = require("./evo-connection-state.service");
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080").replace(/\/$/, "");
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
 const EVO_INSTANCES_URL = String(process.env.EVO_INSTANCES_URL || "").trim() ||
@@ -195,6 +196,10 @@ async function isEvoInstanceOpen(instanceName) {
     const needle = instanceName.trim().toLowerCase();
     if (!needle)
         return false;
+    const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instanceName, { fresh: true });
+    if (liveState) {
+        return (0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState);
+    }
     const listResult = await (0, evo_http_client_1.evoHttpRequest)(EVO_INSTANCES_URL, "GET", {
         apiKey: EVO_API_KEY,
         timeoutMs: 12000,
@@ -207,25 +212,6 @@ async function isEvoInstanceOpen(instanceName) {
                 return row.open;
             }
         }
-    }
-    const enc = encodeURIComponent(instanceName);
-    const urls = [
-        `${EVO_API_BASE}/instance/connectionState/${enc}`,
-        `${EVO_API_BASE}/instance/connection-state/${enc}`,
-    ];
-    for (const url of urls) {
-        const result = await (0, evo_http_client_1.evoHttpRequest)(url, "GET", {
-            apiKey: EVO_API_KEY,
-            timeoutMs: 8000,
-            retries: 1,
-        });
-        if (!result.ok || result.json == null)
-            continue;
-        const root = result.json;
-        const inst = root.instance ?? root;
-        const state = String(inst?.state ?? inst?.connectionStatus ?? inst?.status ?? root?.state ?? "").toLowerCase();
-        if (state)
-            return state.includes("open");
     }
     return false;
 }

@@ -61,6 +61,8 @@ const alternativa_dispatch_rules_1 = require("./disparos/alternativa-dispatch-ru
 const waba_instance_ownership_service_1 = require("./instances/waba-instance-ownership.service");
 const evo_instance_key_1 = require("./instances/evo-instance-key");
 const evo_instance_phone_service_1 = require("./instances/evo-instance-phone.service");
+const evo_connection_state_service_1 = require("./instances/evo-connection-state.service");
+const evo_integration_probe_service_1 = require("./services/evo-integration-probe.service");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
 const waba_admin_routes_1 = require("./admin/waba-admin.routes");
@@ -327,6 +329,7 @@ function isMaintenanceBypassPath(method, reqPath) {
     return (p === "/health" ||
         p === "/ready" ||
         p === "/service/maintenance" ||
+        p === "/service/evo-integration-probe" ||
         p === "/maintenance");
 }
 function isDistStaticAssetPath(reqPath) {
@@ -430,6 +433,16 @@ app.get("/service/maintenance", (_req, res) => {
         port: PORT,
     });
 });
+app.get("/service/evo-integration-probe", async (_req, res) => {
+    try {
+        const result = await (0, evo_integration_probe_service_1.runEvoIntegrationProbe)();
+        res.status(result.ok ? 200 : 503).json(result);
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ ok: false, error: msg.slice(0, 300) });
+    }
+});
 app.get("/maintenance", (_req, res) => {
     if (!MAINTENANCE_MODE) {
         return res.redirect(302, "/");
@@ -445,13 +458,17 @@ app.use(waba_auth_routes_1.wabaRequireAuthMiddleware);
 const wabaEntitlementService = new waba_entitlement_service_1.WabaEntitlementService();
 async function rejectForeignInstance(req, res, instanceName) {
     const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-    if (!(await waba_instance_ownership_service_1.wabaInstanceOwnershipService.canAccessInstance(auth, instanceName))) {
-        res.status(403).json({
-            error: "Esta instância pertence a outro usuário ou você não tem permissão para acessá-la.",
-        });
-        return true;
-    }
-    return false;
+    const candidates = await resolveInstanceDeletionKeys(instanceName);
+    const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.canAccessInstance(auth, instanceName, candidates);
+    if (allowed)
+        return false;
+    const owner = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.resolveOwnerEmailForCandidates(candidates);
+    res.status(403).json({
+        error: "Esta instância pertence a outro usuário ou você não tem permissão para acessá-la.",
+        ownerEmail: owner || undefined,
+        instanceName: String(instanceName || "").trim() || undefined,
+    });
+    return true;
 }
 function rejectForeignInstanceNames(req, instanceNames) {
     const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
@@ -2730,19 +2747,45 @@ function mergeAquecedorConnectedRows(live, cache) {
         usedCacheOnlyForNumbers: false,
     };
 }
+async function filterAquecedorRowsByEvoLiveOpen(rows) {
+    const filtered = [];
+    const ghost = [];
+    for (const row of rows) {
+        const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia);
+        if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState)) {
+            filtered.push(row);
+        }
+        else {
+            ghost.push(`${row.instancia}(${liveState || "desconhecido"})`);
+        }
+    }
+    return {
+        rows: filtered,
+        ghostOpenSummary: ghost.length
+            ? `${ghost.length} instância(s) aparecem no fetchInstances mas connectionState≠open: ${ghost.slice(0, 8).join(", ")}`
+            : null,
+    };
+}
 async function listMergedConnectedEvoInstancesUnscoped() {
     const evoList = await fetchEvoInstancesList();
     const cache = await loadEvoInstancesCache();
     const fromLive = evoList.ok ? buildConnectedFromEvoResponse(evoList.instances) : [];
     const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
     const merged = mergeAquecedorConnectedRows(fromLive, fromCache);
+    const verified = await filterAquecedorRowsByEvoLiveOpen(merged.rows);
+    const snapshots = evoList.ok && evoList.instances.length
+        ? await (0, evo_connection_state_service_1.resolveEvoLiveConnectionSnapshots)(evoList.instances)
+        : [];
     return {
-        rows: merged.rows,
+        rows: verified.rows,
         liveCount: fromLive.length,
         cacheCount: fromCache.length,
         evoOk: evoList.ok,
         evoError: evoList.ok ? undefined : evoList.detail,
         usedCacheOnlyForNumbers: merged.usedCacheOnlyForNumbers,
+        evoGhostOpenSummary: verified.ghostOpenSummary,
+        evoFetchOpenCount: snapshots.filter((row) => row.fetchStatus.includes("open")).length,
+        evoLiveOpenCount: snapshots.filter((row) => row.trulyOpen).length,
     };
 }
 async function listConnectedEvoInstancesUnscoped() {
@@ -2915,8 +2958,11 @@ async function resolveAquecedorConnectedForOwner(ownerEmail) {
     return {
         connected,
         source: mergedEvo.evoOk ? "evo-live" : "evo-cache",
-        evoDegraded: !mergedEvo.evoOk || usedCacheSupplement,
+        evoDegraded: !mergedEvo.evoOk || usedCacheSupplement || Boolean(mergedEvo.evoGhostOpenSummary),
         evoError: mergedEvo.evoError,
+        evoGhostOpenSummary: mergedEvo.evoGhostOpenSummary,
+        evoFetchOpenCount: mergedEvo.evoFetchOpenCount,
+        evoLiveOpenCount: mergedEvo.evoLiveOpenCount,
     };
 }
 async function buildAquecedorConnectedFromControleInstancia(supabase, ownerEmail) {
@@ -3267,6 +3313,11 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
             "Teste: nenhum par disponível (é necessário ao menos 2 instâncias ativas no Aquecedor).";
         return;
     }
+    const openCheck = await assertAquecedorInstancesOpenForSend(chosen.instancia_origem, chosen.instancia_destino);
+    if (!openCheck.ok) {
+        aquecedorRuntime.lastResult = `Ciclo teste abortado: ${openCheck.reason}`;
+        return;
+    }
     const deliveryTag = buildAquecedorDeliveryTag();
     const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
@@ -3314,7 +3365,8 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
             instance: chosen.instancia_origem,
             numeroLen: numero.length,
         };
-        aquecedorRuntime.lastResult = `Ciclo teste falhou: ${chosen.instancia_origem} → ${chosen.instancia_destino}.`;
+        const detail = String(sendResult.body || sendResult.error || "").slice(0, 160);
+        aquecedorRuntime.lastResult = `Ciclo teste falhou: ${chosen.instancia_origem} → ${chosen.instancia_destino}. EVO HTTP ${sendResult.status}${detail ? `: ${detail}` : ""}.`;
     }
     await supabase.from("controle_ciclo").upsert({ id: 1, ciclo_global: proximo }, { onConflict: "id" });
 }
@@ -3377,14 +3429,20 @@ async function runAquecedorCycle(forceTest = false) {
                 .slice(0, 6)
                 .join("; ");
             const scopedCount = analysis.ownedInstances.length;
+            const ghostNote = resolved.evoGhostOpenSummary ? ` ${resolved.evoGhostOpenSummary}` : "";
+            const liveCounts = resolved.evoFetchOpenCount != null && resolved.evoLiveOpenCount != null
+                ? ` fetchOpen=${resolved.evoFetchOpenCount} liveOpen=${resolved.evoLiveOpenCount}.`
+                : "";
             const evoNote = resolved.evoDegraded
-                ? " Evolution indisponível — usando cache local."
+                ? resolved.evoGhostOpenSummary ||
+                    resolved.evoError ||
+                    " Evolution indisponível ou instâncias não estão open (connectionState)."
                 : "";
             aquecedorRuntime.lastResult = hints
-                ? `Menos de 2 instâncias habilitadas (${connected.length} conectadas de ${scopedCount} no seu escopo). Verifique: ${hints}${evoNote}`
+                ? `Menos de 2 instâncias realmente conectadas (${connected.length} live-open de ${scopedCount} no escopo).${liveCounts}${ghostNote || ""} Verifique: ${hints}${evoNote ? ` ${evoNote}` : ""}`
                 : scopedCount < 2
-                    ? `Menos de 2 instâncias no seu escopo (${scopedCount}). Vincule ou ative números na API Alternativa.${evoNote}`
-                    : `Menos de 2 instâncias conectadas e habilitadas para Aquecedor (${connected.length} de ${scopedCount}).${evoNote}`;
+                    ? `Menos de 2 instâncias no seu escopo (${scopedCount}). Vincule ou ative números na API Alternativa.${ghostNote}`
+                    : `Menos de 2 instâncias open na Evolution (connectionState).${liveCounts}${ghostNote || ""}${evoNote ? ` ${evoNote}` : ""}`;
             return;
         }
         if (resolved.source === "evo-cache") {
@@ -3470,6 +3528,11 @@ async function runAquecedorCycle(forceTest = false) {
         }
         const deliveryTag = buildAquecedorDeliveryTag();
         const textoEnvio = appendAquecedorDeliveryTag(texto, deliveryTag);
+        const openCheck = await assertAquecedorInstancesOpenForSend(chosen.instancia_origem, chosen.instancia_destino);
+        if (!openCheck.ok) {
+            deferAquecedorRetryOrWindow(config, nowSp, 180, openCheck.reason);
+            return;
+        }
         await supabase.from("aquecedor")
             .update({
             status: "PROCESSANDO",
@@ -3495,8 +3558,12 @@ async function runAquecedorCycle(forceTest = false) {
                 (sendResult.body && sendResult.body.length < 200 ? sendResult.body : null);
             const detailStr = evoDetail ? String(evoDetail) : String(sendResult.body || "");
             await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
-            const detail = evoDetail ? ` (${String(evoDetail).slice(0, 120)})` : "";
-            deferAquecedorRetryOrWindow(config, nowSp, 120, `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`);
+            const detail = evoDetail
+                ? ` (${String(evoDetail).slice(0, 120)})`
+                : sendResult.status === 0
+                    ? ` (${String(sendResult.error || sendResult.body || "timeout").slice(0, 120)})`
+                    : "";
+            deferAquecedorRetryOrWindow(config, nowSp, sendResult.status === 0 ? 180 : 120, `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`);
             aquecedorRuntime.lastEvoError = {
                 status: sendResult.status,
                 body: String(sendResult.body || "").slice(0, 500),
@@ -3947,9 +4014,10 @@ app.get("/instancias", async (req, res) => {
             };
         });
         const visibleBaseItems = await filterDeletedInstancesFromItems(baseItems, (row) => String(row?.name || ""));
-        let items = visibleBaseItems;
+        const liveBaseItems = await enrichInstanceItemsWithLiveConnection(visibleBaseItems);
+        let items = liveBaseItems;
         if (EVO_LIVE_PROFILE_SYNC) {
-            items = await Promise.all(visibleBaseItems.map(async (row) => {
+            items = await Promise.all(liveBaseItems.map(async (row) => {
                 const status = String(row?.connectionStatus || "").toLowerCase();
                 if (!status.includes("open"))
                     return row;
@@ -3963,18 +4031,18 @@ app.get("/instancias", async (req, res) => {
                 };
             }));
         }
-        const allNames = visibleBaseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
+        const allNames = liveBaseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
         const reconciled = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(auth, allNames);
         if (reconciled > 0) {
             console.info(`[instancias] ${reconciled} instância(s) órfã(s) vinculada(s) ao master ${auth.email}.`);
         }
         items = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterItemsForAuth(auth, items, (row) => String(row?.name || ""));
-        ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open"))
+        ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase() === "open")
             .length;
         desconectadas = items.length - ativas;
-        void saveEvoInstancesCache(visibleBaseItems.map((row) => ({ ...row })));
+        void saveEvoInstancesCache(liveBaseItems.map((row) => ({ ...row })));
         const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(items, auth.email || "");
-        ativas = enrichedItems.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open")).length;
+        ativas = enrichedItems.filter((row) => String(row?.connectionStatus || "").toLowerCase() === "open").length;
         desconectadas = enrichedItems.length - ativas;
         return res.json({
             total: enrichedItems.length,
@@ -4264,7 +4332,7 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
         }
         if (await rejectForeignInstance(req, res, name))
             return;
-        const live = await fetchEvoInstanceConnectionState(name);
+        const live = await fetchEvoInstanceConnectionState(name, { fresh: true });
         if (live.ok) {
             let instanceNumber = "";
             if (live.open) {
@@ -4286,6 +4354,7 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
                 name,
                 connectionStatus: live.state,
                 open: live.open,
+                connecting: (0, evo_connection_state_service_1.isEvoConnectionInProgress)(live.state),
                 instanceNumber: instanceNumber || null,
                 source: "connectionState",
             });
@@ -4334,9 +4403,11 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
         if (await rejectForeignInstance(req, res, name))
             return;
         const instanceNumberHint = String(req.body?.number || req.body?.instanceNumberHint || "").trim();
+        const forceRestart = Boolean(req.body?.forceRestart);
         const started = await (0, instance_inbound_validation_service_1.startInboundValidation)({
             instanceName: name,
             instanceNumberHint,
+            forceRestart,
         });
         if (started.error) {
             return res.status(400).json({ ok: false, error: started.error });
@@ -4349,10 +4420,19 @@ app.post("/instancias/:name/validacao-inbound", async (req, res) => {
         return res.status(500).json({ error: error?.message || "Erro ao iniciar validação inbound." });
     }
 });
-app.get("/instancias/validacao-inbound/:validationId", (req, res) => {
+app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     const validationId = String(req.params.validationId || "").trim();
     if (!validationId) {
         return res.status(400).json({ error: "validationId é obrigatório." });
+    }
+    const nudge = String(req.query.nudge || "").trim();
+    if (nudge === "1" || nudge === "2") {
+        try {
+            await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, nudge === "2");
+        }
+        catch (error) {
+            console.warn("[validacao-inbound] refresh on GET nudge:", error);
+        }
     }
     const status = (0, instance_inbound_validation_service_1.getInboundValidationStatus)(validationId);
     if (!status) {
@@ -5192,7 +5272,80 @@ async function resolveInstanceDeletionKeys(instanceName) {
     catch {
         // lista EVO opcional
     }
+    const queryDigits = String(name || "").replace(/\D/g, "");
+    if (queryDigits.length >= 8) {
+        for (const registeredKey of await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listAllRegisteredInstanceNames()) {
+            const keyDigits = String(registeredKey || "").replace(/\D/g, "");
+            if (!keyDigits || keyDigits.length < 8)
+                continue;
+            const matched = keyDigits === queryDigits ||
+                keyDigits.endsWith(queryDigits.slice(-8)) ||
+                queryDigits.endsWith(keyDigits.slice(-8));
+            if (matched)
+                keys.add(registeredKey);
+        }
+    }
     return Array.from(keys).filter(Boolean);
+}
+async function resolveInstanceNamesByPhone(phone) {
+    const query = String(phone || "").replace(/\D/g, "");
+    if (query.length < 8)
+        return [];
+    const names = new Set();
+    if (query)
+        names.add(query);
+    if (query.startsWith("55") && query.length > 2)
+        names.add(query.slice(2));
+    if (!query.startsWith("55") && query.length >= 10)
+        names.add(`55${query}`);
+    const evoList = await fetchEvoInstancesList();
+    if (evoList.ok) {
+        for (const inst of evoList.instances) {
+            const instanceName = (0, evo_instance_key_1.resolveEvoInstanceKey)(inst);
+            const number = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(inst)?.phone || extractInstanceNumber(inst);
+            if (!instanceName || !number)
+                continue;
+            const instanceDigits = String(number).replace(/\D/g, "");
+            const queryVariants = new Set([query, query.slice(-11), query.slice(-10), query.slice(-8)]);
+            const instanceVariants = new Set([
+                instanceDigits,
+                instanceDigits.slice(-11),
+                instanceDigits.slice(-10),
+                instanceDigits.slice(-8),
+            ]);
+            let match = false;
+            for (const q of queryVariants) {
+                if (!q)
+                    continue;
+                for (const i of instanceVariants) {
+                    if (!i)
+                        continue;
+                    if (q === i || q.endsWith(i) || i.endsWith(q)) {
+                        match = true;
+                        break;
+                    }
+                }
+                if (match)
+                    break;
+            }
+            if (match)
+                names.add(instanceName);
+        }
+    }
+    for (const key of await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listAllRegisteredInstanceNames()) {
+        const keyDigits = String(key || "").replace(/\D/g, "");
+        if (!keyDigits || keyDigits.length < 8)
+            continue;
+        const queryVariants = [query, query.slice(-11), query.slice(-10), query.slice(-8)];
+        const matched = queryVariants.some((q) => q &&
+            (keyDigits === q ||
+                keyDigits.endsWith(q.slice(-8)) ||
+                q.endsWith(keyDigits.slice(-8)) ||
+                key.toLowerCase().includes(q.slice(-8))));
+        if (matched)
+            names.add(key);
+    }
+    return Array.from(names).filter(Boolean);
 }
 async function filterDeletedInstancesFromItems(items, readName) {
     const filtered = [];
@@ -5349,6 +5502,21 @@ async function attachAquecedorMessageStatsToInstanceItems(items, ownerEmail) {
         };
     });
 }
+async function enrichInstanceItemsWithLiveConnection(items) {
+    return Promise.all(items.map(async (row) => {
+        const name = String(row?.name || "").trim();
+        if (!name)
+            return row;
+        const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+        if (!liveState)
+            return row;
+        return {
+            ...row,
+            connectionStatus: liveState,
+            liveConnectionStatus: liveState,
+        };
+    }));
+}
 async function buildInstancesSnapshotForAuth(auth) {
     const ownedNames = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(auth.email);
     const cache = await loadEvoInstancesCache();
@@ -5386,7 +5554,7 @@ async function buildInstancesSnapshotForAuth(auth) {
             createdAt: "",
         };
     });
-    const ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open")).length;
+    const ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase() === "open").length;
     const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(items, auth.email || "");
     return {
         total: enrichedItems.length,
@@ -5406,9 +5574,10 @@ async function buildFallbackInstancesForAuth(auth, evolutionError) {
     };
 }
 async function callEvoSendTextWithRetry(url, body, maxAttempts = 3) {
+    const timeoutMs = (0, evo_http_client_1.defaultEvoSendTextTimeoutMs)();
     let last = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        const result = await callEvoAction(url, "POST", body);
+        const result = await callEvoAction(url, "POST", body, { timeoutMs, retries: 2 });
         last = result;
         const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
         if (accepted)
@@ -5420,17 +5589,20 @@ async function callEvoSendTextWithRetry(url, body, maxAttempts = 3) {
                 body: `${result.body || ""} | EVO retornou HTTP OK, mas corpo indica falha no envio.`.slice(0, 500),
             };
         }
-        const bodyLc = String(last.body || "").toLowerCase();
-        const isTransient = last.status === 429 ||
+        const bodyLc = String(last.body || last.error || "").toLowerCase();
+        const isTransient = last.status === 0 ||
+            last.status === 429 ||
             last.status === 500 ||
             last.status === 502 ||
             last.status === 503 ||
             last.status === 504 ||
             bodyLc.includes("connection closed") ||
-            bodyLc.includes("timeout");
+            bodyLc.includes("timeout") ||
+            bodyLc.includes("econnreset") ||
+            bodyLc.includes("socket hang up");
         if (!isTransient || attempt >= maxAttempts)
             break;
-        const waitMs = Math.floor(350 * Math.pow(2, attempt - 1) + Math.random() * 180);
+        const waitMs = Math.floor(500 * Math.pow(2, attempt - 1) + Math.random() * 250);
         await new Promise((r) => setTimeout(r, waitMs));
     }
     return (last || {
@@ -5439,6 +5611,25 @@ async function callEvoSendTextWithRetry(url, body, maxAttempts = 3) {
         body: "Falha sem retorno da EVO.",
         json: null,
     });
+}
+async function assertAquecedorInstancesOpenForSend(origem, destino) {
+    const [originState, destState] = await Promise.all([
+        (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(origem),
+        (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(destino),
+    ]);
+    if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(originState)) {
+        return {
+            ok: false,
+            reason: `${origem} não está open na Evolution (connectionState=${originState || "desconhecido"}). fetchInstances pode mostrar "open" incorretamente — reconecte o QR ou reinicie a Evolution.`,
+        };
+    }
+    if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(destState)) {
+        return {
+            ok: false,
+            reason: `${destino} não está open na Evolution (connectionState=${destState || "desconhecido"}). Reconecte o WhatsApp do destino.`,
+        };
+    }
+    return { ok: true };
 }
 function isEvoSendTextAccepted(json, body) {
     const rawBody = String(body || "").trim();
@@ -6266,6 +6457,7 @@ async function prepareEvoInstanceForQrConnect(instanceName) {
     const enc = encodeURIComponent(String(instanceName || "").trim());
     if (!enc)
         return;
+    (0, evo_connection_state_service_1.invalidateEvoLiveStateCache)(instanceName);
     const steps = [
         { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
         { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
@@ -6278,23 +6470,14 @@ async function prepareEvoInstanceForQrConnect(instanceName) {
     }
     await sleepMs(2500);
 }
-function pickEvoConnectionState(payload) {
-    if (!payload || typeof payload !== "object")
-        return "";
-    const root = payload;
-    const inst = root.instance ?? root;
-    const raw = inst.state ??
-        inst.connectionStatus ??
-        inst.status ??
-        root.state ??
-        root.connectionStatus ??
-        "";
-    return String(raw || "").trim().toLowerCase();
-}
-async function fetchEvoInstanceConnectionState(instanceName) {
+async function fetchEvoInstanceConnectionState(instanceName, options) {
     const enc = encodeURIComponent(String(instanceName || "").trim());
     if (!enc)
         return { ok: false, state: "", open: false };
+    const state = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instanceName, { fresh: options?.fresh === true });
+    if (state) {
+        return { ok: true, state, open: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(state) };
+    }
     const urls = [
         `${EVO_API_BASE}/instance/connectionState/${enc}`,
         `${EVO_API_BASE}/instance/connection-state/${enc}`,
@@ -6306,9 +6489,9 @@ async function fetchEvoInstanceConnectionState(instanceName) {
         });
         if (!result.ok && result.status === 404)
             continue;
-        const state = pickEvoConnectionState(result.json);
-        if (state) {
-            return { ok: true, state, open: state.includes("open") };
+        const parsedState = (0, evo_connection_state_service_1.pickEvoConnectionState)(result.json);
+        if (parsedState) {
+            return { ok: true, state: parsedState, open: (0, evo_connection_state_service_1.isEvoLiveStateOpen)(parsedState) };
         }
     }
     return { ok: false, state: "", open: false };
@@ -6735,39 +6918,135 @@ app.get("/instancias/registrar-qrcode/jobs/:jobId", async (req, res) => {
     }
     return res.status(200).json({ jobId, ...job });
 });
+async function performInstanceDeletion(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name) {
+        return { ok: false, status: 400, error: "Nome da instância é obrigatório." };
+    }
+    if (!buildEvoDeleteCandidateUrls(name).length) {
+        return {
+            ok: false,
+            status: 501,
+            error: "Ação deletar não configurada. Defina EVO_DELETE_URL_TEMPLATE no backend.",
+        };
+    }
+    const evoResult = await tryDeleteEvoInstance(name);
+    await purgeInstanceLocalState(name);
+    const message = evoResult.evoDeleted
+        ? "Instância deletada com sucesso."
+        : evoResult.status === 404
+            ? "Instância removida do painel (não encontrada na Evolution)."
+            : "Instância removida do painel. Se ainda existir na Evolution, remova manualmente no servidor EVO.";
+    return {
+        ok: true,
+        message,
+        degraded: !evoResult.evoDeleted,
+        evoStatus: evoResult.status || undefined,
+        evoDetail: evoResult.evoDeleted
+            ? undefined
+            : summarizeEvolutionErrorDetail(evoResult.body, evoResult.status),
+    };
+}
 app.delete("/instancias/:name", async (req, res) => {
     try {
         const instanceName = String(req.params.name || "").trim();
-        if (!instanceName) {
-            return res.status(400).json({ error: "Nome da instância é obrigatório." });
-        }
         if (await rejectForeignInstance(req, res, instanceName))
             return;
-        if (!buildEvoDeleteCandidateUrls(instanceName).length) {
-            return res.status(501).json({
-                error: "Ação deletar não configurada. Defina EVO_DELETE_URL_TEMPLATE no backend.",
-            });
+        const result = await performInstanceDeletion(instanceName);
+        if (!result.ok) {
+            return res.status(result.status).json({ error: result.error });
         }
-        const evoResult = await tryDeleteEvoInstance(instanceName);
-        await purgeInstanceLocalState(instanceName);
-        const message = evoResult.evoDeleted
-            ? "Instância deletada com sucesso."
-            : evoResult.status === 404
-                ? "Instância removida do painel (não encontrada na Evolution)."
-                : "Instância removida do painel. Se ainda existir na Evolution, remova manualmente no servidor EVO.";
         return res.json({
             ok: true,
-            message,
-            degraded: !evoResult.evoDeleted,
-            evoStatus: evoResult.status || undefined,
-            evoDetail: evoResult.evoDeleted
-                ? undefined
-                : summarizeEvolutionErrorDetail(evoResult.body, evoResult.status),
+            message: result.message,
+            degraded: result.degraded,
+            evoStatus: result.evoStatus,
+            evoDetail: result.evoDetail,
         });
     }
     catch (error) {
         console.error("Erro ao deletar instância:", error);
         return res.status(500).json({ error: "Erro ao deletar instância." });
+    }
+});
+app.delete("/admin/instances/:name", async (req, res) => {
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (auth.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(auth.email)) {
+            return res.status(403).json({ error: "Somente usuário master pode excluir instâncias pelo admin." });
+        }
+        const instanceName = String(req.params.name || "").trim();
+        const result = await performInstanceDeletion(instanceName);
+        if (!result.ok) {
+            return res.status(result.status).json({ error: result.error });
+        }
+        return res.json({
+            ok: true,
+            message: result.message,
+            degraded: result.degraded,
+            evoStatus: result.evoStatus,
+            evoDetail: result.evoDetail,
+            deletedBy: auth.email,
+        });
+    }
+    catch (error) {
+        console.error("Erro ao deletar instância (admin):", error);
+        return res.status(500).json({ error: "Erro ao deletar instância." });
+    }
+});
+app.post("/admin/instances/delete-by-phone", async (req, res) => {
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (auth.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(auth.email)) {
+            return res.status(403).json({ error: "Somente usuário master pode excluir instâncias pelo admin." });
+        }
+        const phone = String(req.body?.phone || "").trim();
+        const fromEmail = String(req.body?.fromEmail || "")
+            .trim()
+            .toLowerCase();
+        if (!phone) {
+            return res.status(400).json({ error: "Informe phone." });
+        }
+        const instanceNames = await resolveInstanceNamesByPhone(phone);
+        if (!instanceNames.length) {
+            return res.status(404).json({ error: "Nenhuma instância encontrada para esse número." });
+        }
+        const deleted = [];
+        const skipped = [];
+        for (const instanceName of instanceNames) {
+            if (fromEmail.includes("@")) {
+                const owner = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.resolveOwnerEmailForCandidates(await resolveInstanceDeletionKeys(instanceName));
+                if (owner && owner !== fromEmail) {
+                    skipped.push({
+                        instanceName,
+                        reason: "Instância pertence a outro usuário.",
+                        ownerEmail: owner,
+                    });
+                    continue;
+                }
+            }
+            const result = await performInstanceDeletion(instanceName);
+            if (!result.ok) {
+                skipped.push({ instanceName, reason: result.error });
+                continue;
+            }
+            deleted.push({
+                instanceName,
+                message: result.message,
+                degraded: result.degraded,
+            });
+        }
+        if (!deleted.length) {
+            return res.status(409).json({
+                error: "Nenhuma instância foi excluída.",
+                skipped,
+            });
+        }
+        return res.json({ ok: true, deleted, skipped });
+    }
+    catch (error) {
+        console.error("Erro ao excluir instância por telefone (admin):", error);
+        return res.status(500).json({ error: "Erro ao excluir instância." });
     }
 });
 app.post("/instancias/:name/renomear", async (req, res) => {
@@ -7230,7 +7509,8 @@ app.post("/aquecedor/run-once", async (req, res) => {
     void persistAquecedorRuntimeIntent(false, null);
     const status = buildLiveAquecedorStatusPayload();
     const lastResult = String(aquecedorRuntime.lastResult || "").trim();
-    const ok = /enviado com sucesso|realizado/i.test(lastResult);
+    const ok = /enviado com sucesso|realizado/i.test(lastResult) &&
+        !/abortado|falhou|não está open|connectionState/i.test(lastResult);
     void appendAquecedorCommandLog(lastResult ? `Envio teste: ${lastResult}` : "Envio teste executado.", aquecedorRuntimeOwnerEmail);
     return res.json({
         ok,
@@ -9072,6 +9352,13 @@ async function processOneCampaignDispatch(campaignId) {
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
     }
+    const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
+    if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(instanceLiveState)) {
+        console.error("[Campanha] Instância não open na Evolution (connectionState):", instancePick.instancia, instanceLiveState || "desconhecido");
+        await persistLeadFailed(lead, "send_error");
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+        return;
+    }
     const sendBody = EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text: outbound.text } }
         : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
@@ -10250,7 +10537,7 @@ const httpServer = app.listen(PORT, () => {
     const logoProbe = resolveDraxLogoPng();
     console.log(`[brand] logo PNG: ${logoProbe ? `${logoProbe.length} bytes (ok)` : "FALHOU — embed vazio ou ficheiros em falta"} | use GET /logo.png ou /media/Drax-logo-footer.png`);
     console.log(`[runtime] mode=${RUNTIME_MODE} backgroundProcessing=${ENABLE_BACKGROUND_PROCESSING} aquecedorProcessing=${ENABLE_AQUECEDOR_PROCESSING}`);
-    console.log(`[evo] base=${(0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE)} tlsInsecure=${(0, evo_http_client_1.isEvoTlsInsecure)()} timeoutMs=${(0, evo_http_client_1.defaultEvoHttpTimeoutMs)()}`);
+    console.log(`[evo] base=${(0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE)} tlsInsecure=${(0, evo_http_client_1.isEvoTlsInsecure)()} timeoutMs=${(0, evo_http_client_1.defaultEvoHttpTimeoutMs)()} sendTextTimeoutMs=${(0, evo_http_client_1.defaultEvoSendTextTimeoutMs)()}`);
     if (/walkup[-_]evo|evo-walkup-api:8080/i.test(EVO_API_BASE)) {
         console.warn("[evo] EVO_API_URL parece hostname interno Docker/Swarm. Se QRCode falhar em producao, use https://walkup-evo-walkup-api.achpyp.easypanel.host ou http://172.17.0.1:30181");
     }

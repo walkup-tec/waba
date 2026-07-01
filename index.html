@@ -18135,6 +18135,9 @@
         </div>
 
         <div class="reg-wizard-footer">
+          <button id="register-inbound-nudge-btn" class="reg-wizard-link-btn" type="button" hidden>
+            Já enviei CONFIRMAR
+          </button>
           <button id="register-inbound-retry-btn" class="reg-wizard-link-btn" type="button" hidden>
             Tentar validação novamente
           </button>
@@ -18168,7 +18171,7 @@
             </button>
           </div>
         </div>
-        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-07-01-validacao-qr-fast-connectionstate</span>
+        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-07-01-validacao-confirmar-receive-ok</span>
       </div>
     </div>
 
@@ -38660,6 +38663,33 @@
           });
         }
 
+        const inboundNudgeBtn = document.getElementById("register-inbound-nudge-btn");
+        if (inboundNudgeBtn && inboundNudgeBtn.dataset.boundRegisterQr !== "1") {
+          inboundNudgeBtn.dataset.boundRegisterQr = "1";
+          inboundNudgeBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const validationId = String(registerInboundValidationId || "").trim();
+            const instanceName = String(registerConnectedInstanceName || "").trim();
+            if (!validationId) return;
+            void (async () => {
+              try {
+                const pollRes = await fetchWithTimeout(
+                  `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=2`,
+                  { credentials: "same-origin" },
+                  20000
+                );
+                if (!pollRes.ok) return;
+                const status = await pollRes.json().catch(() => null);
+                applyRegisterInboundStatus(status, instanceName);
+                if (handleRegisterInboundTerminalStatus(status, instanceName)) return;
+              } catch {
+                /* silencioso */
+              }
+            })();
+          });
+        }
+
         const inboundSkipBtn = document.getElementById("register-inbound-skip-btn");
         if (inboundSkipBtn && inboundSkipBtn.dataset.boundRegisterQr !== "1") {
           inboundSkipBtn.dataset.boundRegisterQr = "1";
@@ -38918,11 +38948,13 @@
         numberEl.className = "reg-instruction-highlight";
       }
 
-      function setRegisterInboundActionButtons({ retry = false, skip = null } = {}) {
+      function setRegisterInboundActionButtons({ retry = false, skip = null, nudge = null } = {}) {
         const retryBtn = document.getElementById("register-inbound-retry-btn");
         const skipBtn = document.getElementById("register-inbound-skip-btn");
+        const nudgeBtn = document.getElementById("register-inbound-nudge-btn");
         if (retryBtn) retryBtn.hidden = !retry;
         if (skipBtn && skip !== null) skipBtn.hidden = !skip;
+        if (nudgeBtn && nudge !== null) nudgeBtn.hidden = !nudge;
       }
 
       function clearRegisterInboundTimers() {
@@ -39163,9 +39195,9 @@
             "register-inbound-send-detail",
             "Aguardando recepção de CONFIRMAR para enviar resposta automática…"
           );
-          setRegisterInboundActionButtons({ retry: false, skip: true });
+          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
         } else {
-          setRegisterInboundActionButtons({ retry: false, skip: true });
+          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
           setInboundCheckVisible("register-inbound-receive-row", true, true);
           updateRegisterInboundRow(
             "register-inbound-receive-row",
@@ -39280,8 +39312,7 @@
               true,
               "WhatsApp conectado na Evolution. Validando envio/recepção (CONFIRMAR)…"
             );
-            setRegisterInboundActionButtons({ retry: false, skip: true });
-            scheduleRegisterInboundConnectionAdvance(instanceName);
+            setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
           }
           try {
             const listRes = await fetchWithTimeout("/instancias?refresh=1", {}, 25000);
@@ -39306,7 +39337,7 @@
                 forceRestart: Boolean(registerInboundValidationId),
               }),
             },
-            30000
+            60000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
