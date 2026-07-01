@@ -9,6 +9,7 @@ exports.refreshInboundValidation = refreshInboundValidation;
 exports.handleInboundValidationWebhook = handleInboundValidationWebhook;
 exports.getInboundValidationStatus = getInboundValidationStatus;
 exports.startInboundValidation = startInboundValidation;
+exports.confirmUserSentInbound = confirmUserSentInbound;
 exports.pruneInboundValidations = pruneInboundValidations;
 const crypto_1 = __importDefault(require("crypto"));
 const evo_http_client_1 = require("./evo-http.client");
@@ -1132,6 +1133,50 @@ async function startInboundValidation(input) {
     activeValidationByInstance.set(connected.instancia, validationId);
     void runValidationLoop(record);
     return { validationId, status: publicStatus(record) };
+}
+/** Busca agressiva na Evolution após o usuário confirmar que enviou CONFIRMAR. */
+async function confirmUserSentInbound(validationId) {
+    const id = String(validationId || "").trim();
+    if (!id) {
+        return { ok: false, found: false, error: "validationId é obrigatório.", status: null };
+    }
+    const record = validations.get(id);
+    if (!record) {
+        return {
+            ok: false,
+            found: false,
+            error: "Validação não encontrada ou expirada.",
+            status: null,
+        };
+    }
+    if (record.finished) {
+        const status = getInboundValidationStatus(id);
+        return {
+            ok: true,
+            found: status?.receiveTest?.success === true,
+            status,
+        };
+    }
+    try {
+        const status = await refreshInboundValidation(id, { aggressive: true, deep: true });
+        const found = status?.receiveTest?.success === true;
+        return {
+            ok: true,
+            found,
+            status,
+            error: found
+                ? undefined
+                : `Não encontramos "${exports.INBOUND_VALIDATION_KEYWORD}" na Evolution. Confira se enviou do outro WhatsApp para o número integrado.`,
+        };
+    }
+    catch {
+        return {
+            ok: false,
+            found: false,
+            error: "Falha ao consultar a Evolution. Tente novamente em alguns segundos.",
+            status: getInboundValidationStatus(id),
+        };
+    }
 }
 function pruneInboundValidations() {
     const cutoff = Date.now() - 2 * 60 * 60 * 1000;

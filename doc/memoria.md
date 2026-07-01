@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-01
 
+**WABA — Validação CONFIRMAR modal Sim/Não (20s):** pergunta no passo 3 após 20s; Sim → `POST .../confirmar-envio` busca agressiva EVO; remove auto-conclusão sem validar. Marker `DEPLOY-2026-07-01-validacao-confirmar-modal-sim-nao`. Ver `doc/LOG-2026-07-01__validacao-confirmar-modal-sim-nao.md`.
+
 **WABA — QRCode reconexão ghost open (5181082477):** `registrar-qrcode` bloqueava por `fetchInstances=open` com live `connecting`; alias `Final--2477` ≠ nome técnico `digital-corban-2477`. Marker `DEPLOY-2026-07-01-qrcode-reconnect-live-open-guard`. Ver `doc/LOG-2026-07-01__qrcode-reconnect-5181082477-ghost-open.md`.
 
 **WABA — Validação CONFIRMAR instância nova 7943 / webhook:** `5182007943` sem histórico; webhook Evolution com `instance` objeto ignorado. Marker `DEPLOY-2026-07-01-validacao-confirmar-webhook-instance-obj`. Ver `doc/LOG-2026-07-01__validacao-confirmar-7943-webhook-instance-obj.md`.

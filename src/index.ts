@@ -93,6 +93,7 @@ import {
   startIntegrationProbe,
 } from "./instance-integration-probe";
 import {
+  confirmUserSentInbound,
   getInboundValidationStatus,
   handleInboundValidationWebhook,
   refreshInboundValidation,
@@ -5514,6 +5515,34 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     return res.status(404).json({ error: "Validação não encontrada ou expirada." });
   }
   return res.json({ ok: true, ...status });
+});
+
+app.post("/instancias/validacao-inbound/:validationId/confirmar-envio", async (req, res) => {
+  try {
+    const validationId = String(req.params.validationId || "").trim();
+    if (!validationId) {
+      return res.status(400).json({ ok: false, error: "validationId é obrigatório." });
+    }
+    const statusBefore = getInboundValidationStatus(validationId);
+    if (!statusBefore) {
+      return res.status(404).json({ ok: false, error: "Validação não encontrada ou expirada." });
+    }
+    if (await rejectForeignInstance(req, res, statusBefore.instanceName)) return;
+
+    const result = await confirmUserSentInbound(validationId);
+    return res.json({
+      ok: result.ok,
+      found: result.found,
+      error: result.error,
+      ...(result.status || {}),
+    });
+  } catch (error: any) {
+    console.error("POST /instancias/validacao-inbound/:validationId/confirmar-envio", error);
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "Erro ao confirmar envio na Evolution.",
+    });
+  }
 });
 
 function buildTemplateUrl(template: string, instanceName: string) {

@@ -1308,6 +1308,56 @@ export async function startInboundValidation(input: {
   return { validationId, status: publicStatus(record) };
 }
 
+/** Busca agressiva na Evolution após o usuário confirmar que enviou CONFIRMAR. */
+export async function confirmUserSentInbound(validationId: string): Promise<{
+  ok: boolean;
+  found: boolean;
+  error?: string;
+  status: InboundValidationStatus | null;
+}> {
+  const id = String(validationId || "").trim();
+  if (!id) {
+    return { ok: false, found: false, error: "validationId é obrigatório.", status: null };
+  }
+  const record = validations.get(id);
+  if (!record) {
+    return {
+      ok: false,
+      found: false,
+      error: "Validação não encontrada ou expirada.",
+      status: null,
+    };
+  }
+  if (record.finished) {
+    const status = getInboundValidationStatus(id);
+    return {
+      ok: true,
+      found: status?.receiveTest?.success === true,
+      status,
+    };
+  }
+
+  try {
+    const status = await refreshInboundValidation(id, { aggressive: true, deep: true });
+    const found = status?.receiveTest?.success === true;
+    return {
+      ok: true,
+      found,
+      status,
+      error: found
+        ? undefined
+        : `Não encontramos "${INBOUND_VALIDATION_KEYWORD}" na Evolution. Confira se enviou do outro WhatsApp para o número integrado.`,
+    };
+  } catch {
+    return {
+      ok: false,
+      found: false,
+      error: "Falha ao consultar a Evolution. Tente novamente em alguns segundos.",
+      status: getInboundValidationStatus(id),
+    };
+  }
+}
+
 export function pruneInboundValidations(): void {
   const cutoff = Date.now() - 2 * 60 * 60 * 1000;
   for (const [id, record] of validations.entries()) {

@@ -7875,6 +7875,69 @@
         display: none !important;
       }
 
+      .reg-inbound-sent-prompt {
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(34, 211, 238, 0.45);
+        background: rgba(8, 47, 73, 0.35);
+        animation: reg-val-fade-in 0.35s ease-out;
+      }
+
+      .reg-inbound-sent-prompt.is-visible {
+        display: flex;
+      }
+
+      .reg-inbound-sent-prompt.is-busy {
+        opacity: 0.85;
+        pointer-events: none;
+      }
+
+      .reg-inbound-sent-prompt-question {
+        margin: 0;
+        font-size: var(--reg-text-sm);
+        font-weight: 600;
+        color: #e0f2fe;
+        line-height: 1.45;
+      }
+
+      .reg-inbound-sent-prompt-hint {
+        margin: 0;
+        font-size: 12px;
+        color: #94a3b8;
+        line-height: 1.4;
+      }
+
+      .reg-inbound-sent-prompt-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .reg-inbound-sent-prompt-actions .instance-action-btn {
+        min-width: 88px;
+        flex: 1 1 auto;
+      }
+
+      .reg-inbound-sent-prompt-actions .btn-confirm-no {
+        background: rgba(51, 65, 85, 0.65);
+        border-color: rgba(148, 163, 184, 0.35);
+      }
+
+      @keyframes reg-val-fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
       .reg-inbound-evo-connected {
         display: flex;
         align-items: flex-start;
@@ -18100,6 +18163,33 @@
                 <span class="reg-val-spinner" aria-hidden="true"></span>
                 <span id="register-inbound-waiting-text">Aguardando envio de CONFIRMAR pelo outro WhatsApp (não o que está integrando)…</span>
               </div>
+              <div
+                id="register-inbound-sent-prompt"
+                class="reg-inbound-sent-prompt"
+                hidden
+                aria-live="polite"
+              >
+                <p class="reg-inbound-sent-prompt-question">Você já enviou a mensagem CONFIRMAR?</p>
+                <p class="reg-inbound-sent-prompt-hint">
+                  Envie do <strong>outro WhatsApp</strong> para o número integrado. Ao clicar em Sim, buscamos na Evolution.
+                </p>
+                <div class="reg-inbound-sent-prompt-actions">
+                  <button
+                    id="register-inbound-sent-yes-btn"
+                    class="instance-action-btn btn-qrcode enabled"
+                    type="button"
+                  >
+                    Sim, já enviei
+                  </button>
+                  <button
+                    id="register-inbound-sent-no-btn"
+                    class="instance-action-btn btn-confirm-no enabled"
+                    type="button"
+                  >
+                    Ainda não
+                  </button>
+                </div>
+              </div>
               <div class="reg-val-checks">
                 <div id="register-inbound-receive-row" class="reg-val-check is-hidden" hidden>
                   <span class="reg-val-check-icon">1</span>
@@ -18171,7 +18261,7 @@
             </button>
           </div>
         </div>
-        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-07-01-validacao-confirmar-receive-ok</span>
+        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-07-01-validacao-confirmar-modal-sim-nao</span>
       </div>
     </div>
 
@@ -30873,9 +30963,12 @@
       let registerInboundPollFailCount = 0;
       let registerInboundPollTick = 0;
       let registerInboundConnectionAdvanceTimer = null;
+      let registerInboundSentPromptTimer = null;
+      let registerInboundSentPromptRetryTimer = null;
       const REGISTER_INBOUND_POLL_MS = 300;
       const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
       const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 20000;
+      const REGISTER_INBOUND_SENT_PROMPT_RETRY_MS = 20000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
@@ -38671,24 +38764,27 @@
           inboundNudgeBtn.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
-            const validationId = String(registerInboundValidationId || "").trim();
-            const instanceName = String(registerConnectedInstanceName || "").trim();
-            if (!validationId) return;
-            void (async () => {
-              try {
-                const pollRes = await fetchWithTimeout(
-                  `/instancias/validacao-inbound/${encodeURIComponent(validationId)}?nudge=2`,
-                  { credentials: "same-origin" },
-                  20000
-                );
-                if (!pollRes.ok) return;
-                const status = await pollRes.json().catch(() => null);
-                applyRegisterInboundStatus(status, instanceName);
-                if (handleRegisterInboundTerminalStatus(status, instanceName)) return;
-              } catch {
-                /* silencioso */
-              }
-            })();
+            void handleRegisterInboundUserConfirmSent();
+          });
+        }
+
+        const inboundSentYesBtn = document.getElementById("register-inbound-sent-yes-btn");
+        if (inboundSentYesBtn && inboundSentYesBtn.dataset.boundRegisterQr !== "1") {
+          inboundSentYesBtn.dataset.boundRegisterQr = "1";
+          inboundSentYesBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void handleRegisterInboundUserConfirmSent();
+          });
+        }
+
+        const inboundSentNoBtn = document.getElementById("register-inbound-sent-no-btn");
+        if (inboundSentNoBtn && inboundSentNoBtn.dataset.boundRegisterQr !== "1") {
+          inboundSentNoBtn.dataset.boundRegisterQr = "1";
+          inboundSentNoBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleRegisterInboundUserConfirmNotSent();
           });
         }
 
@@ -38968,6 +39064,96 @@
           clearTimeout(registerInboundConnectionAdvanceTimer);
           registerInboundConnectionAdvanceTimer = null;
         }
+        if (registerInboundSentPromptTimer) {
+          clearTimeout(registerInboundSentPromptTimer);
+          registerInboundSentPromptTimer = null;
+        }
+        if (registerInboundSentPromptRetryTimer) {
+          clearTimeout(registerInboundSentPromptRetryTimer);
+          registerInboundSentPromptRetryTimer = null;
+        }
+      }
+
+      function setRegisterInboundSentPromptVisible(visible) {
+        const prompt = document.getElementById("register-inbound-sent-prompt");
+        if (!prompt) return;
+        prompt.classList.toggle("is-visible", visible);
+        prompt.hidden = !visible;
+        prompt.classList.remove("is-busy");
+        if (visible) {
+          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+        }
+      }
+
+      function scheduleRegisterInboundSentPrompt(delayMs = REGISTER_INBOUND_CONNECTION_ADVANCE_MS) {
+        if (registerInboundSentPromptTimer) {
+          clearTimeout(registerInboundSentPromptTimer);
+          registerInboundSentPromptTimer = null;
+        }
+        registerInboundSentPromptTimer = setTimeout(() => {
+          registerInboundSentPromptTimer = null;
+          if (registerWizardStep !== 3) return;
+          const receiveRow = document.getElementById("register-inbound-receive-row");
+          if (receiveRow?.classList.contains("success")) return;
+          setRegisterInboundSentPromptVisible(true);
+          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+        }, delayMs);
+      }
+
+      async function handleRegisterInboundUserConfirmSent() {
+        const validationId = String(registerInboundValidationId || "").trim();
+        const instanceName = String(registerConnectedInstanceName || "").trim();
+        const prompt = document.getElementById("register-inbound-sent-prompt");
+        if (!validationId) return;
+        if (prompt) prompt.classList.add("is-busy");
+        setInboundWaitingVisible(true, "Consultando a Evolution para confirmar CONFIRMAR…");
+        try {
+          const res = await fetchWithTimeout(
+            `/instancias/validacao-inbound/${encodeURIComponent(validationId)}/confirmar-envio`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+            },
+            45000
+          );
+          const data = await res.json().catch(() => ({}));
+          applyRegisterInboundStatus(data, instanceName);
+          if (data?.receiveTest?.success === true) {
+            setRegisterInboundSentPromptVisible(false);
+            if (handleRegisterInboundTerminalStatus(data, instanceName)) return;
+            return;
+          }
+          const errMsg =
+            data?.error ||
+            "CONFIRMAR não encontrado na Evolution. Verifique o outro WhatsApp e tente novamente.";
+          showToast(errMsg, "warning");
+          setInboundWaitingVisible(true, errMsg);
+          if (prompt) prompt.classList.remove("is-busy");
+          setRegisterInboundSentPromptVisible(true);
+        } catch {
+          showToast("Falha ao consultar a Evolution. Tente novamente.", "error");
+          if (prompt) prompt.classList.remove("is-busy");
+          setRegisterInboundSentPromptVisible(true);
+          setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+        }
+      }
+
+      function handleRegisterInboundUserConfirmNotSent() {
+        setRegisterInboundSentPromptVisible(false);
+        setInboundWaitingVisible(
+          true,
+          "Envie CONFIRMAR pelo outro WhatsApp. A pergunta voltará em alguns segundos."
+        );
+        setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
+        if (registerInboundSentPromptRetryTimer) {
+          clearTimeout(registerInboundSentPromptRetryTimer);
+        }
+        registerInboundSentPromptRetryTimer = setTimeout(() => {
+          registerInboundSentPromptRetryTimer = null;
+          if (registerWizardStep !== 3) return;
+          scheduleRegisterInboundSentPrompt(0);
+        }, REGISTER_INBOUND_SENT_PROMPT_RETRY_MS);
       }
 
       function showRegisterInboundEvoConnectedBanner(visible, text) {
@@ -39025,6 +39211,7 @@
       function handleRegisterInboundTerminalStatus(status, instanceName) {
         if (!status || status.finished !== true) return false;
 
+        setRegisterInboundSentPromptVisible(false);
         clearRegisterInboundTimers();
         registerInboundPollFailCount = 0;
 
@@ -39072,50 +39259,7 @@
       }
 
       function scheduleRegisterInboundConnectionAdvance(instanceName) {
-        if (registerInboundConnectionAdvanceTimer) {
-          clearTimeout(registerInboundConnectionAdvanceTimer);
-          registerInboundConnectionAdvanceTimer = null;
-        }
-        registerInboundConnectionAdvanceTimer = setTimeout(async () => {
-          registerInboundConnectionAdvanceTimer = null;
-          const name = String(instanceName || registerConnectedInstanceName || "").trim();
-          if (!name || registerWizardStep !== 3) return;
-
-          const open = await confirmRegisterInstanceOpenInEvo(name);
-          if (!open) return;
-
-          if (registerInboundValidationId) {
-            try {
-              const pollRes = await fetchWithTimeout(
-                `/instancias/validacao-inbound/${encodeURIComponent(registerInboundValidationId)}`,
-                { credentials: "same-origin" },
-                12000
-              );
-              if (pollRes.ok) {
-                const status = await pollRes.json().catch(() => null);
-                if (isRegisterInboundFullyValidated(status)) {
-                  handleRegisterInboundTerminalStatus(status, name);
-                  return;
-                }
-                if (status?.receiveTest?.success === true && status?.finished !== true) {
-                  scheduleRegisterInboundConnectionAdvance(name);
-                  return;
-                }
-              }
-            } catch {
-              /* segue fallback */
-            }
-          }
-
-          showRegisterInboundEvoConnectedBanner(
-            true,
-            "WhatsApp conectado na Evolution. A validação CONFIRMAR não concluiu — concluindo integração para liberar a instância."
-          );
-          finishRegisterWizardConnectionOnly(
-            name,
-            "WhatsApp conectado na Evolution. Validação CONFIRMAR pendente — instância liberada para uso."
-          );
-        }, REGISTER_INBOUND_CONNECTION_ADVANCE_MS);
+        scheduleRegisterInboundSentPrompt(REGISTER_INBOUND_CONNECTION_ADVANCE_MS);
       }
 
       function resetRegisterInboundPanel() {
@@ -39143,6 +39287,7 @@
         }
         if (keywordEl) keywordEl.textContent = "CONFIRMAR";
         showRegisterInboundEvoConnectedBanner(false);
+        setRegisterInboundSentPromptVisible(false);
         setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
         const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
         if (pane) pane.classList.remove("reg-pane-validating");
@@ -39178,6 +39323,10 @@
         const receiveDone = status.receiveTest?.success !== null && status.receiveTest?.success !== undefined;
         const receiveOk = status.receiveTest?.success === true;
         const sendDone = status.sendTest?.success !== null && status.sendTest?.success !== undefined;
+
+        if (receiveOk) {
+          setRegisterInboundSentPromptVisible(false);
+        }
 
         if (!receiveDone) {
           setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
@@ -39388,6 +39537,9 @@
           }
           return;
         }
+
+        registerInboundPollTick = 0;
+        scheduleRegisterInboundSentPrompt();
 
         const validationStartedAt = Date.now();
         registerInboundPollTimer = setInterval(async () => {
