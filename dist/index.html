@@ -7629,13 +7629,14 @@
         display: none;
       }
 
+      #register-inbound-progress:not([data-phase="prompt"]) .reg-inbound-sent-prompt {
+        display: none !important;
+      }
+
       #register-inbound-progress[data-phase="prompt"] .reg-inbound-waiting,
       #register-inbound-progress[data-phase="verify-receive"] .reg-inbound-waiting,
-      #register-inbound-progress[data-phase="verify-receive"] .reg-inbound-sent-prompt,
       #register-inbound-progress[data-phase="verify-send"] .reg-inbound-waiting,
-      #register-inbound-progress[data-phase="verify-send"] .reg-inbound-sent-prompt,
-      #register-inbound-progress[data-phase="complete"] .reg-inbound-waiting,
-      #register-inbound-progress[data-phase="complete"] .reg-inbound-sent-prompt {
+      #register-inbound-progress[data-phase="complete"] .reg-inbound-waiting {
         display: none !important;
       }
 
@@ -30983,6 +30984,7 @@
       let registerInboundUiPhase = "instructions";
       let registerInboundUserAwaitingConfirm = false;
       let registerInboundAwaitingConfirmSince = 0;
+      let registerInboundReceiveConfirmed = false;
       let registerInboundConfirmInFlight = false;
       const REGISTER_INBOUND_POLL_MS = 300;
       const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
@@ -38909,9 +38911,12 @@
           status?.sendTest?.success !== null && status?.sendTest?.success !== undefined;
 
         if (receiveOk && sendDone) return "complete";
-        if (receiveOk) return "verify-send";
+        if (receiveOk || registerInboundReceiveConfirmed) return "verify-send";
         if (receiveDone && !receiveOk) return "verify-receive";
         if (registerInboundUserAwaitingConfirm) return "verify-receive";
+        if (registerInboundUiPhase === "verify-send" || registerInboundUiPhase === "complete") {
+          return registerInboundUiPhase;
+        }
         if (registerInboundUiPhase === "prompt") return "prompt";
         return "instructions";
       }
@@ -38920,9 +38925,13 @@
         if (
           registerInboundUserAwaitingConfirm &&
           (phase === "prompt" || phase === "instructions") &&
-          !options.force
+          !options.force &&
+          !registerInboundReceiveConfirmed
         ) {
           phase = "verify-receive";
+        }
+        if (registerInboundReceiveConfirmed && (phase === "prompt" || phase === "instructions")) {
+          phase = "verify-send";
         }
         registerInboundUiPhase = phase;
         const progress = document.getElementById("register-inbound-progress");
@@ -38944,7 +38953,7 @@
 
         if (phase === "prompt") {
           setRegisterInboundSentPromptVisible(true);
-        } else if (phase !== "verify-receive" || !registerInboundConfirmInFlight) {
+        } else {
           setRegisterInboundSentPromptVisible(false);
         }
 
@@ -39150,6 +39159,16 @@
         setRegisterInboundConfirmUiBusy(false);
       }
 
+      function markRegisterInboundReceiveConfirmed() {
+        registerInboundReceiveConfirmed = true;
+        clearRegisterInboundAwaitingConfirm();
+        setRegisterInboundSentPromptVisible(false);
+        if (registerInboundSentPromptTimer) {
+          clearTimeout(registerInboundSentPromptTimer);
+          registerInboundSentPromptTimer = null;
+        }
+      }
+
       function maybeExpireRegisterInboundAwaitingConfirm() {
         if (!registerInboundUserAwaitingConfirm || !registerInboundAwaitingConfirmSince) return false;
         if (Date.now() - registerInboundAwaitingConfirmSince < REGISTER_INBOUND_AWAIT_CONFIRM_MS) {
@@ -39269,7 +39288,9 @@
         try {
           const data = await requestRegisterInboundConfirmScan(validationId, instanceName);
           if (data?.receiveTest?.success === true) {
-            clearRegisterInboundAwaitingConfirm();
+            markRegisterInboundReceiveConfirmed();
+            setRegisterInboundPhase("verify-send", { force: true });
+            applyRegisterInboundStatus(data, instanceName);
             if (handleRegisterInboundTerminalStatus(data, instanceName)) return;
             return;
           }
@@ -39426,6 +39447,7 @@
         const numberEl = document.getElementById("register-inbound-number");
         const keywordEl = document.getElementById("register-inbound-keyword");
         registerInboundUiPhase = "instructions";
+        registerInboundReceiveConfirmed = false;
         clearRegisterInboundAwaitingConfirm();
         registerInboundConfirmInFlight = false;
         setInboundCheckVisible("register-inbound-receive-row", false, false);
@@ -39483,7 +39505,7 @@
         const phase = resolveRegisterInboundPhase(status);
 
         if (receiveOk) {
-          clearRegisterInboundAwaitingConfirm();
+          markRegisterInboundReceiveConfirmed();
         }
 
         if (maybeExpireRegisterInboundAwaitingConfirm()) return;
@@ -39756,6 +39778,14 @@
             const status = await pollRes.json().catch(() => null);
             applyRegisterInboundStatus(status, instanceName);
             if (handleRegisterInboundTerminalStatus(status, instanceName)) return;
+
+            if (
+              status?.receiveTest?.success === true &&
+              !registerInboundConfirmInFlight
+            ) {
+              markRegisterInboundReceiveConfirmed();
+              setRegisterInboundPhase("verify-send", { force: true });
+            }
 
             if (
               registerInboundUserAwaitingConfirm &&

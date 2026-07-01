@@ -15,7 +15,7 @@ Como usar:
 ## Última atualização
 2026-07-01
 
-**WABA — Validação CONFIRMAR Sim busca persistente:** 1º clique com feedback imediato; não volta ao prompt após 1 falha; poll nudge=2 + re-scan confirmar-envio; backend 4 tentativas. Marker `DEPLOY-2026-07-01-validacao-confirmar-sim-busca-persistente`. Ver `doc/LOG-2026-07-01__validacao-confirmar-sim-busca-persistente.md`.
+**WABA — Validação CONFIRMAR receive OK esconde prompt:** após recepção confirmada, pergunta Sim/Não some e fluxo avança para resposta automática (verify-send); flag `registerInboundReceiveConfirmed` evita regressão em poll stale. Marker `DEPLOY-2026-07-01-validacao-confirmar-receive-ok-hide-prompt`.
 
 **WABA — Modal wizard altura +20%:** `max-height` 640px → 768px.
 
