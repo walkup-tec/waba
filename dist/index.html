@@ -40138,9 +40138,11 @@
         const duplicatedActive = (Array.isArray(instancesData?.items) ? instancesData.items : []).some(
           (item) => {
             const existingName = String(item?.name || item?.instanceName || "").trim();
-            const status = String(item?.connectionStatus || "").toLowerCase();
+            const status = String(
+              item?.liveConnectionStatus || item?.connectionStatus || "",
+            ).toLowerCase();
             return (
-              existingName.toLowerCase() === normalizedName.toLowerCase() && status.includes("open")
+              existingName.toLowerCase() === normalizedName.toLowerCase() && status === "open"
             );
           }
         );

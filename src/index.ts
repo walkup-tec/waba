@@ -8180,22 +8180,22 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
               ? parsed.data
               : [];
 
-        const alreadyActive = list.some((item: any) => {
+        const existsWithSameName = list.some((item: any) => {
           const inst = item?.instance ?? item;
           const existingName = String(
             inst?.name ?? inst?.instanceName ?? inst?.instance ?? "",
           ).trim();
-          const status = String(inst?.connectionStatus ?? inst?.status ?? "")
-            .toLowerCase()
-            .trim();
-          return existingName.toLowerCase() === name.toLowerCase() && status.includes("open");
+          return existingName.toLowerCase() === name.toLowerCase();
         });
 
-        if (alreadyActive) {
-          return res.status(409).json({
-            error:
-              "Já existe uma instância ativa/conectada com este nome. Use outro nome para registrar.",
-          });
+        if (existsWithSameName) {
+          const liveState = await fetchEvoInstanceLiveState(name, { fresh: true });
+          if (isEvoLiveStateOpen(liveState)) {
+            return res.status(409).json({
+              error:
+                "Esta instância já está conectada na Evolution. Se precisar de novo QR, desconecte antes ou aguarde o status atualizar.",
+            });
+          }
         }
       }
     } catch {
@@ -8466,21 +8466,20 @@ app.post("/instancias/:name/renomear", async (req, res) => {
           const existingName = String(
             inst?.name ?? inst?.instanceName ?? inst?.instance ?? ""
           ).trim();
-          const status = String(inst?.connectionStatus ?? inst?.status ?? "")
-            .toLowerCase()
-            .trim();
           return (
             existingName &&
             existingName.toLowerCase() === newName.toLowerCase() &&
-            status.includes("open") &&
             existingName.toLowerCase() !== oldName.toLowerCase()
           );
         });
         if (conflict) {
-          return res.status(409).json({
-            error:
-              "Já existe uma instância ativa/conectada com este nome. Informe outro nome.",
-          });
+          const liveState = await fetchEvoInstanceLiveState(newName, { fresh: true });
+          if (isEvoLiveStateOpen(liveState)) {
+            return res.status(409).json({
+              error:
+                "Já existe uma instância ativa/conectada com este nome. Informe outro nome.",
+            });
+          }
         }
       }
     } catch {

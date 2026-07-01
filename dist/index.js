@@ -6831,18 +6831,18 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                         : Array.isArray(parsed?.data)
                             ? parsed.data
                             : [];
-                const alreadyActive = list.some((item) => {
+                const existsWithSameName = list.some((item) => {
                     const inst = item?.instance ?? item;
                     const existingName = String(inst?.name ?? inst?.instanceName ?? inst?.instance ?? "").trim();
-                    const status = String(inst?.connectionStatus ?? inst?.status ?? "")
-                        .toLowerCase()
-                        .trim();
-                    return existingName.toLowerCase() === name.toLowerCase() && status.includes("open");
+                    return existingName.toLowerCase() === name.toLowerCase();
                 });
-                if (alreadyActive) {
-                    return res.status(409).json({
-                        error: "Já existe uma instância ativa/conectada com este nome. Use outro nome para registrar.",
-                    });
+                if (existsWithSameName) {
+                    const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
+                    if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState)) {
+                        return res.status(409).json({
+                            error: "Esta instância já está conectada na Evolution. Se precisar de novo QR, desconecte antes ou aguarde o status atualizar.",
+                        });
+                    }
                 }
             }
         }
@@ -7088,18 +7088,17 @@ app.post("/instancias/:name/renomear", async (req, res) => {
                 const conflict = list.some((item) => {
                     const inst = item?.instance ?? item;
                     const existingName = String(inst?.name ?? inst?.instanceName ?? inst?.instance ?? "").trim();
-                    const status = String(inst?.connectionStatus ?? inst?.status ?? "")
-                        .toLowerCase()
-                        .trim();
                     return (existingName &&
                         existingName.toLowerCase() === newName.toLowerCase() &&
-                        status.includes("open") &&
                         existingName.toLowerCase() !== oldName.toLowerCase());
                 });
                 if (conflict) {
-                    return res.status(409).json({
-                        error: "Já existe uma instância ativa/conectada com este nome. Informe outro nome.",
-                    });
+                    const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(newName, { fresh: true });
+                    if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState)) {
+                        return res.status(409).json({
+                            error: "Já existe uma instância ativa/conectada com este nome. Informe outro nome.",
+                        });
+                    }
                 }
             }
         }

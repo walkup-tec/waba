@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-01
 
-**WABA — Validação CONFIRMAR instância nova 7943 / webhook:** `5182007943` sem histórico (`findChats[]`, Message:0); webhook Evolution com `instance` objeto ignorado; fix `normalizeWebhookInstanceRef` + HTTP 202 async. Marker `DEPLOY-2026-07-01-validacao-confirmar-webhook-instance-obj`. Ver `doc/LOG-2026-07-01__validacao-confirmar-7943-webhook-instance-obj.md`.
+**WABA — QRCode reconexão ghost open (5181082477):** `registrar-qrcode` bloqueava por `fetchInstances=open` com live `connecting`; alias `Final--2477` ≠ nome técnico `digital-corban-2477`. Marker `DEPLOY-2026-07-01-qrcode-reconnect-live-open-guard`. Ver `doc/LOG-2026-07-01__qrcode-reconnect-5181082477-ghost-open.md`.
+
+**WABA — Validação CONFIRMAR instância nova 7943 / webhook:** `5182007943` sem histórico; webhook Evolution com `instance` objeto ignorado. Marker `DEPLOY-2026-07-01-validacao-confirmar-webhook-instance-obj`. Ver `doc/LOG-2026-07-01__validacao-confirmar-7943-webhook-instance-obj.md`.
 
 **WABA — Validação CONFIRMAR @lid findChats (5181082477):** CONFIRMAR não aparece em findMessages global; detecção via `findChats.lastMessage`. Marker `DEPLOY-2026-07-01-validacao-confirmar-lid-findchats`. Ver `doc/LOG-2026-07-01__validacao-confirmar-lid-findchats-5181082477.md`.
 
