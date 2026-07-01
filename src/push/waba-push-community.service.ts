@@ -328,7 +328,7 @@ async function resolvePushCommunityEvoInstance(configured: string): Promise<stri
 
   if (!names.length) {
     throw new Error(
-      `Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: drax-oficial).`,
+      `Não foi possível listar instâncias no sistema WABA - Drax. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: drax-oficial).`,
     );
   }
 
@@ -357,7 +357,7 @@ async function resolvePushCommunityEvoInstance(configured: string): Promise<stri
   if (best) return best.name;
 
   throw new Error(
-    `Instância "${preferred}" não existe na Evolution. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`,
+    `Instância "${preferred}" não existe no sistema WABA - Drax. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`,
   );
 }
 
@@ -390,7 +390,7 @@ async function fetchAnnouncementGroupJid(
       if (recovered) return recovered;
     }
     throw new Error(
-      `Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}. Configure WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel ou reconecte a instância na Evolution.`,
+      `Não foi possível listar grupos no sistema WABA - Drax (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}. Configure WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel ou reconecte a instância no sistema WABA - Drax.`,
     );
   }
   const groups = parseGroupsPayload(result.json);
@@ -633,7 +633,7 @@ async function sendPushCommunityMediaToEvo(input: {
     lastResult || {
       ok: false,
       status: 0,
-      body: "Falha ao enviar mídia para a Evolution.",
+      body: "Falha ao enviar mídia para o sistema WABA - Drax.",
       json: null,
       error: "empty_result",
     }
@@ -730,7 +730,7 @@ export async function sendPushToWhatsAppCommunity(
     return { ok: false, detail: "Informe título/texto ou imagem para a comunidade." };
   }
   if (!EVO_API_BASE || !EVO_API_KEY) {
-    return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
+    return { ok: false, detail: "Sistema WABA - Drax não configurado (EVO_API_URL / EVO_API_KEY)." };
   }
 
   let instanceName = "";
@@ -816,7 +816,7 @@ export async function sendPushToWhatsAppCommunity(
     const hint =
       isEvoWaUploadRecoverableError({ status: lastStatus, body: lastError }) ||
       isEvoMediaUrlFetchRecoverableError({ status: lastStatus, body: lastError })
-        ? " Reconecte a instância na Evolution ou use imagem JPEG/PNG até ~1 MB."
+        ? " Reconecte a instância no sistema WABA - Drax ou use imagem JPEG/PNG até ~1 MB."
         : "";
     return {
       ok: false,

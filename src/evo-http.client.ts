@@ -16,7 +16,7 @@ export const defaultEvoHttpTimeoutMs = (): number => {
   return Number.isFinite(raw) && raw >= 5000 ? Math.round(raw) : 45000;
 };
 
-/** sendText na Evolution costuma demorar mais que fetchInstances / connectionState. */
+/** sendText no sistema WABA - Drax costuma demorar mais que fetchInstances / connectionState. */
 export const defaultEvoSendTextTimeoutMs = (): number => {
   const raw = Number(
     process.env.EVO_SEND_TEXT_TIMEOUT_MS ??
@@ -88,7 +88,7 @@ function evoHttpRequestOnce(
         status: 0,
         body: "",
         json: null,
-        error: error instanceof Error ? error.message : "URL da Evolution inválida.",
+        error: error instanceof Error ? error.message : "URL do sistema WABA - Drax inválida.",
       });
       return;
     }
@@ -172,7 +172,7 @@ export function evoHttpRequest(
       status: 0,
       body: "",
       json: null,
-      error: "Evolution API sem resposta.",
+      error: "Sistema WABA - Drax sem resposta.",
     };
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {

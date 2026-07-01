@@ -158,7 +158,7 @@ const dockerDaemonPlaybook: VpsCpuPlaybook = {
 const wabaAppPlaybook: VpsCpuPlaybook = {
   id: "waba-app",
   label: "WABA — aplicação",
-  summary: "CPU alta no WABA: aquecedor ativo, disparador ou muitas instâncias Evolution.",
+  summary: "CPU alta no WABA: aquecedor ativo, disparador ou muitas instâncias no sistema WABA - Drax.",
   steps: [
     {
       order: 1,

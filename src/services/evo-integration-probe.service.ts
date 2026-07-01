@@ -130,7 +130,7 @@ export async function runEvoIntegrationProbe(): Promise<EvoIntegrationProbeResul
       ...base,
       mismatchDetail:
         mismatchDetail ||
-        `Apenas ${liveOpen.length} instância(s) com connectionState=open (fetchInstances open=${fetchOpenCount}). Reconecte QR ou reinicie Evolution.`,
+        `Apenas ${liveOpen.length} instância(s) com connectionState=open (fetchInstances open=${fetchOpenCount}). Reconecte QR ou reinicie o sistema WABA - Drax.`,
     };
   }
 

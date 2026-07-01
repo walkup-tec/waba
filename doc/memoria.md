@@ -15,7 +15,7 @@ Como usar:
 ## Última atualização
 2026-07-01
 
-**WABA — Validação CONFIRMAR Sim não repete prompt:** após «Sim, já enviei» permanece em Processando até detectar mensagem; pergunta e link footer não voltam. Marker `DEPLOY-2026-07-01-validacao-confirmar-sim-nao-repetir-prompt`.
+**WABA — Textos UI «na Evolution» → «no sistema WABA - Drax»:** alertas, modal validação, QR, push, health-check e erros API em `index.html` + `src/`.
 
 **WABA — Modal wizard altura +20%:** `max-height` 640px → 768px.
 

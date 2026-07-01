@@ -4255,19 +4255,19 @@ async function runAquecedorCycle(forceTest = false) {
       const evoNote = resolved.evoDegraded
         ? resolved.evoGhostOpenSummary ||
           resolved.evoError ||
-          " Evolution indisponível ou instâncias não estão open (connectionState)."
+          " Sistema WABA - Drax indisponível ou instâncias não estão open (connectionState)."
         : "";
       aquecedorRuntime.lastResult = hints
         ? `Menos de 2 instâncias realmente conectadas (${connected.length} live-open de ${scopedCount} no escopo).${liveCounts}${ghostNote || ""} Verifique: ${hints}${evoNote ? ` ${evoNote}` : ""}`
         : scopedCount < 2
           ? `Menos de 2 instâncias no seu escopo (${scopedCount}). Vincule ou ative números na API Alternativa.${ghostNote}`
-          : `Menos de 2 instâncias open na Evolution (connectionState).${liveCounts}${ghostNote || ""}${evoNote ? ` ${evoNote}` : ""}`;
+          : `Menos de 2 instâncias open no sistema WABA - Drax (connectionState).${liveCounts}${ghostNote || ""}${evoNote ? ` ${evoNote}` : ""}`;
       return;
     }
 
     if (resolved.source === "evo-cache") {
       console.warn(
-        `[Aquecedor] Evolution degradada — ${connected.length} instância(s) via cache (${resolved.evoError || "sem detalhe"}).`,
+        `[Aquecedor] Sistema WABA - Drax degradado — ${connected.length} instância(s) via cache (${resolved.evoError || "sem detalhe"}).`,
       );
     }
 
@@ -4915,11 +4915,11 @@ app.get("/instancias", async (req, res) => {
     const evoList = await fetchEvoInstancesList();
     if (!evoList.ok) {
       const evolutionError = describeEvoInstancesFetchError(evoList.status, evoList.detail);
-      console.error("Erro Evolution API:", evoList.status, evoList.detail);
+      console.error("Erro Sistema WABA - Drax:", evoList.status, evoList.detail);
       const fallback = await buildFallbackInstancesForAuth(auth, evolutionError);
       if (fallback.items.length > 0) {
         console.warn(
-          `[instancias] Evolution indisponível — retornando ${fallback.items.length} instância(s) do cache/dono (${auth.email || "guest"}).`,
+          `[instancias] Sistema WABA - Drax indisponível — retornando ${fallback.items.length} instância(s) do cache/dono (${auth.email || "guest"}).`,
         );
         return res.status(200).json(fallback);
       }
@@ -5096,10 +5096,10 @@ app.get("/instancias", async (req, res) => {
       items: enrichedItems,
     });
   } catch (error) {
-    console.error("Erro ao consultar Evolution API:", error);
+    console.error("Erro ao consultar Sistema WABA - Drax:", error);
     return res
       .status(500)
-      .json({ error: "Erro ao consultar Evolution API" });
+      .json({ error: "Erro ao consultar o sistema WABA - Drax" });
   }
 });
 
@@ -5463,7 +5463,7 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
 
     return res.status(502).json({
       ok: false,
-      error: "Não foi possível consultar o status da instância na Evolution.",
+      error: "Não foi possível consultar o status da instância no sistema WABA - Drax.",
     });
   } catch (error) {
     console.error("GET /instancias/:name/status-conexao", error);
@@ -5538,7 +5538,7 @@ app.post("/instancias/validacao-inbound/:validationId/confirmar-envio", async (r
     console.error("POST /instancias/validacao-inbound/:validationId/confirmar-envio", error);
     return res.status(500).json({
       ok: false,
-      error: error?.message || "Erro ao confirmar envio na Evolution.",
+      error: error?.message || "Erro ao confirmar envio no sistema WABA - Drax.",
     });
   }
 });
@@ -6238,26 +6238,26 @@ function describeEvoQrFailure(
 ): string {
   const detail = String(qrDetail || createDetail || "").trim();
   if (isIgnorableEvoQrFetchError(qrStatus, detail)) {
-    return "Evolution: use GET /instance/connect para QR. Tente «Atualizar QR» novamente.";
+    return "Sistema WABA - Drax: use GET /instance/connect para QR. Tente «Atualizar QR» novamente.";
   }
   if (createStatus === 404 || qrStatus === 404 || /404 page not found/i.test(detail)) {
-    return "Evolution API indisponível (404). Verifique EVO_API_URL e se o serviço Evolution está no ar.";
+    return "Sistema WABA - Drax indisponível (404). Verifique EVO_API_URL e se o sistema WABA - Drax está no ar.";
   }
   if (createStatus === 0 || qrStatus === 0) {
     if (/self-signed certificate|DEPTH_ZERO_SELF_SIGNED_CERT/i.test(detail)) {
-      return "Evolution API com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no ambiente de desenvolvimento.";
+      return "Sistema WABA - Drax com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no ambiente de desenvolvimento.";
     }
     if (/timeout/i.test(detail)) {
-      return "Evolution API demorou para gerar o QRCode (timeout). Tente «Atualizar QR» ou aumente EVO_HTTP_TIMEOUT_MS no servidor.";
+      return "Sistema WABA - Drax demorou para gerar o QRCode (timeout). Tente «Atualizar QR» ou aumente EVO_HTTP_TIMEOUT_MS no servidor.";
     }
-    return `Evolution API sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o serviço Evolution está no ar.`;
+    return `Sistema WABA - Drax sem resposta (${detail || "erro de rede ou timeout"}). Verifique EVO_API_URL e se o sistema WABA - Drax está no ar.`;
   }
   if (isEvoConnectEmptyQrDetail(detail)) {
-    return "Evolution não retornou QRCode (count:0). A sessão pode estar iniciando — aguarde e use «Atualizar QR». Se persistir, reinicie o container Evolution no Easypanel.";
+    return "O sistema WABA - Drax não retornou QRCode (count:0). A sessão pode estar iniciando — aguarde e use «Atualizar QR». Se persistir, reinicie o serviço no Easypanel no Easypanel.";
   }
   const summarized = summarizeEvolutionErrorDetail(detail, qrStatus || createStatus);
   if (summarized && summarized !== detail) return summarized;
-  if (detail) return `Evolution API: ${detail}`;
+  if (detail) return `Sistema WABA - Drax: ${detail}`;
   return "Dados salvos, mas falha ao gerar QRCode na EVO. Tente «Atualizar QR».";
 }
 
@@ -6285,7 +6285,7 @@ function summarizeEvolutionErrorDetail(detail: string, status = 0): string {
 
   const text = String(nested).trim();
   if (/integrationSession|prismaRepository/i.test(text)) {
-    return "Evolution API com erro interno no banco (Prisma/integrationSession). Reinicie o serviço Evolution no Easypanel e confira o PostgreSQL da EVO.";
+    return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL da EVO.";
   }
   if (status === 500 || /internal server error/i.test(text)) {
     const first =
@@ -6293,8 +6293,8 @@ function summarizeEvolutionErrorDetail(detail: string, status = 0): string {
         .split("\n")
         .map((line) => line.trim())
         .find((line) => line.length > 0) || text;
-    if (first.length > 220) return `Evolution API erro 500: ${first.slice(0, 200)}…`;
-    return `Evolution API erro 500: ${first}`;
+    if (first.length > 220) return `Sistema WABA - Drax erro 500: ${first.slice(0, 200)}…`;
+    return `Sistema WABA - Drax erro 500: ${first}`;
   }
   if (text.length > 400) return `${text.slice(0, 380)}…`;
   return text;
@@ -6303,15 +6303,15 @@ function summarizeEvolutionErrorDetail(detail: string, status = 0): string {
 function describeEvoInstancesFetchError(status: number, detail: string): string {
   const normalized = summarizeEvolutionErrorDetail(detail, status);
   if (status === 404 || /404 page not found/i.test(normalized)) {
-    return "Evolution API indisponível (404). Verifique EVO_API_URL / Traefik no VPS ou use Evolution local no .env.v02.";
+    return "Sistema WABA - Drax indisponível (404). Verifique EVO_API_URL / Traefik no VPS ou use ambiente local no .env.v02.";
   }
   if (status === 0 && /self-signed certificate|DEPTH_ZERO_SELF_SIGNED_CERT/i.test(normalized)) {
-    return "Evolution API com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no .env.v02.";
+    return "Sistema WABA - Drax com certificado TLS inválido. Defina EVO_TLS_INSECURE=1 no .env.v02.";
   }
   if (status === 0) {
-    return `Evolution API sem resposta (${normalized || "erro de rede ou timeout"}).`;
+    return `Sistema WABA - Drax sem resposta (${normalized || "erro de rede ou timeout"}).`;
   }
-  return normalized || "Erro ao buscar dados na Evolution API.";
+  return normalized || "Erro ao buscar dados no sistema WABA - Drax.";
 }
 
 async function callEvoAction(
@@ -6357,7 +6357,7 @@ async function fetchEvoInstancesList(): Promise<
   });
   if (!result.ok) {
     const detail = summarizeEvolutionErrorDetail(
-      String(result.body || result.error || "Erro ao buscar instâncias na Evolution API."),
+      String(result.body || result.error || "Erro ao buscar instâncias no sistema WABA - Drax."),
       result.status
     );
     return { ok: false, status: result.status, detail };
@@ -6852,13 +6852,13 @@ async function assertAquecedorInstancesOpenForSend(
   if (!isEvoLiveStateOpen(originState)) {
     return {
       ok: false,
-      reason: `${origem} não está open na Evolution (connectionState=${originState || "desconhecido"}). fetchInstances pode mostrar "open" incorretamente — reconecte o QR ou reinicie a Evolution.`,
+      reason: `${origem} não está open no sistema WABA - Drax (connectionState=${originState || "desconhecido"}). fetchInstances pode mostrar "open" incorretamente — reconecte o QR ou reinicie o sistema WABA - Drax.`,
     };
   }
   if (!isEvoLiveStateOpen(destState)) {
     return {
       ok: false,
-      reason: `${destino} não está open na Evolution (connectionState=${destState || "desconhecido"}). Reconecte o WhatsApp do destino.`,
+      reason: `${destino} não está open no sistema WABA - Drax (connectionState=${destState || "desconhecido"}). Reconecte o WhatsApp do destino.`,
     };
   }
   return { ok: true };
@@ -7976,7 +7976,7 @@ async function runRegistrarQrcode(
     if (retryQrFromCreate) {
       return {
         ok: true,
-        message: "Instância recriada na Evolution e QRCode gerado com sucesso.",
+        message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
         warning: createWarning,
         qrCode: retryQrFromCreate,
       };
@@ -7991,7 +7991,7 @@ async function runRegistrarQrcode(
       if (qrRetry.ok) {
         return {
           ok: true,
-          message: "Instância recriada na Evolution e QRCode gerado com sucesso.",
+          message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
           warning: createWarning,
           qrCode: qrRetry.qrCode,
           providerResponse: qrRetry.providerResponse,
@@ -8220,7 +8220,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
           if (isEvoLiveStateOpen(liveState)) {
             return res.status(409).json({
               error:
-                "Esta instância já está conectada na Evolution. Se precisar de novo QR, desconecte antes ou aguarde o status atualizar.",
+                "Esta instância já está conectada no sistema WABA - Drax. Se precisar de novo QR, desconecte antes ou aguarde o status atualizar.",
             });
           }
         }
@@ -8333,8 +8333,8 @@ async function performInstanceDeletion(instanceName: string): Promise<InstanceDe
   const message = evoResult.evoDeleted
     ? "Instância deletada com sucesso."
     : evoResult.status === 404
-      ? "Instância removida do painel (não encontrada na Evolution)."
-      : "Instância removida do painel. Se ainda existir na Evolution, remova manualmente no servidor EVO.";
+      ? "Instância removida do painel (não encontrada no sistema WABA - Drax)."
+      : "Instância removida do painel. Se ainda existir no sistema WABA - Drax, remova manualmente no servidor EVO.";
 
   return {
     ok: true,
@@ -10890,7 +10890,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   const instanceLiveState = await fetchEvoInstanceLiveState(instancePick.instancia);
   if (!isEvoLiveStateOpen(instanceLiveState)) {
     console.error(
-      "[Campanha] Instância não open na Evolution (connectionState):",
+      "[Campanha] Instância não open no sistema WABA - Drax (connectionState):",
       instancePick.instancia,
       instanceLiveState || "desconhecido",
     );

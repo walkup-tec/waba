@@ -106,7 +106,7 @@ export type AdminInstanceLookupRow = {
 export class WabaAdminInstancesService {
   private async fetchEvoInstances(): Promise<Array<Record<string, unknown>>> {
     if (!EVO_API_BASE || !EVO_API_KEY) {
-      throw new Error("Evolution API não configurada (EVO_API_URL / EVO_API_KEY).");
+      throw new Error("Sistema WABA - Drax não configurado (EVO_API_URL / EVO_API_KEY).");
     }
     const result = await evoHttpRequest(EVO_INSTANCES_URL, "GET", {
       apiKey: EVO_API_KEY,
@@ -115,7 +115,7 @@ export class WabaAdminInstancesService {
     });
     if (!result.ok) {
       throw new Error(
-        `Falha ao listar instâncias na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 180)}`,
+        `Falha ao listar instâncias no sistema WABA - Drax (${result.status}): ${String(result.body || result.error || "").slice(0, 180)}`,
       );
     }
     return parseEvoInstancesList(result.json);
@@ -167,7 +167,7 @@ export class WabaAdminInstancesService {
     } else if (input.phone) {
       const matches = await this.lookupByPhone(String(input.phone));
       if (!matches.length) {
-        throw new Error("Nenhuma instância Evolution encontrada para esse número.");
+        throw new Error("Nenhuma instância encontrada no sistema WABA - Drax para esse número.");
       }
       instanceNames = matches.map((row) => row.instanceName);
     } else {

@@ -18092,7 +18092,7 @@
           <div class="dis-campaign-spinner sm" aria-hidden="true"></div>
           <div class="confirm-delete-processing-title">Excluindo instância…</div>
           <div class="confirm-delete-processing-sub">
-            Aguarde enquanto removemos na Evolution API. Isso pode levar alguns segundos.
+            Aguarde enquanto removemos no sistema WABA - Drax. Isso pode levar alguns segundos.
           </div>
         </div>
       </div>
@@ -18172,7 +18172,7 @@
               <div id="register-inbound-evo-connected" class="reg-inbound-evo-connected" hidden>
                 <span class="reg-evo-connected-icon" aria-hidden="true">✓</span>
                 <span id="register-inbound-evo-connected-text">
-                  WhatsApp conectado na Evolution. A validação CONFIRMAR é opcional — você pode concluir abaixo.
+                  WhatsApp conectado no sistema WABA - Drax. A validação CONFIRMAR é opcional — você pode concluir abaixo.
                 </span>
               </div>
               <div id="register-inbound-waiting" class="reg-inbound-waiting" aria-live="polite">
@@ -18187,7 +18187,7 @@
               >
                 <p class="reg-inbound-sent-prompt-question">Você já enviou a mensagem CONFIRMAR?</p>
                 <p class="reg-inbound-sent-prompt-hint">
-                  Envie do <strong>outro WhatsApp</strong> para o número integrado. Ao clicar em Sim, buscamos na Evolution.
+                  Envie do <strong>outro WhatsApp</strong> para o número integrado. Ao clicar em Sim, buscamos no sistema WABA - Drax.
                 </p>
                 <div class="reg-inbound-sent-prompt-actions">
                   <button
@@ -18225,7 +18225,7 @@
                 </div>
               </div>
               <div id="register-inbound-alert" class="register-probe-alert">
-                A Evolution recusou a resposta com indícios de restrição neste número.
+                O sistema WABA - Drax recusou a resposta com indícios de restrição neste número.
               </div>
             </div>
           </div>
@@ -19243,7 +19243,7 @@
             ? summarizeInstancesLoadError(
                 String(
                   payload.evolutionError ||
-                    "Evolution temporariamente indisponível — exibindo cache local."
+                    "Sistema WABA - Drax temporariamente indisponível — exibindo cache local."
                 )
               )
             : "";
@@ -19252,7 +19252,7 @@
         } catch (error) {
           if (!instancesData?.items?.length) {
             instancesLoadError =
-              error?.message || "Não foi possível atualizar instâncias na Evolution.";
+              error?.message || "Não foi possível atualizar instâncias no sistema WABA - Drax.";
           }
         } finally {
           instancesFullRefreshInFlight = false;
@@ -19310,7 +19310,7 @@
         if (!text) return "";
         if (text.length <= 320 && !/prismaRepository|integrationSession/i.test(text)) return text;
         if (/integrationSession|prismaRepository/i.test(text)) {
-          return "Evolution API com erro interno no banco (Prisma). Reinicie o serviço Evolution no Easypanel.";
+          return "Sistema WABA - Drax com erro interno no banco (Prisma). Reinicie o serviço no Easypanel.";
         }
         if (text.startsWith("{")) {
           try {
@@ -38819,7 +38819,7 @@
             event.stopPropagation();
             if (
               !window.confirm(
-                "Concluir sem validar CONFIRMAR?\n\nO WhatsApp já está conectado na Evolution. Você pode usar a instância; a validação de envio/recepção ficará pendente.\n\nDeseja concluir mesmo assim?"
+                "Concluir sem validar CONFIRMAR?\n\nO WhatsApp já está conectado no sistema WABA - Drax. Você pode usar a instância; a validação de envio/recepção ficará pendente.\n\nDeseja concluir mesmo assim?"
               )
             ) {
               return;
@@ -39159,7 +39159,7 @@
         const prompt = document.getElementById("register-inbound-sent-prompt");
         if (yesBtn) {
           yesBtn.disabled = busy;
-          yesBtn.textContent = busy ? "Buscando na Evolution…" : "Sim, já enviei";
+          yesBtn.textContent = busy ? "Buscando no sistema WABA - Drax…" : "Sim, já enviei";
         }
         if (noBtn) noBtn.disabled = busy;
         if (prompt) prompt.classList.toggle("is-busy", busy);
@@ -39168,7 +39168,7 @@
       function humanizeRegisterInboundError(err) {
         const raw = String(err?.message || err || "").trim();
         if (!raw || raw === "timeout") {
-          return "Consulta demorou — continuamos buscando CONFIRMAR na Evolution…";
+          return "Consulta demorou — continuamos buscando CONFIRMAR no sistema WABA - Drax…";
         }
         if (/failed to fetch|network|load failed/i.test(raw)) {
           return "Sem resposta do servidor — tentando novamente…";
@@ -39205,7 +39205,7 @@
           "register-inbound-receive-result",
           null,
           "register-inbound-receive-detail",
-          detailText || "Consultando a Evolution para confirmar CONFIRMAR…"
+          detailText || "Consultando o sistema WABA - Drax para confirmar CONFIRMAR…"
         );
         setInboundCheckVisible("register-inbound-send-row", false, false);
       }
@@ -39266,7 +39266,7 @@
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok && !data?.receiveTest) {
-          throw new Error(data?.error || "Falha ao consultar a Evolution.");
+          throw new Error(data?.error || "Falha ao consultar o sistema WABA - Drax.");
         }
         applyRegisterInboundStatus(data, instanceName);
         return data;
@@ -39330,7 +39330,7 @@
         const instanceName = String(registerConnectedInstanceName || "").trim();
 
         if (registerInboundConfirmInFlight) {
-          showToast("Aguarde — já estamos buscando CONFIRMAR na Evolution.", "info");
+          showToast("Aguarde — já estamos buscando CONFIRMAR no sistema WABA - Drax.", "info");
           return;
         }
 
@@ -39351,7 +39351,7 @@
         registerInboundAwaitingConfirmSince = Date.now();
         cancelRegisterInboundPromptTimers();
         setRegisterInboundConfirmUiBusy(true);
-        enterRegisterInboundVerifyReceive("Consultando a Evolution para confirmar CONFIRMAR…");
+        enterRegisterInboundVerifyReceive("Consultando o sistema WABA - Drax para confirmar CONFIRMAR…");
 
         try {
           const data = await requestRegisterInboundConfirmScan(validationId, instanceName);
@@ -39365,7 +39365,7 @@
 
           enterRegisterInboundVerifyReceive(
             data?.error ||
-              "CONFIRMAR ainda não localizado — continuamos buscando na Evolution. Aguarde nesta tela."
+              "CONFIRMAR ainda não localizado — continuamos buscando no sistema WABA - Drax. Aguarde nesta tela."
           );
         } catch (err) {
           const msg = humanizeRegisterInboundError(err);
@@ -39445,7 +39445,7 @@
         registerInboundPollFailCount = 0;
         showRegisterInboundEvoConnectedBanner(true);
         setInboundWaitingVisible(false);
-        setRegisterConnectStatus("success", "WhatsApp conectado na Evolution.");
+        setRegisterConnectStatus("success", "WhatsApp conectado no sistema WABA - Drax.");
         if (instanceName) registerConnectedInstanceName = instanceName;
         finishRegisterWizardSuccess(
           message ||
@@ -39710,7 +39710,7 @@
           if (evoAlreadyOpen) {
             showRegisterInboundEvoConnectedBanner(
               true,
-              "WhatsApp conectado na Evolution. Validando envio/recepção (CONFIRMAR)…"
+              "WhatsApp conectado no sistema WABA - Drax. Validando envio/recepção (CONFIRMAR)…"
             );
             setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
           }
@@ -39745,7 +39745,7 @@
             if (evoAlreadyOpen || (await confirmRegisterInstanceOpenInEvo(instanceName))) {
               showRegisterInboundEvoConnectedBanner(
                 true,
-                "WhatsApp conectado na Evolution. Validação automática indisponível — concluindo integração."
+                "WhatsApp conectado no sistema WABA - Drax. Validação automática indisponível — concluindo integração."
               );
               scheduleRegisterInboundConnectionAdvance(instanceName);
               return;
@@ -39781,7 +39781,7 @@
           if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
             finishRegisterWizardConnectionOnly(
               instanceName,
-              "WhatsApp conectado na Evolution. Validação CONFIRMAR não foi iniciada — instância liberada."
+              "WhatsApp conectado no sistema WABA - Drax. Validação CONFIRMAR não foi iniciada — instância liberada."
             );
           }
           return;
@@ -39885,7 +39885,7 @@
               registerInboundUiPhase === "verify-receive"
             ) {
               enterRegisterInboundVerifyReceive(
-                "Consulta demorou — continuamos buscando CONFIRMAR na Evolution…"
+                "Consulta demorou — continuamos buscando CONFIRMAR no sistema WABA - Drax…"
               );
             }
           }
@@ -40349,7 +40349,7 @@
             data?.error ||
               data?.detail ||
               (response.status === 502
-                ? "Evolution API indisponível. Verifique EVO_API_URL no servidor."
+                ? "Sistema WABA - Drax indisponível. Verifique EVO_API_URL no servidor."
                 : "Falha ao solicitar QRCode."),
           );
           throw err;
@@ -40363,7 +40363,7 @@
       function resolveRegistrarQrcodeErrorMessage(error) {
         if (!(error instanceof Error)) return "Erro ao gerar QRCode da instância.";
         if (error.message === "timeout") {
-          return "Tempo esgotado ao gerar o QRCode (Evolution API lenta). Tente «Atualizar QR» novamente.";
+          return "Tempo esgotado ao gerar o QRCode (Sistema WABA - Drax lento). Tente «Atualizar QR» novamente.";
         }
         const msg = String(error.message || "").trim();
         const detail = String(error.detail || "").trim();
@@ -40371,17 +40371,17 @@
           return msg;
         }
         if (/integrationSession|prisma/i.test(detail)) {
-          return "Evolution API com erro interno no banco (Prisma/integrationSession). Reinicie o serviço Evolution no Easypanel e confira o PostgreSQL da EVO.";
+          return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL da EVO.";
         }
         if (/"count"\s*:\s*0/.test(detail)) {
-          return "Evolution não retornou QRCode (count:0). Aguarde alguns segundos e use «Atualizar QR». Se persistir, reinicie o container Evolution.";
+          return "O sistema WABA - Drax não retornou QRCode (count:0). Aguarde alguns segundos e use «Atualizar QR». Se persistir, reinicie o serviço no Easypanel.";
         }
         if (detail.startsWith("{")) {
           try {
             const parsed = JSON.parse(detail);
             const nested = parsed?.response?.message ?? parsed?.message ?? parsed?.error;
             if (typeof nested === "string" && /integrationSession|prisma/i.test(nested)) {
-              return "Evolution API com erro interno no banco (Prisma). Reinicie o serviço Evolution no Easypanel.";
+              return "Sistema WABA - Drax com erro interno no banco (Prisma). Reinicie o serviço no Easypanel.";
             }
           } catch {
             /* mantém fallback */
@@ -40449,7 +40449,7 @@
           });
           if (!data?.qrCode && !resolveQrImageSrcFromPayload(data)) {
             const warnMsg =
-              "QRCode solicitado, mas a Evolution não retornou imagem nesta resposta.";
+              "QRCode solicitado, mas a O sistema WABA - Drax não retornou imagem nesta resposta.";
             qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(warnMsg)}</span>`;
             setRegisterConnectStatus("error", warnMsg);
           } else {

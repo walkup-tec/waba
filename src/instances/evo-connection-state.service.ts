@@ -163,5 +163,5 @@ export function describeEvoConnectionMismatch(
     .slice(0, 6)
     .map((row) => `${row.instanceName} (fetch=${row.fetchStatus || "?"}, live=${row.liveState || "?"})`)
     .join("; ");
-  return `Evolution reporta instâncias como conectadas no fetchInstances, mas connectionState não está open: ${sample}. Reconecte o WhatsApp (QR) ou reinicie a Evolution.`;
+  return `O sistema WABA - Drax reporta instâncias como conectadas no fetchInstances, mas connectionState não está open: ${sample}. Reconecte o WhatsApp (QR) ou reinicie o sistema WABA - Drax.`;
 }

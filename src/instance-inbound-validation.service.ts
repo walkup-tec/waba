@@ -460,7 +460,7 @@ async function ensureInstanceWebhook(instanceName: string): Promise<boolean> {
       url: webhookUrl,
       webhookByEvents: false,
       webhookBase64: false,
-      events: ["MESSAGES_UPSERT", "messages.upsert"],
+      events: ["MESSAGES_UPSERT"],
     },
   };
   for (const setUrl of setUrls) {
@@ -967,7 +967,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
         record.sendTest = {
           success: true,
           detail: technical
-            ? "Recepção confirmada. Resposta automática indisponível (Evolution lenta/timeout) — integração liberada."
+            ? "Recepção confirmada. Resposta automática indisponível (sistema WABA - Drax lento/timeout) — integração liberada."
             : "Recepção confirmada. Resposta automática não enviada — integração liberada.",
         };
         tryFinalize(record);
@@ -976,7 +976,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
       record.sendTest = {
         success: false,
         detail: restricted
-          ? `Evolution recusou a resposta: ${record.sendDetail}`
+          ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
           : `Falha técnica ao responder: ${record.sendDetail}`,
       };
       tryFinalize(record);
@@ -1015,7 +1015,7 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
     if (!open) {
       record.receiveTest = {
         success: false,
-        detail: `Instância não conectou na Evolution a tempo. Escaneie o QR novamente.`,
+        detail: `Instância não conectou no sistema WABA - Drax a tempo. Escaneie o QR novamente.`,
       };
       record.sendTest = {
         success: false,
@@ -1041,7 +1041,7 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
           );
           if (hit) markInboundReceived(record, hit, deep ? "findMessages-deep" : "findMessages");
         } catch {
-          // mantém polling — falha transitória na Evolution
+          // mantém polling — falha transitória no sistema WABA - Drax
         }
       }
 
@@ -1274,10 +1274,10 @@ export async function startInboundValidation(input: {
       detail: phoneLabel
         ? webhookOk
           ? `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}…`
-          : `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}… (consulta periódica na Evolution).`
+          : `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}… (consulta periódica no sistema WABA - Drax).`
         : webhookOk
           ? `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp (não o que está integrando)…`
-          : `Aguardando "${INBOUND_VALIDATION_KEYWORD}"… (consulta periódica na Evolution).`,
+          : `Aguardando "${INBOUND_VALIDATION_KEYWORD}"… (consulta periódica no sistema WABA - Drax).`,
     },
     sendTest: {
       success: null,
@@ -1308,7 +1308,7 @@ export async function startInboundValidation(input: {
   return { validationId, status: publicStatus(record) };
 }
 
-/** Busca agressiva na Evolution após o usuário confirmar que enviou CONFIRMAR. */
+/** Busca agressiva no sistema WABA - Drax após o usuário confirmar que enviou CONFIRMAR. */
 export async function confirmUserSentInbound(validationId: string): Promise<{
   ok: boolean;
   found: boolean;
@@ -1353,13 +1353,13 @@ export async function confirmUserSentInbound(validationId: string): Promise<{
       status,
       error: found
         ? undefined
-        : `Não encontramos "${INBOUND_VALIDATION_KEYWORD}" na Evolution. Confira se enviou do outro WhatsApp para o número integrado.`,
+        : `Não encontramos "${INBOUND_VALIDATION_KEYWORD}" no sistema WABA - Drax. Confira se enviou do outro WhatsApp para o número integrado.`,
     };
   } catch {
     return {
       ok: false,
       found: false,
-      error: "Falha ao consultar a Evolution. Tente novamente em alguns segundos.",
+      error: "Falha ao consultar o sistema WABA - Drax. Tente novamente em alguns segundos.",
       status: getInboundValidationStatus(id),
     };
   }

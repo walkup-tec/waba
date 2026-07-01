@@ -93,7 +93,7 @@ export async function sendEvoTextAlert(input: {
     (result.json && typeof result.json === "object"
       ? String((result.json as Record<string, unknown>).message ?? "")
       : "") ||
-    "Falha no envio via Evolution API.";
+    "Falha no envio via sistema WABA - Drax.";
 
   return {
     ok: false,

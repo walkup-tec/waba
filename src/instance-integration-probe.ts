@@ -417,7 +417,7 @@ export async function startIntegrationProbe(input: {
   const source = connected.find((c) => c.instancia === sourceInstanceName);
   if (!source) {
     return {
-      error: `Instância "${sourceInstanceName}" não está conectada (status open) na Evolution.`,
+      error: `Instância "${sourceInstanceName}" não está conectada (status open) no sistema WABA - Drax.`,
     };
   }
 
@@ -435,7 +435,7 @@ export async function startIntegrationProbe(input: {
         destinationInstance: "",
         apiTest: {
           success: true,
-          detail: "Conexão confirmada (status open) na Evolution.",
+          detail: "Conexão confirmada (status open) no sistema WABA - Drax.",
         },
         webhookTest: {
           success: null,
@@ -501,7 +501,7 @@ export async function startIntegrationProbe(input: {
     record.webhookTest = {
       success: restricted ? false : null,
       detail: restricted
-        ? "Evolution indicou possível restrição no envio."
+        ? "O sistema WABA - Drax indicou possível restrição no envio."
         : "Envio não confirmado (falha técnica — não indica bloqueio do número).",
     };
     tryFinalizeProbe(record);

@@ -389,7 +389,7 @@ async function ensureInstanceWebhook(instanceName) {
             url: webhookUrl,
             webhookByEvents: false,
             webhookBase64: false,
-            events: ["MESSAGES_UPSERT", "messages.upsert"],
+            events: ["MESSAGES_UPSERT"],
         },
     };
     for (const setUrl of setUrls) {
@@ -834,7 +834,7 @@ async function sendContextualReply(record) {
                 record.sendTest = {
                     success: true,
                     detail: technical
-                        ? "Recepção confirmada. Resposta automática indisponível (Evolution lenta/timeout) — integração liberada."
+                        ? "Recepção confirmada. Resposta automática indisponível (sistema WABA - Drax lento/timeout) — integração liberada."
                         : "Recepção confirmada. Resposta automática não enviada — integração liberada.",
                 };
                 tryFinalize(record);
@@ -843,7 +843,7 @@ async function sendContextualReply(record) {
             record.sendTest = {
                 success: false,
                 detail: restricted
-                    ? `Evolution recusou a resposta: ${record.sendDetail}`
+                    ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
                     : `Falha técnica ao responder: ${record.sendDetail}`,
             };
             tryFinalize(record);
@@ -881,7 +881,7 @@ async function runValidationLoop(record) {
         if (!open) {
             record.receiveTest = {
                 success: false,
-                detail: `Instância não conectou na Evolution a tempo. Escaneie o QR novamente.`,
+                detail: `Instância não conectou no sistema WABA - Drax a tempo. Escaneie o QR novamente.`,
             };
             record.sendTest = {
                 success: false,
@@ -903,7 +903,7 @@ async function runValidationLoop(record) {
                         markInboundReceived(record, hit, deep ? "findMessages-deep" : "findMessages");
                 }
                 catch {
-                    // mantém polling — falha transitória na Evolution
+                    // mantém polling — falha transitória no sistema WABA - Drax
                 }
             }
             if (record.receiveTest.success === true &&
@@ -1103,10 +1103,10 @@ async function startInboundValidation(input) {
             detail: phoneLabel
                 ? webhookOk
                     ? `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}…`
-                    : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}… (consulta periódica na Evolution).`
+                    : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}… (consulta periódica no sistema WABA - Drax).`
                 : webhookOk
                     ? `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp (não o que está integrando)…`
-                    : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}"… (consulta periódica na Evolution).`,
+                    : `Aguardando "${exports.INBOUND_VALIDATION_KEYWORD}"… (consulta periódica no sistema WABA - Drax).`,
         },
         sendTest: {
             success: null,
@@ -1134,7 +1134,7 @@ async function startInboundValidation(input) {
     void runValidationLoop(record);
     return { validationId, status: publicStatus(record) };
 }
-/** Busca agressiva na Evolution após o usuário confirmar que enviou CONFIRMAR. */
+/** Busca agressiva no sistema WABA - Drax após o usuário confirmar que enviou CONFIRMAR. */
 async function confirmUserSentInbound(validationId) {
     const id = String(validationId || "").trim();
     if (!id) {
@@ -1173,14 +1173,14 @@ async function confirmUserSentInbound(validationId) {
             status,
             error: found
                 ? undefined
-                : `Não encontramos "${exports.INBOUND_VALIDATION_KEYWORD}" na Evolution. Confira se enviou do outro WhatsApp para o número integrado.`,
+                : `Não encontramos "${exports.INBOUND_VALIDATION_KEYWORD}" no sistema WABA - Drax. Confira se enviou do outro WhatsApp para o número integrado.`,
         };
     }
     catch {
         return {
             ok: false,
             found: false,
-            error: "Falha ao consultar a Evolution. Tente novamente em alguns segundos.",
+            error: "Falha ao consultar o sistema WABA - Drax. Tente novamente em alguns segundos.",
             status: getInboundValidationStatus(id),
         };
     }
