@@ -1158,8 +1158,7 @@ export function handleInboundValidationWebhook(body: unknown): void {
   if (!body || typeof body !== "object") return;
   const payload = body as Record<string, unknown>;
   const instanceName = extractWebhookInstanceName(payload);
-  const event = String(payload.event || "").toUpperCase().replace(/\./g, "_");
-  if (event && event !== "MESSAGES_UPSERT") return;
+  if (!isEvolutionMessageUpsertEvent(payload.event)) return;
 
   const chunks = unwrapEvolutionWebhookPayload(body);
   const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
@@ -1181,17 +1180,43 @@ export function handleInboundValidationWebhook(body: unknown): void {
   }
 }
 
+function normalizeWebhookInstanceRef(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value).trim();
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    for (const key of ["instanceName", "name", "instance", "id"]) {
+      const nested = normalizeWebhookInstanceRef(obj[key]);
+      if (nested) return nested;
+    }
+  }
+  return "";
+}
+
+function isEvolutionMessageUpsertEvent(eventRaw: unknown): boolean {
+  const event = String(eventRaw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\./g, "_");
+  if (!event) return true;
+  return event === "MESSAGES_UPSERT" || event === "MESSAGES_UPSERT_UPDATE";
+}
+
 function extractWebhookInstanceName(payload: Record<string, unknown>): string {
+  const data = payload.data as Record<string, unknown> | undefined;
   const candidates = [
     payload.instance,
     payload.instanceName,
-    (payload.data as Record<string, unknown> | undefined)?.instance,
-    (payload.data as Record<string, unknown> | undefined)?.instanceName,
+    data?.instance,
+    data?.instanceName,
     (payload.sender as Record<string, unknown> | undefined)?.instance,
+    (data?.instanceData as Record<string, unknown> | undefined)?.instanceName,
   ];
   for (const value of candidates) {
-    const s = String(value || "").trim();
-    if (s) return s;
+    const name = normalizeWebhookInstanceRef(value);
+    if (name) return name;
   }
   return "";
 }

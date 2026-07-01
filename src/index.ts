@@ -5341,14 +5341,15 @@ app.post("/instancias/uso-config", async (req, res) => {
 });
 
 app.post("/webhooks/evolution", (req, res) => {
-  try {
-    handleEvolutionWebhookPayload(req.body);
-    handleInboundValidationWebhook(req.body);
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error("POST /webhooks/evolution", error);
-    return res.status(500).json({ error: "Erro ao processar webhook Evolution." });
-  }
+  res.status(202).json({ ok: true });
+  setImmediate(() => {
+    try {
+      handleEvolutionWebhookPayload(req.body);
+      handleInboundValidationWebhook(req.body);
+    } catch (error) {
+      console.error("POST /webhooks/evolution", error);
+    }
+  });
 });
 
 app.post("/instancias/:name/probe-integracao", async (req, res) => {

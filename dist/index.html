@@ -30874,7 +30874,7 @@
       let registerInboundPollTick = 0;
       let registerInboundConnectionAdvanceTimer = null;
       const REGISTER_INBOUND_POLL_MS = 300;
-      const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 6;
+      const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
       const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 20000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       let registerWizardStep = 1;
@@ -39412,6 +39412,8 @@
             registerInboundPollTick += 1;
             let pollPath = `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`;
             if (registerInboundPollTick % REGISTER_INBOUND_DEEP_NUDGE_EVERY === 0) {
+              pollPath += "?nudge=2";
+            } else if (registerInboundPollTick % 2 === 0) {
               pollPath += "?nudge=1";
             }
             const pollRes = await fetchWithTimeout(

@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-01
 
-**WABA — Validação CONFIRMAR @lid findChats (5181082477):** CONFIRMAR não aparece em findMessages global; detecção via `findChats.lastMessage` a cada tick + webhook ao vivo sem timestamp; instância `digital-corban-2477`. Marker `DEPLOY-2026-07-01-validacao-confirmar-lid-findchats`. Ver `doc/LOG-2026-07-01__validacao-confirmar-lid-findchats-5181082477.md`.
+**WABA — Validação CONFIRMAR instância nova 7943 / webhook:** `5182007943` sem histórico (`findChats[]`, Message:0); webhook Evolution com `instance` objeto ignorado; fix `normalizeWebhookInstanceRef` + HTTP 202 async. Marker `DEPLOY-2026-07-01-validacao-confirmar-webhook-instance-obj`. Ver `doc/LOG-2026-07-01__validacao-confirmar-7943-webhook-instance-obj.md`.
+
+**WABA — Validação CONFIRMAR @lid findChats (5181082477):** CONFIRMAR não aparece em findMessages global; detecção via `findChats.lastMessage`. Marker `DEPLOY-2026-07-01-validacao-confirmar-lid-findchats`. Ver `doc/LOG-2026-07-01__validacao-confirmar-lid-findchats-5181082477.md`.
 
 **WABA — Validação CONFIRMAR detecção rápida:** fast path findMessages paralelo; findChats só em deep scan; poll 280ms backend / 300ms UI. Marker `DEPLOY-2026-07-01-validacao-confirmar-fast-detect`. Ver `doc/LOG-2026-07-01__validacao-confirmar-fast-detect.md`.
 

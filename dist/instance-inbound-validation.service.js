@@ -995,8 +995,7 @@ function handleInboundValidationWebhook(body) {
         return;
     const payload = body;
     const instanceName = extractWebhookInstanceName(payload);
-    const event = String(payload.event || "").toUpperCase().replace(/\./g, "_");
-    if (event && event !== "MESSAGES_UPSERT")
+    if (!isEvolutionMessageUpsertEvent(payload.event))
         return;
     const chunks = unwrapEvolutionWebhookPayload(body);
     const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
@@ -1019,18 +1018,45 @@ function handleInboundValidationWebhook(body) {
             break;
     }
 }
+function normalizeWebhookInstanceRef(value) {
+    if (value == null)
+        return "";
+    if (typeof value === "string" || typeof value === "number") {
+        return String(value).trim();
+    }
+    if (typeof value === "object") {
+        const obj = value;
+        for (const key of ["instanceName", "name", "instance", "id"]) {
+            const nested = normalizeWebhookInstanceRef(obj[key]);
+            if (nested)
+                return nested;
+        }
+    }
+    return "";
+}
+function isEvolutionMessageUpsertEvent(eventRaw) {
+    const event = String(eventRaw || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\./g, "_");
+    if (!event)
+        return true;
+    return event === "MESSAGES_UPSERT" || event === "MESSAGES_UPSERT_UPDATE";
+}
 function extractWebhookInstanceName(payload) {
+    const data = payload.data;
     const candidates = [
         payload.instance,
         payload.instanceName,
-        payload.data?.instance,
-        payload.data?.instanceName,
+        data?.instance,
+        data?.instanceName,
         payload.sender?.instance,
+        data?.instanceData?.instanceName,
     ];
     for (const value of candidates) {
-        const s = String(value || "").trim();
-        if (s)
-            return s;
+        const name = normalizeWebhookInstanceRef(value);
+        if (name)
+            return name;
     }
     return "";
 }
