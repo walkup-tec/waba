@@ -18168,7 +18168,7 @@
             </button>
           </div>
         </div>
-        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-06-30-validacao-inbound-detect-fallback</span>
+        <span class="register-probe-version" id="register-inbound-version" hidden>DEPLOY-2026-07-01-validacao-qr-fast-connectionstate</span>
       </div>
     </div>
 
@@ -30861,6 +30861,7 @@
       let registerModalDefaultName = "";
       let registerConnectPollTimer = null;
       let registerConnectPollStartedAt = 0;
+      let registerConnectConnectingNotified = false;
       let registerConnectedInstanceName = "";
       let registerConnectedInstanceNumber = "";
       let registerInboundPollTimer = null;
@@ -30869,7 +30870,7 @@
       let registerInboundPollFailCount = 0;
       let registerInboundPollUseNudge = true;
       let registerInboundConnectionAdvanceTimer = null;
-      const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 30000;
+      const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 20000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
@@ -38807,6 +38808,7 @@
         }
         clearRegisterInboundTimers();
         registerConnectPollStartedAt = 0;
+        registerConnectConnectingNotified = false;
         registerConnectedInstanceName = "";
         registerConnectedInstanceNumber = "";
         registerInboundValidationId = "";
@@ -39411,7 +39413,7 @@
           } catch {
             registerInboundPollFailCount += 1;
           }
-        }, 800);
+        }, 500);
       }
 
       function openRenameInstanceModal(instanceName) {
@@ -39701,6 +39703,7 @@
         }
         setRegisterWizardStep(2);
         registerConnectPollStartedAt = Date.now();
+        registerConnectConnectingNotified = false;
         setRegisterConnectStatus("loading", "Aguardando leitura do QR Code…");
 
         const pollConnectOnce = async () => {
@@ -39719,13 +39722,22 @@
             const response = await fetchWithTimeout(
               `/instancias/${encodeURIComponent(instanceName)}/status-conexao`,
               { credentials: "same-origin" },
-              12000,
+              8000,
             );
             if (!response.ok) return;
             const payload = await response.json().catch(() => null);
+            const statusLc = String(payload?.connectionStatus || "").toLowerCase();
             const isOpen =
-              payload?.open === true ||
-              String(payload?.connectionStatus || "").toLowerCase().includes("open");
+              payload?.open === true || statusLc.includes("open");
+            const isConnecting =
+              payload?.connecting === true || statusLc.includes("connecting");
+            if (isConnecting && !isOpen && !registerConnectConnectingNotified) {
+              registerConnectConnectingNotified = true;
+              setRegisterConnectStatus(
+                "loading",
+                "QR Code lido! Finalizando conexão com o WhatsApp…"
+              );
+            }
             if (!isOpen) return;
 
             clearInterval(registerConnectPollTimer);
@@ -39741,7 +39753,7 @@
         };
 
         void pollConnectOnce();
-        registerConnectPollTimer = setInterval(pollConnectOnce, 1000);
+        registerConnectPollTimer = setInterval(pollConnectOnce, 500);
       }
 
       function resolveQrImageSrcFromPayload(data) {

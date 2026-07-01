@@ -41,6 +41,16 @@ import {
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
 } from "./instances/evo-instance-phone.service";
+import {
+  describeEvoConnectionMismatch,
+  invalidateEvoLiveStateCache,
+  fetchEvoInstanceLiveState,
+  isEvoLiveStateOpen,
+  isEvoConnectionInProgress,
+  pickEvoConnectionState,
+  resolveEvoLiveConnectionSnapshots,
+} from "./instances/evo-connection-state.service";
+import { runEvoIntegrationProbe } from "./services/evo-integration-probe.service";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
@@ -391,6 +401,7 @@ function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
     p === "/health" ||
     p === "/ready" ||
     p === "/service/maintenance" ||
+    p === "/service/evo-integration-probe" ||
     p === "/maintenance"
   );
 }
@@ -507,6 +518,16 @@ app.get("/service/maintenance", (_req, res) => {
     retryAfterSec: MAINTENANCE_MODE ? MAINTENANCE_RETRY_AFTER_SEC : null,
     port: PORT,
   });
+});
+
+app.get("/service/evo-integration-probe", async (_req, res) => {
+  try {
+    const result = await runEvoIntegrationProbe();
+    res.status(result.ok ? 200 : 503).json(result);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ ok: false, error: msg.slice(0, 300) });
+  }
 });
 
 app.get("/maintenance", (_req, res) => {
@@ -3415,6 +3436,27 @@ function mergeAquecedorConnectedRows(
   };
 }
 
+async function filterAquecedorRowsByEvoLiveOpen<T extends { instancia: string }>(
+  rows: T[],
+): Promise<{ rows: T[]; ghostOpenSummary: string | null }> {
+  const filtered: T[] = [];
+  const ghost: string[] = [];
+  for (const row of rows) {
+    const liveState = await fetchEvoInstanceLiveState(row.instancia);
+    if (isEvoLiveStateOpen(liveState)) {
+      filtered.push(row);
+    } else {
+      ghost.push(`${row.instancia}(${liveState || "desconhecido"})`);
+    }
+  }
+  return {
+    rows: filtered,
+    ghostOpenSummary: ghost.length
+      ? `${ghost.length} instância(s) aparecem no fetchInstances mas connectionState≠open: ${ghost.slice(0, 8).join(", ")}`
+      : null,
+  };
+}
+
 async function listMergedConnectedEvoInstancesUnscoped(): Promise<{
   rows: Array<{ instancia: string; numero: string }>;
   liveCount: number;
@@ -3422,19 +3464,30 @@ async function listMergedConnectedEvoInstancesUnscoped(): Promise<{
   evoOk: boolean;
   evoError?: string;
   usedCacheOnlyForNumbers: boolean;
+  evoGhostOpenSummary?: string | null;
+  evoFetchOpenCount?: number;
+  evoLiveOpenCount?: number;
 }> {
   const evoList = await fetchEvoInstancesList();
   const cache = await loadEvoInstancesCache();
   const fromLive = evoList.ok ? buildConnectedFromEvoResponse(evoList.instances) : [];
   const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
   const merged = mergeAquecedorConnectedRows(fromLive, fromCache);
+  const verified = await filterAquecedorRowsByEvoLiveOpen(merged.rows);
+  const snapshots =
+    evoList.ok && evoList.instances.length
+      ? await resolveEvoLiveConnectionSnapshots(evoList.instances)
+      : [];
   return {
-    rows: merged.rows,
+    rows: verified.rows,
     liveCount: fromLive.length,
     cacheCount: fromCache.length,
     evoOk: evoList.ok,
     evoError: evoList.ok ? undefined : evoList.detail,
     usedCacheOnlyForNumbers: merged.usedCacheOnlyForNumbers,
+    evoGhostOpenSummary: verified.ghostOpenSummary,
+    evoFetchOpenCount: snapshots.filter((row) => row.fetchStatus.includes("open")).length,
+    evoLiveOpenCount: snapshots.filter((row) => row.trulyOpen).length,
   };
 }
 
@@ -3610,6 +3663,9 @@ async function resolveAquecedorConnectedForOwner(ownerEmail: string): Promise<{
   source: "evo-live" | "evo-cache";
   evoDegraded: boolean;
   evoError?: string;
+  evoGhostOpenSummary?: string | null;
+  evoFetchOpenCount?: number;
+  evoLiveOpenCount?: number;
 }> {
   const usageMap = await loadInstanceUsageMap();
 
@@ -3644,8 +3700,11 @@ async function resolveAquecedorConnectedForOwner(ownerEmail: string): Promise<{
   return {
     connected,
     source: mergedEvo.evoOk ? "evo-live" : "evo-cache",
-    evoDegraded: !mergedEvo.evoOk || usedCacheSupplement,
+    evoDegraded: !mergedEvo.evoOk || usedCacheSupplement || Boolean(mergedEvo.evoGhostOpenSummary),
     evoError: mergedEvo.evoError,
+    evoGhostOpenSummary: mergedEvo.evoGhostOpenSummary,
+    evoFetchOpenCount: mergedEvo.evoFetchOpenCount,
+    evoLiveOpenCount: mergedEvo.evoLiveOpenCount,
   };
 }
 
@@ -4045,6 +4104,16 @@ async function runAquecedorCycleTestBatch(
       "Teste: nenhum par disponível (é necessário ao menos 2 instâncias ativas no Aquecedor).";
     return;
   }
+
+  const openCheck = await assertAquecedorInstancesOpenForSend(
+    chosen.instancia_origem,
+    chosen.instancia_destino,
+  );
+  if (!openCheck.ok) {
+    aquecedorRuntime.lastResult = `Ciclo teste abortado: ${openCheck.reason}`;
+    return;
+  }
+
   const deliveryTag = buildAquecedorDeliveryTag();
   const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
@@ -4097,7 +4166,8 @@ async function runAquecedorCycleTestBatch(
       instance: chosen.instancia_origem,
       numeroLen: numero.length,
     };
-    aquecedorRuntime.lastResult = `Ciclo teste falhou: ${chosen.instancia_origem} → ${chosen.instancia_destino}.`;
+    const detail = String(sendResult.body || (sendResult as { error?: string }).error || "").slice(0, 160);
+    aquecedorRuntime.lastResult = `Ciclo teste falhou: ${chosen.instancia_origem} → ${chosen.instancia_destino}. EVO HTTP ${sendResult.status}${detail ? `: ${detail}` : ""}.`;
   }
   await (supabase.from("controle_ciclo" as any) as any).upsert(
     { id: 1, ciclo_global: proximo },
@@ -4176,14 +4246,21 @@ async function runAquecedorCycle(forceTest = false) {
         .slice(0, 6)
         .join("; ");
       const scopedCount = analysis.ownedInstances.length;
+      const ghostNote = resolved.evoGhostOpenSummary ? ` ${resolved.evoGhostOpenSummary}` : "";
+      const liveCounts =
+        resolved.evoFetchOpenCount != null && resolved.evoLiveOpenCount != null
+          ? ` fetchOpen=${resolved.evoFetchOpenCount} liveOpen=${resolved.evoLiveOpenCount}.`
+          : "";
       const evoNote = resolved.evoDegraded
-        ? " Evolution indisponível — usando cache local."
+        ? resolved.evoGhostOpenSummary ||
+          resolved.evoError ||
+          " Evolution indisponível ou instâncias não estão open (connectionState)."
         : "";
       aquecedorRuntime.lastResult = hints
-        ? `Menos de 2 instâncias habilitadas (${connected.length} conectadas de ${scopedCount} no seu escopo). Verifique: ${hints}${evoNote}`
+        ? `Menos de 2 instâncias realmente conectadas (${connected.length} live-open de ${scopedCount} no escopo).${liveCounts}${ghostNote || ""} Verifique: ${hints}${evoNote ? ` ${evoNote}` : ""}`
         : scopedCount < 2
-          ? `Menos de 2 instâncias no seu escopo (${scopedCount}). Vincule ou ative números na API Alternativa.${evoNote}`
-          : `Menos de 2 instâncias conectadas e habilitadas para Aquecedor (${connected.length} de ${scopedCount}).${evoNote}`;
+          ? `Menos de 2 instâncias no seu escopo (${scopedCount}). Vincule ou ative números na API Alternativa.${ghostNote}`
+          : `Menos de 2 instâncias open na Evolution (connectionState).${liveCounts}${ghostNote || ""}${evoNote ? ` ${evoNote}` : ""}`;
       return;
     }
 
@@ -4957,10 +5034,13 @@ app.get("/instancias", async (req, res) => {
     const visibleBaseItems = await filterDeletedInstancesFromItems(baseItems, (row) =>
       String(row?.name || ""),
     );
-    let items = visibleBaseItems;
+    const liveBaseItems = await enrichInstanceItemsWithLiveConnection(
+      visibleBaseItems as Array<Record<string, unknown>>,
+    );
+    let items = liveBaseItems;
     if (EVO_LIVE_PROFILE_SYNC) {
       items = await Promise.all(
-        visibleBaseItems.map(async (row: any) => {
+        liveBaseItems.map(async (row: any) => {
           const status = String(row?.connectionStatus || "").toLowerCase();
           if (!status.includes("open")) return row;
           const live = await fetchLiveWhatsappProfile(
@@ -4978,7 +5058,7 @@ app.get("/instancias", async (req, res) => {
       );
     }
 
-    const allNames = visibleBaseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
+    const allNames = liveBaseItems.map((row) => String(row?.name || "").trim()).filter(Boolean);
     const reconciled = await wabaInstanceOwnershipService.reconcileOrphanInstancesForMaster(
       auth,
       allNames,
@@ -4991,12 +5071,12 @@ app.get("/instancias", async (req, res) => {
     items = await wabaInstanceOwnershipService.filterItemsForAuth(auth, items, (row) =>
       String(row?.name || "")
     );
-    ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase().includes("open"))
+    ativas = items.filter((row) => String(row?.connectionStatus || "").toLowerCase() === "open")
       .length;
     desconectadas = items.length - ativas;
 
     void saveEvoInstancesCache(
-      visibleBaseItems.map((row) => ({ ...row })) as Array<Record<string, unknown>>,
+      liveBaseItems.map((row) => ({ ...row })) as Array<Record<string, unknown>>,
     );
 
     const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
@@ -5004,7 +5084,7 @@ app.get("/instancias", async (req, res) => {
       auth.email || "",
     );
     ativas = enrichedItems.filter((row) =>
-      String(row?.connectionStatus || "").toLowerCase().includes("open"),
+      String(row?.connectionStatus || "").toLowerCase() === "open",
     ).length;
     desconectadas = enrichedItems.length - ativas;
 
@@ -5318,7 +5398,7 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
     }
     if (await rejectForeignInstance(req, res, name)) return;
 
-    const live = await fetchEvoInstanceConnectionState(name);
+    const live = await fetchEvoInstanceConnectionState(name, { fresh: true });
     if (live.ok) {
       let instanceNumber = "";
       if (live.open) {
@@ -5342,6 +5422,7 @@ app.get("/instancias/:name/status-conexao", async (req, res) => {
         name,
         connectionStatus: live.state,
         open: live.open,
+        connecting: isEvoConnectionInProgress(live.state),
         instanceNumber: instanceNumber || null,
         source: "connectionState",
       });
@@ -6575,6 +6656,24 @@ async function attachAquecedorMessageStatsToInstanceItems(
   });
 }
 
+async function enrichInstanceItemsWithLiveConnection(
+  items: Array<Record<string, unknown>>,
+): Promise<Array<Record<string, unknown>>> {
+  return Promise.all(
+    items.map(async (row) => {
+      const name = String(row?.name || "").trim();
+      if (!name) return row;
+      const liveState = await fetchEvoInstanceLiveState(name, { fresh: true });
+      if (!liveState) return row;
+      return {
+        ...row,
+        connectionStatus: liveState,
+        liveConnectionStatus: liveState,
+      };
+    }),
+  );
+}
+
 async function buildInstancesSnapshotForAuth(
   auth: ReturnType<typeof resolveWabaRequestAuth>,
 ): Promise<{
@@ -6625,7 +6724,7 @@ async function buildInstancesSnapshotForAuth(
   });
 
   const ativas = items.filter((row) =>
-    String(row?.connectionStatus || "").toLowerCase().includes("open"),
+    String(row?.connectionStatus || "").toLowerCase() === "open",
   ).length;
 
   const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
@@ -6716,19 +6815,19 @@ async function assertAquecedorInstancesOpenForSend(
   destino: string,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const [originState, destState] = await Promise.all([
-    fetchEvoInstanceConnectionState(origem),
-    fetchEvoInstanceConnectionState(destino),
+    fetchEvoInstanceLiveState(origem),
+    fetchEvoInstanceLiveState(destino),
   ]);
-  if (originState.ok && !originState.open) {
+  if (!isEvoLiveStateOpen(originState)) {
     return {
       ok: false,
-      reason: `${origem} não está conectada na Evolution (${originState.state || "desconectada"}). Reconecte o WhatsApp antes do aquecedor enviar.`,
+      reason: `${origem} não está open na Evolution (connectionState=${originState || "desconhecido"}). fetchInstances pode mostrar "open" incorretamente — reconecte o QR ou reinicie a Evolution.`,
     };
   }
-  if (destState.ok && !destState.open) {
+  if (!isEvoLiveStateOpen(destState)) {
     return {
       ok: false,
-      reason: `${destino} não está conectada na Evolution (${destState.state || "desconectada"}). Reconecte o WhatsApp do destino.`,
+      reason: `${destino} não está open na Evolution (connectionState=${destState || "desconhecido"}). Reconecte o WhatsApp do destino.`,
     };
   }
   return { ok: true };
@@ -7614,6 +7713,7 @@ function buildEvoConnectQrCandidates(
 async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<void> {
   const enc = encodeURIComponent(String(instanceName || "").trim());
   if (!enc) return;
+  invalidateEvoLiveStateCache(instanceName);
   const steps: Array<{ url: string; method: "DELETE" | "POST" }> = [
     { url: `${EVO_API_BASE}/instance/logout/${enc}`, method: "DELETE" },
     { url: `${EVO_API_BASE}/instance/restart/${enc}`, method: "POST" },
@@ -7627,25 +7727,16 @@ async function prepareEvoInstanceForQrConnect(instanceName: string): Promise<voi
   await sleepMs(2500);
 }
 
-function pickEvoConnectionState(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
-  const root = payload as Record<string, unknown>;
-  const inst = (root.instance as Record<string, unknown> | undefined) ?? root;
-  const raw =
-    inst.state ??
-    inst.connectionStatus ??
-    inst.status ??
-    root.state ??
-    root.connectionStatus ??
-    "";
-  return String(raw || "").trim().toLowerCase();
-}
-
 async function fetchEvoInstanceConnectionState(
   instanceName: string,
+  options?: { fresh?: boolean },
 ): Promise<{ ok: boolean; state: string; open: boolean }> {
   const enc = encodeURIComponent(String(instanceName || "").trim());
   if (!enc) return { ok: false, state: "", open: false };
+  const state = await fetchEvoInstanceLiveState(instanceName, { fresh: options?.fresh === true });
+  if (state) {
+    return { ok: true, state, open: isEvoLiveStateOpen(state) };
+  }
   const urls = [
     `${EVO_API_BASE}/instance/connectionState/${enc}`,
     `${EVO_API_BASE}/instance/connection-state/${enc}`,
@@ -7656,9 +7747,9 @@ async function fetchEvoInstanceConnectionState(
       retries: 1,
     });
     if (!result.ok && result.status === 404) continue;
-    const state = pickEvoConnectionState(result.json);
-    if (state) {
-      return { ok: true, state, open: state.includes("open") };
+    const parsedState = pickEvoConnectionState(result.json);
+    if (parsedState) {
+      return { ok: true, state: parsedState, open: isEvoLiveStateOpen(parsedState) };
     }
   }
   return { ok: false, state: "", open: false };
@@ -8835,7 +8926,9 @@ app.post("/aquecedor/run-once", async (req, res) => {
   void persistAquecedorRuntimeIntent(false, null);
   const status = buildLiveAquecedorStatusPayload();
   const lastResult = String(aquecedorRuntime.lastResult || "").trim();
-  const ok = /enviado com sucesso|realizado/i.test(lastResult);
+  const ok =
+    /enviado com sucesso|realizado/i.test(lastResult) &&
+    !/abortado|falhou|não está open|connectionState/i.test(lastResult);
   void appendAquecedorCommandLog(
     lastResult ? `Envio teste: ${lastResult}` : "Envio teste executado.",
     aquecedorRuntimeOwnerEmail,
@@ -10761,6 +10854,17 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   const digitsCheck = String(numero || "").replace(/\D/g, "");
   if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
     await persistLeadFailed(lead, "invalid_phone");
+    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+    return;
+  }
+  const instanceLiveState = await fetchEvoInstanceLiveState(instancePick.instancia);
+  if (!isEvoLiveStateOpen(instanceLiveState)) {
+    console.error(
+      "[Campanha] Instância não open na Evolution (connectionState):",
+      instancePick.instancia,
+      instanceLiveState || "desconhecido",
+    );
+    await persistLeadFailed(lead, "send_error");
     scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
     return;
   }

@@ -13,7 +13,13 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-30
+2026-07-01
+
+**WABA — Validação QR + connectionState fresh:** cache 4s + bypass no poll QR; waitFor open antes CONFIRMAR; findChats primeiro; sendText timeout libera se recepção OK. Marker `DEPLOY-2026-07-01-validacao-qr-fast-connectionstate`. Ver `doc/LOG-2026-07-01__validacao-qr-fast-connectionstate.md`.
+
+**WABA — Desconectar todas instâncias EVO:** logout em massa falhou (HTTP 500 Connection Closed) em 6 instâncias; restart API não muda state. **Usuário deve reiniciar `evo-walkup-api` no Easypanel** antes de reconectar QR. Ver `doc/LOG-2026-07-01__desconectar-todas-instancias-evo-logout-falhou.md`.
+
+**WABA — EVO connectionState truth + probe (NÃO commitado):** fetchOpen=7 liveOpen=0; instâncias ghost-open (connecting); probe send/receive bloqueado até reiniciar Evolution. Ver `doc/LOG-2026-06-30__evo-connectionstate-truth-probe.md`.
 
 **WABA — Aquecedor sendText timeout (HTTP 0):** timeout 90s, retries resilientes, checagem connectionState antes do envio. Marker `DEPLOY-2026-06-30-aquecedor-evo-sendtext-timeout-fix`. Ver `doc/LOG-2026-06-30__aquecedor-evo-sendtext-timeout-fix.md`.
 

@@ -3,6 +3,10 @@ import path from "path";
 import { resolveDataFile } from "../data-path";
 import { evoHttpRequest } from "../evo-http.client";
 import { resolveEvoInstanceKey } from "./evo-instance-key";
+import {
+  fetchEvoInstanceLiveState,
+  isEvoLiveStateOpen,
+} from "./evo-connection-state.service";
 
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080").replace(
   /\/$/,
@@ -194,6 +198,11 @@ export async function isEvoInstanceOpen(instanceName: string): Promise<boolean> 
   const needle = instanceName.trim().toLowerCase();
   if (!needle) return false;
 
+  const liveState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+  if (liveState) {
+    return isEvoLiveStateOpen(liveState);
+  }
+
   const listResult = await evoHttpRequest(EVO_INSTANCES_URL, "GET", {
     apiKey: EVO_API_KEY,
     timeoutMs: 12_000,
@@ -208,25 +217,6 @@ export async function isEvoInstanceOpen(instanceName: string): Promise<boolean> 
     }
   }
 
-  const enc = encodeURIComponent(instanceName);
-  const urls = [
-    `${EVO_API_BASE}/instance/connectionState/${enc}`,
-    `${EVO_API_BASE}/instance/connection-state/${enc}`,
-  ];
-  for (const url of urls) {
-    const result = await evoHttpRequest(url, "GET", {
-      apiKey: EVO_API_KEY,
-      timeoutMs: 8000,
-      retries: 1,
-    });
-    if (!result.ok || result.json == null) continue;
-    const root = result.json as Record<string, unknown>;
-    const inst = (root.instance as Record<string, unknown> | undefined) ?? root;
-    const state = String(
-      inst?.state ?? inst?.connectionStatus ?? inst?.status ?? root?.state ?? ""
-    ).toLowerCase();
-    if (state) return state.includes("open");
-  }
   return false;
 }
 

@@ -1,8 +1,9 @@
 import crypto from "crypto";
-import { evoHttpRequest } from "./evo-http.client";
+import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "./evo-http.client";
 import {
-  extractPhoneFromEvoListItem,
-  isEvoInstanceOpen,
+  waitForEvoInstanceLiveOpen,
+} from "./instances/evo-connection-state.service";
+import {
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
 } from "./instances/evo-instance-phone.service";
@@ -11,9 +12,6 @@ import { resolveWabaPublicBaseUrl } from "./lib/waba-public-base-url";
 const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
   .replace(/\/$/, "");
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
-const EVO_INSTANCES_URL =
-  String(process.env.EVO_INSTANCES_URL || "").trim() ||
-  `${EVO_API_BASE}/instance/fetchInstances`;
 const EVO_SEND_TEXT_URL_TEMPLATE =
   String(process.env.EVO_SEND_TEXT_URL_TEMPLATE || "").trim() ||
   `${EVO_API_BASE}/message/sendText/{instance}`;
@@ -28,8 +26,8 @@ const VALIDATION_TIMEOUT_MS = Math.max(
   Math.min(900_000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 600_000) || 600_000)
 );
 const VALIDATION_POLL_MS = Math.max(
-  400,
-  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 600) || 600)
+  300,
+  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 450) || 450)
 );
 const REPLY_DELAY_MS = Math.max(
   500,
@@ -178,12 +176,15 @@ function jidToNumber(jid: string): string {
 async function callEvo(
   url: string,
   method: "GET" | "POST" | "PUT" | "DELETE",
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  options?: { timeoutMs?: number; retries?: number },
 ) {
+  const isSendText = url.includes("/message/sendText/");
   const result = await evoHttpRequest(url, method, {
     apiKey: EVO_API_KEY,
     body,
-    timeoutMs: 12_000,
+    timeoutMs: options?.timeoutMs ?? (isSendText ? defaultEvoSendTextTimeoutMs() : 15_000),
+    retries: options?.retries ?? (isSendText ? 2 : 1),
   });
   return {
     ok: result.ok,
@@ -203,29 +204,6 @@ function resolveSendTarget(referenceJid: string | null, referenceNumber: string 
   const jid = String(referenceJid || "").trim();
   if (jid.includes("@")) return jid;
   return normalizeWhatsAppNumber(String(referenceNumber || "").trim());
-}
-
-async function fetchConnectedInstance(
-  instanceName: string
-): Promise<{ instancia: string; numero: string } | null> {
-  const response = await callEvo(EVO_INSTANCES_URL, "GET");
-  if (!response.ok) return null;
-  const raw = response.json;
-  const list = Array.isArray(raw)
-    ? raw
-    : Array.isArray((raw as Record<string, unknown>)?.response)
-      ? ((raw as Record<string, unknown>).response as unknown[])
-      : Array.isArray((raw as Record<string, unknown>)?.data)
-        ? ((raw as Record<string, unknown>).data as unknown[])
-        : [];
-  const needle = instanceName.trim().toLowerCase();
-  for (const item of list) {
-    const row = extractPhoneFromEvoListItem(item);
-    if (!row || row.instanceName.toLowerCase() !== needle) continue;
-    if (!row.open) return null;
-    return { instancia: row.instanceName, numero: row.phone };
-  }
-  return null;
 }
 
 function collectMessageTexts(node: unknown, out: string[], depth = 0): void {
@@ -290,6 +268,21 @@ function extractMessageTimestampMs(node: Record<string, unknown>): number | null
     return n < 1_000_000_000_000 ? Math.round(n * 1000) : Math.round(n);
   }
   return null;
+}
+
+function isSendFailureTechnical(detail: string, httpStatus?: number): boolean {
+  const d = String(detail || "").toLowerCase();
+  if (httpStatus === 0) return true;
+  if (
+    d.includes("timeout") ||
+    d.includes("socket hang up") ||
+    d.includes("econnreset") ||
+    d.includes("network") ||
+    d.includes("http 0")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function isLikelyWhatsAppRestriction(detail: string, httpStatus?: number): boolean {
@@ -629,11 +622,12 @@ async function resolveInboundHit(
   minTimestampMs: number,
   aggressive = false
 ): Promise<InboundHit | null> {
+  const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
+  if (viaChats) return viaChats;
+
   const hit = await findInboundViaApi(instanceName, keyword, minTimestampMs);
   if (hit) return hit;
   if (!aggressive) return null;
-  const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
-  if (viaChats) return viaChats;
   return findInboundViaApi(instanceName, keyword, minTimestampMs - 120_000);
 }
 
@@ -813,6 +807,16 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
         `HTTP ${result.status}`;
       record.sendDetail = String(detail);
       const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
+      const technical = isSendFailureTechnical(record.sendDetail, result.status);
+      if (!restricted && technical) {
+        record.sendTest = {
+          success: true,
+          detail:
+            "Recepção confirmada. Resposta automática indisponível (Evolution lenta/timeout) — integração liberada.",
+        };
+        tryFinalize(record);
+        return;
+      }
       record.sendTest = {
         success: false,
         detail: restricted
@@ -999,12 +1003,19 @@ export async function startInboundValidation(input: {
 
   const numberHint = normalizeWhatsAppNumber(String(input.instanceNumberHint || "").trim());
 
-  const open = (await fetchConnectedInstance(instanceName)) != null || (await isEvoInstanceOpen(instanceName));
-  if (!open) {
+  const liveWait = await waitForEvoInstanceLiveOpen(instanceName, {
+    maxWaitMs: Math.max(
+      15_000,
+      Math.min(90_000, Number(process.env.INBOUND_VALIDATION_OPEN_WAIT_MS || 50_000) || 50_000),
+    ),
+    pollMs: 500,
+  });
+  if (!liveWait.open) {
     return {
-      error: `Instância "${instanceName}" não está conectada (status open) na Evolution.`,
+      error: `Instância "${instanceName}" não está conectada na Evolution (connectionState=${liveWait.state || "close"}). Aguarde a conexão ou escaneie o QR novamente.`,
     };
   }
+
   const resolvedNumber = await resolveEvoInstancePhone(instanceName, { hint: numberHint });
   const connected = { instancia: instanceName, numero: resolvedNumber };
 
