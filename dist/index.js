@@ -4428,7 +4428,10 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     const nudge = String(req.query.nudge || "").trim();
     if (nudge === "1" || nudge === "2") {
         try {
-            await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, nudge === "2");
+            await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, {
+                deep: true,
+                aggressive: nudge === "2",
+            });
         }
         catch (error) {
             console.warn("[validacao-inbound] refresh on GET nudge:", error);

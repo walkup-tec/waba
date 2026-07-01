@@ -23,7 +23,10 @@ const EVO_SEND_TEXT_URL_TEMPLATE = String(process.env.EVO_SEND_TEXT_URL_TEMPLATE
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
 exports.INBOUND_VALIDATION_KEYWORD = String(process.env.INBOUND_VALIDATION_KEYWORD || "CONFIRMAR").trim() || "CONFIRMAR";
 const VALIDATION_TIMEOUT_MS = Math.max(120000, Math.min(900000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 600000) || 600000));
-const VALIDATION_POLL_MS = Math.max(300, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 450) || 450));
+const VALIDATION_POLL_MS = Math.max(200, Math.min(10000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 280) || 280));
+const FIND_MESSAGES_TIMEOUT_MS = Math.max(3000, Math.min(20000, Number(process.env.INBOUND_VALIDATION_FIND_MSG_TIMEOUT_MS || 8000) || 8000));
+const INBOUND_DEEP_SCAN_EVERY_TICKS = Math.max(3, Math.min(30, Number(process.env.INBOUND_VALIDATION_DEEP_SCAN_EVERY || 5) || 5));
+const INBOUND_FIND_CHATS_LIMIT = Math.max(3, Math.min(30, Number(process.env.INBOUND_VALIDATION_FIND_CHATS_LIMIT || 8) || 8));
 const REPLY_DELAY_MS = Math.max(500, Math.min(30000, Number(process.env.INBOUND_VALIDATION_REPLY_DELAY_MS || 1000) || 1000));
 const validations = new Map();
 /** Uma validação ativa por instância — evita loops órfãos após novo POST. */
@@ -305,7 +308,7 @@ async function finalizeExpiredAsync(record) {
         return;
     if (record.receiveTest.success === null) {
         try {
-            const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, true);
+            const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, { aggressive: true, deep: true });
             if (hit) {
                 markInboundReceived(record, hit, "expire-rescan");
                 await runValidationFollowUp(record);
@@ -531,37 +534,83 @@ function extractChatRemoteJids(payload) {
 }
 async function findInboundViaRecentChats(instanceName, keyword, searchOpts) {
     for (const url of buildFindChatsUrls(instanceName)) {
-        const result = await callEvo(url, "POST", { limit: 40 });
+        const result = await callEvo(url, "POST", { limit: INBOUND_FIND_CHATS_LIMIT + 12 }, {
+            timeoutMs: FIND_MESSAGES_TIMEOUT_MS,
+        });
         if (!result.ok)
             continue;
-        const jids = extractChatRemoteJids(result.json).slice(0, 20);
+        const jids = extractChatRemoteJids(result.json).slice(0, INBOUND_FIND_CHATS_LIMIT);
         for (const remoteJid of jids) {
-            for (const msgUrl of buildFindMessagesUrls(instanceName)) {
-                const bodies = [
-                    { where: { key: { remoteJid } }, limit: 50 },
-                    { where: { key: { remoteJid } }, take: 50 },
-                ];
-                for (const body of bodies) {
-                    const msgRes = await callEvo(msgUrl, "POST", body);
-                    if (!msgRes.ok)
-                        continue;
-                    const records = extractEvoMessageRecords(msgRes.json);
-                    const payload = records.length ? records : msgRes.json;
-                    const hit = findInboundInPayload(payload, keyword, searchOpts);
-                    if (hit)
-                        return hit;
-                }
-            }
+            const msgUrl = buildFindMessagesUrls(instanceName)[0];
+            const msgRes = await callEvo(msgUrl, "POST", { where: { key: { remoteJid } }, limit: 40 }, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
+            if (!msgRes.ok)
+                continue;
+            const records = extractEvoMessageRecords(msgRes.json);
+            const payload = records.length ? records : msgRes.json;
+            const hit = findInboundInPayload(payload, keyword, searchOpts);
+            if (hit)
+                return hit;
         }
     }
     return null;
 }
-async function resolveInboundHit(instanceName, keyword, validationStartedAtMs, aggressive = false) {
+async function findInboundViaApiFast(instanceName, keyword, searchOpts) {
+    const urls = buildFindMessagesUrls(instanceName).slice(0, 2);
+    const bodies = [
+        { where: { key: { fromMe: false } }, limit: 60 },
+        { limit: 60 },
+    ];
+    const probes = urls.flatMap((url) => bodies.map(async (body) => {
+        const result = await callEvo(url, "POST", body, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
+        if (!result.ok)
+            return null;
+        const records = extractEvoMessageRecords(result.json);
+        return findInboundInPayload(records.length ? records : result.json, keyword, searchOpts);
+    }));
+    const hits = await Promise.all(probes);
+    return hits.find((hit) => hit != null) ?? null;
+}
+async function findInboundViaApiExtended(instanceName, keyword, searchOpts) {
+    const urls = buildFindMessagesUrls(instanceName);
+    const bodies = [
+        { where: { key: { fromMe: false } }, limit: 100 },
+        { limit: 100 },
+        { take: 100 },
+        { limit: 50, page: 1 },
+        {},
+    ];
+    for (const url of urls) {
+        for (const body of bodies) {
+            const result = await callEvo(url, "POST", body, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
+            if (!result.ok)
+                continue;
+            const records = extractEvoMessageRecords(result.json);
+            if (records.length) {
+                const recordsHit = findInboundInPayload(records, keyword, searchOpts);
+                if (recordsHit)
+                    return recordsHit;
+            }
+            const payloadHit = findInboundInPayload(result.json, keyword, searchOpts);
+            if (payloadHit)
+                return payloadHit;
+        }
+    }
+    return null;
+}
+async function resolveInboundHit(instanceName, keyword, validationStartedAtMs, options = false) {
+    const opts = typeof options === "boolean" ? { aggressive: options, deep: options } : options;
+    const aggressive = opts.aggressive === true;
+    const deep = opts.deep === true || aggressive;
     const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
+    const fastHit = await findInboundViaApiFast(instanceName, keyword, searchOpts);
+    if (fastHit)
+        return fastHit;
+    if (!deep)
+        return null;
     const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
     if (viaChats)
         return viaChats;
-    return findInboundViaApi(instanceName, keyword, searchOpts);
+    return findInboundViaApiExtended(instanceName, keyword, searchOpts);
 }
 function extractEvoMessageRecords(payload) {
     if (!payload || typeof payload !== "object")
@@ -577,34 +626,6 @@ function extractEvoMessageRecords(payload) {
     if (Array.isArray(root.data))
         return root.data;
     return [];
-}
-async function findInboundViaApi(instanceName, keyword, searchOpts) {
-    const urls = buildFindMessagesUrls(instanceName);
-    const bodies = [
-        { where: { key: { fromMe: false } }, limit: 100 },
-        { limit: 100 },
-        { take: 100 },
-        { limit: 80 },
-        { limit: 50, page: 1 },
-        {},
-    ];
-    for (const url of urls) {
-        for (const body of bodies) {
-            const result = await callEvo(url, "POST", body);
-            if (!result.ok)
-                continue;
-            const records = extractEvoMessageRecords(result.json);
-            if (records.length) {
-                const recordsHit = findInboundInPayload(records, keyword, searchOpts);
-                if (recordsHit)
-                    return recordsHit;
-            }
-            const payloadHit = findInboundInPayload(result.json, keyword, searchOpts);
-            if (payloadHit)
-                return payloadHit;
-        }
-    }
-    return null;
 }
 async function findReplyInChat(instanceName, referenceJid, replyMarker) {
     const remoteJid = referenceJid.includes("@") ? referenceJid : `${referenceJid}@s.whatsapp.net`;
@@ -804,9 +825,11 @@ async function runValidationLoop(record) {
         while (Date.now() < deadline && !record.finished && !record.cancelled) {
             if (record.receiveTest.success !== true) {
                 try {
-                    const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, false);
+                    record.pollTick += 1;
+                    const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
+                    const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, { deep, aggressive: false });
                     if (hit)
-                        markInboundReceived(record, hit, "findMessages");
+                        markInboundReceived(record, hit, deep ? "findMessages-deep" : "findMessages");
                 }
                 catch {
                     // mantém polling — falha transitória na Evolution
@@ -857,16 +880,21 @@ function unwrapEvolutionWebhookPayload(body) {
     }
     return [body];
 }
-async function refreshInboundValidation(validationId, aggressive = false) {
+async function refreshInboundValidation(validationId, options = false) {
+    const opts = typeof options === "boolean" ? { aggressive: options, deep: options } : options;
     const record = validations.get(validationId);
     if (!record || record.finished || record.cancelled) {
         return getInboundValidationStatus(validationId);
     }
     if (record.receiveTest.success !== true) {
         try {
-            const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, aggressive);
-            if (hit)
-                markInboundReceived(record, hit, aggressive ? "nudge-aggressive" : "nudge");
+            const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, {
+                aggressive: opts.aggressive === true,
+                deep: opts.deep === true || opts.aggressive === true,
+            });
+            if (hit) {
+                markInboundReceived(record, hit, opts.aggressive ? "nudge-aggressive" : opts.deep ? "nudge-deep" : "nudge");
+            }
         }
         catch {
             /* falha transitória */
@@ -985,6 +1013,7 @@ async function startInboundValidation(input) {
         loopRunning: false,
         cancelled: false,
         replyFollowUpScheduled: false,
+        pollTick: 0,
         startedAt,
         finishedAt: null,
     };

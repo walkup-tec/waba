@@ -28,8 +28,20 @@ const VALIDATION_TIMEOUT_MS = Math.max(
   Math.min(900_000, Number(process.env.INBOUND_VALIDATION_TIMEOUT_MS || 600_000) || 600_000)
 );
 const VALIDATION_POLL_MS = Math.max(
-  300,
-  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 450) || 450)
+  200,
+  Math.min(10_000, Number(process.env.INBOUND_VALIDATION_POLL_MS || 280) || 280)
+);
+const FIND_MESSAGES_TIMEOUT_MS = Math.max(
+  3_000,
+  Math.min(20_000, Number(process.env.INBOUND_VALIDATION_FIND_MSG_TIMEOUT_MS || 8_000) || 8_000),
+);
+const INBOUND_DEEP_SCAN_EVERY_TICKS = Math.max(
+  3,
+  Math.min(30, Number(process.env.INBOUND_VALIDATION_DEEP_SCAN_EVERY || 5) || 5),
+);
+const INBOUND_FIND_CHATS_LIMIT = Math.max(
+  3,
+  Math.min(30, Number(process.env.INBOUND_VALIDATION_FIND_CHATS_LIMIT || 8) || 8),
 );
 const REPLY_DELAY_MS = Math.max(
   500,
@@ -76,6 +88,7 @@ type ValidationRecord = InboundValidationStatus & {
   loopRunning: boolean;
   cancelled: boolean;
   replyFollowUpScheduled: boolean;
+  pollTick: number;
 };
 
 const validations = new Map<string, ValidationRecord>();
@@ -365,7 +378,7 @@ async function finalizeExpiredAsync(record: ValidationRecord): Promise<void> {
         record.instanceName,
         record.keyword,
         record.validationStartedAtMs,
-        true
+        { aggressive: true, deep: true },
       );
       if (hit) {
         markInboundReceived(record, hit, "expire-rescan");
@@ -617,72 +630,68 @@ async function findInboundViaRecentChats(
   searchOpts: InboundHitSearchOptions
 ): Promise<InboundHit | null> {
   for (const url of buildFindChatsUrls(instanceName)) {
-    const result = await callEvo(url, "POST", { limit: 40 });
+    const result = await callEvo(url, "POST", { limit: INBOUND_FIND_CHATS_LIMIT + 12 }, {
+      timeoutMs: FIND_MESSAGES_TIMEOUT_MS,
+    });
     if (!result.ok) continue;
-    const jids = extractChatRemoteJids(result.json).slice(0, 20);
+    const jids = extractChatRemoteJids(result.json).slice(0, INBOUND_FIND_CHATS_LIMIT);
     for (const remoteJid of jids) {
-      for (const msgUrl of buildFindMessagesUrls(instanceName)) {
-        const bodies = [
-          { where: { key: { remoteJid } }, limit: 50 },
-          { where: { key: { remoteJid } }, take: 50 },
-        ];
-        for (const body of bodies) {
-          const msgRes = await callEvo(msgUrl, "POST", body);
-          if (!msgRes.ok) continue;
-          const records = extractEvoMessageRecords(msgRes.json);
-          const payload = records.length ? records : msgRes.json;
-          const hit = findInboundInPayload(payload, keyword, searchOpts);
-          if (hit) return hit;
-        }
-      }
+      const msgUrl = buildFindMessagesUrls(instanceName)[0];
+      const msgRes = await callEvo(
+        msgUrl,
+        "POST",
+        { where: { key: { remoteJid } }, limit: 40 },
+        { timeoutMs: FIND_MESSAGES_TIMEOUT_MS },
+      );
+      if (!msgRes.ok) continue;
+      const records = extractEvoMessageRecords(msgRes.json);
+      const payload = records.length ? records : msgRes.json;
+      const hit = findInboundInPayload(payload, keyword, searchOpts);
+      if (hit) return hit;
     }
   }
   return null;
 }
 
-async function resolveInboundHit(
+async function findInboundViaApiFast(
   instanceName: string,
   keyword: string,
-  validationStartedAtMs: number,
-  aggressive = false
+  searchOpts: InboundHitSearchOptions,
 ): Promise<InboundHit | null> {
-  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
-
-  const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
-  if (viaChats) return viaChats;
-
-  return findInboundViaApi(instanceName, keyword, searchOpts);
+  const urls = buildFindMessagesUrls(instanceName).slice(0, 2);
+  const bodies: Record<string, unknown>[] = [
+    { where: { key: { fromMe: false } }, limit: 60 },
+    { limit: 60 },
+  ];
+  const probes = urls.flatMap((url) =>
+    bodies.map(async (body) => {
+      const result = await callEvo(url, "POST", body, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
+      if (!result.ok) return null;
+      const records = extractEvoMessageRecords(result.json);
+      return findInboundInPayload(records.length ? records : result.json, keyword, searchOpts);
+    }),
+  );
+  const hits = await Promise.all(probes);
+  return hits.find((hit) => hit != null) ?? null;
 }
 
-function extractEvoMessageRecords(payload: unknown): unknown[] {
-  if (!payload || typeof payload !== "object") return [];
-  const root = payload as Record<string, unknown>;
-  const messages = root.messages as Record<string, unknown> | undefined;
-  if (messages && Array.isArray(messages.records)) return messages.records;
-  if (Array.isArray(root.records)) return root.records;
-  if (Array.isArray(root.response)) return root.response as unknown[];
-  if (Array.isArray(root.data)) return root.data as unknown[];
-  return [];
-}
-
-async function findInboundViaApi(
+async function findInboundViaApiExtended(
   instanceName: string,
   keyword: string,
-  searchOpts: InboundHitSearchOptions
+  searchOpts: InboundHitSearchOptions,
 ): Promise<InboundHit | null> {
   const urls = buildFindMessagesUrls(instanceName);
   const bodies: Record<string, unknown>[] = [
     { where: { key: { fromMe: false } }, limit: 100 },
     { limit: 100 },
     { take: 100 },
-    { limit: 80 },
     { limit: 50, page: 1 },
     {},
   ];
 
   for (const url of urls) {
     for (const body of bodies) {
-      const result = await callEvo(url, "POST", body);
+      const result = await callEvo(url, "POST", body, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
       if (!result.ok) continue;
 
       const records = extractEvoMessageRecords(result.json);
@@ -696,6 +705,45 @@ async function findInboundViaApi(
     }
   }
   return null;
+}
+
+type ResolveInboundHitOptions = {
+  aggressive?: boolean;
+  deep?: boolean;
+};
+
+async function resolveInboundHit(
+  instanceName: string,
+  keyword: string,
+  validationStartedAtMs: number,
+  options: ResolveInboundHitOptions | boolean = false,
+): Promise<InboundHit | null> {
+  const opts: ResolveInboundHitOptions =
+    typeof options === "boolean" ? { aggressive: options, deep: options } : options;
+  const aggressive = opts.aggressive === true;
+  const deep = opts.deep === true || aggressive;
+  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
+
+  const fastHit = await findInboundViaApiFast(instanceName, keyword, searchOpts);
+  if (fastHit) return fastHit;
+
+  if (!deep) return null;
+
+  const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
+  if (viaChats) return viaChats;
+
+  return findInboundViaApiExtended(instanceName, keyword, searchOpts);
+}
+
+function extractEvoMessageRecords(payload: unknown): unknown[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const messages = root.messages as Record<string, unknown> | undefined;
+  if (messages && Array.isArray(messages.records)) return messages.records;
+  if (Array.isArray(root.records)) return root.records;
+  if (Array.isArray(root.response)) return root.response as unknown[];
+  if (Array.isArray(root.data)) return root.data as unknown[];
+  return [];
 }
 
 async function findReplyInChat(
@@ -904,13 +952,15 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
     while (Date.now() < deadline && !record.finished && !record.cancelled) {
       if (record.receiveTest.success !== true) {
         try {
+          record.pollTick += 1;
+          const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
           const hit = await resolveInboundHit(
             record.instanceName,
             record.keyword,
             record.validationStartedAtMs,
-            false
+            { deep, aggressive: false },
           );
-          if (hit) markInboundReceived(record, hit, "findMessages");
+          if (hit) markInboundReceived(record, hit, deep ? "findMessages-deep" : "findMessages");
         } catch {
           // mantém polling — falha transitória na Evolution
         }
@@ -970,8 +1020,10 @@ function unwrapEvolutionWebhookPayload(body: unknown): unknown[] {
 
 export async function refreshInboundValidation(
   validationId: string,
-  aggressive = false
+  options: { aggressive?: boolean; deep?: boolean } | boolean = false,
 ): Promise<InboundValidationStatus | null> {
+  const opts: { aggressive?: boolean; deep?: boolean } =
+    typeof options === "boolean" ? { aggressive: options, deep: options } : options;
   const record = validations.get(validationId);
   if (!record || record.finished || record.cancelled) {
     return getInboundValidationStatus(validationId);
@@ -983,9 +1035,18 @@ export async function refreshInboundValidation(
         record.instanceName,
         record.keyword,
         record.validationStartedAtMs,
-        aggressive
+        {
+          aggressive: opts.aggressive === true,
+          deep: opts.deep === true || opts.aggressive === true,
+        },
       );
-      if (hit) markInboundReceived(record, hit, aggressive ? "nudge-aggressive" : "nudge");
+      if (hit) {
+        markInboundReceived(
+          record,
+          hit,
+          opts.aggressive ? "nudge-aggressive" : opts.deep ? "nudge-deep" : "nudge",
+        );
+      }
     } catch {
       /* falha transitória */
     }
@@ -1113,6 +1174,7 @@ export async function startInboundValidation(input: {
     loopRunning: false,
     cancelled: false,
     replyFollowUpScheduled: false,
+    pollTick: 0,
     startedAt,
     finishedAt: null,
   };
