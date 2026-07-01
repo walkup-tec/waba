@@ -436,12 +436,33 @@ type InboundHitSearchOptions = {
   requireTimestamp?: boolean;
 };
 
+const INBOUND_KEYWORD_GRACE_MS = Math.max(
+  0,
+  Math.min(60_000, Number(process.env.INBOUND_VALIDATION_KEYWORD_GRACE_MS || 15_000) || 15_000),
+);
+
+function inboundKeywordMinTimestampMs(validationStartedAtMs: number, aggressive = false): number {
+  const grace = aggressive ? Math.max(INBOUND_KEYWORD_GRACE_MS, 60_000) : INBOUND_KEYWORD_GRACE_MS;
+  return validationStartedAtMs - grace;
+}
+
+function inboundKeywordSearchOptions(
+  validationStartedAtMs: number,
+  aggressive = false,
+): InboundHitSearchOptions {
+  return {
+    minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive),
+    requireTimestamp: true,
+  };
+}
+
 function isInboundHitFresh(hit: InboundHit, options?: InboundHitSearchOptions): boolean {
   const minTs = options?.minTimestampMs;
-  if (minTs != null && hit.messageTimestampMs != null) {
+  if (minTs != null) {
+    if (hit.messageTimestampMs == null) return false;
     return hit.messageTimestampMs >= minTs;
   }
-  if (options?.requireTimestamp) return false;
+  if (options?.requireTimestamp) return hit.messageTimestampMs != null;
   return true;
 }
 
@@ -593,9 +614,8 @@ function extractChatRemoteJids(payload: unknown): string[] {
 async function findInboundViaRecentChats(
   instanceName: string,
   keyword: string,
-  minTimestampMs: number
+  searchOpts: InboundHitSearchOptions
 ): Promise<InboundHit | null> {
-  const minTs = minTimestampMs - 120_000;
   for (const url of buildFindChatsUrls(instanceName)) {
     const result = await callEvo(url, "POST", { limit: 40 });
     if (!result.ok) continue;
@@ -611,10 +631,7 @@ async function findInboundViaRecentChats(
           if (!msgRes.ok) continue;
           const records = extractEvoMessageRecords(msgRes.json);
           const payload = records.length ? records : msgRes.json;
-          const hit = findInboundInPayload(payload, keyword, {
-            minTimestampMs: minTs,
-            requireTimestamp: false,
-          });
+          const hit = findInboundInPayload(payload, keyword, searchOpts);
           if (hit) return hit;
         }
       }
@@ -626,16 +643,15 @@ async function findInboundViaRecentChats(
 async function resolveInboundHit(
   instanceName: string,
   keyword: string,
-  minTimestampMs: number,
+  validationStartedAtMs: number,
   aggressive = false
 ): Promise<InboundHit | null> {
-  const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
+  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
+
+  const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
   if (viaChats) return viaChats;
 
-  const hit = await findInboundViaApi(instanceName, keyword, minTimestampMs);
-  if (hit) return hit;
-  if (!aggressive) return null;
-  return findInboundViaApi(instanceName, keyword, minTimestampMs - 120_000);
+  return findInboundViaApi(instanceName, keyword, searchOpts);
 }
 
 function extractEvoMessageRecords(payload: unknown): unknown[] {
@@ -652,7 +668,7 @@ function extractEvoMessageRecords(payload: unknown): unknown[] {
 async function findInboundViaApi(
   instanceName: string,
   keyword: string,
-  minTimestampMs: number
+  searchOpts: InboundHitSearchOptions
 ): Promise<InboundHit | null> {
   const urls = buildFindMessagesUrls(instanceName);
   const bodies: Record<string, unknown>[] = [
@@ -663,46 +679,20 @@ async function findInboundViaApi(
     { limit: 50, page: 1 },
     {},
   ];
-  const timestampGraceMs = 120_000;
-  const minTs = minTimestampMs - timestampGraceMs;
 
   for (const url of urls) {
-    for (let i = 0; i < bodies.length; i += 1) {
-      const result = await callEvo(url, "POST", bodies[i]);
+    for (const body of bodies) {
+      const result = await callEvo(url, "POST", body);
       if (!result.ok) continue;
 
       const records = extractEvoMessageRecords(result.json);
       if (records.length) {
-        const recordsHit = findInboundInPayload(records, keyword, {
-          minTimestampMs: minTs,
-          requireTimestamp: false,
-        });
+        const recordsHit = findInboundInPayload(records, keyword, searchOpts);
         if (recordsHit) return recordsHit;
       }
 
-      const strictHit = findInboundInPayload(result.json, keyword, {
-        minTimestampMs: minTs,
-        requireTimestamp: true,
-      });
-      if (strictHit) return strictHit;
-
-      const looseHit = findInboundInPayload(result.json, keyword, {
-        minTimestampMs: minTs,
-        requireTimestamp: false,
-      });
-      if (looseHit) return looseHit;
-
-      if (i >= bodies.length - 2) {
-        const fallbackHit = findInboundInPayload(result.json, keyword, {
-          requireTimestamp: false,
-        });
-        if (
-          fallbackHit &&
-          (fallbackHit.messageTimestampMs == null || fallbackHit.messageTimestampMs >= minTs)
-        ) {
-          return fallbackHit;
-        }
-      }
+      const payloadHit = findInboundInPayload(result.json, keyword, searchOpts);
+      if (payloadHit) return payloadHit;
     }
   }
   return null;
@@ -918,7 +908,7 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
             record.instanceName,
             record.keyword,
             record.validationStartedAtMs,
-            true
+            false
           );
           if (hit) markInboundReceived(record, hit, "findMessages");
         } catch {
@@ -1023,10 +1013,7 @@ export function handleInboundValidationWebhook(body: unknown): void {
     if (instanceName && instanceName !== record.instanceName) continue;
     let matched = false;
     for (const chunk of chunks) {
-      const hit = findInboundInPayload(chunk, record.keyword, {
-        minTimestampMs: record.validationStartedAtMs - 20_000,
-        requireTimestamp: false,
-      });
+      const hit = findInboundInPayload(chunk, record.keyword, inboundKeywordSearchOptions(record.validationStartedAtMs));
       if (!hit) continue;
       markInboundReceived(record, hit, "webhook");
       matched = true;

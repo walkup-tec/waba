@@ -363,13 +363,26 @@ async function ensureInstanceWebhook(instanceName) {
     }
     return false;
 }
+const INBOUND_KEYWORD_GRACE_MS = Math.max(0, Math.min(60000, Number(process.env.INBOUND_VALIDATION_KEYWORD_GRACE_MS || 15000) || 15000));
+function inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive = false) {
+    const grace = aggressive ? Math.max(INBOUND_KEYWORD_GRACE_MS, 60000) : INBOUND_KEYWORD_GRACE_MS;
+    return validationStartedAtMs - grace;
+}
+function inboundKeywordSearchOptions(validationStartedAtMs, aggressive = false) {
+    return {
+        minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive),
+        requireTimestamp: true,
+    };
+}
 function isInboundHitFresh(hit, options) {
     const minTs = options?.minTimestampMs;
-    if (minTs != null && hit.messageTimestampMs != null) {
+    if (minTs != null) {
+        if (hit.messageTimestampMs == null)
+            return false;
         return hit.messageTimestampMs >= minTs;
     }
     if (options?.requireTimestamp)
-        return false;
+        return hit.messageTimestampMs != null;
     return true;
 }
 function isInboundCandidate(node) {
@@ -516,8 +529,7 @@ function extractChatRemoteJids(payload) {
     visit(payload);
     return Array.from(out);
 }
-async function findInboundViaRecentChats(instanceName, keyword, minTimestampMs) {
-    const minTs = minTimestampMs - 120000;
+async function findInboundViaRecentChats(instanceName, keyword, searchOpts) {
     for (const url of buildFindChatsUrls(instanceName)) {
         const result = await callEvo(url, "POST", { limit: 40 });
         if (!result.ok)
@@ -535,10 +547,7 @@ async function findInboundViaRecentChats(instanceName, keyword, minTimestampMs) 
                         continue;
                     const records = extractEvoMessageRecords(msgRes.json);
                     const payload = records.length ? records : msgRes.json;
-                    const hit = findInboundInPayload(payload, keyword, {
-                        minTimestampMs: minTs,
-                        requireTimestamp: false,
-                    });
+                    const hit = findInboundInPayload(payload, keyword, searchOpts);
                     if (hit)
                         return hit;
                 }
@@ -547,16 +556,12 @@ async function findInboundViaRecentChats(instanceName, keyword, minTimestampMs) 
     }
     return null;
 }
-async function resolveInboundHit(instanceName, keyword, minTimestampMs, aggressive = false) {
-    const viaChats = await findInboundViaRecentChats(instanceName, keyword, minTimestampMs);
+async function resolveInboundHit(instanceName, keyword, validationStartedAtMs, aggressive = false) {
+    const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
+    const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
     if (viaChats)
         return viaChats;
-    const hit = await findInboundViaApi(instanceName, keyword, minTimestampMs);
-    if (hit)
-        return hit;
-    if (!aggressive)
-        return null;
-    return findInboundViaApi(instanceName, keyword, minTimestampMs - 120000);
+    return findInboundViaApi(instanceName, keyword, searchOpts);
 }
 function extractEvoMessageRecords(payload) {
     if (!payload || typeof payload !== "object")
@@ -573,7 +578,7 @@ function extractEvoMessageRecords(payload) {
         return root.data;
     return [];
 }
-async function findInboundViaApi(instanceName, keyword, minTimestampMs) {
+async function findInboundViaApi(instanceName, keyword, searchOpts) {
     const urls = buildFindMessagesUrls(instanceName);
     const bodies = [
         { where: { key: { fromMe: false } }, limit: 100 },
@@ -583,43 +588,20 @@ async function findInboundViaApi(instanceName, keyword, minTimestampMs) {
         { limit: 50, page: 1 },
         {},
     ];
-    const timestampGraceMs = 120000;
-    const minTs = minTimestampMs - timestampGraceMs;
     for (const url of urls) {
-        for (let i = 0; i < bodies.length; i += 1) {
-            const result = await callEvo(url, "POST", bodies[i]);
+        for (const body of bodies) {
+            const result = await callEvo(url, "POST", body);
             if (!result.ok)
                 continue;
             const records = extractEvoMessageRecords(result.json);
             if (records.length) {
-                const recordsHit = findInboundInPayload(records, keyword, {
-                    minTimestampMs: minTs,
-                    requireTimestamp: false,
-                });
+                const recordsHit = findInboundInPayload(records, keyword, searchOpts);
                 if (recordsHit)
                     return recordsHit;
             }
-            const strictHit = findInboundInPayload(result.json, keyword, {
-                minTimestampMs: minTs,
-                requireTimestamp: true,
-            });
-            if (strictHit)
-                return strictHit;
-            const looseHit = findInboundInPayload(result.json, keyword, {
-                minTimestampMs: minTs,
-                requireTimestamp: false,
-            });
-            if (looseHit)
-                return looseHit;
-            if (i >= bodies.length - 2) {
-                const fallbackHit = findInboundInPayload(result.json, keyword, {
-                    requireTimestamp: false,
-                });
-                if (fallbackHit &&
-                    (fallbackHit.messageTimestampMs == null || fallbackHit.messageTimestampMs >= minTs)) {
-                    return fallbackHit;
-                }
-            }
+            const payloadHit = findInboundInPayload(result.json, keyword, searchOpts);
+            if (payloadHit)
+                return payloadHit;
         }
     }
     return null;
@@ -822,7 +804,7 @@ async function runValidationLoop(record) {
         while (Date.now() < deadline && !record.finished && !record.cancelled) {
             if (record.receiveTest.success !== true) {
                 try {
-                    const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, true);
+                    const hit = await resolveInboundHit(record.instanceName, record.keyword, record.validationStartedAtMs, false);
                     if (hit)
                         markInboundReceived(record, hit, "findMessages");
                 }
@@ -913,10 +895,7 @@ function handleInboundValidationWebhook(body) {
             continue;
         let matched = false;
         for (const chunk of chunks) {
-            const hit = findInboundInPayload(chunk, record.keyword, {
-                minTimestampMs: record.validationStartedAtMs - 20000,
-                requireTimestamp: false,
-            });
+            const hit = findInboundInPayload(chunk, record.keyword, inboundKeywordSearchOptions(record.validationStartedAtMs));
             if (!hit)
                 continue;
             markInboundReceived(record, hit, "webhook");
