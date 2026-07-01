@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-01
 
-**WABA — Validação CONFIRMAR detecção rápida:** fast path findMessages paralelo; findChats só em deep scan; poll 280ms backend / 300ms UI; nudge=1 a cada 10 polls. Marker `DEPLOY-2026-07-01-validacao-confirmar-fast-detect`. Ver `doc/LOG-2026-07-01__validacao-confirmar-fast-detect.md`.
+**WABA — Validação CONFIRMAR @lid findChats (5181082477):** CONFIRMAR não aparece em findMessages global; detecção via `findChats.lastMessage` a cada tick + webhook ao vivo sem timestamp; instância `digital-corban-2477`. Marker `DEPLOY-2026-07-01-validacao-confirmar-lid-findchats`. Ver `doc/LOG-2026-07-01__validacao-confirmar-lid-findchats-5181082477.md`.
+
+**WABA — Validação CONFIRMAR detecção rápida:** fast path findMessages paralelo; findChats só em deep scan; poll 280ms backend / 300ms UI. Marker `DEPLOY-2026-07-01-validacao-confirmar-fast-detect`. Ver `doc/LOG-2026-07-01__validacao-confirmar-fast-detect.md`.
 
 **WABA — Validação CONFIRMAR strict timestamp + UI passo 3:** falso positivo corrigido (só aceita CONFIRMAR com timestamp ≥ início da validação; removidos fallbacks loose); webhook estrito; poll normal não-agressivo; UI oculta banner duplicado na etapa "Resposta automática". Marker `DEPLOY-2026-07-01-validacao-confirmar-strict-timestamp`. Ver `doc/LOG-2026-07-01__validacao-confirmar-strict-timestamp-ui.md`.
 

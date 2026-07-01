@@ -210,7 +210,14 @@ function textMatchesKeyword(texts, keyword) {
 }
 function extractMessageTimestampMs(node) {
     const message = node.message;
-    const candidates = [node.messageTimestamp, message?.messageTimestamp];
+    const key = node.key;
+    const candidates = [
+        node.messageTimestamp,
+        message?.messageTimestamp,
+        key?.messageTimestamp,
+        node.timestamp,
+        message?.timestamp,
+    ];
     for (const raw of candidates) {
         if (raw == null || raw === "")
             continue;
@@ -340,11 +347,36 @@ async function finalizeExpiredAsync(record) {
     }
     tryFinalize(record);
 }
+async function readInstanceWebhook(instanceName) {
+    const enc = encodeURIComponent(instanceName);
+    const findUrls = [
+        `${EVO_API_BASE}/webhook/find/${enc}`,
+        `${EVO_API_BASE}/webhook/find/${enc}/webhook`,
+    ];
+    for (const url of findUrls) {
+        const result = await callEvo(url, "GET", undefined, { timeoutMs: 8000 });
+        if (!result.ok || !result.json || typeof result.json !== "object")
+            continue;
+        const root = result.json;
+        const wh = root.webhook ?? root;
+        return {
+            enabled: wh.enabled === true || root.enabled === true,
+            url: String(wh.url ?? root.url ?? "").trim(),
+        };
+    }
+    return { enabled: false, url: "" };
+}
 async function ensureInstanceWebhook(instanceName) {
     const publicBase = resolvePublicWebhookBase();
-    if (!publicBase)
+    const webhookUrl = publicBase ? `${publicBase}/webhooks/evolution` : "";
+    const existing = await readInstanceWebhook(instanceName);
+    if (existing.enabled &&
+        existing.url &&
+        (webhookUrl ? existing.url === webhookUrl : existing.url.includes("/webhooks/evolution"))) {
+        return true;
+    }
+    if (!webhookUrl)
         return false;
-    const webhookUrl = `${publicBase}/webhooks/evolution`;
     const enc = encodeURIComponent(instanceName);
     const setUrls = [
         `${EVO_API_BASE}/webhook/set/${enc}`,
@@ -360,11 +392,12 @@ async function ensureInstanceWebhook(instanceName) {
         },
     };
     for (const setUrl of setUrls) {
-        const result = await callEvo(setUrl, "POST", body);
+        const result = await callEvo(setUrl, "POST", body, { timeoutMs: 10000 });
         if (result.ok)
             return true;
     }
-    return false;
+    const after = await readInstanceWebhook(instanceName);
+    return after.enabled && after.url === webhookUrl;
 }
 const INBOUND_KEYWORD_GRACE_MS = Math.max(0, Math.min(60000, Number(process.env.INBOUND_VALIDATION_KEYWORD_GRACE_MS || 15000) || 15000));
 function inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive = false) {
@@ -532,6 +565,45 @@ function extractChatRemoteJids(payload) {
     visit(payload);
     return Array.from(out);
 }
+function extractFindChatsRecords(payload) {
+    if (!payload || typeof payload !== "object")
+        return [];
+    if (Array.isArray(payload))
+        return payload;
+    const root = payload;
+    if (Array.isArray(root.response))
+        return root.response;
+    if (Array.isArray(root.data))
+        return root.data;
+    if (Array.isArray(root.records))
+        return root.records;
+    return [];
+}
+function chatRecordSortMs(chat) {
+    const updatedAt = Date.parse(String(chat.updatedAt || ""));
+    if (Number.isFinite(updatedAt) && updatedAt > 0)
+        return updatedAt;
+    const lastMessage = chat.lastMessage;
+    const ts = lastMessage ? extractMessageTimestampMs(lastMessage) : null;
+    return ts ?? 0;
+}
+async function findInboundViaChatsLastMessage(instanceName, keyword, searchOpts) {
+    for (const url of buildFindChatsUrls(instanceName)) {
+        const result = await callEvo(url, "POST", { limit: Math.max(INBOUND_FIND_CHATS_LIMIT + 20, 50) }, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
+        if (!result.ok)
+            continue;
+        const chats = extractFindChatsRecords(result.json).sort((a, b) => chatRecordSortMs(b) - chatRecordSortMs(a));
+        for (const chat of chats) {
+            const lastMessage = chat.lastMessage;
+            if (!lastMessage || typeof lastMessage !== "object")
+                continue;
+            const hit = findInboundInPayload(lastMessage, keyword, searchOpts);
+            if (hit)
+                return hit;
+        }
+    }
+    return null;
+}
 async function findInboundViaRecentChats(instanceName, keyword, searchOpts) {
     for (const url of buildFindChatsUrls(instanceName)) {
         const result = await callEvo(url, "POST", { limit: INBOUND_FIND_CHATS_LIMIT + 12 }, {
@@ -602,9 +674,14 @@ async function resolveInboundHit(instanceName, keyword, validationStartedAtMs, o
     const aggressive = opts.aggressive === true;
     const deep = opts.deep === true || aggressive;
     const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
-    const fastHit = await findInboundViaApiFast(instanceName, keyword, searchOpts);
-    if (fastHit)
-        return fastHit;
+    const [fastMsgHit, fastChatsHit] = await Promise.all([
+        findInboundViaApiFast(instanceName, keyword, searchOpts),
+        findInboundViaChatsLastMessage(instanceName, keyword, searchOpts),
+    ]);
+    if (fastMsgHit)
+        return fastMsgHit;
+    if (fastChatsHit)
+        return fastChatsHit;
     if (!deep)
         return null;
     const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
@@ -786,19 +863,12 @@ async function sendContextualReply(record) {
     }
 }
 async function ensureValidationInstanceOpen(record) {
-    const maxWaitMs = Math.max(10000, Math.min(90000, Number(process.env.INBOUND_VALIDATION_OPEN_WAIT_MS || 45000) || 45000));
-    const deadline = Date.now() + maxWaitMs;
-    while (Date.now() < deadline && !record.cancelled && !record.finished) {
-        (0, evo_connection_state_service_1.invalidateEvoLiveStateCache)(record.instanceName);
-        const state = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(record.instanceName, { fresh: true });
-        if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(state))
-            return true;
-        if (state === "close")
-            return false;
-        await new Promise((r) => setTimeout(r, 500));
-    }
-    const state = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(record.instanceName, { fresh: true });
-    return (0, evo_connection_state_service_1.isEvoLiveStateOpen)(state);
+    const maxWaitMs = Math.max(5000, Math.min(30000, Number(process.env.INBOUND_VALIDATION_OPEN_WAIT_MS || 12000) || 12000));
+    const wait = await (0, evo_connection_state_service_1.waitForEvoInstanceLiveOpen)(record.instanceName, {
+        maxWaitMs,
+        pollMs: 400,
+    });
+    return wait.open;
 }
 async function runValidationLoop(record) {
     if (record.loopRunning)
@@ -905,6 +975,21 @@ async function refreshInboundValidation(validationId, options = false) {
     }
     return getInboundValidationStatus(validationId);
 }
+function findInboundInWebhookChunk(chunk, keyword, validationStartedAtMs) {
+    const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false);
+    const strictHit = findInboundInPayload(chunk, keyword, strictOpts);
+    if (strictHit)
+        return strictHit;
+    const liveHit = findInboundInPayload(chunk, keyword, { requireTimestamp: false });
+    if (!liveHit)
+        return null;
+    const ts = liveHit.messageTimestampMs ?? Date.now();
+    const minTs = validationStartedAtMs - INBOUND_KEYWORD_GRACE_MS;
+    if (ts < minTs)
+        return null;
+    liveHit.messageTimestampMs = ts;
+    return liveHit;
+}
 function handleInboundValidationWebhook(body) {
     if (!body || typeof body !== "object")
         return;
@@ -923,7 +1008,7 @@ function handleInboundValidationWebhook(body) {
             continue;
         let matched = false;
         for (const chunk of chunks) {
-            const hit = findInboundInPayload(chunk, record.keyword, inboundKeywordSearchOptions(record.validationStartedAtMs));
+            const hit = findInboundInWebhookChunk(chunk, record.keyword, record.validationStartedAtMs);
             if (!hit)
                 continue;
             markInboundReceived(record, hit, "webhook");
