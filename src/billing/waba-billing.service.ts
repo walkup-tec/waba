@@ -68,7 +68,6 @@ const resolveMinCreditCents = (): number => {
 
 /** Pacotes de teste (100 envios) — valores abaixo do mínimo comercial. */
 const DISPAROS_TEST_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: number }> = [
-  { shipments: 100, valueCents: 500 },
   { shipments: 100, valueCents: 3000 },
 ];
 

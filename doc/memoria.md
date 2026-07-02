@@ -13,6 +13,14 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
+2026-06-21
+
+**WABA — Diferenciais largura total (créditos):** barra Seguro/Performance/Flexível movida para fora do grid 2 colunas; ocupa largura total abaixo do board. Ver `doc/LOG-2026-06-21__diferenciais-largura-total-creditos.md`.
+
+**WABA — Remoção faixa teste 100 envios R$ 5,00:** retirada de `DISPAROS_PRICING_TIERS` (oficial + alternativa) e `DISPAROS_TEST_PACKAGES` no billing. Mantido pacote teste 100 envios R$ 30. Ver `doc/LOG-2026-06-21__remove-faixa-teste-100-envios-5-reais.md`.
+
+**WABA — Fix menus master vazios (HTML nesting):** painéis Disparos/Admin/Suporte estavam dentro de `#tab-disparos-lancamento` por `</div>` incorretos no hub de créditos; `setActiveTab` não exibia conteúdo. Corrigido fechamento de `disparos-pricing-lanes` e wrappers. Ver `doc/LOG-2026-06-21__fix-menus-master-html-nesting-disparos-lancamento.md`. Palavras-chave: `tab-disparos-lancamento`, `tab-hidden`, `setActiveTab`.
+
 2026-07-02
 
 **WABA — Aquecedor isolado por usuário:** motores independentes por e-mail (runtime-intent v3); start/stop/status escopados; fix walkup ↔ mozart. Marker `DEPLOY-2026-07-02-aquecedor-isolamento-por-usuario`. Ver `doc/LOG-2026-07-02__aquecedor-isolamento-por-usuario-fix.md`.

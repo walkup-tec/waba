@@ -30,7 +30,6 @@ const resolveMinCreditCents = () => {
 };
 /** Pacotes de teste (100 envios) — valores abaixo do mínimo comercial. */
 const DISPAROS_TEST_PACKAGES = [
-    { shipments: 100, valueCents: 500 },
     { shipments: 100, valueCents: 3000 },
 ];
 /** Tabela de venda API Oficial (envios × valor total em centavos). */

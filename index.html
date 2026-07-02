@@ -10052,6 +10052,9 @@
         width: 100%;
         max-width: none;
         margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
       }
       .disparos-pricing-board {
         display: grid;
@@ -15699,6 +15702,9 @@
                     </div>
                   </article>
 
+                </div>
+              </div>
+
               <div class="disparos-pricing-benefits" aria-label="Diferenciais da plataforma">
                 <div class="disparos-pricing-benefit">
                   <span class="disparos-pricing-benefit-icon disparos-pricing-benefit-icon--secure" aria-hidden="true">
@@ -15737,7 +15743,7 @@
                   <p>Soluções que se adaptam ao seu negócio e ao seu objetivo.</p>
                 </div>
               </div>
-            </div>
+          </div>
           </div>
           </div>
           <div
@@ -21104,7 +21110,6 @@
 
       const DISPAROS_PRICING_TIERS = {
         oficial: [
-          { shipments: 100, pricePerSend: 0.05, totalCents: 500, testOnly: true },
           { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
           { shipments: 1000, pricePerSend: 0.32, totalCents: 32000 },
           { shipments: 3000, pricePerSend: 0.31, totalCents: 93000 },
@@ -21115,7 +21120,6 @@
           { shipments: 30000, pricePerSend: 0.25, totalCents: 750000 },
         ],
         alternativa: [
-          { shipments: 100, pricePerSend: 0.05, totalCents: 500, testOnly: true },
           { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
           { shipments: 1000, pricePerSend: 0.2, totalCents: 20000 },
           { shipments: 3000, pricePerSend: 0.19, totalCents: 57000 },
