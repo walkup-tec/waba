@@ -10,15 +10,14 @@ const html = fs.readFileSync(htmlPath, "utf8");
 
 const required = [
   "registerInboundUiPhase",
-  "registerInboundUserAwaitingConfirm",
-  "registerInboundConfirmInFlight",
   "setRegisterInboundPhase",
   "resolveRegisterInboundPhase",
   "scrollRegisterInboundActivePhase",
   'data-phase="instructions"',
-  '#register-inbound-progress[data-phase="prompt"] .reg-inbound-waiting',
   'data-phase="verify-receive"',
-  "confirmar-envio",
+  "enterRegisterInboundVerifyReceive",
+  "DEPLOY-2026-07-02-validacao-confirmar-backend-only",
+  "detecta a mensagem automaticamente",
 ];
 
 const missing = required.filter((token) => !html.includes(token));
@@ -27,11 +26,18 @@ if (missing.length) {
   process.exit(1);
 }
 
-const forbidden = ["syncRegisterValidationPaneLayout", "scrollRegisterWizardToProgress"];
+const forbidden = [
+  "syncRegisterValidationPaneLayout",
+  "scrollRegisterWizardToProgress",
+  "register-inbound-sent-yes-btn",
+  "confirmar-envio",
+  "scheduleRegisterInboundSentPrompt",
+  "Você já enviou a mensagem CONFIRMAR",
+];
 const stillPresent = forbidden.filter((token) => html.includes(token));
 if (stillPresent.length) {
   console.error("Símbolos obsoletos ainda presentes:", stillPresent.join(", "));
   process.exit(2);
 }
 
-console.log("OK — modal validação CONFIRMAR: fases progressivas presentes.");
+console.log("OK — modal validação CONFIRMAR: detecção automática no backend.");

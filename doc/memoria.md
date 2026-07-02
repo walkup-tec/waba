@@ -13,9 +13,13 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-07-01
+2026-07-02
 
-**WABA — Validação CONFIRMAR só palavra (sem token WABA-):** keyword voltou a `CONFIRMAR`; removido `CONFIRMAR WABA-XXXXXX`. Marker `DEPLOY-2026-07-01-validacao-confirmar-palavra-simples`. Ver `doc/LOG-2026-07-01__validacao-confirmar-palavra-simples.md`.
+**WABA — Validação CONFIRMAR sem «Sim, já enviei»:** removido prompt Sim/Não e botão nudge; detecção só via webhook + worker no backend; UI entra direto em `verify-receive`. Marker `DEPLOY-2026-07-02-validacao-confirmar-backend-only`. Ver `doc/LOG-2026-07-02__validacao-confirmar-backend-only-sem-sim.md`.
+
+**WABA — Evolution Redis / mensagens não indexadas:** pós 27/06 instâncias novas (`7943`, `final-6019`, `1321`) open com 0 msgs/0 chats; Redis Chatwoot removido ≠ Redis EVO; `walkup_evo-walkup-api-redis` desconectado (logs 30/06). Impacta CONFIRMAR, aquecedor, disparador. Ver `doc/LOG-2026-07-02__evo-redis-mensagens-nao-indexadas-fix.md`, script `scripts/probe-evo-message-indexing.cjs`.
+
+**WABA — Validação CONFIRMAR só palavra (sem token WABA-):** keyword voltou a `CONFIRMAR`. Marker `DEPLOY-2026-07-01-validacao-confirmar-palavra-simples`. Ver `doc/LOG-2026-07-01__validacao-confirmar-palavra-simples.md`.
 
 **WABA — Validação CONFIRMAR worker + webhook + estados + token:** worker 2s paralelo ao webhook; `confirmar-envio` só muda estado; bypass inbox vazio removido. Marker `DEPLOY-2026-07-01-validacao-worker-webhook-estados`. Ver `doc/LOG-2026-07-01__validacao-worker-webhook-estados-token.md`.
 

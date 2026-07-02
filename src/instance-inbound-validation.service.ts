@@ -1336,8 +1336,8 @@ export async function startInboundValidation(input: {
   const startedAt = new Date(validationStartedAtMs).toISOString();
   const phoneLabel = formatPhoneHint(connected.numero);
   const receiveWaitDetail = phoneLabel
-    ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel} e confirme abaixo quando enviar.`
-    : `Envie "${keyword}" de outro WhatsApp (não o celular do QR) e confirme abaixo quando enviar.`;
+    ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel}. O sistema detecta automaticamente.`
+    : `Envie "${keyword}" de outro WhatsApp (não o celular do QR). O sistema detecta automaticamente.`;
 
   const webhookConfigured = await ensureInstanceWebhook(connected.instancia);
 
