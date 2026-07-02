@@ -7090,8 +7090,33 @@
         min-width: 0;
       }
 
+      .admin-coupon-validity-inline {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+        width: 100%;
+      }
+
+      .admin-coupon-validity-inline label {
+        font-size: 0.78rem;
+        color: #cbd5e1;
+        font-weight: 600;
+      }
+
+      .aquecedor-field input[type="datetime-local"],
+      .aquecedor-field input[type="date"],
+      .aquecedor-field input[type="time"] {
+        height: 38px;
+        min-height: 38px;
+        max-height: 38px;
+        line-height: 1.2;
+        color-scheme: dark;
+        font: inherit;
+      }
+
       .admin-coupon-validity-custom {
-        margin-top: 8px;
+        margin-top: 0;
       }
 
       .admin-coupon-status-pill {
@@ -17431,9 +17456,9 @@
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-coupon-discount-percent">Desconto (%)</label>
-                        <input id="admin-coupon-discount-percent" type="number" min="1" max="100" step="1" required placeholder="Ex.: 15" />
+                        <input id="admin-coupon-discount-percent" type="text" inputmode="decimal" required placeholder="Ex.: 10,00" autocomplete="off" />
                       </div>
-                      <div class="aquecedor-field">
+                      <div class="aquecedor-field admin-coupon-validity-field">
                         <label for="admin-coupon-validity-mode">Validade</label>
                         <select id="admin-coupon-validity-mode" required>
                           <option value="12h">12 horas</option>
@@ -17441,10 +17466,10 @@
                           <option value="custom">Personalizada</option>
                           <option value="lifetime">Vitalícia</option>
                         </select>
-                      </div>
-                      <div id="admin-coupon-validity-custom-wrap" class="aquecedor-field admin-coupon-validity-custom" hidden>
-                        <label for="admin-coupon-valid-until">Válido até</label>
-                        <input id="admin-coupon-valid-until" type="datetime-local" />
+                        <div id="admin-coupon-validity-custom-wrap" class="admin-coupon-validity-inline" hidden>
+                          <label for="admin-coupon-valid-until">Válido até</label>
+                          <input id="admin-coupon-valid-until" type="datetime-local" step="60" />
+                        </div>
                       </div>
                     </div>
                     <div class="admin-users-form-footer">
@@ -24860,6 +24885,67 @@
         }
       }
 
+      function parseAdminCouponDiscountPercent(raw) {
+        const text = String(raw ?? "").trim();
+        if (!text) return NaN;
+        let normalized = text.replace(/\s/g, "");
+        if (normalized.includes(",")) {
+          normalized = normalized.replace(/\./g, "").replace(",", ".");
+        }
+        const parsed = Number(normalized);
+        if (!Number.isFinite(parsed)) return NaN;
+        return Math.round(parsed * 100) / 100;
+      }
+
+      function formatAdminCouponDiscountPercentLabel(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return "0,00";
+        return parsed.toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
+
+      function sanitizeAdminCouponDiscountInput(raw) {
+        let value = String(raw ?? "");
+        value = value.replace(/[^\d,.]/g, "");
+        const separatorIndex = Math.max(value.lastIndexOf(","), value.lastIndexOf("."));
+        if (separatorIndex >= 0) {
+          const head = value.slice(0, separatorIndex).replace(/[,.]/g, "");
+          const tail = value.slice(separatorIndex + 1).replace(/[,.]/g, "").slice(0, 2);
+          value = `${head},${tail}`;
+        } else {
+          value = value.replace(/[,.]/g, "");
+        }
+        return value;
+      }
+
+      function formatAdminCouponDiscountPercentBlur(raw) {
+        const parsed = parseAdminCouponDiscountPercent(raw);
+        if (!Number.isFinite(parsed) || parsed <= 0) return "";
+        return Math.min(100, parsed).toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
+
+      function bindAdminCouponDiscountInput() {
+        const input = document.getElementById("admin-coupon-discount-percent");
+        if (!input || input.dataset.maskBound === "1") return;
+        input.dataset.maskBound = "1";
+        input.addEventListener("input", () => {
+          input.value = sanitizeAdminCouponDiscountInput(input.value);
+        });
+        input.addEventListener("blur", () => {
+          input.value = formatAdminCouponDiscountPercentBlur(input.value);
+        });
+        input.addEventListener("paste", () => {
+          window.setTimeout(() => {
+            input.value = formatAdminCouponDiscountPercentBlur(input.value);
+          }, 0);
+        });
+      }
+
       function generateAdminCouponAlias() {
         const char =
           WABA_COUPON_SPECIAL_CHARS[Math.floor(Math.random() * WABA_COUPON_SPECIAL_CHARS.length)] ||
@@ -24905,7 +24991,7 @@
             }`;
             return `<tr>
               <td><code>${escapeAdminHtml(coupon.alias || "")}</code></td>
-              <td class="admin-subscribers-num">${escapeAdminHtml(String(coupon.discountPercent || 0))}%</td>
+              <td class="admin-subscribers-num">${escapeAdminHtml(formatAdminCouponDiscountPercentLabel(coupon.discountPercent))}%</td>
               <td>${escapeAdminHtml(formatAdminCouponValidity(coupon))}</td>
               <td class="admin-subscribers-num">${escapeAdminHtml(uses)}</td>
               <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(statusLabel)}</span></td>
@@ -24960,18 +25046,36 @@
           return;
         }
         const alias = String(document.getElementById("admin-coupon-alias")?.value || "").trim();
-        const discountPercent = Number(document.getElementById("admin-coupon-discount-percent")?.value || 0);
+        const discountInput = document.getElementById("admin-coupon-discount-percent");
+        if (discountInput) {
+          const formattedDiscount = formatAdminCouponDiscountPercentBlur(discountInput.value);
+          if (formattedDiscount) discountInput.value = formattedDiscount;
+        }
+        const discountPercent = parseAdminCouponDiscountPercent(discountInput?.value || "");
         const validityMode = String(document.getElementById("admin-coupon-validity-mode")?.value || "24h");
-        const validUntil = String(document.getElementById("admin-coupon-valid-until")?.value || "");
+        const validUntil = String(document.getElementById("admin-coupon-valid-until")?.value || "").trim();
         const submitBtn = document.getElementById("admin-coupon-create-btn");
 
-        if (!Number.isFinite(discountPercent) || discountPercent < 1 || discountPercent > 100) {
-          showToast("Informe um desconto entre 1% e 100%.", "warning");
+        if (!Number.isFinite(discountPercent) || discountPercent < 0.01 || discountPercent > 100) {
+          showToast("Informe um desconto entre 0,01% e 100,00%.", "warning");
           return;
         }
-        if (validityMode === "custom" && !validUntil) {
-          showToast("Informe a validade personalizada do cupom.", "warning");
-          return;
+        let validUntilIso;
+        if (validityMode === "custom") {
+          if (!validUntil) {
+            showToast("Informe a validade personalizada (data e hora).", "warning");
+            return;
+          }
+          try {
+            validUntilIso = resolveAdminCouponCustomUntilIso(validUntil);
+            if (!validUntilIso) {
+              showToast("Informe a validade personalizada (data e hora).", "warning");
+              return;
+            }
+          } catch (error) {
+            showToast(error?.message || "Validade personalizada inválida.", "warning", 4800);
+            return;
+          }
         }
 
         if (submitBtn) {
@@ -24984,12 +25088,13 @@
             "/admin/coupons",
             {
               method: "POST",
+              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 alias: alias || undefined,
                 discountPercent,
                 validityMode,
-                validUntil: validityMode === "custom" ? new Date(validUntil).toISOString() : undefined,
+                validUntil: validUntilIso,
               }),
             },
             12000
@@ -25000,17 +25105,17 @@
           }
           showToast(`Cupom ${payload.coupon?.alias || ""} criado.`, "success");
           const aliasInput = document.getElementById("admin-coupon-alias");
-          const discountInput = document.getElementById("admin-coupon-discount-percent");
+          const discountInputReset = document.getElementById("admin-coupon-discount-percent");
           const modeInput = document.getElementById("admin-coupon-validity-mode");
           const untilInput = document.getElementById("admin-coupon-valid-until");
           if (aliasInput) aliasInput.value = "";
-          if (discountInput) discountInput.value = "";
+          if (discountInputReset) discountInputReset.value = "";
           if (modeInput) modeInput.value = "24h";
           if (untilInput) untilInput.value = "";
           syncAdminCouponValidityUi();
           await loadAdminCoupons();
         } catch (error) {
-          showToast(error?.message || "Erro ao criar cupom.", "error");
+          showToast(resolveAdminSubscriberFetchError(error, "Erro ao criar cupom."), "error", 5200);
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
@@ -25123,12 +25228,43 @@
         }
       }
 
+      function formatAdminCouponDatetimeLocalMin(date = new Date()) {
+        const value = date instanceof Date ? date : new Date(date);
+        if (Number.isNaN(value.getTime())) return "";
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(
+          value.getHours()
+        )}:${pad(value.getMinutes())}`;
+      }
+
+      function resolveAdminCouponCustomUntilIso(raw) {
+        const value = String(raw ?? "").trim();
+        if (!value) return null;
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new Error("Informe uma data e hora válidas para a validade personalizada.");
+        }
+        if (parsed.getTime() < Date.now() + 60_000) {
+          throw new Error("A validade personalizada deve ser pelo menos 1 minuto no futuro.");
+        }
+        return parsed.toISOString();
+      }
+
       function syncAdminCouponValidityUi() {
         const mode = String(document.getElementById("admin-coupon-validity-mode")?.value || "");
         const wrap = document.getElementById("admin-coupon-validity-custom-wrap");
+        const untilInput = document.getElementById("admin-coupon-valid-until");
         if (!wrap) return;
         const showCustom = mode === "custom";
         wrap.hidden = !showCustom;
+        if (untilInput) {
+          untilInput.required = showCustom;
+          if (showCustom) {
+            untilInput.min = formatAdminCouponDatetimeLocalMin(new Date());
+          } else {
+            untilInput.removeAttribute("min");
+          }
+        }
       }
 
       let adminChamadosCacheOpen = [];
@@ -26987,6 +27123,7 @@
       function initAdminSubscribersUi() {
         syncAdminCouponValidityUi();
         bindAdminSubscriberMaskedInputs();
+        bindAdminCouponDiscountInput();
         document.getElementById("admin-subscriber-create-btn")?.addEventListener("click", () => {
           void createAdminSubscriber({ preventDefault: () => {} });
         });
@@ -31287,7 +31424,7 @@
         }
         return `${formatDisparosMoneyFromCents(disparosAppliedCoupon.finalValueCents)} (de ${formatDisparosMoneyFromCents(
           listCents
-        )} · -${disparosAppliedCoupon.discountPercent}%)`;
+        )} · -${formatAdminCouponDiscountPercentLabel(disparosAppliedCoupon.discountPercent)}%)`;
       }
 
       async function applyDisparosBillingCoupon() {
@@ -31328,7 +31465,9 @@
           if (summary && disparosAppliedCoupon) {
             summary.hidden = false;
             summary.classList.remove("is-error");
-            summary.textContent = `Cupom ${disparosAppliedCoupon.alias} aplicado: ${disparosAppliedCoupon.discountPercent}% de desconto.`;
+            summary.textContent = `Cupom ${disparosAppliedCoupon.alias} aplicado: ${formatAdminCouponDiscountPercentLabel(
+              disparosAppliedCoupon.discountPercent
+            )}% de desconto.`;
           }
           syncDisparosBillingModalState(await loadDisparosBillingConfig().catch(() => ({})));
           showToast("Cupom aplicado com sucesso.", "success");

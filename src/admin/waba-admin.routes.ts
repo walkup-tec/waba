@@ -22,7 +22,7 @@ import {
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
-import { WabaCouponService } from "../billing/waba-coupon.service";
+import { WabaCouponService, parseWabaCouponDiscountPercent } from "../billing/waba-coupon.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
@@ -131,7 +131,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         | "lifetime";
       const coupon = couponService.createCoupon({
         alias: body.alias !== undefined ? String(body.alias) : undefined,
-        discountPercent: Number(body.discountPercent ?? 0),
+        discountPercent: parseWabaCouponDiscountPercent(body.discountPercent),
         validityMode,
         validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
         createdByEmail: auth.email,

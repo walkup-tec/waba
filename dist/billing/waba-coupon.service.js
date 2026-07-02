@@ -1,17 +1,40 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WabaCouponService = void 0;
+exports.WabaCouponService = exports.parseWabaCouponDiscountPercent = void 0;
 const node_crypto_1 = require("node:crypto");
 const waba_coupon_identifiers_1 = require("./waba-coupon-identifiers");
 const waba_coupon_repository_1 = require("./waba-coupon.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
-const resolveDiscountPercent = (value) => {
-    const percent = Math.round(Number(value));
-    if (!Number.isFinite(percent) || percent < 1 || percent > 100) {
-        throw new Error("Informe um desconto entre 1% e 100%.");
+const parseWabaCouponDiscountPercent = (value) => {
+    if (typeof value === "number") {
+        if (!Number.isFinite(value)) {
+            throw new Error("Informe um desconto entre 0,01% e 100,00%.");
+        }
+        return normalizeWabaCouponDiscountPercent(value);
+    }
+    const raw = String(value ?? "").trim();
+    if (!raw) {
+        throw new Error("Informe o desconto (%) do cupom.");
+    }
+    let normalized = raw.replace(/\s/g, "");
+    if (normalized.includes(",")) {
+        normalized = normalized.replace(/\./g, "").replace(",", ".");
+    }
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) {
+        throw new Error("Informe um desconto válido (ex.: 10,00).");
+    }
+    return normalizeWabaCouponDiscountPercent(parsed);
+};
+exports.parseWabaCouponDiscountPercent = parseWabaCouponDiscountPercent;
+const normalizeWabaCouponDiscountPercent = (parsed) => {
+    const percent = Math.round(parsed * 100) / 100;
+    if (!Number.isFinite(percent) || percent < 0.01 || percent > 100) {
+        throw new Error("Informe um desconto entre 0,01% e 100,00%.");
     }
     return percent;
 };
+const resolveDiscountPercent = (value) => (0, exports.parseWabaCouponDiscountPercent)(value);
 const addHours = (iso, hours) => {
     const date = new Date(iso);
     date.setTime(date.getTime() + hours * 60 * 60 * 1000);
@@ -35,8 +58,9 @@ const resolveValidityWindow = (mode, createdAt, customUntil) => {
     if (Number.isNaN(parsed.getTime())) {
         throw new Error("Data de validade personalizada inválida.");
     }
-    if (parsed.getTime() <= Date.parse(createdAt)) {
-        throw new Error("A validade personalizada deve ser posterior ao momento atual.");
+    const minUntilMs = Date.now() + 60000;
+    if (parsed.getTime() < minUntilMs) {
+        throw new Error("A validade personalizada deve ser pelo menos 1 minuto no futuro.");
     }
     return { validFrom: createdAt, validUntil: parsed.toISOString() };
 };

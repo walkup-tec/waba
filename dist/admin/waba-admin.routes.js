@@ -125,7 +125,7 @@ const registerWabaAdminRoutes = (app) => {
             const validityMode = String(body.validityMode ?? "").trim();
             const coupon = couponService.createCoupon({
                 alias: body.alias !== undefined ? String(body.alias) : undefined,
-                discountPercent: Number(body.discountPercent ?? 0),
+                discountPercent: (0, waba_coupon_service_1.parseWabaCouponDiscountPercent)(body.discountPercent),
                 validityMode,
                 validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
                 createdByEmail: auth.email,

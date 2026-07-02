@@ -12,7 +12,7 @@ import {
 
 export type CreateWabaCouponInput = {
   alias?: string;
-  discountPercent: number;
+  discountPercent: number | string;
   validityMode: WabaCouponValidityMode;
   validUntil?: string;
   createdByEmail: string;
@@ -35,13 +35,41 @@ export type WabaCouponQuote = {
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
-const resolveDiscountPercent = (value: number): number => {
-  const percent = Math.round(Number(value));
-  if (!Number.isFinite(percent) || percent < 1 || percent > 100) {
-    throw new Error("Informe um desconto entre 1% e 100%.");
+export const parseWabaCouponDiscountPercent = (value: unknown): number => {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error("Informe um desconto entre 0,01% e 100,00%.");
+    }
+    return normalizeWabaCouponDiscountPercent(value);
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    throw new Error("Informe o desconto (%) do cupom.");
+  }
+
+  let normalized = raw.replace(/\s/g, "");
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".");
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    throw new Error("Informe um desconto válido (ex.: 10,00).");
+  }
+
+  return normalizeWabaCouponDiscountPercent(parsed);
+};
+
+const normalizeWabaCouponDiscountPercent = (parsed: number): number => {
+  const percent = Math.round(parsed * 100) / 100;
+  if (!Number.isFinite(percent) || percent < 0.01 || percent > 100) {
+    throw new Error("Informe um desconto entre 0,01% e 100,00%.");
   }
   return percent;
 };
+
+const resolveDiscountPercent = (value: unknown): number => parseWabaCouponDiscountPercent(value);
 
 const addHours = (iso: string, hours: number): string => {
   const date = new Date(iso);
@@ -71,8 +99,9 @@ const resolveValidityWindow = (
   if (Number.isNaN(parsed.getTime())) {
     throw new Error("Data de validade personalizada inválida.");
   }
-  if (parsed.getTime() <= Date.parse(createdAt)) {
-    throw new Error("A validade personalizada deve ser posterior ao momento atual.");
+  const minUntilMs = Date.now() + 60_000;
+  if (parsed.getTime() < minUntilMs) {
+    throw new Error("A validade personalizada deve ser pelo menos 1 minuto no futuro.");
   }
   return { validFrom: createdAt, validUntil: parsed.toISOString() };
 };
