@@ -270,25 +270,13 @@ function normalizeKeywordText(text: string): string {
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
-function buildValidationKeyword(validationId: string): string {
-  const token = validationId.replace(/-/g, "").slice(0, 8).toUpperCase();
-  const num = (parseInt(token, 16) % 900_000) + 100_000;
-  return `${INBOUND_VALIDATION_KEYWORD} WABA-${num}`;
-}
-
-function keywordUsesUniqueToken(keyword: string): boolean {
-  return /\bwaba-\d{6}\b/i.test(keyword);
-}
-
 function textMatchesKeyword(texts: string[], keyword: string): boolean {
   const needle = normalizeKeywordText(keyword);
   if (!needle) return false;
-  const requiresToken = keywordUsesUniqueToken(keyword);
   return texts.some((t) => {
     const normalized = normalizeKeywordText(t);
     if (!normalized) return false;
     if (normalized === needle) return true;
-    if (requiresToken) return normalized.includes(needle);
     if (normalized.includes(needle) && normalized.length <= needle.length + 12) return true;
     return false;
   });
@@ -515,9 +503,7 @@ const INBOUND_KEYWORD_GRACE_MS = Math.max(
 function inboundKeywordMinTimestampMs(
   validationStartedAtMs: number,
   aggressive = false,
-  keyword = "",
 ): number {
-  if (keywordUsesUniqueToken(keyword)) return 0;
   const grace = aggressive ? Math.max(INBOUND_KEYWORD_GRACE_MS, 60_000) : INBOUND_KEYWORD_GRACE_MS;
   return validationStartedAtMs - grace;
 }
@@ -525,13 +511,9 @@ function inboundKeywordMinTimestampMs(
 function inboundKeywordSearchOptions(
   validationStartedAtMs: number,
   aggressive = false,
-  keyword = "",
 ): InboundHitSearchOptions {
-  if (keywordUsesUniqueToken(keyword)) {
-    return { requireTimestamp: false };
-  }
   return {
-    minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive, keyword),
+    minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive),
     requireTimestamp: true,
   };
 }
@@ -835,7 +817,7 @@ async function resolveInboundHit(
     typeof options === "boolean" ? { aggressive: options, deep: options } : options;
   const aggressive = opts.aggressive === true;
   const deep = opts.deep === true || aggressive;
-  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive, keyword);
+  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
 
   const [fastMsgHit, fastChatsHit] = await Promise.all([
     findInboundViaApiFast(instanceName, keyword, searchOpts),
@@ -1068,7 +1050,6 @@ async function pollReceiveIfDue(record: ValidationRecord): Promise<void> {
   const searchOpts = inboundKeywordSearchOptions(
     record.validationStartedAtMs,
     false,
-    record.keyword,
   );
 
   try {
@@ -1232,11 +1213,7 @@ function findInboundInWebhookChunk(
   keyword: string,
   validationStartedAtMs: number,
 ): InboundHit | null {
-  if (keywordUsesUniqueToken(keyword)) {
-    return findInboundInPayload(chunk, keyword, { requireTimestamp: false });
-  }
-
-  const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false, keyword);
+  const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false);
   const strictHit = findInboundInPayload(chunk, keyword, strictOpts);
   if (strictHit) return strictHit;
 
@@ -1354,13 +1331,13 @@ export async function startInboundValidation(input: {
 
   const validationId = crypto.randomUUID();
   const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
-  const keyword = buildValidationKeyword(validationId);
+  const keyword = INBOUND_VALIDATION_KEYWORD;
   const validationStartedAtMs = Date.now();
   const startedAt = new Date(validationStartedAtMs).toISOString();
   const phoneLabel = formatPhoneHint(connected.numero);
   const receiveWaitDetail = phoneLabel
-    ? `Envie exatamente "${keyword}" de outro WhatsApp para ${phoneLabel} e confirme abaixo quando enviar.`
-    : `Envie exatamente "${keyword}" de outro WhatsApp (não o celular do QR) e confirme abaixo quando enviar.`;
+    ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel} e confirme abaixo quando enviar.`
+    : `Envie "${keyword}" de outro WhatsApp (não o celular do QR) e confirme abaixo quando enviar.`;
 
   const webhookConfigured = await ensureInstanceWebhook(connected.instancia);
 

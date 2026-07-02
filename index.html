@@ -18232,7 +18232,7 @@
               <div id="register-inbound-evo-connected" class="reg-inbound-evo-connected" hidden>
                 <span class="reg-evo-connected-icon" aria-hidden="true">✓</span>
                 <span id="register-inbound-evo-connected-text">
-                  WhatsApp conectado no sistema WABA - Drax. Envie a mensagem com o código único pelo outro WhatsApp.
+                  WhatsApp conectado no sistema WABA - Drax. Envie CONFIRMAR pelo outro WhatsApp.
                 </span>
               </div>
               <div id="register-inbound-waiting" class="reg-inbound-waiting" aria-live="polite">
@@ -39432,7 +39432,7 @@
         registerInboundAwaitingConfirmSince = 0;
         setRegisterInboundConfirmUiBusy(false);
         showToast(
-          "Mensagem ainda não detectada após 2 minutos. Confira o código exato no outro WhatsApp.",
+          "Mensagem ainda não detectada após 2 minutos. Confira se enviou CONFIRMAR pelo outro WhatsApp.",
           "warning"
         );
         updateRegisterInboundRow(
@@ -39440,7 +39440,7 @@
           "register-inbound-receive-result",
           false,
           "register-inbound-receive-detail",
-          "Mensagem não detectada a tempo. Envie novamente com o código exato exibido na tela."
+          "Mensagem não detectada a tempo. Envie CONFIRMAR novamente pelo outro WhatsApp."
         );
         setInboundCheckVisible("register-inbound-receive-row", true, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
@@ -39675,7 +39675,7 @@
         setRegisterConnectStatus(
           "loading",
           status.receiveTest?.detail ||
-            "Validação incompleta. Confira se enviou a mensagem com o código exato pelo outro WhatsApp."
+            "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
         );
         setRegisterInboundActionButtons({ retry: true, skip: false });
         return true;
@@ -39970,7 +39970,7 @@
               clearRegisterInboundTimers();
               setRegisterConnectStatus(
                 "loading",
-                "Validação expirou. Envie a mensagem com o código exato pelo outro WhatsApp e tente novamente."
+                "Validação expirou. Envie CONFIRMAR pelo outro WhatsApp e tente novamente."
               );
               setRegisterInboundActionButtons({ retry: true, skip: false });
               return;

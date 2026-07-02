@@ -195,27 +195,16 @@ function normalizeKeywordText(text) {
         .replace(/\p{M}/gu, "")
         .replace(/[^\p{L}\p{N}]/gu, "");
 }
-function buildValidationKeyword(validationId) {
-    const token = validationId.replace(/-/g, "").slice(0, 8).toUpperCase();
-    const num = (parseInt(token, 16) % 900000) + 100000;
-    return `${exports.INBOUND_VALIDATION_KEYWORD} WABA-${num}`;
-}
-function keywordUsesUniqueToken(keyword) {
-    return /\bwaba-\d{6}\b/i.test(keyword);
-}
 function textMatchesKeyword(texts, keyword) {
     const needle = normalizeKeywordText(keyword);
     if (!needle)
         return false;
-    const requiresToken = keywordUsesUniqueToken(keyword);
     return texts.some((t) => {
         const normalized = normalizeKeywordText(t);
         if (!normalized)
             return false;
         if (normalized === needle)
             return true;
-        if (requiresToken)
-            return normalized.includes(needle);
         if (normalized.includes(needle) && normalized.length <= needle.length + 12)
             return true;
         return false;
@@ -413,18 +402,13 @@ async function ensureInstanceWebhook(instanceName) {
     return after.enabled && after.url === webhookUrl;
 }
 const INBOUND_KEYWORD_GRACE_MS = Math.max(0, Math.min(60000, Number(process.env.INBOUND_VALIDATION_KEYWORD_GRACE_MS || 15000) || 15000));
-function inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive = false, keyword = "") {
-    if (keywordUsesUniqueToken(keyword))
-        return 0;
+function inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive = false) {
     const grace = aggressive ? Math.max(INBOUND_KEYWORD_GRACE_MS, 60000) : INBOUND_KEYWORD_GRACE_MS;
     return validationStartedAtMs - grace;
 }
-function inboundKeywordSearchOptions(validationStartedAtMs, aggressive = false, keyword = "") {
-    if (keywordUsesUniqueToken(keyword)) {
-        return { requireTimestamp: false };
-    }
+function inboundKeywordSearchOptions(validationStartedAtMs, aggressive = false) {
     return {
-        minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive, keyword),
+        minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive),
         requireTimestamp: true,
     };
 }
@@ -691,7 +675,7 @@ async function resolveInboundHit(instanceName, keyword, validationStartedAtMs, o
     const opts = typeof options === "boolean" ? { aggressive: options, deep: options } : options;
     const aggressive = opts.aggressive === true;
     const deep = opts.deep === true || aggressive;
-    const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive, keyword);
+    const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
     const [fastMsgHit, fastChatsHit] = await Promise.all([
         findInboundViaApiFast(instanceName, keyword, searchOpts),
         findInboundViaChatsLastMessage(instanceName, keyword, searchOpts),
@@ -913,7 +897,7 @@ async function pollReceiveIfDue(record) {
     record.pollTick += 1;
     const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
     const useMessages = record.pollTick % 2 === 1;
-    const searchOpts = inboundKeywordSearchOptions(record.validationStartedAtMs, false, record.keyword);
+    const searchOpts = inboundKeywordSearchOptions(record.validationStartedAtMs, false);
     try {
         let hit = null;
         let via = useMessages ? "findMessages" : "findChats";
@@ -1050,10 +1034,7 @@ async function refreshInboundValidation(validationId, options = false) {
     return getInboundValidationStatus(validationId);
 }
 function findInboundInWebhookChunk(chunk, keyword, validationStartedAtMs) {
-    if (keywordUsesUniqueToken(keyword)) {
-        return findInboundInPayload(chunk, keyword, { requireTimestamp: false });
-    }
-    const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false, keyword);
+    const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false);
     const strictHit = findInboundInPayload(chunk, keyword, strictOpts);
     if (strictHit)
         return strictHit;
@@ -1165,13 +1146,13 @@ async function startInboundValidation(input) {
     stopValidationsForInstance(connected.instancia);
     const validationId = crypto_1.default.randomUUID();
     const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
-    const keyword = buildValidationKeyword(validationId);
+    const keyword = exports.INBOUND_VALIDATION_KEYWORD;
     const validationStartedAtMs = Date.now();
     const startedAt = new Date(validationStartedAtMs).toISOString();
     const phoneLabel = formatPhoneHint(connected.numero);
     const receiveWaitDetail = phoneLabel
-        ? `Envie exatamente "${keyword}" de outro WhatsApp para ${phoneLabel} e confirme abaixo quando enviar.`
-        : `Envie exatamente "${keyword}" de outro WhatsApp (não o celular do QR) e confirme abaixo quando enviar.`;
+        ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel} e confirme abaixo quando enviar.`
+        : `Envie "${keyword}" de outro WhatsApp (não o celular do QR) e confirme abaixo quando enviar.`;
     const webhookConfigured = await ensureInstanceWebhook(connected.instancia);
     const record = {
         validationId,
