@@ -7261,6 +7261,30 @@
         align-items: end;
       }
 
+      .disparos-billing-coupon-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 2px 0 0;
+        font-size: 0.9rem;
+        color: #e2e8f0;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .disparos-billing-coupon-toggle input {
+        width: 16px;
+        height: 16px;
+        accent-color: #10b981;
+        cursor: pointer;
+      }
+
+      .disparos-billing-coupon-panel {
+        display: grid;
+        gap: 8px;
+        margin-top: 4px;
+      }
+
       .disparos-billing-coupon-summary {
         margin: 0;
         font-size: 0.84rem;
@@ -19176,11 +19200,9 @@
           <label for="disparos-pricing-custom-qty">Quantidade de envios</label>
           <input
             id="disparos-pricing-custom-qty"
-            type="number"
+            type="text"
             inputmode="numeric"
-            min="1"
-            step="1"
-            placeholder="Ex.: 35000"
+            placeholder="Ex.: 35.000"
             autocomplete="off"
           />
           <p id="disparos-pricing-custom-hint" class="disparos-pricing-custom-hint"></p>
@@ -19310,20 +19332,26 @@
           <label class="register-label" for="disparos-billing-value">Valor dos créditos (PIX)</label>
           <input id="disparos-billing-value" class="register-input" type="text" readonly />
 
-          <label class="register-label" for="disparos-billing-coupon">Cupom de desconto</label>
-          <div class="disparos-billing-coupon-row">
-            <input
-              id="disparos-billing-coupon"
-              class="register-input"
-              type="text"
-              placeholder="WABA-#1234"
-              autocomplete="off"
-            />
-            <button id="disparos-billing-coupon-apply-btn" class="instance-action-btn enabled" type="button">
-              Aplicar
-            </button>
+          <label class="disparos-billing-coupon-toggle" for="disparos-billing-coupon-toggle">
+            <input id="disparos-billing-coupon-toggle" type="checkbox" />
+            Eu tenho cupom de desconto
+          </label>
+          <div id="disparos-billing-coupon-panel" class="disparos-billing-coupon-panel" hidden>
+            <label class="register-label" for="disparos-billing-coupon">Cupom de desconto</label>
+            <div class="disparos-billing-coupon-row">
+              <input
+                id="disparos-billing-coupon"
+                class="register-input"
+                type="text"
+                placeholder="WABA-#1234"
+                autocomplete="off"
+              />
+              <button id="disparos-billing-coupon-apply-btn" class="instance-action-btn enabled" type="button">
+                Aplicar
+              </button>
+            </div>
+            <p id="disparos-billing-coupon-summary" class="disparos-billing-coupon-summary" hidden></p>
           </div>
-          <p id="disparos-billing-coupon-summary" class="disparos-billing-coupon-summary" hidden></p>
         </div>
         <div class="register-actions">
           <button id="disparos-billing-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
@@ -22731,6 +22759,31 @@
         return Number(value || 0).toLocaleString("pt-BR");
       }
 
+      function parseDisparosQtyInputValue(value) {
+        const digits = String(value || "").replace(/\D/g, "");
+        if (!digits) return 0;
+        return Math.floor(Number(digits)) || 0;
+      }
+
+      function formatDisparosQtyInputValue(value) {
+        const qty = parseDisparosQtyInputValue(value);
+        return qty > 0 ? formatDisparosQty(qty) : "";
+      }
+
+      function bindDisparosPricingCustomQtyInput() {
+        const customInput = document.getElementById("disparos-pricing-custom-qty");
+        if (!customInput || customInput.dataset.bound) return;
+        customInput.dataset.bound = "1";
+        customInput.addEventListener("input", () => {
+          if (!document.getElementById("disparos-pricing-custom-check")?.checked) return;
+          const formatted = formatDisparosQtyInputValue(customInput.value);
+          if (customInput.value !== formatted) {
+            customInput.value = formatted;
+          }
+          refreshDisparosCustomPricingSelection();
+        });
+      }
+
       function formatDisparosMoneyDecimal(value) {
         return Number(value || 0)
           .toFixed(2)
@@ -22809,11 +22862,14 @@
           customHint.textContent = `Informe uma quantidade maior que ${formatDisparosQty(minExclusive)} envios. Valor por envio: ${formatDisparosUnitPrice(lastTier.pricePerSend)}.`;
         }
 
-        const tier = buildDisparosCustomTier(apiKind, customInput?.value);
+        const tier = buildDisparosCustomTier(
+          apiKind,
+          parseDisparosQtyInputValue(customInput?.value)
+        );
         if (!tier) {
           disparosSelectedPackage = null;
           if (customError) {
-            const raw = String(customInput?.value || "").trim();
+            const raw = parseDisparosQtyInputValue(customInput?.value);
             if (raw) {
               customError.hidden = false;
               customError.textContent = `A quantidade deve ser maior que ${formatDisparosQty(minExclusive)} envios.`;
@@ -32449,14 +32505,7 @@
         tbody.appendChild(customRow);
 
         const customInput = document.getElementById("disparos-pricing-custom-qty");
-        if (customInput && !customInput.dataset.bound) {
-          customInput.dataset.bound = "1";
-          customInput.addEventListener("input", () => {
-            if (document.getElementById("disparos-pricing-custom-check")?.checked) {
-              refreshDisparosCustomPricingSelection();
-            }
-          });
-        }
+        bindDisparosPricingCustomQtyInput();
       }
 
       function openDisparosPricingModal(apiKind) {
@@ -32472,13 +32521,40 @@
 
       function resetDisparosBillingCoupon() {
         disparosAppliedCoupon = null;
+        const toggle = document.getElementById("disparos-billing-coupon-toggle");
+        const panel = document.getElementById("disparos-billing-coupon-panel");
         const input = document.getElementById("disparos-billing-coupon");
         const summary = document.getElementById("disparos-billing-coupon-summary");
+        if (toggle) toggle.checked = false;
+        if (panel) panel.hidden = true;
         if (input) input.value = "";
         if (summary) {
           summary.hidden = true;
           summary.textContent = "";
           summary.classList.remove("is-error");
+        }
+      }
+
+      function syncDisparosBillingCouponPanel(focusInput = false) {
+        const toggle = document.getElementById("disparos-billing-coupon-toggle");
+        const panel = document.getElementById("disparos-billing-coupon-panel");
+        const visible = Boolean(toggle?.checked);
+        if (panel) panel.hidden = !visible;
+        if (!visible) {
+          disparosAppliedCoupon = null;
+          const input = document.getElementById("disparos-billing-coupon");
+          const summary = document.getElementById("disparos-billing-coupon-summary");
+          if (input) input.value = "";
+          if (summary) {
+            summary.hidden = true;
+            summary.textContent = "";
+            summary.classList.remove("is-error");
+          }
+          void syncDisparosBillingModalState(loadDisparosBillingConfig().catch(() => ({})));
+          return;
+        }
+        if (focusInput) {
+          document.getElementById("disparos-billing-coupon")?.focus();
         }
       }
 
@@ -32668,6 +32744,7 @@
       }
 
       function initDisparosBillingUi() {
+        bindDisparosPricingCustomQtyInput();
         document
           .getElementById("disparos-toolbar-buy-btn")
           ?.addEventListener("click", () => goToDisparosAddCredits());
@@ -32821,6 +32898,9 @@
             }
             openDisparosOverlay("disparos-pricing-overlay");
           });
+        document
+          .getElementById("disparos-billing-coupon-toggle")
+          ?.addEventListener("change", () => syncDisparosBillingCouponPanel(true));
         document
           .getElementById("disparos-billing-coupon-apply-btn")
           ?.addEventListener("click", () => void applyDisparosBillingCoupon());
