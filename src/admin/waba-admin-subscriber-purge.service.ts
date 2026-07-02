@@ -7,6 +7,7 @@ const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 export type AdminSubscriberPurgeSummary = {
   email: string;
   subscriberRemoved: boolean;
+  systemUserRemoved: boolean;
   billingOrdersRemoved: number;
   creditUsageRemoved: boolean;
   bonusBalanceRemoved: boolean;
@@ -49,6 +50,7 @@ export class WabaAdminSubscriberPurgeService {
     const summary: AdminSubscriberPurgeSummary = {
       email,
       subscriberRemoved: false,
+      systemUserRemoved: false,
       billingOrdersRemoved: 0,
       creditUsageRemoved: false,
       bonusBalanceRemoved: false,
@@ -69,7 +71,23 @@ export class WabaAdminSubscriberPurgeService {
     );
     summary.subscriberRemoved = subscribersStore.subscribers.length < beforeSubs;
     if (!summary.subscriberRemoved) throw new Error("Assinante não encontrado.");
+    if (!summary.subscriberRemoved) throw new Error("Assinante não encontrado.");
     writeJson(subscribersPath, subscribersStore);
+
+    const systemUsersPath = resolveDataFile("waba-system-users.json");
+    const systemUsersStore = readJson(systemUsersPath, {
+      version: 1,
+      users: [] as Array<{ email?: string; role?: string }>,
+    });
+    if (Array.isArray(systemUsersStore.users)) {
+      const beforeUsers = systemUsersStore.users.length;
+      systemUsersStore.users = systemUsersStore.users.filter((user) => {
+        if (normalizeEmail(String(user?.email ?? "")) !== email) return true;
+        return String(user?.role ?? "").trim().toLowerCase() === "master";
+      });
+      summary.systemUserRemoved = systemUsersStore.users.length < beforeUsers;
+      if (summary.systemUserRemoved) writeJson(systemUsersPath, systemUsersStore);
+    }
 
     const ordersPath = resolveDataFile("waba-billing-orders.json");
     const orders = readJson<Array<{ ownerEmail?: string }>>(ordersPath, []);

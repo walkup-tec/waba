@@ -140,6 +140,24 @@ const registerWabaAdminRoutes = (app) => {
             return res.status(status).json({ error: message });
         }
     });
+    app.delete("/admin/subscribers/:subscriberId", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const subscriberId = String(req.params.subscriberId ?? "").trim();
+            const detail = adminSubscribersService.getSubscriberDetail(subscriberId);
+            if (!detail?.profile?.email) {
+                return res.status(404).json({ error: "Assinante não encontrado." });
+            }
+            const summary = adminSubscriberPurgeService.purgeByEmail(detail.profile.email);
+            return res.status(200).json({ ok: true, ...summary });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível excluir o assinante.";
+            const status = message.includes("não encontrado") ? 404 : 400;
+            return res.status(status).json({ error: message });
+        }
+    });
     app.post("/admin/subscribers", (req, res) => {
         const auth = rejectNonMaster(req, res);
         if (!auth)

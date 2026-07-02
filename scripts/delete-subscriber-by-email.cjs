@@ -64,6 +64,7 @@ function main() {
     dataDir,
     dryRun,
     subscriberRemoved: false,
+    systemUserRemoved: false,
     billingOrdersRemoved: 0,
     creditUsageRemoved: false,
     bonusBalanceRemoved: false,
@@ -84,6 +85,18 @@ function main() {
   );
   summary.subscriberRemoved = subscribersStore.subscribers.length < beforeSubs;
   if (summary.subscriberRemoved) writeJson(subscribersPath, subscribersStore);
+
+  const systemUsersPath = path.join(dataDir, "waba-system-users.json");
+  const systemUsersStore = readJson(systemUsersPath, { version: 1, users: [] });
+  if (Array.isArray(systemUsersStore.users)) {
+    const beforeUsers = systemUsersStore.users.length;
+    systemUsersStore.users = systemUsersStore.users.filter((user) => {
+      if (normalizeEmail(user?.email) !== email) return true;
+      return String(user?.role ?? "").trim().toLowerCase() === "master";
+    });
+    summary.systemUserRemoved = systemUsersStore.users.length < beforeUsers;
+    if (summary.systemUserRemoved) writeJson(systemUsersPath, systemUsersStore);
+  }
 
   const ordersPath = path.join(dataDir, "waba-billing-orders.json");
   const orders = readJson(ordersPath, []);

@@ -40,6 +40,7 @@ class WabaAdminSubscriberPurgeService {
         const summary = {
             email,
             subscriberRemoved: false,
+            systemUserRemoved: false,
             billingOrdersRemoved: 0,
             creditUsageRemoved: false,
             bonusBalanceRemoved: false,
@@ -59,7 +60,25 @@ class WabaAdminSubscriberPurgeService {
         summary.subscriberRemoved = subscribersStore.subscribers.length < beforeSubs;
         if (!summary.subscriberRemoved)
             throw new Error("Assinante não encontrado.");
+        if (!summary.subscriberRemoved)
+            throw new Error("Assinante não encontrado.");
         writeJson(subscribersPath, subscribersStore);
+        const systemUsersPath = (0, data_path_1.resolveDataFile)("waba-system-users.json");
+        const systemUsersStore = readJson(systemUsersPath, {
+            version: 1,
+            users: [],
+        });
+        if (Array.isArray(systemUsersStore.users)) {
+            const beforeUsers = systemUsersStore.users.length;
+            systemUsersStore.users = systemUsersStore.users.filter((user) => {
+                if (normalizeEmail(String(user?.email ?? "")) !== email)
+                    return true;
+                return String(user?.role ?? "").trim().toLowerCase() === "master";
+            });
+            summary.systemUserRemoved = systemUsersStore.users.length < beforeUsers;
+            if (summary.systemUserRemoved)
+                writeJson(systemUsersPath, systemUsersStore);
+        }
         const ordersPath = (0, data_path_1.resolveDataFile)("waba-billing-orders.json");
         const orders = readJson(ordersPath, []);
         if (Array.isArray(orders)) {

@@ -7419,6 +7419,15 @@
         color: #94a3b8;
       }
 
+      .admin-subscriber-detail-delete-btn {
+        border-color: rgba(248, 113, 113, 0.55);
+        color: #fecaca;
+      }
+
+      .admin-subscriber-detail-delete-btn:hover {
+        background: rgba(248, 113, 113, 0.12);
+      }
+
       .admin-subscriber-purchase-status {
         display: inline-flex;
         align-items: center;
@@ -18978,6 +18987,13 @@
           <button id="admin-subscriber-detail-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">
             Salvar alterações
           </button>
+          <button
+            id="admin-subscriber-detail-delete-btn"
+            class="instance-action-btn admin-subscriber-detail-delete-btn"
+            type="button"
+          >
+            Excluir assinante
+          </button>
           <button id="admin-subscriber-detail-close-btn" class="instance-action-btn" type="button">
             Fechar
           </button>
@@ -22948,6 +22964,53 @@
       }
 
       let adminSubscriberDetailId = "";
+      let adminSubscriberDetailEmail = "";
+
+      async function deleteAdminSubscriberDetail() {
+        if (!hasMasterAccess() || !adminSubscriberDetailId) return;
+        const profileEmail =
+          adminSubscriberDetailEmail ||
+          String(document.getElementById("admin-subscriber-detail-email")?.value || "").trim();
+        if (!profileEmail) {
+          showToast("E-mail do assinante indisponível.", "error", 4200);
+          return;
+        }
+        const confirmed = window.confirm(
+          `Excluir permanentemente o assinante ${profileEmail}?\n\nIsso remove cadastro, pedidos, créditos, campanhas e usuário operacional/suporte com o mesmo e-mail. Esta ação não pode ser desfeita.`
+        );
+        if (!confirmed) return;
+
+        const deleteBtn = document.getElementById("admin-subscriber-detail-delete-btn");
+        if (deleteBtn) {
+          deleteBtn.disabled = true;
+          deleteBtn.textContent = "Excluindo…";
+        }
+
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/subscribers/${encodeURIComponent(adminSubscriberDetailId)}`,
+            {
+              method: "DELETE",
+              credentials: "same-origin",
+            },
+            15000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível excluir o assinante.");
+          }
+          closeAdminSubscriberDetail();
+          await loadAdminSubscribers();
+          showToast(`Assinante ${profileEmail} excluído.`, "success", 4800);
+        } catch (error) {
+          showToast(resolveAdminSubscriberFetchError(error, "Erro ao excluir assinante."), "error", 5200);
+        } finally {
+          if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = "Excluir assinante";
+          }
+        }
+      }
 
       function bindAdminSubscriberDetailMaskedInputs() {
         const cpfInput = document.getElementById("admin-subscriber-detail-cpf");
@@ -22988,6 +23051,7 @@
         const summary = detail?.summary || {};
         const purchases = Array.isArray(detail?.purchaseHistory) ? detail.purchaseHistory : [];
         adminSubscriberDetailId = String(profile.id || adminSubscriberDetailId || "");
+        adminSubscriberDetailEmail = String(profile.email || "");
 
         if (title) title.textContent = profile.fullName || "Detalhes do assinante";
         if (subtitle) {
@@ -23205,6 +23269,7 @@
       function closeAdminSubscriberDetail() {
         closeDisparosOverlay("admin-subscriber-detail-overlay");
         adminSubscriberDetailId = "";
+        adminSubscriberDetailEmail = "";
       }
 
       let adminFinanceiroOrdersState = {
@@ -28125,6 +28190,9 @@
         });
         document.getElementById("admin-subscriber-detail-save-btn")?.addEventListener("click", () => {
           void saveAdminSubscriberDetail();
+        });
+        document.getElementById("admin-subscriber-detail-delete-btn")?.addEventListener("click", () => {
+          void deleteAdminSubscriberDetail();
         });
         document.getElementById("admin-subscriber-detail-close-btn")?.addEventListener("click", () => {
           closeAdminSubscriberDetail();
