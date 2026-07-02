@@ -17377,7 +17377,7 @@
               <div class="aquecedor-section">
                 <div class="admin-assinantes-block">
                   <h3 class="admin-assinantes-block-title">Novo assinante</h3>
-                  <form id="admin-subscribers-create-form" class="admin-users-form" autocomplete="off">
+                  <form id="admin-subscribers-create-form" class="admin-users-form" autocomplete="off" novalidate>
                     <div class="admin-users-form-grid">
                       <div class="aquecedor-field">
                         <label for="admin-subscriber-full-name">Nome</label>
@@ -17401,7 +17401,7 @@
                       </div>
                     </div>
                     <div class="admin-users-form-footer">
-                      <button id="admin-subscriber-create-btn" class="instance-action-btn btn-qrcode enabled" type="submit">
+                      <button id="admin-subscriber-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
                         Criar assinante
                       </button>
                     </div>
@@ -17413,7 +17413,7 @@
                   <p class="admin-users-menus-hint" style="margin-top: 0">
                     Padrão do código: <code>WABA-[caractere especial][4 dígitos]</code> (ex.: <code>WABA-#4821</code>).
                   </p>
-                  <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off">
+                  <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off" novalidate>
                     <div class="admin-users-form-grid">
                       <div class="aquecedor-field">
                         <label for="admin-coupon-alias">Código do cupom</label>
@@ -17443,7 +17443,7 @@
                       </div>
                     </div>
                     <div class="admin-users-form-footer">
-                      <button id="admin-coupon-create-btn" class="instance-action-btn btn-qrcode enabled" type="submit">
+                      <button id="admin-coupon-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
                         Criar cupom
                       </button>
                     </div>
@@ -24916,8 +24916,24 @@
         const cpfCnpj = String(document.getElementById("admin-subscriber-cpf")?.value || "").trim();
         const submitBtn = document.getElementById("admin-subscriber-create-btn");
 
-        if (fullName.length < 2 || !email || password.length < 6 || !whatsapp || !cpfCnpj) {
-          showToast("Preencha nome, e-mail, senha, WhatsApp e CPF/CNPJ.", "warning");
+        if (fullName.length < 2) {
+          showToast("Informe o nome completo do assinante.", "warning");
+          return;
+        }
+        if (!email) {
+          showToast("Informe o e-mail do assinante.", "warning");
+          return;
+        }
+        if (password.length < 6) {
+          showToast("A senha deve ter pelo menos 6 caracteres.", "warning");
+          return;
+        }
+        if (!whatsapp) {
+          showToast("Informe o WhatsApp do assinante.", "warning");
+          return;
+        }
+        if (!cpfCnpj) {
+          showToast("Informe o CPF ou CNPJ do assinante.", "warning");
           return;
         }
 
@@ -26820,10 +26836,18 @@
 
       function initAdminSubscribersUi() {
         syncAdminCouponValidityUi();
+        document.getElementById("admin-subscriber-create-btn")?.addEventListener("click", () => {
+          void createAdminSubscriber({ preventDefault: () => {} });
+        });
+        document.getElementById("admin-coupon-create-btn")?.addEventListener("click", () => {
+          void createAdminCoupon({ preventDefault: () => {} });
+        });
         document.getElementById("admin-subscribers-create-form")?.addEventListener("submit", (event) => {
+          event.preventDefault();
           void createAdminSubscriber(event);
         });
         document.getElementById("admin-coupons-create-form")?.addEventListener("submit", (event) => {
+          event.preventDefault();
           void createAdminCoupon(event);
         });
         document.getElementById("admin-coupon-validity-mode")?.addEventListener("change", () => {
