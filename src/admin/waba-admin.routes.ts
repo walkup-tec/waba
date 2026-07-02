@@ -105,6 +105,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         whatsapp,
         phone: String(body.phone ?? whatsapp),
         cpfCnpj: String(body.cpfCnpj ?? ""),
+        aquecedorGranted: body.aquecedorGranted === true,
       });
       return res.status(201).json({ ok: true, subscriber });
     } catch (error) {

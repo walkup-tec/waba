@@ -7,6 +7,7 @@ export type AdminCreateSubscriberInput = {
   whatsapp: string;
   phone?: string;
   cpfCnpj: string;
+  aquecedorGranted?: boolean;
 };
 
 export class WabaAdminSubscribersCreateService {
@@ -20,6 +21,7 @@ export class WabaAdminSubscribersCreateService {
       whatsapp: String(input.whatsapp ?? ""),
       phone: String(input.phone ?? ""),
       cpfCnpj: String(input.cpfCnpj ?? ""),
+      aquecedorGranted: input.aquecedorGranted === true,
     });
   }
 }

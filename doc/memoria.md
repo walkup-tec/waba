@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Admin Assinantes: Aquecedor parceiro + cupons abas + copiar:** checkbox liberar Aquecedor no cadastro (`aquecedorGranted`); abas Ativos/Inativos nos cupons; botão Copiar código; removido hint padrão WABA. Marker `DEPLOY-2026-06-21-assinante-liberar-aquecedor`. Ver `doc/LOG-2026-06-21__admin-assinantes-aquecedor-cupons-abas-copiar.md`. Palavras-chave: `aquecedorGranted`, `admin-coupons-bucket`, `copyAdminCouponAlias`.
+
 **WABA — Admin Assinantes: criar assinantes + cupons de desconto:** master cadastra assinantes e cupons (12h/24h/custom/vitalícia, % sobre total); checkout PIX aceita cupom antes da cobrança; alias `WABA-[#$%&*!@?][0000-9999]`. Marker `DEPLOY-2026-06-21-admin-assinantes-cupons-desconto`. Ver `doc/LOG-2026-06-21__admin-assinantes-cupons-desconto.md`. Palavras-chave: `admin-assinantes`, `waba-coupons.json`, `couponAlias`, `disparos-billing-overlay`.
 
 **WABA — Diferenciais largura total (créditos):** barra Seguro/Performance/Flexível movida para fora do grid 2 colunas; ocupa largura total abaixo do board. Ver `doc/LOG-2026-06-21__diferenciais-largura-total-creditos.md`.

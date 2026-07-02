@@ -1,6 +1,7 @@
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaBillingOrderRepository } from "../billing/waba-billing-order.repository";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
+import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 
 export type WabaAuthRole = "master" | "operacional" | "suporte" | "subscriber" | "guest";
 
@@ -11,7 +12,7 @@ const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 export type AquecedorEntitlement = {
   active: boolean;
   bypass: boolean;
-  reason: "active" | "master" | "no_payment" | "expired" | "guest";
+  reason: "active" | "master" | "partner" | "no_payment" | "expired" | "guest";
   email: string;
   lastPaidAt: string;
   expiresAt: string;
@@ -24,6 +25,7 @@ export class WabaEntitlementService {
   constructor(
     private readonly orderRepository = new WabaBillingOrderRepository(),
     private readonly disparosCreditsService = new WabaDisparosCreditsService(),
+    private readonly subscriberRepository = new WabaSubscriberRepository(),
   ) {}
 
   private buildActiveFromCredits(email: string): AquecedorEntitlement | null {
@@ -87,6 +89,21 @@ export class WabaEntitlementService {
         "guest",
         "Faça login com sua conta de assinante para verificar o acesso ao Aquecedor.",
       );
+    }
+
+    const subscriber = this.subscriberRepository.getByEmail(normalizedEmail);
+    if (subscriber?.aquecedorGranted) {
+      return {
+        active: true,
+        bypass: true,
+        reason: "partner",
+        email: normalizedEmail,
+        lastPaidAt: "",
+        expiresAt: "",
+        daysRemaining: 999,
+        sourceOrderId: "",
+        message: "Aquecedor liberado para este assinante parceiro (sem exigência de compra de envios).",
+      };
     }
 
     const paidOrders = this.orderRepository

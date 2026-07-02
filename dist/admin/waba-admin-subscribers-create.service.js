@@ -14,6 +14,7 @@ class WabaAdminSubscribersCreateService {
             whatsapp: String(input.whatsapp ?? ""),
             phone: String(input.phone ?? ""),
             cpfCnpj: String(input.cpfCnpj ?? ""),
+            aquecedorGranted: input.aquecedorGranted === true,
         });
     }
 }

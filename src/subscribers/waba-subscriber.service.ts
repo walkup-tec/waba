@@ -32,6 +32,7 @@ export type RegisterSubscriberInput = {
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
+  aquecedorGranted?: boolean;
 };
 
 export class WabaSubscriberService {
@@ -52,6 +53,7 @@ export class WabaSubscriberService {
     if (cpfCnpj.length < 11) throw new Error("Informe CPF ou CNPJ válido.");
 
     const now = new Date().toISOString();
+    const aquecedorGranted = input.aquecedorGranted === true;
     const subscriber = this.repository.create({
       id: randomUUID(),
       email,
@@ -60,6 +62,7 @@ export class WabaSubscriberService {
       whatsapp,
       phone,
       cpfCnpj,
+      aquecedorGranted: aquecedorGranted || undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -71,6 +74,7 @@ export class WabaSubscriberService {
       whatsapp: subscriber.whatsapp,
       phone: subscriber.phone ?? "",
       cpfCnpj: subscriber.cpfCnpj,
+      aquecedorGranted: Boolean(subscriber.aquecedorGranted),
       createdAt: subscriber.createdAt,
     };
   }

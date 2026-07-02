@@ -4,12 +4,14 @@ exports.WabaEntitlementService = void 0;
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
+const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const AQUECEDOR_ACCESS_MS = 30 * 24 * 60 * 60 * 1000;
 const normalizeEmail = (value) => value.trim().toLowerCase();
 class WabaEntitlementService {
-    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService()) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository()) {
         this.orderRepository = orderRepository;
         this.disparosCreditsService = disparosCreditsService;
+        this.subscriberRepository = subscriberRepository;
     }
     buildActiveFromCredits(email) {
         const summary = this.disparosCreditsService.getCreditsSummary(email);
@@ -63,6 +65,20 @@ class WabaEntitlementService {
         }
         if (!normalizedEmail) {
             return inactive("guest", "Faça login com sua conta de assinante para verificar o acesso ao Aquecedor.");
+        }
+        const subscriber = this.subscriberRepository.getByEmail(normalizedEmail);
+        if (subscriber?.aquecedorGranted) {
+            return {
+                active: true,
+                bypass: true,
+                reason: "partner",
+                email: normalizedEmail,
+                lastPaidAt: "",
+                expiresAt: "",
+                daysRemaining: 999,
+                sourceOrderId: "",
+                message: "Aquecedor liberado para este assinante parceiro (sem exigência de compra de envios).",
+            };
         }
         const paidOrders = this.orderRepository
             .list()

@@ -7079,6 +7079,46 @@
         color: #e2e8f0;
       }
 
+      .admin-subscriber-options {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.35);
+      }
+
+      .admin-subscriber-options-title {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 650;
+        color: #cbd5e1;
+      }
+
+      .admin-subscriber-option-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 0.84rem;
+        color: #e2e8f0;
+        cursor: pointer;
+        line-height: 1.45;
+      }
+
+      .admin-subscriber-option-check input {
+        margin-top: 3px;
+        flex-shrink: 0;
+      }
+
+      .admin-subscriber-option-hint {
+        margin: 0;
+        font-size: 0.78rem;
+        color: #94a3b8;
+        line-height: 1.45;
+      }
+
       .admin-coupon-alias-row {
         display: flex;
         gap: 8px;
@@ -7140,6 +7180,28 @@
         color: #fca5a5;
         background: rgba(239, 68, 68, 0.12);
         border: 1px solid rgba(239, 68, 68, 0.32);
+      }
+
+      .admin-coupon-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .admin-coupon-copy-btn {
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        background: rgba(59, 130, 246, 0.16);
+        color: #93c5fd;
+      }
+
+      .admin-coupon-copy-btn:hover {
+        background: rgba(59, 130, 246, 0.28);
       }
 
       .disparos-billing-coupon-row {
@@ -17429,6 +17491,16 @@
                         <label for="admin-subscriber-cpf">CPF ou CNPJ</label>
                         <input id="admin-subscriber-cpf" type="text" required placeholder="000.000.000-00 ou 00.000.000/0000-00" inputmode="numeric" autocomplete="off" />
                       </div>
+                      <div class="admin-subscriber-options">
+                        <p class="admin-subscriber-options-title">Recursos do assinante</p>
+                        <label class="admin-subscriber-option-check" for="admin-subscriber-aquecedor-granted">
+                          <input id="admin-subscriber-aquecedor-granted" type="checkbox" />
+                          <span>Liberar Aquecedor sem compra de envios</span>
+                        </label>
+                        <p class="admin-subscriber-option-hint">
+                          Para parceiros ou amigos de negócio — o assinante acessa o Aquecedor sem precisar contratar créditos de disparos.
+                        </p>
+                      </div>
                     </div>
                     <div class="admin-users-form-footer">
                       <button id="admin-subscriber-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
@@ -17440,9 +17512,6 @@
 
                 <div class="admin-assinantes-block">
                   <h3 class="admin-assinantes-block-title">Cupons de desconto</h3>
-                  <p class="admin-users-menus-hint" style="margin-top: 0">
-                    Padrão do código: <code>WABA-[caractere especial][4 dígitos]</code> (ex.: <code>WABA-#4821</code>).
-                  </p>
                   <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off" novalidate>
                     <div class="admin-users-form-grid">
                       <div class="aquecedor-field">
@@ -17480,6 +17549,30 @@
                   </form>
                   <div class="admin-subscribers-toolbar" style="margin-top: 16px">
                     <span id="admin-coupons-summary" class="admin-subscribers-summary">Carregando cupons…</span>
+                    <div class="admin-campanhas-buckets" role="tablist" aria-label="Filtrar cupons">
+                      <button
+                        id="admin-coupons-bucket-active"
+                        class="admin-campanhas-bucket-btn is-active"
+                        type="button"
+                        role="tab"
+                        aria-selected="true"
+                        data-coupons-bucket="active"
+                      >
+                        Ativos
+                        <span id="admin-coupons-count-active" class="admin-campanhas-bucket-count">0</span>
+                      </button>
+                      <button
+                        id="admin-coupons-bucket-inactive"
+                        class="admin-campanhas-bucket-btn"
+                        type="button"
+                        role="tab"
+                        aria-selected="false"
+                        data-coupons-bucket="inactive"
+                      >
+                        Inativos
+                        <span id="admin-coupons-count-inactive" class="admin-campanhas-bucket-count">0</span>
+                      </button>
+                    </div>
                     <button id="admin-coupons-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">
                       Atualizar cupons
                     </button>
@@ -24969,23 +25062,110 @@
         return "Personalizada";
       }
 
-      function renderAdminCouponsTable(items) {
+      let adminCouponsCache = [];
+      let adminCouponsActiveBucket = "active";
+      let adminCouponsPollTimer = null;
+      const ADMIN_COUPONS_POLL_MS = 30000;
+
+      function isAdminCouponEffectiveActive(coupon, nowMs = Date.now()) {
+        if (!coupon || !coupon.active) return false;
+        const fromMs = Date.parse(String(coupon.validFrom || ""));
+        if (Number.isFinite(fromMs) && nowMs < fromMs) return false;
+        if (coupon.validUntil) {
+          const untilMs = Date.parse(String(coupon.validUntil));
+          if (Number.isFinite(untilMs) && nowMs > untilMs) return false;
+        }
+        const max = Number(coupon.maxRedemptions);
+        const uses = Math.max(0, Math.floor(Number(coupon.redemptionCount) || 0));
+        if (Number.isFinite(max) && max > 0 && uses >= max) return false;
+        return true;
+      }
+
+      function resolveAdminCouponStatusLabel(coupon) {
+        if (!coupon?.active) return "Desativado";
+        if (isAdminCouponEffectiveActive(coupon)) return "Ativo";
+        const max = Number(coupon.maxRedemptions);
+        const uses = Math.max(0, Math.floor(Number(coupon.redemptionCount) || 0));
+        if (Number.isFinite(max) && max > 0 && uses >= max) return "Esgotado";
+        if (coupon.validUntil && Date.now() > Date.parse(String(coupon.validUntil))) return "Expirado";
+        return "Inativo";
+      }
+
+      function updateAdminCouponsBucketUi(counts = {}) {
+        const activeBtn = document.getElementById("admin-coupons-bucket-active");
+        const inactiveBtn = document.getElementById("admin-coupons-bucket-inactive");
+        const activeCountEl = document.getElementById("admin-coupons-count-active");
+        const inactiveCountEl = document.getElementById("admin-coupons-count-inactive");
+        const activeCount = Number(counts.active || 0);
+        const inactiveCount = Number(counts.inactive || 0);
+        if (activeCountEl) activeCountEl.textContent = String(activeCount);
+        if (inactiveCountEl) inactiveCountEl.textContent = String(inactiveCount);
+        if (activeBtn) {
+          activeBtn.classList.toggle("is-active", adminCouponsActiveBucket === "active");
+          activeBtn.setAttribute("aria-selected", adminCouponsActiveBucket === "active" ? "true" : "false");
+        }
+        if (inactiveBtn) {
+          inactiveBtn.classList.toggle("is-active", adminCouponsActiveBucket === "inactive");
+          inactiveBtn.setAttribute("aria-selected", adminCouponsActiveBucket === "inactive" ? "true" : "false");
+        }
+      }
+
+      function setAdminCouponsBucket(bucket) {
+        adminCouponsActiveBucket = bucket === "inactive" ? "inactive" : "active";
+        renderAdminCouponsTableFromCache();
+      }
+
+      function startAdminCouponsPolling() {
+        stopAdminCouponsPolling();
+        adminCouponsPollTimer = window.setInterval(() => {
+          if (activeTab !== "admin-assinantes") return;
+          if (!adminCouponsCache.length) return;
+          renderAdminCouponsTableFromCache();
+        }, ADMIN_COUPONS_POLL_MS);
+      }
+
+      function stopAdminCouponsPolling() {
+        if (adminCouponsPollTimer) {
+          window.clearInterval(adminCouponsPollTimer);
+          adminCouponsPollTimer = null;
+        }
+      }
+
+      function renderAdminCouponsTableFromCache() {
+        const all = Array.isArray(adminCouponsCache) ? adminCouponsCache : [];
+        const activeItems = all.filter((coupon) => isAdminCouponEffectiveActive(coupon));
+        const inactiveItems = all.filter((coupon) => !isAdminCouponEffectiveActive(coupon));
+        updateAdminCouponsBucketUi({
+          active: activeItems.length,
+          inactive: inactiveItems.length,
+        });
+        const filtered = adminCouponsActiveBucket === "inactive" ? inactiveItems : activeItems;
+        renderAdminCouponsTable(filtered, { bucket: adminCouponsActiveBucket });
+      }
+
+      function renderAdminCouponsTable(items, options = {}) {
         const tbody = document.getElementById("admin-coupons-tbody");
         const summary = document.getElementById("admin-coupons-summary");
         const list = Array.isArray(items) ? items : [];
+        const bucket = options.bucket === "inactive" ? "inactive" : "active";
         if (summary) {
-          summary.textContent = `${list.length} cupom(ns) cadastrado(s)`;
+          summary.textContent =
+            bucket === "inactive"
+              ? `${list.length} cupom(ns) inativo(s)`
+              : `${list.length} cupom(ns) ativo(s)`;
         }
         if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="muted">Nenhum cupom cadastrado.</td></tr>';
+          tbody.innerHTML = `<tr><td colspan="6" class="muted">${
+            bucket === "inactive" ? "Nenhum cupom inativo." : "Nenhum cupom ativo."
+          }</td></tr>`;
           return;
         }
         tbody.innerHTML = list
           .map((coupon) => {
-            const active = Boolean(coupon.active && coupon.validNow);
-            const statusClass = active ? "is-active" : "is-inactive";
-            const statusLabel = active ? "Ativo" : coupon.active ? "Expirado" : "Inativo";
+            const listedAsActive = isAdminCouponEffectiveActive(coupon);
+            const statusClass = listedAsActive ? "is-active" : "is-inactive";
+            const statusLabel = resolveAdminCouponStatusLabel(coupon);
             const uses = `${Number(coupon.redemptionCount || 0)}${
               coupon.maxRedemptions ? ` / ${coupon.maxRedemptions}` : ""
             }`;
@@ -24996,13 +25176,22 @@
               <td class="admin-subscribers-num">${escapeAdminHtml(uses)}</td>
               <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(statusLabel)}</span></td>
               <td>
-                ${
-                  coupon.active
-                    ? `<button type="button" class="instance-action-btn admin-coupon-deactivate-btn" data-coupon-id="${escapeAdminHtml(
-                        coupon.id
-                      )}">Desativar</button>`
-                    : '<span class="muted">—</span>'
-                }
+                <div class="admin-coupon-actions">
+                  <button
+                    type="button"
+                    class="admin-coupon-copy-btn"
+                    data-coupon-alias="${escapeAdminHtml(coupon.alias || "")}"
+                  >
+                    Copiar
+                  </button>
+                  ${
+                    listedAsActive
+                      ? `<button type="button" class="instance-action-btn admin-coupon-deactivate-btn" data-coupon-id="${escapeAdminHtml(
+                          coupon.id
+                        )}">Desativar</button>`
+                      : ""
+                  }
+                </div>
               </td>
             </tr>`;
           })
@@ -25027,7 +25216,8 @@
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os cupons.");
           }
-          renderAdminCouponsTable(payload.items);
+          adminCouponsCache = Array.isArray(payload.items) ? payload.items : [];
+          renderAdminCouponsTableFromCache();
         } catch (error) {
           if (tbody) {
             tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
@@ -25113,6 +25303,7 @@
           if (modeInput) modeInput.value = "24h";
           if (untilInput) untilInput.value = "";
           syncAdminCouponValidityUi();
+          adminCouponsActiveBucket = "active";
           await loadAdminCoupons();
         } catch (error) {
           showToast(resolveAdminSubscriberFetchError(error, "Erro ao criar cupom."), "error", 5200);
@@ -25120,6 +25311,33 @@
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = "Criar cupom";
+          }
+        }
+      }
+
+      async function copyAdminCouponAlias(alias) {
+        const code = String(alias || "").trim();
+        if (!code) {
+          showToast("Código do cupom indisponível.", "error", 3200);
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(code);
+          showToast(`Cupom ${code} copiado.`, "success", 2800);
+        } catch {
+          try {
+            const helper = document.createElement("textarea");
+            helper.value = code;
+            helper.setAttribute("readonly", "true");
+            helper.style.position = "fixed";
+            helper.style.left = "-9999px";
+            document.body.appendChild(helper);
+            helper.select();
+            document.execCommand("copy");
+            helper.remove();
+            showToast(`Cupom ${code} copiado.`, "success", 2800);
+          } catch {
+            showToast("Não foi possível copiar o código do cupom.", "error", 3600);
           }
         }
       }
@@ -25138,6 +25356,9 @@
           }
           showToast("Cupom desativado.", "success");
           await loadAdminCoupons();
+          if (adminCouponsActiveBucket === "active") {
+            setAdminCouponsBucket("inactive");
+          }
         } catch (error) {
           showToast(error?.message || "Erro ao desativar cupom.", "error");
         }
@@ -25154,6 +25375,9 @@
         const password = String(document.getElementById("admin-subscriber-password")?.value || "");
         const whatsapp = String(document.getElementById("admin-subscriber-whatsapp")?.value || "").replace(/\D/g, "");
         const cpfCnpj = String(document.getElementById("admin-subscriber-cpf")?.value || "").replace(/\D/g, "");
+        const aquecedorGranted = Boolean(
+          document.getElementById("admin-subscriber-aquecedor-granted")?.checked
+        );
         const submitBtn = document.getElementById("admin-subscriber-create-btn");
 
         if (fullName.length < 2) {
@@ -25197,7 +25421,15 @@
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fullName, email, password, whatsapp, phone: whatsapp, cpfCnpj }),
+              body: JSON.stringify({
+                fullName,
+                email,
+                password,
+                whatsapp,
+                phone: whatsapp,
+                cpfCnpj,
+                aquecedorGranted,
+              }),
             },
             12000
           );
@@ -25205,12 +25437,19 @@
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível criar o assinante.");
           }
-          showToast("Assinante criado com sucesso.", "success");
+          showToast(
+            payload.subscriber?.aquecedorGranted
+              ? "Assinante criado com Aquecedor liberado."
+              : "Assinante criado com sucesso.",
+            "success"
+          );
           document.getElementById("admin-subscriber-full-name").value = "";
           document.getElementById("admin-subscriber-email").value = "";
           document.getElementById("admin-subscriber-password").value = "";
           document.getElementById("admin-subscriber-whatsapp").value = "";
           document.getElementById("admin-subscriber-cpf").value = "";
+          const aquecedorCheckbox = document.getElementById("admin-subscriber-aquecedor-granted");
+          if (aquecedorCheckbox) aquecedorCheckbox.checked = false;
           upsertAdminSubscriberListRow(payload.subscriber, cpfCnpj);
           scrollAdminSubscribersListIntoView();
           try {
@@ -27148,9 +27387,20 @@
         document.getElementById("admin-coupons-refresh-btn")?.addEventListener("click", () => {
           void loadAdminCoupons();
         });
+        document.getElementById("admin-coupons-bucket-active")?.addEventListener("click", () => {
+          setAdminCouponsBucket("active");
+        });
+        document.getElementById("admin-coupons-bucket-inactive")?.addEventListener("click", () => {
+          setAdminCouponsBucket("inactive");
+        });
         document.getElementById("admin-coupons-tbody")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof HTMLElement)) return;
+          const copyBtn = target.closest(".admin-coupon-copy-btn");
+          if (copyBtn) {
+            void copyAdminCouponAlias(copyBtn.getAttribute("data-coupon-alias") || "");
+            return;
+          }
           const btn = target.closest(".admin-coupon-deactivate-btn");
           if (!btn) return;
           const couponId = btn.getAttribute("data-coupon-id") || "";
@@ -37833,6 +38083,9 @@
         if (nextTab !== "admin-monitor-cpu") {
           stopAdminMonitorCpuPolling();
         }
+        if (nextTab !== "admin-assinantes") {
+          stopAdminCouponsPolling();
+        }
 
         if (dashboardPanel) {
           dashboardPanel.classList.toggle(
@@ -38064,6 +38317,7 @@
           stopAdminCampanhasPolling();
           void loadAdminSubscribers();
           void loadAdminCoupons();
+          startAdminCouponsPolling();
         } else if (nextTab === "admin-campanhas") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();

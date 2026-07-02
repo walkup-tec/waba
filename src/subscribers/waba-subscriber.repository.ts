@@ -10,6 +10,8 @@ export type WabaSubscriber = {
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
+  /** Liberado pelo master sem exigir compra de envios (parceiros). */
+  aquecedorGranted?: boolean;
   createdAt: string;
   updatedAt: string;
 };
