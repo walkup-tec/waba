@@ -97,6 +97,26 @@ const registerWabaBillingRoutes = (app) => {
             items: disparosCreditsService.listBonusHistory(auth.email, limit),
         });
     });
+    app.post("/billing/disparos/coupon/validate", (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para aplicar cupom." });
+            }
+            const body = req.body;
+            const quote = billingService.quoteDisparosCoupon({
+                alias: String(body.alias ?? ""),
+                apiKind: body.apiKind === "alternativa" ? "alternativa" : "oficial",
+                shipmentCount: Number(body.shipmentCount ?? 0),
+            });
+            return res.status(200).json({ ok: true, quote });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível validar o cupom.",
+            });
+        }
+    });
     app.post("/billing/disparos/checkout", async (req, res) => {
         try {
             const auth = resolveRequestAuth(req);
@@ -112,6 +132,7 @@ const registerWabaBillingRoutes = (app) => {
                 whatsapp: String(body.whatsapp ?? ""),
                 valueCents: body.valueCents !== undefined ? Number(body.valueCents) : undefined,
                 shipmentCount: body.shipmentCount !== undefined ? Number(body.shipmentCount) : undefined,
+                couponAlias: body.couponAlias !== undefined ? String(body.couponAlias) : undefined,
             });
             return res.status(201).json(checkout);
         }

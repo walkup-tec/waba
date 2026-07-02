@@ -7,6 +7,7 @@ import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.ser
 import { WabaAdminDashboardService } from "./waba-admin-dashboard.service";
 import { WabaAdminFinanceiroService } from "./waba-admin-financeiro.service";
 import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
+import { WabaAdminSubscribersCreateService } from "./waba-admin-subscribers-create.service";
 import { WabaAdminSubscriberPromoteService } from "./waba-admin-subscriber-promote.service";
 import { WabaAdminMasterPromoteService } from "./waba-admin-master-promote.service";
 import { WabaAdminSupportService } from "./waba-admin-support.service";
@@ -21,10 +22,13 @@ import {
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
+import { WabaCouponService } from "../billing/waba-coupon.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
 const adminSubscribersService = new WabaAdminSubscribersService();
+const adminSubscribersCreateService = new WabaAdminSubscribersCreateService();
+const couponService = new WabaCouponService();
 const adminSubscriberPromoteService = new WabaAdminSubscriberPromoteService();
 const adminMasterPromoteService = new WabaAdminMasterPromoteService();
 const adminUsersService = new WabaAdminUsersService();
@@ -80,6 +84,71 @@ export const registerWabaAdminRoutes = (app: Express) => {
     if (!rejectNonMaster(req, res)) return;
     const items = adminSubscribersService.listSubscribers();
     return res.status(200).json({ items });
+  });
+
+  app.post("/admin/subscribers", (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const subscriber = adminSubscribersCreateService.createSubscriber({
+        email: String(body.email ?? ""),
+        password: String(body.password ?? ""),
+        fullName: String(body.fullName ?? body.name ?? ""),
+        whatsapp: String(body.whatsapp ?? ""),
+        phone: String(body.phone ?? ""),
+        cpfCnpj: String(body.cpfCnpj ?? ""),
+      });
+      return res.status(201).json({ ok: true, subscriber });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível criar o assinante.",
+      });
+    }
+  });
+
+  app.get("/admin/coupons", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    return res.status(200).json({ items: couponService.listPublicCoupons() });
+  });
+
+  app.post("/admin/coupons", (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const validityMode = String(body.validityMode ?? "").trim() as
+        | "12h"
+        | "24h"
+        | "custom"
+        | "lifetime";
+      const coupon = couponService.createCoupon({
+        alias: body.alias !== undefined ? String(body.alias) : undefined,
+        discountPercent: Number(body.discountPercent ?? 0),
+        validityMode,
+        validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
+        createdByEmail: auth.email,
+        maxRedemptions:
+          body.maxRedemptions !== undefined ? Number(body.maxRedemptions) : undefined,
+      });
+      return res.status(201).json({ ok: true, coupon });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível criar o cupom.",
+      });
+    }
+  });
+
+  app.patch("/admin/coupons/:couponId/deactivate", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const coupon = couponService.deactivateCoupon(String(req.params.couponId ?? ""));
+      return res.status(200).json({ ok: true, coupon });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível desativar o cupom.",
+      });
+    }
   });
 
   app.get("/admin/instances/lookup", async (req, res) => {

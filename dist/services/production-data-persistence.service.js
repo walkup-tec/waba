@@ -11,6 +11,7 @@ exports.PRODUCTION_PERSISTENCE_CATALOG = [
     { id: "subscribers", file: "waba-subscribers.json", label: "Assinantes" },
     { id: "systemUsers", file: "waba-system-users.json", label: "Usuários (staff/master)" },
     { id: "billingOrders", file: "waba-billing-orders.json", label: "Financeiro / pedidos" },
+    { id: "coupons", file: "waba-coupons.json", label: "Cupons de desconto" },
     { id: "financeiroSplit", file: "waba-financeiro-split-config.json", label: "Financeiro / split" },
     { id: "financeiroSettlements", file: "waba-financeiro-split-settlements.json", label: "Financeiro / liquidações" },
     { id: "creditUsage", file: "waba-disparos-credit-usage.json", label: "Créditos consumidos" },

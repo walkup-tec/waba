@@ -12,6 +12,7 @@ const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-spli
 const waba_admin_dashboard_service_1 = require("./waba-admin-dashboard.service");
 const waba_admin_financeiro_service_1 = require("./waba-admin-financeiro.service");
 const waba_admin_subscribers_service_1 = require("./waba-admin-subscribers.service");
+const waba_admin_subscribers_create_service_1 = require("./waba-admin-subscribers-create.service");
 const waba_admin_subscriber_promote_service_1 = require("./waba-admin-subscriber-promote.service");
 const waba_admin_master_promote_service_1 = require("./waba-admin-master-promote.service");
 const waba_admin_support_service_1 = require("./waba-admin-support.service");
@@ -22,8 +23,11 @@ const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integra
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const waba_admin_instances_service_1 = require("./waba-admin-instances.service");
 const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
+const waba_coupon_service_1 = require("../billing/waba-coupon.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
+const adminSubscribersCreateService = new waba_admin_subscribers_create_service_1.WabaAdminSubscribersCreateService();
+const couponService = new waba_coupon_service_1.WabaCouponService();
 const adminSubscriberPromoteService = new waba_admin_subscriber_promote_service_1.WabaAdminSubscriberPromoteService();
 const adminMasterPromoteService = new waba_admin_master_promote_service_1.WabaAdminMasterPromoteService();
 const adminUsersService = new waba_admin_users_service_1.WabaAdminUsersService();
@@ -76,6 +80,69 @@ const registerWabaAdminRoutes = (app) => {
             return;
         const items = adminSubscribersService.listSubscribers();
         return res.status(200).json({ items });
+    });
+    app.post("/admin/subscribers", (req, res) => {
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = req.body;
+            const subscriber = adminSubscribersCreateService.createSubscriber({
+                email: String(body.email ?? ""),
+                password: String(body.password ?? ""),
+                fullName: String(body.fullName ?? body.name ?? ""),
+                whatsapp: String(body.whatsapp ?? ""),
+                phone: String(body.phone ?? ""),
+                cpfCnpj: String(body.cpfCnpj ?? ""),
+            });
+            return res.status(201).json({ ok: true, subscriber });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível criar o assinante.",
+            });
+        }
+    });
+    app.get("/admin/coupons", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        return res.status(200).json({ items: couponService.listPublicCoupons() });
+    });
+    app.post("/admin/coupons", (req, res) => {
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = req.body;
+            const validityMode = String(body.validityMode ?? "").trim();
+            const coupon = couponService.createCoupon({
+                alias: body.alias !== undefined ? String(body.alias) : undefined,
+                discountPercent: Number(body.discountPercent ?? 0),
+                validityMode,
+                validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
+                createdByEmail: auth.email,
+                maxRedemptions: body.maxRedemptions !== undefined ? Number(body.maxRedemptions) : undefined,
+            });
+            return res.status(201).json({ ok: true, coupon });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível criar o cupom.",
+            });
+        }
+    });
+    app.patch("/admin/coupons/:couponId/deactivate", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const coupon = couponService.deactivateCoupon(String(req.params.couponId ?? ""));
+            return res.status(200).json({ ok: true, coupon });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível desativar o cupom.",
+            });
+        }
     });
     app.get("/admin/instances/lookup", async (req, res) => {
         if (!rejectNonMaster(req, res))

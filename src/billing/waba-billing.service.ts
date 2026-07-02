@@ -22,6 +22,7 @@ import { WabaBillingOrderRepository, type WabaBillingOrder } from "./waba-billin
 import {
   WabaAlternativaNumbersService,
 } from "./waba-alternativa-numbers.service";
+import { WabaCouponService } from "./waba-coupon.service";
 
 export type CreateAlternativaNumbersCheckoutInput = {
   customerName: string;
@@ -40,6 +41,7 @@ export type CreateDisparosCheckoutInput = {
   whatsapp: string;
   valueCents?: number;
   shipmentCount?: number;
+  couponAlias?: string;
 };
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
@@ -108,12 +110,28 @@ const isDisparosAlternativaSalePackage = (shipmentCount: number, valueCents: num
     (pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents,
   );
 
+const resolveListValueCentsForPackage = (
+  apiKind: "oficial" | "alternativa",
+  shipmentCount: number,
+): number | null => {
+  if (shipmentCount <= 0) return null;
+  const tables =
+    apiKind === "oficial"
+      ? [...DISPAROS_TEST_PACKAGES, ...DISPAROS_OFICIAL_SALE_PACKAGES]
+      : [...DISPAROS_TEST_PACKAGES, ...DISPAROS_ALTERNATIVA_SALE_PACKAGES];
+  const match = tables.find((pack) => pack.shipments === shipmentCount);
+  return match ? match.valueCents : null;
+};
+
+const ASAAS_MIN_CHARGE_CENTS = 500;
+
 export class WabaBillingService {
   constructor(
     private readonly orderRepository = new WabaBillingOrderRepository(),
     private readonly bonusSettlementService = new WabaDisparosBonusSettlementService(),
     private readonly splitService = new WabaFinanceiroSplitService(),
     private readonly alternativaNumbersService = new WabaAlternativaNumbersService(),
+    private readonly couponService = new WabaCouponService(),
   ) {}
 
   private finalizePaidOrder(order: WabaBillingOrder): WabaBillingOrder {
@@ -164,6 +182,9 @@ export class WabaBillingService {
       apiKind: settled.apiKind,
       status: settled.status,
       valueCents: settled.valueCents,
+      listValueCents: settled.listValueCents ?? settled.valueCents,
+      discountPercent: settled.discountPercent ?? 0,
+      couponAlias: settled.couponAlias ?? "",
       shipmentCount: settled.shipmentCount ?? 0,
       numberCount: settled.product === "waba-alternativa-numbers" ? settled.shipmentCount ?? 0 : 0,
       bonusShipmentsApplied: settled.bonusShipmentsApplied ?? 0,
@@ -174,6 +195,34 @@ export class WabaBillingService {
       updatedAt: settled.updatedAt,
       asaasExternalReference: settled.asaasExternalReference,
     };
+  }
+
+  quoteDisparosCoupon(input: {
+    alias: string;
+    apiKind: "oficial" | "alternativa";
+    shipmentCount: number;
+  }) {
+    const apiKind = input.apiKind;
+    if (apiKind !== "oficial" && apiKind !== "alternativa") {
+      throw new Error("Selecione API Oficial ou API Alternativa.");
+    }
+    const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
+    const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount);
+    if (!listValueCents) {
+      throw new Error("Pacote de envios inválido.");
+    }
+    const quote = this.couponService.quoteCoupon({
+      alias: input.alias,
+      listValueCents,
+    });
+    if (quote.finalValueCents < ASAAS_MIN_CHARGE_CENTS) {
+      throw new Error(
+        `O valor final após desconto deve ser de pelo menos R$ ${centsToCurrency(ASAAS_MIN_CHARGE_CENTS)
+          .toFixed(2)
+          .replace(".", ",")}.`,
+      );
+    }
+    return quote;
   }
 
   private validateCheckoutInput(input: CreateDisparosCheckoutInput) {
@@ -200,32 +249,61 @@ export class WabaBillingService {
     const whatsapp = formatBrazilMobileForAsaas(String(input.whatsapp ?? ""));
 
     const minCreditCents = resolveMinCreditCents();
-    const valueCents = Math.round(Number(input.valueCents ?? minCreditCents));
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-    const isTestPackage = isDisparosTestPackage(shipmentCount, valueCents);
+    const listValueCentsFromPackage =
+      shipmentCount > 0 ? resolveListValueCentsForPackage(apiKind, shipmentCount) : null;
+
+    let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));
+    if (!Number.isFinite(listValueCents) || listValueCents <= 0) {
+      throw new Error("Valor do pacote inválido.");
+    }
+
+    if (shipmentCount > 0) {
+      if (!listValueCentsFromPackage) {
+        throw new Error(
+          apiKind === "oficial"
+            ? "Pacote de envios inválido para API Oficial."
+            : "Pacote de envios inválido para API Alternativa.",
+        );
+      }
+      listValueCents = listValueCentsFromPackage;
+    } else {
+      const isTestPackage = isDisparosTestPackage(shipmentCount, listValueCents);
+      const effectiveMin = isTestPackage ? listValueCents : minCreditCents;
+      if (listValueCents < effectiveMin) {
+        throw new Error(
+          `Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`,
+        );
+      }
+    }
+
+    const couponAlias = String(input.couponAlias ?? "").trim();
+    let valueCents = listValueCents;
+    let discountPercent: number | undefined;
+    let couponId: string | undefined;
+    let normalizedCouponAlias: string | undefined;
+
+    if (couponAlias) {
+      const quote = this.couponService.quoteCoupon({ alias: couponAlias, listValueCents });
+      valueCents = quote.finalValueCents;
+      discountPercent = quote.discountPercent;
+      couponId = quote.couponId;
+      normalizedCouponAlias = quote.alias;
+    }
+
+    const isTestPackage = isDisparosTestPackage(shipmentCount, listValueCents);
     const effectiveMin = isTestPackage ? valueCents : minCreditCents;
-    if (!Number.isFinite(valueCents) || valueCents < effectiveMin) {
+    if (valueCents < effectiveMin && !couponAlias) {
       throw new Error(
         `Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`,
       );
     }
-
-    if (
-      apiKind === "oficial" &&
-      shipmentCount > 0 &&
-      !isDisparosTestPackage(shipmentCount, valueCents) &&
-      !isDisparosOficialSalePackage(shipmentCount, valueCents)
-    ) {
-      throw new Error("Pacote de envios inválido para API Oficial.");
-    }
-
-    if (
-      apiKind === "alternativa" &&
-      shipmentCount > 0 &&
-      !isDisparosTestPackage(shipmentCount, valueCents) &&
-      !isDisparosAlternativaSalePackage(shipmentCount, valueCents)
-    ) {
-      throw new Error("Pacote de envios inválido para API Alternativa.");
+    if (valueCents < ASAAS_MIN_CHARGE_CENTS) {
+      throw new Error(
+        `O valor final deve ser de pelo menos R$ ${centsToCurrency(ASAAS_MIN_CHARGE_CENTS)
+          .toFixed(2)
+          .replace(".", ",")}.`,
+      );
     }
 
     return {
@@ -235,6 +313,10 @@ export class WabaBillingService {
       cpfCnpj,
       whatsapp,
       valueCents,
+      listValueCents,
+      discountPercent,
+      couponId,
+      couponAlias: normalizedCouponAlias,
       shipmentCount: shipmentCount > 0 ? shipmentCount : undefined,
     };
   }
@@ -259,12 +341,20 @@ export class WabaBillingService {
       cpfCnpj: validated.cpfCnpj,
       billingType: "PIX",
       valueCents: validated.valueCents,
+      listValueCents: validated.listValueCents,
+      discountPercent: validated.discountPercent,
+      couponAlias: validated.couponAlias,
+      couponId: validated.couponId,
       shipmentCount: validated.shipmentCount,
       status: "pending_payment",
       asaasExternalReference,
       createdAt: now,
       updatedAt: now,
     });
+
+    if (validated.couponId) {
+      this.couponService.registerRedemption(validated.couponId);
+    }
 
     const customer = await createAsaasCustomer({
       name: order.customerName,

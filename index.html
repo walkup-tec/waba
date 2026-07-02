@@ -7060,6 +7060,80 @@
         color: var(--text-secondary);
       }
 
+      .admin-assinantes-block {
+        margin-bottom: 28px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      }
+
+      .admin-assinantes-block:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+
+      .admin-assinantes-block-title {
+        margin: 0 0 12px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+
+      .admin-coupon-alias-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .admin-coupon-alias-row input {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .admin-coupon-validity-custom {
+        margin-top: 8px;
+      }
+
+      .admin-coupon-status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .admin-coupon-status-pill.is-active {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.14);
+        border: 1px solid rgba(34, 197, 94, 0.35);
+      }
+
+      .admin-coupon-status-pill.is-inactive {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.32);
+      }
+
+      .disparos-billing-coupon-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: end;
+      }
+
+      .disparos-billing-coupon-summary {
+        margin: 0;
+        font-size: 0.84rem;
+        color: #86efac;
+      }
+
+      .disparos-billing-coupon-summary.is-error {
+        color: #fca5a5;
+      }
+
       .admin-subscribers-table-wrap {
         overflow-x: auto;
         border: 1px solid rgba(148, 163, 184, 0.2);
@@ -17298,9 +17372,111 @@
             <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Admin · Assinantes</div>
-                <span class="muted">Clientes cadastrados, créditos contratados e campanhas.</span>
+                <span class="muted">Cadastre assinantes, cupons de desconto e acompanhe créditos e campanhas.</span>
               </div>
               <div class="aquecedor-section">
+                <div class="admin-assinantes-block">
+                  <h3 class="admin-assinantes-block-title">Novo assinante</h3>
+                  <form id="admin-subscribers-create-form" class="admin-users-form" autocomplete="off">
+                    <div class="admin-users-form-grid">
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-full-name">Nome</label>
+                        <input id="admin-subscriber-full-name" type="text" required minlength="2" placeholder="Nome completo" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-email">E-mail</label>
+                        <input id="admin-subscriber-email" type="email" required autocomplete="off" placeholder="cliente@empresa.com.br" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-password">Senha</label>
+                        <input id="admin-subscriber-password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-whatsapp">WhatsApp</label>
+                        <input id="admin-subscriber-whatsapp" type="tel" required placeholder="(11) 99999-9999" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-cpf">CPF ou CNPJ</label>
+                        <input id="admin-subscriber-cpf" type="text" required placeholder="Somente números" />
+                      </div>
+                    </div>
+                    <div class="admin-users-form-footer">
+                      <button id="admin-subscriber-create-btn" class="instance-action-btn btn-qrcode enabled" type="submit">
+                        Criar assinante
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="admin-assinantes-block">
+                  <h3 class="admin-assinantes-block-title">Cupons de desconto</h3>
+                  <p class="admin-users-menus-hint" style="margin-top: 0">
+                    Padrão do código: <code>WABA-[caractere especial][4 dígitos]</code> (ex.: <code>WABA-#4821</code>).
+                  </p>
+                  <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off">
+                    <div class="admin-users-form-grid">
+                      <div class="aquecedor-field">
+                        <label for="admin-coupon-alias">Código do cupom</label>
+                        <div class="admin-coupon-alias-row">
+                          <input id="admin-coupon-alias" type="text" placeholder="WABA-#1234" />
+                          <button id="admin-coupon-generate-alias-btn" class="instance-action-btn" type="button">
+                            Gerar
+                          </button>
+                        </div>
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-coupon-discount-percent">Desconto (%)</label>
+                        <input id="admin-coupon-discount-percent" type="number" min="1" max="100" step="1" required placeholder="Ex.: 15" />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-coupon-validity-mode">Validade</label>
+                        <select id="admin-coupon-validity-mode" required>
+                          <option value="12h">12 horas</option>
+                          <option value="24h" selected>24 horas</option>
+                          <option value="custom">Personalizada</option>
+                          <option value="lifetime">Vitalícia</option>
+                        </select>
+                      </div>
+                      <div id="admin-coupon-validity-custom-wrap" class="aquecedor-field admin-coupon-validity-custom" hidden>
+                        <label for="admin-coupon-valid-until">Válido até</label>
+                        <input id="admin-coupon-valid-until" type="datetime-local" />
+                      </div>
+                    </div>
+                    <div class="admin-users-form-footer">
+                      <button id="admin-coupon-create-btn" class="instance-action-btn btn-qrcode enabled" type="submit">
+                        Criar cupom
+                      </button>
+                    </div>
+                  </form>
+                  <div class="admin-subscribers-toolbar" style="margin-top: 16px">
+                    <span id="admin-coupons-summary" class="admin-subscribers-summary">Carregando cupons…</span>
+                    <button id="admin-coupons-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                      Atualizar cupons
+                    </button>
+                  </div>
+                  <div id="admin-coupons-table-wrap" class="admin-subscribers-table-wrap">
+                    <table class="admin-subscribers-table" aria-label="Lista de cupons">
+                      <thead>
+                        <tr>
+                          <th scope="col">Código</th>
+                          <th scope="col" class="admin-subscribers-num">Desconto</th>
+                          <th scope="col">Validade</th>
+                          <th scope="col" class="admin-subscribers-num">Usos</th>
+                          <th scope="col">Status</th>
+                          <th scope="col">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-coupons-tbody">
+                        <tr>
+                          <td colspan="6" class="muted">Carregando…</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="admin-assinantes-block">
+                  <h3 class="admin-assinantes-block-title">Assinantes cadastrados</h3>
                 <div class="admin-subscribers-toolbar">
                   <span id="admin-subscribers-summary" class="admin-subscribers-summary">Carregando assinantes…</span>
                   <button
@@ -17330,6 +17506,7 @@
                       </tr>
                     </tbody>
                   </table>
+                </div>
                 </div>
               </div>
             </section>
@@ -18784,6 +18961,21 @@
 
           <label class="register-label" for="disparos-billing-value">Valor dos créditos (PIX)</label>
           <input id="disparos-billing-value" class="register-input" type="text" readonly />
+
+          <label class="register-label" for="disparos-billing-coupon">Cupom de desconto</label>
+          <div class="disparos-billing-coupon-row">
+            <input
+              id="disparos-billing-coupon"
+              class="register-input"
+              type="text"
+              placeholder="WABA-#1234"
+              autocomplete="off"
+            />
+            <button id="disparos-billing-coupon-apply-btn" class="instance-action-btn enabled" type="button">
+              Aplicar
+            </button>
+          </div>
+          <p id="disparos-billing-coupon-summary" class="disparos-billing-coupon-summary" hidden></p>
         </div>
         <div class="register-actions">
           <button id="disparos-billing-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
@@ -21137,6 +21329,7 @@
       let disparosBillingSelectedKind = "oficial";
       let disparosBillingCheckoutInFlight = false;
       let disparosSelectedPackage = null;
+      let disparosAppliedCoupon = null;
       const ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
       const ALTERNATIVA_NUMBER_MAX_QTY = 20;
       const ALTERNATIVA_DISPATCH_RULES_FALLBACK = {
@@ -24530,6 +24723,248 @@
         }
       }
 
+      const WABA_COUPON_SPECIAL_CHARS = "#$%&*!@?";
+
+      function generateAdminCouponAlias() {
+        const char =
+          WABA_COUPON_SPECIAL_CHARS[Math.floor(Math.random() * WABA_COUPON_SPECIAL_CHARS.length)] ||
+          "#";
+        const digits = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+        return `WABA-${char}${digits}`;
+      }
+
+      function formatAdminCouponValidity(coupon) {
+        if (!coupon) return "—";
+        if (coupon.validityMode === "lifetime") return "Vitalícia";
+        if (coupon.validityMode === "12h") return "12 horas";
+        if (coupon.validityMode === "24h") return "24 horas";
+        if (coupon.validUntil) {
+          try {
+            return `Até ${new Date(coupon.validUntil).toLocaleString("pt-BR")}`;
+          } catch {
+            return "Personalizada";
+          }
+        }
+        return "Personalizada";
+      }
+
+      function renderAdminCouponsTable(items) {
+        const tbody = document.getElementById("admin-coupons-tbody");
+        const summary = document.getElementById("admin-coupons-summary");
+        const list = Array.isArray(items) ? items : [];
+        if (summary) {
+          summary.textContent = `${list.length} cupom(ns) cadastrado(s)`;
+        }
+        if (!tbody) return;
+        if (!list.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted">Nenhum cupom cadastrado.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list
+          .map((coupon) => {
+            const active = Boolean(coupon.active && coupon.validNow);
+            const statusClass = active ? "is-active" : "is-inactive";
+            const statusLabel = active ? "Ativo" : coupon.active ? "Expirado" : "Inativo";
+            const uses = `${Number(coupon.redemptionCount || 0)}${
+              coupon.maxRedemptions ? ` / ${coupon.maxRedemptions}` : ""
+            }`;
+            return `<tr>
+              <td><code>${escapeAdminHtml(coupon.alias || "")}</code></td>
+              <td class="admin-subscribers-num">${escapeAdminHtml(String(coupon.discountPercent || 0))}%</td>
+              <td>${escapeAdminHtml(formatAdminCouponValidity(coupon))}</td>
+              <td class="admin-subscribers-num">${escapeAdminHtml(uses)}</td>
+              <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(statusLabel)}</span></td>
+              <td>
+                ${
+                  coupon.active
+                    ? `<button type="button" class="instance-action-btn admin-coupon-deactivate-btn" data-coupon-id="${escapeAdminHtml(
+                        coupon.id
+                      )}">Desativar</button>`
+                    : '<span class="muted">—</span>'
+                }
+              </td>
+            </tr>`;
+          })
+          .join("");
+      }
+
+      async function loadAdminCoupons() {
+        const tbody = document.getElementById("admin-coupons-tbody");
+        const summary = document.getElementById("admin-coupons-summary");
+        if (!hasMasterAccess()) {
+          if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">Área restrita ao usuário master.</td></tr>';
+          }
+          if (summary) summary.textContent = "Acesso negado.";
+          return;
+        }
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="muted">Carregando…</td></tr>';
+        if (summary) summary.textContent = "Carregando cupons…";
+        try {
+          const response = await fetchWithTimeout("/admin/coupons", {}, 12000);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível carregar os cupons.");
+          }
+          renderAdminCouponsTable(payload.items);
+        } catch (error) {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
+              error?.message || "Falha ao carregar cupons."
+            )}</td></tr>`;
+          }
+          if (summary) summary.textContent = "Falha ao carregar.";
+          showToast(error?.message || "Falha ao carregar cupons.", "error");
+        }
+      }
+
+      async function createAdminCoupon(event) {
+        event?.preventDefault();
+        if (!hasMasterAccess()) {
+          showToast("Área restrita ao usuário master.", "warning");
+          return;
+        }
+        const alias = String(document.getElementById("admin-coupon-alias")?.value || "").trim();
+        const discountPercent = Number(document.getElementById("admin-coupon-discount-percent")?.value || 0);
+        const validityMode = String(document.getElementById("admin-coupon-validity-mode")?.value || "24h");
+        const validUntil = String(document.getElementById("admin-coupon-valid-until")?.value || "");
+        const submitBtn = document.getElementById("admin-coupon-create-btn");
+
+        if (!Number.isFinite(discountPercent) || discountPercent < 1 || discountPercent > 100) {
+          showToast("Informe um desconto entre 1% e 100%.", "warning");
+          return;
+        }
+        if (validityMode === "custom" && !validUntil) {
+          showToast("Informe a validade personalizada do cupom.", "warning");
+          return;
+        }
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Criando…";
+        }
+
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/coupons",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                alias: alias || undefined,
+                discountPercent,
+                validityMode,
+                validUntil: validityMode === "custom" ? new Date(validUntil).toISOString() : undefined,
+              }),
+            },
+            12000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível criar o cupom.");
+          }
+          showToast(`Cupom ${payload.coupon?.alias || ""} criado.`, "success");
+          const aliasInput = document.getElementById("admin-coupon-alias");
+          const discountInput = document.getElementById("admin-coupon-discount-percent");
+          const modeInput = document.getElementById("admin-coupon-validity-mode");
+          const untilInput = document.getElementById("admin-coupon-valid-until");
+          if (aliasInput) aliasInput.value = "";
+          if (discountInput) discountInput.value = "";
+          if (modeInput) modeInput.value = "24h";
+          if (untilInput) untilInput.value = "";
+          syncAdminCouponValidityUi();
+          await loadAdminCoupons();
+        } catch (error) {
+          showToast(error?.message || "Erro ao criar cupom.", "error");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Criar cupom";
+          }
+        }
+      }
+
+      async function deactivateAdminCoupon(couponId) {
+        if (!hasMasterAccess() || !couponId) return;
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/coupons/${encodeURIComponent(couponId)}/deactivate`,
+            { method: "PATCH" },
+            12000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível desativar o cupom.");
+          }
+          showToast("Cupom desativado.", "success");
+          await loadAdminCoupons();
+        } catch (error) {
+          showToast(error?.message || "Erro ao desativar cupom.", "error");
+        }
+      }
+
+      async function createAdminSubscriber(event) {
+        event?.preventDefault();
+        if (!hasMasterAccess()) {
+          showToast("Área restrita ao usuário master.", "warning");
+          return;
+        }
+        const fullName = String(document.getElementById("admin-subscriber-full-name")?.value || "").trim();
+        const email = String(document.getElementById("admin-subscriber-email")?.value || "").trim();
+        const password = String(document.getElementById("admin-subscriber-password")?.value || "");
+        const whatsapp = String(document.getElementById("admin-subscriber-whatsapp")?.value || "").trim();
+        const cpfCnpj = String(document.getElementById("admin-subscriber-cpf")?.value || "").trim();
+        const submitBtn = document.getElementById("admin-subscriber-create-btn");
+
+        if (fullName.length < 2 || !email || password.length < 6 || !whatsapp || !cpfCnpj) {
+          showToast("Preencha nome, e-mail, senha, WhatsApp e CPF/CNPJ.", "warning");
+          return;
+        }
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Criando…";
+        }
+
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/subscribers",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fullName, email, password, whatsapp, cpfCnpj }),
+            },
+            12000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível criar o assinante.");
+          }
+          showToast("Assinante criado com sucesso.", "success");
+          document.getElementById("admin-subscriber-full-name").value = "";
+          document.getElementById("admin-subscriber-email").value = "";
+          document.getElementById("admin-subscriber-password").value = "";
+          document.getElementById("admin-subscriber-whatsapp").value = "";
+          document.getElementById("admin-subscriber-cpf").value = "";
+          await loadAdminSubscribers();
+        } catch (error) {
+          showToast(error?.message || "Erro ao criar assinante.", "error");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Criar assinante";
+          }
+        }
+      }
+
+      function syncAdminCouponValidityUi() {
+        const mode = String(document.getElementById("admin-coupon-validity-mode")?.value || "");
+        const wrap = document.getElementById("admin-coupon-validity-custom-wrap");
+        if (!wrap) return;
+        const showCustom = mode === "custom";
+        wrap.hidden = !showCustom;
+      }
+
       let adminChamadosCacheOpen = [];
       let adminChamadosCacheClosed = [];
       let adminChamadosActiveBucket = "open";
@@ -26384,6 +26819,31 @@
       }
 
       function initAdminSubscribersUi() {
+        syncAdminCouponValidityUi();
+        document.getElementById("admin-subscribers-create-form")?.addEventListener("submit", (event) => {
+          void createAdminSubscriber(event);
+        });
+        document.getElementById("admin-coupons-create-form")?.addEventListener("submit", (event) => {
+          void createAdminCoupon(event);
+        });
+        document.getElementById("admin-coupon-validity-mode")?.addEventListener("change", () => {
+          syncAdminCouponValidityUi();
+        });
+        document.getElementById("admin-coupon-generate-alias-btn")?.addEventListener("click", () => {
+          const input = document.getElementById("admin-coupon-alias");
+          if (input) input.value = generateAdminCouponAlias();
+        });
+        document.getElementById("admin-coupons-refresh-btn")?.addEventListener("click", () => {
+          void loadAdminCoupons();
+        });
+        document.getElementById("admin-coupons-tbody")?.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const btn = target.closest(".admin-coupon-deactivate-btn");
+          if (!btn) return;
+          const couponId = btn.getAttribute("data-coupon-id") || "";
+          void deactivateAdminCoupon(couponId);
+        });
         document.getElementById("admin-subscribers-refresh-btn")?.addEventListener("click", () => {
           const btn = document.getElementById("admin-subscribers-refresh-btn");
           if (btn) {
@@ -30632,6 +31092,88 @@
         openDisparosOverlay("disparos-pricing-overlay");
       }
 
+      function resetDisparosBillingCoupon() {
+        disparosAppliedCoupon = null;
+        const input = document.getElementById("disparos-billing-coupon");
+        const summary = document.getElementById("disparos-billing-coupon-summary");
+        if (input) input.value = "";
+        if (summary) {
+          summary.hidden = true;
+          summary.textContent = "";
+          summary.classList.remove("is-error");
+        }
+      }
+
+      function formatDisparosBillingValueLabel() {
+        if (!disparosSelectedPackage) return "Selecione um pacote";
+        const listCents = disparosSelectedPackage.totalCents;
+        if (!disparosAppliedCoupon) {
+          return formatDisparosMoneyFromCents(listCents);
+        }
+        return `${formatDisparosMoneyFromCents(disparosAppliedCoupon.finalValueCents)} (de ${formatDisparosMoneyFromCents(
+          listCents
+        )} · -${disparosAppliedCoupon.discountPercent}%)`;
+      }
+
+      async function applyDisparosBillingCoupon() {
+        const alias = String(document.getElementById("disparos-billing-coupon")?.value || "").trim();
+        const summary = document.getElementById("disparos-billing-coupon-summary");
+        if (!disparosSelectedPackage) {
+          showToast("Selecione um pacote na tabela de preços.", "error", 4200);
+          return;
+        }
+        if (!alias) {
+          resetDisparosBillingCoupon();
+          syncDisparosBillingModalState(await loadDisparosBillingConfig().catch(() => ({})));
+          return;
+        }
+
+        const applyBtn = document.getElementById("disparos-billing-coupon-apply-btn");
+        if (applyBtn) {
+          applyBtn.disabled = true;
+          applyBtn.textContent = "Validando…";
+        }
+
+        try {
+          const response = await fetch("/billing/disparos/coupon/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({
+              alias,
+              apiKind: disparosBillingSelectedKind,
+              shipmentCount: disparosSelectedPackage.shipments,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Cupom inválido.");
+          }
+          disparosAppliedCoupon = payload.quote || null;
+          if (summary && disparosAppliedCoupon) {
+            summary.hidden = false;
+            summary.classList.remove("is-error");
+            summary.textContent = `Cupom ${disparosAppliedCoupon.alias} aplicado: ${disparosAppliedCoupon.discountPercent}% de desconto.`;
+          }
+          syncDisparosBillingModalState(await loadDisparosBillingConfig().catch(() => ({})));
+          showToast("Cupom aplicado com sucesso.", "success");
+        } catch (error) {
+          disparosAppliedCoupon = null;
+          if (summary) {
+            summary.hidden = false;
+            summary.classList.add("is-error");
+            summary.textContent = error?.message || "Não foi possível aplicar o cupom.";
+          }
+          syncDisparosBillingModalState(await loadDisparosBillingConfig().catch(() => ({})));
+          showToast(error?.message || "Cupom inválido.", "error", 4800);
+        } finally {
+          if (applyBtn) {
+            applyBtn.disabled = false;
+            applyBtn.textContent = "Aplicar";
+          }
+        }
+      }
+
       function syncDisparosBillingModalState(config) {
         const configured = Boolean(config?.paymentConfigured);
         const unconfiguredEl = document.getElementById("disparos-billing-unconfigured");
@@ -30646,7 +31188,7 @@
           }
         }
         if (valueInput && disparosSelectedPackage) {
-          valueInput.value = formatDisparosMoneyFromCents(disparosSelectedPackage.totalCents);
+          valueInput.value = formatDisparosBillingValueLabel();
         }
       }
 
@@ -30655,6 +31197,7 @@
           showToast("Selecione um pacote na tabela de preços.", "error", 4200);
           return;
         }
+        resetDisparosBillingCoupon();
         resetAlternativaNumbersCheckoutState();
 
         try {
@@ -30723,8 +31266,11 @@
               ownerEmail,
               cpfCnpj,
               whatsapp,
-              valueCents: disparosSelectedPackage.totalCents,
+              valueCents: disparosAppliedCoupon
+                ? disparosAppliedCoupon.finalValueCents
+                : disparosSelectedPackage.totalCents,
               shipmentCount: disparosSelectedPackage.shipments,
+              couponAlias: disparosAppliedCoupon?.alias || undefined,
             }),
           });
           const payload = await response.json().catch(() => ({}));
@@ -30894,6 +31440,17 @@
               return;
             }
             openDisparosOverlay("disparos-pricing-overlay");
+          });
+        document
+          .getElementById("disparos-billing-coupon-apply-btn")
+          ?.addEventListener("click", () => void applyDisparosBillingCoupon());
+        document
+          .getElementById("disparos-billing-coupon")
+          ?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void applyDisparosBillingCoupon();
+            }
           });
         document
           .getElementById("disparos-billing-submit-btn")
@@ -37192,6 +37749,7 @@
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
           void loadAdminSubscribers();
+          void loadAdminCoupons();
         } else if (nextTab === "admin-campanhas") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();

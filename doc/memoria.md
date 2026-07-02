@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-06-21
 
+**WABA — Admin Assinantes: criar assinantes + cupons de desconto:** master cadastra assinantes e cupons (12h/24h/custom/vitalícia, % sobre total); checkout PIX aceita cupom antes da cobrança; alias `WABA-[#$%&*!@?][0000-9999]`. Marker `DEPLOY-2026-06-21-admin-assinantes-cupons-desconto`. Ver `doc/LOG-2026-06-21__admin-assinantes-cupons-desconto.md`. Palavras-chave: `admin-assinantes`, `waba-coupons.json`, `couponAlias`, `disparos-billing-overlay`.
+
 **WABA — Diferenciais largura total (créditos):** barra Seguro/Performance/Flexível movida para fora do grid 2 colunas; ocupa largura total abaixo do board. Ver `doc/LOG-2026-06-21__diferenciais-largura-total-creditos.md`.
 
 **WABA — Remoção faixa teste 100 envios R$ 5,00:** retirada de `DISPAROS_PRICING_TIERS` (oficial + alternativa) e `DISPAROS_TEST_PACKAGES` no billing. Mantido pacote teste 100 envios R$ 30. Ver `doc/LOG-2026-06-21__remove-faixa-teste-100-envios-5-reais.md`.

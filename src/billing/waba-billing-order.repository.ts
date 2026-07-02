@@ -17,6 +17,10 @@ export type WabaBillingOrder = {
   billingType: "PIX";
   valueCents: number;
   shipmentCount?: number;
+  listValueCents?: number;
+  discountPercent?: number;
+  couponAlias?: string;
+  couponId?: string;
   status: WabaBillingOrderStatus;
   asaasCustomerId?: string;
   asaasPaymentId?: string;
