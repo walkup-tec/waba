@@ -15,6 +15,10 @@ Como usar:
 ## Última atualização
 2026-07-02
 
+**WABA — Tarifador API Alternativa (tabela venda 2026):** 7 faixas (1k–30k envios, R$ 0,13–0,20); card «De R$ 0,13 a R$ 0,20»; mínimo R$ 200; validação checkout backend. Ver `doc/LOG-2026-07-02__tarifador-api-alternativa-tabela-venda-2026.md`.
+
+**WABA — Tarifador API Oficial (tabela venda 2026):** 7 faixas (1k–30k envios, R$ 0,25–0,32); card «De R$ 0,25 a R$ 0,32»; mínimo R$ 320; validação checkout backend. Ver `doc/LOG-2026-07-02__tarifador-api-oficial-tabela-venda-2026.md`.
+
 **WABA — Validação CONFIRMAR sem «Sim, já enviei»:** removido prompt Sim/Não e botão nudge; detecção só via webhook + worker no backend; UI entra direto em `verify-receive`. Marker `DEPLOY-2026-07-02-validacao-confirmar-backend-only`. Ver `doc/LOG-2026-07-02__validacao-confirmar-backend-only-sem-sim.md`.
 
 **WABA — Evolution Redis / mensagens não indexadas:** pós 27/06 instâncias novas (`7943`, `final-6019`, `1321`) open com 0 msgs/0 chats; Redis Chatwoot removido ≠ Redis EVO; `walkup_evo-walkup-api-redis` desconectado (logs 30/06). Impacta CONFIRMAR, aquecedor, disparador. Ver `doc/LOG-2026-07-02__evo-redis-mensagens-nao-indexadas-fix.md`, script `scripts/probe-evo-message-indexing.cjs`.

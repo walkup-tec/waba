@@ -72,8 +72,40 @@ const DISPAROS_TEST_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: num
   { shipments: 100, valueCents: 3000 },
 ];
 
+/** Tabela de venda API Oficial (envios × valor total em centavos). */
+const DISPAROS_OFICIAL_SALE_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: number }> = [
+  { shipments: 1000, valueCents: 32000 },
+  { shipments: 3000, valueCents: 93000 },
+  { shipments: 5000, valueCents: 150000 },
+  { shipments: 8000, valueCents: 232000 },
+  { shipments: 10000, valueCents: 270000 },
+  { shipments: 20000, valueCents: 520000 },
+  { shipments: 30000, valueCents: 750000 },
+];
+
+/** Tabela de venda API Alternativa (envios × valor total em centavos). */
+const DISPAROS_ALTERNATIVA_SALE_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: number }> = [
+  { shipments: 1000, valueCents: 20000 },
+  { shipments: 3000, valueCents: 57000 },
+  { shipments: 5000, valueCents: 85000 },
+  { shipments: 8000, valueCents: 128000 },
+  { shipments: 10000, valueCents: 150000 },
+  { shipments: 20000, valueCents: 280000 },
+  { shipments: 30000, valueCents: 390000 },
+];
+
 const isDisparosTestPackage = (shipmentCount: number, valueCents: number): boolean =>
   DISPAROS_TEST_PACKAGES.some(
+    (pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents,
+  );
+
+const isDisparosOficialSalePackage = (shipmentCount: number, valueCents: number): boolean =>
+  DISPAROS_OFICIAL_SALE_PACKAGES.some(
+    (pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents,
+  );
+
+const isDisparosAlternativaSalePackage = (shipmentCount: number, valueCents: number): boolean =>
+  DISPAROS_ALTERNATIVA_SALE_PACKAGES.some(
     (pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents,
   );
 
@@ -177,6 +209,24 @@ export class WabaBillingService {
       throw new Error(
         `Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`,
       );
+    }
+
+    if (
+      apiKind === "oficial" &&
+      shipmentCount > 0 &&
+      !isDisparosTestPackage(shipmentCount, valueCents) &&
+      !isDisparosOficialSalePackage(shipmentCount, valueCents)
+    ) {
+      throw new Error("Pacote de envios inválido para API Oficial.");
+    }
+
+    if (
+      apiKind === "alternativa" &&
+      shipmentCount > 0 &&
+      !isDisparosTestPackage(shipmentCount, valueCents) &&
+      !isDisparosAlternativaSalePackage(shipmentCount, valueCents)
+    ) {
+      throw new Error("Pacote de envios inválido para API Alternativa.");
     }
 
     return {
