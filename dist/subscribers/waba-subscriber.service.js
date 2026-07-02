@@ -40,7 +40,8 @@ class WabaSubscriberService {
         const password = String(input.password ?? "");
         const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
         const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
-        const phone = (0, phone_1.formatBrazilPhoneDigits)(String(input.phone ?? ""));
+        const phoneRaw = String(input.phone ?? "").trim();
+        const phone = phoneRaw ? (0, phone_1.formatBrazilPhoneDigits)(phoneRaw) : whatsapp;
         if (!email.includes("@"))
             throw new Error("Informe um e-mail válido.");
         if (fullName.length < 2)

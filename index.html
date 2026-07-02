@@ -17393,11 +17393,11 @@
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-subscriber-whatsapp">WhatsApp</label>
-                        <input id="admin-subscriber-whatsapp" type="tel" required placeholder="(11) 99999-9999" />
+                        <input id="admin-subscriber-whatsapp" type="tel" required placeholder="(11) 99999-9999" inputmode="numeric" autocomplete="tel" />
                       </div>
                       <div class="aquecedor-field">
                         <label for="admin-subscriber-cpf">CPF ou CNPJ</label>
-                        <input id="admin-subscriber-cpf" type="text" required placeholder="Somente números" />
+                        <input id="admin-subscriber-cpf" type="text" required placeholder="000.000.000-00 ou 00.000.000/0000-00" inputmode="numeric" autocomplete="off" />
                       </div>
                     </div>
                     <div class="admin-users-form-footer">
@@ -24725,6 +24725,41 @@
 
       const WABA_COUPON_SPECIAL_CHARS = "#$%&*!@?";
 
+      function formatAdminCpfCnpjInput(raw) {
+        const digits = String(raw ?? "").replace(/\D/g, "").slice(0, 14);
+        if (!digits) return "";
+        if (digits.length <= 11) {
+          let out = digits.slice(0, 3);
+          if (digits.length > 3) out += `.${digits.slice(3, 6)}`;
+          if (digits.length > 6) out += `.${digits.slice(6, 9)}`;
+          if (digits.length > 9) out += `-${digits.slice(9, 11)}`;
+          return out;
+        }
+        let out = digits.slice(0, 2);
+        if (digits.length > 2) out += `.${digits.slice(2, 5)}`;
+        if (digits.length > 5) out += `.${digits.slice(5, 8)}`;
+        if (digits.length > 8) out += `/${digits.slice(8, 12)}`;
+        if (digits.length > 12) out += `-${digits.slice(12, 14)}`;
+        return out;
+      }
+
+      function bindAdminSubscriberMaskedInputs() {
+        const cpfInput = document.getElementById("admin-subscriber-cpf");
+        const whatsappInput = document.getElementById("admin-subscriber-whatsapp");
+        if (cpfInput && cpfInput.dataset.maskBound !== "1") {
+          cpfInput.dataset.maskBound = "1";
+          cpfInput.addEventListener("input", () => {
+            cpfInput.value = formatAdminCpfCnpjInput(cpfInput.value);
+          });
+        }
+        if (whatsappInput && whatsappInput.dataset.maskBound !== "1") {
+          whatsappInput.dataset.maskBound = "1";
+          whatsappInput.addEventListener("input", () => {
+            whatsappInput.value = formatWhatsappTarget(whatsappInput.value);
+          });
+        }
+      }
+
       function generateAdminCouponAlias() {
         const char =
           WABA_COUPON_SPECIAL_CHARS[Math.floor(Math.random() * WABA_COUPON_SPECIAL_CHARS.length)] ||
@@ -24912,8 +24947,8 @@
         const fullName = String(document.getElementById("admin-subscriber-full-name")?.value || "").trim();
         const email = String(document.getElementById("admin-subscriber-email")?.value || "").trim();
         const password = String(document.getElementById("admin-subscriber-password")?.value || "");
-        const whatsapp = String(document.getElementById("admin-subscriber-whatsapp")?.value || "").trim();
-        const cpfCnpj = String(document.getElementById("admin-subscriber-cpf")?.value || "").trim();
+        const whatsapp = String(document.getElementById("admin-subscriber-whatsapp")?.value || "").replace(/\D/g, "");
+        const cpfCnpj = String(document.getElementById("admin-subscriber-cpf")?.value || "").replace(/\D/g, "");
         const submitBtn = document.getElementById("admin-subscriber-create-btn");
 
         if (fullName.length < 2) {
@@ -24932,8 +24967,16 @@
           showToast("Informe o WhatsApp do assinante.", "warning");
           return;
         }
+        if (whatsapp.length !== 11 || whatsapp.charAt(2) !== "9") {
+          showToast("Informe um celular válido com DDD (ex.: (51) 99966-6841).", "warning");
+          return;
+        }
         if (!cpfCnpj) {
           showToast("Informe o CPF ou CNPJ do assinante.", "warning");
+          return;
+        }
+        if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+          showToast("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.", "warning");
           return;
         }
 
@@ -26836,6 +26879,7 @@
 
       function initAdminSubscribersUi() {
         syncAdminCouponValidityUi();
+        bindAdminSubscriberMaskedInputs();
         document.getElementById("admin-subscriber-create-btn")?.addEventListener("click", () => {
           void createAdminSubscriber({ preventDefault: () => {} });
         });
