@@ -18232,7 +18232,7 @@
               <div id="register-inbound-evo-connected" class="reg-inbound-evo-connected" hidden>
                 <span class="reg-evo-connected-icon" aria-hidden="true">✓</span>
                 <span id="register-inbound-evo-connected-text">
-                  WhatsApp conectado no sistema WABA - Drax. A validação CONFIRMAR é opcional — você pode concluir abaixo.
+                  WhatsApp conectado no sistema WABA - Drax. Envie a mensagem com o código único pelo outro WhatsApp.
                 </span>
               </div>
               <div id="register-inbound-waiting" class="reg-inbound-waiting" aria-live="polite">
@@ -38989,7 +38989,7 @@
         );
         setRegisterWizardStep3Mode("connection-ready");
         setRegisterInboundPhase("connection-ready");
-        setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+        setRegisterInboundActionButtons({ retry: false, skip: false, nudge: false });
       }
 
       async function startRegisterInboundOptionalValidation(instanceName) {
@@ -39127,11 +39127,11 @@
 
         if (phase === "prompt") {
           setRegisterInboundSentPromptVisible(true);
-          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+          setRegisterInboundActionButtons({ retry: false, skip: false, nudge: false });
         } else {
           setRegisterInboundSentPromptVisible(false);
           if (phase === "verify-receive" || phase === "verify-send" || phase === "complete") {
-            setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+            setRegisterInboundActionButtons({ retry: false, skip: false, nudge: false });
           }
         }
 
@@ -39312,7 +39312,7 @@
         const prompt = document.getElementById("register-inbound-sent-prompt");
         if (yesBtn) {
           yesBtn.disabled = busy;
-          yesBtn.textContent = busy ? "Buscando no sistema WABA - Drax…" : "Sim, já enviei";
+          yesBtn.textContent = busy ? "Registrado — aguardando detecção…" : "Sim, já enviei";
         }
         if (noBtn) noBtn.disabled = busy;
         if (prompt) prompt.classList.toggle("is-busy", busy);
@@ -39432,7 +39432,7 @@
         registerInboundAwaitingConfirmSince = 0;
         setRegisterInboundConfirmUiBusy(false);
         showToast(
-          "CONFIRMAR não localizado após 2 minutos. Confira o outro WhatsApp ou pule a validação.",
+          "Mensagem ainda não detectada após 2 minutos. Confira o código exato no outro WhatsApp.",
           "warning"
         );
         updateRegisterInboundRow(
@@ -39440,12 +39440,12 @@
           "register-inbound-receive-result",
           false,
           "register-inbound-receive-detail",
-          "CONFIRMAR não detectado a tempo. Envie novamente ou pule a validação."
+          "Mensagem não detectada a tempo. Envie novamente com o código exato exibido na tela."
         );
         setInboundCheckVisible("register-inbound-receive-row", true, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
         setRegisterInboundPhase("verify-receive", { force: true });
-        setRegisterInboundActionButtons({ retry: true, skip: true, nudge: false });
+        setRegisterInboundActionButtons({ retry: true, skip: false, nudge: false });
         return true;
       }
 
@@ -39457,11 +39457,11 @@
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
           },
-          60000
+          15000
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok && !data?.receiveTest) {
-          throw new Error(data?.error || "Falha ao consultar o sistema WABA - Drax.");
+          throw new Error(data?.error || "Falha ao registrar envio.");
         }
         applyRegisterInboundStatus(data, instanceName);
         return data;
@@ -39503,7 +39503,7 @@
         prompt.hidden = !visible;
         prompt.classList.remove("is-busy");
         if (visible) {
-          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+          setRegisterInboundActionButtons({ retry: false, skip: false, nudge: false });
         }
       }
 
@@ -39551,18 +39551,16 @@
 
         try {
           const data = await requestRegisterInboundConfirmScan(validationId, instanceName);
+          applyRegisterInboundStatus(data, instanceName);
           if (data?.receiveTest?.success === true) {
             markRegisterInboundReceiveConfirmed();
             setRegisterInboundPhase("verify-send", { force: true });
-            applyRegisterInboundStatus(data, instanceName);
             if (handleRegisterInboundTerminalStatus(data, instanceName)) return;
-            return;
+          } else {
+            enterRegisterInboundVerifyReceive(
+              "Envio registrado. O sistema busca sua mensagem automaticamente (webhook + consulta a cada 2s)…"
+            );
           }
-
-          enterRegisterInboundVerifyReceive(
-            data?.error ||
-              "CONFIRMAR ainda não localizado — continuamos buscando no sistema WABA - Drax."
-          );
         } catch (err) {
           const msg = humanizeRegisterInboundError(err);
           enterRegisterInboundVerifyReceive(msg);
@@ -39586,7 +39584,7 @@
           true,
           "Envie CONFIRMAR pelo outro WhatsApp. A pergunta voltará em alguns segundos."
         );
-        setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
+        setRegisterInboundActionButtons({ retry: false, skip: false, nudge: true });
         if (registerInboundSentPromptRetryTimer) {
           clearTimeout(registerInboundSentPromptRetryTimer);
         }
@@ -39661,7 +39659,7 @@
             "error",
             "Validação concluída com indício de restrição no envio."
           );
-          setRegisterInboundActionButtons({ retry: true, skip: true });
+          setRegisterInboundActionButtons({ retry: true, skip: false });
           return true;
         }
 
@@ -39674,28 +39672,12 @@
         }
 
         const name = String(instanceName || registerConnectedInstanceName || "").trim();
-        void (async () => {
-          const open = name ? await confirmRegisterInstanceOpenInEvo(name) : false;
-          if (open) {
-            const receiveDetail = String(status.receiveTest?.detail || "");
-            const timedOut = /tempo esgotado|recepção não confirmada|não testada/i.test(
-              receiveDetail
-            );
-            finishRegisterWizardConnectionOnly(
-              name,
-              timedOut
-                ? "WhatsApp conectado. CONFIRMAR não detectado a tempo — instância liberada (pode validar depois)."
-                : "WhatsApp conectado. Validação incompleta — instância liberada para uso."
-            );
-            return;
-          }
-          setRegisterConnectStatus(
-            "loading",
-            status.receiveTest?.detail ||
-              "Validação incompleta. Confira se enviou CONFIRMAR pelo outro WhatsApp."
-          );
-          setRegisterInboundActionButtons({ retry: true, skip: true });
-        })();
+        setRegisterConnectStatus(
+          "loading",
+          status.receiveTest?.detail ||
+            "Validação incompleta. Confira se enviou a mensagem com o código exato pelo outro WhatsApp."
+        );
+        setRegisterInboundActionButtons({ retry: true, skip: false });
         return true;
       }
 
@@ -39801,9 +39783,9 @@
             setInboundCheckVisible("register-inbound-receive-row", false, false);
             setInboundCheckVisible("register-inbound-send-row", false, false);
           }
-          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
+          setRegisterInboundActionButtons({ retry: false, skip: false, nudge: true });
         } else {
-          setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
+          setRegisterInboundActionButtons({ retry: false, skip: false, nudge: true });
           setInboundCheckVisible("register-inbound-receive-row", true, phase === "verify-send");
           updateRegisterInboundRow(
             "register-inbound-receive-row",
@@ -39844,7 +39826,7 @@
         const failed =
           status.finished === true &&
           (status.receiveTest?.success !== true || status.sendTest?.success !== true);
-        setRegisterInboundActionButtons({ retry: failed, skip: true });
+        setRegisterInboundActionButtons({ retry: failed, skip: false });
         setRegisterInboundPhase(phase);
       }
 
@@ -39852,7 +39834,7 @@
         clearRegisterInboundTimers();
         registerInboundValidationId = "";
         registerInboundStartInFlight = false;
-        await startRegisterInboundOptionalValidation(instanceName);
+        await startRegisterInboundValidation(instanceName);
       }
 
       function finishRegisterWizardSuccess(message) {
@@ -39920,7 +39902,7 @@
               true,
               "WhatsApp conectado no sistema WABA - Drax. Validando envio/recepção (CONFIRMAR)…"
             );
-            setRegisterInboundActionButtons({ retry: false, skip: true, nudge: true });
+            setRegisterInboundActionButtons({ retry: false, skip: false, nudge: true });
           }
           try {
             const listRes = await fetchWithTimeout("/instancias?refresh=1", {}, 25000);
@@ -39950,20 +39932,12 @@
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
             const errMsg = String(data?.error || "Não foi possível iniciar a validação.");
-            if (evoAlreadyOpen || (await confirmRegisterInstanceOpenInEvo(instanceName))) {
-              showRegisterInboundEvoConnectedBanner(
-                true,
-                "WhatsApp conectado no sistema WABA - Drax. Validação automática indisponível — concluindo integração."
-              );
-              scheduleRegisterInboundConnectionAdvance(instanceName);
-              return;
-            }
             setRegisterConnectStatus("error", errMsg);
             showToast(errMsg, "error");
             const receiveDetail = document.getElementById("register-inbound-receive-detail");
             if (receiveDetail) receiveDetail.textContent = errMsg;
             setInboundWaitingVisible(false);
-            setRegisterInboundActionButtons({ retry: true, skip: true });
+            setRegisterInboundActionButtons({ retry: true, skip: false });
             return;
           }
           validationId = String(data?.validationId || "").trim();
@@ -39973,22 +39947,16 @@
         } catch {
           const receiveDetail = document.getElementById("register-inbound-receive-detail");
           if (receiveDetail) receiveDetail.textContent = "Erro ao iniciar validação. Tente novamente.";
-          if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
-            showRegisterInboundEvoConnectedBanner(
-              true,
-              "WhatsApp conectado, mas a validação não iniciou. Concluindo integração em instantes…"
-            );
-            scheduleRegisterInboundConnectionAdvance(instanceName);
-          }
+          setRegisterConnectStatus("error", "Erro ao iniciar validação. Tente novamente.");
+          setRegisterInboundActionButtons({ retry: true, skip: false });
           return;
         } finally {
           registerInboundStartInFlight = false;
         }
 
         if (!validationId) {
-          if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
-            enterRegisterWizardStep3AfterConnection(instanceName);
-          }
+          setRegisterConnectStatus("error", "Validação não iniciou. Tente novamente.");
+          setRegisterInboundActionButtons({ retry: true, skip: false });
           return;
         }
 
@@ -40000,18 +39968,11 @@
           try {
             if (Date.now() - validationStartedAt > 360000) {
               clearRegisterInboundTimers();
-              if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
-                finishRegisterWizardConnectionOnly(
-                  instanceName,
-                  "WhatsApp conectado. Validação CONFIRMAR expirou — instância liberada para uso."
-                );
-                return;
-              }
               setRegisterConnectStatus(
                 "loading",
-                "Validação expirou. Envie CONFIRMAR pelo outro WhatsApp ou conclua sem validar."
+                "Validação expirou. Envie a mensagem com o código exato pelo outro WhatsApp e tente novamente."
               );
-              setRegisterInboundActionButtons({ retry: true, skip: true });
+              setRegisterInboundActionButtons({ retry: true, skip: false });
               return;
             }
 
@@ -40040,9 +40001,6 @@
                   receiveDetail.textContent =
                     "Perdemos contato com a sessão de validação. Reconectando…";
                 }
-                if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
-                  scheduleRegisterInboundConnectionAdvance(instanceName);
-                }
               }
               return;
             }
@@ -40058,24 +40016,6 @@
             ) {
               markRegisterInboundReceiveConfirmed();
               setRegisterInboundPhase("verify-send", { force: true });
-            }
-
-            if (
-              registerInboundUserAwaitingConfirm &&
-              !registerInboundConfirmInFlight &&
-              registerInboundPollTick % 10 === 0 &&
-              status?.receiveTest?.success !== true
-            ) {
-              void requestRegisterInboundConfirmScan(validationId, instanceName)
-                .then((data) => {
-                  if (data?.receiveTest?.success === true) {
-                    markRegisterInboundReceiveConfirmed();
-                    handleRegisterInboundTerminalStatus(data, instanceName);
-                  }
-                })
-                .catch(() => {
-                  /* poll continua; detalhe amigável via applyRegisterInboundStatus */
-                });
             }
           } catch {
             registerInboundPollFailCount += 1;
@@ -40420,7 +40360,7 @@
             rememberRegisterConnectedNumber(payload?.instanceNumber || "");
             setRegisterConnectStatus("success", "WhatsApp conectado no sistema WABA - Drax.");
             beginRegisterWizardHide(instanceName);
-            enterRegisterWizardStep3AfterConnection(instanceName);
+            void startRegisterInboundValidation(instanceName);
           } catch {
             // silencioso para não poluir UX durante polling
           }

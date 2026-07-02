@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-01
 
+**WABA — Validação CONFIRMAR worker + webhook + estados + token:** worker 2s paralelo ao webhook; `confirmar-envio` só muda estado; keyword `CONFIRMAR WABA-XXXXXX`; bypass inbox vazio removido; validação obrigatória após QR. Marker `DEPLOY-2026-07-01-validacao-worker-webhook-estados`. Ver `doc/LOG-2026-07-01__validacao-worker-webhook-estados-token.md`.
+
 **WABA — Validação 2 níveis (A=conexão, B=CONFIRMAR opcional):** passo 3 após QR mostra «Concluir integração»; CONFIRMAR só se usuário escolher. Marker `DEPLOY-2026-07-01-validacao-nivel-a-conexao-opcional-confirmar`. Ver `doc/LOG-2026-07-01__validacao-nivel-a-conexao-confirmar-opcional.md`.
 
 **WABA — Validação CONFIRMAR pull-only (sem webhook na recepção):** removido `ensureInstanceWebhook` e polling automático de recepção; só pull após «Sim, já enviei» (`confirmar-envio`); webhook validação no-op. Marker `DEPLOY-2026-07-01-validacao-confirmar-pull-only-sem-webhook`. Ver `doc/LOG-2026-07-01__validacao-confirmar-pull-only-sem-webhook.md`.
