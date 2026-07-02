@@ -8,6 +8,7 @@ import { WabaAdminDashboardService } from "./waba-admin-dashboard.service";
 import { WabaAdminFinanceiroService } from "./waba-admin-financeiro.service";
 import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminSubscribersCreateService } from "./waba-admin-subscribers-create.service";
+import { WabaAdminSubscriberPurgeService } from "./waba-admin-subscriber-purge.service";
 import { WabaAdminSubscriberPromoteService } from "./waba-admin-subscriber-promote.service";
 import { WabaAdminMasterPromoteService } from "./waba-admin-master-promote.service";
 import { WabaAdminSupportService } from "./waba-admin-support.service";
@@ -28,6 +29,7 @@ const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
 const adminSubscribersService = new WabaAdminSubscribersService();
 const adminSubscribersCreateService = new WabaAdminSubscribersCreateService();
+const adminSubscriberPurgeService = new WabaAdminSubscriberPurgeService();
 const couponService = new WabaCouponService();
 const adminSubscriberPromoteService = new WabaAdminSubscriberPromoteService();
 const adminMasterPromoteService = new WabaAdminMasterPromoteService();
@@ -121,6 +123,19 @@ export const registerWabaAdminRoutes = (app: Express) => {
       return res.status(200).json({ ok: true, ...detail });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível atualizar o assinante.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.delete("/admin/subscribers/by-email/:email", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const email = decodeURIComponent(String(req.params.email ?? "").trim());
+      const summary = adminSubscriberPurgeService.purgeByEmail(email);
+      return res.status(200).json({ ok: true, ...summary });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível excluir o assinante.";
       const status = message.includes("não encontrado") ? 404 : 400;
       return res.status(status).json({ error: message });
     }

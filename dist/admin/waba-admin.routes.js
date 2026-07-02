@@ -13,6 +13,7 @@ const waba_admin_dashboard_service_1 = require("./waba-admin-dashboard.service")
 const waba_admin_financeiro_service_1 = require("./waba-admin-financeiro.service");
 const waba_admin_subscribers_service_1 = require("./waba-admin-subscribers.service");
 const waba_admin_subscribers_create_service_1 = require("./waba-admin-subscribers-create.service");
+const waba_admin_subscriber_purge_service_1 = require("./waba-admin-subscriber-purge.service");
 const waba_admin_subscriber_promote_service_1 = require("./waba-admin-subscriber-promote.service");
 const waba_admin_master_promote_service_1 = require("./waba-admin-master-promote.service");
 const waba_admin_support_service_1 = require("./waba-admin-support.service");
@@ -27,6 +28,7 @@ const waba_coupon_service_1 = require("../billing/waba-coupon.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
 const adminSubscribersCreateService = new waba_admin_subscribers_create_service_1.WabaAdminSubscribersCreateService();
+const adminSubscriberPurgeService = new waba_admin_subscriber_purge_service_1.WabaAdminSubscriberPurgeService();
 const couponService = new waba_coupon_service_1.WabaCouponService();
 const adminSubscriberPromoteService = new waba_admin_subscriber_promote_service_1.WabaAdminSubscriberPromoteService();
 const adminMasterPromoteService = new waba_admin_master_promote_service_1.WabaAdminMasterPromoteService();
@@ -120,6 +122,20 @@ const registerWabaAdminRoutes = (app) => {
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Não foi possível atualizar o assinante.";
+            const status = message.includes("não encontrado") ? 404 : 400;
+            return res.status(status).json({ error: message });
+        }
+    });
+    app.delete("/admin/subscribers/by-email/:email", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const email = decodeURIComponent(String(req.params.email ?? "").trim());
+            const summary = adminSubscriberPurgeService.purgeByEmail(email);
+            return res.status(200).json({ ok: true, ...summary });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível excluir o assinante.";
             const status = message.includes("não encontrado") ? 404 : 400;
             return res.status(status).json({ error: message });
         }
