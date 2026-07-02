@@ -7216,6 +7216,11 @@
         background: rgba(15, 23, 42, 0.55);
       }
 
+      .admin-subscribers-table tbody tr.admin-subscribers-row-new {
+        background: rgba(34, 197, 94, 0.12);
+        outline: 1px solid rgba(34, 197, 94, 0.35);
+      }
+
       .admin-subscribers-name {
         font-weight: 650;
         color: #f8fafc;
@@ -24719,7 +24724,7 @@
             )}</td></tr>`;
           }
           if (summary) summary.textContent = "Falha ao carregar.";
-          showToast(error?.message || "Falha ao carregar assinantes.", "error");
+          showToast(resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes."), "error", 4800);
         }
       }
 
@@ -24746,17 +24751,112 @@
       function bindAdminSubscriberMaskedInputs() {
         const cpfInput = document.getElementById("admin-subscriber-cpf");
         const whatsappInput = document.getElementById("admin-subscriber-whatsapp");
+        const applyCpfMask = () => {
+          if (!cpfInput) return;
+          cpfInput.value = formatAdminCpfCnpjInput(cpfInput.value);
+        };
+        const applyWhatsappMask = () => {
+          if (!whatsappInput) return;
+          whatsappInput.value = formatWhatsappTarget(whatsappInput.value);
+        };
         if (cpfInput && cpfInput.dataset.maskBound !== "1") {
           cpfInput.dataset.maskBound = "1";
-          cpfInput.addEventListener("input", () => {
-            cpfInput.value = formatAdminCpfCnpjInput(cpfInput.value);
+          cpfInput.addEventListener("input", applyCpfMask);
+          cpfInput.addEventListener("blur", applyCpfMask);
+          cpfInput.addEventListener("paste", () => {
+            window.setTimeout(applyCpfMask, 0);
           });
         }
         if (whatsappInput && whatsappInput.dataset.maskBound !== "1") {
           whatsappInput.dataset.maskBound = "1";
-          whatsappInput.addEventListener("input", () => {
-            whatsappInput.value = formatWhatsappTarget(whatsappInput.value);
+          whatsappInput.addEventListener("input", applyWhatsappMask);
+          whatsappInput.addEventListener("blur", applyWhatsappMask);
+          whatsappInput.addEventListener("paste", () => {
+            window.setTimeout(applyWhatsappMask, 0);
           });
+        }
+      }
+
+      function resolveAdminSubscriberFetchError(error, fallbackMessage) {
+        const raw = String(error?.message || "").trim();
+        if (raw === "timeout") {
+          return "Servidor demorou para responder. Verifique se o Node está ativo após o deploy.";
+        }
+        if (!raw || /failed to fetch|networkerror|load failed|fetch failed|econnreset|socket hang up|err_connection/i.test(raw)) {
+          return "Sem conexão com o servidor. Aguarde o deploy ou reinicie o serviço Node no host.";
+        }
+        return raw || fallbackMessage;
+      }
+
+      function scrollAdminSubscribersListIntoView() {
+        document.getElementById("admin-subscribers-table-wrap")?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }
+
+      function upsertAdminSubscriberListRow(subscriber, cpfCnpjDigits = "") {
+        if (!subscriber) return;
+        const tbody = document.getElementById("admin-subscribers-tbody");
+        const summary = document.getElementById("admin-subscribers-summary");
+        if (!tbody) return;
+
+        const item = {
+          fullName: subscriber.fullName || "—",
+          email: subscriber.email || "",
+          cpfCnpjFormatted: formatAdminCpfCnpjInput(cpfCnpjDigits || subscriber.cpfCnpj || ""),
+          createdAtLabel: subscriber.createdAt
+            ? new Date(subscriber.createdAt).toLocaleString("pt-BR")
+            : new Date().toLocaleString("pt-BR"),
+          creditsValueLabel: formatDisparosMoneyFromCents(0),
+          contractedShipments: 0,
+          campaignsAwaiting: 0,
+          campaignsCompleted: 0,
+        };
+
+        const emptyRow = tbody.querySelector("td[colspan]");
+        if (emptyRow) {
+          tbody.innerHTML = "";
+        } else {
+          const existingRows = Array.from(tbody.querySelectorAll("tr"));
+          for (const row of existingRows) {
+            const emailEl = row.querySelector(".admin-subscribers-email");
+            if (emailEl && String(emailEl.textContent || "").trim().toLowerCase() === item.email.toLowerCase()) {
+              row.remove();
+            }
+          }
+        }
+
+        const name = escapeAdminHtml(item.fullName);
+        const email = escapeAdminHtml(item.email);
+        const cpf = escapeAdminHtml(item.cpfCnpjFormatted || "—");
+        const createdAt = escapeAdminHtml(item.createdAtLabel);
+        const credits = escapeAdminHtml(item.creditsValueLabel);
+        const disparos = escapeAdminHtml(formatDisparosQty(0));
+        const aguardando = escapeAdminHtml(formatDisparosQty(0));
+        const finalizados = escapeAdminHtml(formatDisparosQty(0));
+
+        const row = document.createElement("tr");
+        row.className = "admin-subscribers-row-new";
+        row.innerHTML = `
+          <td>
+            <span class="admin-subscribers-name">${name}</span>
+            ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
+          </td>
+          <td>${cpf}</td>
+          <td>${createdAt}</td>
+          <td class="admin-subscribers-num">${credits}</td>
+          <td class="admin-subscribers-num">${disparos}</td>
+          <td class="admin-subscribers-num">${aguardando}</td>
+          <td class="admin-subscribers-num">${finalizados}</td>
+        `;
+        tbody.prepend(row);
+        window.setTimeout(() => row.classList.remove("admin-subscribers-row-new"), 2400);
+
+        if (summary) {
+          const count = tbody.querySelectorAll("tr").length;
+          summary.textContent =
+            count === 1 ? "1 assinante cadastrado" : `${count.toLocaleString("pt-BR")} assinantes cadastrados`;
         }
       }
 
@@ -24990,8 +25090,9 @@
             "/admin/subscribers",
             {
               method: "POST",
+              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fullName, email, password, whatsapp, cpfCnpj }),
+              body: JSON.stringify({ fullName, email, password, whatsapp, phone: whatsapp, cpfCnpj }),
             },
             12000
           );
@@ -25005,9 +25106,15 @@
           document.getElementById("admin-subscriber-password").value = "";
           document.getElementById("admin-subscriber-whatsapp").value = "";
           document.getElementById("admin-subscriber-cpf").value = "";
-          await loadAdminSubscribers();
+          upsertAdminSubscriberListRow(payload.subscriber, cpfCnpj);
+          scrollAdminSubscribersListIntoView();
+          try {
+            await loadAdminSubscribers();
+          } catch {
+            /* lista parcial já exibida acima */
+          }
         } catch (error) {
-          showToast(error?.message || "Erro ao criar assinante.", "error");
+          showToast(resolveAdminSubscriberFetchError(error, "Erro ao criar assinante."), "error", 5200);
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
@@ -37950,7 +38057,7 @@
             reject(new Error("timeout"));
           }, timeoutMs);
 
-          fetch(url, options)
+          fetch(url, { credentials: "same-origin", ...options })
             .then(async (res) => {
               clearTimeout(timer);
               const path = String(url || "");

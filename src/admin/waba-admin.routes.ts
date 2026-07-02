@@ -82,8 +82,14 @@ export const registerWabaAdminRoutes = (app: Express) => {
 
   app.get("/admin/subscribers", (req, res) => {
     if (!rejectNonMaster(req, res)) return;
-    const items = adminSubscribersService.listSubscribers();
-    return res.status(200).json({ items });
+    try {
+      const items = adminSubscribersService.listSubscribers();
+      return res.status(200).json({ items });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar os assinantes.",
+      });
+    }
   });
 
   app.post("/admin/subscribers", (req, res) => {
@@ -91,12 +97,13 @@ export const registerWabaAdminRoutes = (app: Express) => {
     if (!auth) return;
     try {
       const body = req.body as Record<string, unknown>;
+      const whatsapp = String(body.whatsapp ?? "");
       const subscriber = adminSubscribersCreateService.createSubscriber({
         email: String(body.email ?? ""),
         password: String(body.password ?? ""),
         fullName: String(body.fullName ?? body.name ?? ""),
-        whatsapp: String(body.whatsapp ?? ""),
-        phone: String(body.phone ?? ""),
+        whatsapp,
+        phone: String(body.phone ?? whatsapp),
         cpfCnpj: String(body.cpfCnpj ?? ""),
       });
       return res.status(201).json({ ok: true, subscriber });
