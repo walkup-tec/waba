@@ -11165,6 +11165,45 @@
         font-size: 13px;
         color: #cbd5e1;
       }
+      .disparos-pricing-custom-wrap {
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(15, 23, 42, 0.45);
+      }
+      .disparos-pricing-custom-wrap label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 8px;
+      }
+      .disparos-pricing-custom-wrap input {
+        width: 100%;
+        max-width: 220px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 14px;
+      }
+      .disparos-pricing-custom-hint,
+      .disparos-pricing-custom-error {
+        margin: 8px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .disparos-pricing-custom-hint {
+        color: #94a3b8;
+      }
+      .disparos-pricing-custom-error {
+        color: #f87171;
+      }
+      .disparos-pricing-table tr.disparos-pricing-custom-row td:nth-child(2) {
+        font-weight: 600;
+      }
       .disparos-pricing-total-box strong {
         font-size: 20px;
         color: #34d399;
@@ -19117,6 +19156,20 @@
             <tbody id="disparos-pricing-tbody"></tbody>
           </table>
         </div>
+        <div id="disparos-pricing-custom-wrap" class="disparos-pricing-custom-wrap" hidden>
+          <label for="disparos-pricing-custom-qty">Quantidade de envios</label>
+          <input
+            id="disparos-pricing-custom-qty"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            step="1"
+            placeholder="Ex.: 35000"
+            autocomplete="off"
+          />
+          <p id="disparos-pricing-custom-hint" class="disparos-pricing-custom-hint"></p>
+          <p id="disparos-pricing-custom-error" class="disparos-pricing-custom-error" hidden></p>
+        </div>
         <div class="disparos-pricing-total-box">
           <span>Total a pagar</span>
           <strong id="disparos-pricing-total-value">Selecione um pacote</strong>
@@ -22666,6 +22719,146 @@
         return Number(value || 0)
           .toFixed(2)
           .replace(".", ",");
+      }
+
+      function formatDisparosUnitPrice(value) {
+        return `R$ ${formatDisparosMoneyDecimal(value)}`;
+      }
+
+      function getDisparosPricingLastTier(apiKind) {
+        const tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
+        return tiers.reduce(
+          (max, tier) => (tier.shipments > (max?.shipments ?? 0) ? tier : max),
+          null
+        );
+      }
+
+      function buildDisparosCustomTier(apiKind, shipments) {
+        const lastTier = getDisparosPricingLastTier(apiKind);
+        const qty = Math.floor(Number(shipments) || 0);
+        if (!lastTier || qty <= lastTier.shipments) return null;
+        const totalCents = Math.round(qty * lastTier.pricePerSend * 100);
+        return {
+          shipments: qty,
+          pricePerSend: lastTier.pricePerSend,
+          totalCents,
+          custom: true,
+        };
+      }
+
+      function resetDisparosPricingCustomUi() {
+        const customWrap = document.getElementById("disparos-pricing-custom-wrap");
+        const customInput = document.getElementById("disparos-pricing-custom-qty");
+        const customHint = document.getElementById("disparos-pricing-custom-hint");
+        const customError = document.getElementById("disparos-pricing-custom-error");
+        const customRow = document.getElementById("disparos-pricing-custom-row");
+        const customCheck = document.getElementById("disparos-pricing-custom-check");
+        if (customWrap) customWrap.hidden = true;
+        if (customInput) customInput.value = "";
+        if (customHint) customHint.textContent = "";
+        if (customError) {
+          customError.hidden = true;
+          customError.textContent = "";
+        }
+        if (customRow) customRow.classList.remove("is-selected");
+        if (customCheck) customCheck.checked = false;
+      }
+
+      function syncDisparosPricingContinueState() {
+        const continueBtn = document.getElementById("disparos-pricing-continue-btn");
+        if (continueBtn) {
+          continueBtn.disabled = !disparosSelectedPackage;
+        }
+      }
+
+      function updateDisparosPricingTotalLabel() {
+        const totalEl = document.getElementById("disparos-pricing-total-value");
+        if (!totalEl) return;
+        if (!disparosSelectedPackage) {
+          totalEl.textContent = "Selecione um pacote";
+          return;
+        }
+        totalEl.textContent = formatDisparosMoneyFromCents(disparosSelectedPackage.totalCents);
+      }
+
+      function refreshDisparosCustomPricingSelection() {
+        const apiKind = disparosBillingSelectedKind;
+        const lastTier = getDisparosPricingLastTier(apiKind);
+        const customInput = document.getElementById("disparos-pricing-custom-qty");
+        const customHint = document.getElementById("disparos-pricing-custom-hint");
+        const customError = document.getElementById("disparos-pricing-custom-error");
+        const minExclusive = lastTier?.shipments ?? 0;
+
+        if (customHint && minExclusive > 0) {
+          customHint.textContent = `Informe uma quantidade maior que ${formatDisparosQty(minExclusive)} envios. Valor por envio: ${formatDisparosUnitPrice(lastTier.pricePerSend)}.`;
+        }
+
+        const tier = buildDisparosCustomTier(apiKind, customInput?.value);
+        if (!tier) {
+          disparosSelectedPackage = null;
+          if (customError) {
+            const raw = String(customInput?.value || "").trim();
+            if (raw) {
+              customError.hidden = false;
+              customError.textContent = `A quantidade deve ser maior que ${formatDisparosQty(minExclusive)} envios.`;
+            } else {
+              customError.hidden = true;
+              customError.textContent = "";
+            }
+          }
+          updateDisparosPricingTotalLabel();
+          syncDisparosPricingContinueState();
+          return;
+        }
+
+        if (customError) {
+          customError.hidden = true;
+          customError.textContent = "";
+        }
+        disparosSelectedPackage = tier;
+        updateDisparosPricingTotalLabel();
+        syncDisparosPricingContinueState();
+      }
+
+      function selectDisparosPricingTier(tier, rowEl) {
+        resetDisparosPricingCustomUi();
+        disparosSelectedPackage = tier;
+        document.querySelectorAll("#disparos-pricing-tbody tr[data-tier-row]").forEach((row) => {
+          row.classList.toggle("is-selected", row === rowEl);
+          const input = row.querySelector(".disparos-pricing-check");
+          if (input) input.checked = row === rowEl;
+        });
+        updateDisparosPricingTotalLabel();
+        syncDisparosPricingContinueState();
+      }
+
+      function selectDisparosPricingCustomMode() {
+        disparosSelectedPackage = null;
+        document.querySelectorAll("#disparos-pricing-tbody tr[data-tier-row]").forEach((row) => {
+          row.classList.remove("is-selected");
+          const input = row.querySelector(".disparos-pricing-check");
+          if (input) input.checked = false;
+        });
+        const customWrap = document.getElementById("disparos-pricing-custom-wrap");
+        const customRow = document.getElementById("disparos-pricing-custom-row");
+        const customCheck = document.getElementById("disparos-pricing-custom-check");
+        if (customWrap) customWrap.hidden = false;
+        if (customRow) customRow.classList.add("is-selected");
+        if (customCheck) customCheck.checked = true;
+        refreshDisparosCustomPricingSelection();
+        document.getElementById("disparos-pricing-custom-qty")?.focus();
+      }
+
+      function clearDisparosPricingSelection() {
+        disparosSelectedPackage = null;
+        resetDisparosPricingCustomUi();
+        document.querySelectorAll("#disparos-pricing-tbody tr[data-tier-row]").forEach((row) => {
+          row.classList.remove("is-selected");
+          const input = row.querySelector(".disparos-pricing-check");
+          if (input) input.checked = false;
+        });
+        updateDisparosPricingTotalLabel();
+        syncDisparosPricingContinueState();
       }
 
       function formatDisparosMoneyFromCents(cents) {
@@ -32111,18 +32304,7 @@
       }
 
       function updateDisparosPricingSelection(tier, rowEl) {
-        disparosSelectedPackage = tier;
-        document.querySelectorAll("#disparos-pricing-tbody tr").forEach((row) => {
-          row.classList.toggle("is-selected", row === rowEl);
-          const input = row.querySelector(".disparos-pricing-check");
-          if (input) input.checked = row === rowEl;
-        });
-        const totalEl = document.getElementById("disparos-pricing-total-value");
-        const continueBtn = document.getElementById("disparos-pricing-continue-btn");
-        if (totalEl && tier) {
-          totalEl.textContent = formatDisparosMoneyFromCents(tier.totalCents);
-        }
-        if (continueBtn) continueBtn.disabled = !tier;
+        selectDisparosPricingTier(tier, rowEl);
       }
 
       function renderDisparosPricingTable(apiKind) {
@@ -32131,13 +32313,13 @@
         const tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
         tbody.innerHTML = "";
         disparosSelectedPackage = null;
-        const totalEl = document.getElementById("disparos-pricing-total-value");
-        const continueBtn = document.getElementById("disparos-pricing-continue-btn");
-        if (totalEl) totalEl.textContent = "Selecione um pacote";
-        if (continueBtn) continueBtn.disabled = true;
+        resetDisparosPricingCustomUi();
+        updateDisparosPricingTotalLabel();
+        syncDisparosPricingContinueState();
 
         tiers.forEach((tier) => {
           const row = document.createElement("tr");
+          row.dataset.tierRow = "1";
           const checkCell = document.createElement("td");
           const qtyCell = document.createElement("td");
           const unitCell = document.createElement("td");
@@ -32148,23 +32330,65 @@
           checkbox.setAttribute("aria-label", `Selecionar ${formatDisparosQty(tier.shipments)} envios`);
           checkbox.addEventListener("change", () => {
             if (checkbox.checked) {
-              updateDisparosPricingSelection(tier, row);
+              selectDisparosPricingTier(tier, row);
             } else if (disparosSelectedPackage === tier) {
-              updateDisparosPricingSelection(null, null);
+              clearDisparosPricingSelection();
             }
           });
           row.addEventListener("click", (event) => {
             if (event.target === checkbox) return;
             checkbox.checked = true;
-            updateDisparosPricingSelection(tier, row);
+            selectDisparosPricingTier(tier, row);
           });
           checkCell.appendChild(checkbox);
           qtyCell.textContent = formatDisparosQty(tier.shipments);
-          unitCell.textContent = formatDisparosMoneyDecimal(tier.pricePerSend);
+          unitCell.textContent = formatDisparosUnitPrice(tier.pricePerSend);
           totalCell.textContent = formatDisparosMoneyFromCents(tier.totalCents);
           row.append(checkCell, qtyCell, unitCell, totalCell);
           tbody.appendChild(row);
         });
+
+        const customRow = document.createElement("tr");
+        customRow.id = "disparos-pricing-custom-row";
+        customRow.className = "disparos-pricing-custom-row";
+        customRow.dataset.customRow = "1";
+        const customCheckCell = document.createElement("td");
+        const customLabelCell = document.createElement("td");
+        const customUnitCell = document.createElement("td");
+        const customTotalCell = document.createElement("td");
+        const customCheckbox = document.createElement("input");
+        customCheckbox.type = "checkbox";
+        customCheckbox.id = "disparos-pricing-custom-check";
+        customCheckbox.className = "disparos-pricing-check disparos-pricing-check-custom";
+        customCheckbox.setAttribute("aria-label", "Nenhum desses pacotes");
+        customCheckbox.addEventListener("change", () => {
+          if (customCheckbox.checked) {
+            selectDisparosPricingCustomMode();
+          } else {
+            clearDisparosPricingSelection();
+          }
+        });
+        customRow.addEventListener("click", (event) => {
+          if (event.target === customCheckbox) return;
+          customCheckbox.checked = true;
+          selectDisparosPricingCustomMode();
+        });
+        customCheckCell.appendChild(customCheckbox);
+        customLabelCell.textContent = "Nenhum desses";
+        customUnitCell.textContent = "—";
+        customTotalCell.textContent = "—";
+        customRow.append(customCheckCell, customLabelCell, customUnitCell, customTotalCell);
+        tbody.appendChild(customRow);
+
+        const customInput = document.getElementById("disparos-pricing-custom-qty");
+        if (customInput && !customInput.dataset.bound) {
+          customInput.dataset.bound = "1";
+          customInput.addEventListener("input", () => {
+            if (document.getElementById("disparos-pricing-custom-check")?.checked) {
+              refreshDisparosCustomPricingSelection();
+            }
+          });
+        }
       }
 
       function openDisparosPricingModal(apiKind) {

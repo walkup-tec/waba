@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-02
 
+**WABA — Tarifador: Nenhum desses + qty custom:** opção na tabela Oficial/Alternativa; input para qty > última faixa; total = qty × último valor/envio; R$ na coluna unitária. Marker `DEPLOY-2026-07-02-tarifador-nenhum-desses-custom`. Ver `doc/LOG-2026-07-02__tarifador-nenhum-desses-quantidade-custom.md`. Palavras-chave: `Nenhum desses`, `buildDisparosCustomTier`, `resolveDisparosCustomListValueCents`.
+
 **WABA — Admin assinante: editar cadastro no modal:** PATCH `/admin/subscribers/:id`; formulário editável no detalhe. Marker `DEPLOY-2026-07-02-admin-assinante-editar-cadastro`. Ver `doc/LOG-2026-07-02__admin-assinante-editar-cadastro-modal.md`. Palavras-chave: `saveAdminSubscriberDetail`, `updateSubscriber`.
 
 **WABA — Master menu: destaque registros novos:** linhas com faixa âmbar + tag Novo ao abrir menu com badge; API retorna `seenAt`. Marker `DEPLOY-2026-07-02-master-menu-novos-destaque-linhas`. Ver `doc/LOG-2026-07-02__master-menu-destaque-registros-novos.md`. Palavras-chave: `master-menu-new-row`, `captureMasterMenuNewHighlight`, `seenAt`.

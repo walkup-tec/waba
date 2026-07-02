@@ -374,7 +374,7 @@ class WabaInstanceOwnershipService {
         return names.filter((name) => allowedLower.has(normalizeInstanceName(name).toLowerCase()));
     }
     /**
-     * Instâncias legadas na Evolution sem dono em instance-owners.json ficam invisíveis.
+     * Instâncias legadas no sistema WABA - Drax sem dono em instance-owners.json ficam invisíveis.
      * O master reconcilia órfãs para o próprio e-mail na primeira listagem.
      */
     async reconcileOrphanInstancesForMaster(auth, instanceNames) {

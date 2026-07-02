@@ -110,6 +110,22 @@ const isDisparosAlternativaSalePackage = (shipmentCount: number, valueCents: num
     (pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents,
   );
 
+const getDisparosSalePackages = (
+  apiKind: "oficial" | "alternativa",
+): ReadonlyArray<{ shipments: number; valueCents: number }> =>
+  apiKind === "oficial" ? DISPAROS_OFICIAL_SALE_PACKAGES : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+
+const resolveDisparosCustomListValueCents = (
+  apiKind: "oficial" | "alternativa",
+  shipmentCount: number,
+): number | null => {
+  const salePackages = getDisparosSalePackages(apiKind);
+  const lastTier = salePackages[salePackages.length - 1];
+  if (!lastTier || shipmentCount <= lastTier.shipments) return null;
+  const unitCents = lastTier.valueCents / lastTier.shipments;
+  return Math.round(shipmentCount * unitCents);
+};
+
 const resolveListValueCentsForPackage = (
   apiKind: "oficial" | "alternativa",
   shipmentCount: number,
@@ -120,7 +136,8 @@ const resolveListValueCentsForPackage = (
       ? [...DISPAROS_TEST_PACKAGES, ...DISPAROS_OFICIAL_SALE_PACKAGES]
       : [...DISPAROS_TEST_PACKAGES, ...DISPAROS_ALTERNATIVA_SALE_PACKAGES];
   const match = tables.find((pack) => pack.shipments === shipmentCount);
-  return match ? match.valueCents : null;
+  if (match) return match.valueCents;
+  return resolveDisparosCustomListValueCents(apiKind, shipmentCount);
 };
 
 const ASAAS_MIN_CHARGE_CENTS = 500;
@@ -260,10 +277,14 @@ export class WabaBillingService {
 
     if (shipmentCount > 0) {
       if (!listValueCentsFromPackage) {
+        const salePackages = getDisparosSalePackages(apiKind);
+        const maxShipments = salePackages[salePackages.length - 1]?.shipments ?? 0;
         throw new Error(
-          apiKind === "oficial"
-            ? "Pacote de envios inválido para API Oficial."
-            : "Pacote de envios inválido para API Alternativa.",
+          maxShipments > 0
+            ? `Informe uma quantidade maior que ${maxShipments.toLocaleString("pt-BR")} envios.`
+            : apiKind === "oficial"
+              ? "Pacote de envios inválido para API Oficial."
+              : "Pacote de envios inválido para API Alternativa.",
         );
       }
       listValueCents = listValueCentsFromPackage;

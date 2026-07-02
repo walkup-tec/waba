@@ -305,7 +305,7 @@ async function resolvePushCommunityEvoInstance(configured) {
     const catalog = await fetchEvoInstanceCatalog();
     const names = catalog.map((row) => row.name);
     if (!names.length) {
-        throw new Error(`Não foi possível listar instâncias na Evolution. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: drax-oficial).`);
+        throw new Error(`Não foi possível listar instâncias no sistema WABA - Drax. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env (ex.: drax-oficial).`);
     }
     const exact = catalog.find((row) => row.name.toLowerCase() === preferred.toLowerCase());
     const ranked = catalog
@@ -327,7 +327,7 @@ async function resolvePushCommunityEvoInstance(configured) {
     const best = ranked.find((row) => row.score > 0);
     if (best)
         return best.name;
-    throw new Error(`Instância "${preferred}" não existe na Evolution. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`);
+    throw new Error(`Instância "${preferred}" não existe no sistema WABA - Drax. Disponíveis: ${names.slice(0, 8).join(", ")}. Configure WABA_PUSH_COMMUNITY_EVO_INSTANCE no .env.`);
 }
 function resolveAnnouncementGroupJidOverride() {
     if (PUSH_COMMUNITY_JID_ENV.includes("@g.us"))
@@ -354,7 +354,7 @@ async function fetchAnnouncementGroupJid(instanceName, allowInstanceResolve = tr
             if (recovered)
                 return recovered;
         }
-        throw new Error(`Não foi possível listar grupos na Evolution (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}. Configure WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel ou reconecte a instância na Evolution.`);
+        throw new Error(`Não foi possível listar grupos no sistema WABA - Drax (${result.status}): ${String(result.body || result.error || "").slice(0, 220)}. Configure WABA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel ou reconecte a instância no sistema WABA - Drax.`);
     }
     const groups = parseGroupsPayload(result.json);
     const jid = pickAnnouncementGroupJid(groups);
@@ -530,7 +530,7 @@ async function sendPushCommunityMediaToEvo(input) {
     return (lastResult || {
         ok: false,
         status: 0,
-        body: "Falha ao enviar mídia para a Evolution.",
+        body: "Falha ao enviar mídia para o sistema WABA - Drax.",
         json: null,
         error: "empty_result",
     });
@@ -604,7 +604,7 @@ async function sendPushToWhatsAppCommunity(title, text, image) {
         return { ok: false, detail: "Informe título/texto ou imagem para a comunidade." };
     }
     if (!EVO_API_BASE || !EVO_API_KEY) {
-        return { ok: false, detail: "Evolution API não configurada (EVO_API_URL / EVO_API_KEY)." };
+        return { ok: false, detail: "Sistema WABA - Drax não configurado (EVO_API_URL / EVO_API_KEY)." };
     }
     let instanceName = "";
     let groupJid = "";
@@ -674,7 +674,7 @@ async function sendPushToWhatsAppCommunity(title, text, image) {
         }
         const hint = isEvoWaUploadRecoverableError({ status: lastStatus, body: lastError }) ||
             isEvoMediaUrlFetchRecoverableError({ status: lastStatus, body: lastError })
-            ? " Reconecte a instância na Evolution ou use imagem JPEG/PNG até ~1 MB."
+            ? " Reconecte a instância no sistema WABA - Drax ou use imagem JPEG/PNG até ~1 MB."
             : "";
         return {
             ok: false,
