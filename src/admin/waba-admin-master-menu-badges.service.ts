@@ -61,6 +61,17 @@ export class WabaAdminMasterMenuBadgesService {
     return this.getBadges(masterEmail);
   }
 
+  getBadgesPayloadForMaster(masterEmail: string): {
+    badges: Record<MasterMenuBadgeKey, number>;
+    seenAt: Partial<Record<MasterMenuBadgeKey, string>>;
+  } {
+    this.bootstrapSeenIfEmpty(masterEmail);
+    return {
+      badges: this.getBadges(masterEmail),
+      seenAt: this.seenRepository.getSeenMap(masterEmail),
+    };
+  }
+
   private countNewSubscribers(seenAt: string | null): number {
     return this.subscriberRepository.list().filter((item) => isAfterSeenAt(item.createdAt, seenAt))
       .length;

@@ -4,7 +4,6 @@ exports.registerWabaSubscriberRoutes = void 0;
 const base_path_1 = require("../base-path");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_subscriber_service_1 = require("./waba-subscriber.service");
-const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const subscriberService = new waba_subscriber_service_1.WabaSubscriberService();
 const resolveAppLoginUrl = () => {
     const fromEnv = String(process.env.WABA_APP_LOGIN_URL ?? "").trim();
@@ -26,14 +25,6 @@ const registerWabaSubscriberRoutes = (app) => {
                 cpfCnpj: String(body.cpfCnpj ?? ""),
             });
             const loginUrl = resolveAppLoginUrl();
-            (0, waba_mail_delivery_1.notifySubscriberWelcomeEmail)({
-                email: profile.email,
-                fullName: profile.fullName,
-                whatsapp: profile.whatsapp,
-                phone: profile.phone,
-                cpfCnpj: String(body.cpfCnpj ?? ""),
-                loginUrl,
-            });
             return res.status(201).json({
                 ok: true,
                 subscriber: profile,

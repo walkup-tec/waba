@@ -56,5 +56,33 @@ class WabaSubscriberRepository {
         this.writeStore(store);
         return subscriber;
     }
+    update(id, patch) {
+        const normalizedId = String(id ?? "").trim();
+        if (!normalizedId)
+            throw new Error("Assinante inválido.");
+        const store = this.readStore();
+        const index = store.subscribers.findIndex((item) => item.id === normalizedId);
+        if (index < 0)
+            throw new Error("Assinante não encontrado.");
+        const current = store.subscribers[index];
+        const nextEmail = String(patch.email ?? current.email)
+            .trim()
+            .toLowerCase();
+        if (nextEmail !== current.email &&
+            store.subscribers.some((item) => item.email === nextEmail && item.id !== normalizedId)) {
+            throw new Error("Já existe uma conta com este e-mail.");
+        }
+        const updated = {
+            ...current,
+            ...patch,
+            id: current.id,
+            email: nextEmail,
+            createdAt: current.createdAt,
+            updatedAt: String(patch.updatedAt ?? new Date().toISOString()),
+        };
+        store.subscribers[index] = updated;
+        this.writeStore(store);
+        return updated;
+    }
 }
 exports.WabaSubscriberRepository = WabaSubscriberRepository;

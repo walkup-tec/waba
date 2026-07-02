@@ -5,7 +5,6 @@ import {
   resolveWabaSessionCookieOptions,
 } from "../auth/waba-auth.service";
 import { WabaSubscriberService } from "./waba-subscriber.service";
-import { notifySubscriberWelcomeEmail } from "../mail/waba-mail-delivery";
 
 const subscriberService = new WabaSubscriberService();
 
@@ -29,14 +28,6 @@ export const registerWabaSubscriberRoutes = (app: Express) => {
         cpfCnpj: String(body.cpfCnpj ?? ""),
       });
       const loginUrl = resolveAppLoginUrl();
-      notifySubscriberWelcomeEmail({
-        email: profile.email,
-        fullName: profile.fullName,
-        whatsapp: profile.whatsapp,
-        phone: profile.phone,
-        cpfCnpj: String(body.cpfCnpj ?? ""),
-        loginUrl,
-      });
       return res.status(201).json({
         ok: true,
         subscriber: profile,

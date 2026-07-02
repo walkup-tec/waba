@@ -88,6 +88,42 @@ const registerWabaAdminRoutes = (app) => {
             });
         }
     });
+    app.get("/admin/subscribers/:subscriberId", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const detail = adminSubscribersService.getSubscriberDetail(String(req.params.subscriberId ?? ""));
+            return res.status(200).json(detail);
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível carregar o assinante.";
+            const status = message.includes("não encontrado") ? 404 : 400;
+            return res.status(status).json({ error: message });
+        }
+    });
+    app.patch("/admin/subscribers/:subscriberId", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const body = req.body;
+            const whatsapp = String(body.whatsapp ?? "");
+            const detail = adminSubscribersService.updateSubscriber(String(req.params.subscriberId ?? ""), {
+                email: String(body.email ?? ""),
+                fullName: String(body.fullName ?? body.name ?? ""),
+                whatsapp,
+                phone: String(body.phone ?? whatsapp),
+                cpfCnpj: String(body.cpfCnpj ?? ""),
+                aquecedorGranted: body.aquecedorGranted === true,
+                password: body.password !== undefined ? String(body.password) : undefined,
+            });
+            return res.status(200).json({ ok: true, ...detail });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível atualizar o assinante.";
+            const status = message.includes("não encontrado") ? 404 : 400;
+            return res.status(status).json({ error: message });
+        }
+    });
     app.post("/admin/subscribers", (req, res) => {
         const auth = rejectNonMaster(req, res);
         if (!auth)
@@ -479,8 +515,8 @@ const registerWabaAdminRoutes = (app) => {
         if (!auth)
             return;
         try {
-            const badges = adminMasterMenuBadgesService.getBadgesForMaster(auth.email);
-            return res.status(200).json({ badges });
+            const payload = adminMasterMenuBadgesService.getBadgesPayloadForMaster(auth.email);
+            return res.status(200).json(payload);
         }
         catch (error) {
             return res.status(500).json({
@@ -498,8 +534,8 @@ const registerWabaAdminRoutes = (app) => {
         }
         try {
             adminMasterMenuBadgesService.markSeen(auth.email, menuKey);
-            const badges = adminMasterMenuBadgesService.getBadges(auth.email);
-            return res.status(200).json({ ok: true, badges });
+            const payload = adminMasterMenuBadgesService.getBadgesPayloadForMaster(auth.email);
+            return res.status(200).json({ ok: true, ...payload });
         }
         catch (error) {
             return res.status(400).json({

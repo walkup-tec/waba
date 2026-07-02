@@ -6438,6 +6438,56 @@
         display: inline-flex;
       }
 
+      .admin-subscribers-table tbody tr.master-menu-new-row td,
+      #admin-campanhas-table-wrap tbody tr.master-menu-new-row td,
+      #admin-users-table-wrap tbody tr.master-menu-new-row td,
+      #admin-financeiro-table-wrap tbody tr.master-menu-new-row td,
+      #admin-chamados-table-wrap tbody tr.master-menu-new-row td {
+        background: rgba(251, 191, 36, 0.11) !important;
+      }
+
+      .admin-subscribers-table tbody tr.master-menu-new-row td:first-child,
+      #admin-campanhas-table-wrap tbody tr.master-menu-new-row td:first-child,
+      #admin-users-table-wrap tbody tr.master-menu-new-row td:first-child,
+      #admin-financeiro-table-wrap tbody tr.master-menu-new-row td:first-child,
+      #admin-chamados-table-wrap tbody tr.master-menu-new-row td:first-child {
+        box-shadow: inset 3px 0 0 rgba(251, 191, 36, 0.62);
+      }
+
+      .master-menu-new-row-marker {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(251, 191, 36, 0.18);
+        color: #fcd34d;
+        vertical-align: middle;
+      }
+
+      @keyframes master-menu-new-row-fade {
+        0%,
+        65% {
+          filter: none;
+        }
+        100% {
+          filter: saturate(0.85);
+          opacity: 0.92;
+        }
+      }
+
+      .admin-subscribers-table tbody tr.master-menu-new-row,
+      #admin-campanhas-table-wrap tbody tr.master-menu-new-row,
+      #admin-users-table-wrap tbody tr.master-menu-new-row,
+      #admin-financeiro-table-wrap tbody tr.master-menu-new-row,
+      #admin-chamados-table-wrap tbody tr.master-menu-new-row {
+        animation: master-menu-new-row-fade 20s ease-out forwards;
+      }
+
       .menu-group-toggle {
         gap: 8px;
       }
@@ -7306,6 +7356,91 @@
       .admin-subscribers-table tbody tr.admin-subscribers-row-new {
         background: rgba(34, 197, 94, 0.12);
         outline: 1px solid rgba(34, 197, 94, 0.35);
+      }
+
+      .admin-subscribers-table tbody tr.admin-subscribers-row-clickable {
+        cursor: pointer;
+      }
+
+      .admin-subscribers-table tbody tr.admin-subscribers-row-clickable:hover td {
+        background: rgba(59, 130, 246, 0.1);
+      }
+
+      .admin-subscribers-table tbody tr.admin-subscribers-row-clickable:focus-visible td {
+        outline: 2px solid rgba(96, 165, 250, 0.65);
+        outline-offset: -2px;
+      }
+
+      #admin-subscriber-detail-overlay {
+        z-index: 2500;
+      }
+
+      .admin-subscriber-detail-modal {
+        width: min(94vw, 760px);
+        max-height: min(92dvh, 860px);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .admin-subscriber-detail-body {
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding-right: 4px;
+      }
+
+      .admin-subscriber-detail-purchases {
+        overflow: auto;
+        max-height: min(42dvh, 360px);
+      }
+
+      .admin-subscriber-detail-purchases .admin-subscribers-table tbody td {
+        font-size: 0.82rem;
+      }
+
+      .admin-subscriber-detail-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 14px;
+      }
+
+      @media (max-width: 720px) {
+        .admin-subscriber-detail-form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .admin-subscriber-detail-readonly-meta {
+        margin: 0 0 12px;
+        font-size: 0.82rem;
+        color: #94a3b8;
+      }
+
+      .admin-subscriber-purchase-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+
+      .admin-subscriber-purchase-status.is-paid {
+        background: rgba(34, 197, 94, 0.16);
+        color: #86efac;
+      }
+
+      .admin-subscriber-purchase-status.is-pending {
+        background: rgba(251, 191, 36, 0.16);
+        color: #fcd34d;
+      }
+
+      .admin-subscriber-purchase-status.is-other {
+        background: rgba(148, 163, 184, 0.16);
+        color: #cbd5e1;
       }
 
       .admin-subscribers-name {
@@ -18790,6 +18925,27 @@
       </div>
     </div>
 
+    <div id="admin-subscriber-detail-overlay" class="confirm-overlay" aria-hidden="true">
+      <div
+        class="confirm-modal admin-chamados-detail-modal admin-subscriber-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-subscriber-detail-title"
+      >
+        <div class="confirm-title" id="admin-subscriber-detail-title">Detalhes do assinante</div>
+        <p class="confirm-text" id="admin-subscriber-detail-subtitle"></p>
+        <div id="admin-subscriber-detail-body" class="admin-subscriber-detail-body"></div>
+        <div class="confirm-actions">
+          <button id="admin-subscriber-detail-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+            Salvar alterações
+          </button>
+          <button id="admin-subscriber-detail-close-btn" class="instance-action-btn" type="button">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="admin-campanhas-report-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal camp-report-modal" role="dialog" aria-modal="true" aria-labelledby="admin-campanhas-report-title">
         <div class="confirm-title" id="admin-campanhas-report-title">Relatório da campanha</div>
@@ -20114,6 +20270,8 @@
       let masterCpuAlertPollTimer = null;
       let masterCpuAlertActive = false;
       let lastMasterMenuBadges = {};
+      let lastMasterMenuSeenAt = {};
+      let masterMenuHighlightBaseline = {};
       const MASTER_MENU_BADGE_POLL_MS = 60000;
       const MASTER_CPU_ALERT_POLL_MS = 60 * 1000;
 
@@ -20167,6 +20325,42 @@
         syncMasterCpuAlertHeaderDot(false);
       }
 
+      function isMasterMenuNewRecord(menuKey, itemAt, extraCondition = true) {
+        if (!extraCondition || !menuKey || !itemAt) return false;
+        const seenAt =
+          masterMenuHighlightBaseline[menuKey] ?? lastMasterMenuSeenAt[menuKey] ?? null;
+        if (!seenAt) return false;
+        const itemMs = new Date(String(itemAt)).getTime();
+        const seenMs = new Date(String(seenAt)).getTime();
+        if (Number.isNaN(itemMs) || Number.isNaN(seenMs)) return false;
+        return itemMs > seenMs;
+      }
+
+      function captureMasterMenuNewHighlight(menuKey) {
+        if (!menuKey || !MASTER_MENU_BADGE_KEYS.has(menuKey)) return;
+        const badgeCount = Math.max(0, Math.floor(Number(lastMasterMenuBadges[menuKey] || 0)));
+        if (badgeCount <= 0) {
+          delete masterMenuHighlightBaseline[menuKey];
+          return;
+        }
+        masterMenuHighlightBaseline[menuKey] = lastMasterMenuSeenAt[menuKey] || null;
+      }
+
+      function renderMasterMenuNewMarker(menuKey, itemAt, extraCondition = true) {
+        if (!isMasterMenuNewRecord(menuKey, itemAt, extraCondition)) return "";
+        return '<span class="master-menu-new-row-marker">Novo</span>';
+      }
+
+      function mergeMasterMenuNewRowClass(menuKey, itemAt, baseClass = "", extraCondition = true) {
+        const classes = String(baseClass || "")
+          .split(/\s+/)
+          .filter(Boolean);
+        if (isMasterMenuNewRecord(menuKey, itemAt, extraCondition)) {
+          classes.push("master-menu-new-row");
+        }
+        return classes.join(" ");
+      }
+
       function syncMasterMenuGroupBadges(badges = lastMasterMenuBadges) {
         const groupTotals = {};
         Object.entries(badges || {}).forEach(([key, rawCount]) => {
@@ -20202,8 +20396,9 @@
         });
       }
 
-      function syncMasterMenuBadgeUi(badges = {}) {
+      function syncMasterMenuBadgeUi(badges = {}, seenAt = lastMasterMenuSeenAt) {
         lastMasterMenuBadges = { ...(badges || {}) };
+        lastMasterMenuSeenAt = { ...(seenAt || {}) };
         document.querySelectorAll("[data-master-menu-badge]").forEach((el) => {
           if (!hasMasterAccess()) {
             el.hidden = true;
@@ -20227,14 +20422,14 @@
 
       async function refreshMasterMenuBadges() {
         if (!hasMasterAccess()) {
-          syncMasterMenuBadgeUi({});
+          syncMasterMenuBadgeUi({}, {});
           return;
         }
         try {
           const response = await fetchWithTimeout("/admin/master-menu-badges", {}, 12000);
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) return;
-          syncMasterMenuBadgeUi(payload.badges || {});
+          syncMasterMenuBadgeUi(payload.badges || {}, payload.seenAt || {});
         } catch {
           /* ignore badge refresh errors */
         }
@@ -20254,7 +20449,7 @@
           );
           const payload = await response.json().catch(() => ({}));
           if (response.ok) {
-            syncMasterMenuBadgeUi(payload.badges || {});
+            syncMasterMenuBadgeUi(payload.badges || {}, payload.seenAt || {});
           } else {
             void refreshMasterMenuBadges();
           }
@@ -22483,6 +22678,47 @@
         return div.innerHTML;
       }
 
+      function buildAdminSubscriberRowHtml(item) {
+        const subscriberId = escapeAdminHtml(item?.id || "");
+        const name = escapeAdminHtml(item?.fullName || "—");
+        const email = escapeAdminHtml(item?.email || "");
+        const cpf = escapeAdminHtml(item?.cpfCnpjFormatted || item?.cpfCnpj || "—");
+        const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
+        const credits = escapeAdminHtml(item?.creditsValueLabel || formatDisparosMoneyFromCents(0));
+        const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
+        const aguardando = escapeAdminHtml(formatDisparosQty(item?.campaignsAwaiting));
+        const finalizados = escapeAdminHtml(formatDisparosQty(item?.campaignsCompleted));
+        const rowClass = mergeMasterMenuNewRowClass(
+          "admin-assinantes",
+          item?.createdAt,
+          subscriberId ? "admin-subscribers-row-clickable" : ""
+        );
+        const rowAttrs = rowClass
+          ? `class="${rowClass}"${
+              subscriberId
+                ? ` data-subscriber-id="${subscriberId}" tabindex="0" role="button" aria-label="Ver detalhes de ${name}"`
+                : ""
+            }`
+          : subscriberId
+            ? `class="admin-subscribers-row-clickable" data-subscriber-id="${subscriberId}" tabindex="0" role="button" aria-label="Ver detalhes de ${name}"`
+            : "";
+        const newMarker = renderMasterMenuNewMarker("admin-assinantes", item?.createdAt);
+        return `
+              <tr ${rowAttrs}>
+                <td>
+                  <span class="admin-subscribers-name">${name}${newMarker}</span>
+                  ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
+                </td>
+                <td>${cpf}</td>
+                <td>${createdAt}</td>
+                <td class="admin-subscribers-num">${credits}</td>
+                <td class="admin-subscribers-num">${disparos}</td>
+                <td class="admin-subscribers-num">${aguardando}</td>
+                <td class="admin-subscribers-num">${finalizados}</td>
+              </tr>
+            `;
+      }
+
       function renderAdminSubscribersTable(items) {
         const tbody = document.getElementById("admin-subscribers-tbody");
         const summary = document.getElementById("admin-subscribers-summary");
@@ -22502,32 +22738,280 @@
           return;
         }
 
-        tbody.innerHTML = rows
-          .map((item) => {
-            const name = escapeAdminHtml(item?.fullName || "—");
-            const email = escapeAdminHtml(item?.email || "");
-            const cpf = escapeAdminHtml(item?.cpfCnpjFormatted || item?.cpfCnpj || "—");
-            const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
-            const credits = escapeAdminHtml(item?.creditsValueLabel || formatDisparosMoneyFromCents(0));
-            const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
-            const aguardando = escapeAdminHtml(formatDisparosQty(item?.campaignsAwaiting));
-            const finalizados = escapeAdminHtml(formatDisparosQty(item?.campaignsCompleted));
-            return `
-              <tr>
-                <td>
-                  <span class="admin-subscribers-name">${name}</span>
-                  ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
-                </td>
-                <td>${cpf}</td>
-                <td>${createdAt}</td>
-                <td class="admin-subscribers-num">${credits}</td>
-                <td class="admin-subscribers-num">${disparos}</td>
-                <td class="admin-subscribers-num">${aguardando}</td>
-                <td class="admin-subscribers-num">${finalizados}</td>
-              </tr>
-            `;
-          })
-          .join("");
+        tbody.innerHTML = rows.map((item) => buildAdminSubscriberRowHtml(item)).join("");
+      }
+
+      function renderAdminSubscriberPurchaseStatusBadge(status, label) {
+        const normalized = String(status || "").trim().toLowerCase();
+        const className =
+          normalized === "paid"
+            ? "is-paid"
+            : normalized === "pending_payment"
+              ? "is-pending"
+              : "is-other";
+        return `<span class="admin-subscriber-purchase-status ${className}">${escapeAdminHtml(
+          label || "—"
+        )}</span>`;
+      }
+
+      let adminSubscriberDetailId = "";
+
+      function bindAdminSubscriberDetailMaskedInputs() {
+        const cpfInput = document.getElementById("admin-subscriber-detail-cpf");
+        const whatsappInput = document.getElementById("admin-subscriber-detail-whatsapp");
+        const applyCpfMask = () => {
+          if (!cpfInput) return;
+          cpfInput.value = formatAdminCpfCnpjInput(cpfInput.value);
+        };
+        const applyWhatsappMask = () => {
+          if (!whatsappInput) return;
+          whatsappInput.value = formatWhatsappTarget(whatsappInput.value);
+        };
+        if (cpfInput && cpfInput.dataset.maskBound !== "1") {
+          cpfInput.dataset.maskBound = "1";
+          cpfInput.addEventListener("input", applyCpfMask);
+          cpfInput.addEventListener("blur", applyCpfMask);
+          cpfInput.addEventListener("paste", () => {
+            window.setTimeout(applyCpfMask, 0);
+          });
+        }
+        if (whatsappInput && whatsappInput.dataset.maskBound !== "1") {
+          whatsappInput.dataset.maskBound = "1";
+          whatsappInput.addEventListener("input", applyWhatsappMask);
+          whatsappInput.addEventListener("blur", applyWhatsappMask);
+          whatsappInput.addEventListener("paste", () => {
+            window.setTimeout(applyWhatsappMask, 0);
+          });
+        }
+      }
+
+      function renderAdminSubscriberDetailModal(detail) {
+        const title = document.getElementById("admin-subscriber-detail-title");
+        const subtitle = document.getElementById("admin-subscriber-detail-subtitle");
+        const body = document.getElementById("admin-subscriber-detail-body");
+        if (!body) return;
+
+        const profile = detail?.profile || {};
+        const summary = detail?.summary || {};
+        const purchases = Array.isArray(detail?.purchaseHistory) ? detail.purchaseHistory : [];
+        adminSubscriberDetailId = String(profile.id || adminSubscriberDetailId || "");
+
+        if (title) title.textContent = profile.fullName || "Detalhes do assinante";
+        if (subtitle) {
+          subtitle.textContent = profile.email
+            ? `Cadastro em ${profile.createdAtLabel || "—"} · última alteração ${profile.updatedAtLabel || "—"}`
+            : "Edite os dados cadastrais e consulte o histórico de compras";
+        }
+
+        const purchaseRows = purchases.length
+          ? purchases
+              .map((order) => {
+                const coupon = order?.couponAlias
+                  ? `<div class="muted">${escapeAdminHtml(order.couponAlias)}</div>`
+                  : "";
+                return `<tr>
+                  <td>${escapeAdminHtml(order?.paidAtLabel || order?.createdAtLabel || "—")}</td>
+                  <td>${escapeAdminHtml(order?.productLabel || "—")}</td>
+                  <td>${renderWabaApiKindLabelHtml(order?.apiKind === "alternativa" ? "alternativa" : "oficial")}</td>
+                  <td class="admin-subscribers-num">${escapeAdminHtml(order?.quantityLabel || "—")}</td>
+                  <td class="admin-subscribers-num">${escapeAdminHtml(order?.valueLabel || formatDisparosMoneyFromCents(0))}${coupon}</td>
+                  <td>${renderAdminSubscriberPurchaseStatusBadge(order?.status, order?.statusLabel)}</td>
+                </tr>`;
+              })
+              .join("")
+          : '<tr><td colspan="6" class="muted">Nenhuma compra registrada ainda.</td></tr>';
+
+        body.innerHTML = `
+          <form id="admin-subscriber-detail-form" class="admin-users-form" autocomplete="off" novalidate>
+            <section class="admin-chamados-detail-block">
+              <label for="admin-subscriber-detail-full-name">Dados cadastrais</label>
+              <p class="admin-subscriber-detail-readonly-meta">
+                ID: <code>${escapeAdminHtml(profile.id || "—")}</code>
+              </p>
+              <div class="admin-subscriber-detail-form-grid">
+                <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-full-name">Nome</label>
+                  <input id="admin-subscriber-detail-full-name" type="text" required minlength="2" value="${escapeAdminHtml(profile.fullName || "")}" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-email">E-mail</label>
+                  <input id="admin-subscriber-detail-email" type="email" required autocomplete="off" value="${escapeAdminHtml(profile.email || "")}" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-whatsapp">WhatsApp</label>
+                  <input id="admin-subscriber-detail-whatsapp" type="tel" required inputmode="numeric" autocomplete="tel" value="${escapeAdminHtml(profile.whatsappFormatted || profile.whatsapp || "")}" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-cpf">CPF ou CNPJ</label>
+                  <input id="admin-subscriber-detail-cpf" type="text" required inputmode="numeric" autocomplete="off" value="${escapeAdminHtml(profile.cpfCnpjFormatted || profile.cpfCnpj || "")}" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-password">Nova senha</label>
+                  <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter" />
+                </div>
+                <div class="admin-subscriber-options">
+                  <p class="admin-subscriber-options-title">Recursos do assinante</p>
+                  <label class="admin-subscriber-option-check" for="admin-subscriber-detail-aquecedor-granted">
+                    <input id="admin-subscriber-detail-aquecedor-granted" type="checkbox" ${
+                      profile.aquecedorGranted ? "checked" : ""
+                    } />
+                    <span>Liberar Aquecedor sem compra de envios</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </form>
+          <section class="admin-chamados-detail-block">
+            <label>Resumo na plataforma</label>
+            <dl class="admin-chamados-detail-meta">
+              <div>
+                <dt>Créditos contratados</dt>
+                <dd>${escapeAdminHtml(summary.creditsValueLabel || formatDisparosMoneyFromCents(0))}</dd>
+              </div>
+              <div>
+                <dt>Envios contratados</dt>
+                <dd>${escapeAdminHtml(formatDisparosQty(summary.contractedShipments))}</dd>
+              </div>
+              <div>
+                <dt>Campanhas aguardando</dt>
+                <dd>${escapeAdminHtml(formatDisparosQty(summary.campaignsAwaiting))}</dd>
+              </div>
+              <div>
+                <dt>Campanhas finalizadas</dt>
+                <dd>${escapeAdminHtml(formatDisparosQty(summary.campaignsCompleted))}</dd>
+              </div>
+            </dl>
+          </section>
+          <section class="admin-chamados-detail-block">
+            <label>Histórico de compras</label>
+            <div class="admin-subscriber-detail-purchases admin-subscribers-table-wrap">
+              <table class="admin-subscribers-table" aria-label="Histórico de compras do assinante">
+                <thead>
+                  <tr>
+                    <th scope="col">Data</th>
+                    <th scope="col">Produto</th>
+                    <th scope="col">API</th>
+                    <th scope="col" class="admin-subscribers-num">Quantidade</th>
+                    <th scope="col" class="admin-subscribers-num">Valor</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>${purchaseRows}</tbody>
+              </table>
+            </div>
+          </section>
+        `;
+        bindAdminSubscriberDetailMaskedInputs();
+      }
+
+      async function saveAdminSubscriberDetail() {
+        if (!hasMasterAccess() || !adminSubscriberDetailId) return;
+        const fullName = String(document.getElementById("admin-subscriber-detail-full-name")?.value || "").trim();
+        const email = String(document.getElementById("admin-subscriber-detail-email")?.value || "").trim();
+        const whatsapp = String(document.getElementById("admin-subscriber-detail-whatsapp")?.value || "").replace(/\D/g, "");
+        const cpfCnpj = String(document.getElementById("admin-subscriber-detail-cpf")?.value || "").replace(/\D/g, "");
+        const password = String(document.getElementById("admin-subscriber-detail-password")?.value || "");
+        const aquecedorGranted = Boolean(
+          document.getElementById("admin-subscriber-detail-aquecedor-granted")?.checked
+        );
+        const saveBtn = document.getElementById("admin-subscriber-detail-save-btn");
+
+        if (fullName.length < 2) {
+          showToast("Informe o nome completo do assinante.", "warning");
+          return;
+        }
+        if (!email) {
+          showToast("Informe o e-mail do assinante.", "warning");
+          return;
+        }
+        if (whatsapp.length < 10) {
+          showToast("Informe um WhatsApp válido com DDD.", "warning");
+          return;
+        }
+        if (cpfCnpj.length < 11) {
+          showToast("Informe CPF ou CNPJ válido.", "warning");
+          return;
+        }
+        if (password && password.length < 6) {
+          showToast("A nova senha deve ter pelo menos 6 caracteres.", "warning");
+          return;
+        }
+
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.textContent = "Salvando…";
+        }
+
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/subscribers/${encodeURIComponent(adminSubscriberDetailId)}`,
+            {
+              method: "PATCH",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fullName,
+                email,
+                whatsapp,
+                phone: whatsapp,
+                cpfCnpj,
+                aquecedorGranted,
+                password: password || undefined,
+              }),
+            },
+            12000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível salvar o assinante.");
+          }
+          showToast("Assinante atualizado.", "success");
+          renderAdminSubscriberDetailModal(payload);
+          await loadAdminSubscribers();
+        } catch (error) {
+          showToast(resolveAdminSubscriberFetchError(error, "Erro ao salvar assinante."), "error", 5200);
+        } finally {
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = "Salvar alterações";
+          }
+        }
+      }
+
+      async function openAdminSubscriberDetail(subscriberId) {
+        if (!hasMasterAccess() || !subscriberId) return;
+        adminSubscriberDetailId = String(subscriberId);
+        const body = document.getElementById("admin-subscriber-detail-body");
+        const subtitle = document.getElementById("admin-subscriber-detail-subtitle");
+        if (body) {
+          body.innerHTML = '<p class="muted">Carregando detalhes…</p>';
+        }
+        if (subtitle) subtitle.textContent = "Carregando…";
+        openDisparosOverlay("admin-subscriber-detail-overlay");
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/subscribers/${encodeURIComponent(subscriberId)}`,
+            {},
+            12000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível carregar o assinante.");
+          }
+          renderAdminSubscriberDetailModal(payload);
+        } catch (error) {
+          closeAdminSubscriberDetail();
+          showToast(
+            resolveAdminSubscriberFetchError(error, "Falha ao abrir detalhes do assinante."),
+            "error",
+            4800
+          );
+        }
+      }
+
+      function closeAdminSubscriberDetail() {
+        closeDisparosOverlay("admin-subscriber-detail-overlay");
+        adminSubscriberDetailId = "";
       }
 
       let adminFinanceiroOrdersState = {
@@ -24633,14 +25117,25 @@
         const shipments = escapeAdminHtml(formatDisparosQty(order?.shipmentCount || 0));
         const createdAt = escapeAdminHtml(formatAdminDateTimeLabel(order?.createdAt));
         const statusBadge = formatAdminFinanceiroStatusBadge(order?.status);
+        const rowClass = mergeMasterMenuNewRowClass(
+          "admin-financeiro",
+          order?.createdAt,
+          "",
+          String(order?.status || "").trim().toLowerCase() === "pending_payment"
+        );
+        const newMarker = renderMasterMenuNewMarker(
+          "admin-financeiro",
+          order?.createdAt,
+          String(order?.status || "").trim().toLowerCase() === "pending_payment"
+        );
         const actions = order?.paymentUrl
           ? `<a class="instance-action-btn btn-refresh enabled" href="${escapeAdminHtml(
               order.paymentUrl
             )}" target="_blank" rel="noopener noreferrer">Abrir cobrança</a>`
           : '<span class="muted">—</span>';
         return `
-          <tr>
-            <td><code>${id}</code></td>
+          <tr${rowClass ? ` class="${rowClass}"` : ""}>
+            <td><code>${id}</code>${newMarker}</td>
             <td>${customer}</td>
             <td>${email}</td>
             <td>${renderWabaApiKindLabelHtml(apiKind)}</td>
@@ -24920,6 +25415,7 @@
         if (!tbody) return;
 
         const item = {
+          id: subscriber.id || "",
           fullName: subscriber.fullName || "—",
           email: subscriber.email || "",
           cpfCnpjFormatted: formatAdminCpfCnpjInput(cpfCnpjDigits || subscriber.cpfCnpj || ""),
@@ -24945,29 +25441,11 @@
           }
         }
 
-        const name = escapeAdminHtml(item.fullName);
-        const email = escapeAdminHtml(item.email);
-        const cpf = escapeAdminHtml(item.cpfCnpjFormatted || "—");
-        const createdAt = escapeAdminHtml(item.createdAtLabel);
-        const credits = escapeAdminHtml(item.creditsValueLabel);
-        const disparos = escapeAdminHtml(formatDisparosQty(0));
-        const aguardando = escapeAdminHtml(formatDisparosQty(0));
-        const finalizados = escapeAdminHtml(formatDisparosQty(0));
-
-        const row = document.createElement("tr");
-        row.className = "admin-subscribers-row-new";
-        row.innerHTML = `
-          <td>
-            <span class="admin-subscribers-name">${name}</span>
-            ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
-          </td>
-          <td>${cpf}</td>
-          <td>${createdAt}</td>
-          <td class="admin-subscribers-num">${credits}</td>
-          <td class="admin-subscribers-num">${disparos}</td>
-          <td class="admin-subscribers-num">${aguardando}</td>
-          <td class="admin-subscribers-num">${finalizados}</td>
-        `;
+        const template = document.createElement("tbody");
+        template.innerHTML = buildAdminSubscriberRowHtml(item);
+        const row = template.querySelector("tr");
+        if (!row) return;
+        row.classList.add("admin-subscribers-row-new");
         tbody.prepend(row);
         window.setTimeout(() => row.classList.remove("admin-subscribers-row-new"), 2400);
 
@@ -25112,6 +25590,10 @@
 
       function setAdminCouponsBucket(bucket) {
         adminCouponsActiveBucket = bucket === "inactive" ? "inactive" : "active";
+        updateAdminCouponsBucketUi({
+          active: adminCouponsCache.filter((coupon) => isAdminCouponEffectiveActive(coupon)).length,
+          inactive: adminCouponsCache.filter((coupon) => !isAdminCouponEffectiveActive(coupon)).length,
+        });
         renderAdminCouponsTableFromCache();
       }
 
@@ -25666,10 +26148,21 @@
             const email = escapeAdminHtml(item?.ownerEmail || "—");
             const title = escapeAdminHtml(item?.title || "—");
             const attachments = renderAdminChamadosAttachmentsCell(item?.attachments);
+            const rowClass = mergeMasterMenuNewRowClass(
+              "admin-chamados",
+              item?.openedAt,
+              "",
+              adminChamadosActiveBucket !== "closed" && item?.status !== "closed"
+            );
+            const newMarker = renderMasterMenuNewMarker(
+              "admin-chamados",
+              item?.openedAt,
+              adminChamadosActiveBucket !== "closed" && item?.status !== "closed"
+            );
             return `
-              <tr>
+              <tr${rowClass ? ` class="${rowClass}"` : ""}>
                 ${overdueCell}
-                <td><code>${displayId}</code></td>
+                <td><code>${displayId}</code>${newMarker}</td>
                 <td>${openedAt}</td>
                 <td>${closedAt}</td>
                 <td><code>${email}</code></td>
@@ -26975,9 +27468,11 @@
                 ? `admin-users-role-badge--${role}`
                 : "";
             const isMaster = role === "master";
+            const rowClass = mergeMasterMenuNewRowClass("admin-usuarios", item?.createdAt);
+            const newMarker = renderMasterMenuNewMarker("admin-usuarios", item?.createdAt);
             return `
-              <tr>
-                <td><span class="admin-subscribers-name">${name}</span></td>
+              <tr${rowClass ? ` class="${rowClass}"` : ""}>
+                <td><span class="admin-subscribers-name">${name}${newMarker}</span></td>
                 <td>${email}</td>
                 <td><span class="admin-users-role-badge ${roleClass}">${roleLabel}</span></td>
                 <td>${dispatchesLabel}</td>
@@ -27419,6 +27914,33 @@
             }
           });
         });
+        document.getElementById("admin-subscribers-tbody")?.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const row = target.closest("[data-subscriber-id]");
+          if (!row) return;
+          void openAdminSubscriberDetail(row.getAttribute("data-subscriber-id") || "");
+        });
+        document.getElementById("admin-subscribers-tbody")?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const row = target.closest("[data-subscriber-id]");
+          if (!row) return;
+          event.preventDefault();
+          void openAdminSubscriberDetail(row.getAttribute("data-subscriber-id") || "");
+        });
+        document.getElementById("admin-subscriber-detail-save-btn")?.addEventListener("click", () => {
+          void saveAdminSubscriberDetail();
+        });
+        document.getElementById("admin-subscriber-detail-close-btn")?.addEventListener("click", () => {
+          closeAdminSubscriberDetail();
+        });
+        document.getElementById("admin-subscriber-detail-overlay")?.addEventListener("click", (event) => {
+          if (event.target?.id === "admin-subscriber-detail-overlay") {
+            closeAdminSubscriberDetail();
+          }
+        });
       }
 
       function syncAdminFinanceiroSplitCollapseUi() {
@@ -27703,7 +28225,7 @@
           nextBucket = "open";
         }
         adminCampanhasActiveBucket = nextBucket;
-        document.querySelectorAll(".admin-campanhas-bucket-btn").forEach((btn) => {
+        document.querySelectorAll("[data-campanhas-bucket]").forEach((btn) => {
           const active = btn.getAttribute("data-campanhas-bucket") === nextBucket;
           btn.classList.toggle("is-active", active);
           btn.setAttribute("aria-selected", active ? "true" : "false");
@@ -27891,10 +28413,12 @@
                 </button>
               `);
             }
+            const rowClass = mergeMasterMenuNewRowClass("admin-campanhas", item?.createdAt);
+            const newMarker = renderMasterMenuNewMarker("admin-campanhas", item?.createdAt);
             return `
-              <tr>
+              <tr${rowClass ? ` class="${rowClass}"` : ""}>
                 ${overdueCell}
-                <td><code>${subscriberId}</code></td>
+                <td><code>${subscriberId}</code>${newMarker}</td>
                 <td>${planType}</td>
                 <td>${campaignName}</td>
                 <td class="admin-subscribers-num">${envios}</td>
@@ -28826,7 +29350,7 @@
           });
         });
 
-        document.querySelectorAll(".admin-campanhas-bucket-btn").forEach((btn) => {
+        document.querySelectorAll("[data-campanhas-bucket]").forEach((btn) => {
           btn.addEventListener("click", () => {
             setAdminCampanhasBucket(btn.getAttribute("data-campanhas-bucket"));
           });
@@ -38057,6 +38581,10 @@
           return;
         }
         activeTab = nextTab;
+        if (hasMasterAccess()) {
+          const badgeKey = getMenuKeysForTab(nextTab).find((key) => MASTER_MENU_BADGE_KEYS.has(key));
+          if (badgeKey) captureMasterMenuNewHighlight(badgeKey);
+        }
         if (nextTab === "disparos" && hasCampanhasMenuAccess()) {
           markCampanhasMenuSeen();
         }

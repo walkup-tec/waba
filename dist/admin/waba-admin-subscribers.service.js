@@ -2,8 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaAdminSubscribersService = void 0;
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
+const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
+const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-shipments");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
+const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const formatCpfCnpj = (raw) => {
     const digits = String(raw ?? "").replace(/\D/g, "");
@@ -35,6 +38,51 @@ const formatMoneyFromCents = (cents) => {
     const value = Number(cents || 0) / 100;
     return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 };
+const formatPhoneDisplay = (raw) => {
+    const digits = String(raw ?? "").replace(/\D/g, "");
+    if (digits.length === 11) {
+        return digits.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    }
+    if (digits.length === 10) {
+        return digits.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+    }
+    return digits || "—";
+};
+const resolveProductLabel = (product) => {
+    if (product === "waba-alternativa-numbers")
+        return "Números API Alternativa";
+    return "Créditos de disparos";
+};
+const resolveApiKindLabel = (apiKind) => apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+const resolveOrderStatusLabel = (status) => {
+    if (status === "paid")
+        return "Pago";
+    if (status === "pending_payment")
+        return "Aguardando pagamento";
+    if (status === "cancelled")
+        return "Cancelado";
+    if (status === "failed")
+        return "Falhou";
+    return status;
+};
+const resolvePurchaseQuantityLabel = (order) => {
+    const quantity = Math.max(0, Math.round(Number((0, waba_disparos_order_shipments_1.resolveOrderShipmentCount)(order) || 0)));
+    const bonus = Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0)));
+    if (order.product === "waba-alternativa-numbers") {
+        return {
+            quantity,
+            label: quantity === 1 ? "1 número" : `${quantity.toLocaleString("pt-BR")} números`,
+        };
+    }
+    const base = quantity === 1 ? "1 envio" : `${quantity.toLocaleString("pt-BR")} envios`;
+    if (bonus > 0) {
+        return {
+            quantity,
+            label: `${base} (+${bonus.toLocaleString("pt-BR")} bônus)`,
+        };
+    }
+    return { quantity, label: base };
+};
 const normalizeIntakeStatus = (status) => String(status || "")
     .trim()
     .toLowerCase();
@@ -44,10 +92,12 @@ const isCampaignAwaiting = (intake) => {
 };
 const isCampaignCompleted = (intake) => normalizeIntakeStatus(intake.status) === "completed";
 class WabaAdminSubscribersService {
-    constructor(subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), creditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository()) {
+    constructor(subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), subscriberService = new waba_subscriber_service_1.WabaSubscriberService(), creditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository()) {
         this.subscriberRepository = subscriberRepository;
+        this.subscriberService = subscriberService;
         this.creditsService = creditsService;
         this.intakeRepository = intakeRepository;
+        this.orderRepository = orderRepository;
     }
     listSubscribers() {
         const intakesByEmail = new Map();
@@ -80,6 +130,84 @@ class WabaAdminSubscribersService {
                 contractedShipments: credits.contractedShipments,
                 campaignsAwaiting: intakes.filter(isCampaignAwaiting).length,
                 campaignsCompleted: intakes.filter(isCampaignCompleted).length,
+            };
+        });
+    }
+    getSubscriberDetail(subscriberId) {
+        const id = String(subscriberId ?? "").trim();
+        if (!id)
+            throw new Error("Assinante inválido.");
+        const subscriber = this.subscriberRepository.getById(id);
+        if (!subscriber)
+            throw new Error("Assinante não encontrado.");
+        const email = normalizeEmail(subscriber.email);
+        const credits = this.creditsService.getCreditsSummary(email);
+        const intakes = this.intakeRepository.listByEmail(email);
+        return {
+            profile: {
+                id: subscriber.id,
+                email,
+                fullName: subscriber.fullName,
+                cpfCnpj: subscriber.cpfCnpj,
+                cpfCnpjFormatted: formatCpfCnpj(subscriber.cpfCnpj),
+                whatsapp: subscriber.whatsapp,
+                whatsappFormatted: formatPhoneDisplay(subscriber.whatsapp),
+                phone: subscriber.phone,
+                phoneFormatted: formatPhoneDisplay(subscriber.phone || subscriber.whatsapp),
+                aquecedorGranted: Boolean(subscriber.aquecedorGranted),
+                createdAt: subscriber.createdAt,
+                createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),
+                updatedAt: subscriber.updatedAt,
+                updatedAtLabel: formatCreatedAtLabel(subscriber.updatedAt),
+            },
+            summary: {
+                creditsValueCents: credits.contractedValueCents,
+                creditsValueLabel: formatMoneyFromCents(credits.contractedValueCents),
+                contractedShipments: credits.contractedShipments,
+                campaignsAwaiting: intakes.filter(isCampaignAwaiting).length,
+                campaignsCompleted: intakes.filter(isCampaignCompleted).length,
+            },
+            purchaseHistory: this.listPurchaseHistory(email),
+        };
+    }
+    updateSubscriber(subscriberId, input) {
+        this.subscriberService.update(subscriberId, input);
+        return this.getSubscriberDetail(subscriberId);
+    }
+    listPurchaseHistory(email, limit = 50) {
+        const normalized = normalizeEmail(email);
+        if (!normalized)
+            return [];
+        return this.orderRepository
+            .list()
+            .filter((order) => normalizeEmail(order.ownerEmail) === normalized &&
+            (order.status === "paid" || order.status === "pending_payment"))
+            .sort((a, b) => {
+            const aTime = new Date(String(a.paidAt || a.createdAt || 0)).getTime();
+            const bTime = new Date(String(b.paidAt || b.createdAt || 0)).getTime();
+            return bTime - aTime;
+        })
+            .slice(0, Math.max(1, Math.min(100, Math.floor(limit))))
+            .map((order) => {
+            const quantity = resolvePurchaseQuantityLabel(order);
+            return {
+                id: order.id,
+                product: order.product,
+                productLabel: resolveProductLabel(order.product),
+                apiKind: order.apiKind,
+                apiKindLabel: resolveApiKindLabel(order.apiKind),
+                valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),
+                valueLabel: formatMoneyFromCents(order.valueCents),
+                quantity: quantity.quantity,
+                quantityLabel: quantity.label,
+                bonusShipmentsApplied: Math.max(0, Math.round(Number(order.bonusShipmentsApplied ?? 0))),
+                status: order.status,
+                statusLabel: resolveOrderStatusLabel(order.status),
+                paidAt: String(order.paidAt ?? ""),
+                paidAtLabel: order.paidAt ? formatCreatedAtLabel(order.paidAt) : "—",
+                createdAt: order.createdAt,
+                createdAtLabel: formatCreatedAtLabel(order.createdAt),
+                couponAlias: String(order.couponAlias ?? "").trim(),
             };
         });
     }

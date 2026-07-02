@@ -13,7 +13,17 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-06-21
+2026-07-02
+
+**WABA — Admin assinante: editar cadastro no modal:** PATCH `/admin/subscribers/:id`; formulário editável no detalhe. Marker `DEPLOY-2026-07-02-admin-assinante-editar-cadastro`. Ver `doc/LOG-2026-07-02__admin-assinante-editar-cadastro-modal.md`. Palavras-chave: `saveAdminSubscriberDetail`, `updateSubscriber`.
+
+**WABA — Master menu: destaque registros novos:** linhas com faixa âmbar + tag Novo ao abrir menu com badge; API retorna `seenAt`. Marker `DEPLOY-2026-07-02-master-menu-novos-destaque-linhas`. Ver `doc/LOG-2026-07-02__master-menu-destaque-registros-novos.md`. Palavras-chave: `master-menu-new-row`, `captureMasterMenuNewHighlight`, `seenAt`.
+
+**WABA — Admin assinante: detalhe + histórico de compras:** clique na linha abre modal com dados cadastrais e compras; API `GET /admin/subscribers/:id`. Marker `DEPLOY-2026-06-21-admin-assinante-detalhe-compras`. Ver `doc/LOG-2026-06-21__admin-assinante-detalhe-historico-compras.md`. Palavras-chave: `openAdminSubscriberDetail`, `getSubscriberDetail`.
+
+**WABA — Fix abas cupons Ativos/Inativos:** cor da aba ativa instantânea; campanhas deixou de sobrescrever botões de cupons/chamados. Marker `DEPLOY-2026-06-21-fix-cupons-abas-ativo-instantaneo`. Ver `doc/LOG-2026-06-21__fix-cupons-abas-ativo-instantaneo.md`. Palavras-chave: `admin-coupons-bucket`, `data-campanhas-bucket`.
+
+**WABA — Admin assinante: e-mail boas-vindas:** cadastro master passa a enviar o mesmo e-mail da landing; lógica centralizada em `WabaSubscriberService.register()`. Marker `DEPLOY-2026-06-21-admin-assinante-boas-vindas-email`. Ver `doc/LOG-2026-06-21__admin-assinante-boas-vindas-email.md`. Palavras-chave: `notifySubscriberWelcomeEmail`, `buildSubscriberWelcomeTemplate`.
 
 **WABA — Admin Assinantes: Aquecedor parceiro + cupons abas + copiar:** checkbox liberar Aquecedor no cadastro (`aquecedorGranted`); abas Ativos/Inativos nos cupons; botão Copiar código; removido hint padrão WABA. Marker `DEPLOY-2026-06-21-assinante-liberar-aquecedor`. Ver `doc/LOG-2026-06-21__admin-assinantes-aquecedor-cupons-abas-copiar.md`. Palavras-chave: `aquecedorGranted`, `admin-coupons-bucket`, `copyAdminCouponAlias`.
 
