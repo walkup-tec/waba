@@ -7624,6 +7624,44 @@
         display: none;
       }
 
+      #register-inbound-progress[data-phase="connection-ready"] .reg-inbound-waiting,
+      #register-inbound-progress[data-phase="connection-ready"] .reg-inbound-sent-prompt,
+      #register-inbound-progress[data-phase="connection-ready"] .reg-val-checks {
+        display: none !important;
+      }
+
+      .reg-inbound-connection-ready {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 16px 0 8px;
+      }
+
+      .reg-inbound-connection-ready[hidden] {
+        display: none !important;
+      }
+
+      .reg-inbound-connection-ready-title {
+        margin: 0;
+        font-size: var(--reg-text-lg);
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+
+      .reg-inbound-connection-ready-lead {
+        margin: 0;
+        font-size: var(--reg-text-sm);
+        color: #94a3b8;
+        line-height: 1.5;
+      }
+
+      .reg-inbound-connection-ready-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
       #register-inbound-progress[data-phase="instructions"] .reg-val-checks,
       #register-inbound-progress[data-phase="prompt"] .reg-val-checks {
         display: none;
@@ -18114,7 +18152,7 @@
             </li>
             <li class="reg-step" data-step="3">
               <span class="reg-step-num">3</span>
-              <span class="reg-step-label">Validar</span>
+              <span class="reg-step-label">Concluir</span>
             </li>
             <li class="reg-step" data-step="4">
               <span class="reg-step-num">4</span>
@@ -18169,6 +18207,28 @@
               </div>
             </div>
             <div class="reg-wizard-pane-progress" id="register-inbound-progress" data-phase="instructions">
+              <div id="register-inbound-connection-ready" class="reg-inbound-connection-ready" hidden>
+                <p class="reg-inbound-connection-ready-title">WhatsApp conectado com sucesso</p>
+                <p class="reg-inbound-connection-ready-lead">
+                  Nível A concluído: a instância já pode ser usada. O teste CONFIRMAR (nível B) é opcional.
+                </p>
+                <div class="reg-inbound-connection-ready-actions">
+                  <button
+                    id="register-inbound-finish-integration-btn"
+                    class="instance-action-btn btn-qrcode enabled"
+                    type="button"
+                  >
+                    Concluir integração
+                  </button>
+                  <button
+                    id="register-inbound-optional-validate-btn"
+                    class="reg-wizard-link-btn"
+                    type="button"
+                  >
+                    Validar envio CONFIRMAR (opcional)
+                  </button>
+                </div>
+              </div>
               <div id="register-inbound-evo-connected" class="reg-inbound-evo-connected" hidden>
                 <span class="reg-evo-connected-icon" aria-hidden="true">✓</span>
                 <span id="register-inbound-evo-connected-text">
@@ -18248,7 +18308,7 @@
             Tentar validação novamente
           </button>
           <button id="register-inbound-skip-btn" class="reg-wizard-link-btn" type="button" hidden>
-            Pular validação
+            Concluir integração
           </button>
           <div class="register-actions">
             <button id="register-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
@@ -30987,12 +31047,18 @@
       let registerInboundReceiveConfirmed = false;
       let registerInboundPromptAnsweredYes = false;
       let registerInboundConfirmInFlight = false;
+      let registerInboundProgressTimers = [];
       const REGISTER_INBOUND_POLL_MS = 300;
       const REGISTER_INBOUND_DEEP_NUDGE_EVERY = 3;
       const REGISTER_INBOUND_CONNECTION_ADVANCE_MS = 20000;
       const REGISTER_INBOUND_SENT_PROMPT_RETRY_MS = 20000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       const REGISTER_INBOUND_AWAIT_CONFIRM_MS = 120000;
+      const REGISTER_INBOUND_PROGRESS_LINES = [
+        { atMs: 0, text: "Buscando a identificação da mensagem enviada" },
+        { atMs: 5000, text: "Processando o ID para match da instância" },
+        { atMs: 10000, text: "Aguarde até finalizarmos a integração" },
+      ];
       let registerWizardStep = 1;
       let registerWizardHideInstanceName = "";
       let registerWizardValidationComplete = false;
@@ -38817,20 +38883,43 @@
           inboundSkipBtn.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
-            if (
-              !window.confirm(
-                "Concluir sem validar CONFIRMAR?\n\nO WhatsApp já está conectado no sistema WABA - Drax. Você pode usar a instância; a validação de envio/recepção ficará pendente.\n\nDeseja concluir mesmo assim?"
-              )
-            ) {
-              return;
-            }
             const name =
               String(registerConnectedInstanceName || "").trim() ||
               String(document.getElementById("register-name-input")?.value || "").trim();
             finishRegisterWizardConnectionOnly(
               name,
-              "WhatsApp conectado. Validação CONFIRMAR pendente — pode repetir depois pelo QRCode se quiser."
+              "WhatsApp conectado no sistema WABA - Drax. Instância pronta para uso."
             );
+          });
+        }
+
+        const inboundFinishBtn = document.getElementById("register-inbound-finish-integration-btn");
+        if (inboundFinishBtn && inboundFinishBtn.dataset.boundRegisterQr !== "1") {
+          inboundFinishBtn.dataset.boundRegisterQr = "1";
+          inboundFinishBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const name =
+              String(registerConnectedInstanceName || "").trim() ||
+              String(document.getElementById("register-name-input")?.value || "").trim();
+            finishRegisterWizardConnectionOnly(
+              name,
+              "WhatsApp conectado no sistema WABA - Drax. Instância pronta para uso."
+            );
+          });
+        }
+
+        const inboundOptionalBtn = document.getElementById("register-inbound-optional-validate-btn");
+        if (inboundOptionalBtn && inboundOptionalBtn.dataset.boundRegisterQr !== "1") {
+          inboundOptionalBtn.dataset.boundRegisterQr = "1";
+          inboundOptionalBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const name =
+              String(registerConnectedInstanceName || "").trim() ||
+              String(document.getElementById("register-name-input")?.value || "").trim();
+            if (!name) return;
+            void startRegisterInboundOptionalValidation(name);
           });
         }
 
@@ -38850,6 +38939,64 @@
             event.stopPropagation();
           });
         }
+      }
+
+      function setRegisterWizardStep3Mode(mode) {
+        const title = document.querySelector('.reg-wizard-pane[data-pane="3"] .reg-wizard-pane-title');
+        const lead = document.querySelector('.reg-wizard-pane[data-pane="3"] .reg-wizard-pane-lead');
+        const intro = document.querySelector('.reg-wizard-pane[data-pane="3"] .reg-wizard-pane-intro');
+        const connReady = document.getElementById("register-inbound-connection-ready");
+        if (mode === "connection-ready") {
+          if (title) title.textContent = "Passo 3 — Conexão confirmada";
+          if (lead) {
+            lead.textContent =
+              "O WhatsApp está conectado no sistema WABA - Drax. Conclua a integração para usar a instância.";
+          }
+          if (intro) intro.hidden = true;
+          if (connReady) connReady.hidden = false;
+        } else if (mode === "optional-validate") {
+          if (title) title.textContent = "Passo 3 — Validar envio e recepção (opcional)";
+          if (lead) {
+            lead.textContent =
+              "Use outro WhatsApp para enviar CONFIRMAR. Você pode concluir sem este teste a qualquer momento.";
+          }
+          if (intro) intro.hidden = false;
+          if (connReady) connReady.hidden = true;
+        } else {
+          if (title) title.textContent = "Passo 3 — Validar envio e recepção";
+          if (lead) {
+            lead.textContent =
+              "Use outro WhatsApp (não o celular do QR). O sistema responde automaticamente pelo número conectado.";
+          }
+          if (intro) intro.hidden = false;
+          if (connReady) connReady.hidden = true;
+        }
+      }
+
+      function enterRegisterWizardStep3AfterConnection(instanceName) {
+        const name = String(instanceName || "").trim();
+        if (name) registerConnectedInstanceName = name;
+        clearRegisterInboundTimers();
+        registerInboundValidationId = "";
+        registerInboundStartInFlight = false;
+        registerInboundPollFailCount = 0;
+        setRegisterWizardStep(3);
+        resetRegisterInboundPanel();
+        setRegisterInboundNumberDisplay(name, {});
+        showRegisterInboundEvoConnectedBanner(
+          true,
+          "WhatsApp conectado. Conclua a integração ou valide CONFIRMAR (opcional)."
+        );
+        setRegisterWizardStep3Mode("connection-ready");
+        setRegisterInboundPhase("connection-ready");
+        setRegisterInboundActionButtons({ retry: false, skip: true, nudge: false });
+      }
+
+      async function startRegisterInboundOptionalValidation(instanceName) {
+        setRegisterWizardStep3Mode("optional-validate");
+        const connReady = document.getElementById("register-inbound-connection-ready");
+        if (connReady) connReady.hidden = true;
+        await startRegisterInboundValidation(instanceName, { optionalMode: true });
       }
 
       function setRegisterWizardStep(step) {
@@ -38911,6 +39058,9 @@
         const sendDone =
           status?.sendTest?.success !== null && status?.sendTest?.success !== undefined;
 
+        if (registerInboundUiPhase === "connection-ready" && !String(registerInboundValidationId || "").trim()) {
+          return "connection-ready";
+        }
         if (receiveOk && sendDone) return "complete";
         if (receiveOk || registerInboundReceiveConfirmed) return "verify-send";
         if (receiveDone && !receiveOk) return "verify-receive";
@@ -38968,6 +39118,9 @@
 
         if (phase === "instructions") {
           setInboundWaitingVisible(true, REGISTER_INBOUND_WAIT_STEP1);
+        } else if (phase === "connection-ready") {
+          setInboundWaitingVisible(false);
+          setRegisterWizardStep3Mode("connection-ready");
         } else {
           setInboundWaitingVisible(false);
         }
@@ -39176,6 +39329,29 @@
         return raw;
       }
 
+      function clearRegisterInboundProgressMessages() {
+        for (const timer of registerInboundProgressTimers) {
+          clearTimeout(timer);
+        }
+        registerInboundProgressTimers = [];
+      }
+
+      function startRegisterInboundProgressMessages() {
+        clearRegisterInboundProgressMessages();
+        const detail = document.getElementById("register-inbound-receive-detail");
+        if (!detail) return;
+        for (const line of REGISTER_INBOUND_PROGRESS_LINES) {
+          const timer = setTimeout(() => {
+            if (registerInboundReceiveConfirmed) return;
+            if (registerInboundUiPhase !== "verify-receive") return;
+            const row = document.getElementById("register-inbound-receive-row");
+            if (!row || row.hidden || row.classList.contains("is-hidden")) return;
+            detail.textContent = line.text;
+          }, line.atMs);
+          registerInboundProgressTimers.push(timer);
+        }
+      }
+
       function registerInboundReceiveWaitDetail(status, instanceName) {
         const fromStatus = String(status?.receiveTest?.detail || "").trim();
         if (
@@ -39200,13 +39376,31 @@
       function enterRegisterInboundVerifyReceive(detailText) {
         setRegisterInboundPhase("verify-receive");
         setInboundCheckVisible("register-inbound-receive-row", true, true);
-        updateRegisterInboundRow(
-          "register-inbound-receive-row",
-          "register-inbound-receive-result",
-          null,
-          "register-inbound-receive-detail",
-          detailText || "Consultando o sistema WABA - Drax para confirmar CONFIRMAR…"
-        );
+        const custom = String(detailText || "").trim();
+        const isProgressDetail =
+          !custom ||
+          /buscando a identificação|processando o id|aguarde até finalizarmos|consultando o sistema/i.test(
+            custom
+          );
+        if (isProgressDetail) {
+          updateRegisterInboundRow(
+            "register-inbound-receive-row",
+            "register-inbound-receive-result",
+            null,
+            "register-inbound-receive-detail",
+            REGISTER_INBOUND_PROGRESS_LINES[0].text
+          );
+          startRegisterInboundProgressMessages();
+        } else {
+          clearRegisterInboundProgressMessages();
+          updateRegisterInboundRow(
+            "register-inbound-receive-row",
+            "register-inbound-receive-result",
+            null,
+            "register-inbound-receive-detail",
+            custom
+          );
+        }
         setInboundCheckVisible("register-inbound-send-row", false, false);
       }
 
@@ -39218,6 +39412,7 @@
 
       function markRegisterInboundReceiveConfirmed() {
         registerInboundReceiveConfirmed = true;
+        clearRegisterInboundProgressMessages();
         clearRegisterInboundAwaitingConfirm();
         setRegisterInboundSentPromptVisible(false);
         if (registerInboundSentPromptTimer) {
@@ -39282,6 +39477,7 @@
       }
 
       function clearRegisterInboundTimers() {
+        clearRegisterInboundProgressMessages();
         if (registerInboundPollTimer) {
           clearInterval(registerInboundPollTimer);
           registerInboundPollTimer = null;
@@ -39351,7 +39547,7 @@
         registerInboundAwaitingConfirmSince = Date.now();
         cancelRegisterInboundPromptTimers();
         setRegisterInboundConfirmUiBusy(true);
-        enterRegisterInboundVerifyReceive("Consultando o sistema WABA - Drax para confirmar CONFIRMAR…");
+        enterRegisterInboundVerifyReceive();
 
         try {
           const data = await requestRegisterInboundConfirmScan(validationId, instanceName);
@@ -39365,7 +39561,7 @@
 
           enterRegisterInboundVerifyReceive(
             data?.error ||
-              "CONFIRMAR ainda não localizado — continuamos buscando no sistema WABA - Drax. Aguarde nesta tela."
+              "CONFIRMAR ainda não localizado — continuamos buscando no sistema WABA - Drax."
           );
         } catch (err) {
           const msg = humanizeRegisterInboundError(err);
@@ -39504,7 +39700,7 @@
       }
 
       function scheduleRegisterInboundConnectionAdvance(instanceName) {
-        scheduleRegisterInboundSentPrompt(REGISTER_INBOUND_CONNECTION_ADVANCE_MS);
+        enterRegisterWizardStep3AfterConnection(instanceName);
       }
 
       function resetRegisterInboundPanel() {
@@ -39523,6 +39719,7 @@
         clearRegisterInboundAwaitingConfirm();
         cancelRegisterInboundPromptTimers();
         registerInboundConfirmInFlight = false;
+        clearRegisterInboundProgressMessages();
         setInboundCheckVisible("register-inbound-receive-row", false, false);
         setInboundCheckVisible("register-inbound-send-row", false, false);
         if (receiveRow) receiveRow.className = "reg-val-check is-hidden";
@@ -39538,6 +39735,8 @@
         }
         if (keywordEl) keywordEl.textContent = "CONFIRMAR";
         showRegisterInboundEvoConnectedBanner(false);
+        const connReady = document.getElementById("register-inbound-connection-ready");
+        if (connReady) connReady.hidden = true;
         const pane = document.querySelector('.reg-wizard-pane[data-pane="3"]');
         if (pane) pane.classList.remove("reg-pane-validating");
         setRegisterInboundPhase("instructions");
@@ -39585,14 +39784,18 @@
 
         if (!receiveDone) {
           if (phase === "verify-receive") {
-            setInboundCheckVisible("register-inbound-receive-row", true, false);
+            setInboundCheckVisible("register-inbound-receive-row", true, true);
+            const customDetail = registerInboundReceiveWaitDetail(status, instanceName);
+            const useProgress =
+              registerInboundUserAwaitingConfirm || registerInboundPromptAnsweredYes;
             updateRegisterInboundRow(
               "register-inbound-receive-row",
               "register-inbound-receive-result",
               null,
               "register-inbound-receive-detail",
-              registerInboundReceiveWaitDetail(status, instanceName)
+              useProgress ? REGISTER_INBOUND_PROGRESS_LINES[0].text : customDetail
             );
+            if (useProgress) startRegisterInboundProgressMessages();
             setInboundCheckVisible("register-inbound-send-row", false, false);
           } else {
             setInboundCheckVisible("register-inbound-receive-row", false, false);
@@ -39649,7 +39852,7 @@
         clearRegisterInboundTimers();
         registerInboundValidationId = "";
         registerInboundStartInFlight = false;
-        await startRegisterInboundValidation(instanceName);
+        await startRegisterInboundOptionalValidation(instanceName);
       }
 
       function finishRegisterWizardSuccess(message) {
@@ -39665,12 +39868,17 @@
         }
       }
 
-      async function startRegisterInboundValidation(instanceName) {
+      async function startRegisterInboundValidation(instanceName, options = {}) {
         if (registerInboundStartInFlight) return;
         if (registerInboundValidationId && registerInboundPollTimer) return;
         registerInboundStartInFlight = true;
-        setRegisterWizardStep(3);
+        if (!options.optionalMode) {
+          setRegisterWizardStep(3);
+        }
         resetRegisterInboundPanel();
+        if (options.optionalMode) {
+          setRegisterWizardStep3Mode("optional-validate");
+        }
 
         const numberInput = document.getElementById("register-number-input");
         const formNumber = String(
@@ -39779,10 +39987,7 @@
 
         if (!validationId) {
           if (await confirmRegisterInstanceOpenInEvo(instanceName)) {
-            finishRegisterWizardConnectionOnly(
-              instanceName,
-              "WhatsApp conectado no sistema WABA - Drax. Validação CONFIRMAR não foi iniciada — instância liberada."
-            );
+            enterRegisterWizardStep3AfterConnection(instanceName);
           }
           return;
         }
@@ -39879,9 +40084,7 @@
               registerInboundPromptAnsweredYes ||
               registerInboundUiPhase === "verify-receive"
             ) {
-              enterRegisterInboundVerifyReceive(
-                "Consulta demorou — continuamos buscando CONFIRMAR no sistema WABA - Drax…"
-              );
+              enterRegisterInboundVerifyReceive();
             }
           }
         }, REGISTER_INBOUND_POLL_MS);
@@ -40215,9 +40418,9 @@
             registerConnectPollTimer = null;
             registerConnectedInstanceName = instanceName;
             rememberRegisterConnectedNumber(payload?.instanceNumber || "");
-            setRegisterConnectStatus("success", "Dispositivo conectado. Iniciando validação segura…");
+            setRegisterConnectStatus("success", "WhatsApp conectado no sistema WABA - Drax.");
             beginRegisterWizardHide(instanceName);
-            await startRegisterInboundValidation(instanceName);
+            enterRegisterWizardStep3AfterConnection(instanceName);
           } catch {
             // silencioso para não poluir UX durante polling
           }

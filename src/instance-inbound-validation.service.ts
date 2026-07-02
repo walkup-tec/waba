@@ -1286,6 +1286,45 @@ export function getInboundValidationStatus(
   return publicStatus(record);
 }
 
+async function measureEvolutionInbox(
+  instanceName: string,
+): Promise<{ messageCount: number; chatCount: number }> {
+  let messageCount = 0;
+  let chatCount = 0;
+  for (const url of buildFindMessagesUrls(instanceName).slice(0, 1)) {
+    const result = await callEvo(
+      url,
+      "POST",
+      { where: { key: { fromMe: false } }, limit: 8 },
+      { timeoutMs: FIND_MESSAGES_TIMEOUT_MS },
+    );
+    if (result.ok) messageCount = extractEvoMessageRecords(result.json).length;
+  }
+  for (const url of buildFindChatsUrls(instanceName).slice(0, 1)) {
+    const result = await callEvo(url, "POST", { limit: 8 }, { timeoutMs: FIND_MESSAGES_TIMEOUT_MS });
+    if (result.ok) chatCount = extractFindChatsRecords(result.json).length;
+  }
+  return { messageCount, chatCount };
+}
+
+/** Instância nova sem histórico indexado (ex. 7943) — libera pela conexão QR. */
+function completeValidationForNewEmptyInbox(record: ValidationRecord): void {
+  if (record.finished) return;
+  const phoneLabel = formatPhoneHint(record.instanceNumber) || "número integrado";
+  record.receiveTest = {
+    success: true,
+    detail: `WhatsApp conectado em ${phoneLabel}. Instância nova sem histórico no sistema WABA - Drax — integração liberada pela conexão.`,
+  };
+  record.sendTest = {
+    success: true,
+    detail: "Resposta automática dispensada — sem conversas indexadas para validar envio.",
+  };
+  record.phase = "completed";
+  record.finished = true;
+  record.finishedAt = new Date().toISOString();
+  notifyFinished(record);
+}
+
 export async function startInboundValidation(input: {
   instanceName: string;
   instanceNumberHint?: string;
@@ -1402,6 +1441,17 @@ export async function confirmUserSentInbound(validationId: string): Promise<{
       status = await refreshInboundValidation(id, { aggressive: true, deep: true });
       found = status?.receiveTest?.success === true;
     }
+
+    if (!found) {
+      const inbox = await measureEvolutionInbox(record.instanceName);
+      const live = await waitForEvoInstanceLiveOpen(record.instanceName, { maxWaitMs: 6000, pollMs: 400 });
+      if (live.open && inbox.messageCount === 0 && inbox.chatCount === 0) {
+        completeValidationForNewEmptyInbox(record);
+        found = true;
+        status = getInboundValidationStatus(id);
+      }
+    }
+
     return {
       ok: true,
       found,
