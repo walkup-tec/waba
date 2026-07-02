@@ -45,4 +45,8 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ${{ secrets.FTP_REMOTE_DIR }}
           local-dir: ./ftp-bundle/
+          exclude: |
+            **/data/**
+            **/.env
+            **/.env.*
           log-level: standard

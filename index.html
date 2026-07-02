@@ -39813,16 +39813,11 @@
             registerInboundPollTick += 1;
             if (maybeExpireRegisterInboundAwaitingConfirm()) return;
 
-            let pollPath = `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`;
-            if (registerInboundPollTick % 10 === 0) {
-              pollPath += "?nudge=2";
-            } else if (registerInboundPollTick % 3 === 0) {
-              pollPath += "?nudge=1";
-            }
+            const pollPath = `/instancias/validacao-inbound/${encodeURIComponent(validationId)}`;
             const pollRes = await fetchWithTimeout(
               pollPath,
               { credentials: "same-origin" },
-              pollPath.includes("nudge=2") ? 20000 : 12000
+              12000
             );
 
             if (!pollRes.ok) {
@@ -39863,7 +39858,7 @@
             if (
               registerInboundUserAwaitingConfirm &&
               !registerInboundConfirmInFlight &&
-              registerInboundPollTick % 15 === 0 &&
+              registerInboundPollTick % 10 === 0 &&
               status?.receiveTest?.success !== true
             ) {
               void requestRegisterInboundConfirmScan(validationId, instanceName)

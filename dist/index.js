@@ -4426,15 +4426,6 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     if (!validationId) {
         return res.status(400).json({ error: "validationId é obrigatório." });
     }
-    const nudge = String(req.query.nudge || "").trim();
-    if (nudge === "1" || nudge === "2") {
-        void (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, {
-            deep: true,
-            aggressive: nudge === "2",
-        }).catch((error) => {
-            console.warn("[validacao-inbound] refresh on GET nudge:", error);
-        });
-    }
     const status = (0, instance_inbound_validation_service_1.getInboundValidationStatus)(validationId);
     if (!status) {
         return res.status(404).json({ error: "Validação não encontrada ou expirada." });

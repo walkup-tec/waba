@@ -82,9 +82,12 @@ type ValidationRecord = InboundValidationStatus & {
   sendHttpOk: boolean;
   sendDetail: string;
   loopRunning: boolean;
+  sendFollowUpLoopRunning: boolean;
   cancelled: boolean;
   replyFollowUpScheduled: boolean;
   pollTick: number;
+  /** Recepção CONFIRMAR só via pull (usuário clicou «Sim, já enviei»). */
+  receivePullOnly: boolean;
 };
 
 const validations = new Map<string, ValidationRecord>();
@@ -874,6 +877,9 @@ function markInboundReceived(record: ValidationRecord, hit: InboundHit, via: str
     detail: `Mensagem "${record.keyword}" recebida (${via}).`,
   };
   scheduleValidationFollowUp(record);
+  if (record.receivePullOnly) {
+    void runValidationSendFollowUpLoop(record);
+  }
 }
 
 function scheduleValidationFollowUp(record: ValidationRecord): void {
@@ -1006,7 +1012,79 @@ async function ensureValidationInstanceOpen(record: ValidationRecord): Promise<b
   return wait.open;
 }
 
+/** Após recepção confirmada (pull): envia resposta e confirma no histórico. */
+async function runValidationSendFollowUpLoop(record: ValidationRecord): Promise<void> {
+  if (record.sendFollowUpLoopRunning || record.finished || record.cancelled) return;
+  record.sendFollowUpLoopRunning = true;
+  const deadline = Date.now() + Math.min(VALIDATION_TIMEOUT_MS, 180_000);
+  try {
+    while (Date.now() < deadline && !record.finished && !record.cancelled) {
+      if (
+        record.receiveTest.success === true &&
+        record.inboundReceivedAt &&
+        Date.now() >= record.inboundReceivedAt + REPLY_DELAY_MS &&
+        !record.sendAttempted
+      ) {
+        await sendContextualReply(record);
+      }
+
+      if (
+        record.sendAttempted &&
+        record.sendHttpOk &&
+        record.sendTest.success !== true &&
+        record.referenceJid
+      ) {
+        const found = await findReplyInChat(
+          record.instanceName,
+          record.referenceJid,
+          record.replyMarker,
+        );
+        if (found) {
+          record.sendTest = {
+            success: true,
+            detail: "Resposta confirmada no histórico da conversa.",
+          };
+          tryFinalize(record);
+        }
+      }
+
+      if (!record.finished) {
+        await new Promise((r) => setTimeout(r, VALIDATION_POLL_MS));
+      }
+    }
+  } finally {
+    record.sendFollowUpLoopRunning = false;
+  }
+}
+
+function scheduleValidationExpireTimer(record: ValidationRecord): void {
+  setTimeout(() => {
+    if (record.finished || record.cancelled) return;
+    void finalizeExpiredAsync(record);
+  }, VALIDATION_TIMEOUT_MS).unref?.();
+}
+
 async function runValidationLoop(record: ValidationRecord): Promise<void> {
+  if (record.receivePullOnly) {
+    scheduleValidationExpireTimer(record);
+    const open = await ensureValidationInstanceOpen(record);
+    if (!open) {
+      record.receiveTest = {
+        success: false,
+        detail: `Instância não conectou no sistema WABA - Drax a tempo. Escaneie o QR novamente.`,
+      };
+      record.sendTest = {
+        success: false,
+        detail: "Validação cancelada — instância desconectada.",
+      };
+      record.phase = "failed";
+      record.finished = true;
+      record.finishedAt = new Date().toISOString();
+      notifyFinished(record);
+    }
+    return;
+  }
+
   if (record.loopRunning) return;
   record.loopRunning = true;
   const deadline = Date.now() + VALIDATION_TIMEOUT_MS;
@@ -1063,7 +1141,7 @@ async function runValidationLoop(record: ValidationRecord): Promise<void> {
         const found = await findReplyInChat(
           record.instanceName,
           record.referenceJid,
-          record.replyMarker
+          record.replyMarker,
         );
         if (found) {
           record.sendTest = {
@@ -1154,30 +1232,9 @@ function findInboundInWebhookChunk(
   return liveHit;
 }
 
-export function handleInboundValidationWebhook(body: unknown): void {
-  if (!body || typeof body !== "object") return;
-  const payload = body as Record<string, unknown>;
-  const instanceName = extractWebhookInstanceName(payload);
-  if (!isEvolutionMessageUpsertEvent(payload.event)) return;
-
-  const chunks = unwrapEvolutionWebhookPayload(body);
-  const active = instanceName ? getActiveValidationForInstance(instanceName) : null;
-  const candidates = active
-    ? [active]
-    : [...validations.values()].filter((record) => isRecordActive(record));
-
-  for (const record of candidates) {
-    if (instanceName && instanceName !== record.instanceName) continue;
-    let matched = false;
-    for (const chunk of chunks) {
-      const hit = findInboundInWebhookChunk(chunk, record.keyword, record.validationStartedAtMs);
-      if (!hit) continue;
-      markInboundReceived(record, hit, "webhook");
-      matched = true;
-      break;
-    }
-    if (matched) break;
-  }
+/** Validação CONFIRMAR do wizard usa pull sob demanda — webhook não participa. */
+export function handleInboundValidationWebhook(_body: unknown): void {
+  return;
 }
 
 function normalizeWebhookInstanceRef(value: unknown): string {
@@ -1259,8 +1316,10 @@ export async function startInboundValidation(input: {
   const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
   const validationStartedAtMs = Date.now();
   const startedAt = new Date(validationStartedAtMs).toISOString();
-  const webhookOk = await ensureInstanceWebhook(instanceName);
   const phoneLabel = formatPhoneHint(connected.numero);
+  const receiveWaitDetail = phoneLabel
+    ? `Envie "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel} e confirme abaixo quando enviar.`
+    : `Envie "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp (não o celular do QR) e confirme abaixo quando enviar.`;
 
   const record: ValidationRecord = {
     validationId,
@@ -1271,13 +1330,7 @@ export async function startInboundValidation(input: {
     phase: "awaiting_inbound",
     receiveTest: {
       success: null,
-      detail: phoneLabel
-        ? webhookOk
-          ? `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}…`
-          : `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp para ${phoneLabel}… (consulta periódica no sistema WABA - Drax).`
-        : webhookOk
-          ? `Aguardando "${INBOUND_VALIDATION_KEYWORD}" de outro WhatsApp (não o que está integrando)…`
-          : `Aguardando "${INBOUND_VALIDATION_KEYWORD}"… (consulta periódica no sistema WABA - Drax).`,
+      detail: receiveWaitDetail,
     },
     sendTest: {
       success: null,
@@ -1289,14 +1342,16 @@ export async function startInboundValidation(input: {
     referenceJid: null,
     inboundReceivedAt: null,
     validationStartedAtMs,
-    webhookConfigured: webhookOk,
+    webhookConfigured: false,
     sendAttempted: false,
     sendHttpOk: false,
     sendDetail: "",
     loopRunning: false,
+    sendFollowUpLoopRunning: false,
     cancelled: false,
     replyFollowUpScheduled: false,
     pollTick: 0,
+    receivePullOnly: true,
     startedAt,
     finishedAt: null,
   };
@@ -1340,9 +1395,9 @@ export async function confirmUserSentInbound(validationId: string): Promise<{
   try {
     let status: InboundValidationStatus | null = null;
     let found = false;
-    for (let attempt = 0; attempt < 4 && !found; attempt += 1) {
+    for (let attempt = 0; attempt < 8 && !found; attempt += 1) {
       if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, 700));
+        await new Promise((r) => setTimeout(r, 450));
       }
       status = await refreshInboundValidation(id, { aggressive: true, deep: true });
       found = status?.receiveTest?.success === true;
