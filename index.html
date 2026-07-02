@@ -32808,6 +32808,7 @@
 
           if (
             autoResume &&
+            data?.motorOwnedByMe !== false &&
             desiredRunning &&
             !running &&
             hasAquecedorAccess() &&
