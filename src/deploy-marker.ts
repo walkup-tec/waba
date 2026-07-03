@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-03-fix-deploy-overlay-auto-dismiss";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-03-og-v3-icones-assinantes-ordem";

@@ -25,6 +25,8 @@ Como usar:
 
 **WABA — Admin assinantes ações inline:** ícones reenviar/excluir/editar na tabela; modal só Salvar+Fechar; overlay senha para reenvio. Ver `doc/LOG-2026-07-03__admin-assinantes-acoes-inline-tabela.md`. Palavras-chave: `admin-subscriber-row-icon-btn`.
 
+**WABA — OG compartilhamento V3:** `compBoasvindasV3.png` em `/media/` + meta tags Open Graph/Twitter. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindasV3.md`. Palavras-chave: `compBoasvindasV3`, `og:image`.
+
 **WABA — OG compartilhamento V2:** `compBoasvindasV2.png` em `/media/` + meta tags Open Graph/Twitter. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindasV2.md`. Palavras-chave: `compBoasvindasV2`, `og:image`.
 
 **WABA — Fix botão Criar assinante (Admin):** validação inline CPF/e-mail; reset do botão ao abrir aba e no `finally`; submit único no form. Ver `doc/LOG-2026-07-03__fix-admin-criar-assinante-botao-travado.md`. Palavras-chave: `resetAdminSubscriberCreateFormState`, `admin-subscriber-create-error`.
