@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Fix botão Criar assinante (Admin):** validação inline CPF/e-mail; reset do botão ao abrir aba e no `finally`; submit único no form. Ver `doc/LOG-2026-07-03__fix-admin-criar-assinante-botao-travado.md`. Palavras-chave: `resetAdminSubscriberCreateFormState`, `admin-subscriber-create-error`.
+
 **WABA — Overlay deploy só waba_disparador:** modal «Atualizando» habilitado apenas no container produção master; gatilho `shuttingDown` (não 502 genérico). Marker `DEPLOY-2026-07-03-deploy-overlay-so-waba-disparador`. Ver `doc/LOG-2026-07-03__deploy-overlay-so-waba-disparador.md`.
 
 **WABA — OG compartilhamento redes:** `compBoasvindas.png` em `/media/` + meta tags Open Graph/Twitter. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindas.md`.
