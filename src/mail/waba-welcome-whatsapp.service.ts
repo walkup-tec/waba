@@ -1,6 +1,9 @@
 import { defaultEvoSendTextTimeoutMs } from "../evo-http.client";
 import { sendEvoTextAlert } from "../monitoring/evo-text-alert.client";
-import { resolveConnectedEvoOutboundInstance } from "../push/waba-push-community.service";
+import {
+  resolveConnectedEvoInstanceByPhoneHint,
+  resolveConnectedEvoOutboundInstance,
+} from "../push/waba-push-community.service";
 import { WabaPushRepository } from "../push/waba-push.repository";
 import {
   resolveDefaultPushCommunityEvoInstance,
@@ -25,6 +28,14 @@ export type WabaWhatsAppDeliveryResult = {
 };
 
 const DEFAULT_COMMUNITY_LINK = "https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7";
+const DEFAULT_WELCOME_PRIMARY_PHONE = "51981077770";
+const DEFAULT_WELCOME_FALLBACK_PHONE = "5197462102";
+
+const resolveWelcomePrimaryPhoneHint = (): string =>
+  String(process.env.WABA_WELCOME_WHATSAPP_PRIMARY_PHONE || DEFAULT_WELCOME_PRIMARY_PHONE).trim();
+
+const resolveWelcomeFallbackPhoneHint = (): string =>
+  String(process.env.WABA_WELCOME_WHATSAPP_FALLBACK_PHONE || DEFAULT_WELCOME_FALLBACK_PHONE).trim();
 
 const uniqueInstanceNames = (names: string[]): string[] => {
   const seen = new Set<string>();
@@ -67,6 +78,29 @@ const isRecoverableSendFailure = (detail: string, status: number): boolean => {
 };
 
 const buildWelcomeSendCandidates = async (): Promise<string[]> => {
+  const primaryPhone = resolveWelcomePrimaryPhoneHint();
+  const fallbackPhone = resolveWelcomeFallbackPhoneHint();
+
+  const primaryByPhone = await resolveConnectedEvoInstanceByPhoneHint(primaryPhone);
+  if (primaryByPhone) {
+    console.info(
+      `[whatsapp] boas-vindas: instância primária ${primaryByPhone} (${primaryPhone}) conectada.`,
+    );
+    return [primaryByPhone];
+  }
+
+  const fallbackByPhone = await resolveConnectedEvoInstanceByPhoneHint(fallbackPhone);
+  if (fallbackByPhone) {
+    console.info(
+      `[whatsapp] boas-vindas: primária ${primaryPhone} indisponível; usando ${fallbackByPhone} (${fallbackPhone}).`,
+    );
+    return [fallbackByPhone];
+  }
+
+  console.warn(
+    `[whatsapp] boas-vindas: instâncias ${primaryPhone} e ${fallbackPhone} indisponíveis; tentando resolução legada.`,
+  );
+
   const preferred = resolveWelcomeWhatsAppPreferredInstance();
   const candidates = uniqueInstanceNames([
     preferred,

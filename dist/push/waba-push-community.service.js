@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveConnectedEvoInstanceByPhoneHint = resolveConnectedEvoInstanceByPhoneHint;
 exports.resolveConnectedEvoOutboundInstance = resolveConnectedEvoOutboundInstance;
 exports.formatWhatsAppCommunityMessage = formatWhatsAppCommunityMessage;
 exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
@@ -300,6 +301,43 @@ async function discoverPushCommunityInstanceWithGroups(preferred) {
             return hit;
     }
     return null;
+}
+const normalizePhoneHintDigits = (value) => String(value || "").replace(/\D/g, "");
+const phoneHintMatchesInstance = (row, phoneHint) => {
+    const hint = normalizePhoneHintDigits(phoneHint);
+    if (!hint)
+        return false;
+    const numberDigits = normalizePhoneHintDigits(row.number);
+    const nameDigits = normalizePhoneHintDigits(row.name);
+    const candidates = [numberDigits, nameDigits].filter(Boolean);
+    for (const digits of candidates) {
+        if (digits === hint || digits.endsWith(hint) || hint.endsWith(digits))
+            return true;
+        const digitsBr = digits.startsWith("55") ? digits.slice(2) : digits;
+        const hintBr = hint.startsWith("55") ? hint.slice(2) : hint;
+        if (digitsBr === hintBr || digitsBr.endsWith(hintBr) || hintBr.endsWith(digitsBr))
+            return true;
+        if (digitsBr.includes(hintBr) || hintBr.includes(digitsBr))
+            return true;
+    }
+    return false;
+};
+/** Instância Evolution conectada cujo número/nome corresponde ao hint (ex.: 51981077770). */
+async function resolveConnectedEvoInstanceByPhoneHint(phoneHint) {
+    const hint = normalizePhoneHintDigits(phoneHint);
+    if (!hint)
+        return null;
+    const catalog = await fetchEvoInstanceCatalog();
+    const matches = catalog
+        .filter((row) => row.isOpen && phoneHintMatchesInstance(row, hint))
+        .sort((a, b) => {
+        const aNum = normalizePhoneHintDigits(a.number);
+        const bNum = normalizePhoneHintDigits(b.number);
+        const aExact = aNum === hint || aNum.endsWith(hint) ? 1 : 0;
+        const bExact = bNum === hint || bNum.endsWith(hint) ? 1 : 0;
+        return bExact - aExact;
+    });
+    return matches[0]?.name || null;
 }
 /** Instância Evolution conectada para envio outbound (boas-vindas, alertas, etc.). */
 async function resolveConnectedEvoOutboundInstance(preferred) {

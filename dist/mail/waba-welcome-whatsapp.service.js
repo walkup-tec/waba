@@ -8,6 +8,10 @@ const waba_push_repository_1 = require("../push/waba-push.repository");
 const waba_push_types_1 = require("../push/waba-push.types");
 const waba_app_url_1 = require("./waba-app-url");
 const DEFAULT_COMMUNITY_LINK = "https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7";
+const DEFAULT_WELCOME_PRIMARY_PHONE = "51981077770";
+const DEFAULT_WELCOME_FALLBACK_PHONE = "5197462102";
+const resolveWelcomePrimaryPhoneHint = () => String(process.env.WABA_WELCOME_WHATSAPP_PRIMARY_PHONE || DEFAULT_WELCOME_PRIMARY_PHONE).trim();
+const resolveWelcomeFallbackPhoneHint = () => String(process.env.WABA_WELCOME_WHATSAPP_FALLBACK_PHONE || DEFAULT_WELCOME_FALLBACK_PHONE).trim();
 const uniqueInstanceNames = (names) => {
     const seen = new Set();
     const out = [];
@@ -55,6 +59,19 @@ const isRecoverableSendFailure = (detail, status) => {
     return false;
 };
 const buildWelcomeSendCandidates = async () => {
+    const primaryPhone = resolveWelcomePrimaryPhoneHint();
+    const fallbackPhone = resolveWelcomeFallbackPhoneHint();
+    const primaryByPhone = await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(primaryPhone);
+    if (primaryByPhone) {
+        console.info(`[whatsapp] boas-vindas: instância primária ${primaryByPhone} (${primaryPhone}) conectada.`);
+        return [primaryByPhone];
+    }
+    const fallbackByPhone = await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(fallbackPhone);
+    if (fallbackByPhone) {
+        console.info(`[whatsapp] boas-vindas: primária ${primaryPhone} indisponível; usando ${fallbackByPhone} (${fallbackPhone}).`);
+        return [fallbackByPhone];
+    }
+    console.warn(`[whatsapp] boas-vindas: instâncias ${primaryPhone} e ${fallbackPhone} indisponíveis; tentando resolução legada.`);
     const preferred = resolveWelcomeWhatsAppPreferredInstance();
     const candidates = uniqueInstanceNames([
         preferred,
