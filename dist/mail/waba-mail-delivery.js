@@ -5,6 +5,7 @@ const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.rep
 const waba_app_url_1 = require("./waba-app-url");
 const waba_mail_templates_1 = require("./waba-mail.templates");
 const waba_mail_service_1 = require("./waba-mail.service");
+const waba_welcome_whatsapp_service_1 = require("./waba-welcome-whatsapp.service");
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
 const resolveSubscriberName = (email) => {
     const subscriber = subscriberRepository.getByEmail(email);
@@ -208,6 +209,12 @@ const notifySubscriberWelcomeEmail = (input) => {
     void (0, exports.deliverSubscriberWelcomeEmail)(input).catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[mail] boas-vindas cadastro (async):", message);
+    });
+    (0, waba_welcome_whatsapp_service_1.notifySubscriberWelcomeWhatsApp)({
+        email: input.email,
+        password: input.password,
+        whatsapp: input.whatsapp,
+        loginUrl: input.loginUrl,
     });
 };
 exports.notifySubscriberWelcomeEmail = notifySubscriberWelcomeEmail;

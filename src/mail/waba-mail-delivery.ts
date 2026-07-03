@@ -13,6 +13,7 @@ import {
   buildSupportTicketClosedTemplate,
 } from "./waba-mail.templates";
 import { wabaMailService } from "./waba-mail.service";
+import { notifySubscriberWelcomeWhatsApp } from "./waba-welcome-whatsapp.service";
 
 export type WabaEmailDeliveryStatus = "sent" | "skipped" | "failed";
 
@@ -294,5 +295,11 @@ export const notifySubscriberWelcomeEmail = (input: {
   void deliverSubscriberWelcomeEmail(input).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[mail] boas-vindas cadastro (async):", message);
+  });
+  notifySubscriberWelcomeWhatsApp({
+    email: input.email,
+    password: input.password,
+    whatsapp: input.whatsapp,
+    loginUrl: input.loginUrl,
   });
 };
