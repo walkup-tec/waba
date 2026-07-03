@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
+exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildOperacionalNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
 const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -191,6 +191,36 @@ const buildOperacionalNewCampaignTemplate = (input) => {
     return { subject, html };
 };
 exports.buildOperacionalNewCampaignTemplate = buildOperacionalNewCampaignTemplate;
+const buildOperacionalNewCampaignWhatsAppText = (input) => {
+    const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+    const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
+    const subscriberId = String(input.subscriberId || "").trim() || "—";
+    const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
+    const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+    const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+    const slaHours = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+    return [
+        `Olá, ${recipient}!`,
+        "",
+        `Uma nova campanha foi gerada no plano ${apiKindLabel} e está aguardando sua configuração no painel operacional.`,
+        "",
+        "Resumo da campanha:",
+        `- Data de criação: ${createdAtLabel}`,
+        `- ID do assinante: ${subscriberId}`,
+        `- Nome da campanha: ${campaignName}`,
+        `- Envios registrados: ${plannedSendCount}`,
+        `- Plano de atendimento: ${apiKindLabel}`,
+        "",
+        `Por gentileza, acesse seu painel operador e inicie a configuração desta campanha. O prazo para atendimento é de até ${slaHours} horas a partir da criação.`,
+        "",
+        "Acesse seu painel operador.",
+        "",
+        `Este aviso foi enviado somente para operacionais designados ao plano ${apiKindLabel}. Obrigado pelo cuidado com cada entrega!`,
+        "",
+        "Equipe Drax Sistemas",
+    ].join("\n");
+};
+exports.buildOperacionalNewCampaignWhatsAppText = buildOperacionalNewCampaignWhatsAppText;
 const buildCampaignErrorReportedTemplate = (input) => {
     const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
     const campaignName = String(input.campaignName || "").trim() || "Sua campanha";

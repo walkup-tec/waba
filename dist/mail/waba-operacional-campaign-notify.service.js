@@ -5,6 +5,7 @@ const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_mail_delivery_1 = require("./waba-mail-delivery");
+const waba_operacional_campaign_whatsapp_service_1 = require("./waba-operacional-campaign-whatsapp.service");
 const formatCreatedAtLabel = (iso) => {
     const value = String(iso ?? "").trim();
     if (!value)
@@ -52,7 +53,7 @@ const notifyOperacionalStaffOnCampaignCreated = async (intake) => {
         operacionais.map((user) => user.email).join(", "));
     const recipients = [];
     for (const operacional of operacionais) {
-        const delivery = await (0, waba_mail_delivery_1.deliverOperacionalNewCampaignEmail)({
+        const emailDelivery = await (0, waba_mail_delivery_1.deliverOperacionalNewCampaignEmail)({
             operacionalEmail: operacional.email,
             operacionalName: operacional.fullName,
             campaignId: intake.id,
@@ -62,18 +63,46 @@ const notifyOperacionalStaffOnCampaignCreated = async (intake) => {
             createdAtLabel,
             apiKindLabel,
         });
+        const whatsappDelivery = await (0, waba_operacional_campaign_whatsapp_service_1.deliverOperacionalNewCampaignWhatsApp)({
+            recipientEmail: operacional.email,
+            recipientName: operacional.fullName,
+            whatsapp: String(operacional.whatsapp ?? "").trim(),
+            campaignId: intake.id,
+            campaignName: intake.campaignName,
+            subscriberId,
+            plannedSendCount,
+            createdAtLabel,
+            apiKindLabel,
+            campaignUrl: "",
+        });
+        const aggregatedStatus = emailDelivery.status === "sent" || whatsappDelivery.status === "sent"
+            ? "sent"
+            : emailDelivery.status === "failed" || whatsappDelivery.status === "failed"
+                ? "failed"
+                : "skipped";
+        const aggregatedMessage = [
+            `E-mail: ${emailDelivery.message}`,
+            `WhatsApp: ${whatsappDelivery.message}`,
+        ].join(" | ");
         recipients.push({
             email: operacional.email.trim().toLowerCase(),
             fullName: operacional.fullName,
-            status: delivery.status,
-            message: delivery.message,
-            messageId: delivery.messageId,
+            status: aggregatedStatus,
+            message: aggregatedMessage,
+            messageId: emailDelivery.messageId,
+            emailStatus: emailDelivery.status,
+            emailMessage: emailDelivery.message,
+            emailMessageId: emailDelivery.messageId,
+            whatsapp: String(operacional.whatsapp ?? "").trim(),
+            whatsappStatus: whatsappDelivery.status,
+            whatsappMessage: whatsappDelivery.message,
+            whatsappInstanceName: whatsappDelivery.instanceName,
         });
-        if (delivery.status === "skipped") {
-            console.warn(`[mail] ${delivery.message}`);
+        if (aggregatedStatus === "skipped") {
+            console.warn(`[notify] ${operacional.email}: ${aggregatedMessage}`);
         }
-        else if (delivery.status === "failed") {
-            console.error(`[mail] operacional nova campanha: ${delivery.message}`);
+        else if (aggregatedStatus === "failed") {
+            console.error(`[notify] operacional nova campanha: ${operacional.email}: ${aggregatedMessage}`);
         }
     }
     return {

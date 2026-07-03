@@ -36,6 +36,13 @@ export type WabaCampaignOperacionalNotifyAudit = {
     status: "sent" | "skipped" | "failed";
     message: string;
     messageId?: string;
+    emailStatus?: "sent" | "skipped" | "failed";
+    emailMessage?: string;
+    emailMessageId?: string;
+    whatsapp?: string;
+    whatsappStatus?: "sent" | "skipped" | "failed";
+    whatsappMessage?: string;
+    whatsappInstanceName?: string;
   }[];
 };
 

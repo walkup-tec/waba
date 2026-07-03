@@ -5,15 +5,19 @@ import { resolveDataFile } from "../data-path";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 
 export type WabaSystemUserRole = "master" | "operacional" | "suporte";
+export type WabaSystemUserOperacionalSegment = "bets" | "todos";
 
 export type WabaSystemUser = {
   id: string;
   fullName: string;
   email: string;
   passwordHash: string;
+  whatsapp?: string;
   role: WabaSystemUserRole;
   /** Operacional: fila de campanhas (API Oficial ou API Alternativa). */
   operacionalDispatchesApi?: WabaDispatchesApiKind | null;
+  /** Operacional: segmento atendido no painel. */
+  operacionalSegment?: WabaSystemUserOperacionalSegment | null;
   /** Master: créditos ilimitados para disparos (padrão true). */
   masterUnlimitedCredits?: boolean;
   /** Master: repasse PIX ao fornecedor no split (padrão true). */
@@ -94,7 +98,9 @@ export class WabaSystemUserRepository {
         Pick<
         WabaSystemUser,
         | "menuPermissions"
+        | "whatsapp"
         | "operacionalDispatchesApi"
+        | "operacionalSegment"
         | "masterUnlimitedCredits"
         | "masterSplitSuppliers"
         | "masterSplitProfits"

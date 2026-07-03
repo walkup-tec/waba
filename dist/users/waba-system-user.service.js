@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getStaffRoleLabel = exports.isStaffRole = exports.WabaSystemUserService = void 0;
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const node_crypto_2 = require("node:crypto");
+const phone_1 = require("../billing/phone");
 const waba_menu_permissions_service_1 = require("../menus/waba-menu-permissions.service");
 const waba_menu_registry_1 = require("../menus/waba-menu-registry");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
@@ -37,6 +38,10 @@ const ROLE_LABELS = {
     operacional: "Operacional",
     suporte: "Suporte",
 };
+const OPERACIONAL_SEGMENT_LABELS = {
+    bets: "Bets",
+    todos: "Todos",
+};
 const parseRole = (value) => {
     const raw = String(value ?? "")
         .trim()
@@ -53,6 +58,24 @@ const parseOperacionalDispatchesApiForRole = (role, value, options = {}) => {
         throw new Error("Selecione o tipo de disparos que este operacional atende (API Oficial ou API Alternativa).");
     }
     return parsed;
+};
+const parseOptionalWhatsapp = (value) => {
+    const raw = String(value ?? "").trim();
+    if (!raw)
+        return "";
+    return (0, phone_1.formatBrazilPhoneDigits)(raw);
+};
+const parseOperacionalSegmentForRole = (role, value, options = {}) => {
+    if (role !== "operacional")
+        return null;
+    const raw = String(value ?? "")
+        .trim()
+        .toLowerCase();
+    if (!raw)
+        return options.defaultValue ?? "todos";
+    if (raw === "bets" || raw === "todos")
+        return raw;
+    throw new Error("Selecione um segmento válido para o operacional (Bets ou Todos).");
 };
 const formatMasterDisparosPolicyLabel = (policy) => {
     const creditsLabel = policy.unlimitedCredits ? "Ilimitado" : "Créditos";
@@ -85,12 +108,17 @@ class WabaSystemUserService {
         this.repository = repository;
     }
     ensureUserMigrated(user) {
-        if (user.menuPermissions != null)
+        const patch = {};
+        if (user.menuPermissions == null) {
+            patch.menuPermissions = (0, waba_menu_permissions_service_1.buildLegacyMigrationPermissions)();
+        }
+        if (user.role === "operacional" && user.operacionalSegment == null) {
+            patch.operacionalSegment = "todos";
+        }
+        if (!Object.keys(patch).length)
             return user;
-        const migrated = this.repository.updateById(user.id, {
-            menuPermissions: (0, waba_menu_permissions_service_1.buildLegacyMigrationPermissions)(),
-        });
-        return migrated ?? user;
+        const migrated = this.repository.updateById(user.id, patch);
+        return migrated ?? { ...user, ...patch };
     }
     getUserWithMigration(email) {
         const user = this.repository.getByEmail(normalizeEmail(email));
@@ -105,6 +133,7 @@ class WabaSystemUserService {
             id: user.id,
             fullName: user.fullName,
             email: user.email,
+            whatsapp: String(user.whatsapp ?? "").trim(),
             role: user.role,
             roleLabel: ROLE_LABELS[user.role],
             createdAt: user.createdAt,
@@ -115,6 +144,10 @@ class WabaSystemUserService {
             operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
             operacionalDispatchesApiLabel: user.operacionalDispatchesApi
                 ? waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[user.operacionalDispatchesApi]
+                : "—",
+            operacionalSegment: user.operacionalSegment ?? null,
+            operacionalSegmentLabel: user.operacionalSegment
+                ? OPERACIONAL_SEGMENT_LABELS[user.operacionalSegment]
                 : "—",
             masterUnlimitedCredits: masterPolicy?.unlimitedCredits ?? false,
             masterSplitSuppliers: masterPolicy?.splitSuppliers ?? false,
@@ -172,6 +205,7 @@ class WabaSystemUserService {
         const email = normalizeEmail(input.email);
         const fullName = String(input.fullName ?? "").trim();
         const password = String(input.password ?? "");
+        const whatsapp = parseOptionalWhatsapp(input.whatsapp);
         const role = parseRole(input.role);
         if (fullName.length < 2)
             throw new Error("Informe o nome do usuário.");
@@ -186,6 +220,9 @@ class WabaSystemUserService {
             throw new Error("Selecione pelo menos um menu para o usuário.");
         }
         const operacionalDispatchesApi = parseOperacionalDispatchesApiForRole(role, input.operacionalDispatchesApi, { required: true });
+        const operacionalSegment = parseOperacionalSegmentForRole(role, input.operacionalSegment, {
+            defaultValue: "todos",
+        });
         const masterPolicy = role === "master"
             ? (0, waba_master_disparos_policy_service_1.parseMasterDisparosPolicyInput)(input, { applyDefaults: true })
             : null;
@@ -195,8 +232,10 @@ class WabaSystemUserService {
             fullName,
             email,
             passwordHash: hashPassword(password),
+            whatsapp,
             role,
             operacionalDispatchesApi,
+            operacionalSegment,
             masterUnlimitedCredits: masterPolicy?.unlimitedCredits,
             masterSplitSuppliers: masterPolicy?.splitSuppliers,
             masterSplitProfits: masterPolicy?.splitProfits,
@@ -213,6 +252,7 @@ class WabaSystemUserService {
         const fullName = input.fullName !== undefined ? String(input.fullName).trim() : user.fullName;
         const email = input.email !== undefined ? normalizeEmail(input.email) : user.email;
         const password = input.password !== undefined ? String(input.password ?? "") : undefined;
+        const whatsapp = input.whatsapp !== undefined ? parseOptionalWhatsapp(input.whatsapp) : String(user.whatsapp ?? "").trim();
         if (fullName.length < 2)
             throw new Error("Informe o nome do usuário.");
         if (!email.includes("@"))
@@ -223,7 +263,7 @@ class WabaSystemUserService {
                 throw new Error("Já existe um usuário com este e-mail.");
             }
         }
-        const patch = { fullName, email };
+        const patch = { fullName, email, whatsapp };
         if (password !== undefined && password.length > 0) {
             if (password.length < 6) {
                 throw new Error("A senha deve ter pelo menos 6 caracteres.");
@@ -235,6 +275,9 @@ class WabaSystemUserService {
         }
         if (input.operacionalDispatchesApi !== undefined) {
             patch.operacionalDispatchesApi = parseOperacionalDispatchesApiForRole(user.role, input.operacionalDispatchesApi, { required: user.role === "operacional" });
+        }
+        if (input.operacionalSegment !== undefined) {
+            patch.operacionalSegment = parseOperacionalSegmentForRole(user.role, input.operacionalSegment, { defaultValue: user.operacionalSegment ?? "todos" });
         }
         if (user.role === "master") {
             const hasMasterPolicyInput = input.masterUnlimitedCredits !== undefined ||

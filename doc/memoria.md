@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Operacional: persistência de WhatsApp + notify por WhatsApp:** `Admin · Usuários` agora persiste `whatsapp` e `segmento` do operador; campanha nova envia e-mail e também WhatsApp com fallback de instância `51981077770` -> `5197462102`. Ver `doc/LOG-2026-07-03__operacional-whatsapp-persistencia-e-notify.md`. Palavras-chave: `waba-system-user`, `operacionalNotify`, `whatsapp`, `segmento`, `final 77770`.
+
 **WABA — Admin Usuários (front):** formulário e modal de edição ganharam campo visual de `WhatsApp` e select `Segmento` (`Bets`/`Todos`) para papel `operacional`, com máscara e exibição condicional. Ver `doc/LOG-2026-07-03__admin-usuarios-front-whatsapp-segmento.md`. Palavras-chave: `admin-user-whatsapp`, `operacional-segment`, `Admin Usuários`.
 
 **WABA — Healthcheck do `waba_disparador` estabilizado:** Docker deixou de usar `GET /health` pesado (snapshot de `/app/data`) e passou a usar `GET /ready` com timeout/start-period/retries mais tolerantes; marker `DEPLOY-2026-07-03-healthcheck-ready-waba-disparador`. Ver `doc/LOG-2026-07-03__fix-waba-disparador-healthcheck-ready.md`. Palavras-chave: `waba_disparador`, `HEALTHCHECK`, `/ready`, Easypanel amarelo/verde.
