@@ -128,6 +128,7 @@ const deliverSubscriberWelcomeEmail = async (input) => {
     const mail = (0, waba_mail_templates_1.buildSubscriberWelcomeTemplate)({
         recipientName: input.fullName,
         recipientEmail: email,
+        password: String(input.password ?? ""),
         whatsapp: input.whatsapp,
         phone: input.phone,
         cpfCnpj: input.cpfCnpj,

@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-02
 
+**WABA — Boas-vindas com senha no e-mail:** template inclui senha de acesso no cadastro (site e master via `register()`). Marker `DEPLOY-2026-07-03-boas-vindas-senha-cadastro`. Ver `doc/LOG-2026-07-03__boas-vindas-email-senha-cadastro.md`. Palavras-chave: `buildSubscriberWelcomeTemplate`, `Senha de acesso`.
+
 **WABA — Billing: prefill CPF + moeda milheiro + modal excluir:** doc do cadastro no checkout; R$ com milheiro; exclusão assinante sem alerta do navegador. Marker `DEPLOY-2026-07-02-billing-prefill-doc-moeda-milheiro`. Ver `doc/LOG-2026-07-02__billing-prefill-doc-moeda-excluir-modal.md`. Palavras-chave: `prefillDisparosBillingForm`, `admin-subscriber-delete-overlay`.
 
 **WABA — Checkout: máscara qty + cupom toggle:** qty custom com milheiro pt-BR; cupom só após "Eu tenho cupom de desconto". Marker `DEPLOY-2026-07-02-billing-qty-mask-cupom-toggle`. Ver `doc/LOG-2026-07-02__billing-qty-mask-cupom-toggle.md`. Palavras-chave: `disparos-billing-coupon-toggle`, `parseDisparosQtyInputValue`.

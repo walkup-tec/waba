@@ -105,6 +105,7 @@ export const buildSupportTicketClosedTemplate = (input: SupportTicketClosedTempl
 export type SubscriberWelcomeTemplateInput = {
   recipientName: string;
   recipientEmail: string;
+  password: string;
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
@@ -133,6 +134,7 @@ export const buildSubscriberWelcomeTemplate = (input: SubscriberWelcomeTemplateI
     <table style="width:100%;border-collapse:collapse;margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
       ${registrationFieldRow("Nome completo", input.recipientName)}
       ${registrationFieldRow("E-mail de acesso", input.recipientEmail)}
+      ${registrationFieldRow("Senha de acesso", input.password)}
       ${registrationFieldRow("WhatsApp", whatsappLabel)}
       ${phoneLabel && phoneLabel !== whatsappLabel ? registrationFieldRow("Telefone", phoneLabel) : ""}
       ${registrationFieldRow("CPF/CNPJ", cpfCnpjLabel)}

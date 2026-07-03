@@ -92,6 +92,7 @@ export class WabaSubscriberService {
     notifySubscriberWelcomeEmail({
       email: profile.email,
       fullName: profile.fullName,
+      password,
       whatsapp: profile.whatsapp,
       phone: profile.phone,
       cpfCnpj: profile.cpfCnpj,

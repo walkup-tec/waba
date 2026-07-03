@@ -78,6 +78,7 @@ class WabaSubscriberService {
         (0, waba_mail_delivery_1.notifySubscriberWelcomeEmail)({
             email: profile.email,
             fullName: profile.fullName,
+            password,
             whatsapp: profile.whatsapp,
             phone: profile.phone,
             cpfCnpj: profile.cpfCnpj,

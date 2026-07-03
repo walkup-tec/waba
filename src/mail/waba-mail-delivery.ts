@@ -162,6 +162,7 @@ export const deliverCampaignErrorReportedEmail = async (input: {
 export const deliverSubscriberWelcomeEmail = async (input: {
   email: string;
   fullName: string;
+  password: string;
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
@@ -174,6 +175,7 @@ export const deliverSubscriberWelcomeEmail = async (input: {
   const mail = buildSubscriberWelcomeTemplate({
     recipientName: input.fullName,
     recipientEmail: email,
+    password: String(input.password ?? ""),
     whatsapp: input.whatsapp,
     phone: input.phone,
     cpfCnpj: input.cpfCnpj,
@@ -283,6 +285,7 @@ export const notifyOperacionalNewCampaignEmail = (input: {
 export const notifySubscriberWelcomeEmail = (input: {
   email: string;
   fullName: string;
+  password: string;
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
