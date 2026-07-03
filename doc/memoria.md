@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Admin Usuários (front):** formulário e modal de edição ganharam campo visual de `WhatsApp` e select `Segmento` (`Bets`/`Todos`) para papel `operacional`, com máscara e exibição condicional. Ver `doc/LOG-2026-07-03__admin-usuarios-front-whatsapp-segmento.md`. Palavras-chave: `admin-user-whatsapp`, `operacional-segment`, `Admin Usuários`.
+
 **WABA — Healthcheck do `waba_disparador` estabilizado:** Docker deixou de usar `GET /health` pesado (snapshot de `/app/data`) e passou a usar `GET /ready` com timeout/start-period/retries mais tolerantes; marker `DEPLOY-2026-07-03-healthcheck-ready-waba-disparador`. Ver `doc/LOG-2026-07-03__fix-waba-disparador-healthcheck-ready.md`. Palavras-chave: `waba_disparador`, `HEALTHCHECK`, `/ready`, Easypanel amarelo/verde.
 
 **WABA — Fix OG image não indexada:** `compBoasvindasV3.png` 1.5 MB → `.jpg` 140 KB (1200×1200 q82); scraper WhatsApp/Meta agora processa. Ver `doc/LOG-2026-07-03__fix-og-image-boas-vindas-otimizada.md`. Palavras-chave: `og:image`, `compBoasvindasV3`, preview WhatsApp.

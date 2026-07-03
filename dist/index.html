@@ -18387,6 +18387,16 @@
                       <input id="admin-user-email" type="email" required autocomplete="off" placeholder="usuario@empresa.com.br" />
                     </div>
                     <div class="aquecedor-field">
+                      <label for="admin-user-whatsapp">WhatsApp</label>
+                      <input
+                        id="admin-user-whatsapp"
+                        type="tel"
+                        inputmode="numeric"
+                        autocomplete="tel"
+                        placeholder="(11) 99999-9999"
+                      />
+                    </div>
+                    <div class="aquecedor-field">
                       <label for="admin-user-password">Senha</label>
                       <input id="admin-user-password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
                     </div>
@@ -18408,6 +18418,13 @@
                       <p class="admin-users-menus-hint" style="margin-top: 6px">
                         Campanhas contratadas neste plano aparecem no painel operacional deste usuário.
                       </p>
+                    </div>
+                    <div id="admin-user-operacional-segment-block" class="aquecedor-field" hidden>
+                      <label for="admin-user-operacional-segment">Segmento</label>
+                      <select id="admin-user-operacional-segment" required>
+                        <option value="bets">Bets</option>
+                        <option value="todos" selected>Todos</option>
+                      </select>
                     </div>
                     <div id="admin-user-master-policy-block" class="admin-user-master-policy-block" hidden>
                       <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -19296,6 +19313,16 @@
               <input id="admin-user-edit-email" type="email" required placeholder="usuario@empresa.com.br" />
             </div>
             <div class="aquecedor-field">
+              <label for="admin-user-edit-whatsapp">WhatsApp</label>
+              <input
+                id="admin-user-edit-whatsapp"
+                type="tel"
+                inputmode="numeric"
+                autocomplete="tel"
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+            <div class="aquecedor-field">
               <label for="admin-user-edit-password">Nova senha</label>
               <input
                 id="admin-user-edit-password"
@@ -19318,6 +19345,13 @@
               <p class="admin-users-menus-hint" style="margin-top: 6px">
                 Define quais campanhas contratadas este operacional enxerga no painel Campanhas.
               </p>
+            </div>
+            <div id="admin-user-edit-operacional-segment-block" class="aquecedor-field" hidden>
+              <label for="admin-user-edit-operacional-segment">Segmento</label>
+              <select id="admin-user-edit-operacional-segment" required>
+                <option value="bets">Bets</option>
+                <option value="todos" selected>Todos</option>
+              </select>
             </div>
             <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block" hidden>
               <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -28029,12 +28063,30 @@
         return wabaMenuRegistryCache;
       }
 
+      function bindAdminUserWhatsappMask(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input || input.dataset.maskBound === "1") return;
+        const applyMask = () => {
+          input.value = formatWhatsappTarget(input.value);
+        };
+        input.dataset.maskBound = "1";
+        input.addEventListener("input", applyMask);
+        input.addEventListener("blur", applyMask);
+        input.addEventListener("paste", () => {
+          window.setTimeout(applyMask, 0);
+        });
+      }
+
       function syncAdminUserOperacionalApiField(role, options = {}) {
         const isOperacional = String(role || "").toLowerCase() === "operacional";
         const createBlock = document.getElementById("admin-user-operacional-api-block");
         const createSelect = document.getElementById("admin-user-operacional-api");
+        const createSegmentBlock = document.getElementById("admin-user-operacional-segment-block");
+        const createSegmentSelect = document.getElementById("admin-user-operacional-segment");
         const editBlock = document.getElementById("admin-user-edit-operacional-api-block");
         const editSelect = document.getElementById("admin-user-edit-operacional-api");
+        const editSegmentBlock = document.getElementById("admin-user-edit-operacional-segment-block");
+        const editSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
         const mode = String(options.mode || "create");
 
         if (mode === "create") {
@@ -28043,12 +28095,22 @@
             createSelect.required = isOperacional;
             if (!isOperacional) createSelect.value = "";
           }
+          if (createSegmentBlock) createSegmentBlock.hidden = !isOperacional;
+          if (createSegmentSelect) {
+            createSegmentSelect.required = isOperacional;
+            if (!isOperacional) createSegmentSelect.value = "todos";
+          }
         }
         if (mode === "edit" || mode === "both") {
           if (editBlock) editBlock.hidden = !isOperacional;
           if (editSelect) {
             editSelect.required = isOperacional;
             if (!isOperacional) editSelect.value = "";
+          }
+          if (editSegmentBlock) editSegmentBlock.hidden = !isOperacional;
+          if (editSegmentSelect) {
+            editSegmentSelect.required = isOperacional;
+            if (!isOperacional) editSegmentSelect.value = "todos";
           }
         }
         syncAdminUserMasterPolicyField(role, options);
@@ -28102,6 +28164,12 @@
       function readAdminUserOperacionalApiValue(mode = "create") {
         const id = mode === "edit" ? "admin-user-edit-operacional-api" : "admin-user-operacional-api";
         return String(document.getElementById(id)?.value || "").trim();
+      }
+
+      function readAdminUserOperacionalSegmentValue(mode = "create") {
+        const id =
+          mode === "edit" ? "admin-user-edit-operacional-segment" : "admin-user-operacional-segment";
+        return String(document.getElementById(id)?.value || "todos").trim() || "todos";
       }
 
       function syncAdminCampanhasScopeHint() {
@@ -28280,12 +28348,22 @@
         }
         if (nameInput) nameInput.value = user.fullName || "";
         if (emailInput) emailInput.value = user.email || "";
+        const whatsappInput = document.getElementById("admin-user-edit-whatsapp");
+        if (whatsappInput) {
+          whatsappInput.value = formatWhatsappTarget(
+            String(user.whatsapp || user.phone || user.contactWhatsapp || "")
+          );
+        }
         if (passwordInput) passwordInput.value = "";
         if (roleInput) roleInput.value = user.roleLabel || user.role || "";
         syncAdminUserOperacionalApiField(user.role, { mode: "edit", user });
         const operacionalApiSelect = document.getElementById("admin-user-edit-operacional-api");
         if (operacionalApiSelect) {
           operacionalApiSelect.value = String(user.operacionalDispatchesApi || "");
+        }
+        const operacionalSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
+        if (operacionalSegmentSelect) {
+          operacionalSegmentSelect.value = String(user.operacionalSegment || user.segment || "todos");
         }
         if (menusBlock) {
           menusBlock.hidden = user.role === "master";
@@ -28394,7 +28472,8 @@
           return;
         }
 
-        const body = { fullName, email };
+        const whatsapp = String(document.getElementById("admin-user-edit-whatsapp")?.value || "").trim();
+        const body = { fullName, email, whatsapp };
         if (password.length > 0) body.password = password;
         if (user?.role !== "master") {
           body.menuPermissions = collectMenuPermissionsFromContainer(checklist);
@@ -28408,6 +28487,7 @@
             return;
           }
           body.operacionalDispatchesApi = operacionalDispatchesApi;
+          body.operacionalSegment = readAdminUserOperacionalSegmentValue("edit");
         }
         if (user?.role === "master") {
           Object.assign(body, readAdminUserMasterPolicyValues("edit"));
@@ -28492,6 +28572,7 @@
 
         const fullName = String(document.getElementById("admin-user-full-name")?.value || "").trim();
         const email = String(document.getElementById("admin-user-email")?.value || "").trim();
+        const whatsapp = String(document.getElementById("admin-user-whatsapp")?.value || "").trim();
         const password = String(document.getElementById("admin-user-password")?.value || "");
         const role = String(document.getElementById("admin-user-role")?.value || "").trim();
         const menuPermissions = collectMenuPermissionsFromContainer(
@@ -28523,10 +28604,13 @@
               body: JSON.stringify({
                 fullName,
                 email,
+                whatsapp,
                 password,
                 role,
                 menuPermissions,
                 operacionalDispatchesApi: role === "operacional" ? operacionalDispatchesApi : undefined,
+                operacionalSegment:
+                  role === "operacional" ? readAdminUserOperacionalSegmentValue("create") : undefined,
                 ...(role === "master" ? readAdminUserMasterPolicyValues("create") : {}),
               }),
             },
@@ -28539,10 +28623,13 @@
           showToast("Usuário criado com sucesso.", "success");
           document.getElementById("admin-user-full-name").value = "";
           document.getElementById("admin-user-email").value = "";
+          document.getElementById("admin-user-whatsapp").value = "";
           document.getElementById("admin-user-password").value = "";
           document.getElementById("admin-user-role").value = "suporte";
           const operacionalApiSelect = document.getElementById("admin-user-operacional-api");
           if (operacionalApiSelect) operacionalApiSelect.value = "";
+          const operacionalSegmentSelect = document.getElementById("admin-user-operacional-segment");
+          if (operacionalSegmentSelect) operacionalSegmentSelect.value = "todos";
           syncAdminUserCreateMenuChecklist();
           await loadAdminUsers();
         } catch (error) {
@@ -28556,6 +28643,8 @@
       }
 
       function initAdminUsersUi() {
+        bindAdminUserWhatsappMask("admin-user-whatsapp");
+        bindAdminUserWhatsappMask("admin-user-edit-whatsapp");
         document.getElementById("admin-users-create-form")?.addEventListener("submit", (event) => {
           void createAdminUser(event);
         });
