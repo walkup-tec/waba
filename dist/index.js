@@ -1027,6 +1027,32 @@ async function resolveAquecedorEnviosAllowedInstances(ownerEmail) {
     }
     return allowed;
 }
+async function resolveAquecedorDashboardScope(ownerEmail) {
+    const email = String(ownerEmail || "").trim().toLowerCase();
+    if (isAquecedorGlobalScopeOwner(email)) {
+        return { globalScope: true, instanceNames: [], filterValues: [] };
+    }
+    const names = await listAquecedorScopedInstanceNames(email);
+    const aliasesMap = await loadInstanceAliasesMap();
+    const filterValues = [];
+    for (const name of names) {
+        const normalized = String(name || "").trim();
+        if (!normalized)
+            continue;
+        filterValues.push(normalized);
+        const alias = mapGetInsensitive(aliasesMap, normalized);
+        if (alias && alias !== normalized)
+            filterValues.push(alias);
+    }
+    return { globalScope: false, instanceNames: names, filterValues };
+}
+function buildDadosScopeFingerprint(scope) {
+    if (scope.globalScope)
+        return "global";
+    if (!scope.instanceNames.length)
+        return "empty";
+    return scope.instanceNames.slice().sort().join("|");
+}
 const AQUECEDOR_FALLBACK_MESSAGE = "Olá! Tudo bem? Mensagem automática do aquecedor.";
 const AQUECEDOR_RECENT_SENT_LIMIT = 50;
 const AQUECEDOR_MESSAGE_BANK_LIMIT = 5000;
@@ -3528,11 +3554,17 @@ else {
 }
 // Cache curto em memória para GET /dados (reduz hits repetidos ao Supabase).
 const DADOS_RESPONSE_CACHE_TTL_MS = 45000;
+const EMPTY_DADOS_RESPONSE = {
+    log: "",
+    count: 0,
+    totalCount: 0,
+    countsBySender: {},
+};
 const dadosResponseCache = new Map();
-function buildDadosResponseCacheKey(rangeStart, rangeEnd) {
-    if (rangeStart && rangeEnd)
-        return `range:${rangeStart}:${rangeEnd}`;
-    return "default";
+function buildDadosResponseCacheKey(ownerEmail, scopeFingerprint, rangeStart, rangeEnd) {
+    const owner = String(ownerEmail || "guest").trim().toLowerCase();
+    const range = rangeStart && rangeEnd ? `range:${rangeStart}:${rangeEnd}` : "default";
+    return `${owner}:${scopeFingerprint}:${range}`;
 }
 function readDadosResponseCache(key) {
     const entry = dadosResponseCache.get(key);
@@ -3553,14 +3585,30 @@ function writeDadosResponseCache(key, payload) {
 // Dados direto do banco (view logs_envios_br já com fuso tratado)
 app.get("/dados", async (req, res) => {
     try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const ownerEmail = auth.email?.trim().toLowerCase() || "";
+        const authConfigured = (0, waba_auth_service_1.isWabaAuthConfigured)();
+        if (authConfigured && !ownerEmail) {
+            return res.status(401).json({ error: "Faça login para consultar o dashboard." });
+        }
+        const scope = authConfigured && ownerEmail
+            ? await resolveAquecedorDashboardScope(ownerEmail)
+            : { globalScope: true, instanceNames: [], filterValues: [] };
+        const scopeFingerprint = buildDadosScopeFingerprint(scope);
         const rangeStart = typeof req.query.rangeStart === "string" ? req.query.rangeStart : null;
         const rangeEnd = typeof req.query.rangeEnd === "string" ? req.query.rangeEnd : null;
-        const cacheKey = buildDadosResponseCacheKey(rangeStart, rangeEnd);
+        const cacheKey = buildDadosResponseCacheKey(ownerEmail, scopeFingerprint, rangeStart, rangeEnd);
         const cachedPayload = readDadosResponseCache(cacheKey);
         if (cachedPayload) {
             res.setHeader("Cache-Control", "private, max-age=30");
             res.setHeader("X-Waba-Dados-Cache", "hit");
             return res.json(cachedPayload);
+        }
+        if (!scope.globalScope && !scope.filterValues.length) {
+            writeDadosResponseCache(cacheKey, EMPTY_DADOS_RESPONSE);
+            res.setHeader("Cache-Control", "private, max-age=30");
+            res.setHeader("X-Waba-Dados-Cache", "empty-scope");
+            return res.json(EMPTY_DADOS_RESPONSE);
         }
         const supabase = getSupabaseClient();
         if (!supabase) {
@@ -3568,6 +3616,11 @@ app.get("/dados", async (req, res) => {
                 error: "Supabase não configurado no servidor (verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY).",
             });
         }
+        const applyDadosInstanceScope = (query) => {
+            if (scope.globalScope || !scope.filterValues.length)
+                return query;
+            return query.in("instancia_origem", scope.filterValues);
+        };
         const isValidYMD = (ymd) => /^\d{4}-\d{2}-\d{2}$/.test(ymd);
         const dateToNextDayYMD = (ymd) => {
             // ymd: YYYY-MM-DD
@@ -3597,11 +3650,11 @@ app.get("/dados", async (req, res) => {
             const endExclusive = dateToNextDayYMD(rangeEnd);
             const endTs = `${endExclusive} 00:00:00`;
             // Count exato para bater com o SQL da view (sem precisar trazer todas as linhas)
-            const { count, error: countError } = await supabase
+            const { count, error: countError } = await applyDadosInstanceScope(supabase
                 .from("logs_envios_br")
                 .select("id", { count: "exact", head: true })
                 .gte("data_envio_br", startTs)
-                .lt("data_envio_br", endTs);
+                .lt("data_envio_br", endTs));
             if (!countError && typeof count === "number") {
                 totalCount = count;
             }
@@ -3618,13 +3671,13 @@ app.get("/dados", async (req, res) => {
                 let safety = 0;
                 while (offset < totalCount && safety < 50) {
                     safety += 1;
-                    const { data: senderRows, error: senderErr } = await supabase
+                    const { data: senderRows, error: senderErr } = await applyDadosInstanceScope(supabase
                         .from("logs_envios_br")
                         .select("instancia_origem")
                         .gte("data_envio_br", startTs)
                         .lt("data_envio_br", endTs)
                         .order("data_envio_br", { ascending: false })
-                        .range(offset, offset + pageSize - 1);
+                        .range(offset, offset + pageSize - 1));
                     if (senderErr) {
                         console.error("Erro countsBySender pagination:", senderErr);
                         break;
@@ -3641,10 +3694,10 @@ app.get("/dados", async (req, res) => {
                 }
             }
             // Linhas limitadas para montar lista/gráficos (o PostgREST pode limitar ~1000)
-            query = query.gte("data_envio_br", startTs).lt("data_envio_br", endTs).limit(5000);
+            query = applyDadosInstanceScope(query.gte("data_envio_br", startTs).lt("data_envio_br", endTs).limit(5000));
         }
         else {
-            query = query.limit(2000);
+            query = applyDadosInstanceScope(query.limit(2000));
         }
         const { data, error } = await query;
         if (error) {
@@ -7021,9 +7074,23 @@ app.get("/aquecedor/envios", async (req, res) => {
             return aliasesMap.get(key) || key;
         };
         const allowed = await resolveAquecedorEnviosAllowedInstances(ownerEmail);
-        const scopedTechnicalNames = isAquecedorGlobalScopeOwner(ownerEmail)
-            ? []
-            : await listAquecedorScopedInstanceNames(ownerEmail);
+        const globalScope = isAquecedorGlobalScopeOwner(ownerEmail);
+        const scopedTechnicalNames = globalScope ? [] : await listAquecedorScopedInstanceNames(ownerEmail);
+        if (!globalScope && scopedTechnicalNames.length === 0) {
+            const ownerMotor = ownerEmail ? (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail) : null;
+            const ownerMotorRunning = ownerMotor?.runtime.running === true || ownerMotor?.desired === true;
+            let hint = "";
+            if (ownerMotorRunning) {
+                hint = "Motor ativo, mas sem instâncias vinculadas. Cadastre ou conecte instâncias para ver envios.";
+            }
+            return res.json({
+                items: [],
+                motorRunning: ownerMotor?.runtime.running === true,
+                pendingCount: 0,
+                ownerEmail: ownerEmail || null,
+                hint,
+            });
+        }
         const filterQueueByOwner = scopedTechnicalNames.length > 0;
         const pushItem = (instanciaOrigem, instanciaDestino, dataEnvio, status) => {
             if (!aquecedorEnvioMatchesOwner(instanciaOrigem, instanciaDestino, allowed))
@@ -7039,8 +7106,11 @@ app.get("/aquecedor/envios", async (req, res) => {
         const supabase = getSupabaseClient();
         const localRows = await readAquecedorEnviosLog();
         for (const row of localRows) {
-            if (ownerEmail && row.ownerEmail && row.ownerEmail !== ownerEmail)
-                continue;
+            if (!globalScope) {
+                const rowOwner = String(row.ownerEmail || "").trim().toLowerCase();
+                if (rowOwner !== ownerEmail)
+                    continue;
+            }
             // Com Supabase, envios concluídos vêm só de logs_envios (evita linha duplicada no painel).
             if (supabase && row.status === "Envio com Sucesso")
                 continue;
@@ -7139,11 +7209,19 @@ app.get("/aquecedor/envios", async (req, res) => {
                 }
                 pushItem(origem || "—", destino, dataEnvio, "Em Fila");
             }
-            const { data: logsData, error } = await (supabase
-                .from("logs_envios_br")
-                .select("instancia_origem, instancia_destino, data_envio_br")
-                .order("data_envio_br", { ascending: false })
-                .limit(limit));
+            const logsQuery = filterQueueByOwner
+                ? supabase
+                    .from("logs_envios_br")
+                    .select("instancia_origem, instancia_destino, data_envio_br")
+                    .in("instancia_origem", scopedTechnicalNames)
+                    .order("data_envio_br", { ascending: false })
+                    .limit(limit)
+                : supabase
+                    .from("logs_envios_br")
+                    .select("instancia_origem, instancia_destino, data_envio_br")
+                    .order("data_envio_br", { ascending: false })
+                    .limit(limit);
+            const { data: logsData, error } = (await logsQuery);
             if (!error && Array.isArray(logsData)) {
                 for (const row of logsData) {
                     const dataEnvio = String(row?.data_envio_br || row?.data_envio || "").trim() || null;
@@ -7201,7 +7279,7 @@ app.get("/aquecedor/command-logs", async (req, res) => {
             if (globalScope)
                 return true;
             const rowOwner = String(row.ownerEmail || "").trim().toLowerCase();
-            return !rowOwner || rowOwner === ownerEmail;
+            return rowOwner === ownerEmail;
         });
         return res.json({ items: items.slice(0, limit) });
     }

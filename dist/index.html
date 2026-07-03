@@ -20229,7 +20229,14 @@
               wabaAuthRole !== "master" &&
               Boolean(String(session.email || "").trim());
           }
-          wabaSessionEmail = String(session.email || "").trim().toLowerCase();
+          const nextSessionEmail = String(session.email || "").trim().toLowerCase();
+          if (nextSessionEmail && nextSessionEmail !== wabaSessionEmail) {
+            rawEvents = [];
+            allEvents = [];
+            isFirstLoad = true;
+            dashboardDadosCacheSavedAt = 0;
+          }
+          wabaSessionEmail = nextSessionEmail;
           wabaSubscriberProfile =
             session.subscriber && typeof session.subscriber === "object" ? session.subscriber : null;
           hydrateInstancesFromLocalCache();

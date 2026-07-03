@@ -13,7 +13,9 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-07-02
+2026-07-03
+
+**WABA — Aquecedor: dashboard isolado por assinante:** `GET /dados` e `/aquecedor/envios` filtram por instâncias do dono; assinante sem instâncias vê dashboard vazio (fix vazamento global para `digitalcorban@gmail.com`). Ver `doc/LOG-2026-07-03__aquecedor-dashboard-isolamento-assinante.md`. Palavras-chave: `resolveAquecedorDashboardScope`, `filterQueueByOwner`, `logs_envios_br`.
 
 **WABA — Boas-vindas com senha no e-mail:** template inclui senha de acesso no cadastro (site e master via `register()`). Marker `DEPLOY-2026-07-03-boas-vindas-senha-cadastro`. Ver `doc/LOG-2026-07-03__boas-vindas-email-senha-cadastro.md`. Palavras-chave: `buildSubscriberWelcomeTemplate`, `Senha de acesso`.
 
