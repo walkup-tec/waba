@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { isWabaDisparadorProductionContainer } from "./waba-container-service";
 
 /** Prefixo público (ex.: /version-01). Vazio = raiz (produção). */
 export function normalizeBasePath(raw: string): string {
@@ -44,20 +45,10 @@ export function resolveDeployResilienceForClient(): boolean {
     .trim()
     .toLowerCase();
   if (["0", "false", "off", "no"].includes(explicit)) return false;
-  if (["1", "true", "on", "yes"].includes(explicit)) return true;
-
-  const runtimeMode = String(process.env.RUNTIME_MODE || "production").toLowerCase();
-  if (runtimeMode === "development") return false;
-
-  const wabaEnv = String(process.env.WABA_ENV || "")
-    .trim()
-    .toLowerCase();
-  if (wabaEnv === "v01" || wabaEnv === "v02") return false;
-
-  const entry = String(process.argv[1] || "");
-  if (/\.ts$/i.test(entry)) return false;
-
-  return runtimeMode === "production";
+  if (["1", "true", "on", "yes"].includes(explicit)) {
+    return isWabaDisparadorProductionContainer();
+  }
+  return isWabaDisparadorProductionContainer();
 }
 
 /** Chave de cache da shell HTML — deve coincidir com media/sw-deploy-resilience.js */

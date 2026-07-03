@@ -41,6 +41,7 @@ import {
   resolveShellCacheKey,
   type WabaUiProfile,
 } from "./base-path";
+import { resolveWabaContainerServiceId } from "./waba-container-service";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
 import { resolveWabaRequestAuth } from "./auth/waba-request-auth";
 import { isWabaAuthConfigured, isWabaMasterEmail } from "./auth/waba-auth.service";
@@ -492,6 +493,7 @@ app.get("/health", (_req, res) => {
     maintenanceMode: MAINTENANCE_MODE,
     runtimeMode: RUNTIME_MODE,
     deployResilienceEnabled: resolveDeployResilienceForClient(),
+    containerService: resolveWabaContainerServiceId(),
     backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
     aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
     evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),

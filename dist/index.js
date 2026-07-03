@@ -51,6 +51,7 @@ const load_env_1 = require("./load-env");
 const data_path_1 = require("./data-path");
 const aquecedor_owner_runtime_registry_1 = require("./services/aquecedor-owner-runtime.registry");
 const base_path_1 = require("./base-path");
+const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
 const waba_auth_service_1 = require("./auth/waba-auth.service");
@@ -387,6 +388,7 @@ app.get("/health", (_req, res) => {
         maintenanceMode: MAINTENANCE_MODE,
         runtimeMode: RUNTIME_MODE,
         deployResilienceEnabled: (0, base_path_1.resolveDeployResilienceForClient)(),
+        containerService: (0, waba_container_service_1.resolveWabaContainerServiceId)(),
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
         aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),

@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-03
 
-**WABA — OG compartilhamento redes:** `compBoasvindas.png` em `/media/` + meta tags Open Graph/Twitter no app, vendas e cadastro. Marker `DEPLOY-2026-07-03-og-compartilhamento-compBoasvindas`. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindas.md`.
+**WABA — Overlay deploy só waba_disparador:** modal «Atualizando» habilitado apenas no container produção master; gatilho `shuttingDown` (não 502 genérico). Marker `DEPLOY-2026-07-03-deploy-overlay-so-waba-disparador`. Ver `doc/LOG-2026-07-03__deploy-overlay-so-waba-disparador.md`.
+
+**WABA — OG compartilhamento redes:** `compBoasvindas.png` em `/media/` + meta tags Open Graph/Twitter. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindas.md`.
 
 **WABA — Boas-vindas WhatsApp fallback por número:** primária `51981077770`, se offline usa `5197462102`. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-phone-fallback.md`.
 

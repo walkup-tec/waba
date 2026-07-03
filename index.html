@@ -49,6 +49,7 @@
         var baselineDeployMarker = "";
         var baselineServerBootId = "";
         var serverDeployResilienceFromHealth = null;
+        var serverContainerService = "";
 
         function isProductionDeployHost() {
           var host = String(window.location.hostname || "").toLowerCase();
@@ -65,37 +66,48 @@
           return window.WABA_DEPLOY_RESILIENCE_ENABLED === true;
         }
 
+        function isWabaDisparadorContainerFromHealth() {
+          if (!serverContainerService) return true;
+          return serverContainerService === "waba_disparador";
+        }
+
         function isDeployResilienceEnabled() {
           if (serverDeployResilienceFromHealth === false) return false;
-          return isServerDeployResilienceEnabled() && isProductionDeployHost();
+          if (serverContainerService && serverContainerService !== "waba_disparador") return false;
+          return isServerDeployResilienceEnabled() && isProductionDeployHost() && isWabaDisparadorContainerFromHealth();
         }
 
         function applyDeployResilienceFromHealth(data) {
           if (!data || typeof data !== "object") return;
+          if (typeof data.containerService === "string") {
+            serverContainerService = String(data.containerService || "").trim().toLowerCase();
+          }
           if (typeof data.deployResilienceEnabled === "boolean") {
             serverDeployResilienceFromHealth = data.deployResilienceEnabled;
             if (!data.deployResilienceEnabled) purgeDeployServiceWorkerCache();
           }
+          if (serverContainerService && serverContainerService !== "waba_disparador") {
+            purgeDeployServiceWorkerCache();
+          }
+        }
+
+        function isDeployShutdownSignal(payload) {
+          return Boolean(payload && payload.shuttingDown === true);
         }
 
         function shouldTriggerDeployRecoveryFromHttp(status, payload) {
-          if (status === 502 || status === 504) return true;
           if (status !== 503) return false;
-          if (payload && payload.shuttingDown === true) return true;
-          if (payload && payload.maintenanceMode === true) return true;
-          return false;
+          return isDeployShutdownSignal(payload);
         }
 
         async function shouldTriggerDeployRecoveryFromResponse(response) {
           if (!response) return false;
-          var status = response.status;
-          if (status === 502 || status === 504) return true;
-          if (status !== 503) return false;
+          if (response.status !== 503) return false;
           try {
             var payload = await response.clone().json();
-            return shouldTriggerDeployRecoveryFromHttp(status, payload);
+            return isDeployShutdownSignal(payload);
           } catch (_) {
-            return true;
+            return false;
           }
         }
 
@@ -321,22 +333,17 @@
               return {
                 stable: false,
                 deploySignal: true,
-                reason:
-                  data && data.shuttingDown
-                    ? "shutdown"
-                    : data && data.maintenanceMode
-                      ? "maintenance"
-                      : "gateway",
+                reason: "shutdown",
               };
             }
             if (isGatewayStatus(response.status)) {
               return { stable: false, deploySignal: false, reason: "gateway_without_deploy_signal" };
             }
-            if (data && data.shuttingDown) {
+            if (isDeployShutdownSignal(data)) {
               return { stable: false, deploySignal: true, reason: "shutdown" };
             }
             if (data && data.maintenanceMode) {
-              return { stable: false, deploySignal: true, reason: "maintenance" };
+              return { stable: false, deploySignal: false, reason: "maintenance" };
             }
             if (!response.ok || !data || data.ok !== true) {
               return { stable: false, deploySignal: false, reason: "unhealthy" };
