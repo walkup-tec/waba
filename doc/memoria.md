@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Fix overlay deploy travado:** dismiss ao restaurar sessão; poll no pós-deploy; force complete 90s. Ver `doc/LOG-2026-07-03__fix-deploy-overlay-travado-pos-deploy.md`.
+
 **WABA — Fix deploy Docker (dist desatualizado):** UI estava só em `index.html` raiz; produção usa `dist/index.html`. Build + `COPY public-pages` no Dockerfile. Ver `doc/LOG-2026-07-03__fix-deploy-dist-index-desatualizado.md`.
 
 **WABA — Sidebar top fixo (sem scroll):** menu lateral alinha ao conteúdo no load; não acompanha rolagem da página. Ver `doc/LOG-2026-07-03__sidebar-top-fixo-sem-scroll.md`. Palavras-chave: `syncWabaSidebarStackTop`.

@@ -41,6 +41,7 @@
         var STABLE_PROBES_REQUIRED = 3;
         var STABLE_COMPLETE_MS = 500;
         var FALSE_ALARM_MS = 45000;
+        var FORCE_COMPLETE_MS = 90000;
         var pollTimer = null;
         var pollStartedAt = 0;
         var deployRecoveryActive = false;
@@ -392,13 +393,23 @@
           if (probe.stable && shouldCompleteDeployAfterStableProbe(probe)) {
             stableProbeStreak += 1;
             setOverlayPhase("stabilizing");
-            if (stableProbeStreak >= STABLE_PROBES_REQUIRED) {
+            if (
+              stableProbeStreak >= STABLE_PROBES_REQUIRED ||
+              (sawDeploySignal && Date.now() - pollStartedAt >= FORCE_COMPLETE_MS)
+            ) {
               completeDeployRecovery();
               return;
             }
           } else if (probe.stable) {
-            stableProbeStreak = 0;
+            stableProbeStreak += 1;
             setOverlayPhase("stabilizing");
+            if (deployRecoveryActive && sawDeploySignal && Date.now() - pollStartedAt >= FORCE_COMPLETE_MS) {
+              completeDeployRecovery();
+              return;
+            }
+            if (!shouldCompleteDeployAfterStableProbe(probe)) {
+              stableProbeStreak = 0;
+            }
           } else {
             stableProbeStreak = 0;
             setOverlayPhase(probe.deploySignal ? "deploying" : "waiting");
@@ -471,6 +482,7 @@
         window.wabaDeployResilience = {
           show: showDeployOverlay,
           hide: hideDeployOverlay,
+          dismiss: dismissDeployRecoveryWithoutReload,
           pollUntilReady: pollUntilReady,
           startDeployRecovery: startDeployRecovery,
           isGatewayStatus: isGatewayStatus,
@@ -20354,7 +20366,20 @@
         }
       }
 
+      function dismissWabaDeployOverlay() {
+        const resilience = window.wabaDeployResilience;
+        if (!resilience) return;
+        if (typeof resilience.dismiss === "function") {
+          resilience.dismiss();
+          return;
+        }
+        if (typeof resilience.hide === "function") {
+          resilience.hide();
+        }
+      }
+
       function unlockWabaApp(session) {
+        dismissWabaDeployOverlay();
         document.body.classList.remove("waba-auth-locked", "waba-auth-checking");
         const loginScreen = document.getElementById("waba-login-screen");
         if (loginScreen) {
@@ -21253,6 +21278,7 @@
       }
 
       function lockWabaApp() {
+        dismissWabaDeployOverlay();
         document.body.classList.add("waba-auth-locked");
         document.body.classList.remove("waba-auth-checking", "waba-auth-enabled");
         const loginScreen = document.getElementById("waba-login-screen");
@@ -21312,14 +21338,17 @@
                 const resilience = window.wabaDeployResilience;
                 if (
                   resilience &&
-                  typeof resilience.show === "function" &&
                   typeof resilience.isEnabled === "function" &&
                   resilience.isEnabled()
                 ) {
-                  resilience.show(
-                    "Finalizando a atualização. Sua sessão será restaurada em instantes.",
-                    "stabilizing"
-                  );
+                  if (typeof resilience.startDeployRecovery === "function") {
+                    resilience.startDeployRecovery(false);
+                  } else if (typeof resilience.show === "function") {
+                    resilience.show(
+                      "Finalizando a atualização. Sua sessão será restaurada em instantes.",
+                      "stabilizing"
+                    );
+                  }
                 }
               }
               await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
