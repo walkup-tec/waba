@@ -25996,7 +25996,7 @@
         if (summary) summary.textContent = "Carregando assinantes…";
 
         try {
-          const response = await fetchWithTimeout("/admin/subscribers", {}, 12000);
+          const response = await fetchWithTimeout("/admin/subscribers", {}, 45000);
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os assinantes.");
@@ -26005,7 +26005,7 @@
         } catch (error) {
           if (tbody) {
             tbody.innerHTML = `<tr><td colspan="8" class="muted">${escapeAdminHtml(
-              error?.message || "Falha ao carregar assinantes."
+              resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes.")
             )}</td></tr>`;
           }
           if (summary) summary.textContent = "Falha ao carregar.";
@@ -26418,7 +26418,7 @@
         if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="muted">Carregando…</td></tr>';
         if (summary) summary.textContent = "Carregando cupons…";
         try {
-          const response = await fetchWithTimeout("/admin/coupons", {}, 12000);
+          const response = await fetchWithTimeout("/admin/coupons", {}, 45000);
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível carregar os cupons.");
@@ -26428,11 +26428,11 @@
         } catch (error) {
           if (tbody) {
             tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
-              error?.message || "Falha ao carregar cupons."
+              resolveAdminSubscriberFetchError(error, "Falha ao carregar cupons.")
             )}</td></tr>`;
           }
           if (summary) summary.textContent = "Falha ao carregar.";
-          showToast(error?.message || "Falha ao carregar cupons.", "error");
+          showToast(resolveAdminSubscriberFetchError(error, "Falha ao carregar cupons."), "error");
         }
       }
 

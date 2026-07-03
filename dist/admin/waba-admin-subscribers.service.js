@@ -93,6 +93,15 @@ const isCampaignAwaiting = (intake) => {
     return status === "generated" || status === "pending_review" || status === "in_progress";
 };
 const isCampaignCompleted = (intake) => normalizeIntakeStatus(intake.status) === "completed";
+const summarizePaidDisparosOrders = (orders) => {
+    let contractedValueCents = 0;
+    let contractedShipments = 0;
+    for (const order of orders) {
+        contractedValueCents += Math.max(0, Math.round(Number(order.valueCents ?? 0)));
+        contractedShipments += Math.max(0, Math.round(Number((0, waba_disparos_order_shipments_1.resolveOrderShipmentCount)(order) || 0)));
+    }
+    return { contractedValueCents, contractedShipments };
+};
 class WabaAdminSubscribersService {
     constructor(subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), subscriberService = new waba_subscriber_service_1.WabaSubscriberService(), creditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository()) {
         this.subscriberRepository = subscriberRepository;
@@ -100,6 +109,22 @@ class WabaAdminSubscribersService {
         this.creditsService = creditsService;
         this.intakeRepository = intakeRepository;
         this.orderRepository = orderRepository;
+    }
+    buildPaidDisparosOrdersByEmail() {
+        const byEmail = new Map();
+        for (const order of this.orderRepository.list()) {
+            if (order.product !== "waba-disparos" || order.status !== "paid")
+                continue;
+            if (!String(order.paidAt ?? "").trim())
+                continue;
+            const email = normalizeEmail(order.ownerEmail);
+            if (!email)
+                continue;
+            const bucket = byEmail.get(email) ?? [];
+            bucket.push(order);
+            byEmail.set(email, bucket);
+        }
+        return byEmail;
     }
     listSubscribers() {
         const intakesByEmail = new Map();
@@ -111,13 +136,14 @@ class WabaAdminSubscribersService {
             bucket.push(intake);
             intakesByEmail.set(email, bucket);
         }
+        const paidDisparosByEmail = this.buildPaidDisparosOrdersByEmail();
         return this.subscriberRepository
             .list()
             .slice()
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((subscriber) => {
             const email = normalizeEmail(subscriber.email);
-            const credits = this.creditsService.getCreditsSummary(email);
+            const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
             const intakes = intakesByEmail.get(email) ?? [];
             return {
                 id: subscriber.id,

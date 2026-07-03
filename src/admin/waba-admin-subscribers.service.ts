@@ -177,6 +177,20 @@ const isCampaignAwaiting = (intake: WabaCampaignIntake): boolean => {
 const isCampaignCompleted = (intake: WabaCampaignIntake): boolean =>
   normalizeIntakeStatus(intake.status) === "completed";
 
+const summarizePaidDisparosOrders = (
+  orders: WabaBillingOrder[],
+): { contractedValueCents: number; contractedShipments: number } => {
+  let contractedValueCents = 0;
+  let contractedShipments = 0;
+
+  for (const order of orders) {
+    contractedValueCents += Math.max(0, Math.round(Number(order.valueCents ?? 0)));
+    contractedShipments += Math.max(0, Math.round(Number(resolveOrderShipmentCount(order) || 0)));
+  }
+
+  return { contractedValueCents, contractedShipments };
+};
+
 export class WabaAdminSubscribersService {
   constructor(
     private readonly subscriberRepository = new WabaSubscriberRepository(),
@@ -185,6 +199,24 @@ export class WabaAdminSubscribersService {
     private readonly intakeRepository = new WabaCampaignIntakeRepository(),
     private readonly orderRepository = new WabaBillingOrderRepository(),
   ) {}
+
+  private buildPaidDisparosOrdersByEmail(): Map<string, WabaBillingOrder[]> {
+    const byEmail = new Map<string, WabaBillingOrder[]>();
+
+    for (const order of this.orderRepository.list()) {
+      if (order.product !== "waba-disparos" || order.status !== "paid") continue;
+      if (!String(order.paidAt ?? "").trim()) continue;
+
+      const email = normalizeEmail(order.ownerEmail);
+      if (!email) continue;
+
+      const bucket = byEmail.get(email) ?? [];
+      bucket.push(order);
+      byEmail.set(email, bucket);
+    }
+
+    return byEmail;
+  }
 
   listSubscribers(): AdminSubscriberListItem[] {
     const intakesByEmail = new Map<string, WabaCampaignIntake[]>();
@@ -196,13 +228,15 @@ export class WabaAdminSubscribersService {
       intakesByEmail.set(email, bucket);
     }
 
+    const paidDisparosByEmail = this.buildPaidDisparosOrdersByEmail();
+
     return this.subscriberRepository
       .list()
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((subscriber) => {
         const email = normalizeEmail(subscriber.email);
-        const credits = this.creditsService.getCreditsSummary(email);
+        const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
         const intakes = intakesByEmail.get(email) ?? [];
 
         return {

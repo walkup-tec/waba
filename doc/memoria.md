@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Fix timeout Admin Assinantes/Cupons:** listagem de assinantes deixou de chamar `getCreditsSummary` por linha (N+1); pedidos indexados uma vez; timeout frontend 45s + mensagem amigável. Ver `doc/LOG-2026-07-03__fix-admin-assinantes-cupons-timeout.md`. Palavras-chave: `listSubscribers`, `buildPaidDisparosOrdersByEmail`, `fetchWithTimeout`.
+
 **WABA — Fix overlay deploy travado:** dismiss ao restaurar sessão; poll no pós-deploy; force complete 90s. Ver `doc/LOG-2026-07-03__fix-deploy-overlay-travado-pos-deploy.md`.
 
 **WABA — Fix deploy Docker (dist desatualizado):** UI estava só em `index.html` raiz; produção usa `dist/index.html`. Build + `COPY public-pages` no Dockerfile. Ver `doc/LOG-2026-07-03__fix-deploy-dist-index-desatualizado.md`.
