@@ -21,7 +21,7 @@
       content="Plataforma WABA profissional da DRAX para disparos de WhatsApp em escala com máxima segurança."
     />
     <meta property="og:url" content="https://waba.draxsistemas.com.br/" />
-    <meta property="og:image" content="https://waba.draxsistemas.com.br/media/compBoasvindas.png" />
+    <meta property="og:image" content="https://waba.draxsistemas.com.br/media/compBoasvindasV2.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1254" />
     <meta property="og:image:height" content="1254" />
@@ -32,7 +32,7 @@
       name="twitter:description"
       content="Plataforma WABA profissional da DRAX para disparos de WhatsApp em escala com máxima segurança."
     />
-    <meta name="twitter:image" content="https://waba.draxsistemas.com.br/media/compBoasvindas.png" />
+    <meta name="twitter:image" content="https://waba.draxsistemas.com.br/media/compBoasvindasV2.png" />
 
     <script>
       (function () {
@@ -8856,6 +8856,15 @@
         font-size: 0.84rem;
         line-height: 1.4;
         color: #fda4af;
+      }
+
+      .admin-users-form .admin-field-invalid {
+        border-color: rgba(251, 113, 133, 0.75) !important;
+        box-shadow: 0 0 0 1px rgba(251, 113, 133, 0.28);
+      }
+
+      #admin-subscriber-create-error[hidden] {
+        display: none !important;
       }
 
       .waba-staff-no-menus-banner {
@@ -17760,8 +17769,9 @@
                         </p>
                       </div>
                     </div>
+                    <p id="admin-subscriber-create-error" class="admin-user-edit-error" hidden role="alert"></p>
                     <div class="admin-users-form-footer">
-                      <button id="admin-subscriber-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                      <button id="admin-subscriber-create-btn" class="instance-action-btn btn-qrcode enabled" type="submit">
                         Criar assinante
                       </button>
                     </div>
@@ -25892,6 +25902,59 @@
         });
       }
 
+      function resetAdminSubscriberCreateFormState() {
+        const submitBtn = document.getElementById("admin-subscriber-create-btn");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.removeAttribute("disabled");
+          submitBtn.textContent = "Criar assinante";
+          submitBtn.classList.add("enabled");
+          submitBtn.classList.remove("disabled");
+        }
+        const err = document.getElementById("admin-subscriber-create-error");
+        if (err) {
+          err.hidden = true;
+          err.textContent = "";
+        }
+        document
+          .querySelectorAll("#admin-subscribers-create-form .admin-field-invalid")
+          .forEach((el) => el.classList.remove("admin-field-invalid"));
+      }
+
+      function showAdminSubscriberCreateValidation(message, fieldId = "") {
+        const err = document.getElementById("admin-subscriber-create-error");
+        if (err) {
+          err.hidden = false;
+          err.textContent = message;
+        }
+        showToast(message, "warning", 5200);
+        document
+          .querySelectorAll("#admin-subscribers-create-form .admin-field-invalid")
+          .forEach((el) => el.classList.remove("admin-field-invalid"));
+        const field = fieldId ? document.getElementById(fieldId) : null;
+        if (field) {
+          field.classList.add("admin-field-invalid");
+          field.focus();
+          field.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+
+      function bindAdminSubscriberCreateFormFeedback() {
+        const form = document.getElementById("admin-subscribers-create-form");
+        if (!form || form.dataset.feedbackBound === "1") return;
+        form.dataset.feedbackBound = "1";
+        form.querySelectorAll("input").forEach((input) => {
+          input.addEventListener("input", () => {
+            input.classList.remove("admin-field-invalid");
+            const err = document.getElementById("admin-subscriber-create-error");
+            if (err && !err.hidden) {
+              err.hidden = true;
+              err.textContent = "";
+            }
+          });
+        });
+      }
+
       function upsertAdminSubscriberListRow(subscriber, cpfCnpjDigits = "") {
         if (!subscriber) return;
         const tbody = document.getElementById("admin-subscribers-tbody");
@@ -26345,33 +26408,47 @@
           document.getElementById("admin-subscriber-aquecedor-granted")?.checked
         );
         const submitBtn = document.getElementById("admin-subscriber-create-btn");
+        const errEl = document.getElementById("admin-subscriber-create-error");
+        if (errEl) {
+          errEl.hidden = true;
+          errEl.textContent = "";
+        }
+        document
+          .querySelectorAll("#admin-subscribers-create-form .admin-field-invalid")
+          .forEach((el) => el.classList.remove("admin-field-invalid"));
 
         if (fullName.length < 2) {
-          showToast("Informe o nome completo do assinante.", "warning");
+          showAdminSubscriberCreateValidation("Informe o nome completo do assinante.", "admin-subscriber-full-name");
           return;
         }
         if (!email) {
-          showToast("Informe o e-mail do assinante.", "warning");
+          showAdminSubscriberCreateValidation("Informe o e-mail do assinante.", "admin-subscriber-email");
           return;
         }
         if (password.length < 6) {
-          showToast("A senha deve ter pelo menos 6 caracteres.", "warning");
+          showAdminSubscriberCreateValidation("A senha deve ter pelo menos 6 caracteres.", "admin-subscriber-password");
           return;
         }
         if (!whatsapp) {
-          showToast("Informe o WhatsApp do assinante.", "warning");
+          showAdminSubscriberCreateValidation("Informe o WhatsApp do assinante.", "admin-subscriber-whatsapp");
           return;
         }
         if (whatsapp.length !== 11 || whatsapp.charAt(2) !== "9") {
-          showToast("Informe um celular válido com DDD (ex.: (51) 99966-6841).", "warning");
+          showAdminSubscriberCreateValidation(
+            "Informe um celular válido com DDD (ex.: (51) 99966-6841).",
+            "admin-subscriber-whatsapp"
+          );
           return;
         }
         if (!cpfCnpj) {
-          showToast("Informe o CPF ou CNPJ do assinante.", "warning");
+          showAdminSubscriberCreateValidation("Informe o CPF ou CNPJ do assinante.", "admin-subscriber-cpf");
           return;
         }
         if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
-          showToast("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.", "warning");
+          showAdminSubscriberCreateValidation(
+            "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.",
+            "admin-subscriber-cpf"
+          );
           return;
         }
 
@@ -26416,6 +26493,7 @@
           document.getElementById("admin-subscriber-cpf").value = "";
           const aquecedorCheckbox = document.getElementById("admin-subscriber-aquecedor-granted");
           if (aquecedorCheckbox) aquecedorCheckbox.checked = false;
+          resetAdminSubscriberCreateFormState();
           upsertAdminSubscriberListRow(payload.subscriber, cpfCnpj);
           scrollAdminSubscribersListIntoView();
           try {
@@ -26424,11 +26502,25 @@
             /* lista parcial já exibida acima */
           }
         } catch (error) {
-          showToast(resolveAdminSubscriberFetchError(error, "Erro ao criar assinante."), "error", 5200);
+          const message = resolveAdminSubscriberFetchError(error, "Erro ao criar assinante.");
+          const fieldId = /e-mail|email/i.test(message) ? "admin-subscriber-email" : "";
+          if (fieldId) {
+            showAdminSubscriberCreateValidation(message, fieldId);
+          } else {
+            const err = document.getElementById("admin-subscriber-create-error");
+            if (err) {
+              err.hidden = false;
+              err.textContent = message;
+            }
+            showToast(message, "error", 5200);
+          }
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
+            submitBtn.removeAttribute("disabled");
             submitBtn.textContent = "Criar assinante";
+            submitBtn.classList.add("enabled");
+            submitBtn.classList.remove("disabled");
           }
         }
       }
@@ -28341,10 +28433,9 @@
       function initAdminSubscribersUi() {
         syncAdminCouponValidityUi();
         bindAdminSubscriberMaskedInputs();
+        bindAdminSubscriberCreateFormFeedback();
+        resetAdminSubscriberCreateFormState();
         bindAdminCouponDiscountInput();
-        document.getElementById("admin-subscriber-create-btn")?.addEventListener("click", () => {
-          void createAdminSubscriber({ preventDefault: () => {} });
-        });
         document.getElementById("admin-coupon-create-btn")?.addEventListener("click", () => {
           void createAdminCoupon({ preventDefault: () => {} });
         });
@@ -39429,6 +39520,7 @@
           stopDisparosCampaignsPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
+          resetAdminSubscriberCreateFormState();
           void loadAdminSubscribers();
           void loadAdminCoupons();
           startAdminCouponsPolling();

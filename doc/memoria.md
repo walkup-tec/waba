@@ -15,6 +15,14 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Sidebar top fixo (sem scroll):** menu lateral alinha ao conteúdo no load; não acompanha rolagem da página. Ver `doc/LOG-2026-07-03__sidebar-top-fixo-sem-scroll.md`. Palavras-chave: `syncWabaSidebarStackTop`.
+
+**WABA — Cupons form layout inline:** campo «Válido até» na mesma linha do grid (4 colunas). Ver `doc/LOG-2026-07-03__cupons-form-valido-ate-inline.md`.
+
+**WABA — Admin assinantes ações inline:** ícones reenviar/excluir/editar na tabela; modal só Salvar+Fechar; overlay senha para reenvio. Ver `doc/LOG-2026-07-03__admin-assinantes-acoes-inline-tabela.md`. Palavras-chave: `admin-subscriber-row-icon-btn`.
+
+**WABA — OG compartilhamento V2:** `compBoasvindasV2.png` em `/media/` + meta tags Open Graph/Twitter. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindasV2.md`. Palavras-chave: `compBoasvindasV2`, `og:image`.
+
 **WABA — Fix botão Criar assinante (Admin):** validação inline CPF/e-mail; reset do botão ao abrir aba e no `finally`; submit único no form. Ver `doc/LOG-2026-07-03__fix-admin-criar-assinante-botao-travado.md`. Palavras-chave: `resetAdminSubscriberCreateFormState`, `admin-subscriber-create-error`.
 
 **WABA — Overlay deploy só waba_disparador:** modal «Atualizando» habilitado apenas no container produção master; gatilho `shuttingDown` (não 502 genérico). Marker `DEPLOY-2026-07-03-deploy-overlay-so-waba-disparador`. Ver `doc/LOG-2026-07-03__deploy-overlay-so-waba-disparador.md`.
