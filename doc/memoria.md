@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-03
 
+**WABA — Healthcheck do `waba_disparador` estabilizado:** Docker deixou de usar `GET /health` pesado (snapshot de `/app/data`) e passou a usar `GET /ready` com timeout/start-period/retries mais tolerantes; marker `DEPLOY-2026-07-03-healthcheck-ready-waba-disparador`. Ver `doc/LOG-2026-07-03__fix-waba-disparador-healthcheck-ready.md`. Palavras-chave: `waba_disparador`, `HEALTHCHECK`, `/ready`, Easypanel amarelo/verde.
+
 **WABA — Fix OG image não indexada:** `compBoasvindasV3.png` 1.5 MB → `.jpg` 140 KB (1200×1200 q82); scraper WhatsApp/Meta agora processa. Ver `doc/LOG-2026-07-03__fix-og-image-boas-vindas-otimizada.md`. Palavras-chave: `og:image`, `compBoasvindasV3`, preview WhatsApp.
 
 **WABA — Fix timeout Admin Assinantes/Cupons:** listagem de assinantes deixou de chamar `getCreditsSummary` por linha (N+1); pedidos indexados uma vez; timeout frontend 45s + mensagem amigável. Ver `doc/LOG-2026-07-03__fix-admin-assinantes-cupons-timeout.md`. Palavras-chave: `listSubscribers`, `buildPaidDisparosOrdersByEmail`, `fetchWithTimeout`.
