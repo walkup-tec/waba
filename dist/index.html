@@ -2791,7 +2791,7 @@
           bottom: 14px;
           width: 70px;
           z-index: 30;
-          transition: width 0.2s ease, top 0.2s ease;
+          transition: width 0.2s ease;
         }
 
         body.sidebar-expanded .waba-sidebar-stack {
@@ -7211,18 +7211,30 @@
         min-width: 0;
       }
 
-      .admin-coupon-validity-inline {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-top: 10px;
-        width: 100%;
+      #admin-coupons-create-form .admin-users-form-grid {
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.75fr) minmax(0, 0.95fr) minmax(0, 1.05fr);
+        align-items: end;
       }
 
-      .admin-coupon-validity-inline label {
-        font-size: 0.78rem;
-        color: #cbd5e1;
-        font-weight: 600;
+      @media (max-width: 1200px) {
+        #admin-coupons-create-form .admin-users-form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        #admin-coupons-create-form .admin-users-form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      #admin-coupons-create-form .admin-coupon-until-field[hidden] {
+        display: none;
+      }
+
+      #admin-coupons-create-form .aquecedor-field label {
+        display: block;
+        margin-bottom: 6px;
       }
 
       .aquecedor-field input[type="datetime-local"],
@@ -7234,10 +7246,6 @@
         line-height: 1.2;
         color-scheme: dark;
         font: inherit;
-      }
-
-      .admin-coupon-validity-custom {
-        margin-top: 0;
       }
 
       .admin-coupon-status-pill {
@@ -7414,7 +7422,70 @@
       }
 
       .admin-subscribers-table tbody tr.admin-subscribers-row-clickable {
+        cursor: default;
+      }
+
+      .admin-subscribers-actions-col {
+        width: 96px;
+        text-align: center;
+      }
+
+      .admin-subscribers-table td.admin-subscribers-actions {
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .admin-subscriber-row-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+
+      .admin-subscriber-row-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.55);
+        color: #cbd5e1;
         cursor: pointer;
+        line-height: 1;
+      }
+
+      .admin-subscriber-row-icon-btn:hover {
+        color: #f8fafc;
+        border-color: rgba(148, 163, 184, 0.45);
+        background: rgba(30, 41, 59, 0.85);
+      }
+
+      .admin-subscriber-row-icon-btn.is-resend {
+        color: #93c5fd;
+      }
+
+      .admin-subscriber-row-icon-btn.is-delete {
+        color: #f87171;
+      }
+
+      .admin-subscriber-row-icon-btn.is-edit {
+        color: #86efac;
+      }
+
+      .admin-subscriber-row-icon-btn svg {
+        display: block;
+      }
+
+      .admin-subscriber-row-icon-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      #admin-subscriber-resend-overlay .admin-subscriber-resend-password {
+        margin-top: 12px;
       }
 
       .admin-subscribers-table tbody tr.admin-subscribers-row-clickable:hover td {
@@ -17803,10 +17874,10 @@
                           <option value="custom">Personalizada</option>
                           <option value="lifetime">Vitalícia</option>
                         </select>
-                        <div id="admin-coupon-validity-custom-wrap" class="admin-coupon-validity-inline" hidden>
-                          <label for="admin-coupon-valid-until">Válido até</label>
-                          <input id="admin-coupon-valid-until" type="datetime-local" step="60" />
-                        </div>
+                      </div>
+                      <div id="admin-coupon-validity-custom-wrap" class="aquecedor-field admin-coupon-until-field" hidden>
+                        <label for="admin-coupon-valid-until">Válido até</label>
+                        <input id="admin-coupon-valid-until" type="datetime-local" step="60" />
                       </div>
                     </div>
                     <div class="admin-users-form-footer">
@@ -17889,11 +17960,12 @@
                         <th scope="col" class="admin-subscribers-num">Disparos</th>
                         <th scope="col" class="admin-subscribers-num">Aguardando</th>
                         <th scope="col" class="admin-subscribers-num">Finalizados</th>
+                        <th scope="col" class="admin-subscribers-actions-col"><span class="sr-only">Ações</span></th>
                       </tr>
                     </thead>
                     <tbody id="admin-subscribers-tbody">
                       <tr>
-                        <td colspan="7" class="muted">Carregando…</td>
+                        <td colspan="8" class="muted">Carregando…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -19072,21 +19144,6 @@
           <button id="admin-subscriber-detail-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">
             Salvar alterações
           </button>
-          <button
-            id="admin-subscriber-detail-resend-welcome-btn"
-            class="instance-action-btn"
-            type="button"
-            title="Informe a senha no campo Nova senha antes de reenviar"
-          >
-            Reenviar boas-vindas
-          </button>
-          <button
-            id="admin-subscriber-detail-delete-btn"
-            class="instance-action-btn admin-subscriber-detail-delete-btn"
-            type="button"
-          >
-            Excluir assinante
-          </button>
           <button id="admin-subscriber-detail-close-btn" class="instance-action-btn" type="button">
             Fechar
           </button>
@@ -19121,6 +19178,44 @@
             type="button"
           >
             Sim, excluir
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="admin-subscriber-resend-overlay" class="confirm-overlay" aria-hidden="true">
+      <div
+        class="confirm-modal admin-subscriber-resend-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-subscriber-resend-title"
+        style="max-width: 520px"
+      >
+        <div class="confirm-title" id="admin-subscriber-resend-title">Reenviar boas-vindas</div>
+        <div class="confirm-text">
+          Informe a senha de acesso para reenviar e-mail e WhatsApp para
+          <strong id="admin-subscriber-resend-email-display" class="admin-subscriber-delete-email"></strong>.
+        </div>
+        <div class="aquecedor-field admin-subscriber-resend-password">
+          <label for="admin-subscriber-resend-password">Senha de acesso</label>
+          <input
+            id="admin-subscriber-resend-password"
+            type="password"
+            minlength="6"
+            autocomplete="new-password"
+            placeholder="Mínimo 6 caracteres"
+          />
+        </div>
+        <div class="confirm-actions">
+          <button id="admin-subscriber-resend-cancel-btn" class="instance-action-btn" type="button">
+            Cancelar
+          </button>
+          <button
+            id="admin-subscriber-resend-confirm-btn"
+            class="instance-action-btn btn-qrcode enabled"
+            type="button"
+          >
+            Enviar
           </button>
         </div>
       </div>
@@ -23054,29 +23149,45 @@
 
       function buildAdminSubscriberRowHtml(item) {
         const subscriberId = escapeAdminHtml(item?.id || "");
+        const subscriberEmail = escapeAdminHtml(item?.email || "");
         const name = escapeAdminHtml(item?.fullName || "—");
-        const email = escapeAdminHtml(item?.email || "");
+        const email = subscriberEmail;
         const cpf = escapeAdminHtml(item?.cpfCnpjFormatted || item?.cpfCnpj || "—");
         const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
         const credits = escapeAdminHtml(item?.creditsValueLabel || formatDisparosMoneyFromCents(0));
         const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
         const aguardando = escapeAdminHtml(formatDisparosQty(item?.campaignsAwaiting));
         const finalizados = escapeAdminHtml(formatDisparosQty(item?.campaignsCompleted));
-        const rowClass = mergeMasterMenuNewRowClass(
-          "admin-assinantes",
-          item?.createdAt,
-          subscriberId ? "admin-subscribers-row-clickable" : ""
-        );
-        const rowAttrs = rowClass
-          ? `class="${rowClass}"${
-              subscriberId
-                ? ` data-subscriber-id="${subscriberId}" tabindex="0" role="button" aria-label="Ver detalhes de ${name}"`
-                : ""
-            }`
-          : subscriberId
-            ? `class="admin-subscribers-row-clickable" data-subscriber-id="${subscriberId}" tabindex="0" role="button" aria-label="Ver detalhes de ${name}"`
-            : "";
+        const rowClass = mergeMasterMenuNewRowClass("admin-assinantes", item?.createdAt, "");
+        const rowAttrs = rowClass ? `class="${rowClass}"` : "";
         const newMarker = renderMasterMenuNewMarker("admin-assinantes", item?.createdAt);
+        const actionButtons = subscriberId
+          ? `<div class="admin-subscriber-row-actions">
+              <button
+                type="button"
+                class="admin-subscriber-row-icon-btn is-resend admin-subscriber-resend-btn"
+                title="Reenviar boas-vindas"
+                aria-label="Reenviar boas-vindas"
+                data-subscriber-id="${subscriberId}"
+                data-subscriber-email="${subscriberEmail}"
+              >${ADMIN_SUBSCRIBER_ICON_RESEND}</button>
+              <button
+                type="button"
+                class="admin-subscriber-row-icon-btn is-delete admin-subscriber-delete-btn"
+                title="Excluir assinante"
+                aria-label="Excluir assinante"
+                data-subscriber-id="${subscriberId}"
+                data-subscriber-email="${subscriberEmail}"
+              >${ADMIN_SUBSCRIBER_ICON_DELETE}</button>
+              <button
+                type="button"
+                class="admin-subscriber-row-icon-btn is-edit admin-subscriber-edit-btn"
+                title="Editar cadastro"
+                aria-label="Editar cadastro"
+                data-subscriber-id="${subscriberId}"
+              >${ADMIN_SUBSCRIBER_ICON_EDIT}</button>
+            </div>`
+          : "";
         return `
               <tr ${rowAttrs}>
                 <td>
@@ -23089,6 +23200,7 @@
                 <td class="admin-subscribers-num">${disparos}</td>
                 <td class="admin-subscribers-num">${aguardando}</td>
                 <td class="admin-subscribers-num">${finalizados}</td>
+                <td class="admin-subscribers-actions">${actionButtons}</td>
               </tr>
             `;
       }
@@ -23108,7 +23220,7 @@
 
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td colspan="7" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            '<tr><td colspan="8" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
           return;
         }
 
@@ -23130,9 +23242,12 @@
 
       let adminSubscriberDetailId = "";
       let adminSubscriberDetailEmail = "";
+      let adminSubscriberResendId = "";
 
-      async function deleteAdminSubscriberDetail() {
-        if (!hasMasterAccess() || !adminSubscriberDetailId) return;
+      function openAdminSubscriberDeleteModal(subscriberId, email = "") {
+        if (!hasMasterAccess() || !subscriberId) return;
+        adminSubscriberDetailId = String(subscriberId);
+        adminSubscriberDetailEmail = String(email || "").trim();
         const profileEmail =
           adminSubscriberDetailEmail ||
           String(document.getElementById("admin-subscriber-detail-email")?.value || "").trim();
@@ -23143,6 +23258,27 @@
         const emailEl = document.getElementById("admin-subscriber-delete-email-display");
         if (emailEl) emailEl.textContent = profileEmail;
         openDisparosOverlay("admin-subscriber-delete-overlay");
+      }
+
+      function openAdminSubscriberResendModal(subscriberId, email = "") {
+        if (!hasMasterAccess() || !subscriberId) return;
+        adminSubscriberResendId = String(subscriberId);
+        const emailEl = document.getElementById("admin-subscriber-resend-email-display");
+        const passwordInput = document.getElementById("admin-subscriber-resend-password");
+        if (emailEl) emailEl.textContent = String(email || "").trim() || "—";
+        if (passwordInput) passwordInput.value = "";
+        openDisparosOverlay("admin-subscriber-resend-overlay");
+        window.setTimeout(() => passwordInput?.focus(), 0);
+      }
+
+      function closeAdminSubscriberResendModal() {
+        closeDisparosOverlay("admin-subscriber-resend-overlay");
+        adminSubscriberResendId = "";
+        const confirmBtn = document.getElementById("admin-subscriber-resend-confirm-btn");
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = "Enviar";
+        }
       }
 
       function closeAdminSubscriberDeleteModal() {
@@ -23284,7 +23420,7 @@
                 </div>
                 <div class="aquecedor-field">
                   <label for="admin-subscriber-detail-password">Nova senha</label>
-                  <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter; use para reenviar boas-vindas" />
+                  <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter a senha atual" />
                 </div>
                 <div class="admin-subscriber-options">
                   <p class="admin-subscriber-options-title">Recursos do assinante</p>
@@ -23341,30 +23477,33 @@
         bindAdminSubscriberDetailMaskedInputs();
       }
 
-      async function resendAdminSubscriberWelcome() {
-        if (!hasMasterAccess() || !adminSubscriberDetailId) return;
-        const password = String(document.getElementById("admin-subscriber-detail-password")?.value || "").trim();
-        if (password.length < 6) {
+      async function resendAdminSubscriberWelcome(subscriberId, password) {
+        const targetId = String(subscriberId || adminSubscriberResendId || "").trim();
+        if (!hasMasterAccess() || !targetId) return;
+        const pwd = String(
+          password ?? document.getElementById("admin-subscriber-resend-password")?.value ?? ""
+        ).trim();
+        if (pwd.length < 6) {
           showToast(
-            "Informe a senha no campo Nova senha (mín. 6 caracteres) para reenviar e-mail e WhatsApp de boas-vindas.",
+            "Informe a senha (mín. 6 caracteres) para reenviar e-mail e WhatsApp de boas-vindas.",
             "warning",
             6000
           );
           return;
         }
-        const btn = document.getElementById("admin-subscriber-detail-resend-welcome-btn");
+        const btn = document.getElementById("admin-subscriber-resend-confirm-btn");
         if (btn) {
           btn.disabled = true;
           btn.textContent = "Enviando…";
         }
         try {
           const response = await fetchWithTimeout(
-            `/admin/subscribers/${encodeURIComponent(adminSubscriberDetailId)}/resend-welcome`,
+            `/admin/subscribers/${encodeURIComponent(targetId)}/resend-welcome`,
             {
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password }),
+              body: JSON.stringify({ password: pwd }),
             },
             120000
           );
@@ -23387,14 +23526,19 @@
               7200
             );
           }
+          closeAdminSubscriberResendModal();
         } catch (error) {
           showToast(resolveAdminSubscriberFetchError(error, "Erro ao reenviar boas-vindas."), "error", 6200);
         } finally {
           if (btn) {
             btn.disabled = false;
-            btn.textContent = "Reenviar boas-vindas";
+            btn.textContent = "Enviar";
           }
         }
+      }
+
+      async function confirmResendAdminSubscriberWelcome() {
+        await resendAdminSubscriberWelcome(adminSubscriberResendId);
       }
 
       async function saveAdminSubscriberDetail() {
@@ -24374,6 +24518,9 @@
 
       const SPLIT_LINE_ICON_RECEIPT = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12h8v2H8v-2zm0 4h5v2H8v-2z"/></svg>`;
       const SPLIT_LINE_ICON_REFRESH = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 9h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
+      const ADMIN_SUBSCRIBER_ICON_RESEND = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2zm0 2.236l-8 5-8-5V18h16v-7.764z"/></svg>`;
+      const ADMIN_SUBSCRIBER_ICON_DELETE = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+      const ADMIN_SUBSCRIBER_ICON_EDIT = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 1.33H5v-.92l9.06-9.06.92.92L5.92 18.58zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>`;
 
       function sortSplitSettlementLines(lines) {
         const order = { cet: 0, supplier: 1, partner: 2 };
@@ -25806,14 +25953,14 @@
         if (!hasMasterAccess()) {
           if (tbody) {
             tbody.innerHTML =
-              '<tr><td colspan="7" class="muted">Área restrita ao usuário master.</td></tr>';
+              '<tr><td colspan="8" class="muted">Área restrita ao usuário master.</td></tr>';
           }
           if (summary) summary.textContent = "Acesso negado.";
           return;
         }
 
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="7" class="muted">Carregando…</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" class="muted">Carregando…</td></tr>';
         }
         if (summary) summary.textContent = "Carregando assinantes…";
 
@@ -25826,7 +25973,7 @@
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="7" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="8" class="muted">${escapeAdminHtml(
               error?.message || "Falha ao carregar assinantes."
             )}</td></tr>`;
           }
@@ -28492,27 +28639,52 @@
         document.getElementById("admin-subscribers-tbody")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
-          const row = target.closest("[data-subscriber-id]");
-          if (!row) return;
-          void openAdminSubscriberDetail(row.getAttribute("data-subscriber-id") || "");
-        });
-        document.getElementById("admin-subscribers-tbody")?.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          const target = event.target;
-          if (!(target instanceof Element)) return;
-          const row = target.closest("[data-subscriber-id]");
-          if (!row) return;
-          event.preventDefault();
-          void openAdminSubscriberDetail(row.getAttribute("data-subscriber-id") || "");
+          const resendBtn = target.closest(".admin-subscriber-resend-btn");
+          if (resendBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            openAdminSubscriberResendModal(
+              resendBtn.getAttribute("data-subscriber-id") || "",
+              resendBtn.getAttribute("data-subscriber-email") || ""
+            );
+            return;
+          }
+          const deleteBtn = target.closest(".admin-subscriber-delete-btn");
+          if (deleteBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            openAdminSubscriberDeleteModal(
+              deleteBtn.getAttribute("data-subscriber-id") || "",
+              deleteBtn.getAttribute("data-subscriber-email") || ""
+            );
+            return;
+          }
+          const editBtn = target.closest(".admin-subscriber-edit-btn");
+          if (editBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void openAdminSubscriberDetail(editBtn.getAttribute("data-subscriber-id") || "");
+          }
         });
         document.getElementById("admin-subscriber-detail-save-btn")?.addEventListener("click", () => {
           void saveAdminSubscriberDetail();
         });
-        document.getElementById("admin-subscriber-detail-resend-welcome-btn")?.addEventListener("click", () => {
-          void resendAdminSubscriberWelcome();
+        document.getElementById("admin-subscriber-resend-cancel-btn")?.addEventListener("click", () => {
+          closeAdminSubscriberResendModal();
         });
-        document.getElementById("admin-subscriber-detail-delete-btn")?.addEventListener("click", () => {
-          void deleteAdminSubscriberDetail();
+        document.getElementById("admin-subscriber-resend-confirm-btn")?.addEventListener("click", () => {
+          void confirmResendAdminSubscriberWelcome();
+        });
+        document.getElementById("admin-subscriber-resend-overlay")?.addEventListener("click", (event) => {
+          if (event.target?.id === "admin-subscriber-resend-overlay") {
+            closeAdminSubscriberResendModal();
+          }
+        });
+        document.getElementById("admin-subscriber-resend-password")?.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void confirmResendAdminSubscriberWelcome();
+          }
         });
         document.getElementById("admin-subscriber-delete-cancel-btn")?.addEventListener("click", () => {
           closeAdminSubscriberDeleteModal();
@@ -30813,26 +30985,40 @@
         }
       }
 
-      function syncWabaSidebarStackTop() {
-        const stack = document.querySelector(".waba-sidebar-stack");
-        if (!stack || !document.body.classList.contains("has-sidebar")) return;
-        if (!window.matchMedia("(min-width: 992px)").matches) {
-          stack.style.removeProperty("top");
-          return;
-        }
-
+      function resolveWabaSidebarStackAnchor() {
         const strip = document.querySelector(".integration-env-strip");
         const stripVisible =
           strip &&
           !strip.hidden &&
           window.getComputedStyle(strip).display !== "none" &&
           window.getComputedStyle(strip).visibility !== "hidden";
+        return stripVisible ? strip : document.getElementById("waba-main");
+      }
 
-        const anchorEl = stripVisible ? strip : document.getElementById("waba-main");
+      /** Posição vertical fixa no viewport — alinha ao topo do conteúdo no load, sem seguir o scroll. */
+      function resolveWabaSidebarStackTopPx(anchorEl) {
+        if (!anchorEl) return null;
+        const scrollY = window.scrollY || window.pageYOffset || 0;
+        const layoutTop = anchorEl.getBoundingClientRect().top + scrollY;
+        return Math.max(0, Math.round(layoutTop));
+      }
+
+      function syncWabaSidebarStackTop() {
+        const stack = document.querySelector(".waba-sidebar-stack");
+        if (!stack || !document.body.classList.contains("has-sidebar")) return;
+        if (!window.matchMedia("(min-width: 992px)").matches) {
+          stack.style.removeProperty("top");
+          document.documentElement.style.removeProperty("--waba-sidebar-top");
+          return;
+        }
+
+        const anchorEl = resolveWabaSidebarStackAnchor();
         if (!anchorEl) return;
 
-        const topPx = Math.max(0, Math.round(anchorEl.getBoundingClientRect().top));
+        const topPx = resolveWabaSidebarStackTopPx(anchorEl);
+        if (topPx == null) return;
         stack.style.setProperty("top", `${topPx}px`);
+        document.documentElement.style.setProperty("--waba-sidebar-top", `${topPx}px`);
       }
 
       let wabaSidebarLayoutObserver = null;
@@ -30848,10 +31034,8 @@
         wabaSidebarLayoutObserver = new ResizeObserver(run);
         const header = document.querySelector(".shell > header");
         const strip = document.querySelector(".integration-env-strip");
-        const main = document.getElementById("waba-main");
         if (header) wabaSidebarLayoutObserver.observe(header);
         if (strip) wabaSidebarLayoutObserver.observe(strip);
-        if (main) wabaSidebarLayoutObserver.observe(main);
       }
 
       function syncWabaSupportFabPosition() {
