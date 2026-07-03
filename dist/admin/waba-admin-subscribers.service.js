@@ -7,6 +7,8 @@ const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-int
 const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-shipments");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
+const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
+const waba_welcome_whatsapp_service_1 = require("../mail/waba-welcome-whatsapp.service");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const formatCpfCnpj = (raw) => {
     const digits = String(raw ?? "").replace(/\D/g, "");
@@ -173,6 +175,35 @@ class WabaAdminSubscribersService {
     updateSubscriber(subscriberId, input) {
         this.subscriberService.update(subscriberId, input);
         return this.getSubscriberDetail(subscriberId);
+    }
+    async resendSubscriberWelcome(subscriberId, password) {
+        const id = String(subscriberId || "").trim();
+        if (!id)
+            throw new Error("Assinante inválido.");
+        const subscriber = this.subscriberRepository.getById(id);
+        if (!subscriber)
+            throw new Error("Assinante não encontrado.");
+        const plainPassword = String(password ?? "").trim();
+        if (plainPassword.length < 6) {
+            throw new Error("Informe a senha de acesso (mín. 6 caracteres) para reenviar as boas-vindas.");
+        }
+        const payload = {
+            email: subscriber.email,
+            fullName: subscriber.fullName,
+            password: plainPassword,
+            whatsapp: subscriber.whatsapp,
+            phone: subscriber.phone ?? subscriber.whatsapp,
+            cpfCnpj: subscriber.cpfCnpj,
+        };
+        const [email, whatsapp] = await Promise.all([
+            (0, waba_mail_delivery_1.deliverSubscriberWelcomeEmail)(payload),
+            (0, waba_welcome_whatsapp_service_1.deliverSubscriberWelcomeWhatsApp)({
+                email: payload.email,
+                password: payload.password,
+                whatsapp: payload.whatsapp,
+            }),
+        ]);
+        return { email, whatsapp };
     }
     listPurchaseHistory(email, limit = 50) {
         const normalized = normalizeEmail(email);

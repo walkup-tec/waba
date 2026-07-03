@@ -321,6 +321,12 @@ async function discoverPushCommunityInstanceWithGroups(
   return null;
 }
 
+/** Instância Evolution conectada para envio outbound (boas-vindas, alertas, etc.). */
+export async function resolveConnectedEvoOutboundInstance(preferred?: string): Promise<string> {
+  const configured = String(preferred || resolveDefaultPushCommunityEvoInstance()).trim();
+  return resolvePushCommunityEvoInstance(configured);
+}
+
 async function resolvePushCommunityEvoInstance(configured: string): Promise<string> {
   const preferred = String(configured || resolveDefaultPushCommunityEvoInstance()).trim();
   const catalog = await fetchEvoInstanceCatalog();

@@ -181,6 +181,22 @@ export const registerWabaAdminRoutes = (app: Express) => {
     }
   });
 
+  app.post("/admin/subscribers/:subscriberId/resend-welcome", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = await adminSubscribersService.resendSubscriberWelcome(
+        String(req.params.subscriberId ?? ""),
+        String(body.password ?? ""),
+      );
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível reenviar as boas-vindas.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
   app.get("/admin/coupons", (req, res) => {
     if (!rejectNonMaster(req, res)) return;
     return res.status(200).json({ items: couponService.listPublicCoupons() });

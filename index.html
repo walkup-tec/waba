@@ -19032,6 +19032,14 @@
             Salvar alterações
           </button>
           <button
+            id="admin-subscriber-detail-resend-welcome-btn"
+            class="instance-action-btn"
+            type="button"
+            title="Informe a senha no campo Nova senha antes de reenviar"
+          >
+            Reenviar boas-vindas
+          </button>
+          <button
             id="admin-subscriber-detail-delete-btn"
             class="instance-action-btn admin-subscriber-detail-delete-btn"
             type="button"
@@ -23235,7 +23243,7 @@
                 </div>
                 <div class="aquecedor-field">
                   <label for="admin-subscriber-detail-password">Nova senha</label>
-                  <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter" />
+                  <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter; use para reenviar boas-vindas" />
                 </div>
                 <div class="admin-subscriber-options">
                   <p class="admin-subscriber-options-title">Recursos do assinante</p>
@@ -23290,6 +23298,62 @@
           </section>
         `;
         bindAdminSubscriberDetailMaskedInputs();
+      }
+
+      async function resendAdminSubscriberWelcome() {
+        if (!hasMasterAccess() || !adminSubscriberDetailId) return;
+        const password = String(document.getElementById("admin-subscriber-detail-password")?.value || "").trim();
+        if (password.length < 6) {
+          showToast(
+            "Informe a senha no campo Nova senha (mín. 6 caracteres) para reenviar e-mail e WhatsApp de boas-vindas.",
+            "warning",
+            6000
+          );
+          return;
+        }
+        const btn = document.getElementById("admin-subscriber-detail-resend-welcome-btn");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Enviando…";
+        }
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/subscribers/${encodeURIComponent(adminSubscriberDetailId)}/resend-welcome`,
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password }),
+            },
+            120000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível reenviar as boas-vindas.");
+          }
+          const emailOk = payload?.email?.status === "sent";
+          const whatsappOk = payload?.whatsapp?.status === "sent";
+          if (emailOk && whatsappOk) {
+            showToast("Boas-vindas reenviadas por e-mail e WhatsApp.", "success", 5200);
+          } else if (whatsappOk) {
+            showToast(`WhatsApp enviado. E-mail: ${payload?.email?.message || "verifique SMTP."}`, "warning", 6200);
+          } else if (emailOk) {
+            showToast(`E-mail enviado. WhatsApp: ${payload?.whatsapp?.message || "falhou."}`, "warning", 6200);
+          } else {
+            showToast(
+              `Falha ao reenviar. E-mail: ${payload?.email?.message || "—"} | WhatsApp: ${payload?.whatsapp?.message || "—"}`,
+              "error",
+              7200
+            );
+          }
+        } catch (error) {
+          showToast(resolveAdminSubscriberFetchError(error, "Erro ao reenviar boas-vindas."), "error", 6200);
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Reenviar boas-vindas";
+          }
+        }
       }
 
       async function saveAdminSubscriberDetail() {
@@ -28321,6 +28385,9 @@
         });
         document.getElementById("admin-subscriber-detail-save-btn")?.addEventListener("click", () => {
           void saveAdminSubscriberDetail();
+        });
+        document.getElementById("admin-subscriber-detail-resend-welcome-btn")?.addEventListener("click", () => {
+          void resendAdminSubscriberWelcome();
         });
         document.getElementById("admin-subscriber-detail-delete-btn")?.addEventListener("click", () => {
           void deleteAdminSubscriberDetail();

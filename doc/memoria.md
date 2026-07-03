@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-03
 
-**WABA — Boas-vindas WhatsApp no cadastro:** mensagem DRAX com credenciais + comunidade enviada ao WhatsApp do assinante (site e master) via Evolution. Marker `DEPLOY-2026-07-03-boas-vindas-whatsapp-assinante`. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-assinante.md`. Palavras-chave: `notifySubscriberWelcomeWhatsApp`, `buildSubscriberWelcomeWhatsAppText`.
+**WABA — Boas-vindas WhatsApp fix instância + reenvio admin:** resolve instância Evolution conectada; timeout sendText 90s; `POST /admin/subscribers/:id/resend-welcome`. Marker `DEPLOY-2026-07-03-boas-vindas-whatsapp-fix`. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-fix-instancia.md`.
+
+**WABA — Boas-vindas WhatsApp no cadastro:** mensagem DRAX com credenciais + comunidade enviada ao WhatsApp do assinante (site e master) via Evolution. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-assinante.md`.
 
 **WABA — Aquecedor: dashboard isolado por assinante:** `GET /dados` e `/aquecedor/envios` filtram por instâncias do dono; assinante sem instâncias vê dashboard vazio (fix vazamento global para `digitalcorban@gmail.com`). Ver `doc/LOG-2026-07-03__aquecedor-dashboard-isolamento-assinante.md`. Palavras-chave: `resolveAquecedorDashboardScope`, `filterQueueByOwner`, `logs_envios_br`.
 

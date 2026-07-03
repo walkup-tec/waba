@@ -65,10 +65,13 @@ async function sendEvoTextAlert(input) {
     const body = isSendTextV1()
         ? { number: targetNumber, textMessage: { text } }
         : { number: targetNumber, text, textMessage: { text } };
+    const timeoutMs = typeof input.timeoutMs === "number" && input.timeoutMs >= 10000
+        ? Math.round(input.timeoutMs)
+        : (0, evo_http_client_1.defaultEvoSendTextTimeoutMs)();
     const result = await (0, evo_http_client_1.evoHttpRequest)(url, "POST", {
         apiKey: resolveEvoApiKey(),
         body,
-        timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000),
+        timeoutMs,
         retries: 1,
     });
     const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);

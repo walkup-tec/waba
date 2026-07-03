@@ -14,6 +14,14 @@ import {
   WabaSubscriberService,
   type UpdateSubscriberInput,
 } from "../subscribers/waba-subscriber.service";
+import {
+  deliverSubscriberWelcomeEmail,
+  type WabaEmailDeliveryResult,
+} from "../mail/waba-mail-delivery";
+import {
+  deliverSubscriberWelcomeWhatsApp,
+  type WabaWhatsAppDeliveryResult,
+} from "../mail/waba-welcome-whatsapp.service";
 
 export type AdminSubscriberListItem = {
   id: string;
@@ -255,6 +263,44 @@ export class WabaAdminSubscribersService {
   updateSubscriber(subscriberId: string, input: UpdateSubscriberInput): AdminSubscriberDetail {
     this.subscriberService.update(subscriberId, input);
     return this.getSubscriberDetail(subscriberId);
+  }
+
+  async resendSubscriberWelcome(
+    subscriberId: string,
+    password: string,
+  ): Promise<{
+    email: WabaEmailDeliveryResult;
+    whatsapp: WabaWhatsAppDeliveryResult;
+  }> {
+    const id = String(subscriberId || "").trim();
+    if (!id) throw new Error("Assinante inválido.");
+    const subscriber = this.subscriberRepository.getById(id);
+    if (!subscriber) throw new Error("Assinante não encontrado.");
+
+    const plainPassword = String(password ?? "").trim();
+    if (plainPassword.length < 6) {
+      throw new Error("Informe a senha de acesso (mín. 6 caracteres) para reenviar as boas-vindas.");
+    }
+
+    const payload = {
+      email: subscriber.email,
+      fullName: subscriber.fullName,
+      password: plainPassword,
+      whatsapp: subscriber.whatsapp,
+      phone: subscriber.phone ?? subscriber.whatsapp,
+      cpfCnpj: subscriber.cpfCnpj,
+    };
+
+    const [email, whatsapp] = await Promise.all([
+      deliverSubscriberWelcomeEmail(payload),
+      deliverSubscriberWelcomeWhatsApp({
+        email: payload.email,
+        password: payload.password,
+        whatsapp: payload.whatsapp,
+      }),
+    ]);
+
+    return { email, whatsapp };
   }
 
   private listPurchaseHistory(email: string, limit = 50): AdminSubscriberPurchaseHistoryItem[] {

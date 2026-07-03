@@ -1,6 +1,11 @@
+import { defaultEvoSendTextTimeoutMs } from "../evo-http.client";
 import { sendEvoTextAlert } from "../monitoring/evo-text-alert.client";
+import { resolveConnectedEvoOutboundInstance } from "../push/waba-push-community.service";
 import { WabaPushRepository } from "../push/waba-push.repository";
-import { resolveDefaultPushCommunityEvoInstance } from "../push/waba-push.types";
+import {
+  resolveDefaultPushCommunityEvoInstance,
+  resolvePushCommunityEvoInstanceFallbacks,
+} from "../push/waba-push.types";
 import { resolveWabaAppLoginUrl } from "./waba-app-url";
 
 export type SubscriberWelcomeWhatsAppInput = {
@@ -16,11 +21,26 @@ export type WabaWhatsAppDeliveryStatus = "sent" | "skipped" | "failed";
 export type WabaWhatsAppDeliveryResult = {
   status: WabaWhatsAppDeliveryStatus;
   message: string;
+  instanceName?: string;
 };
 
 const DEFAULT_COMMUNITY_LINK = "https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7";
 
-const resolveWelcomeWhatsAppEvoInstance = (): string => {
+const uniqueInstanceNames = (names: string[]): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of names) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+};
+
+const resolveWelcomeWhatsAppPreferredInstance = (): string => {
   const fromEnv = String(process.env.WABA_WELCOME_WHATSAPP_EVO_INSTANCE || "").trim();
   if (fromEnv) return fromEnv;
   const pushConfig = new WabaPushRepository().readConfig();
@@ -34,6 +54,37 @@ const resolveWelcomeCommunityLink = (): string => {
   if (fromEnv) return fromEnv;
   const fromPush = String(new WabaPushRepository().readConfig().communityInviteLink || "").trim();
   return fromPush || DEFAULT_COMMUNITY_LINK;
+};
+
+const isRecoverableSendFailure = (detail: string, status: number): boolean => {
+  const text = String(detail || "").toLowerCase();
+  if (status === 404) return true;
+  if (text.includes("not found") || text.includes("does not exist")) return true;
+  if (text.includes("instance") && text.includes("exist")) return true;
+  if (text.includes("disconnected") || text.includes("not connected")) return true;
+  if (text.includes("integrationsession") || text.includes("internal server error")) return true;
+  return false;
+};
+
+const buildWelcomeSendCandidates = async (): Promise<string[]> => {
+  const preferred = resolveWelcomeWhatsAppPreferredInstance();
+  const candidates = uniqueInstanceNames([
+    preferred,
+    ...resolvePushCommunityEvoInstanceFallbacks(),
+    resolveDefaultPushCommunityEvoInstance(),
+  ]);
+
+  const resolved: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      const connected = await resolveConnectedEvoOutboundInstance(candidate);
+      if (connected) resolved.push(connected);
+    } catch {
+      resolved.push(candidate);
+    }
+  }
+
+  return uniqueInstanceNames(resolved);
 };
 
 export const buildSubscriberWelcomeWhatsAppText = (input: SubscriberWelcomeWhatsAppInput): string => {
@@ -86,28 +137,45 @@ export const deliverSubscriberWelcomeWhatsApp = async (
     };
   }
 
-  const instanceName = resolveWelcomeWhatsAppEvoInstance();
-  if (!instanceName) {
+  const text = buildSubscriberWelcomeWhatsAppText(input);
+  const candidates = await buildWelcomeSendCandidates();
+  if (!candidates.length) {
     return {
       status: "skipped",
-      message: `boas-vindas WhatsApp ${email}: instância Evolution não configurada.`,
+      message: `boas-vindas WhatsApp ${email}: nenhuma instância Evolution disponível.`,
     };
   }
 
-  const text = buildSubscriberWelcomeWhatsAppText(input);
-  const result = await sendEvoTextAlert({
-    instanceName,
-    targetNumber: whatsapp,
-    text,
-  });
+  const errors: string[] = [];
+  const timeoutMs = defaultEvoSendTextTimeoutMs();
 
-  if (result.ok) {
-    console.log(`[whatsapp] boas-vindas enviada para ${whatsapp} (${email}) via ${instanceName}.`);
-    return { status: "sent", message: "WhatsApp enviado." };
+  for (const instanceName of candidates) {
+    const result = await sendEvoTextAlert({
+      instanceName,
+      targetNumber: whatsapp,
+      text,
+      timeoutMs,
+    });
+
+    if (result.ok) {
+      console.log(
+        `[whatsapp] boas-vindas enviada para ${whatsapp} (${email}) via ${instanceName}.`,
+      );
+      return { status: "sent", message: "WhatsApp enviado.", instanceName };
+    }
+
+    const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
+    errors.push(`${instanceName}: ${detail}`);
+    console.warn(
+      `[whatsapp] boas-vindas tentativa falhou (${instanceName}) para ${whatsapp} (${email}):`,
+      detail,
+    );
+    if (!isRecoverableSendFailure(detail, result.status)) break;
   }
 
-  console.error(`[whatsapp] boas-vindas falhou para ${whatsapp} (${email}):`, result.detail);
-  return { status: "failed", message: result.detail };
+  const message = errors.join(" | ") || `boas-vindas WhatsApp ${email}: falha desconhecida.`;
+  console.error(`[whatsapp] boas-vindas falhou para ${whatsapp} (${email}):`, message);
+  return { status: "failed", message };
 };
 
 export const notifySubscriberWelcomeWhatsApp = (input: SubscriberWelcomeWhatsAppInput): void => {

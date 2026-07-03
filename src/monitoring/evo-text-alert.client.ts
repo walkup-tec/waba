@@ -1,4 +1,4 @@
-import { defaultEvoHttpTimeoutMs, evoHttpRequest } from "../evo-http.client";
+import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "../evo-http.client";
 
 const resolveEvoApiBase = (): string =>
   String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
@@ -55,6 +55,7 @@ export async function sendEvoTextAlert(input: {
   instanceName: string;
   targetNumber: string;
   text: string;
+  timeoutMs?: number;
 }): Promise<{ ok: boolean; detail: string; status: number }> {
   const instanceName = String(input.instanceName || "").trim();
   const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
@@ -75,10 +76,15 @@ export async function sendEvoTextAlert(input: {
     ? { number: targetNumber, textMessage: { text } }
     : { number: targetNumber, text, textMessage: { text } };
 
+  const timeoutMs =
+    typeof input.timeoutMs === "number" && input.timeoutMs >= 10_000
+      ? Math.round(input.timeoutMs)
+      : defaultEvoSendTextTimeoutMs();
+
   const result = await evoHttpRequest(url, "POST", {
     apiKey: resolveEvoApiKey(),
     body,
-    timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 20_000),
+    timeoutMs,
     retries: 1,
   });
 

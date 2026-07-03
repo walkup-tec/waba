@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveConnectedEvoOutboundInstance = resolveConnectedEvoOutboundInstance;
 exports.formatWhatsAppCommunityMessage = formatWhatsAppCommunityMessage;
 exports.sendPushToWhatsAppCommunity = sendPushToWhatsAppCommunity;
 exports.getPushCommunityConfig = getPushCommunityConfig;
@@ -299,6 +300,11 @@ async function discoverPushCommunityInstanceWithGroups(preferred) {
             return hit;
     }
     return null;
+}
+/** Instância Evolution conectada para envio outbound (boas-vindas, alertas, etc.). */
+async function resolveConnectedEvoOutboundInstance(preferred) {
+    const configured = String(preferred || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
+    return resolvePushCommunityEvoInstance(configured);
 }
 async function resolvePushCommunityEvoInstance(configured) {
     const preferred = String(configured || (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)()).trim();
