@@ -7399,6 +7399,26 @@
         z-index: 2500;
       }
 
+      #admin-subscriber-delete-overlay {
+        z-index: 2600;
+      }
+
+      .admin-subscriber-delete-modal .confirm-text {
+        line-height: 1.55;
+      }
+
+      .admin-subscriber-delete-email {
+        color: #f8fafc;
+        font-weight: 700;
+      }
+
+      .admin-subscriber-delete-hint {
+        display: block;
+        margin-top: 10px;
+        font-size: 0.84rem;
+        color: #94a3b8;
+      }
+
       .admin-subscriber-detail-modal {
         width: min(94vw, 760px);
         max-height: min(92dvh, 860px);
@@ -19025,6 +19045,38 @@
       </div>
     </div>
 
+    <div id="admin-subscriber-delete-overlay" class="confirm-overlay" aria-hidden="true">
+      <div
+        class="confirm-modal admin-subscriber-delete-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-subscriber-delete-title"
+        style="max-width: 520px"
+      >
+        <div class="confirm-title" id="admin-subscriber-delete-title">Excluir assinante</div>
+        <div class="confirm-text">
+          Confirma a exclusão permanente de
+          <strong id="admin-subscriber-delete-email-display" class="admin-subscriber-delete-email"></strong>?
+          <span class="admin-subscriber-delete-hint">
+            Isso remove cadastro, pedidos, créditos, campanhas e usuário operacional/suporte com o mesmo e-mail.
+            Esta ação não pode ser desfeita.
+          </span>
+        </div>
+        <div class="confirm-actions">
+          <button id="admin-subscriber-delete-cancel-btn" class="instance-action-btn" type="button">
+            Cancelar
+          </button>
+          <button
+            id="admin-subscriber-delete-confirm-btn"
+            class="instance-action-btn btn-delete enabled"
+            type="button"
+          >
+            Sim, excluir
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="admin-campanhas-report-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal camp-report-modal" role="dialog" aria-modal="true" aria-labelledby="admin-campanhas-report-title">
         <div class="confirm-title" id="admin-campanhas-report-title">Relatório da campanha</div>
@@ -22785,9 +22837,10 @@
       }
 
       function formatDisparosMoneyDecimal(value) {
-        return Number(value || 0)
-          .toFixed(2)
-          .replace(".", ",");
+        return Number(value || 0).toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
       }
 
       function formatDisparosUnitPrice(value) {
@@ -23031,15 +23084,29 @@
           showToast("E-mail do assinante indisponível.", "error", 4200);
           return;
         }
-        const confirmed = window.confirm(
-          `Excluir permanentemente o assinante ${profileEmail}?\n\nIsso remove cadastro, pedidos, créditos, campanhas e usuário operacional/suporte com o mesmo e-mail. Esta ação não pode ser desfeita.`
-        );
-        if (!confirmed) return;
+        const emailEl = document.getElementById("admin-subscriber-delete-email-display");
+        if (emailEl) emailEl.textContent = profileEmail;
+        openDisparosOverlay("admin-subscriber-delete-overlay");
+      }
 
-        const deleteBtn = document.getElementById("admin-subscriber-detail-delete-btn");
-        if (deleteBtn) {
-          deleteBtn.disabled = true;
-          deleteBtn.textContent = "Excluindo…";
+      function closeAdminSubscriberDeleteModal() {
+        closeDisparosOverlay("admin-subscriber-delete-overlay");
+        const confirmBtn = document.getElementById("admin-subscriber-delete-confirm-btn");
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = "Sim, excluir";
+        }
+      }
+
+      async function confirmDeleteAdminSubscriber() {
+        if (!hasMasterAccess() || !adminSubscriberDetailId) return;
+        const profileEmail =
+          adminSubscriberDetailEmail ||
+          String(document.getElementById("admin-subscriber-detail-email")?.value || "").trim();
+        const confirmBtn = document.getElementById("admin-subscriber-delete-confirm-btn");
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = "Excluindo…";
         }
 
         try {
@@ -23055,15 +23122,16 @@
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível excluir o assinante.");
           }
+          closeAdminSubscriberDeleteModal();
           closeAdminSubscriberDetail();
           await loadAdminSubscribers();
           showToast(`Assinante ${profileEmail} excluído.`, "success", 4800);
         } catch (error) {
           showToast(resolveAdminSubscriberFetchError(error, "Erro ao excluir assinante."), "error", 5200);
         } finally {
-          if (deleteBtn) {
-            deleteBtn.disabled = false;
-            deleteBtn.textContent = "Excluir assinante";
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Sim, excluir";
           }
         }
       }
@@ -28250,6 +28318,17 @@
         document.getElementById("admin-subscriber-detail-delete-btn")?.addEventListener("click", () => {
           void deleteAdminSubscriberDetail();
         });
+        document.getElementById("admin-subscriber-delete-cancel-btn")?.addEventListener("click", () => {
+          closeAdminSubscriberDeleteModal();
+        });
+        document.getElementById("admin-subscriber-delete-confirm-btn")?.addEventListener("click", () => {
+          void confirmDeleteAdminSubscriber();
+        });
+        document.getElementById("admin-subscriber-delete-overlay")?.addEventListener("click", (event) => {
+          if (event.target?.id === "admin-subscriber-delete-overlay") {
+            closeAdminSubscriberDeleteModal();
+          }
+        });
         document.getElementById("admin-subscriber-detail-close-btn")?.addEventListener("click", () => {
           closeAdminSubscriberDetail();
         });
@@ -31120,6 +31199,7 @@
       function prefillDisparosBillingForm() {
         const nameEl = document.getElementById("disparos-billing-name");
         const emailEl = document.getElementById("disparos-billing-email");
+        const cpfEl = document.getElementById("disparos-billing-cpf");
         const whatsappEl = document.getElementById("disparos-billing-whatsapp");
         const profile = wabaSubscriberProfile && typeof wabaSubscriberProfile === "object"
           ? wabaSubscriberProfile
@@ -31134,8 +31214,36 @@
         if (nameEl && !String(nameEl.value || "").trim()) {
           nameEl.value = String(profile?.fullName || "").trim();
         }
-        if (whatsappEl && !String(whatsappEl.value || "").trim()) {
-          whatsappEl.value = String(profile?.whatsapp || profile?.phone || "").trim();
+        if (cpfEl) {
+          const profileDoc = formatAdminCpfCnpjInput(String(profile?.cpfCnpj || "").trim());
+          if (profileDoc) {
+            cpfEl.value = profileDoc;
+          }
+        }
+        if (whatsappEl) {
+          const whatsappRaw = String(
+            profile?.whatsapp || profile?.phone || whatsappEl.value || ""
+          ).trim();
+          if (whatsappRaw) {
+            whatsappEl.value = formatWhatsappTarget(whatsappRaw);
+          }
+        }
+      }
+
+      function bindDisparosBillingMaskedInputs() {
+        const cpfInput = document.getElementById("disparos-billing-cpf");
+        const whatsappInput = document.getElementById("disparos-billing-whatsapp");
+        if (cpfInput && !cpfInput.dataset.maskBound) {
+          cpfInput.dataset.maskBound = "1";
+          cpfInput.addEventListener("input", () => {
+            cpfInput.value = formatAdminCpfCnpjInput(cpfInput.value);
+          });
+        }
+        if (whatsappInput && !whatsappInput.dataset.maskBound) {
+          whatsappInput.dataset.maskBound = "1";
+          whatsappInput.addEventListener("input", () => {
+            whatsappInput.value = formatWhatsappTarget(whatsappInput.value);
+          });
         }
       }
 
@@ -32745,6 +32853,7 @@
 
       function initDisparosBillingUi() {
         bindDisparosPricingCustomQtyInput();
+        bindDisparosBillingMaskedInputs();
         document
           .getElementById("disparos-toolbar-buy-btn")
           ?.addEventListener("click", () => goToDisparosAddCredits());

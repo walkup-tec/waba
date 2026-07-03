@@ -15,6 +15,8 @@ Como usar:
 ## Última atualização
 2026-07-02
 
+**WABA — Billing: prefill CPF + moeda milheiro + modal excluir:** doc do cadastro no checkout; R$ com milheiro; exclusão assinante sem alerta do navegador. Marker `DEPLOY-2026-07-02-billing-prefill-doc-moeda-milheiro`. Ver `doc/LOG-2026-07-02__billing-prefill-doc-moeda-excluir-modal.md`. Palavras-chave: `prefillDisparosBillingForm`, `admin-subscriber-delete-overlay`.
+
 **WABA — Checkout: máscara qty + cupom toggle:** qty custom com milheiro pt-BR; cupom só após "Eu tenho cupom de desconto". Marker `DEPLOY-2026-07-02-billing-qty-mask-cupom-toggle`. Ver `doc/LOG-2026-07-02__billing-qty-mask-cupom-toggle.md`. Palavras-chave: `disparos-billing-coupon-toggle`, `parseDisparosQtyInputValue`.
 
 **WABA — Admin: excluir assinante (UI + purge):** botão no modal master; DELETE por id; remove também operacional/suporte com mesmo e-mail. Marker `DEPLOY-2026-07-02-admin-assinante-excluir-ui`. Ver `doc/LOG-2026-07-02__admin-assinante-excluir-ui-purge.md`. Palavras-chave: `deleteAdminSubscriberDetail`, `purgeByEmail`, `digitalcorban`.

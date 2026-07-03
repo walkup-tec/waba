@@ -149,6 +149,7 @@ class WabaSubscriberService {
             fullName: subscriber.fullName,
             whatsapp: subscriber.whatsapp,
             phone: subscriber.phone,
+            cpfCnpj: subscriber.cpfCnpj,
             createdAt: subscriber.createdAt,
         };
     }
