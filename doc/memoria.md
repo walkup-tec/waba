@@ -15,7 +15,9 @@ Como usar:
 ## Última atualização
 2026-07-03
 
-**WABA — Boas-vindas WhatsApp fallback por número:** primária `51981077770`, se offline usa `5197462102`. Marker `DEPLOY-2026-07-03-boas-vindas-whatsapp-phone-fallback`. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-phone-fallback.md`.
+**WABA — OG compartilhamento redes:** `compBoasvindas.png` em `/media/` + meta tags Open Graph/Twitter no app, vendas e cadastro. Marker `DEPLOY-2026-07-03-og-compartilhamento-compBoasvindas`. Ver `doc/LOG-2026-07-03__og-compartilhamento-compBoasvindas.md`.
+
+**WABA — Boas-vindas WhatsApp fallback por número:** primária `51981077770`, se offline usa `5197462102`. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-phone-fallback.md`.
 
 **WABA — Boas-vindas WhatsApp fix instância + reenvio admin:** resolve instância Evolution conectada; timeout sendText 90s; `POST /admin/subscribers/:id/resend-welcome`. Ver `doc/LOG-2026-07-03__boas-vindas-whatsapp-fix-instancia.md`.
 
