@@ -2013,3 +2013,14 @@ Palavras-chave para buscar:
 - **2026-06-25 (hexa-corrigi-2):** arte `media/hexa-corrigi-2.png` (1024×1536, ~2,2MB) na tela Contratar.
 - **2026-06-25 (backdrop contratar):** luzes + véu blur + conteúdo; ver `doc/LOG-2026-06-25__creditos-contratar-backdrop-luz-blur.md`.
 - **2026-06-25 (backdrop tela inteira):** `#tab-disparos-lancamento` full bleed; PNG hexa-corrigi-2 atualizado.
+
+## 2026-07-05 — Healthcheck estável: `/live` + `/ready` antecipado
+
+- **Problema:** Docker HEALTHCHECK em `/ready` atravessava body parsers, maintenance e middlewares pesados → falhas intermitentes e restarts no Easypanel (`waba_disparador`).
+- **Fix:**
+  - `GET /live` — resposta mínima `ok` (200), registrada logo após `stripBasePathMiddleware`.
+  - `GET /ready` — movido para a mesma posição precoce (antes de parsers/maintenance); removido handler duplicado.
+  - `Dockerfile` — HEALTHCHECK usa `/live`; timeout HTTP 8000ms; docker timeout 15s; interval 45s; retries 5.
+- **Marker:** `DEPLOY-2026-07-05-healthcheck-live-waba-disparador`
+- **Log:** `doc/LOG-2026-07-05__fix-waba-disparador-healthcheck-live.md`
+- **Próximo:** validar deploy em produção (`GET /live`, marker em `/health`).

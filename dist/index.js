@@ -98,6 +98,36 @@ const waba_graceful_shutdown_1 = require("./server/waba-graceful-shutdown");
 const WABA_SERVER_BOOT_ID = `${Date.now().toString(36)}-${crypto_1.default.randomBytes(4).toString("hex")}`;
 const app = (0, express_1.default)();
 app.use(base_path_1.stripBasePathMiddleware);
+app.get("/live", (_req, res) => res.status(200).send("ok"));
+app.get("/ready", (_req, res) => {
+    const shuttingDown = (0, waba_graceful_shutdown_1.isWabaServerShuttingDown)();
+    if (shuttingDown) {
+        return res.status(503).json({
+            ok: false,
+            ready: false,
+            shuttingDown: true,
+            message: "Servidor em atualização.",
+            retryAfterSec: 15,
+        });
+    }
+    if (MAINTENANCE_MODE) {
+        return res.status(503).json({
+            ok: false,
+            ready: false,
+            maintenanceMode: true,
+            message: MAINTENANCE_MESSAGE,
+            retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
+        });
+    }
+    res.json({
+        ok: true,
+        ready: true,
+        maintenanceMode: false,
+        port: PORT,
+        runtimeMode: RUNTIME_MODE,
+        backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+    });
+});
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
 const rootPath = path_1.default.join(__dirname, "..");
 const distPath = path_1.default.join(rootPath, "dist");
@@ -396,35 +426,6 @@ app.get("/health", (_req, res) => {
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
         shortPublicBase: (0, waba_shortener_service_1.peekWabaShortPublicBaseUrl)(),
         dataPersistence: (0, production_data_persistence_service_1.getProductionDataPersistenceSnapshot)(),
-    });
-});
-app.get("/ready", (_req, res) => {
-    const shuttingDown = (0, waba_graceful_shutdown_1.isWabaServerShuttingDown)();
-    if (shuttingDown) {
-        return res.status(503).json({
-            ok: false,
-            ready: false,
-            shuttingDown: true,
-            message: "Servidor em atualização.",
-            retryAfterSec: 15,
-        });
-    }
-    if (MAINTENANCE_MODE) {
-        return res.status(503).json({
-            ok: false,
-            ready: false,
-            maintenanceMode: true,
-            message: MAINTENANCE_MESSAGE,
-            retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
-        });
-    }
-    res.json({
-        ok: true,
-        ready: true,
-        maintenanceMode: false,
-        port: PORT,
-        runtimeMode: RUNTIME_MODE,
-        backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
     });
 });
 app.get("/service/maintenance", (_req, res) => {

@@ -155,6 +155,38 @@ const WABA_SERVER_BOOT_ID = `${Date.now().toString(36)}-${crypto.randomBytes(4).
 const app = express();
 app.use(stripBasePathMiddleware);
 
+app.get("/live", (_req, res) => res.status(200).send("ok"));
+
+app.get("/ready", (_req, res) => {
+  const shuttingDown = isWabaServerShuttingDown();
+  if (shuttingDown) {
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      shuttingDown: true,
+      message: "Servidor em atualização.",
+      retryAfterSec: 15,
+    });
+  }
+  if (MAINTENANCE_MODE) {
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      maintenanceMode: true,
+      message: MAINTENANCE_MESSAGE,
+      retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
+    });
+  }
+  res.json({
+    ok: true,
+    ready: true,
+    maintenanceMode: false,
+    port: PORT,
+    runtimeMode: RUNTIME_MODE,
+    backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
+  });
+});
+
 /** UI estática: raiz do projeto e pasta dist (antes de middlewares que possam interferir). */
 const rootPath = path.join(__dirname, "..");
 const distPath = path.join(rootPath, "dist");
@@ -501,36 +533,6 @@ app.get("/health", (_req, res) => {
     evoHttpTimeoutMs: defaultEvoHttpTimeoutMs(),
     shortPublicBase: peekWabaShortPublicBaseUrl(),
     dataPersistence: getProductionDataPersistenceSnapshot(),
-  });
-});
-
-app.get("/ready", (_req, res) => {
-  const shuttingDown = isWabaServerShuttingDown();
-  if (shuttingDown) {
-    return res.status(503).json({
-      ok: false,
-      ready: false,
-      shuttingDown: true,
-      message: "Servidor em atualização.",
-      retryAfterSec: 15,
-    });
-  }
-  if (MAINTENANCE_MODE) {
-    return res.status(503).json({
-      ok: false,
-      ready: false,
-      maintenanceMode: true,
-      message: MAINTENANCE_MESSAGE,
-      retryAfterSec: MAINTENANCE_RETRY_AFTER_SEC,
-    });
-  }
-  res.json({
-    ok: true,
-    ready: true,
-    maintenanceMode: false,
-    port: PORT,
-    runtimeMode: RUNTIME_MODE,
-    backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
   });
 });
 

@@ -35,7 +35,7 @@ EXPOSE 3000
 
 VOLUME ["/app/data"]
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=6 \
-  CMD node -e "const http=require('http');const req=http.get({host:'127.0.0.1',port:process.env.PORT||3000,path:'/ready',timeout:4000},res=>process.exit(res.statusCode===200?0:1));req.on('timeout',()=>{req.destroy();process.exit(1)});req.on('error',()=>process.exit(1));"
+HEALTHCHECK --interval=45s --timeout=15s --start-period=90s --retries=5 \
+  CMD node -e "const http=require('http');const req=http.get({host:'127.0.0.1',port:process.env.PORT||3000,path:'/live',timeout:8000},res=>process.exit(res.statusCode===200?0:1));req.on('timeout',()=>{req.destroy();process.exit(1)});req.on('error',()=>process.exit(1));"
 
 CMD ["node", "dist/index.js"]
