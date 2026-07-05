@@ -232,11 +232,18 @@
           } catch (_) {}
         }
 
-        function hasDeployVersionDrift(probe) {
+        function hasDeployMarkerDrift(probe) {
           if (!probe || !probe.stable) return false;
           var nextMarker = String(probe.deployMarker || "");
-          var nextBootId = String(probe.serverBootId || "");
           if (baselineDeployMarker && nextMarker && nextMarker !== baselineDeployMarker) return true;
+          return false;
+        }
+
+        function hasDeployVersionDrift(probe) {
+          if (hasDeployMarkerDrift(probe)) return true;
+          if (!sawDeploySignal) return false;
+          if (!probe || !probe.stable) return false;
+          var nextBootId = String(probe.serverBootId || "");
           if (baselineServerBootId && nextBootId && nextBootId !== baselineServerBootId) return true;
           return false;
         }
@@ -450,7 +457,7 @@
             startDeployRecovery(false);
             return;
           }
-          if (probe.stable && hasDeployVersionDrift(probe)) {
+          if (probe.stable && hasDeployMarkerDrift(probe)) {
             startDeployRecovery(true);
             return;
           }

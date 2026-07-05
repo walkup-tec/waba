@@ -2023,4 +2023,6 @@ Palavras-chave para buscar:
   - `Dockerfile` — HEALTHCHECK usa `/live`; timeout HTTP 8000ms; docker timeout 15s; interval 45s; retries 5.
 - **Marker:** `DEPLOY-2026-07-05-healthcheck-live-waba-disparador`
 - **Log:** `doc/LOG-2026-07-05__fix-waba-disparador-healthcheck-live.md`
-- **Próximo:** validar deploy em produção (`GET /live`, marker em `/health`).
+- **Validação local 2026-07-05:** `npm install` + `npm run build` OK; `GET /live` → 200 `ok`; marker `DEPLOY-2026-07-05-healthcheck-live-waba-disparador` em `/health`.
+- **Produção deploy healthcheck (2026-07-05):** marker `DEPLOY-2026-07-05-healthcheck-live-waba-disparador`; serviço verde estável.
+- **Fix overlay falso positivo (2026-07-05):** modal «Atualizando» disparava a cada restart do container porque `watchDeployInBackground` tratava mudança de `serverBootId` como deploy (poll 8s). Fix: gatilho por drift só via `deployMarker`; `serverBootId` só após `shuttingDown` real. Marker `DEPLOY-2026-07-05-deploy-overlay-bootid-false-alarm-fix`. Log `doc/LOG-2026-07-05__deploy-overlay-bootid-false-alarm-fix.md`.
