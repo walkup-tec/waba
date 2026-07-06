@@ -13,7 +13,9 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-07-03
+2026-07-06
+
+**WABA — OG wabadisparos.com.br (produção):** imagem `wabadisparos-og.jpg` (1200×630, ~127 KB) + script `deploy-wabadisparos-og-vps.sh` para publicar no container `waba_paginadevendas`. URL OG: `https://wabadisparos.com.br/wabadisparos-og.jpg`. Ver `doc/LOG-2026-07-06__193000__og-wabadisparos-share-image-producao.md`. Palavras-chave: `wabadisparos`, `og:image`, `paginadevendas`.
 
 **WABA — Operacional: persistência de WhatsApp + notify por WhatsApp:** `Admin · Usuários` agora persiste `whatsapp` e `segmento` do operador; campanha nova envia e-mail e também WhatsApp com fallback de instância `51981077770` -> `5197462102`. Ver `doc/LOG-2026-07-03__operacional-whatsapp-persistencia-e-notify.md`. Palavras-chave: `waba-system-user`, `operacionalNotify`, `whatsapp`, `segmento`, `final 77770`.
 
