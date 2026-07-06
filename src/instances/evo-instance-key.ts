@@ -1,4 +1,4 @@
-/** Chave técnica da instância na Evolution — mesma ordem de `/instancias` e do painel. */
+/** Chave técnica da instância no sistema WABA - Drax — mesma ordem de `/instancias` e do painel. */
 export function resolveEvoInstanceKey(inst: unknown): string {
   if (!inst || typeof inst !== "object") return "";
   const root = inst as Record<string, unknown>;

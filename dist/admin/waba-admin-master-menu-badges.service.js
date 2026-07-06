@@ -56,6 +56,13 @@ class WabaAdminMasterMenuBadgesService {
         this.bootstrapSeenIfEmpty(masterEmail);
         return this.getBadges(masterEmail);
     }
+    getBadgesPayloadForMaster(masterEmail) {
+        this.bootstrapSeenIfEmpty(masterEmail);
+        return {
+            badges: this.getBadges(masterEmail),
+            seenAt: this.seenRepository.getSeenMap(masterEmail),
+        };
+    }
     countNewSubscribers(seenAt) {
         return this.subscriberRepository.list().filter((item) => isAfterSeenAt(item.createdAt, seenAt))
             .length;

@@ -3,11 +3,36 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaEntitlementService = void 0;
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
+const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
+const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const AQUECEDOR_ACCESS_MS = 30 * 24 * 60 * 60 * 1000;
 const normalizeEmail = (value) => value.trim().toLowerCase();
 class WabaEntitlementService {
-    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository()) {
+    constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository()) {
         this.orderRepository = orderRepository;
+        this.disparosCreditsService = disparosCreditsService;
+        this.subscriberRepository = subscriberRepository;
+    }
+    buildActiveFromCredits(email) {
+        const summary = this.disparosCreditsService.getCreditsSummary(email);
+        const hasAccess = summary.hasCredits ||
+            summary.pendingBonusShipments > 0 ||
+            summary.contractedShipments > 0;
+        if (!hasAccess)
+            return null;
+        return {
+            active: true,
+            bypass: false,
+            reason: "active",
+            email,
+            lastPaidAt: summary.lastPaidAt,
+            expiresAt: "",
+            daysRemaining: summary.unlimitedCredits ? 999 : Math.max(0, summary.remainingShipments),
+            sourceOrderId: "",
+            message: summary.unlimitedCredits
+                ? "Aquecedor liberado — créditos ilimitados na conta."
+                : `Aquecedor liberado enquanto houver créditos de disparos (${summary.remainingShipments.toLocaleString("pt-BR")} restantes).`,
+        };
     }
     getAquecedorEntitlement(email, role) {
         const normalizedEmail = normalizeEmail(email);
@@ -41,6 +66,20 @@ class WabaEntitlementService {
         if (!normalizedEmail) {
             return inactive("guest", "Faça login com sua conta de assinante para verificar o acesso ao Aquecedor.");
         }
+        const subscriber = this.subscriberRepository.getByEmail(normalizedEmail);
+        if (subscriber?.aquecedorGranted) {
+            return {
+                active: true,
+                bypass: true,
+                reason: "partner",
+                email: normalizedEmail,
+                lastPaidAt: "",
+                expiresAt: "",
+                daysRemaining: 999,
+                sourceOrderId: "",
+                message: "Aquecedor liberado para este assinante parceiro (sem exigência de compra de envios).",
+            };
+        }
         const paidOrders = this.orderRepository
             .list()
             .filter((order) => order.product === "waba-disparos" &&
@@ -50,12 +89,18 @@ class WabaEntitlementService {
             .sort((a, b) => new Date(b.paidAt || 0).getTime() - new Date(a.paidAt || 0).getTime());
         const latest = paidOrders[0];
         if (!latest?.paidAt) {
+            const fromCredits = this.buildActiveFromCredits(normalizedEmail);
+            if (fromCredits)
+                return fromCredits;
             return inactive("no_payment", "Contrate um pacote de disparos e aguarde a confirmação do PIX para liberar o Aquecedor gratuitamente.");
         }
         const paidAtMs = new Date(latest.paidAt).getTime();
         const expiresAtMs = paidAtMs + AQUECEDOR_ACCESS_MS;
         const now = Date.now();
         if (!Number.isFinite(paidAtMs) || now > expiresAtMs) {
+            const fromCredits = this.buildActiveFromCredits(normalizedEmail);
+            if (fromCredits)
+                return fromCredits;
             return {
                 active: false,
                 bypass: false,

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildCampaignErrorReportedTemplate = exports.buildCampaignCompletedTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
+exports.buildPushAnnouncementTemplate = exports.buildCampaignErrorReportedTemplate = exports.buildOperacionalNewCampaignWhatsAppText = exports.buildOperacionalNewCampaignTemplate = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = exports.buildCampaignCompletedTemplate = exports.buildSubscriberWelcomeTemplate = exports.buildSupportTicketClosedTemplate = void 0;
 const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -103,6 +103,7 @@ const buildSubscriberWelcomeTemplate = (input) => {
     <table style="width:100%;border-collapse:collapse;margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
       ${registrationFieldRow("Nome completo", input.recipientName)}
       ${registrationFieldRow("E-mail de acesso", input.recipientEmail)}
+      ${registrationFieldRow("Senha de acesso", input.password)}
       ${registrationFieldRow("WhatsApp", whatsappLabel)}
       ${phoneLabel && phoneLabel !== whatsappLabel ? registrationFieldRow("Telefone", phoneLabel) : ""}
       ${registrationFieldRow("CPF/CNPJ", cpfCnpjLabel)}
@@ -149,6 +150,77 @@ const buildCampaignCompletedTemplate = (input) => {
     return { subject, html };
 };
 exports.buildCampaignCompletedTemplate = buildCampaignCompletedTemplate;
+exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = 24;
+const buildOperacionalNewCampaignTemplate = (input) => {
+    const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+    const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
+    const subscriberId = String(input.subscriberId || "").trim() || "—";
+    const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
+    const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+    const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+    const slaHours = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+    const subject = `Nova campanha ${apiKindLabel} aguardando sua configuração`;
+    const html = baseEmailShell("Nova campanha para atendimento", `
+    <p style="margin:0 0 12px;color:#1e293b;">Olá, <strong>${escapeHtml(recipient)}</strong>!</p>
+    <p style="margin:0 0 12px;color:#1e293b;">
+      Tudo bem? Uma nova campanha foi gerada no plano <strong>${escapeHtml(apiKindLabel)}</strong>
+      e está aguardando sua configuração no painel operacional.
+    </p>
+    <p style="margin:0 0 8px;color:#1e293b;"><strong>Resumo da campanha:</strong></p>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+      ${registrationFieldRow("Data de criação", createdAtLabel)}
+      ${registrationFieldRow("ID do assinante", subscriberId)}
+      ${registrationFieldRow("Nome da campanha", campaignName)}
+      ${registrationFieldRow("Envios registrados", String(plannedSendCount))}
+      ${registrationFieldRow("Plano de atendimento", apiKindLabel)}
+    </table>
+    <p style="margin:0 0 12px;color:#1e293b;">
+      Por gentileza, acesse o sistema e inicie a configuração desta campanha.
+      O prazo para atendimento é de até <strong>${slaHours} horas</strong> a partir da criação.
+    </p>
+    ${primaryButtonHtml(input.campaignUrl, "Abrir campanha no painel")}
+    <p style="margin:16px 0 0;color:#1e293b;">
+      Este aviso foi enviado somente para operacionais designados ao plano
+      <strong>${escapeHtml(apiKindLabel)}</strong>. Obrigado pelo cuidado com cada entrega!
+    </p>
+    <p style="margin:16px 0 0;color:#1e293b;">
+      Um abraço,<br />
+      <strong>Equipe Drax Sistemas</strong>
+    </p>
+  `);
+    return { subject, html };
+};
+exports.buildOperacionalNewCampaignTemplate = buildOperacionalNewCampaignTemplate;
+const buildOperacionalNewCampaignWhatsAppText = (input) => {
+    const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+    const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
+    const subscriberId = String(input.subscriberId || "").trim() || "—";
+    const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
+    const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+    const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+    const slaHours = exports.OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+    return [
+        `Olá, ${recipient}!`,
+        "",
+        `Uma nova campanha foi gerada no plano ${apiKindLabel} e está aguardando sua configuração no painel operacional.`,
+        "",
+        "Resumo da campanha:",
+        `- Data de criação: ${createdAtLabel}`,
+        `- ID do assinante: ${subscriberId}`,
+        `- Nome da campanha: ${campaignName}`,
+        `- Envios registrados: ${plannedSendCount}`,
+        `- Plano de atendimento: ${apiKindLabel}`,
+        "",
+        `Por gentileza, acesse seu painel operador e inicie a configuração desta campanha. O prazo para atendimento é de até ${slaHours} horas a partir da criação.`,
+        "",
+        "Acesse seu painel operador.",
+        "",
+        `Este aviso foi enviado somente para operacionais designados ao plano ${apiKindLabel}. Obrigado pelo cuidado com cada entrega!`,
+        "",
+        "Equipe Drax Sistemas",
+    ].join("\n");
+};
+exports.buildOperacionalNewCampaignWhatsAppText = buildOperacionalNewCampaignWhatsAppText;
 const buildCampaignErrorReportedTemplate = (input) => {
     const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
     const campaignName = String(input.campaignName || "").trim() || "Sua campanha";
@@ -175,3 +247,29 @@ const buildCampaignErrorReportedTemplate = (input) => {
     return { subject, html };
 };
 exports.buildCampaignErrorReportedTemplate = buildCampaignErrorReportedTemplate;
+const buildPushAnnouncementTemplate = (input) => {
+    const title = String(input.title || "Comunicado WABA").trim() || "Comunicado WABA";
+    const message = String(input.message || "").trim();
+    const imageUrl = String(input.imageUrl || "").trim();
+    const subject = title;
+    const imageBlock = imageUrl
+        ? `<div style="margin:0 0 16px;"><img src="${imageUrl}" alt="Comunicado WABA" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #e2e8f0;" /></div>`
+        : "";
+    const messageBlock = message
+        ? `<div style="margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;color:#1e293b;line-height:1.5;">
+      ${formatMultilineHtml(message)}
+    </div>`
+        : "";
+    const html = baseEmailShell(title, `
+    <p style="margin:0 0 12px;color:#1e293b;">Olá,</p>
+    <p style="margin:0 0 12px;color:#1e293b;">Temos um comunicado importante sobre o sistema WABA:</p>
+    ${imageBlock}
+    ${messageBlock}
+    <p style="margin:16px 0 0;color:#1e293b;">
+      Atenciosamente,<br />
+      <strong>Equipe Drax Sistemas</strong>
+    </p>
+  `);
+    return { subject, html };
+};
+exports.buildPushAnnouncementTemplate = buildPushAnnouncementTemplate;

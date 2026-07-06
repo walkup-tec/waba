@@ -19,6 +19,8 @@ RUN echo ">>> npm ci --omit=dev" \
   && echo ">>> npm ci OK"
 
 COPY dist ./dist
+COPY scripts ./scripts
+COPY public-pages ./public-pages
 COPY media/Drax-logo-footer.png media/favcon.png media/favicon.ico media/favicon.png ./media/
 
 RUN test -f dist/index.js || (echo "ERRO: dist/index.js ausente — rode npm run build antes do deploy" && exit 1)
@@ -33,7 +35,7 @@ EXPOSE 3000
 
 VOLUME ["/app/data"]
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
-  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3000)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+HEALTHCHECK --interval=45s --timeout=15s --start-period=90s --retries=5 \
+  CMD node -e "const http=require('http');const req=http.get({host:'127.0.0.1',port:process.env.PORT||3000,path:'/live',timeout:8000},res=>process.exit(res.statusCode===200?0:1));req.on('timeout',()=>{req.destroy();process.exit(1)});req.on('error',()=>process.exit(1));"
 
 CMD ["node", "dist/index.js"]

@@ -1,4 +1,4 @@
-Disparador N8
+Waba - Drax # Sistema de mensageria para whatsapp API Oficial e API Alternativa
 ==============
 
 Projeto para integrações e disparos automáticos utilizando API oficial e Sem API OFicial (dois modos para atender a necessidades diferentes).

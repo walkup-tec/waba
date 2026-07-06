@@ -150,6 +150,22 @@ exports.WABA_MENU_REGISTRY = [
         sectionLabel: SECTION_LABELS.suporte,
         profile: "all",
     },
+    {
+        id: "admin-monitor-cpu",
+        label: "Monitor CPU",
+        tab: "admin-monitor-cpu",
+        section: "suporte",
+        sectionLabel: SECTION_LABELS.suporte,
+        profile: "all",
+    },
+    {
+        id: "admin-push",
+        label: "Push",
+        tab: "admin-push",
+        section: "suporte",
+        sectionLabel: SECTION_LABELS.suporte,
+        profile: "all",
+    },
 ];
 /** Menus Disparos visíveis para assinantes (UI produção / V02). */
 exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [

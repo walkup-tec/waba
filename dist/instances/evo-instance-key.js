@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveEvoInstanceKey = resolveEvoInstanceKey;
-/** Chave técnica da instância na Evolution — mesma ordem de `/instancias` e do painel. */
+/** Chave técnica da instância no sistema WABA - Drax — mesma ordem de `/instancias` e do painel. */
 function resolveEvoInstanceKey(inst) {
     if (!inst || typeof inst !== "object")
         return "";

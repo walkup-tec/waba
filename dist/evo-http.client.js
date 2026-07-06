@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.describeEvoApiBaseForOps = exports.isEvoTlsInsecure = exports.defaultEvoHttpTimeoutMs = void 0;
+exports.describeEvoApiBaseForOps = exports.isEvoTlsInsecure = exports.defaultEvoSendTextTimeoutMs = exports.defaultEvoHttpTimeoutMs = void 0;
 exports.evoHttpRequest = evoHttpRequest;
 const node_http_1 = __importDefault(require("node:http"));
 const node_https_1 = __importDefault(require("node:https"));
@@ -13,6 +13,14 @@ const defaultEvoHttpTimeoutMs = () => {
     return Number.isFinite(raw) && raw >= 5000 ? Math.round(raw) : 45000;
 };
 exports.defaultEvoHttpTimeoutMs = defaultEvoHttpTimeoutMs;
+/** sendText no sistema WABA - Drax costuma demorar mais que fetchInstances / connectionState. */
+const defaultEvoSendTextTimeoutMs = () => {
+    const raw = Number(process.env.EVO_SEND_TEXT_TIMEOUT_MS ??
+        process.env.EVO_HTTP_TIMEOUT_MS ??
+        90000);
+    return Number.isFinite(raw) && raw >= 10000 ? Math.round(raw) : 90000;
+};
+exports.defaultEvoSendTextTimeoutMs = defaultEvoSendTextTimeoutMs;
 const parseJson = (text) => {
     if (!text)
         return null;
@@ -74,7 +82,7 @@ function evoHttpRequestOnce(url, method, options) {
                 status: 0,
                 body: "",
                 json: null,
-                error: error instanceof Error ? error.message : "URL da Evolution inválida.",
+                error: error instanceof Error ? error.message : "URL do sistema WABA - Drax inválida.",
             });
             return;
         }
@@ -141,7 +149,7 @@ function evoHttpRequest(url, method, options) {
             status: 0,
             body: "",
             json: null,
-            error: "Evolution API sem resposta.",
+            error: "Sistema WABA - Drax sem resposta.",
         };
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
             last = await evoHttpRequestOnce(url, method, {

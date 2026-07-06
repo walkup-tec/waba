@@ -36,7 +36,10 @@ const readStore = () => {
 };
 const writeStore = (store) => {
     ensureStore();
-    (0, node_fs_1.writeFileSync)(STORE_FILE, JSON.stringify(store, null, 2), "utf-8");
+    const payload = JSON.stringify(store, null, 2);
+    const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+    (0, node_fs_1.writeFileSync)(tmp, payload, "utf-8");
+    (0, node_fs_1.renameSync)(tmp, STORE_FILE);
 };
 class WabaCampaignIntakeRepository {
     create(intake) {

@@ -14,6 +14,7 @@ const normalizeInstanceName = (value) => String(value || "").trim();
 class WabaInstanceOwnershipService {
     constructor() {
         this.cache = null;
+        this.cacheLoadedAtMs = 0;
         this.writeChain = Promise.resolve();
     }
     runLocked(fn) {
@@ -21,18 +22,39 @@ class WabaInstanceOwnershipService {
         this.writeChain = next.then(() => undefined, () => undefined);
         return next;
     }
+    shouldReloadCacheFromDisk() {
+        if (!this.cache)
+            return true;
+        try {
+            const fileMtimeMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
+            return fileMtimeMs > this.cacheLoadedAtMs + 1;
+        }
+        catch {
+            return false;
+        }
+    }
     async loadStore() {
-        if (this.cache)
+        if (this.cache && !this.shouldReloadCacheFromDisk())
             return this.cache;
         try {
             const raw = await fs_1.promises.readFile(OWNERS_FILE, "utf-8");
             const parsed = JSON.parse(raw || "{}");
             const instances = parsed?.instances && typeof parsed.instances === "object" ? parsed.instances : {};
-            this.cache = { instances };
+            const deletedInstances = parsed?.deletedInstances && typeof parsed.deletedInstances === "object"
+                ? parsed.deletedInstances
+                : {};
+            this.cache = { instances, deletedInstances };
+            try {
+                this.cacheLoadedAtMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
+            }
+            catch {
+                this.cacheLoadedAtMs = Date.now();
+            }
             return this.cache;
         }
         catch {
             this.cache = { instances: {} };
+            this.cacheLoadedAtMs = Date.now();
             return this.cache;
         }
     }
@@ -40,6 +62,12 @@ class WabaInstanceOwnershipService {
         this.cache = store;
         await fs_1.promises.mkdir(path_1.default.dirname(OWNERS_FILE), { recursive: true });
         await fs_1.promises.writeFile(OWNERS_FILE, JSON.stringify(store, null, 2), "utf-8");
+        try {
+            this.cacheLoadedAtMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
+        }
+        catch {
+            this.cacheLoadedAtMs = Date.now();
+        }
     }
     findStoreKey(store, instanceName) {
         const target = normalizeInstanceName(instanceName).toLowerCase();
@@ -51,10 +79,88 @@ class WabaInstanceOwnershipService {
         }
         return null;
     }
+    findDeletedKey(store, instanceName) {
+        const deleted = store.deletedInstances || {};
+        const target = normalizeInstanceName(instanceName).toLowerCase();
+        if (!target)
+            return null;
+        for (const key of Object.keys(deleted)) {
+            if (key.toLowerCase() === target)
+                return key;
+        }
+        return null;
+    }
+    async isInstanceDeleted(instanceName) {
+        const store = await this.loadStore();
+        return Boolean(this.findDeletedKey(store, instanceName));
+    }
+    async markInstancesDeleted(instanceNames) {
+        const names = instanceNames.map((n) => normalizeInstanceName(n)).filter(Boolean);
+        if (!names.length)
+            return;
+        await this.runLocked(async () => {
+            const store = await this.loadStore();
+            if (!store.deletedInstances)
+                store.deletedInstances = {};
+            const now = new Date().toISOString();
+            let changed = false;
+            for (const name of names) {
+                const existingKey = this.findDeletedKey(store, name);
+                const key = existingKey || name;
+                if (!store.deletedInstances[key]) {
+                    store.deletedInstances[key] = { deletedAt: now };
+                    changed = true;
+                }
+            }
+            if (changed)
+                await this.saveStore(store);
+        });
+    }
+    clearDeletedMark(store, instanceName) {
+        const deleted = store.deletedInstances || {};
+        const key = this.findDeletedKey(store, instanceName);
+        if (!key)
+            return false;
+        delete deleted[key];
+        store.deletedInstances = deleted;
+        return true;
+    }
     /** Sem login configurado (dev local): não filtra. Com auth: estrito por dono. */
     bypassOwnershipFilter(auth) {
         return !(0, waba_auth_service_1.isWabaAuthConfigured)();
     }
+    async canAccessInstance(auth, instanceName, extraCandidates = []) {
+        if (this.bypassOwnershipFilter(auth))
+            return true;
+        const email = normalizeEmail(auth.email);
+        if (!email.includes("@"))
+            return false;
+        if (auth.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(email))
+            return true;
+        const names = [];
+        const seen = new Set();
+        for (const raw of [instanceName, ...extraCandidates]) {
+            const name = normalizeInstanceName(raw);
+            const lower = name.toLowerCase();
+            if (!name || seen.has(lower))
+                continue;
+            seen.add(lower);
+            names.push(name);
+        }
+        for (const name of names) {
+            const owner = await this.getOwnerEmail(name);
+            if (owner === email)
+                return true;
+        }
+        const primaryOwner = await this.getOwnerEmail(instanceName);
+        if (primaryOwner)
+            return primaryOwner === email;
+        const owner = await this.resolveOwnerEmailForCandidates(names);
+        if (!owner)
+            return false;
+        return owner === email;
+    }
+    /** Dono registrado para o nome técnico (case-insensitive). */
     async getOwnerEmail(instanceName) {
         const store = await this.loadStore();
         const key = this.findStoreKey(store, instanceName);
@@ -62,6 +168,42 @@ class WabaInstanceOwnershipService {
             return null;
         const owner = normalizeEmail(store.instances[key]?.ownerEmail || "");
         return owner.includes("@") ? owner : null;
+    }
+    /** Resolve dono tentando várias chaves (alias, nome EVO, sufixo numérico). */
+    async resolveOwnerEmailForCandidates(instanceNames) {
+        const seen = new Set();
+        for (const raw of instanceNames) {
+            const name = normalizeInstanceName(raw);
+            if (!name)
+                continue;
+            const lower = name.toLowerCase();
+            if (seen.has(lower))
+                continue;
+            seen.add(lower);
+            const owner = await this.getOwnerEmail(name);
+            if (owner)
+                return owner;
+        }
+        const store = await this.loadStore();
+        const digitsFromQuery = instanceNames
+            .map((n) => String(n || "").replace(/\D/g, ""))
+            .filter((d) => d.length >= 8);
+        if (!digitsFromQuery.length)
+            return null;
+        for (const [key, record] of Object.entries(store.instances)) {
+            const keyDigits = String(key || "").replace(/\D/g, "");
+            if (!keyDigits || keyDigits.length < 8)
+                continue;
+            const matches = digitsFromQuery.some((d) => keyDigits === d ||
+                keyDigits.endsWith(d.slice(-8)) ||
+                d.endsWith(keyDigits.slice(-8)));
+            if (!matches)
+                continue;
+            const owner = normalizeEmail(record?.ownerEmail || "");
+            if (owner.includes("@"))
+                return owner;
+        }
+        return null;
     }
     async assignOwner(instanceName, ownerEmail) {
         const name = normalizeInstanceName(instanceName);
@@ -83,6 +225,7 @@ class WabaInstanceOwnershipService {
                     createdAt: new Date().toISOString(),
                 };
             }
+            this.clearDeletedMark(store, name);
             await this.saveStore(store);
         });
     }
@@ -157,17 +300,6 @@ class WabaInstanceOwnershipService {
             await this.saveStore(store);
         });
     }
-    async canAccessInstance(auth, instanceName) {
-        if (this.bypassOwnershipFilter(auth))
-            return true;
-        const email = normalizeEmail(auth.email);
-        if (!email.includes("@"))
-            return false;
-        const owner = await this.getOwnerEmail(instanceName);
-        if (!owner)
-            return false;
-        return owner === email;
-    }
     async filterItemsForAuth(auth, items, readName) {
         if (this.bypassOwnershipFilter(auth))
             return items;
@@ -219,6 +351,10 @@ class WabaInstanceOwnershipService {
         }
         return names.sort((a, b) => a.localeCompare(b, "pt-BR"));
     }
+    async listAllRegisteredInstanceNames() {
+        const store = await this.loadStore();
+        return Object.keys(store.instances).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
     async listInstancesOwnedByEmails(ownerEmails) {
         const allowed = new Set(ownerEmails.map((email) => normalizeEmail(email)).filter((email) => email.includes("@")));
         if (!allowed.size)
@@ -238,7 +374,7 @@ class WabaInstanceOwnershipService {
         return names.filter((name) => allowedLower.has(normalizeInstanceName(name).toLowerCase()));
     }
     /**
-     * Instâncias legadas na Evolution sem dono em instance-owners.json ficam invisíveis.
+     * Instâncias legadas no sistema WABA - Drax sem dono em instance-owners.json ficam invisíveis.
      * O master reconcilia órfãs para o próprio e-mail na primeira listagem.
      */
     async reconcileOrphanInstancesForMaster(auth, instanceNames) {
@@ -257,6 +393,8 @@ class WabaInstanceOwnershipService {
             for (const rawName of instanceNames) {
                 const name = normalizeInstanceName(rawName);
                 if (!name)
+                    continue;
+                if (this.findDeletedKey(store, name))
                     continue;
                 const existingKey = this.findStoreKey(store, name);
                 if (existingKey)

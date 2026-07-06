@@ -55,13 +55,29 @@ if (!fs.existsSync(path.join(distSrc, "index.js"))) {
 }
 copyDir(distSrc, path.join(out, "dist"));
 
-const dataSrc = path.join(root, "data");
-const dataDest = path.join(out, "data");
-if (fs.existsSync(dataSrc)) {
-  copyDir(dataSrc, dataDest);
-} else {
-  fs.mkdirSync(dataDest, { recursive: true });
+const scriptsSrc = path.join(root, "scripts");
+const scriptsDest = path.join(out, "scripts");
+if (fs.existsSync(scriptsSrc)) {
+  copyDir(scriptsSrc, scriptsDest);
 }
+
+const dataDest = path.join(out, "data");
+fs.mkdirSync(dataDest, { recursive: true });
+fs.writeFileSync(
+  path.join(dataDest, "LEIA-ME-NAO-SOBRESCREVER.txt"),
+  `Pasta data/ do servidor de PRODUÇÃO — NÃO enviar via FTP/Git.
+
+Os dados dos assinantes, campanhas, créditos, financeiro e suporte ficam
+no VOLUME /app/data (Easypanel) ou na pasta data/ já existente no host.
+
+O deploy só atualiza dist/ e código. Nunca substitua este diretório pelo
+bundle local (v02/v01).
+
+Backup: node scripts/backup-production-data.mjs --data-dir /app/data
+Doc: doc/deploy-preservacao-dados-producao.md
+`,
+  "utf8",
+);
 
 const envExample = path.join(root, ".env.example");
 if (fs.existsSync(envExample)) {
@@ -76,7 +92,7 @@ ${"=".repeat(44)}
 
 CONTEÚDO
   dist/           → aplicação (iniciar com: node dist/index.js)
-  data/           → estado local (campanhas, aliases); o servidor pode gravar aqui
+  data/           → APENAS LEIA-ME (não sobrescreva data/ de produção via FTP)
   node_modules/   → dependências de produção (geradas por npm run bundle:ftp)
   package.json + package-lock.json
 

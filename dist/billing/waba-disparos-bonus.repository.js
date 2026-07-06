@@ -140,5 +140,40 @@ class WabaDisparosBonusRepository {
     clearPendingShipments(email, apiKind) {
         return this.getPendingShipments(email, apiKind);
     }
+    listGrantHistory(email, limit = 20) {
+        const entry = this.getEntry(email);
+        if (!entry)
+            return [];
+        const cap = Math.max(1, Math.min(50, Math.floor(limit)));
+        const appliedBudget = {
+            oficial: sumAppliedBonusFromOrders(email, "oficial", this.orderRepository),
+            alternativa: sumAppliedBonusFromOrders(email, "alternativa", this.orderRepository),
+        };
+        const grantsOldestFirst = [...entry.grants].sort((a, b) => new Date(a.grantedAt).getTime() - new Date(b.grantedAt).getTime());
+        const statusByCampaignId = new Map();
+        for (const kind of ["oficial", "alternativa"]) {
+            let remainingApplied = appliedBudget[kind];
+            for (const grant of grantsOldestFirst.filter((item) => item.apiKind === kind)) {
+                const amount = Math.max(0, Math.round(Number(grant.shipments ?? 0)));
+                if (remainingApplied >= amount && amount > 0) {
+                    statusByCampaignId.set(grant.campaignId, "applied");
+                    remainingApplied -= amount;
+                }
+                else {
+                    statusByCampaignId.set(grant.campaignId, "pending");
+                }
+            }
+        }
+        return [...entry.grants]
+            .sort((a, b) => new Date(b.grantedAt).getTime() - new Date(a.grantedAt).getTime())
+            .slice(0, cap)
+            .map((grant) => ({
+            campaignId: grant.campaignId,
+            shipments: Math.max(0, Math.round(Number(grant.shipments ?? 0))),
+            grantedAt: String(grant.grantedAt ?? ""),
+            apiKind: grant.apiKind,
+            status: statusByCampaignId.get(grant.campaignId) ?? "pending",
+        }));
+    }
 }
 exports.WabaDisparosBonusRepository = WabaDisparosBonusRepository;

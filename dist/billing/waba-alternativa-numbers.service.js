@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WabaAlternativaNumbersService = exports.ALTERNATIVA_NUMBER_MAX_QUANTITY = exports.ALTERNATIVA_NUMBER_UNIT_CENTS = void 0;
+exports.configureAlternativaNumbersSummaryReplenish = configureAlternativaNumbersSummaryReplenish;
+exports.configureAlternativaSummaryPostProcess = configureAlternativaSummaryPostProcess;
 const node_crypto_1 = require("node:crypto");
 const waba_fazenda_pool_service_1 = require("../instances/waba-fazenda-pool.service");
 const alternativa_number_activation_repository_1 = require("./alternativa-number-activation.repository");
@@ -9,6 +11,14 @@ const alternativa_dispatch_rules_1 = require("../disparos/alternativa-dispatch-r
 exports.ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
 exports.ALTERNATIVA_NUMBER_MAX_QUANTITY = 20;
 const normalizeEmail = (value) => String(value ?? "").trim().toLowerCase();
+let alternativaSummaryReplenishHook = null;
+let alternativaSummaryPostProcessHook = null;
+function configureAlternativaNumbersSummaryReplenish(hook) {
+    alternativaSummaryReplenishHook = hook;
+}
+function configureAlternativaSummaryPostProcess(hook) {
+    alternativaSummaryPostProcessHook = hook;
+}
 class WabaAlternativaNumbersService {
     constructor(orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), activationRepository = new alternativa_number_activation_repository_1.AlternativaNumberActivationRepository()) {
         this.orderRepository = orderRepository;
@@ -34,12 +44,21 @@ class WabaAlternativaNumbersService {
             .reduce((sum, order) => sum + Math.max(0, Math.round(Number(order.shipmentCount ?? 0))), 0);
     }
     async getSummaryAsync(email) {
+        const normalized = normalizeEmail(email);
+        if (alternativaSummaryReplenishHook && normalized.includes("@")) {
+            try {
+                await alternativaSummaryReplenishHook(normalized);
+            }
+            catch {
+                /* segue com snapshot atual */
+            }
+        }
         const purchasedSlots = this.getPurchasedSlots(email);
         const activations = this.activationRepository.listForEmail(email);
-        const activatedCount = activations.length;
+        const activatedCount = this.activationRepository.countForEmail(email);
         const availableSlots = Math.max(0, purchasedSlots - activatedCount);
         const fazendaPool = await waba_fazenda_pool_service_1.wabaFazendaPoolService.buildPoolForSubscriber(email);
-        return {
+        const summary = {
             ...this.getPricing(),
             dispatchRules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)(),
             canPickNumbers: purchasedSlots >= (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)().minPurchasedForPicker,
@@ -50,6 +69,11 @@ class WabaAlternativaNumbersService {
             activations: activations.map((row) => ({
                 instanceName: row.instanceName,
                 activatedAt: row.activatedAt,
+                status: row.status === "blocked" ? "blocked" : "active",
+                blockedAt: row.blockedAt ?? null,
+                replacedByInstanceName: row.replacedByInstanceName ?? null,
+                replacesInstanceName: row.replacesInstanceName ?? null,
+                replacementScope: row.replacementScope ?? null,
             })),
             fazendaPool: {
                 items: fazendaPool.items,
@@ -57,6 +81,10 @@ class WabaAlternativaNumbersService {
                 assignedToSubscriber: fazendaPool.assignedToSubscriber,
             },
         };
+        if (alternativaSummaryPostProcessHook) {
+            return (await alternativaSummaryPostProcessHook(summary, normalized));
+        }
+        return summary;
     }
     validateCheckout(quantity, valueCents) {
         const qty = Math.round(Number(quantity));

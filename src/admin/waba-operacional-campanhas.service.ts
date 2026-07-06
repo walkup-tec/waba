@@ -27,6 +27,10 @@ import {
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { notifyCampaignCompletedEmail, notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
+import {
+  notifyOperacionalStaffOnCampaignCreated,
+  type OperacionalNotifyResult,
+} from "../mail/waba-operacional-campaign-notify.service";
 
 export const CAMPAIGN_START_DEADLINE_MS = 6 * 60 * 60 * 1000;
 
@@ -515,5 +519,30 @@ export class WabaOperacionalCampanhasService {
       buffer: trimSpreadsheetBufferToRowCount(originalBuffer, plannedSendCount),
       fileName: trimmedFileName,
     };
+  }
+
+  async resendOperacionalNotifyEmail(
+    campaignId: string,
+    staff: OperacionalCampanhasStaffContext,
+  ): Promise<OperacionalNotifyResult> {
+    const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+    const result = await notifyOperacionalStaffOnCampaignCreated(intake);
+    this.intakeRepository.updateById(intake.id, {
+      updatedAt: new Date().toISOString(),
+      operacionalNotifyAudit: result,
+    });
+    const anySent = result.recipients.some((item) => item.status === "sent");
+    if (!result.recipients.length) {
+      throw new Error(
+        `Nenhum operacional designado para ${result.apiKindLabel}. Ajuste em Admin · Usuários.`,
+      );
+    }
+    if (!anySent) {
+      throw new Error(
+        result.recipients.map((item) => `${item.email}: ${item.message}`).join(" | ") ||
+          "Falha ao enviar e-mail operacional.",
+      );
+    }
+    return result;
   }
 }

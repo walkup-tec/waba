@@ -38,6 +38,62 @@ export type AsaasTransferPermissionProbe = {
   usesDedicatedKey: boolean;
 };
 
+export type AsaasPaymentApiProbe = {
+  ok: boolean;
+  httpStatus: number;
+  code: string;
+  message: string;
+};
+
+export const probeAsaasPaymentApi = async (): Promise<AsaasPaymentApiProbe> => {
+  if (!isAsaasConfigured()) {
+    return {
+      ok: false,
+      httpStatus: 0,
+      code: "missing_key",
+      message: "Defina ASAAS_API_KEY no servidor.",
+    };
+  }
+
+  const response = await fetch(`${resolveAsaasApiBaseUrl()}/finance/balance`, {
+    method: "GET",
+    headers: { access_token: resolveAsaasApiKey() },
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as unknown;
+  const code = readAsaasErrorCode(payload);
+  const message = readAsaasErrorMessage(payload, response.status);
+
+  if (response.ok) {
+    return { ok: true, httpStatus: response.status, code: "ok", message: "API de cobrança Asaas acessível." };
+  }
+
+  if (response.status === 401 || code === "invalid_access_token") {
+    return {
+      ok: false,
+      httpStatus: response.status,
+      code: code || "invalid_access_token",
+      message: "ASAAS_API_KEY inválida ou revogada no painel Asaas.",
+    };
+  }
+
+  if (response.status === 403 && message.toLowerCase().includes("ip")) {
+    return {
+      ok: false,
+      httpStatus: response.status,
+      code: code || "ip_forbidden",
+      message: `${message} Adicione o IP do servidor na whitelist do Asaas.`,
+    };
+  }
+
+  return {
+    ok: false,
+    httpStatus: response.status,
+    code: code || "api_error",
+    message,
+  };
+};
+
 export const probeAsaasTransferPermission = async (): Promise<AsaasTransferPermissionProbe> => {
   const usesDedicatedKey = usesDedicatedAsaasTransferKey();
   if (!isAsaasTransferConfigured()) {

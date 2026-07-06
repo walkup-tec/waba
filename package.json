@@ -13,6 +13,8 @@
     "init:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-env-v01-v02.ps1",
     "build": "node scripts/generate-brand-logo-module.mjs && tsc && node scripts/copy-index-html.mjs",
     "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
+    "backup:production-data": "node scripts/backup-production-data.mjs",
+    "verify:data-safety": "node scripts/verify-production-data-safety.mjs",
     "start": "node dist/index.js",
     "free:3000": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/free-port-3000.ps1",
     "start:win": "npm run free:3000 && node dist/index.js",

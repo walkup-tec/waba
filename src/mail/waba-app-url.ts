@@ -5,6 +5,12 @@ export const resolveWabaAppLoginUrl = (): string => {
     .trim()
     .replace(/\/$/, "");
   if (fromEnv) return fromEnv;
+  const fromPublic = String(
+    process.env.WABA_PUBLIC_BASE_URL ?? process.env.WABA_WEBHOOK_BASE_URL ?? "",
+  )
+    .trim()
+    .replace(/\/$/, "");
+  if (fromPublic) return fromPublic;
   const port = String(process.env.PORT || 3012).trim();
   const base = BASE_PATH || "";
   return `http://localhost:${port}${base}`;
@@ -24,5 +30,14 @@ export const buildCampaignListDeepLink = (): string => {
   const base = resolveWabaAppLoginUrl().replace(/\/$/, "");
   const url = new URL(`${base}/`);
   url.searchParams.set("aba", "disparos");
+  return url.toString();
+};
+
+/** Deep link para operacional abrir detalhes da campanha no Admin · Campanhas. */
+export const buildOperacionalAdminCampaignDeepLink = (campaignId: string): string => {
+  const id = String(campaignId || "").trim();
+  const base = resolveWabaAppLoginUrl().replace(/\/$/, "");
+  const url = new URL(`${base}/`);
+  url.searchParams.set("operacionalCampanha", id);
   return url.toString();
 };

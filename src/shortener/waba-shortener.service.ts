@@ -1,4 +1,10 @@
 import crypto from "crypto";
+import type { WabaPublicBaseRequestHints } from "../lib/waba-public-base-url";
+import {
+  peekWabaShortPublicBaseUrl,
+  rememberPublicBaseFromRequest,
+  resolveWabaShortPublicBaseUrl,
+} from "../lib/waba-public-base-url";
 import {
   createShortLinkRecord,
   extractSlugFromPublicShortUrl,
@@ -9,18 +15,10 @@ import {
   randomSlug,
 } from "./waba-shortener.repository";
 
-function resolveWabaShortPublicBase(): string {
-  const explicit = String(
-    process.env.WABA_SHORT_PUBLIC_BASE ||
-      process.env.BASE_SHORT_DOMAIN ||
-      process.env.WABA_SHORTENER_PUBLIC_BASE ||
-      ""
-  )
-    .trim()
-    .replace(/\/+$/, "");
-  if (explicit) return explicit;
-  const port = String(process.env.PORT || "3000").trim();
-  return `http://localhost:${port}`;
+function buildPublicShortUrl(slug: string, hints?: WabaPublicBaseRequestHints): string {
+  rememberPublicBaseFromRequest(hints);
+  const base = resolveWabaShortPublicBaseUrl(hints);
+  return `${base}/s/${slug}`;
 }
 
 function deriveSlugFromLongUrl(longUrl: string): string {
@@ -33,14 +31,9 @@ function deriveSlugFromLongUrl(longUrl: string): string {
   return randomSlug(7);
 }
 
-function buildPublicShortUrl(slug: string): string {
-  const base = resolveWabaShortPublicBase();
-  return `${base}/s/${slug}`;
-}
-
 export async function createWabaShortUrl(
   longUrl: string,
-  options: { tenantId?: string; slug?: string } = {}
+  options: { tenantId?: string; slug?: string; publicBaseHints?: WabaPublicBaseRequestHints } = {},
 ): Promise<string> {
   const safeLongUrl = String(longUrl || "").trim();
   if (!/^https?:\/\//i.test(safeLongUrl)) {
@@ -61,7 +54,7 @@ export async function createWabaShortUrl(
         longUrl: safeLongUrl,
         tenantId: options.tenantId,
       });
-      return buildPublicShortUrl(record.slug);
+      return buildPublicShortUrl(record.slug, options.publicBaseHints);
     } catch (error: any) {
       lastError = error instanceof Error ? error : new Error(String(error?.message || "Falha ao criar slug"));
     }
@@ -87,7 +80,9 @@ export async function fetchWabaShortUrlClicks(shortUrl: string): Promise<number 
 export function isWabaManagedShortUrl(shortUrl: string): boolean {
   const slug = extractSlugFromPublicShortUrl(shortUrl);
   if (!slug) return false;
-  const base = resolveWabaShortPublicBase().toLowerCase();
+  const peek = peekWabaShortPublicBaseUrl();
+  const base = String(peek.base || "").toLowerCase();
+  if (!base) return String(shortUrl || "").toLowerCase().includes("/s/");
   try {
     const u = new URL(String(shortUrl || "").trim());
     const shortBase = new URL(base);
@@ -96,3 +91,5 @@ export function isWabaManagedShortUrl(shortUrl: string): boolean {
     return String(shortUrl || "").toLowerCase().includes("/s/");
   }
 }
+
+export { peekWabaShortPublicBaseUrl };

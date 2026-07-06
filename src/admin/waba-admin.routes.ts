@@ -1,25 +1,59 @@
 import type { Express, Request, Response } from "express";
 import path from "node:path";
+import multer from "multer";
 import { rejectUnlessStaffMenu } from "../auth/waba-staff-menu-auth";
 import { resolveWabaRequestAuth } from "../auth/waba-request-auth";
 import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
 import { WabaAdminDashboardService } from "./waba-admin-dashboard.service";
 import { WabaAdminFinanceiroService } from "./waba-admin-financeiro.service";
 import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
+import { WabaAdminSubscribersCreateService } from "./waba-admin-subscribers-create.service";
+import { WabaAdminSubscriberPurgeService } from "./waba-admin-subscriber-purge.service";
+import { WabaAdminSubscriberPromoteService } from "./waba-admin-subscriber-promote.service";
+import { WabaAdminMasterPromoteService } from "./waba-admin-master-promote.service";
 import { WabaAdminSupportService } from "./waba-admin-support.service";
+import { WabaAdminPushService } from "./waba-admin-push.service";
 import { WabaAdminMasterMenuBadgesService } from "./waba-admin-master-menu-badges.service";
 import { MASTER_MENU_BADGE_KEYS, type MasterMenuBadgeKey } from "./waba-admin-master-menu-badges.repository";
+import {
+  runAsaasIntegrationMonitorCheck,
+  sendAsaasIntegrationTestAlert,
+  getAsaasIntegrationMonitorStatus,
+} from "../monitoring/asaas-integration-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
+import { WabaAdminInstancesService } from "./waba-admin-instances.service";
+import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
+import { WabaCouponService, parseWabaCouponDiscountPercent } from "../billing/waba-coupon.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
 const adminSubscribersService = new WabaAdminSubscribersService();
+const adminSubscribersCreateService = new WabaAdminSubscribersCreateService();
+const adminSubscriberPurgeService = new WabaAdminSubscriberPurgeService();
+const couponService = new WabaCouponService();
+const adminSubscriberPromoteService = new WabaAdminSubscriberPromoteService();
+const adminMasterPromoteService = new WabaAdminMasterPromoteService();
 const adminUsersService = new WabaAdminUsersService();
 const adminFinanceiroService = new WabaAdminFinanceiroService();
 const adminDashboardService = new WabaAdminDashboardService();
 const adminSupportService = new WabaAdminSupportService();
+const adminPushService = new WabaAdminPushService();
+const adminInstancesService = new WabaAdminInstancesService();
 const adminMasterMenuBadgesService = new WabaAdminMasterMenuBadgesService();
 const financeiroSplitService = new WabaFinanceiroSplitService();
+const vpsCpuMonitorService = new VpsCpuMonitorService();
+
+const uploadPushImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype || "").toLowerCase().startsWith("image/")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Envie apenas imagens (JPEG, PNG, WebP ou GIF)."));
+  },
+});
 
 const rejectNonMaster = (req: Request, res: Response) => {
   const auth = resolveWabaRequestAuth(req);
@@ -50,13 +84,267 @@ export const registerWabaAdminRoutes = (app: Express) => {
 
   app.get("/admin/subscribers", (req, res) => {
     if (!rejectNonMaster(req, res)) return;
-    const items = adminSubscribersService.listSubscribers();
-    return res.status(200).json({ items });
+    try {
+      const items = adminSubscribersService.listSubscribers();
+      return res.status(200).json({ items });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar os assinantes.",
+      });
+    }
+  });
+
+  app.get("/admin/subscribers/:subscriberId", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const detail = adminSubscribersService.getSubscriberDetail(String(req.params.subscriberId ?? ""));
+      return res.status(200).json(detail);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível carregar o assinante.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.patch("/admin/subscribers/:subscriberId", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const whatsapp = String(body.whatsapp ?? "");
+      const detail = adminSubscribersService.updateSubscriber(String(req.params.subscriberId ?? ""), {
+        email: String(body.email ?? ""),
+        fullName: String(body.fullName ?? body.name ?? ""),
+        whatsapp,
+        phone: String(body.phone ?? whatsapp),
+        cpfCnpj: String(body.cpfCnpj ?? ""),
+        aquecedorGranted: body.aquecedorGranted === true,
+        password: body.password !== undefined ? String(body.password) : undefined,
+      });
+      return res.status(200).json({ ok: true, ...detail });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível atualizar o assinante.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.delete("/admin/subscribers/by-email/:email", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const email = decodeURIComponent(String(req.params.email ?? "").trim());
+      const summary = adminSubscriberPurgeService.purgeByEmail(email);
+      return res.status(200).json({ ok: true, ...summary });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível excluir o assinante.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.delete("/admin/subscribers/:subscriberId", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const subscriberId = String(req.params.subscriberId ?? "").trim();
+      const detail = adminSubscribersService.getSubscriberDetail(subscriberId);
+      if (!detail?.profile?.email) {
+        return res.status(404).json({ error: "Assinante não encontrado." });
+      }
+      const summary = adminSubscriberPurgeService.purgeByEmail(detail.profile.email);
+      return res.status(200).json({ ok: true, ...summary });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível excluir o assinante.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post("/admin/subscribers", (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const whatsapp = String(body.whatsapp ?? "");
+      const subscriber = adminSubscribersCreateService.createSubscriber({
+        email: String(body.email ?? ""),
+        password: String(body.password ?? ""),
+        fullName: String(body.fullName ?? body.name ?? ""),
+        whatsapp,
+        phone: String(body.phone ?? whatsapp),
+        cpfCnpj: String(body.cpfCnpj ?? ""),
+        aquecedorGranted: body.aquecedorGranted === true,
+      });
+      return res.status(201).json({ ok: true, subscriber });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível criar o assinante.",
+      });
+    }
+  });
+
+  app.post("/admin/subscribers/:subscriberId/resend-welcome", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = await adminSubscribersService.resendSubscriberWelcome(
+        String(req.params.subscriberId ?? ""),
+        String(body.password ?? ""),
+      );
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível reenviar as boas-vindas.";
+      const status = message.includes("não encontrado") ? 404 : 400;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.get("/admin/coupons", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    return res.status(200).json({ items: couponService.listPublicCoupons() });
+  });
+
+  app.post("/admin/coupons", (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const validityMode = String(body.validityMode ?? "").trim() as
+        | "12h"
+        | "24h"
+        | "custom"
+        | "lifetime";
+      const coupon = couponService.createCoupon({
+        alias: body.alias !== undefined ? String(body.alias) : undefined,
+        discountPercent: parseWabaCouponDiscountPercent(body.discountPercent),
+        validityMode,
+        validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
+        createdByEmail: auth.email,
+        maxRedemptions:
+          body.maxRedemptions !== undefined ? Number(body.maxRedemptions) : undefined,
+      });
+      return res.status(201).json({ ok: true, coupon });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível criar o cupom.",
+      });
+    }
+  });
+
+  app.patch("/admin/coupons/:couponId/deactivate", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const coupon = couponService.deactivateCoupon(String(req.params.couponId ?? ""));
+      return res.status(200).json({ ok: true, coupon });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível desativar o cupom.",
+      });
+    }
+  });
+
+  app.get("/admin/instances/lookup", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const phone = String(req.query.phone || "").trim();
+      const items = await adminInstancesService.lookupByPhone(phone);
+      return res.status(200).json({ items });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível localizar a instância.",
+      });
+    }
+  });
+
+  app.post("/admin/instances/transfer-owner", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = await adminInstancesService.transferOwner({
+        instanceName: body.instanceName !== undefined ? String(body.instanceName) : undefined,
+        phone: body.phone !== undefined ? String(body.phone) : undefined,
+        targetEmail: String(body.targetEmail || ""),
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível transferir a instância.",
+      });
+    }
+  });
+
+  app.post("/admin/subscribers/promote-from-v02", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = adminSubscriberPromoteService.promoteFromV02Bundle(body as any);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível promover o assinante.",
+      });
+    }
+  });
+
+  app.post("/admin/master/promote-from-v02", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = adminMasterPromoteService.promoteFromV02Bundle(body as any);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível promover o master.",
+      });
+    }
   });
 
   app.get("/admin/financeiro/overview", async (req, res) => {
     if (!rejectNonMaster(req, res)) return;
     return res.status(200).json(await adminFinanceiroService.getOverview());
+  });
+
+  app.get("/admin/financeiro/asaas-monitor/status", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      return res.status(200).json(await getAsaasIntegrationMonitorStatus());
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível consultar o monitor Asaas.",
+      });
+    }
+  });
+
+  app.post("/admin/financeiro/asaas-monitor/run", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const forceAlert =
+        String(req.query.forceAlert ?? req.body?.forceAlert ?? "")
+          .trim()
+          .toLowerCase() === "1" ||
+        String(req.query.forceAlert ?? req.body?.forceAlert ?? "")
+          .trim()
+          .toLowerCase() === "true";
+      const result = await runAsaasIntegrationMonitorCheck({
+        forceAlert,
+        skipState: forceAlert,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível executar o monitor Asaas.",
+      });
+    }
+  });
+
+  app.post("/admin/financeiro/asaas-monitor/test-alert", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const alerts = await sendAsaasIntegrationTestAlert();
+      return res.status(200).json({ ok: true, test: true, alerts });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
+      });
+    }
   });
 
   app.get("/admin/financeiro/orders", (req, res) => {
@@ -213,9 +501,11 @@ export const registerWabaAdminRoutes = (app: Express) => {
         fullName: String(body.fullName ?? body.name ?? ""),
         email: String(body.email ?? ""),
         password: String(body.password ?? ""),
+        whatsapp: body.whatsapp,
         role: String(body.role ?? ""),
         menuPermissions: body.menuPermissions,
         operacionalDispatchesApi: body.operacionalDispatchesApi,
+        operacionalSegment: body.operacionalSegment,
         masterUnlimitedCredits: body.masterUnlimitedCredits,
         masterSplitSuppliers: body.masterSplitSuppliers,
         masterSplitProfits: body.masterSplitProfits,
@@ -236,8 +526,10 @@ export const registerWabaAdminRoutes = (app: Express) => {
         fullName: body.fullName !== undefined ? String(body.fullName) : undefined,
         email: body.email !== undefined ? String(body.email) : undefined,
         password: body.password !== undefined ? String(body.password) : undefined,
+        whatsapp: body.whatsapp,
         menuPermissions: body.menuPermissions,
         operacionalDispatchesApi: body.operacionalDispatchesApi,
+        operacionalSegment: body.operacionalSegment,
         masterUnlimitedCredits: body.masterUnlimitedCredits,
         masterSplitSuppliers: body.masterSplitSuppliers,
         masterSplitProfits: body.masterSplitProfits,
@@ -283,8 +575,8 @@ export const registerWabaAdminRoutes = (app: Express) => {
     const auth = rejectNonMaster(req, res);
     if (!auth) return;
     try {
-      const badges = adminMasterMenuBadgesService.getBadgesForMaster(auth.email);
-      return res.status(200).json({ badges });
+      const payload = adminMasterMenuBadgesService.getBadgesPayloadForMaster(auth.email);
+      return res.status(200).json(payload);
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível carregar os avisos do menu.",
@@ -301,8 +593,8 @@ export const registerWabaAdminRoutes = (app: Express) => {
     }
     try {
       adminMasterMenuBadgesService.markSeen(auth.email, menuKey);
-      const badges = adminMasterMenuBadgesService.getBadges(auth.email);
-      return res.status(200).json({ ok: true, badges });
+      const payload = adminMasterMenuBadgesService.getBadgesPayloadForMaster(auth.email);
+      return res.status(200).json({ ok: true, ...payload });
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Não foi possível atualizar o aviso do menu.",
@@ -359,5 +651,170 @@ export const registerWabaAdminRoutes = (app: Express) => {
       `inline; filename="${resolved.attachment.fileName.replace(/"/g, "")}"`,
     );
     return res.sendFile(path.resolve(resolved.absolutePath));
+  });
+
+  app.post("/admin/push/review", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = await adminPushService.reviewMessage({
+        title: String(body.title || "").trim(),
+        text: String(body.text || "").trim(),
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível revisar a mensagem.",
+      });
+    }
+  });
+
+  app.post("/admin/push/upload-image", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    uploadPushImage.single("image")(req, res, (err) => {
+      if (err) {
+        const message =
+          err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE"
+            ? "Imagem maior que 5 MB."
+            : err instanceof Error
+              ? err.message
+              : "Falha no upload da imagem.";
+        return res.status(400).json({ error: message });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "Selecione uma imagem para enviar." });
+      }
+      try {
+        const image = adminPushService.uploadImage(file);
+        return res.status(200).json({ image });
+      } catch (error) {
+        return res.status(400).json({
+          error: error instanceof Error ? error.message : "Não foi possível salvar a imagem.",
+        });
+      }
+    });
+  });
+
+  app.post("/admin/push/send", async (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const audiences = Array.isArray(body.audiences) ? body.audiences : [];
+      const userRoles = Array.isArray(body.userRoles) ? body.userRoles : [];
+      const imageRaw = body.image && typeof body.image === "object" ? (body.image as Record<string, unknown>) : null;
+      const result = await adminPushService.publishMessage({
+        title: String(body.title || "").trim(),
+        originalText: String(body.originalText || "").trim(),
+        reviewedText: String(body.reviewedText || "").trim(),
+        audiences: audiences as never[],
+        userRoles: userRoles as never[],
+        createdByEmail: auth.email,
+        image: imageRaw?.id
+          ? {
+              id: String(imageRaw.id || "").trim(),
+              fileName: String(imageRaw.fileName || "imagem").trim(),
+              mimeType: String(imageRaw.mimeType || "image/jpeg").trim(),
+              sizeBytes: Number(imageRaw.sizeBytes) || 0,
+            }
+          : null,
+      });
+      if (result.deduplicated) {
+        return res.status(200).json({
+          message: result.message,
+          deduplicated: true,
+        });
+      }
+      res.status(202).json({
+        message: result.message,
+        deduplicated: false,
+        accepted: true,
+      });
+      const messageId = String(result.message?.id || "").trim();
+      const fingerprint = String(result.fingerprint || "").trim();
+      if (messageId && fingerprint) {
+        setImmediate(() => {
+          adminPushService.deliverMessage(messageId, fingerprint);
+        });
+      }
+      return;
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível enviar o push.",
+      });
+    }
+  });
+
+  app.get("/admin/push/history", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+    return res.status(200).json({ items: adminPushService.listHistory(limit) });
+  });
+
+  app.get("/admin/push/messages/:id", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const message = adminPushService.getMessageById(String(req.params.id || "").trim());
+    if (!message) {
+      return res.status(404).json({ error: "Push não encontrado." });
+    }
+    return res.status(200).json({ message });
+  });
+
+  app.get("/admin/push/community-config", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const payload = await adminPushService.loadCommunityConfigForAdmin();
+      return res.status(200).json(payload);
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar config da comunidade.",
+      });
+    }
+  });
+
+  app.put("/admin/push/community-config", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    const body = req.body as Record<string, unknown>;
+    const config = adminPushService.saveCommunityConfig({
+      communityInviteLink:
+        body.communityInviteLink !== undefined ? String(body.communityInviteLink) : undefined,
+      communityAnnouncementGroupJid:
+        body.communityAnnouncementGroupJid !== undefined
+          ? String(body.communityAnnouncementGroupJid)
+          : undefined,
+      communityEvoInstance:
+        body.communityEvoInstance !== undefined ? String(body.communityEvoInstance) : undefined,
+    });
+    return res.status(200).json({ config });
+  });
+
+  app.get("/admin/infra/cpu/dashboard", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    if (!vpsCpuMonitorService.isEnabled()) {
+      return res.status(503).json({ error: "Monitor CPU desativado neste ambiente." });
+    }
+    try {
+      const range = String(req.query.range ?? "1h");
+      return res.status(200).json(await vpsCpuMonitorService.getDashboard(range));
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar o monitor CPU.",
+      });
+    }
+  });
+
+  app.get("/admin/infra/cpu/alert-status", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    if (!vpsCpuMonitorService.isEnabled()) {
+      return res.status(200).json({ active: false, alert: null });
+    }
+    try {
+      return res.status(200).json(await vpsCpuMonitorService.getAlertStatus());
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível verificar alerta CPU.",
+      });
+    }
   });
 };

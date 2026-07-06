@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { isWabaDisparadorProductionContainer } from "./waba-container-service";
 
 /** Prefixo público (ex.: /version-01). Vazio = raiz (produção). */
 export function normalizeBasePath(raw: string): string {
@@ -28,6 +29,37 @@ export function requestUnderBasePath(req: Request): boolean {
 
 export type WabaUiProfile = "production" | "full" | "baseline";
 
+export type WabaClientFeatureFlags = {
+  alternativaNumbersPurchase: boolean;
+};
+
+export type WabaClientRuntimeInject = {
+  basePath: string;
+  uiProfile: WabaUiProfile;
+  featureFlags?: WabaClientFeatureFlags;
+  deployResilienceEnabled?: boolean;
+};
+
+export function resolveDeployResilienceForClient(): boolean {
+  const explicit = String(process.env.WABA_DEPLOY_RESILIENCE || "")
+    .trim()
+    .toLowerCase();
+  if (["0", "false", "off", "no"].includes(explicit)) return false;
+  if (["1", "true", "on", "yes"].includes(explicit)) {
+    return isWabaDisparadorProductionContainer();
+  }
+  return isWabaDisparadorProductionContainer();
+}
+
+/** Chave de cache da shell HTML — deve coincidir com media/sw-deploy-resilience.js */
+export function resolveShellCacheKey(uiProfile: WabaUiProfile, basePath: string = BASE_PATH): string {
+  const normalizedBase = normalizeBasePath(basePath);
+  if (!normalizedBase) return "waba-shell-production-root";
+  const slug = normalizedBase.replace(/^\//, "").replace(/\//g, "-");
+  if (uiProfile === "baseline") return `waba-shell-baseline-${slug}`;
+  return `waba-shell-${uiProfile}-${slug}`;
+}
+
 function buildBasePathScript(basePath: string): string {
   const safe = basePath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   return `<meta name="waba-base-path" content="${basePath}" />
@@ -49,11 +81,23 @@ window.WABA_BASE_PATH="${safe}";
 
 export function injectRuntimeIntoIndexHtml(
   html: string,
-  opts: { basePath: string; uiProfile: WabaUiProfile }
+  opts: {
+    basePath: string;
+    uiProfile: WabaUiProfile;
+    featureFlags?: WabaClientFeatureFlags;
+    deployResilienceEnabled?: boolean;
+  }
 ): string {
+  const featureFlagsJson = JSON.stringify(opts.featureFlags ?? { alternativaNumbersPurchase: false });
+  const deployResilienceEnabled =
+    typeof opts.deployResilienceEnabled === "boolean"
+      ? opts.deployResilienceEnabled
+      : resolveDeployResilienceForClient();
   const injection = [
     opts.basePath ? buildBasePathScript(opts.basePath) : "",
     `<script>window.WABA_UI_PROFILE="${opts.uiProfile}";</script>`,
+    `<script>window.WABA_FEATURE_FLAGS=${featureFlagsJson};</script>`,
+    `<script>window.WABA_DEPLOY_RESILIENCE_ENABLED=${deployResilienceEnabled ? "true" : "false"};</script>`,
   ]
     .filter(Boolean)
     .join("\n");

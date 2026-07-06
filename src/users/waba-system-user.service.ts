@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { formatBrazilPhoneDigits } from "../billing/phone";
 import {
   buildAllMenusEnabled,
   buildLegacyMigrationPermissions,
@@ -18,6 +19,7 @@ import {
 } from "../disparos/waba-dispatches-api-kind";
 import {
   WabaSystemUserRepository,
+  type WabaSystemUserOperacionalSegment,
   type WabaSystemUser,
   type WabaSystemUserRole,
 } from "./waba-system-user.repository";
@@ -54,6 +56,11 @@ const ROLE_LABELS: Record<WabaSystemUserRole, string> = {
   suporte: "Suporte",
 };
 
+const OPERACIONAL_SEGMENT_LABELS: Record<WabaSystemUserOperacionalSegment, string> = {
+  bets: "Bets",
+  todos: "Todos",
+};
+
 const parseRole = (value: string): WabaSystemUserRole | null => {
   const raw = String(value ?? "")
     .trim()
@@ -77,13 +84,37 @@ const parseOperacionalDispatchesApiForRole = (
   return parsed;
 };
 
+const parseOptionalWhatsapp = (value: unknown): string => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return formatBrazilPhoneDigits(raw);
+};
+
+const parseOperacionalSegmentForRole = (
+  role: WabaSystemUserRole,
+  value: unknown,
+  options: { defaultValue?: WabaSystemUserOperacionalSegment | null } = {},
+): WabaSystemUserOperacionalSegment | null => {
+  if (role !== "operacional") return null;
+
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return options.defaultValue ?? "todos";
+  if (raw === "bets" || raw === "todos") return raw;
+
+  throw new Error("Selecione um segmento válido para o operacional (Bets ou Todos).");
+};
+
 export type CreateSystemUserInput = {
   fullName: string;
   email: string;
   password: string;
+  whatsapp?: unknown;
   role: string;
   menuPermissions?: unknown;
   operacionalDispatchesApi?: unknown;
+  operacionalSegment?: unknown;
   masterUnlimitedCredits?: unknown;
   masterSplitSuppliers?: unknown;
   masterSplitProfits?: unknown;
@@ -93,8 +124,10 @@ export type UpdateSystemUserInput = {
   fullName?: string;
   email?: string;
   password?: string;
+  whatsapp?: unknown;
   menuPermissions?: unknown;
   operacionalDispatchesApi?: unknown;
+  operacionalSegment?: unknown;
   masterUnlimitedCredits?: unknown;
   masterSplitSuppliers?: unknown;
   masterSplitProfits?: unknown;
@@ -104,6 +137,7 @@ export type PublicSystemUser = {
   id: string;
   fullName: string;
   email: string;
+  whatsapp: string;
   role: WabaSystemUserRole;
   roleLabel: string;
   createdAt: string;
@@ -113,6 +147,8 @@ export type PublicSystemUser = {
   allowedMenuIds: string[];
   operacionalDispatchesApi: WabaDispatchesApiKind | null;
   operacionalDispatchesApiLabel: string;
+  operacionalSegment: WabaSystemUserOperacionalSegment | null;
+  operacionalSegmentLabel: string;
   masterUnlimitedCredits: boolean;
   masterSplitSuppliers: boolean;
   masterSplitProfits: boolean;
@@ -147,11 +183,17 @@ export class WabaSystemUserService {
   constructor(private readonly repository = new WabaSystemUserRepository()) {}
 
   private ensureUserMigrated(user: WabaSystemUser): WabaSystemUser {
-    if (user.menuPermissions != null) return user;
-    const migrated = this.repository.updateById(user.id, {
-      menuPermissions: buildLegacyMigrationPermissions(),
-    });
-    return migrated ?? user;
+    const patch: Partial<Pick<WabaSystemUser, "menuPermissions" | "operacionalSegment">> = {};
+    if (user.menuPermissions == null) {
+      patch.menuPermissions = buildLegacyMigrationPermissions();
+    }
+    if (user.role === "operacional" && user.operacionalSegment == null) {
+      patch.operacionalSegment = "todos";
+    }
+    if (!Object.keys(patch).length) return user;
+
+    const migrated = this.repository.updateById(user.id, patch);
+    return migrated ?? { ...user, ...patch };
   }
 
   private getUserWithMigration(email: string): WabaSystemUser | null {
@@ -168,6 +210,7 @@ export class WabaSystemUserService {
       id: user.id,
       fullName: user.fullName,
       email: user.email,
+      whatsapp: String(user.whatsapp ?? "").trim(),
       role: user.role,
       roleLabel: ROLE_LABELS[user.role],
       createdAt: user.createdAt,
@@ -178,6 +221,10 @@ export class WabaSystemUserService {
       operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
       operacionalDispatchesApiLabel: user.operacionalDispatchesApi
         ? WABA_DISPATCHES_API_LABELS[user.operacionalDispatchesApi]
+        : "—",
+      operacionalSegment: user.operacionalSegment ?? null,
+      operacionalSegmentLabel: user.operacionalSegment
+        ? OPERACIONAL_SEGMENT_LABELS[user.operacionalSegment]
         : "—",
       masterUnlimitedCredits: masterPolicy?.unlimitedCredits ?? false,
       masterSplitSuppliers: masterPolicy?.splitSuppliers ?? false,
@@ -207,6 +254,21 @@ export class WabaSystemUserService {
     return user.operacionalDispatchesApi ?? null;
   }
 
+  /** Operacionais designados para atender campanhas de um plano (API Oficial ou Alternativa). */
+  listOperacionalUsersForDispatchesApi(apiKind: WabaDispatchesApiKind): WabaSystemUser[] {
+    return this.repository
+      .list()
+      .map((user) => this.ensureUserMigrated(user))
+      .filter(
+        (user) =>
+          user.role === "operacional" && user.operacionalDispatchesApi === apiKind,
+      )
+      .map((user) => ({
+        ...user,
+        email: user.email.trim().toLowerCase(),
+      }));
+  }
+
   getSessionMenuAccess(email: string): { allowedMenuIds: string[]; menuPermissions: MenuPermissionsMap } {
     const user = this.getUserWithMigration(email);
     if (!user) {
@@ -229,6 +291,7 @@ export class WabaSystemUserService {
     const email = normalizeEmail(input.email);
     const fullName = String(input.fullName ?? "").trim();
     const password = String(input.password ?? "");
+    const whatsapp = parseOptionalWhatsapp(input.whatsapp);
     const role = parseRole(input.role);
 
     if (fullName.length < 2) throw new Error("Informe o nome do usuário.");
@@ -245,6 +308,9 @@ export class WabaSystemUserService {
       input.operacionalDispatchesApi,
       { required: true },
     );
+    const operacionalSegment = parseOperacionalSegmentForRole(role, input.operacionalSegment, {
+      defaultValue: "todos",
+    });
     const masterPolicy =
       role === "master"
         ? parseMasterDisparosPolicyInput(input, { applyDefaults: true })
@@ -256,8 +322,10 @@ export class WabaSystemUserService {
       fullName,
       email,
       passwordHash: hashPassword(password),
+      whatsapp,
       role,
       operacionalDispatchesApi,
+      operacionalSegment,
       masterUnlimitedCredits: masterPolicy?.unlimitedCredits,
       masterSplitSuppliers: masterPolicy?.splitSuppliers,
       masterSplitProfits: masterPolicy?.splitProfits,
@@ -279,6 +347,8 @@ export class WabaSystemUserService {
       input.email !== undefined ? normalizeEmail(input.email) : user.email;
     const password =
       input.password !== undefined ? String(input.password ?? "") : undefined;
+    const whatsapp =
+      input.whatsapp !== undefined ? parseOptionalWhatsapp(input.whatsapp) : String(user.whatsapp ?? "").trim();
 
     if (fullName.length < 2) throw new Error("Informe o nome do usuário.");
     if (!email.includes("@")) throw new Error("Informe um e-mail válido.");
@@ -296,13 +366,15 @@ export class WabaSystemUserService {
         | "fullName"
         | "email"
         | "passwordHash"
+        | "whatsapp"
         | "menuPermissions"
         | "operacionalDispatchesApi"
+        | "operacionalSegment"
         | "masterUnlimitedCredits"
         | "masterSplitSuppliers"
         | "masterSplitProfits"
       >
-    > = { fullName, email };
+    > = { fullName, email, whatsapp };
 
     if (password !== undefined && password.length > 0) {
       if (password.length < 6) {
@@ -320,6 +392,14 @@ export class WabaSystemUserService {
         user.role,
         input.operacionalDispatchesApi,
         { required: user.role === "operacional" },
+      );
+    }
+
+    if (input.operacionalSegment !== undefined) {
+      patch.operacionalSegment = parseOperacionalSegmentForRole(
+        user.role,
+        input.operacionalSegment,
+        { defaultValue: user.operacionalSegment ?? "todos" },
       );
     }
 

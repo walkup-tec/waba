@@ -1,11 +1,13 @@
 import type { Express, Request } from "express";
 import { readWabaSessionCookie, resolveSessionRole, verifyWabaSessionToken } from "../auth/waba-auth.service";
 import { WABA_ENV } from "../load-env";
+import { isAlternativaNumbersPurchaseEnabled } from "../config/waba-feature-flags";
 import { AsaasTransferAuthService } from "./asaas-transfer-auth.service";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { WabaBillingService } from "./waba-billing.service";
 import { WabaAlternativaNumbersService } from "./waba-alternativa-numbers.service";
 import { WabaDisparosCreditsService } from "./waba-disparos-credits.service";
+import { getAlternativaDispatchRulesMeta } from "../disparos/alternativa-dispatch-rules";
 
 const orderRepository = new WabaBillingOrderRepository();
 const billingService = new WabaBillingService(orderRepository);
@@ -32,18 +34,32 @@ const resolveAsaasTransferWebhookToken = (): string =>
       "",
   ).trim();
 
+const parseAsaasWebhookTokens = (raw: string): string[] =>
+  String(raw ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+const readAsaasWebhookHeaderToken = (req: Request): string =>
+  String(
+    req.header("asaas-access-token") ??
+      req.header("Asaas-Access-Token") ??
+      req.header("ASAAS-ACCESS-TOKEN") ??
+      "",
+  ).trim();
+
 const isAuthorizedAsaasWebhook = (req: Request): boolean => {
-  const expected = resolveAsaasWebhookToken();
-  if (!expected) return true;
-  const received = String(req.header("asaas-access-token") ?? "").trim();
-  return received.length > 0 && received === expected;
+  const expectedTokens = parseAsaasWebhookTokens(resolveAsaasWebhookToken());
+  if (!expectedTokens.length) return true;
+  const received = readAsaasWebhookHeaderToken(req);
+  return received.length > 0 && expectedTokens.includes(received);
 };
 
 const isAuthorizedAsaasTransferWebhook = (req: Request): boolean => {
-  const expected = resolveAsaasTransferWebhookToken();
-  if (!expected) return true;
-  const received = String(req.header("asaas-access-token") ?? "").trim();
-  return received.length > 0 && received === expected;
+  const expectedTokens = parseAsaasWebhookTokens(resolveAsaasTransferWebhookToken());
+  if (!expectedTokens.length) return true;
+  const received = readAsaasWebhookHeaderToken(req);
+  return received.length > 0 && expectedTokens.includes(received);
 };
 
 const isAlternativaNumbersSimulationEnabled = (): boolean => {
@@ -86,6 +102,38 @@ export const registerWabaBillingRoutes = (app: Express) => {
     });
   });
 
+  app.get("/billing/disparos/bonus-history", (req, res) => {
+    const auth = resolveRequestAuth(req);
+    if (!auth.email) {
+      return res.status(401).json({ error: "Faça login para consultar bonificações." });
+    }
+    const limitRaw = Number(req.query.limit ?? 20);
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 20;
+    return res.status(200).json({
+      items: disparosCreditsService.listBonusHistory(auth.email, limit),
+    });
+  });
+
+  app.post("/billing/disparos/coupon/validate", (req, res) => {
+    try {
+      const auth = resolveRequestAuth(req);
+      if (!auth.email) {
+        return res.status(401).json({ error: "Faça login para aplicar cupom." });
+      }
+      const body = req.body as Record<string, unknown>;
+      const quote = billingService.quoteDisparosCoupon({
+        alias: String(body.alias ?? ""),
+        apiKind: body.apiKind === "alternativa" ? "alternativa" : "oficial",
+        shipmentCount: Number(body.shipmentCount ?? 0),
+      });
+      return res.status(200).json({ ok: true, quote });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível validar o cupom.",
+      });
+    }
+  });
+
   app.post("/billing/disparos/checkout", async (req, res) => {
     try {
       const auth = resolveRequestAuth(req);
@@ -101,6 +149,7 @@ export const registerWabaBillingRoutes = (app: Express) => {
         whatsapp: String(body.whatsapp ?? ""),
         valueCents: body.valueCents !== undefined ? Number(body.valueCents) : undefined,
         shipmentCount: body.shipmentCount !== undefined ? Number(body.shipmentCount) : undefined,
+        couponAlias: body.couponAlias !== undefined ? String(body.couponAlias) : undefined,
       });
       return res.status(201).json(checkout);
     } catch (error) {
@@ -127,9 +176,12 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.get("/billing/alternativa-numbers/config", (_req, res) => {
+    const purchaseEnabled = isAlternativaNumbersPurchaseEnabled();
     return res.status(200).json({
       ...alternativaNumbersService.getPricing(),
       paymentConfigured: billingService.getDisparosConfig().paymentConfigured,
+      purchaseEnabled,
+      featureFlags: { alternativaNumbersPurchase: purchaseEnabled },
     });
   });
 
@@ -138,8 +190,23 @@ export const registerWabaBillingRoutes = (app: Express) => {
     if (!auth.email) {
       return res.status(401).json({ error: "Faça login para consultar seus números." });
     }
+    if (!isAlternativaNumbersPurchaseEnabled()) {
+      return res.status(200).json({
+        purchaseEnabled: false,
+        ...alternativaNumbersService.getPricing(),
+        dispatchRules: getAlternativaDispatchRulesMeta(),
+        purchasedSlots: 0,
+        activatedCount: 0,
+        availableSlots: 0,
+        activations: [],
+        fazendaPool: { items: [], availableToClaim: [], assignedToSubscriber: [] },
+        canPickNumbers: false,
+        canSend: false,
+      });
+    }
     try {
-      return res.status(200).json(await alternativaNumbersService.getSummaryAsync(auth.email));
+      const summary = await alternativaNumbersService.getSummaryAsync(auth.email);
+      return res.status(200).json({ ...summary, purchaseEnabled: true });
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Erro ao consultar números da fazenda.",
@@ -148,6 +215,9 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
+    if (!isAlternativaNumbersPurchaseEnabled()) {
+      return res.status(403).json({ error: "Compra de números indisponível neste ambiente." });
+    }
     try {
       const auth = resolveRequestAuth(req);
       if (!auth.email) {
@@ -172,6 +242,9 @@ export const registerWabaBillingRoutes = (app: Express) => {
   });
 
   app.post("/billing/alternativa-numbers/activate", async (req, res) => {
+    if (!isAlternativaNumbersPurchaseEnabled()) {
+      return res.status(403).json({ error: "Ativação de números da fazenda indisponível neste ambiente." });
+    }
     try {
       const auth = resolveRequestAuth(req);
       if (!auth.email) {
@@ -213,30 +286,48 @@ export const registerWabaBillingRoutes = (app: Express) => {
     }
   });
 
-  app.post("/webhooks/asaas", async (req, res) => {
+  app.post("/webhooks/asaas", (req, res) => {
     if (!isAuthorizedAsaasWebhook(req)) {
+      console.warn(
+        "[AsaasWebhook] rejeitado — header asaas-access-token ausente ou diferente do env ASAAS_WEBHOOK_ACCESS_TOKEN",
+      );
       return res.status(401).json({ error: "Webhook Asaas não autorizado." });
     }
 
-    try {
-      const body = req.body as {
-        event?: string;
-        payment?: { id?: string; externalReference?: string; status?: string };
-      };
-      const result = await billingService.handleAsaasWebhook(
-        String(body.event ?? ""),
-        body.payment ?? {},
-      );
-      return res.status(200).json(result);
-    } catch (error) {
-      return res.status(400).json({
-        error: error instanceof Error ? error.message : "Webhook inválido.",
-      });
-    }
+    const body = req.body as {
+      event?: string;
+      payment?: { id?: string; externalReference?: string; status?: string };
+    };
+    const event = String(body.event ?? "");
+    const payment = body.payment ?? {};
+
+    // Asaas só considera entrega OK com HTTP 200 — responder rápido e processar depois.
+    res.status(200).json({ ok: true, accepted: true });
+
+    setImmediate(() => {
+      billingService
+        .handleAsaasWebhook(event, payment)
+        .then((result) => {
+          if (result?.ignored) {
+            console.info("[AsaasWebhook] ignorado:", result.reason ?? event);
+            return;
+          }
+          console.info("[AsaasWebhook] processado:", JSON.stringify(result));
+        })
+        .catch((error) => {
+          console.error(
+            "[AsaasWebhook] erro ao processar (já respondido 200):",
+            error instanceof Error ? error.message : error,
+          );
+        });
+    });
   });
 
   app.post("/webhooks/asaas/transfer-authorization", (req, res) => {
     if (!isAuthorizedAsaasTransferWebhook(req)) {
+      console.warn(
+        "[AsaasTransferWebhook] rejeitado — header asaas-access-token ausente ou diferente do env",
+      );
       return res.status(401).json({ error: "Webhook de autorização de transferência não autorizado." });
     }
 
@@ -244,7 +335,11 @@ export const registerWabaBillingRoutes = (app: Express) => {
       const result = transferAuthService.resolveTransferAuthorization(req.body);
       return res.status(200).json(result);
     } catch (error) {
-      return res.status(400).json({
+      console.error(
+        "[AsaasTransferWebhook] erro:",
+        error instanceof Error ? error.message : error,
+      );
+      return res.status(200).json({
         status: "REFUSED",
         refuseReason: error instanceof Error ? error.message : "Falha ao validar transferência.",
       });

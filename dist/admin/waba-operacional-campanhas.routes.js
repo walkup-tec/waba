@@ -70,9 +70,14 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(200).json({ ok: true, campaign });
         }
         catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível iniciar a campanha.",
-            });
+            const message = error instanceof Error ? error.message : "Não foi possível iniciar a campanha.";
+            const status = /não encontrada|não disponível|Somente campanhas|não foi possível atualizar/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/iniciar] erro:", error);
+            }
+            return res.status(status).json({ error: message });
         }
     });
     app.get("/admin/operacional/campanhas/:id/relatorio", (req, res) => {
@@ -110,6 +115,22 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             });
         }
     });
+    app.post("/admin/operacional/campanhas/:id/reenviar-email-operacional", async (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const result = await operacionalCampanhasService.resendOperacionalNotifyEmail(req.params.id, {
+                email: auth.email,
+                role: auth.role,
+            });
+            return res.status(200).json({ ok: true, operacionalNotify: result });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível reenviar o e-mail operacional.";
+            return res.status(400).json({ error: message });
+        }
+    });
     app.post("/admin/operacional/campanhas/:id/reportar-erro", (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
@@ -123,9 +144,14 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(200).json({ ok: true, campaign });
         }
         catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível reportar o erro.",
-            });
+            const message = error instanceof Error ? error.message : "Não foi possível reportar o erro.";
+            const status = /não encontrada|não disponível|Somente campanhas|já foi finalizada|foi cancelada|justificativa|não foi possível registrar/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/reportar-erro] erro:", error);
+            }
+            return res.status(status).json({ error: message });
         }
     });
 };

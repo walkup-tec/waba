@@ -164,7 +164,7 @@ async function checkInstanceHealth(input) {
             id: "connection_state",
             ok: false,
             label: "Estado da conexão",
-            detail: "Endpoint connectionState indisponível na Evolution.",
+            detail: "Endpoint connectionState indisponível no sistema WABA - Drax.",
         });
     }
     const instancesRes = await evoGet(EVO_INSTANCES_URL);
@@ -187,7 +187,7 @@ async function checkInstanceHealth(input) {
             checks.push({
                 id: "instance_listed",
                 ok: listedStatus.includes("open") && numberMatches,
-                label: "Instância na Evolution",
+                label: "Instância no sistema WABA - Drax",
                 detail: listedStatus.includes("open")
                     ? `Conectada como ${listedNumber || "número não informado"}.`
                     : `Status atual: ${listedStatus || "desconhecido"}.`,
@@ -197,7 +197,7 @@ async function checkInstanceHealth(input) {
             checks.push({
                 id: "instance_listed",
                 ok: false,
-                label: "Instância na Evolution",
+                label: "Instância no sistema WABA - Drax",
                 detail: "Instância não encontrada na listagem.",
             });
         }
@@ -206,7 +206,7 @@ async function checkInstanceHealth(input) {
         checks.push({
             id: "instance_listed",
             ok: false,
-            label: "Instância na Evolution",
+            label: "Instância no sistema WABA - Drax",
             detail: `Falha ao listar instâncias (HTTP ${instancesRes.status}).`,
         });
     }

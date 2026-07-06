@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import type { Express, Request } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
 import multer from "multer";
 import {
   readWabaSessionCookie,
@@ -25,6 +25,7 @@ import {
   countSpreadsheetImportedRows,
   trimSpreadsheetBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
+import { notifyOperacionalStaffOnCampaignCreated } from "../mail/waba-operacional-campaign-notify.service";
 import { buildDisparosDashboardOverview, buildMasterSubscribersDisparosDashboardOverview } from "./waba-disparos-dashboard.service";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import {
@@ -180,34 +181,41 @@ const parseRequestedApiKind = (
   ownerEmail: string,
 ): { apiKind: WabaDispatchesApiKind; error?: string } => {
   const email = ownerEmail.trim().toLowerCase();
+  const requested = normalizeDispatchesApiKind(body.apiKind);
 
   if (masterPolicyService.hasUnlimitedCredits(email)) {
-    const parsed = normalizeDispatchesApiKind(body.apiKind);
-    return { apiKind: parsed === "alternativa" ? "alternativa" : "oficial" };
+    return { apiKind: requested === "alternativa" ? "alternativa" : "oficial" };
   }
 
   const available = listAvailableApiKindsForEmail(email);
   if (!available.length) {
     return {
-      apiKind: "oficial",
+      apiKind: requested === "alternativa" ? "alternativa" : "oficial",
       error: "Você não possui saldo em nenhum plano. Contrate envios antes de gerar a campanha.",
     };
   }
 
-  // Um único plano com saldo: uso implícito, sem escolha do assinante.
+  // Plano explícito no wizard (ex.: API Oficial) — honra quando há saldo nesse plano.
+  if (requested && available.includes(requested)) {
+    return { apiKind: requested };
+  }
+
   if (available.length === 1) {
     return { apiKind: available[0] };
   }
 
-  const parsed = normalizeDispatchesApiKind(body.apiKind);
-  if (!parsed || !available.includes(parsed)) {
+  if (requested && !available.includes(requested)) {
+    const apiLabel = requested === "alternativa" ? "API Alternativa" : "API Oficial";
     return {
-      apiKind: available[0],
-      error: "Selecione o plano de envio (API Oficial ou API Alternativa).",
+      apiKind: requested,
+      error: `Você não possui envios disponíveis no plano ${apiLabel}. Contrate um pacote antes de gerar a campanha.`,
     };
   }
 
-  return { apiKind: parsed };
+  return {
+    apiKind: available[0],
+    error: "Selecione o plano de envio (API Oficial ou API Alternativa).",
+  };
 };
 
 const parseTextOptions = (body: Record<string, unknown>): [string, string, string] | null => {
@@ -220,14 +228,26 @@ const parseTextOptions = (body: Record<string, unknown>): [string, string, strin
   return options as [string, string, string];
 };
 
+const handleCampaignIntakeUpload = (req: Request, res: Response, next: NextFunction) => {
+  uploadIntake.fields([
+    { name: "image", maxCount: 1 },
+    { name: "spreadsheet", maxCount: 1 },
+  ])(req, res, (err) => {
+    if (!err) {
+      next();
+      return;
+    }
+    const limitErr = err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE";
+    const msg = limitErr
+      ? `Arquivo acima do limite de ${Math.round(UPLOAD_MAX_BYTES / 1024 / 1024)}MB.`
+      : (err as Error).message || "Falha no upload dos arquivos da campanha.";
+    return res.status(400).json({ error: msg });
+  });
+};
+
 export const registerWabaCampaignIntakeRoutes = (app: Express) => {
-  app.post(
-    "/disparos/campanhas/intake",
-    uploadIntake.fields([
-      { name: "image", maxCount: 1 },
-      { name: "spreadsheet", maxCount: 1 },
-    ]),
-    (req, res) => {
+  app.post("/disparos/campanhas/intake", handleCampaignIntakeUpload, async (req, res) => {
+    try {
       const auth = resolveRequestAuth(req);
       if (!auth.email) {
         return res.status(401).json({ error: "Faça login para enviar a campanha." });
@@ -276,7 +296,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         return res.status(400).json({ error: "A lista de clientes deve ser um arquivo Excel (.xlsx ou .xls)." });
       }
 
-      const importedLineCount = countSpreadsheetImportedRows(spreadsheetFile.buffer);
+      let importedLineCount = 0;
+      try {
+        importedLineCount = countSpreadsheetImportedRows(spreadsheetFile.buffer);
+      } catch {
+        return res.status(400).json({ error: "Não foi possível ler a planilha Excel." });
+      }
       if (importedLineCount < 1) {
         return res.status(400).json({ error: "A planilha não contém linhas de leads." });
       }
@@ -305,14 +330,25 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       const spreadsheetStoredPath = path.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
       const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
       const spreadsheetTrimmedPath = path.join(storageDir, spreadsheetTrimmedFileName);
-      const trimmedSpreadsheetBuffer = trimSpreadsheetBufferToRowCount(
-        spreadsheetFile.buffer,
-        plannedSendCount,
-      );
+      let trimmedSpreadsheetBuffer: Buffer;
+      try {
+        trimmedSpreadsheetBuffer = trimSpreadsheetBufferToRowCount(
+          spreadsheetFile.buffer,
+          plannedSendCount,
+        );
+      } catch {
+        return res.status(400).json({ error: "Não foi possível preparar a planilha para envio." });
+      }
 
-      writeFileSync(imageStoredPath, imageFile.buffer);
-      writeFileSync(spreadsheetStoredPath, spreadsheetFile.buffer);
-      writeFileSync(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+      try {
+        writeFileSync(imageStoredPath, imageFile.buffer);
+        writeFileSync(spreadsheetStoredPath, spreadsheetFile.buffer);
+        writeFileSync(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+      } catch {
+        return res.status(500).json({
+          error: "Não foi possível gravar os arquivos da campanha no servidor. Tente novamente.",
+        });
+      }
 
       const intake = intakeRepository.create({
         id: intakeId,
@@ -339,6 +375,12 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
       }
 
+      const operacionalNotify = await notifyOperacionalStaffOnCampaignCreated(intake);
+      intakeRepository.updateById(intake.id, {
+        updatedAt: new Date().toISOString(),
+        operacionalNotifyAudit: operacionalNotify,
+      });
+
       const importSummary =
         plannedSendCount < importedLineCount
           ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
@@ -347,21 +389,32 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       return res.status(201).json({
         ok: true,
         ...toPublicIntake(intake),
+        operacionalNotify,
         message:
           "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
         importSummary,
       });
-    },
-  );
+    } catch (error) {
+      console.error("[disparos/campanhas/intake] erro:", error);
+      return res.status(500).json({
+        error: "Erro interno ao processar a campanha. Tente novamente em instantes.",
+      });
+    }
+  });
 
   app.get("/disparos/campanhas/intake", (req, res) => {
-    const auth = resolveRequestAuth(req);
-    if (!auth.email) {
-      return res.status(401).json({ error: "Faça login para listar suas campanhas." });
+    try {
+      const auth = resolveRequestAuth(req);
+      if (!auth.email) {
+        return res.status(401).json({ error: "Faça login para listar suas campanhas." });
+      }
+      const items = intakeRepository.listByEmail(auth.email).map(toPublicIntake);
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(200).json({ items });
+    } catch (error) {
+      console.error("[disparos/campanhas/intake] list erro:", error);
+      return res.status(500).json({ error: "Erro ao carregar campanhas geradas. Tente novamente." });
     }
-    const items = intakeRepository.listByEmail(auth.email).map(toPublicIntake);
-    res.setHeader("Cache-Control", "no-store");
-    return res.status(200).json({ items });
   });
 
   app.get("/disparos/campanhas/intake/:id/relatorio", (req, res) => {

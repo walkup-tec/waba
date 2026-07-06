@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { resolveDataDir, resolveDataFile } from "../data-path";
 import type { WabaDispatchesApiKind } from "./waba-dispatches-api-kind";
@@ -24,6 +24,26 @@ export type WabaCampaignPerformanceReport = {
   failed: number;
   filledAt: string;
   filledByEmail: string;
+};
+
+export type WabaCampaignOperacionalNotifyAudit = {
+  attemptedAt: string;
+  apiKind: WabaDispatchesApiKind;
+  apiKindLabel: string;
+  recipients: {
+    email: string;
+    fullName: string;
+    status: "sent" | "skipped" | "failed";
+    message: string;
+    messageId?: string;
+    emailStatus?: "sent" | "skipped" | "failed";
+    emailMessage?: string;
+    emailMessageId?: string;
+    whatsapp?: string;
+    whatsappStatus?: "sent" | "skipped" | "failed";
+    whatsappMessage?: string;
+    whatsappInstanceName?: string;
+  }[];
 };
 
 export type WabaCampaignIntake = {
@@ -52,6 +72,8 @@ export type WabaCampaignIntake = {
   startedByEmail?: string;
   performanceReport?: WabaCampaignPerformanceReport;
   errorReport?: WabaCampaignErrorReport;
+  /** Última tentativa de e-mail ao operacional designado. */
+  operacionalNotifyAudit?: WabaCampaignOperacionalNotifyAudit;
   createdAt: string;
   updatedAt: string;
 };
@@ -93,7 +115,10 @@ const readStore = (): Store => {
 
 const writeStore = (store: Store) => {
   ensureStore();
-  writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), "utf-8");
+  const payload = JSON.stringify(store, null, 2);
+  const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, payload, "utf-8");
+  renameSync(tmp, STORE_FILE);
 };
 
 export class WabaCampaignIntakeRepository {
@@ -132,6 +157,7 @@ export class WabaCampaignIntakeRepository {
         | "startedByEmail"
         | "performanceReport"
         | "errorReport"
+        | "operacionalNotifyAudit"
       >
     >,
   ): WabaCampaignIntake | null {

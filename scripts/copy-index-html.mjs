@@ -11,6 +11,12 @@ const mediaDistDir = path.join(distDir, "media");
 await fs.promises.mkdir(distDir, { recursive: true });
 await fs.promises.copyFile(srcPath, destPath);
 
+const swSrc = path.join(rootDir, "media", "sw-deploy-resilience.js");
+const swDest = path.join(distDir, "sw-deploy-resilience.js");
+if (fs.existsSync(swSrc)) {
+  await fs.promises.copyFile(swSrc, swDest);
+}
+
 const faviconIco = path.join(rootDir, "favicon.ico");
 if (fs.existsSync(faviconIco)) {
   await fs.promises.copyFile(faviconIco, path.join(distDir, "favicon.ico"));

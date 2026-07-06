@@ -3,18 +3,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.collectInstanceNameKeys = collectInstanceNameKeys;
+exports.findAquecedorLifecycleRow = findAquecedorLifecycleRow;
+exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForInstance;
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
+exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
 exports.registerAquecedorInstancePreparing = registerAquecedorInstancePreparing;
 exports.grandfatherAquecedorInstanceActive = grandfatherAquecedorInstanceActive;
 exports.markAquecedorInstanceRestricted = markAquecedorInstanceRestricted;
+exports.syncAquecedorPreparingPromotions = syncAquecedorPreparingPromotions;
 exports.tickAquecedorStaggerPromotions = tickAquecedorStaggerPromotions;
 exports.computePreparingPromoteAtMs = computePreparingPromoteAtMs;
+exports.filterInstancesLifecycleReady = filterInstancesLifecycleReady;
 exports.formatAquecedorLifecycleStatusLabel = formatAquecedorLifecycleStatusLabel;
 exports.getAquecedorLifecycleStatusMap = getAquecedorLifecycleStatusMap;
 exports.filterAquecedorCycleConnected = filterAquecedorCycleConnected;
+exports.refreshAquecedorDailyCapsIfNeeded = refreshAquecedorDailyCapsIfNeeded;
 exports.canAquecedorInstanceSendToday = canAquecedorInstanceSendToday;
 exports.recordAquecedorInstanceDailySend = recordAquecedorInstanceDailySend;
 exports.detectAndMarkRestrictionFromSend = detectAndMarkRestrictionFromSend;
@@ -23,14 +30,87 @@ const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../data-path");
 const LIFECYCLE_FILE = (0, data_path_1.resolveDataFile)("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
+const INSTANCE_ALIASES_FILE = (0, data_path_1.resolveDataFile)("instance-aliases.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
 exports.AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
-const STAGGER_PROMOTE_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS;
+/** Duração da fase Preparando (6h desde a integração). */
+exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS;
+const PREPARING_DURATION_MS = exports.AQUECEDOR_PREPARING_DURATION_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
 let cache = null;
+let aliasesCache = null;
 function normalizeKey(instanceName) {
     return String(instanceName || "").trim().toLowerCase();
+}
+async function loadAliasesMap() {
+    if (aliasesCache)
+        return aliasesCache;
+    try {
+        const raw = await fs_1.promises.readFile(INSTANCE_ALIASES_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        aliasesCache = new Map();
+        for (const [technical, alias] of Object.entries(parsed || {})) {
+            const key = String(technical || "").trim();
+            const val = String(alias || "").trim();
+            if (key && val)
+                aliasesCache.set(key, val);
+        }
+    }
+    catch {
+        aliasesCache = new Map();
+    }
+    return aliasesCache;
+}
+/** Todas as chaves (técnica + alias) que referem a mesma instância. */
+function collectInstanceNameKeys(instanceName, aliasesMap) {
+    const keys = new Set();
+    const add = (raw) => {
+        const key = normalizeKey(raw);
+        if (key)
+            keys.add(key);
+    };
+    const target = normalizeKey(instanceName);
+    if (!target)
+        return [];
+    add(instanceName);
+    for (const [technical, alias] of aliasesMap) {
+        const techKey = normalizeKey(technical);
+        const aliasKey = normalizeKey(alias);
+        if (techKey === target || aliasKey === target) {
+            add(technical);
+            add(alias);
+        }
+    }
+    return [...keys];
+}
+async function findAquecedorLifecycleRow(instanceName) {
+    const aliasesMap = await loadAliasesMap();
+    const store = await loadStore();
+    for (const key of collectInstanceNameKeys(instanceName, aliasesMap)) {
+        const row = store.instances[key];
+        if (row)
+            return { key, row };
+    }
+    return null;
+}
+async function getAquecedorLifecycleStatusForInstance(instanceName) {
+    await syncAquecedorPreparingPromotions();
+    const found = await findAquecedorLifecycleRow(instanceName);
+    if (!found)
+        return null;
+    const row = found.row;
+    refreshRestrictionPhase(row);
+    let promoteAt = null;
+    if (row.phase === "preparing") {
+        promoteAt = new Date(computePreparingPromoteAtMs(row)).toISOString();
+    }
+    return {
+        phase: row.phase,
+        statusLabel: formatAquecedorLifecycleStatusLabel(row),
+        restrictedUntil: row.restrictedUntil,
+        promoteAt,
+    };
 }
 function emptyRow(phase, preparingSince) {
     const now = new Date().toISOString();
@@ -49,9 +129,11 @@ async function readEvoInstanceCreatedAt(instanceName) {
     try {
         const raw = await fs_1.promises.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
         const parsed = JSON.parse(raw);
-        const key = normalizeKey(instanceName);
+        const aliasesMap = await loadAliasesMap();
+        const keys = new Set(collectInstanceNameKeys(instanceName, aliasesMap));
         for (const item of parsed?.items || []) {
-            if (normalizeKey(String(item?.name || "")) !== key)
+            const itemKey = normalizeKey(String(item?.name || ""));
+            if (!keys.has(itemKey))
                 continue;
             const createdAt = String(item?.createdAt || "").trim();
             return createdAt || null;
@@ -77,7 +159,7 @@ function shouldRevertGrandfatherToPreparing(row, createdAt) {
     const createdMs = new Date(createdAt || 0).getTime();
     if (!Number.isFinite(createdMs))
         return false;
-    return Date.now() - createdMs < STAGGER_PROMOTE_MS;
+    return Date.now() - createdMs < PREPARING_DURATION_MS;
 }
 async function reconcileGrandfatheredActiveRow(instanceName, row) {
     const createdAt = await readEvoInstanceCreatedAt(instanceName);
@@ -134,26 +216,15 @@ function todayKeySp() {
         return new Date().toISOString().slice(0, 10);
     }
 }
-function stableWeeklyHash(instanceName, weekIndex) {
-    const seed = `${instanceName.toLowerCase()}|w${weekIndex}`;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i += 1) {
-        hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-    }
-    return hash;
-}
-/** Semana 1: 8–16/dia; sobe ~40% por semana (teto 48). */
-function computeDailyCapForInstance(instanceName, activatedAt) {
+/** Semana 1: 70/dia por instância; +40% por semana; teto 150 (~semana 4). */
+exports.AQUECEDOR_DAILY_CAP_BASE = 70;
+exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = 1.4;
+exports.AQUECEDOR_DAILY_CAP_CEILING = 150;
+function computeDailyCapForInstance(_instanceName, activatedAt) {
     const activatedMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
     const weekIndex = Math.max(0, Math.floor((Date.now() - activatedMs) / (7 * 24 * 60 * 60 * 1000)));
-    const baseMin = 8;
-    const baseMax = 16;
-    const growth = 1 + weekIndex * 0.4;
-    const min = Math.min(40, Math.round(baseMin * growth));
-    const max = Math.min(48, Math.round(baseMax * growth));
-    const span = Math.max(1, max - min + 1);
-    const hash = stableWeeklyHash(instanceName, weekIndex);
-    return min + (hash % span);
+    const scaled = Math.round(exports.AQUECEDOR_DAILY_CAP_BASE * exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH ** weekIndex);
+    return Math.min(exports.AQUECEDOR_DAILY_CAP_CEILING, scaled);
 }
 function isLikelyWhatsAppRestriction(detail, httpStatus) {
     const d = String(detail || "").toLowerCase();
@@ -199,20 +270,31 @@ function ensureDailyCap(row, instanceName) {
     if (row.dailyDate !== today) {
         row.dailyDate = today;
         row.dailySendCount = 0;
-        row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
     }
-    else if (row.dailyCap == null) {
-        row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
-    }
+    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
 }
 async function getAquecedorLifecycleRow(instanceName) {
-    const store = await loadStore();
-    const key = normalizeKey(instanceName);
-    const row = store.instances[key];
-    if (!row)
+    const found = await findAquecedorLifecycleRow(instanceName);
+    if (!found)
         return null;
-    refreshRestrictionPhase(row);
-    return { ...row };
+    refreshRestrictionPhase(found.row);
+    return { ...found.row };
+}
+async function removeAquecedorInstanceLifecycle(instanceName) {
+    const aliasesMap = await loadAliasesMap();
+    const keys = collectInstanceNameKeys(instanceName, aliasesMap);
+    if (!keys.length)
+        return;
+    const store = await loadStore();
+    let changed = false;
+    for (const key of keys) {
+        if (store.instances[key]) {
+            delete store.instances[key];
+            changed = true;
+        }
+    }
+    if (changed)
+        await saveStore(store);
 }
 async function registerAquecedorInstancePreparing(instanceName, preparingSince) {
     const name = String(instanceName || "").trim();
@@ -220,13 +302,13 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince) 
         return;
     const store = await loadStore();
     const key = normalizeKey(name);
-    const existing = store.instances[key];
+    const existing = await findAquecedorLifecycleRow(name);
     if (existing) {
-        refreshRestrictionPhase(existing);
-        if (existing.phase === "restricted_wait")
+        refreshRestrictionPhase(existing.row);
+        if (existing.row.phase === "restricted_wait")
             return;
-        if (existing.phase === "active") {
-            if (await reconcileGrandfatheredActiveRow(name, existing)) {
+        if (existing.row.phase === "active") {
+            if (await reconcileGrandfatheredActiveRow(name, existing.row)) {
                 await saveStore(store);
             }
             return;
@@ -272,51 +354,61 @@ async function markAquecedorInstanceRestricted(instanceName, detail) {
     await saveStore(store);
     console.warn(`[Aquecedor] instância ${name} em espera de 6h por restrição: ${row.restrictedReason}`);
 }
-async function tickAquecedorStaggerPromotions() {
+async function syncAquecedorPreparingPromotions() {
     const store = await loadStore();
     const now = Date.now();
-    const lastMs = store.lastStaggerPromotionAt
-        ? new Date(store.lastStaggerPromotionAt).getTime()
-        : 0;
-    if (lastMs && now - lastMs < STAGGER_PROMOTE_MS)
-        return null;
-    const preparing = Object.entries(store.instances)
-        .map(([key, row]) => ({ key, row }))
-        .filter((item) => {
-        refreshRestrictionPhase(item.row);
-        return item.row.phase === "preparing";
-    })
-        .sort((a, b) => {
-        const aMs = new Date(a.row.preparingSince || 0).getTime();
-        const bMs = new Date(b.row.preparingSince || 0).getTime();
-        return aMs - bMs;
-    });
-    if (!preparing.length)
-        return null;
-    const pick = preparing[0];
-    const preparingSinceMs = new Date(pick.row.preparingSince || 0).getTime();
-    if (!Number.isFinite(preparingSinceMs) || now - preparingSinceMs < STAGGER_PROMOTE_MS) {
-        return null;
+    const promoted = [];
+    for (const [key, row] of Object.entries(store.instances)) {
+        refreshRestrictionPhase(row);
+        if (row.phase !== "preparing")
+            continue;
+        const preparingSinceMs = new Date(row.preparingSince || 0).getTime();
+        if (!Number.isFinite(preparingSinceMs))
+            continue;
+        if (now < preparingSinceMs + PREPARING_DURATION_MS)
+            continue;
+        row.phase = "active";
+        row.activatedAt = new Date().toISOString();
+        row.preparingSince = null;
+        promoted.push(key);
     }
-    if (lastMs && now - lastMs < STAGGER_PROMOTE_MS)
-        return null;
-    pick.row.phase = "active";
-    pick.row.activatedAt = new Date().toISOString();
-    pick.row.preparingSince = null;
-    store.lastStaggerPromotionAt = new Date().toISOString();
-    await saveStore(store);
-    return pick.key;
+    if (promoted.length)
+        await saveStore(store);
+    return promoted;
 }
-function computePreparingPromoteAtMs(row, queueIndex, lastStaggerPromotionAt) {
+async function tickAquecedorStaggerPromotions() {
+    const promoted = await syncAquecedorPreparingPromotions();
+    return promoted[0] ?? null;
+}
+/** Momento em que a instância sai de Preparando: integração + 6h (sem fila escalonada). */
+function computePreparingPromoteAtMs(row) {
     const preparingSinceMs = new Date(row.preparingSince || 0).getTime();
     if (!Number.isFinite(preparingSinceMs))
-        return Date.now() + STAGGER_PROMOTE_MS;
-    const personalReadyMs = preparingSinceMs + STAGGER_PROMOTE_MS;
-    const lastStaggerMs = lastStaggerPromotionAt
-        ? new Date(lastStaggerPromotionAt).getTime()
-        : 0;
-    const staggerReadyMs = lastStaggerMs + STAGGER_PROMOTE_MS * (queueIndex + 1);
-    return Math.max(personalReadyMs, staggerReadyMs);
+        return Date.now() + PREPARING_DURATION_MS;
+    return preparingSinceMs + PREPARING_DURATION_MS;
+}
+/** Instâncias em fase ativa (pós-Preparando) — elegíveis para aquecedor e disparo. */
+async function filterInstancesLifecycleReady(instanceNames) {
+    await syncAquecedorPreparingPromotions();
+    const store = await loadStore();
+    const out = [];
+    for (const rawName of instanceNames) {
+        const name = String(rawName || "").trim();
+        if (!name)
+            continue;
+        const found = await findAquecedorLifecycleRow(name);
+        const row = found?.row;
+        if (!row) {
+            const createdAt = await readEvoInstanceCreatedAt(name);
+            if (isGrandfatherEligible(createdAt))
+                out.push(name);
+            continue;
+        }
+        refreshRestrictionPhase(row);
+        if (row.phase === "active")
+            out.push(name);
+    }
+    return out;
 }
 function formatAquecedorLifecycleStatusLabel(row) {
     if (!row)
@@ -333,6 +425,7 @@ function formatAquecedorLifecycleStatusLabel(row) {
     return null;
 }
 async function getAquecedorLifecycleStatusMap() {
+    await syncAquecedorPreparingPromotions();
     const store = await loadStore();
     let storeDirty = false;
     for (const [key, row] of Object.entries(store.instances)) {
@@ -341,26 +434,12 @@ async function getAquecedorLifecycleStatusMap() {
     }
     if (storeDirty)
         await saveStore(store);
-    const preparingList = Object.entries(store.instances)
-        .map(([key, row]) => ({ key, row }))
-        .filter(({ row }) => {
-        refreshRestrictionPhase(row);
-        return row.phase === "preparing";
-    })
-        .sort((a, b) => {
-        const aMs = new Date(a.row.preparingSince || 0).getTime();
-        const bMs = new Date(b.row.preparingSince || 0).getTime();
-        return aMs - bMs;
-    });
-    const queueIndexByKey = new Map();
-    preparingList.forEach(({ key }, index) => queueIndexByKey.set(key, index));
     const out = {};
     for (const [key, row] of Object.entries(store.instances)) {
         refreshRestrictionPhase(row);
         let promoteAt = null;
         if (row.phase === "preparing") {
-            const queueIndex = queueIndexByKey.get(key) ?? 0;
-            promoteAt = new Date(computePreparingPromoteAtMs(row, queueIndex, store.lastStaggerPromotionAt)).toISOString();
+            promoteAt = new Date(computePreparingPromoteAtMs(row)).toISOString();
         }
         out[key] = {
             phase: row.phase,
@@ -372,22 +451,24 @@ async function getAquecedorLifecycleStatusMap() {
     return out;
 }
 async function filterAquecedorCycleConnected(connected) {
-    await tickAquecedorStaggerPromotions();
+    await syncAquecedorPreparingPromotions();
     const store = await loadStore();
     const out = [];
     let storeDirty = false;
     for (const item of connected) {
-        const key = normalizeKey(item.instancia);
-        let row = store.instances[key];
+        let found = await findAquecedorLifecycleRow(item.instancia);
+        let row = found?.row;
         if (!row) {
             const createdAt = await readEvoInstanceCreatedAt(item.instancia);
             if (isGrandfatherEligible(createdAt)) {
                 await grandfatherAquecedorInstanceActive(item.instancia);
-                row = (await loadStore()).instances[key];
+                found = await findAquecedorLifecycleRow(item.instancia);
+                row = found?.row;
             }
             else {
                 await registerAquecedorInstancePreparing(item.instancia, createdAt);
-                row = (await loadStore()).instances[key];
+                found = await findAquecedorLifecycleRow(item.instancia);
+                row = found?.row;
             }
         }
         else if (await reconcileGrandfatheredActiveRow(item.instancia, row)) {
@@ -403,12 +484,27 @@ async function filterAquecedorCycleConnected(connected) {
         await saveStore(store);
     return out;
 }
+/** Zera contadores diários ao virar o dia (SP) e persiste quando necessário. */
+async function refreshAquecedorDailyCapsIfNeeded() {
+    const store = await loadStore();
+    let dirty = false;
+    for (const [key, row] of Object.entries(store.instances)) {
+        refreshRestrictionPhase(row);
+        const beforeDate = row.dailyDate;
+        const beforeCap = row.dailyCap;
+        ensureDailyCap(row, key);
+        if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap)
+            dirty = true;
+    }
+    if (dirty)
+        await saveStore(store);
+}
 async function canAquecedorInstanceSendToday(instanceName) {
     const store = await loadStore();
-    const key = normalizeKey(instanceName);
-    const row = store.instances[key];
+    const found = await findAquecedorLifecycleRow(instanceName);
+    const row = found?.row;
     if (!row) {
-        return { ok: true, reason: "", dailyCap: 16, dailyCount: 0 };
+        return { ok: true, reason: "", dailyCap: exports.AQUECEDOR_DAILY_CAP_BASE, dailyCount: 0 };
     }
     refreshRestrictionPhase(row);
     if (row.phase !== "active") {
@@ -421,8 +517,13 @@ async function canAquecedorInstanceSendToday(instanceName) {
             dailyCount: 0,
         };
     }
+    const beforeDate = row.dailyDate;
+    const beforeCap = row.dailyCap;
     ensureDailyCap(row, instanceName);
-    const cap = row.dailyCap ?? 16;
+    if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap) {
+        await saveStore(store);
+    }
+    const cap = row.dailyCap ?? exports.AQUECEDOR_DAILY_CAP_BASE;
     if (row.dailySendCount >= cap) {
         return {
             ok: false,
@@ -438,8 +539,9 @@ async function recordAquecedorInstanceDailySend(instanceName) {
     if (!name)
         return;
     const store = await loadStore();
-    const key = normalizeKey(name);
-    const row = store.instances[key] || emptyRow("active");
+    const found = await findAquecedorLifecycleRow(name);
+    const key = found?.key ?? normalizeKey(name);
+    const row = found?.row ?? emptyRow("active");
     ensureDailyCap(row, name);
     row.dailySendCount += 1;
     store.instances[key] = row;

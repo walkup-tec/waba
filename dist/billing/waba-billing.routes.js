@@ -3,11 +3,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaBillingRoutes = void 0;
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const load_env_1 = require("../load-env");
+const waba_feature_flags_1 = require("../config/waba-feature-flags");
 const asaas_transfer_auth_service_1 = require("./asaas-transfer-auth.service");
 const waba_billing_order_repository_1 = require("./waba-billing-order.repository");
 const waba_billing_service_1 = require("./waba-billing.service");
 const waba_alternativa_numbers_service_1 = require("./waba-alternativa-numbers.service");
 const waba_disparos_credits_service_1 = require("./waba-disparos-credits.service");
+const alternativa_dispatch_rules_1 = require("../disparos/alternativa-dispatch-rules");
 const orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository();
 const billingService = new waba_billing_service_1.WabaBillingService(orderRepository);
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
@@ -27,19 +29,27 @@ const resolveAsaasWebhookToken = () => String(process.env.ASAAS_WEBHOOK_ACCESS_T
 const resolveAsaasTransferWebhookToken = () => String(process.env.ASAAS_TRANSFER_WEBHOOK_ACCESS_TOKEN ??
     process.env.ASAAS_WEBHOOK_ACCESS_TOKEN ??
     "").trim();
+const parseAsaasWebhookTokens = (raw) => String(raw ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+const readAsaasWebhookHeaderToken = (req) => String(req.header("asaas-access-token") ??
+    req.header("Asaas-Access-Token") ??
+    req.header("ASAAS-ACCESS-TOKEN") ??
+    "").trim();
 const isAuthorizedAsaasWebhook = (req) => {
-    const expected = resolveAsaasWebhookToken();
-    if (!expected)
+    const expectedTokens = parseAsaasWebhookTokens(resolveAsaasWebhookToken());
+    if (!expectedTokens.length)
         return true;
-    const received = String(req.header("asaas-access-token") ?? "").trim();
-    return received.length > 0 && received === expected;
+    const received = readAsaasWebhookHeaderToken(req);
+    return received.length > 0 && expectedTokens.includes(received);
 };
 const isAuthorizedAsaasTransferWebhook = (req) => {
-    const expected = resolveAsaasTransferWebhookToken();
-    if (!expected)
+    const expectedTokens = parseAsaasWebhookTokens(resolveAsaasTransferWebhookToken());
+    if (!expectedTokens.length)
         return true;
-    const received = String(req.header("asaas-access-token") ?? "").trim();
-    return received.length > 0 && received === expected;
+    const received = readAsaasWebhookHeaderToken(req);
+    return received.length > 0 && expectedTokens.includes(received);
 };
 const isAlternativaNumbersSimulationEnabled = () => {
     const runtime = String(process.env.RUNTIME_MODE ?? "").trim().toLowerCase();
@@ -76,6 +86,37 @@ const registerWabaBillingRoutes = (app) => {
             items: disparosCreditsService.listPurchaseHistory(auth.email, limit),
         });
     });
+    app.get("/billing/disparos/bonus-history", (req, res) => {
+        const auth = resolveRequestAuth(req);
+        if (!auth.email) {
+            return res.status(401).json({ error: "Faça login para consultar bonificações." });
+        }
+        const limitRaw = Number(req.query.limit ?? 20);
+        const limit = Number.isFinite(limitRaw) ? limitRaw : 20;
+        return res.status(200).json({
+            items: disparosCreditsService.listBonusHistory(auth.email, limit),
+        });
+    });
+    app.post("/billing/disparos/coupon/validate", (req, res) => {
+        try {
+            const auth = resolveRequestAuth(req);
+            if (!auth.email) {
+                return res.status(401).json({ error: "Faça login para aplicar cupom." });
+            }
+            const body = req.body;
+            const quote = billingService.quoteDisparosCoupon({
+                alias: String(body.alias ?? ""),
+                apiKind: body.apiKind === "alternativa" ? "alternativa" : "oficial",
+                shipmentCount: Number(body.shipmentCount ?? 0),
+            });
+            return res.status(200).json({ ok: true, quote });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível validar o cupom.",
+            });
+        }
+    });
     app.post("/billing/disparos/checkout", async (req, res) => {
         try {
             const auth = resolveRequestAuth(req);
@@ -91,6 +132,7 @@ const registerWabaBillingRoutes = (app) => {
                 whatsapp: String(body.whatsapp ?? ""),
                 valueCents: body.valueCents !== undefined ? Number(body.valueCents) : undefined,
                 shipmentCount: body.shipmentCount !== undefined ? Number(body.shipmentCount) : undefined,
+                couponAlias: body.couponAlias !== undefined ? String(body.couponAlias) : undefined,
             });
             return res.status(201).json(checkout);
         }
@@ -118,9 +160,12 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.get("/billing/alternativa-numbers/config", (_req, res) => {
+        const purchaseEnabled = (0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)();
         return res.status(200).json({
             ...alternativaNumbersService.getPricing(),
             paymentConfigured: billingService.getDisparosConfig().paymentConfigured,
+            purchaseEnabled,
+            featureFlags: { alternativaNumbersPurchase: purchaseEnabled },
         });
     });
     app.get("/billing/alternativa-numbers/summary", async (req, res) => {
@@ -128,8 +173,23 @@ const registerWabaBillingRoutes = (app) => {
         if (!auth.email) {
             return res.status(401).json({ error: "Faça login para consultar seus números." });
         }
+        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+            return res.status(200).json({
+                purchaseEnabled: false,
+                ...alternativaNumbersService.getPricing(),
+                dispatchRules: (0, alternativa_dispatch_rules_1.getAlternativaDispatchRulesMeta)(),
+                purchasedSlots: 0,
+                activatedCount: 0,
+                availableSlots: 0,
+                activations: [],
+                fazendaPool: { items: [], availableToClaim: [], assignedToSubscriber: [] },
+                canPickNumbers: false,
+                canSend: false,
+            });
+        }
         try {
-            return res.status(200).json(await alternativaNumbersService.getSummaryAsync(auth.email));
+            const summary = await alternativaNumbersService.getSummaryAsync(auth.email);
+            return res.status(200).json({ ...summary, purchaseEnabled: true });
         }
         catch (error) {
             return res.status(500).json({
@@ -138,6 +198,9 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.post("/billing/alternativa-numbers/checkout", async (req, res) => {
+        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+            return res.status(403).json({ error: "Compra de números indisponível neste ambiente." });
+        }
         try {
             const auth = resolveRequestAuth(req);
             if (!auth.email) {
@@ -162,6 +225,9 @@ const registerWabaBillingRoutes = (app) => {
         }
     });
     app.post("/billing/alternativa-numbers/activate", async (req, res) => {
+        if (!(0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
+            return res.status(403).json({ error: "Ativação de números da fazenda indisponível neste ambiente." });
+        }
         try {
             const auth = resolveRequestAuth(req);
             if (!auth.email) {
@@ -203,23 +269,34 @@ const registerWabaBillingRoutes = (app) => {
             });
         }
     });
-    app.post("/webhooks/asaas", async (req, res) => {
+    app.post("/webhooks/asaas", (req, res) => {
         if (!isAuthorizedAsaasWebhook(req)) {
+            console.warn("[AsaasWebhook] rejeitado — header asaas-access-token ausente ou diferente do env ASAAS_WEBHOOK_ACCESS_TOKEN");
             return res.status(401).json({ error: "Webhook Asaas não autorizado." });
         }
-        try {
-            const body = req.body;
-            const result = await billingService.handleAsaasWebhook(String(body.event ?? ""), body.payment ?? {});
-            return res.status(200).json(result);
-        }
-        catch (error) {
-            return res.status(400).json({
-                error: error instanceof Error ? error.message : "Webhook inválido.",
+        const body = req.body;
+        const event = String(body.event ?? "");
+        const payment = body.payment ?? {};
+        // Asaas só considera entrega OK com HTTP 200 — responder rápido e processar depois.
+        res.status(200).json({ ok: true, accepted: true });
+        setImmediate(() => {
+            billingService
+                .handleAsaasWebhook(event, payment)
+                .then((result) => {
+                if (result?.ignored) {
+                    console.info("[AsaasWebhook] ignorado:", result.reason ?? event);
+                    return;
+                }
+                console.info("[AsaasWebhook] processado:", JSON.stringify(result));
+            })
+                .catch((error) => {
+                console.error("[AsaasWebhook] erro ao processar (já respondido 200):", error instanceof Error ? error.message : error);
             });
-        }
+        });
     });
     app.post("/webhooks/asaas/transfer-authorization", (req, res) => {
         if (!isAuthorizedAsaasTransferWebhook(req)) {
+            console.warn("[AsaasTransferWebhook] rejeitado — header asaas-access-token ausente ou diferente do env");
             return res.status(401).json({ error: "Webhook de autorização de transferência não autorizado." });
         }
         try {
@@ -227,7 +304,8 @@ const registerWabaBillingRoutes = (app) => {
             return res.status(200).json(result);
         }
         catch (error) {
-            return res.status(400).json({
+            console.error("[AsaasTransferWebhook] erro:", error instanceof Error ? error.message : error);
+            return res.status(200).json({
                 status: "REFUSED",
                 refuseReason: error instanceof Error ? error.message : "Falha ao validar transferência.",
             });

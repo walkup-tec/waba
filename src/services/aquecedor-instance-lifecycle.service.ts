@@ -4,6 +4,7 @@ import { resolveDataFile } from "../data-path";
 
 const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = resolveDataFile("evo-instances-cache.json");
+const INSTANCE_ALIASES_FILE = resolveDataFile("instance-aliases.json");
 const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
 export const AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
@@ -33,9 +34,86 @@ type LifecycleStore = {
 };
 
 let cache: LifecycleStore | null = null;
+let aliasesCache: Map<string, string> | null = null;
 
 function normalizeKey(instanceName: string): string {
   return String(instanceName || "").trim().toLowerCase();
+}
+
+async function loadAliasesMap(): Promise<Map<string, string>> {
+  if (aliasesCache) return aliasesCache;
+  try {
+    const raw = await fs.readFile(INSTANCE_ALIASES_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    aliasesCache = new Map<string, string>();
+    for (const [technical, alias] of Object.entries(parsed || {})) {
+      const key = String(technical || "").trim();
+      const val = String(alias || "").trim();
+      if (key && val) aliasesCache.set(key, val);
+    }
+  } catch {
+    aliasesCache = new Map();
+  }
+  return aliasesCache;
+}
+
+/** Todas as chaves (técnica + alias) que referem a mesma instância. */
+export function collectInstanceNameKeys(
+  instanceName: string,
+  aliasesMap: Map<string, string>,
+): string[] {
+  const keys = new Set<string>();
+  const add = (raw: string) => {
+    const key = normalizeKey(raw);
+    if (key) keys.add(key);
+  };
+  const target = normalizeKey(instanceName);
+  if (!target) return [];
+  add(instanceName);
+  for (const [technical, alias] of aliasesMap) {
+    const techKey = normalizeKey(technical);
+    const aliasKey = normalizeKey(alias);
+    if (techKey === target || aliasKey === target) {
+      add(technical);
+      add(alias);
+    }
+  }
+  return [...keys];
+}
+
+export async function findAquecedorLifecycleRow(
+  instanceName: string,
+): Promise<{ key: string; row: AquecedorInstanceLifecycleRow } | null> {
+  const aliasesMap = await loadAliasesMap();
+  const store = await loadStore();
+  for (const key of collectInstanceNameKeys(instanceName, aliasesMap)) {
+    const row = store.instances[key];
+    if (row) return { key, row };
+  }
+  return null;
+}
+
+export async function getAquecedorLifecycleStatusForInstance(instanceName: string): Promise<{
+  phase: AquecedorInstancePhase;
+  statusLabel: string | null;
+  restrictedUntil: string | null;
+  promoteAt: string | null;
+} | null> {
+  await syncAquecedorPreparingPromotions();
+  const found = await findAquecedorLifecycleRow(instanceName);
+  if (!found) return null;
+  const row = found.row;
+  refreshRestrictionPhase(row);
+  let promoteAt: string | null = null;
+  if (row.phase === "preparing") {
+    promoteAt = new Date(computePreparingPromoteAtMs(row)).toISOString();
+  }
+  return {
+    phase: row.phase,
+    statusLabel: formatAquecedorLifecycleStatusLabel(row),
+    restrictedUntil: row.restrictedUntil,
+    promoteAt,
+  };
 }
 
 function emptyRow(
@@ -59,9 +137,11 @@ async function readEvoInstanceCreatedAt(instanceName: string): Promise<string | 
   try {
     const raw = await fs.readFile(EVO_INSTANCES_CACHE_FILE, "utf-8");
     const parsed = JSON.parse(raw) as { items?: Array<{ name?: string; createdAt?: string }> };
-    const key = normalizeKey(instanceName);
+    const aliasesMap = await loadAliasesMap();
+    const keys = new Set(collectInstanceNameKeys(instanceName, aliasesMap));
     for (const item of parsed?.items || []) {
-      if (normalizeKey(String(item?.name || "")) !== key) continue;
+      const itemKey = normalizeKey(String(item?.name || ""));
+      if (!keys.has(itemKey)) continue;
       const createdAt = String(item?.createdAt || "").trim();
       return createdAt || null;
     }
@@ -149,18 +229,13 @@ function todayKeySp(): string {
   }
 }
 
-function stableWeeklyHash(instanceName: string, weekIndex: number): number {
-  const seed = `${instanceName.toLowerCase()}|w${weekIndex}`;
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
+/** Semana 1: 70/dia por instância; +40% por semana; teto 150 (~semana 4). */
+export const AQUECEDOR_DAILY_CAP_BASE = 70;
+export const AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = 1.4;
+export const AQUECEDOR_DAILY_CAP_CEILING = 150;
 
-/** Semana 1: 8–16/dia; sobe ~40% por semana (teto 48). */
 export function computeDailyCapForInstance(
-  instanceName: string,
+  _instanceName: string,
   activatedAt: string | null,
 ): number {
   const activatedMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
@@ -168,14 +243,10 @@ export function computeDailyCapForInstance(
     0,
     Math.floor((Date.now() - activatedMs) / (7 * 24 * 60 * 60 * 1000)),
   );
-  const baseMin = 8;
-  const baseMax = 16;
-  const growth = 1 + weekIndex * 0.4;
-  const min = Math.min(40, Math.round(baseMin * growth));
-  const max = Math.min(48, Math.round(baseMax * growth));
-  const span = Math.max(1, max - min + 1);
-  const hash = stableWeeklyHash(instanceName, weekIndex);
-  return min + (hash % span);
+  const scaled = Math.round(
+    AQUECEDOR_DAILY_CAP_BASE * AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH ** weekIndex,
+  );
+  return Math.min(AQUECEDOR_DAILY_CAP_CEILING, scaled);
 }
 
 export function isLikelyWhatsAppRestriction(detail: string, httpStatus?: number): boolean {
@@ -222,21 +293,32 @@ function ensureDailyCap(row: AquecedorInstanceLifecycleRow, instanceName: string
   if (row.dailyDate !== today) {
     row.dailyDate = today;
     row.dailySendCount = 0;
-    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
-  } else if (row.dailyCap == null) {
-    row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
   }
+  row.dailyCap = computeDailyCapForInstance(instanceName, row.activatedAt);
 }
 
 export async function getAquecedorLifecycleRow(
   instanceName: string,
 ): Promise<AquecedorInstanceLifecycleRow | null> {
+  const found = await findAquecedorLifecycleRow(instanceName);
+  if (!found) return null;
+  refreshRestrictionPhase(found.row);
+  return { ...found.row };
+}
+
+export async function removeAquecedorInstanceLifecycle(instanceName: string): Promise<void> {
+  const aliasesMap = await loadAliasesMap();
+  const keys = collectInstanceNameKeys(instanceName, aliasesMap);
+  if (!keys.length) return;
   const store = await loadStore();
-  const key = normalizeKey(instanceName);
-  const row = store.instances[key];
-  if (!row) return null;
-  refreshRestrictionPhase(row);
-  return { ...row };
+  let changed = false;
+  for (const key of keys) {
+    if (store.instances[key]) {
+      delete store.instances[key];
+      changed = true;
+    }
+  }
+  if (changed) await saveStore(store);
 }
 
 export async function registerAquecedorInstancePreparing(
@@ -247,12 +329,12 @@ export async function registerAquecedorInstancePreparing(
   if (!name) return;
   const store = await loadStore();
   const key = normalizeKey(name);
-  const existing = store.instances[key];
+  const existing = await findAquecedorLifecycleRow(name);
   if (existing) {
-    refreshRestrictionPhase(existing);
-    if (existing.phase === "restricted_wait") return;
-    if (existing.phase === "active") {
-      if (await reconcileGrandfatheredActiveRow(name, existing)) {
+    refreshRestrictionPhase(existing.row);
+    if (existing.row.phase === "restricted_wait") return;
+    if (existing.row.phase === "active") {
+      if (await reconcileGrandfatheredActiveRow(name, existing.row)) {
         await saveStore(store);
       }
       return;
@@ -349,8 +431,8 @@ export async function filterInstancesLifecycleReady(instanceNames: string[]): Pr
   for (const rawName of instanceNames) {
     const name = String(rawName || "").trim();
     if (!name) continue;
-    const key = normalizeKey(name);
-    const row = store.instances[key];
+    const found = await findAquecedorLifecycleRow(name);
+    const row = found?.row;
     if (!row) {
       const createdAt = await readEvoInstanceCreatedAt(name);
       if (isGrandfatherEligible(createdAt)) out.push(name);
@@ -428,16 +510,18 @@ export async function filterAquecedorCycleConnected<T extends { instancia: strin
   const out: T[] = [];
   let storeDirty = false;
   for (const item of connected) {
-    const key = normalizeKey(item.instancia);
-    let row = store.instances[key];
+    let found = await findAquecedorLifecycleRow(item.instancia);
+    let row = found?.row;
     if (!row) {
       const createdAt = await readEvoInstanceCreatedAt(item.instancia);
       if (isGrandfatherEligible(createdAt)) {
         await grandfatherAquecedorInstanceActive(item.instancia);
-        row = (await loadStore()).instances[key];
+        found = await findAquecedorLifecycleRow(item.instancia);
+        row = found?.row;
       } else {
         await registerAquecedorInstancePreparing(item.instancia, createdAt);
-        row = (await loadStore()).instances[key];
+        found = await findAquecedorLifecycleRow(item.instancia);
+        row = found?.row;
       }
     } else if (await reconcileGrandfatheredActiveRow(item.instancia, row)) {
       storeDirty = true;
@@ -450,6 +534,20 @@ export async function filterAquecedorCycleConnected<T extends { instancia: strin
   return out;
 }
 
+/** Zera contadores diários ao virar o dia (SP) e persiste quando necessário. */
+export async function refreshAquecedorDailyCapsIfNeeded(): Promise<void> {
+  const store = await loadStore();
+  let dirty = false;
+  for (const [key, row] of Object.entries(store.instances)) {
+    refreshRestrictionPhase(row);
+    const beforeDate = row.dailyDate;
+    const beforeCap = row.dailyCap;
+    ensureDailyCap(row, key);
+    if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap) dirty = true;
+  }
+  if (dirty) await saveStore(store);
+}
+
 export async function canAquecedorInstanceSendToday(instanceName: string): Promise<{
   ok: boolean;
   reason: string;
@@ -457,10 +555,10 @@ export async function canAquecedorInstanceSendToday(instanceName: string): Promi
   dailyCount: number;
 }> {
   const store = await loadStore();
-  const key = normalizeKey(instanceName);
-  const row = store.instances[key];
+  const found = await findAquecedorLifecycleRow(instanceName);
+  const row = found?.row;
   if (!row) {
-    return { ok: true, reason: "", dailyCap: 16, dailyCount: 0 };
+    return { ok: true, reason: "", dailyCap: AQUECEDOR_DAILY_CAP_BASE, dailyCount: 0 };
   }
   refreshRestrictionPhase(row);
   if (row.phase !== "active") {
@@ -474,8 +572,13 @@ export async function canAquecedorInstanceSendToday(instanceName: string): Promi
       dailyCount: 0,
     };
   }
+  const beforeDate = row.dailyDate;
+  const beforeCap = row.dailyCap;
   ensureDailyCap(row, instanceName);
-  const cap = row.dailyCap ?? 16;
+  if (beforeDate !== row.dailyDate || beforeCap !== row.dailyCap) {
+    await saveStore(store);
+  }
+  const cap = row.dailyCap ?? AQUECEDOR_DAILY_CAP_BASE;
   if (row.dailySendCount >= cap) {
     return {
       ok: false,
@@ -491,8 +594,9 @@ export async function recordAquecedorInstanceDailySend(instanceName: string): Pr
   const name = String(instanceName || "").trim();
   if (!name) return;
   const store = await loadStore();
-  const key = normalizeKey(name);
-  const row = store.instances[key] || emptyRow("active");
+  const found = await findAquecedorLifecycleRow(name);
+  const key = found?.key ?? normalizeKey(name);
+  const row = found?.row ?? emptyRow("active");
   ensureDailyCap(row, name);
   row.dailySendCount += 1;
   store.instances[key] = row;

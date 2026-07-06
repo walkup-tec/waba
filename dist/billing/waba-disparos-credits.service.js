@@ -166,5 +166,9 @@ class WabaDisparosCreditsService {
             paidAt: String(order.paidAt ?? ""),
         }));
     }
+    listBonusHistory(email, limit = 20) {
+        const cap = Math.max(1, Math.min(50, Math.floor(limit)));
+        return this.bonusService.listBonusGrantHistory(email, cap);
+    }
 }
 exports.WabaDisparosCreditsService = WabaDisparosCreditsService;

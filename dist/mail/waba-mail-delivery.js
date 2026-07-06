@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifySubscriberWelcomeEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
+exports.notifySubscriberWelcomeEmail = exports.notifyOperacionalNewCampaignEmail = exports.deliverOperacionalNewCampaignEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_app_url_1 = require("./waba-app-url");
 const waba_mail_templates_1 = require("./waba-mail.templates");
 const waba_mail_service_1 = require("./waba-mail.service");
+const waba_welcome_whatsapp_service_1 = require("./waba-welcome-whatsapp.service");
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
 const resolveSubscriberName = (email) => {
     const subscriber = subscriberRepository.getByEmail(email);
@@ -24,17 +25,35 @@ const deliverEmail = async (input) => {
         };
     }
     try {
-        const delivery = await waba_mail_service_1.wabaMailService.send({
-            to: toEmail,
-            subject: input.subject,
-            html: input.html,
-        });
-        console.log(`[mail] ${input.logLabel} enviado para ${toEmail} (${delivery.messageId || "ok"}).`);
-        return {
-            status: "sent",
-            message: "E-mail enviado.",
-            messageId: delivery.messageId,
-        };
+        let lastError = null;
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+            try {
+                const delivery = await waba_mail_service_1.wabaMailService.send({
+                    to: toEmail,
+                    subject: input.subject,
+                    html: input.html,
+                });
+                console.log(`[mail] ${input.logLabel} enviado para ${toEmail} (${delivery.messageId || "ok"}).`);
+                return {
+                    status: "sent",
+                    message: "E-mail enviado.",
+                    messageId: delivery.messageId,
+                };
+            }
+            catch (error) {
+                lastError = error;
+                const message = error instanceof Error ? error.message : "Falha ao enviar e-mail.";
+                const retryable = /timeout|econnreset|econnrefused|421|450|451|452|454/i.test(message);
+                if (attempt < 2 && retryable) {
+                    await new Promise((resolve) => setTimeout(resolve, 900));
+                    continue;
+                }
+                console.error(`[mail] ${input.logLabel} falhou para ${toEmail}:`, message);
+                return { status: "failed", message };
+            }
+        }
+        const message = lastError instanceof Error ? lastError.message : "Falha ao enviar e-mail.";
+        return { status: "failed", message };
     }
     catch (error) {
         const message = error instanceof Error ? error.message : "Falha ao enviar e-mail.";
@@ -110,6 +129,7 @@ const deliverSubscriberWelcomeEmail = async (input) => {
     const mail = (0, waba_mail_templates_1.buildSubscriberWelcomeTemplate)({
         recipientName: input.fullName,
         recipientEmail: email,
+        password: String(input.password ?? ""),
         whatsapp: input.whatsapp,
         phone: input.phone,
         cpfCnpj: input.cpfCnpj,
@@ -144,10 +164,57 @@ const notifyCampaignErrorReportedEmail = (input) => {
     });
 };
 exports.notifyCampaignErrorReportedEmail = notifyCampaignErrorReportedEmail;
+const deliverOperacionalNewCampaignEmail = async (input) => {
+    const operacionalEmail = String(input.operacionalEmail || "")
+        .trim()
+        .toLowerCase();
+    const operacionalName = String(input.operacionalName || "").trim();
+    const campaignUrl = (0, waba_app_url_1.buildOperacionalAdminCampaignDeepLink)(input.campaignId);
+    const mail = (0, waba_mail_templates_1.buildOperacionalNewCampaignTemplate)({
+        recipientName: operacionalName,
+        recipientEmail: operacionalEmail,
+        campaignId: input.campaignId,
+        campaignName: input.campaignName,
+        subscriberId: input.subscriberId,
+        plannedSendCount: input.plannedSendCount,
+        createdAtLabel: input.createdAtLabel,
+        apiKindLabel: input.apiKindLabel,
+        campaignUrl,
+    });
+    return deliverEmail({
+        toEmail: operacionalEmail,
+        subject: mail.subject,
+        html: mail.html,
+        logLabel: `operacional nova campanha ${input.campaignId}`,
+    });
+};
+exports.deliverOperacionalNewCampaignEmail = deliverOperacionalNewCampaignEmail;
+const notifyOperacionalNewCampaignEmail = (input) => {
+    void (0, exports.deliverOperacionalNewCampaignEmail)(input)
+        .then((result) => {
+        if (result.status === "skipped") {
+            console.warn(`[mail] ${result.message}`);
+        }
+        else if (result.status === "failed") {
+            console.error(`[mail] operacional nova campanha (async): ${result.message}`);
+        }
+    })
+        .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[mail] operacional nova campanha (async):", message);
+    });
+};
+exports.notifyOperacionalNewCampaignEmail = notifyOperacionalNewCampaignEmail;
 const notifySubscriberWelcomeEmail = (input) => {
     void (0, exports.deliverSubscriberWelcomeEmail)(input).catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[mail] boas-vindas cadastro (async):", message);
+    });
+    (0, waba_welcome_whatsapp_service_1.notifySubscriberWelcomeWhatsApp)({
+        email: input.email,
+        password: input.password,
+        whatsapp: input.whatsapp,
+        loginUrl: input.loginUrl,
     });
 };
 exports.notifySubscriberWelcomeEmail = notifySubscriberWelcomeEmail;
