@@ -299,8 +299,9 @@ backend_url = (backend_url or "").rstrip("/") + "/"
 swarm_name = swarm_name or "waba_waba_disparador"
 public_host = public_host or "waba.draxsistemas.com.br"
 
-is_paginadevendas = "paginadevendas" in swarm_name or "paginadevendas" in (public_host or "")
-is_disparador = not is_paginadevendas
+is_paginadevendas = "paginadevendas" in swarm_name or "wabadisparos" in (public_host or "")
+is_bets_pv = "bets_pv" in swarm_name or "bet.waba" in (public_host or "")
+is_disparador = not is_paginadevendas and not is_bets_pv
 
 service_keys = [
     f"{swarm_name}-0",
@@ -340,6 +341,10 @@ if is_paginadevendas:
     block_pats.append(
         rf'("[^"]*paginadevendas[^"]*"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")http://[^"]+(")'
     )
+if is_bets_pv:
+    block_pats.append(
+        rf'("[^"]*bets[_-]?pv[^"]*"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")http://[^"]+(")'
+    )
 for block_pat in block_pats:
     text, n_blk = re.subn(block_pat, rf'\g<1>{backend_url}\2', text, flags=re.I)
     if n_blk:
@@ -358,6 +363,11 @@ if is_paginadevendas:
         "waba_paginadevendas",
         "typebot_paginadevendas",
         "paginadevendas",
+    ])
+if is_bets_pv:
+    host_aliases.extend([
+        "waba_bets_pv",
+        "bets_pv",
     ])
 for host in host_aliases:
     for prefix in ("", "tasks."):
@@ -384,6 +394,13 @@ if is_paginadevendas:
         "paginadevendas",
         "waba_paginadevendas",
         "typebot_paginadevendas",
+    ])
+if is_bets_pv:
+    needles.extend([
+        "bet.waba",
+        "bets_pv",
+        "waba_bets_pv",
+        "waba-bets-pv",
     ])
 
 def fix_host_windows(host_needle, backend):
