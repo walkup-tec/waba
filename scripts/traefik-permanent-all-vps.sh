@@ -20,6 +20,7 @@ REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/wab
 
 WABA_SCRIPT="/root/traefik-permanent-waba-vps.sh"
 EVO_SCRIPT="/root/traefik-permanent-walkup-evo-vps.sh"
+PV_SCRIPT="/root/traefik-permanent-paginadevendas-vps.sh"
 GUARD_SCRIPT="/root/traefik-easypanel-config-guard.sh"
 RESTORE_WABA="/root/restore-waba-traefik-router-vps.sh"
 RESTORE_EVO="/root/restore-walkup-evo-traefik-router-vps.sh"
@@ -64,6 +65,7 @@ install_scripts() {
   copy_local_or_curl "traefik-easypanel-bootstrap-vps.sh" "$BOOTSTRAP_SCRIPT"
   copy_local_or_curl "traefik-permanent-waba-vps.sh" "$WABA_SCRIPT"
   copy_local_or_curl "traefik-permanent-walkup-evo-vps.sh" "$EVO_SCRIPT"
+  copy_local_or_curl "traefik-permanent-paginadevendas-vps.sh" "$PV_SCRIPT"
   copy_local_or_curl "traefik-easypanel-config-guard.sh" "$GUARD_SCRIPT"
   copy_local_or_curl "restore-waba-traefik-router-vps.sh" "$RESTORE_WABA"
   copy_local_or_curl "restore-walkup-evo-traefik-router-vps.sh" "$RESTORE_EVO"
@@ -179,7 +181,7 @@ run_all() {
   fi
   ensure_waba_host_port || true
 
-  local ok_waba=0 ok_evo=0
+  local ok_waba=0 ok_evo=0 ok_pv=0
 
   if [[ -x "$RESTORE_WABA" ]]; then
     echo "--- restore WABA router ---" | tee -a "$LOG"
@@ -198,9 +200,13 @@ run_all() {
     echo "--- traefik-permanent-walkup-evo ---" | tee -a "$LOG"
     "$EVO_SCRIPT" run | tee -a "$LOG" && ok_evo=1 || true
   fi
+  if [[ -x "$PV_SCRIPT" ]]; then
+    echo "--- traefik-permanent-paginadevendas ---" | tee -a "$LOG"
+    "$PV_SCRIPT" run | tee -a "$LOG" && ok_pv=1 || true
+  fi
 
-  echo "RESULTADO all: waba=${ok_waba} evo=${ok_evo}" | tee -a "$LOG"
-  [[ "$ok_waba" -eq 1 || "$ok_evo" -eq 1 ]]
+  echo "RESULTADO all: waba=${ok_waba} evo=${ok_evo} pv=${ok_pv}" | tee -a "$LOG"
+  [[ "$ok_waba" -eq 1 || "$ok_evo" -eq 1 || "$ok_pv" -eq 1 ]]
 }
 
 install_all() {
@@ -212,6 +218,9 @@ install_all() {
 
   echo "--- instalando Evolution permanent ---"
   "$EVO_SCRIPT" install || true
+
+  echo "--- instalando paginadevendas permanent ---"
+  "$PV_SCRIPT" install || true
 
   install_bootstrap_timer
   install_guard_service
@@ -225,6 +234,7 @@ install_all() {
   echo "  Bootstrap:  ${BOOTSTRAP_SCRIPT} (+ timer ${BOOTSTRAP_TIMER})"
   echo "  WABA:       ${WABA_SCRIPT}"
   echo "  EVO:        ${EVO_SCRIPT}"
+  echo "  PV:         ${PV_SCRIPT}"
   echo "  Guard:      ${GUARD_SCRIPT} (${GUARD_SERVICE})"
   echo "  Log:        ${LOG}"
   echo ""
@@ -243,7 +253,9 @@ show_status() {
     traefik-permanent-waba-watch.service \
     traefik-permanent-waba-fix.timer \
     traefik-permanent-walkup-evo-watch.service \
-    traefik-permanent-walkup-evo-fix.timer; do
+    traefik-permanent-walkup-evo-fix.timer \
+    traefik-permanent-paginadevendas-watch.service \
+    traefik-permanent-paginadevendas-fix.timer; do
     if systemctl list-unit-files "$unit" &>/dev/null 2>&1; then
       printf "  %-45s %s\n" "$unit:" "$(systemctl is-active "$unit" 2>/dev/null || echo inactive)"
     fi
@@ -251,6 +263,7 @@ show_status() {
   [[ -x "$BOOTSTRAP_SCRIPT" ]] && "$BOOTSTRAP_SCRIPT" status || echo "  Bootstrap ausente"
   [[ -x "$WABA_SCRIPT" ]] && "$WABA_SCRIPT" status || echo "  WABA script ausente"
   [[ -x "$EVO_SCRIPT" ]] && "$EVO_SCRIPT" status || echo "  EVO script ausente"
+  [[ -x "$PV_SCRIPT" ]] && "$PV_SCRIPT" status || echo "  PV script ausente"
 }
 
 case "${1:-run}" in

@@ -325,14 +325,14 @@ def fix_service(name: str, url: str) -> int:
 for key in service_keys:
     fix_service(key, backend_url)
 
-# Easypanel regenera :3000 — força :80/tasks/host em qualquer URL do bloco waba_disparador
-waba_url_pat = re.compile(
+# Easypanel regenera :3000 — força tasks.* em blocos waba_disparador / paginadevendas
+for block_pat in (
     rf'("waba[^"]*disparador[^"]*"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")http://[^"]+(")',
-    re.I,
-)
-text, n_waba = waba_url_pat.subn(rf'\g<1>{backend_url}\2', text)
-if n_waba:
-    print(f"  blocos waba_disparador -> {backend_url} ({n_waba}x)")
+    rf'("[^"]*paginadevendas[^"]*"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")http://[^"]+(")',
+):
+    text, n_blk = re.subn(block_pat, rf'\g<1>{backend_url}\2', text, flags=re.I)
+    if n_blk:
+        print(f"  blocos Traefik -> {backend_url} ({n_blk}x)")
 
 host_aliases = [
     swarm_name,
@@ -340,6 +340,9 @@ host_aliases = [
     "waba_waba-disparador",
     "waba_disparador",
     "waba-disparador",
+    "waba_paginadevendas",
+    "typebot_paginadevendas",
+    "paginadevendas",
 ]
 for host in host_aliases:
     for prefix in ("", "tasks."):
@@ -350,7 +353,17 @@ for host in host_aliases:
                 text = text.replace(old, backend_url.rstrip("/"))
                 print(f"  replace {old}* -> {backend_url}")
 
-needles = [public_host, "waba.draxsistemas", "waba_disparador", "waba-disparador", "waba-waba"]
+needles = [
+    public_host,
+    "waba.draxsistemas",
+    "waba_disparador",
+    "waba-disparador",
+    "waba-waba",
+    "wabadisparos",
+    "paginadevendas",
+    "waba_paginadevendas",
+    "typebot_paginadevendas",
+]
 if easypanel_host:
     needles.append(easypanel_host)
 
@@ -469,13 +482,16 @@ run_fix() {
     echo "RESULTADO waba:${public} health:${health}"
   fi
 
-  [[ "$health" == "200" ]]
+  [[ "$health" == "200" || "$public" == "200" ]]
 }
 
 should_patch_for_name() {
   local name="$1"
   case "$name" in
     *waba_disparador*|*waba-disparador*|*waba_waba*|waba_*)
+      return 0
+      ;;
+    *paginadevendas*|*bets_pv*)
       return 0
       ;;
     *traefik*|*easypanel*)
