@@ -23,6 +23,13 @@ const registerWabaSubscriberRoutes = (app) => {
                 whatsapp: String(body.whatsapp ?? ""),
                 phone: String(body.phone ?? ""),
                 cpfCnpj: String(body.cpfCnpj ?? ""),
+                segment: body.segment,
+                signupOrigin: body.signupOrigin ?? body.signupSource,
+            }, {
+                requestHeaders: {
+                    origin: String(req.headers.origin ?? ""),
+                    referer: String(req.headers.referer ?? ""),
+                },
             });
             const loginUrl = resolveAppLoginUrl();
             return res.status(201).json({

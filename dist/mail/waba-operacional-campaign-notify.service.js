@@ -33,10 +33,13 @@ const notifyOperacionalStaffOnCampaignCreated = async (intake) => {
     const attemptedAt = new Date().toISOString();
     const apiKind = resolveApiKind(intake);
     const apiKindLabel = waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind];
-    const operacionais = new waba_system_user_service_1.WabaSystemUserService().listOperacionalUsersForDispatchesApi(apiKind);
+    const subscriber = new waba_subscriber_repository_1.WabaSubscriberRepository().getByEmail(intake.ownerEmail);
+    const subscriberSegment = subscriber?.segment ?? "outros";
+    const operacionais = new waba_system_user_service_1.WabaSystemUserService().listOperacionalUsersForCampaign(apiKind, subscriberSegment);
     if (!operacionais.length) {
-        const message = `Nenhum usuário operacional designado para ${apiKindLabel}. ` +
-            "Configure em Admin · Usuários o plano de atendimento (API Oficial ou API Alternativa).";
+        const message = `Nenhum usuário operacional designado para ${apiKindLabel} no segmento ` +
+            `${subscriberSegment === "bets" ? "Bets" : "Outros"}. ` +
+            "Configure em Admin · Usuários o plano de atendimento e o segmento.";
         console.warn(`[mail] campanha ${intake.id}: ${message}`);
         return {
             attemptedAt,
@@ -45,7 +48,6 @@ const notifyOperacionalStaffOnCampaignCreated = async (intake) => {
             recipients: [],
         };
     }
-    const subscriber = new waba_subscriber_repository_1.WabaSubscriberRepository().getByEmail(intake.ownerEmail);
     const subscriberId = String(subscriber?.id ?? "").trim() || "—";
     const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
     const plannedSendCount = resolvePlannedSendCount(intake);

@@ -70,6 +70,7 @@ const waba_admin_routes_1 = require("./admin/waba-admin.routes");
 const waba_push_routes_1 = require("./push/waba-push.routes");
 const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
 const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
+const uptime_monitor_service_1 = require("./monitoring/uptime-monitor.service");
 const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_public_base_url_1 = require("./lib/waba-public-base-url");
@@ -83,6 +84,7 @@ const waba_entitlement_routes_1 = require("./entitlements/waba-entitlement.route
 const waba_entitlement_service_1 = require("./entitlements/waba-entitlement.service");
 const waba_cors_1 = require("./lib/waba-cors");
 const waba_subscriber_routes_1 = require("./subscribers/waba-subscriber.routes");
+const waba_subscriber_segment_1 = require("./subscribers/waba-subscriber-segment");
 const waba_support_routes_1 = require("./support/waba-support.routes");
 const instance_integration_probe_1 = require("./instance-integration-probe");
 const instance_inbound_validation_service_1 = require("./instance-inbound-validation.service");
@@ -2996,6 +2998,8 @@ async function resolveDispatchCreditsApiKindForOwner(ownerEmail) {
     const normalized = String(ownerEmail || "").trim().toLowerCase();
     if (!normalized.includes("@"))
         return "oficial";
+    if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(normalized))
+        return "oficial";
     const summary = disparosCreditsService.getCreditsSummary(normalized);
     if (summary.activeApiKind === "alternativa")
         return "alternativa";
@@ -3018,6 +3022,8 @@ function debitsDisparosCreditsPerSuccessfulSend(apiKind) {
 async function shouldApplyAlternativaDispatchProfile(email) {
     const normalized = String(email || "").trim().toLowerCase();
     if (!normalized.includes("@"))
+        return false;
+    if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(normalized))
         return false;
     if ((0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
         const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
@@ -10491,6 +10497,7 @@ const httpServer = app.listen(PORT, () => {
                 : "[campanhas] processamento automático desativado neste processo (dev isolado).");
         }
         (0, asaas_integration_monitor_service_1.startAsaasIntegrationMonitorScheduler)();
+        (0, uptime_monitor_service_1.startUptimeMonitorScheduler)();
     })();
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer);

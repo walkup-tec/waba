@@ -7,6 +7,7 @@ const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-int
 const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-shipments");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
+const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_welcome_whatsapp_service_1 = require("../mail/waba-welcome-whatsapp.service");
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -145,12 +146,15 @@ class WabaAdminSubscribersService {
             const email = normalizeEmail(subscriber.email);
             const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
             const intakes = intakesByEmail.get(email) ?? [];
+            const segment = subscriber.segment ?? "outros";
             return {
                 id: subscriber.id,
                 email,
                 fullName: subscriber.fullName,
                 cpfCnpj: subscriber.cpfCnpj,
                 cpfCnpjFormatted: formatCpfCnpj(subscriber.cpfCnpj),
+                segment,
+                segmentLabel: waba_subscriber_segment_1.WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
                 createdAt: subscriber.createdAt,
                 createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),
                 creditsValueCents: credits.contractedValueCents,
@@ -171,6 +175,7 @@ class WabaAdminSubscribersService {
         const email = normalizeEmail(subscriber.email);
         const credits = this.creditsService.getCreditsSummary(email);
         const intakes = this.intakeRepository.listByEmail(email);
+        const segment = subscriber.segment ?? "outros";
         return {
             profile: {
                 id: subscriber.id,
@@ -182,6 +187,8 @@ class WabaAdminSubscribersService {
                 whatsappFormatted: formatPhoneDisplay(subscriber.whatsapp),
                 phone: subscriber.phone,
                 phoneFormatted: formatPhoneDisplay(subscriber.phone || subscriber.whatsapp),
+                segment,
+                segmentLabel: waba_subscriber_segment_1.WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
                 aquecedorGranted: Boolean(subscriber.aquecedorGranted),
                 createdAt: subscriber.createdAt,
                 createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),

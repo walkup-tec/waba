@@ -21,6 +21,7 @@ const waba_admin_push_service_1 = require("./waba-admin-push.service");
 const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-menu-badges.service");
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integration-monitor.service");
+const uptime_monitor_service_1 = require("../monitoring/uptime-monitor.service");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const waba_admin_instances_service_1 = require("./waba-admin-instances.service");
 const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
@@ -116,6 +117,7 @@ const registerWabaAdminRoutes = (app) => {
                 phone: String(body.phone ?? whatsapp),
                 cpfCnpj: String(body.cpfCnpj ?? ""),
                 aquecedorGranted: body.aquecedorGranted === true,
+                segment: body.segment,
                 password: body.password !== undefined ? String(body.password) : undefined,
             });
             return res.status(200).json({ ok: true, ...detail });
@@ -173,6 +175,7 @@ const registerWabaAdminRoutes = (app) => {
                 phone: String(body.phone ?? whatsapp),
                 cpfCnpj: String(body.cpfCnpj ?? ""),
                 aquecedorGranted: body.aquecedorGranted === true,
+                segment: body.segment,
             });
             return res.status(201).json({ ok: true, subscriber });
         }
@@ -341,6 +344,45 @@ const registerWabaAdminRoutes = (app) => {
             return;
         try {
             const alerts = await (0, asaas_integration_monitor_service_1.sendAsaasIntegrationTestAlert)();
+            return res.status(200).json({ ok: true, test: true, alerts });
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
+            });
+        }
+    });
+    app.get("/admin/infra/uptime-monitor/status", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            return res.status(200).json(await (0, uptime_monitor_service_1.getUptimeMonitorStatus)());
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível ler o status do monitor.",
+            });
+        }
+    });
+    app.post("/admin/infra/uptime-monitor/run", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const forceAlert = ["1", "true"].includes(String(req.query.forceAlert ?? req.body?.forceAlert ?? "").trim().toLowerCase());
+            const result = await (0, uptime_monitor_service_1.runUptimeMonitorCheck)({ forceAlert, skipState: forceAlert });
+            return res.status(200).json(result);
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível executar o monitor de uptime.",
+            });
+        }
+    });
+    app.post("/admin/infra/uptime-monitor/test-alert", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const alerts = await (0, uptime_monitor_service_1.sendUptimeMonitorTestAlert)();
             return res.status(200).json({ ok: true, test: true, alerts });
         }
         catch (error) {

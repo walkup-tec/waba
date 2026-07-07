@@ -117,6 +117,21 @@ class WabaOperacionalCampanhasService {
         const apiKind = this.systemUserService.getOperacionalDispatchesApiForEmail(staff.email);
         return apiKind ?? "unassigned";
     }
+    resolveStaffSegmentFilter(staff) {
+        if (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email))
+            return null;
+        if (staff.role === "suporte")
+            return null;
+        if (staff.role !== "operacional")
+            return null;
+        const segment = this.systemUserService.getOperacionalSegmentForEmail(staff.email);
+        return segment ?? "unassigned";
+    }
+    resolveSubscriberSegmentForIntake(intake) {
+        const email = normalizeEmail(intake.ownerEmail);
+        const subscriber = this.subscriberRepository.getByEmail(email);
+        return subscriber?.segment ?? "outros";
+    }
     matchesStaffApiFilter(intake, staff) {
         const filter = this.resolveStaffApiFilter(staff);
         if (filter === null)
@@ -125,11 +140,22 @@ class WabaOperacionalCampanhasService {
             return false;
         return resolveIntakeApiKind(intake, this.orderRepository) === filter;
     }
+    matchesStaffSegmentFilter(intake, staff) {
+        const filter = this.resolveStaffSegmentFilter(staff);
+        if (filter === null)
+            return true;
+        if (filter === "unassigned")
+            return false;
+        return this.resolveSubscriberSegmentForIntake(intake) === filter;
+    }
+    matchesStaffCampaignFilter(intake, staff) {
+        return (this.matchesStaffApiFilter(intake, staff) && this.matchesStaffSegmentFilter(intake, staff));
+    }
     getIntakeForStaffOrThrow(campaignId, staff) {
         const intake = this.intakeRepository.getById(campaignId);
         if (!intake)
             throw new Error("Campanha não encontrada.");
-        if (!this.matchesStaffApiFilter(intake, staff)) {
+        if (!this.matchesStaffCampaignFilter(intake, staff)) {
             throw new Error("Campanha não disponível para o seu tipo de operação.");
         }
         return intake;
@@ -166,7 +192,7 @@ class WabaOperacionalCampanhasService {
     listCampaigns(staff) {
         return this.intakeRepository
             .listAll()
-            .filter((intake) => this.matchesStaffApiFilter(intake, staff))
+            .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
             .map((intake) => this.toListItem(intake))
             .sort((a, b) => {
             if (a.needsConfiguration !== b.needsConfiguration) {
@@ -177,7 +203,7 @@ class WabaOperacionalCampanhasService {
     }
     getCampaignDetail(campaignId, staff) {
         const intake = this.intakeRepository.getById(campaignId);
-        if (!intake || !this.matchesStaffApiFilter(intake, staff))
+        if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
         const base = this.toListItem(intake);
         const plannedSendCount = base.plannedSendCount;
@@ -331,7 +357,7 @@ class WabaOperacionalCampanhasService {
     }
     resolveImageDownload(intakeId, staff) {
         const intake = this.intakeRepository.getById(intakeId);
-        if (!intake || !this.matchesStaffApiFilter(intake, staff))
+        if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
         if (!intake.imageStoredPath || !(0, node_fs_1.existsSync)(intake.imageStoredPath)) {
             return null;
@@ -343,7 +369,7 @@ class WabaOperacionalCampanhasService {
     }
     resolveSpreadsheetDownload(intakeId, staff) {
         const intake = this.intakeRepository.getById(intakeId);
-        if (!intake || !this.matchesStaffApiFilter(intake, staff))
+        if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
         const plannedSendCount = resolvePlannedSendCount(intake);
         const trimmedFileName = intake.spreadsheetTrimmedFileName ||
