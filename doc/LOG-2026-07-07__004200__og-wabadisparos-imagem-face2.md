@@ -3,15 +3,22 @@
 **Data:** 2026-07-07  
 **Solicitação:** Meta tags OG no index wabadisparos.com.br com imagem agenciadigitalcorban.
 
-## Meta tags solicitadas
+## Link público DRAX (og:image)
 
-```html
-<meta property="og:image" content="http://agenciadigitalcorban.com.br/img/imagem-face2.jpg" />
-<meta property="og:image:type" content="image/jpg" />
-<meta property="og:image:width" content="800" />
-<meta property="og:image:height" content="600" />
-<meta property="og:type" content="website" />
 ```
+https://waba.draxsistemas.com.br/media/imagem-face2.jpg
+```
+
+## Publicar no VPS
+
+```bash
+# copie imagem-face2.jpg para /tmp/imagem-face2.jpg
+wget -O /tmp/publish-og-drax.sh "https://raw.githubusercontent.com/walkup-tec/waba/<SHA>/scripts/publish-wabadisparos-og-image-drax-vps.sh"
+chmod +x /tmp/publish-og-drax.sh
+/tmp/publish-og-drax.sh
+```
+
+## Meta tags (og:image aponta para link DRAX acima)
 
 ## Implementação
 

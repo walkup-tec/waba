@@ -15,7 +15,7 @@ Como usar:
 ## Última atualização
 2026-07-07
 
-**WABA — OG wabadisparos imagem-face2 (produção):** meta `og:image` → `http://agenciadigitalcorban.com.br/img/imagem-face2.jpg` (800×600, image/jpg) via patch SSR `scripts/patch-paginadevendas-router-og.cjs` + deploy `scripts/deploy-paginadevendas-og-vps.sh`. Ver `doc/LOG-2026-07-07__004200__og-wabadisparos-imagem-face2.md`. Palavras-chave: `wabadisparos`, `og:image`, `paginadevendas`, `imagem-face2`.
+**WABA — OG wabadisparos imagem-face2 (produção):** link público DRAX `https://waba.draxsistemas.com.br/media/imagem-face2.jpg` (800×600) + publish `scripts/publish-wabadisparos-og-image-drax-vps.sh` + patch SSR `scripts/deploy-paginadevendas-og-vps.sh`. Ver `doc/LOG-2026-07-07__004200__og-wabadisparos-imagem-face2.md`.
 
 **WABA — paginadevendas verde Easypanel (script v3):** `scripts/fix-paginadevendas-green-vps.sh` v2 (`60fb7d7`) — `docker service scale -d` (detach) para não travar terminal; pula scale se container já HTTP 200 + Health healthy. Commit anterior `4631b91` travava em scale bloqueante com Swarm 0/1. Ver `doc/LOG-2026-07-07__003500__fix-paginadevendas-green-scale-detach-v2.md`. Palavras-chave: `waba_paginadevendas`, Easypanel amarelo, scale detach.
 
