@@ -7,6 +7,8 @@ Após **redeploy no Easypanel**, o Traefik regenera `/etc/easypanel/traefik/conf
 | Serviço | Host |
 |---------|------|
 | WABA | `waba.draxsistemas.com.br` |
+| Landing disparos | `wabadisparos.com.br` |
+| Landing bets | `bet.waba.info` |
 | Evolution API | `walkup-evo-walkup-api.achpyp.easypanel.host` |
 
 ### Classe diferente: `curl (7)` — nada na porta 443
@@ -38,7 +40,13 @@ Script mestre que instala **tudo**:
 5. **Cron 1 min** (backup extra)
 6. **Guarda inotify** — quando Easypanel **reescreve main.yaml**, reaplica fixes na hora
 
-### Instalar (root no VPS)
+### Instalar (root no VPS) — **recomendado (tudo de uma vez)**
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/infra/bootstrap-vps-definitivo.sh" | bash
+```
+
+Ou só Traefik permanent:
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/traefik-permanent-all-vps.sh" -o /root/traefik-permanent-all-vps.sh
@@ -47,7 +55,17 @@ chmod +x /root/traefik-permanent-all-vps.sh
 /root/traefik-permanent-all-vps.sh install
 ```
 
-Ou com cópia local do repo:
+### Auto-heal contínuo (timer 2 min no VPS)
+
+Instalado automaticamente pelo bootstrap ou por `install-vps-monitor.sh install`:
+
+- `/root/waba-infra/vps-traefik-autoheal.sh` — checa `bet.waba.info`, `wabadisparos.com.br`, `waba.draxsistemas.com.br/health` e executa `traefik-permanent-all-vps.sh run` se falhar.
+
+### GitHub Actions (opcional — sem SSH manual)
+
+Workflow `.github/workflows/vps-infra-heal.yml` — a cada 5 min + manual. Requer secret `VPS_SSH_PRIVATE_KEY` (e opcional `VPS_HOST`).
+
+### Instalar manual (legado)
 
 ```bash
 cp /caminho/waba/scripts/traefik-permanent-all-vps.sh /root/

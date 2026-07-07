@@ -1,0 +1,57 @@
+# Auto-heal Traefik no VPS — evita 404/flapping em bet.waba.info e wabadisparos.com.br.
+#
+# Secrets obrigatórios (GitHub → Settings → Secrets → Actions):
+#   VPS_SSH_PRIVATE_KEY  — chave privada OpenSSH (root@srv1261237)
+#   VPS_HOST             — opcional; default 72.60.51.127
+#
+# Doc: doc/FIX-TRAEFIK-DEFINITIVO.md
+
+name: VPS Infra Heal (Traefik)
+
+on:
+  schedule:
+    # A cada 3 minutos — cobre flapping entre timers do VPS
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: vps-infra-heal
+  cancel-in-progress: false
+
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::warning::VPS_SSH_PRIVATE_KEY não configurado — job ignorado."
+            exit 0
+          fi
+
+      - name: SSH — auto-heal Traefik
+        if: ${{ secrets.VPS_SSH_PRIVATE_KEY != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 6m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+            if [[ ! -x /root/waba-infra/vps-traefik-autoheal.sh ]]; then
+              curl -fsSL "${REPO}/infra/bootstrap-vps-definitivo.sh" -o /tmp/bootstrap-vps-definitivo.sh
+              sed -i 's/\r$//' /tmp/bootstrap-vps-definitivo.sh
+              chmod +x /tmp/bootstrap-vps-definitivo.sh
+              /tmp/bootstrap-vps-definitivo.sh
+            else
+              /root/waba-infra/vps-traefik-autoheal.sh heal || /root/waba-infra/vps-traefik-autoheal.sh force-heal
+            fi
+            echo "--- status ---"
+            /root/traefik-permanent-all-vps.sh status 2>/dev/null || true
+            echo "--- probe ---"
+            curl -sS -o /dev/null -w "bet:%{http_code}\n" --max-time 15 --resolve bet.waba.info:443:127.0.0.1 https://bet.waba.info/ || echo "bet:000"
+            curl -sS -o /dev/null -w "disparos:%{http_code}\n" --max-time 15 --resolve wabadisparos.com.br:443:127.0.0.1 https://wabadisparos.com.br/ || echo "disparos:000"

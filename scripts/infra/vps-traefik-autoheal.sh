@@ -1,0 +1,100 @@
+#!/bin/bash
+# Auto-heal Traefik — WABA + Evolution + landings (bet.waba.info, wabadisparos.com.br).
+# Roda no VPS (root). Instalado por install-vps-monitor.sh ou bootstrap-vps-definitivo.sh.
+#
+# Versão: waba-traefik-autoheal-2026-07-07-v1
+set -euo pipefail
+
+AUTOHEAL_VERSION="waba-traefik-autoheal-2026-07-07-v1"
+LOG="${WABA_TRAEFIK_AUTOHEAL_LOG:-/var/log/waba-traefik-autoheal.log}"
+LOCK_FILE="${WABA_TRAEFIK_AUTOHEAL_LOCK:-/var/run/waba-traefik-autoheal.lock}"
+ALL_SCRIPT="${TRAEFIK_ALL_SCRIPT:-/root/traefik-permanent-all-vps.sh}"
+REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
+
+PUBLIC_HOSTS=(
+  "waba.draxsistemas.com.br|/health"
+  "bet.waba.info|/"
+  "wabadisparos.com.br|/"
+)
+
+log() {
+  echo "[$(date -Is)] [$AUTOHEAL_VERSION] $*" | tee -a "$LOG"
+}
+
+http_code_local() {
+  local host="$1"
+  local path="${2:-/}"
+  curl -sS -o /dev/null -w "%{http_code}" --max-time 12 \
+    --resolve "${host}:443:127.0.0.1" \
+    "https://${host}${path}" 2>/dev/null || echo "000"
+}
+
+check_hosts() {
+  local host path code failures=()
+  for entry in "${PUBLIC_HOSTS[@]}"; do
+    host="${entry%%|*}"
+    path="${entry#*|}"
+    code="$(http_code_local "$host" "$path")"
+    if [[ "$code" =~ ^[23] ]]; then
+      log "OK ${host}${path} -> ${code}"
+    else
+      log "FALHA ${host}${path} -> ${code}"
+      failures+=("${host}:${code}")
+    fi
+  done
+  if ((${#failures[@]})); then
+    printf '%s\n' "${failures[@]}"
+    return 1
+  fi
+  return 0
+}
+
+ensure_all_script() {
+  if [[ -x "$ALL_SCRIPT" ]]; then
+    return 0
+  fi
+  log "Instalando ${ALL_SCRIPT} a partir do repositório..."
+  curl -fsSL "${REPO_BASE}/traefik-permanent-all-vps.sh" -o "$ALL_SCRIPT"
+  sed -i 's/\r$//' "$ALL_SCRIPT" 2>/dev/null || true
+  chmod +x "$ALL_SCRIPT"
+  "$ALL_SCRIPT" install >>"$LOG" 2>&1 || true
+}
+
+run_heal() {
+  ensure_all_script
+  if [[ ! -x "$ALL_SCRIPT" ]]; then
+    log "ERRO: ${ALL_SCRIPT} ausente — impossível curar"
+    return 1
+  fi
+  log "Executando ${ALL_SCRIPT} run"
+  if command -v flock >/dev/null 2>&1; then
+    flock -n "$LOCK_FILE" -c "\"$ALL_SCRIPT\" run" >>"$LOG" 2>&1 || true
+  else
+    "$ALL_SCRIPT" run >>"$LOG" 2>&1 || true
+  fi
+}
+
+cmd_check_and_heal() {
+  if check_hosts; then
+    return 0
+  fi
+  log "Hosts com falha — iniciando auto-heal"
+  run_heal
+  sleep 5
+  if check_hosts; then
+    log "Auto-heal concluído com sucesso"
+    return 0
+  fi
+  log "AVISO: auto-heal executado mas ainda há falhas"
+  return 1
+}
+
+case "${1:-heal}" in
+  check) check_hosts ;;
+  heal) cmd_check_and_heal ;;
+  force-heal) run_heal ;;
+  *)
+    echo "Uso: $0 check | heal | force-heal"
+    exit 1
+    ;;
+esac

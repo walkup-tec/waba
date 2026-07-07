@@ -1,7 +1,7 @@
 #!/bin/bash
 # Auditoria de saúde — WABA + Traefik + Docker (VPS Hostinger / Easypanel)
 # Uso: bash vps-health-audit.sh [--json]
-# Versão: waba-infra-audit-2026-06-27-v1
+# Versão: waba-infra-audit-2026-07-07-v2
 set -euo pipefail
 
 JSON_MODE=0
@@ -41,6 +41,26 @@ else
   note_issue "https_health_failed"
 fi
 
+landing_bet_code="000"
+landing_disparos_code="000"
+if landing_bet_code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
+  --resolve bet.waba.info:443:127.0.0.1 \
+  https://bet.waba.info/ 2>/dev/null)"; then
+  :
+else
+  landing_bet_code="000"
+  note_issue "landing_bet_failed"
+fi
+
+if landing_disparos_code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
+  --resolve wabadisparos.com.br:443:127.0.0.1 \
+  https://wabadisparos.com.br/ 2>/dev/null)"; then
+  :
+else
+  landing_disparos_code="000"
+  note_issue "landing_disparos_failed"
+fi
+
 cert_subject=""
 cert_issuer=""
 cert_not_after=""
@@ -67,6 +87,8 @@ mem_avail_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || ec
 [[ "$port_30180" -eq 0 ]] && note_issue "port_30180_closed"
 [[ "$health_code" != "200" ]] && note_issue "health_not_200"
 [[ "$https_code" != "200" ]] && note_issue "https_not_200"
+[[ ! "$landing_bet_code" =~ ^[23] ]] && note_issue "landing_bet_not_ok"
+[[ ! "$landing_disparos_code" =~ ^[23] ]] && note_issue "landing_disparos_not_ok"
 
 if [[ "$JSON_MODE" -eq 1 ]]; then
   issues_json="[]"
@@ -74,22 +96,29 @@ if [[ "$JSON_MODE" -eq 1 ]]; then
     issues_json="$(printf '"%s",' "${issues[@]}" | sed 's/,$//')"
     issues_json="[${issues_json}]"
   fi
-  printf '{"ts":"%s","host":"%s","docker":"%s","swarm":"%s","traefik":"%s","waba":"%s","health_code":"%s","https_code":"%s","load":"%s","mem_avail_kb":%s,"issues":%s}\n' \
+  printf '{"ts":"%s","host":"%s","docker":"%s","swarm":"%s","traefik":"%s","waba":"%s","health_code":"%s","https_code":"%s","landing_bet":"%s","landing_disparos":"%s","load":"%s","mem_avail_kb":%s,"issues":%s}\n' \
     "$ts" "$host" "$docker_active" "$swarm_state" "${traefik_replicas:-unknown}" "${waba_replicas:-unknown}" \
-    "$health_code" "$https_code" "$load_avg" "$mem_avail_kb" "$issues_json"
+    "$health_code" "$https_code" "$landing_bet_code" "$landing_disparos_code" "$load_avg" "$mem_avail_kb" "$issues_json"
   exit 0
 fi
 
 echo "=== WABA Infra Audit === $ts ($host) ==="
 echo "docker=$docker_active swarm=$swarm_state load=$load_avg mem_avail_kb=$mem_avail_kb"
 echo "traefik=${traefik_replicas:-?} waba=${waba_replicas:-?} :443=$port_443 :30180=$port_30180"
-echo "health_local=$health_code https=$https_code"
+echo "health_local=$health_code https=$https_code bet=$landing_bet_code disparos=$landing_disparos_code"
 echo "cert_subject=$cert_subject"
 echo "cert_issuer=$cert_issuer"
 echo "cert_not_after=$cert_not_after"
 if ((${#issues[@]})); then
   echo "ISSUES:"
   printf ' - %s\n' "${issues[@]}"
+  if [[ -x /root/waba-infra/vps-traefik-autoheal.sh ]]; then
+    echo "AUTOHEAL: disparando vps-traefik-autoheal.sh heal"
+    /root/waba-infra/vps-traefik-autoheal.sh heal || true
+  elif [[ -x /root/traefik-permanent-all-vps.sh ]]; then
+    echo "AUTOHEAL: disparando traefik-permanent-all-vps.sh run"
+    /root/traefik-permanent-all-vps.sh run || true
+  fi
   exit 1
 fi
 echo "OK: all checks passed"

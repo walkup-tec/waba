@@ -8,10 +8,10 @@
 #   chmod +x /root/traefik-permanent-all-vps.sh
 #   /root/traefik-permanent-all-vps.sh install
 #
-# Versão: traefik-permanent-all-2026-06-20-v3
+# Versão: traefik-permanent-all-2026-07-07-v4
 set -euo pipefail
 
-ALL_VERSION="traefik-permanent-all-2026-06-20-v3"
+ALL_VERSION="traefik-permanent-all-2026-07-07-v4"
 WABA_SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
 WABA_HOST_PUBLISHED_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
 INSTALL_PATH="/root/traefik-permanent-all-vps.sh"

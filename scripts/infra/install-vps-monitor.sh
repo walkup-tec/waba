@@ -1,7 +1,7 @@
 #!/bin/bash
 # Instala monitor periódico de infra WABA no VPS (systemd timer, 15 min)
 # Uso (root): bash install-vps-monitor.sh install|status|run-once
-# Versão: waba-infra-install-2026-06-27-v1
+# Versão: waba-infra-install-2026-07-07-v2
 set -euo pipefail
 
 INSTALL_DIR="/root/waba-infra"
@@ -11,6 +11,11 @@ SERVICE="waba-infra-audit.service"
 TIMER="waba-infra-audit.timer"
 UNIT_DIR="/etc/systemd/system"
 REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/infra}"
+REPO_SCRIPTS="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
+TRAEFIK_ALL="/root/traefik-permanent-all-vps.sh"
+AUTOHEAL_SCRIPT="${INSTALL_DIR}/vps-traefik-autoheal.sh"
+AUTOHEAL_SERVICE="waba-traefik-autoheal.service"
+AUTOHEAL_TIMER="waba-traefik-autoheal.timer"
 
 script_dir() {
   dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
@@ -30,12 +35,27 @@ fetch_or_copy() {
   chmod +x "$dest"
 }
 
+ensure_traefik_permanent_all() {
+  if [[ -x "$TRAEFIK_ALL" ]]; then
+    echo "Traefik permanent já instalado: ${TRAEFIK_ALL}"
+    "$TRAEFIK_ALL" install >>"${AUDIT_LOG}" 2>&1 || true
+    return 0
+  fi
+  echo "Instalando Traefik permanent ALL (waba + evo + landings)..."
+  curl -fsSL "${REPO_SCRIPTS}/traefik-permanent-all-vps.sh" -o "$TRAEFIK_ALL"
+  sed -i 's/\r$//' "$TRAEFIK_ALL" 2>/dev/null || true
+  chmod +x "$TRAEFIK_ALL"
+  "$TRAEFIK_ALL" install >>"${AUDIT_LOG}" 2>&1 || true
+}
+
 cmd_install() {
   [[ "$(id -u)" -eq 0 ]] || { echo "Execute como root"; exit 1; }
   mkdir -p "$INSTALL_DIR"
   fetch_or_copy "vps-health-audit.sh" "$INSTALL_DIR/vps-health-audit.sh"
   fetch_or_copy "vps-cpu-report.sh" "$INSTALL_DIR/vps-cpu-report.sh"
   fetch_or_copy "collect-vps-cpu-metrics-for-waba.sh" "$INSTALL_DIR/collect-vps-cpu-metrics-for-waba.sh"
+  fetch_or_copy "vps-traefik-autoheal.sh" "$AUTOHEAL_SCRIPT"
+  ensure_traefik_permanent_all
 
   cat >"${UNIT_DIR}/${SERVICE}" <<EOF
 [Unit]
@@ -95,8 +115,36 @@ EOF
   systemctl enable --now "${CPU_COLLECTOR_TIMER}"
   bash "$INSTALL_DIR/collect-vps-cpu-metrics-for-waba.sh" || true
 
-  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}"
-  echo "Logs: ${AUDIT_LOG} ${CPU_LOG}"
+  cat >"${UNIT_DIR}/${AUTOHEAL_SERVICE}" <<EOF
+[Unit]
+Description=WABA Traefik auto-heal (bet.waba.info + wabadisparos.com.br)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=${AUTOHEAL_SCRIPT} heal
+EOF
+
+  cat >"${UNIT_DIR}/${AUTOHEAL_TIMER}" <<EOF
+[Unit]
+Description=Traefik auto-heal a cada 2 minutos
+
+[Timer]
+OnBootSec=45
+OnUnitActiveSec=2min
+AccuracySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable --now "${AUTOHEAL_TIMER}"
+  bash "$AUTOHEAL_SCRIPT" heal || true
+
+  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}"
+  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log"
   bash "$INSTALL_DIR/vps-health-audit.sh" || true
 }
 
@@ -108,12 +156,17 @@ cmd_status() {
   tail -15 "${CPU_LOG}" 2>/dev/null || echo "(sem log ainda)"
   echo "--- cpu collector timer ---"
   systemctl status waba-infra-cpu-collector.timer --no-pager 2>/dev/null || echo "(timer cpu collector não instalado)"
+  echo "--- traefik autoheal timer ---"
+  systemctl status waba-traefik-autoheal.timer --no-pager 2>/dev/null || echo "(timer autoheal não instalado)"
+  echo "--- tail traefik autoheal ---"
+  tail -15 /var/log/waba-traefik-autoheal.log 2>/dev/null || echo "(sem log autoheal ainda)"
 }
 
 cmd_run_once() {
   bash "${INSTALL_DIR}/vps-health-audit.sh"
   bash "${INSTALL_DIR}/vps-cpu-report.sh"
   bash "${INSTALL_DIR}/collect-vps-cpu-metrics-for-waba.sh" 2>/dev/null || true
+  bash "${AUTOHEAL_SCRIPT}" heal 2>/dev/null || true
 }
 
 case "${1:-}" in
