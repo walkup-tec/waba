@@ -1,4 +1,5 @@
 import { WabaSubscriberService } from "../subscribers/waba-subscriber.service";
+import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 
 export type AdminCreateSubscriberInput = {
   email: string;
@@ -8,6 +9,7 @@ export type AdminCreateSubscriberInput = {
   phone?: string;
   cpfCnpj: string;
   aquecedorGranted?: boolean;
+  segment: WabaSubscriberSegment | unknown;
 };
 
 export class WabaAdminSubscribersCreateService {
@@ -22,6 +24,7 @@ export class WabaAdminSubscribersCreateService {
       phone: String(input.phone ?? ""),
       cpfCnpj: String(input.cpfCnpj ?? ""),
       aquecedorGranted: input.aquecedorGranted === true,
+      segment: input.segment,
     });
   }
 }

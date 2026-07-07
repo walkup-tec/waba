@@ -5,7 +5,7 @@ import { resolveDataFile } from "../data-path";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 
 export type WabaSystemUserRole = "master" | "operacional" | "suporte";
-export type WabaSystemUserOperacionalSegment = "bets" | "todos";
+export type WabaSystemUserOperacionalSegment = "bets" | "outros";
 
 export type WabaSystemUser = {
   id: string;

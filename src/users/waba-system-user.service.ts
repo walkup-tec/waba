@@ -58,7 +58,7 @@ const ROLE_LABELS: Record<WabaSystemUserRole, string> = {
 
 const OPERACIONAL_SEGMENT_LABELS: Record<WabaSystemUserOperacionalSegment, string> = {
   bets: "Bets",
-  todos: "Todos",
+  outros: "Outros",
 };
 
 const parseRole = (value: string): WabaSystemUserRole | null => {
@@ -100,10 +100,11 @@ const parseOperacionalSegmentForRole = (
   const raw = String(value ?? "")
     .trim()
     .toLowerCase();
-  if (!raw) return options.defaultValue ?? "todos";
-  if (raw === "bets" || raw === "todos") return raw;
+  if (!raw) return options.defaultValue ?? "outros";
+  if (raw === "todos") return "outros";
+  if (raw === "bets" || raw === "outros") return raw;
 
-  throw new Error("Selecione um segmento válido para o operacional (Bets ou Todos).");
+  throw new Error("Selecione um segmento válido para o operacional (Bets ou Outros).");
 };
 
 export type CreateSystemUserInput = {
@@ -187,8 +188,12 @@ export class WabaSystemUserService {
     if (user.menuPermissions == null) {
       patch.menuPermissions = buildLegacyMigrationPermissions();
     }
-    if (user.role === "operacional" && user.operacionalSegment == null) {
-      patch.operacionalSegment = "todos";
+    if (user.role === "operacional") {
+      if (user.operacionalSegment == null) {
+        patch.operacionalSegment = "outros";
+      } else if (String(user.operacionalSegment) === "todos") {
+        patch.operacionalSegment = "outros";
+      }
     }
     if (!Object.keys(patch).length) return user;
 
@@ -222,10 +227,15 @@ export class WabaSystemUserService {
       operacionalDispatchesApiLabel: user.operacionalDispatchesApi
         ? WABA_DISPATCHES_API_LABELS[user.operacionalDispatchesApi]
         : "—",
-      operacionalSegment: user.operacionalSegment ?? null,
-      operacionalSegmentLabel: user.operacionalSegment
-        ? OPERACIONAL_SEGMENT_LABELS[user.operacionalSegment]
-        : "—",
+      operacionalSegment:
+        String(user.operacionalSegment) === "todos"
+          ? "outros"
+          : (user.operacionalSegment ?? null),
+      operacionalSegmentLabel: (() => {
+        const seg =
+          String(user.operacionalSegment) === "todos" ? "outros" : user.operacionalSegment;
+        return seg ? OPERACIONAL_SEGMENT_LABELS[seg] : "—";
+      })(),
       masterUnlimitedCredits: masterPolicy?.unlimitedCredits ?? false,
       masterSplitSuppliers: masterPolicy?.splitSuppliers ?? false,
       masterSplitProfits: masterPolicy?.splitProfits ?? false,
@@ -254,19 +264,35 @@ export class WabaSystemUserService {
     return user.operacionalDispatchesApi ?? null;
   }
 
-  /** Operacionais designados para atender campanhas de um plano (API Oficial ou Alternativa). */
-  listOperacionalUsersForDispatchesApi(apiKind: WabaDispatchesApiKind): WabaSystemUser[] {
+  getOperacionalSegmentForEmail(email: string): WabaSystemUserOperacionalSegment | null {
+    const user = this.getUserWithMigration(email);
+    if (!user || user.role !== "operacional") return null;
+    return user.operacionalSegment ?? "outros";
+  }
+
+  /** Operacionais designados para atender campanhas de um plano e segmento de assinante. */
+  listOperacionalUsersForCampaign(
+    apiKind: WabaDispatchesApiKind,
+    subscriberSegment: WabaSystemUserOperacionalSegment,
+  ): WabaSystemUser[] {
     return this.repository
       .list()
       .map((user) => this.ensureUserMigrated(user))
       .filter(
         (user) =>
-          user.role === "operacional" && user.operacionalDispatchesApi === apiKind,
+          user.role === "operacional" &&
+          user.operacionalDispatchesApi === apiKind &&
+          (user.operacionalSegment ?? "outros") === subscriberSegment,
       )
       .map((user) => ({
         ...user,
         email: user.email.trim().toLowerCase(),
       }));
+  }
+
+  /** @deprecated Use listOperacionalUsersForCampaign — mantido para compatibilidade interna. */
+  listOperacionalUsersForDispatchesApi(apiKind: WabaDispatchesApiKind): WabaSystemUser[] {
+    return this.listOperacionalUsersForCampaign(apiKind, "outros");
   }
 
   getSessionMenuAccess(email: string): { allowedMenuIds: string[]; menuPermissions: MenuPermissionsMap } {
@@ -309,7 +335,7 @@ export class WabaSystemUserService {
       { required: true },
     );
     const operacionalSegment = parseOperacionalSegmentForRole(role, input.operacionalSegment, {
-      defaultValue: "todos",
+      defaultValue: "outros",
     });
     const masterPolicy =
       role === "master"
@@ -399,7 +425,7 @@ export class WabaSystemUserService {
       patch.operacionalSegment = parseOperacionalSegmentForRole(
         user.role,
         input.operacionalSegment,
-        { defaultValue: user.operacionalSegment ?? "todos" },
+        { defaultValue: user.operacionalSegment ?? "outros" },
       );
     }
 

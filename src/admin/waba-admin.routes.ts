@@ -118,6 +118,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         phone: String(body.phone ?? whatsapp),
         cpfCnpj: String(body.cpfCnpj ?? ""),
         aquecedorGranted: body.aquecedorGranted === true,
+        segment: body.segment,
         password: body.password !== undefined ? String(body.password) : undefined,
       });
       return res.status(200).json({ ok: true, ...detail });
@@ -172,6 +173,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         phone: String(body.phone ?? whatsapp),
         cpfCnpj: String(body.cpfCnpj ?? ""),
         aquecedorGranted: body.aquecedorGranted === true,
+        segment: body.segment,
       });
       return res.status(201).json({ ok: true, subscriber });
     } catch (error) {

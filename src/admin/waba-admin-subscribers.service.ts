@@ -14,6 +14,7 @@ import {
   WabaSubscriberService,
   type UpdateSubscriberInput,
 } from "../subscribers/waba-subscriber.service";
+import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import {
   deliverSubscriberWelcomeEmail,
   type WabaEmailDeliveryResult,
@@ -29,6 +30,8 @@ export type AdminSubscriberListItem = {
   fullName: string;
   cpfCnpj: string;
   cpfCnpjFormatted: string;
+  segment: string;
+  segmentLabel: string;
   createdAt: string;
   createdAtLabel: string;
   creditsValueCents: number;
@@ -69,6 +72,8 @@ export type AdminSubscriberDetail = {
     whatsappFormatted: string;
     phone: string;
     phoneFormatted: string;
+    segment: string;
+    segmentLabel: string;
     aquecedorGranted: boolean;
     createdAt: string;
     createdAtLabel: string;
@@ -238,6 +243,7 @@ export class WabaAdminSubscribersService {
         const email = normalizeEmail(subscriber.email);
         const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
         const intakes = intakesByEmail.get(email) ?? [];
+        const segment = subscriber.segment ?? "outros";
 
         return {
           id: subscriber.id,
@@ -245,6 +251,8 @@ export class WabaAdminSubscribersService {
           fullName: subscriber.fullName,
           cpfCnpj: subscriber.cpfCnpj,
           cpfCnpjFormatted: formatCpfCnpj(subscriber.cpfCnpj),
+          segment,
+          segmentLabel: WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
           createdAt: subscriber.createdAt,
           createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),
           creditsValueCents: credits.contractedValueCents,
@@ -265,6 +273,7 @@ export class WabaAdminSubscribersService {
     const email = normalizeEmail(subscriber.email);
     const credits = this.creditsService.getCreditsSummary(email);
     const intakes = this.intakeRepository.listByEmail(email);
+    const segment = subscriber.segment ?? "outros";
 
     return {
       profile: {
@@ -277,6 +286,8 @@ export class WabaAdminSubscribersService {
         whatsappFormatted: formatPhoneDisplay(subscriber.whatsapp),
         phone: subscriber.phone,
         phoneFormatted: formatPhoneDisplay(subscriber.phone || subscriber.whatsapp),
+        segment,
+        segmentLabel: WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
         aquecedorGranted: Boolean(subscriber.aquecedorGranted),
         createdAt: subscriber.createdAt,
         createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),

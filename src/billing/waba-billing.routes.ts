@@ -8,6 +8,7 @@ import { WabaBillingService } from "./waba-billing.service";
 import { WabaAlternativaNumbersService } from "./waba-alternativa-numbers.service";
 import { WabaDisparosCreditsService } from "./waba-disparos-credits.service";
 import { getAlternativaDispatchRulesMeta } from "../disparos/alternativa-dispatch-rules";
+import { isBetsSubscriberEmail } from "../subscribers/waba-subscriber-segment";
 
 const orderRepository = new WabaBillingOrderRepository();
 const billingService = new WabaBillingService(orderRepository);
@@ -125,6 +126,7 @@ export const registerWabaBillingRoutes = (app: Express) => {
         alias: String(body.alias ?? ""),
         apiKind: body.apiKind === "alternativa" ? "alternativa" : "oficial",
         shipmentCount: Number(body.shipmentCount ?? 0),
+        ownerEmail: auth.email,
       });
       return res.status(200).json({ ok: true, quote });
     } catch (error) {
@@ -222,6 +224,11 @@ export const registerWabaBillingRoutes = (app: Express) => {
       const auth = resolveRequestAuth(req);
       if (!auth.email) {
         return res.status(401).json({ error: "Faça login para comprar números." });
+      }
+      if (isBetsSubscriberEmail(auth.email)) {
+        return res.status(403).json({
+          error: "Assinantes do segmento Bets utilizam apenas a API Oficial.",
+        });
       }
       const body = req.body as Record<string, unknown>;
       const quantity = Math.round(Number(body.quantity ?? 0));

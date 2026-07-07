@@ -2,6 +2,12 @@ import crypto from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { formatBrazilMobileForAsaas, formatBrazilPhoneDigits } from "../billing/phone";
 import { notifySubscriberWelcomeEmail } from "../mail/waba-mail-delivery";
+import {
+  parseWabaSubscriberSegment,
+  resolveSignupSegmentFromRequest,
+  WABA_SUBSCRIBER_SEGMENT_LABELS,
+  type WabaSubscriberSegment,
+} from "./waba-subscriber-segment";
 import { WabaSubscriberRepository, type WabaSubscriber } from "./waba-subscriber.repository";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
@@ -34,6 +40,8 @@ export type RegisterSubscriberInput = {
   phone: string;
   cpfCnpj: string;
   aquecedorGranted?: boolean;
+  segment?: unknown;
+  signupOrigin?: unknown;
 };
 
 export type UpdateSubscriberInput = {
@@ -44,12 +52,50 @@ export type UpdateSubscriberInput = {
   cpfCnpj: string;
   aquecedorGranted?: boolean;
   password?: string;
+  segment?: unknown;
+};
+
+export type PublicSubscriberProfile = {
+  id: string;
+  email: string;
+  fullName: string;
+  whatsapp: string;
+  phone: string;
+  cpfCnpj: string;
+  aquecedorGranted: boolean;
+  segment: WabaSubscriberSegment;
+  segmentLabel: string;
+  createdAt: string;
+  updatedAt?: string;
 };
 
 export class WabaSubscriberService {
   constructor(private readonly repository = new WabaSubscriberRepository()) {}
 
-  register(input: RegisterSubscriberInput) {
+  private toPublicProfile(subscriber: WabaSubscriber): PublicSubscriberProfile {
+    const segment = subscriber.segment ?? "outros";
+    return {
+      id: subscriber.id,
+      email: subscriber.email,
+      fullName: subscriber.fullName,
+      whatsapp: subscriber.whatsapp,
+      phone: subscriber.phone,
+      cpfCnpj: subscriber.cpfCnpj,
+      aquecedorGranted: Boolean(subscriber.aquecedorGranted),
+      segment,
+      segmentLabel: WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
+      createdAt: subscriber.createdAt,
+      updatedAt: subscriber.updatedAt,
+    };
+  }
+
+  private ensureSubscriberMigrated(subscriber: WabaSubscriber): WabaSubscriber {
+    if (subscriber.segment) return subscriber;
+    const migrated = this.repository.update(subscriber.id, { segment: "outros" });
+    return migrated;
+  }
+
+  register(input: RegisterSubscriberInput, options?: { requestHeaders?: { origin?: string; referer?: string } }) {
     const email = normalizeEmail(input.email);
     const fullName = String(input.fullName ?? "").trim();
     const password = String(input.password ?? "");
@@ -65,6 +111,10 @@ export class WabaSubscriberService {
 
     const now = new Date().toISOString();
     const aquecedorGranted = input.aquecedorGranted === true;
+    const segment =
+      input.segment !== undefined || input.signupOrigin !== undefined
+        ? parseWabaSubscriberSegment(input.segment ?? input.signupOrigin, { required: true })
+        : resolveSignupSegmentFromRequest({}, options?.requestHeaders ?? {});
     const subscriber = this.repository.create({
       id: randomUUID(),
       email,
@@ -73,21 +123,13 @@ export class WabaSubscriberService {
       whatsapp,
       phone,
       cpfCnpj,
+      segment,
       aquecedorGranted: aquecedorGranted || undefined,
       createdAt: now,
       updatedAt: now,
     });
 
-    const profile = {
-      id: subscriber.id,
-      email: subscriber.email,
-      fullName: subscriber.fullName,
-      whatsapp: subscriber.whatsapp,
-      phone: subscriber.phone ?? "",
-      cpfCnpj: subscriber.cpfCnpj,
-      aquecedorGranted: Boolean(subscriber.aquecedorGranted),
-      createdAt: subscriber.createdAt,
-    };
+    const profile = this.toPublicProfile(subscriber);
 
     notifySubscriberWelcomeEmail({
       email: profile.email,
@@ -132,22 +174,15 @@ export class WabaSubscriberService {
       aquecedorGranted: aquecedorGranted || undefined,
       updatedAt: new Date().toISOString(),
     };
+    if (input.segment !== undefined) {
+      patch.segment = parseWabaSubscriberSegment(input.segment, { required: true });
+    }
     if (password) {
       patch.passwordHash = hashPassword(password);
     }
 
     const subscriber = this.repository.update(id, patch);
-    return {
-      id: subscriber.id,
-      email: subscriber.email,
-      fullName: subscriber.fullName,
-      whatsapp: subscriber.whatsapp,
-      phone: subscriber.phone ?? "",
-      cpfCnpj: subscriber.cpfCnpj,
-      aquecedorGranted: Boolean(subscriber.aquecedorGranted),
-      createdAt: subscriber.createdAt,
-      updatedAt: subscriber.updatedAt,
-    };
+    return this.toPublicProfile(subscriber);
   }
 
   validateCredentials(email: string, password: string): boolean {
@@ -156,17 +191,10 @@ export class WabaSubscriberService {
     return verifyPassword(String(password ?? ""), subscriber.passwordHash);
   }
 
-  getPublicProfile(email: string) {
+  getPublicProfile(email: string): PublicSubscriberProfile | null {
     const subscriber = this.repository.getByEmail(normalizeEmail(email));
     if (!subscriber) return null;
-    return {
-      id: subscriber.id,
-      email: subscriber.email,
-      fullName: subscriber.fullName,
-      whatsapp: subscriber.whatsapp,
-      phone: subscriber.phone,
-      cpfCnpj: subscriber.cpfCnpj,
-      createdAt: subscriber.createdAt,
-    };
+    const migrated = this.ensureSubscriberMigrated(subscriber);
+    return this.toPublicProfile(migrated);
   }
 }

@@ -106,6 +106,7 @@ import { registerWabaEntitlementRoutes } from "./entitlements/waba-entitlement.r
 import { WabaEntitlementService } from "./entitlements/waba-entitlement.service";
 import { registerWabaCors } from "./lib/waba-cors";
 import { registerWabaSubscriberRoutes } from "./subscribers/waba-subscriber.routes";
+import { isBetsSubscriberEmail } from "./subscribers/waba-subscriber-segment";
 import { registerWabaSupportRoutes } from "./support/waba-support.routes";
 import {
   getIntegrationProbeStatus,
@@ -3740,6 +3741,7 @@ async function resolveDispatchCreditsApiKindForOwner(
 ): Promise<WabaDispatchesApiKind> {
   const normalized = String(ownerEmail || "").trim().toLowerCase();
   if (!normalized.includes("@")) return "oficial";
+  if (isBetsSubscriberEmail(normalized)) return "oficial";
   const summary = disparosCreditsService.getCreditsSummary(normalized);
   if (summary.activeApiKind === "alternativa") return "alternativa";
   if (summary.byApi.alternativa.remainingShipments > 0) return "alternativa";
@@ -3762,6 +3764,7 @@ function debitsDisparosCreditsPerSuccessfulSend(apiKind: WabaDispatchesApiKind):
 async function shouldApplyAlternativaDispatchProfile(email: string): Promise<boolean> {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized.includes("@")) return false;
+  if (isBetsSubscriberEmail(normalized)) return false;
   if (isAlternativaNumbersPurchaseEnabled()) {
     const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
     const activated = alternativaActivationRepository.listForEmail(normalized).length;

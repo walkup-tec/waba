@@ -12,8 +12,13 @@ Como usar:
 
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
+## Regra de trabalho (2026-07-06)
+- **Desenvolvimento:** sempre no **V02 local** (`D:\Waba`, branch `v02`, http://localhost:3012/version-02/)
+- **Produção:** só quando o usuário autorizar explicitamente (merge `v02` → `master` + deploy Easypanel)
+- **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem pedido
+
 ## Última atualização
-2026-07-03
+2026-07-06
 
 **WABA — Operacional: persistência de WhatsApp + notify por WhatsApp:** `Admin · Usuários` agora persiste `whatsapp` e `segmento` do operador; campanha nova envia e-mail e também WhatsApp com fallback de instância `51981077770` -> `5197462102`. Ver `doc/LOG-2026-07-03__operacional-whatsapp-persistencia-e-notify.md`. Palavras-chave: `waba-system-user`, `operacionalNotify`, `whatsapp`, `segmento`, `final 77770`.
 
@@ -2014,7 +2019,29 @@ Palavras-chave para buscar:
 - **2026-06-25 (backdrop contratar):** luzes + véu blur + conteúdo; ver `doc/LOG-2026-06-25__creditos-contratar-backdrop-luz-blur.md`.
 - **2026-06-25 (backdrop tela inteira):** `#tab-disparos-lancamento` full bleed; PNG hexa-corrigi-2 atualizado.
 
-## 2026-07-05 — Healthcheck estável: `/live` + `/ready` antecipado
+
+## 2026-07-06 — Segmento assinante + tarifador Bet (V02)
+
+- Assinantes com `segment`: **bets** | **outros** (admin obrigatório; landing infere origem).
+- **Outros:** tarifas atuais Oficial + Alternativa.
+- **Bets:** tabela Oficial Bet; sem Alternativa (menu, checkout, campanhas).
+- Cadastro `wabadisparos` → outros; `bet.waba.info` → bets (referer/origin ou `signupOrigin`).
+- Log: `doc/LOG-2026-07-06__114500__assinante-segmento-tarifador-bet.md`.
+
+## 2026-07-06 — Operacional: segmento filtra campanhas (V02)
+
+- Operacional **Bets** atende só campanhas de assinantes **Bets** (mesmo plano API).
+- Operacional **Outros** atende só assinantes **Outros**.
+- Notificação nova campanha respeita apiKind + segmento.
+- Log: `doc/LOG-2026-07-06__120000__operacional-segmento-campanhas.md`.
+
+## 2026-07-06 — Segmento operacional: Outros (V02)
+
+- Select **Segmento** do usuário operacional: opções **Bets** e **Outros** (valor `outros`; antes `todos`).
+- Backend aceita legado `todos` e migra para `outros`.
+- Branch **v02** apenas; sem deploy produção.
+- Log: `doc/LOG-2026-07-06__113500__segmento-operacional-outros.md`.
+
 
 - **Problema:** Docker HEALTHCHECK em `/ready` atravessava body parsers, maintenance e middlewares pesados → falhas intermitentes e restarts no Easypanel (`waba_disparador`).
 - **Fix:**

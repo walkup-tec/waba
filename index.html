@@ -17851,6 +17851,13 @@
                         <label for="admin-subscriber-cpf">CPF ou CNPJ</label>
                         <input id="admin-subscriber-cpf" type="text" required placeholder="000.000.000-00 ou 00.000.000/0000-00" inputmode="numeric" autocomplete="off" />
                       </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-segment">Segmento</label>
+                        <select id="admin-subscriber-segment" required>
+                          <option value="outros" selected>Outros</option>
+                          <option value="bets">Bets</option>
+                        </select>
+                      </div>
                       <div class="admin-subscriber-options">
                         <p class="admin-subscriber-options-title">Recursos do assinante</p>
                         <label class="admin-subscriber-option-check" for="admin-subscriber-aquecedor-granted">
@@ -17976,6 +17983,7 @@
                     <thead>
                       <tr>
                         <th scope="col">Nome</th>
+                        <th scope="col">Segmento</th>
                         <th scope="col">CPF ou CNPJ</th>
                         <th scope="col">Data inscrição</th>
                         <th scope="col" class="admin-subscribers-num">Créditos</th>
@@ -17987,7 +17995,7 @@
                     </thead>
                     <tbody id="admin-subscribers-tbody">
                       <tr>
-                        <td colspan="8" class="muted">Carregando…</td>
+                        <td colspan="9" class="muted">Carregando…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -18430,8 +18438,11 @@
                       <label for="admin-user-operacional-segment">Segmento</label>
                       <select id="admin-user-operacional-segment" required>
                         <option value="bets">Bets</option>
-                        <option value="todos" selected>Todos</option>
+                        <option value="outros" selected>Outros</option>
                       </select>
+                      <p class="admin-users-menus-hint" style="margin-top: 6px">
+                        Somente campanhas de assinantes deste segmento aparecem para este operacional.
+                      </p>
                     </div>
                     <div id="admin-user-master-policy-block" class="admin-user-master-policy-block" hidden>
                       <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -19357,8 +19368,11 @@
               <label for="admin-user-edit-operacional-segment">Segmento</label>
               <select id="admin-user-edit-operacional-segment" required>
                 <option value="bets">Bets</option>
-                <option value="todos" selected>Todos</option>
+                <option value="outros" selected>Outros</option>
               </select>
+              <p class="admin-users-menus-hint" style="margin-top: 6px">
+                Somente campanhas de assinantes deste segmento aparecem para este operacional.
+              </p>
             </div>
             <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block" hidden>
               <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -20191,6 +20205,7 @@
       let wabaSessionEmail = "";
       let wabaSubscriberProfile = null;
       let wabaOperacionalDispatchesApi = "";
+      let wabaOperacionalSegment = "";
       let wabaStaffAllowedMenuIds = new Set();
       let wabaMenuRegistryCache = [];
       let adminUsersCache = [];
@@ -20464,6 +20479,9 @@
           wabaOperacionalDispatchesApi = String(
             session.operacionalDispatchesApi || session.systemUser?.operacionalDispatchesApi || ""
           ).trim();
+          wabaOperacionalSegment = String(
+            session.operacionalSegment || session.systemUser?.operacionalSegment || ""
+          ).trim();
           const allowedMenus = Array.isArray(session.allowedMenuIds) ? session.allowedMenuIds : [];
           wabaStaffAllowedMenuIds = new Set(allowedMenus.map((id) => String(id || "").trim()).filter(Boolean));
           document.body.classList.add("waba-auth-enabled");
@@ -20477,6 +20495,7 @@
           wabaSessionEmail = "";
           wabaSubscriberProfile = null;
           wabaOperacionalDispatchesApi = "";
+          wabaOperacionalSegment = "";
           wabaStaffAllowedMenuIds = new Set();
           document.body.classList.remove("waba-auth-enabled");
         }
@@ -20500,6 +20519,9 @@
         wabaStaffAllowedMenuIds = new Set(allowedMenus.map((id) => String(id || "").trim()).filter(Boolean));
         wabaOperacionalDispatchesApi = String(
           sessionLike?.operacionalDispatchesApi || sessionLike?.systemUser?.operacionalDispatchesApi || ""
+        ).trim();
+        wabaOperacionalSegment = String(
+          sessionLike?.operacionalSegment || sessionLike?.systemUser?.operacionalSegment || ""
         ).trim();
         applyMenuSectionAccess();
         syncAdminCampanhasScopeHint();
@@ -20912,6 +20934,7 @@
 
       function shouldShowDisparoEvoMenu() {
         if (!isProductionUi()) return false;
+        if (isBetsSubscriberAccount()) return false;
         if (isStaffRole(wabaAuthRole) && wabaAuthRole !== "master") {
           return hasStaffMenuAccess("disparo-evo");
         }
@@ -20988,6 +21011,8 @@
         syncCampanhasMenuHighlight();
         syncOfficialSectionLabels();
         syncSubscriberDisparosMenuLayout();
+        syncDisparoEvoMenuVisibility();
+        syncDisparosPricingBoardForSegment();
       }
 
       function getMenuSectionForTab(tabName) {
@@ -22002,6 +22027,16 @@
           { shipments: 20000, pricePerSend: 0.26, totalCents: 520000 },
           { shipments: 30000, pricePerSend: 0.25, totalCents: 750000 },
         ],
+        betsOficial: [
+          { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
+          { shipments: 1000, pricePerSend: 0.4, totalCents: 40000 },
+          { shipments: 3000, pricePerSend: 0.38, totalCents: 114000 },
+          { shipments: 5000, pricePerSend: 0.37, totalCents: 185000 },
+          { shipments: 8000, pricePerSend: 0.36, totalCents: 288000 },
+          { shipments: 10000, pricePerSend: 0.33, totalCents: 330000 },
+          { shipments: 20000, pricePerSend: 0.32, totalCents: 640000 },
+          { shipments: 30000, pricePerSend: 0.31, totalCents: 930000 },
+        ],
         alternativa: [
           { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
           { shipments: 1000, pricePerSend: 0.2, totalCents: 20000 },
@@ -22013,6 +22048,40 @@
           { shipments: 30000, pricePerSend: 0.13, totalCents: 390000 },
         ],
       };
+
+      function getSubscriberSegment() {
+        const raw = String(wabaSubscriberProfile?.segment || "outros").trim().toLowerCase();
+        return raw === "bets" ? "bets" : "outros";
+      }
+
+      function isBetsSubscriberAccount() {
+        return isSubscriberAccount() && getSubscriberSegment() === "bets";
+      }
+
+      function getDisparosPricingTiers(apiKind) {
+        if (getSubscriberSegment() === "bets") {
+          if (apiKind === "alternativa") return [];
+          return DISPAROS_PRICING_TIERS.betsOficial || [];
+        }
+        return DISPAROS_PRICING_TIERS[apiKind] || [];
+      }
+
+      function syncDisparosPricingBoardForSegment() {
+        const hideAlternativa = isBetsSubscriberAccount();
+        document.querySelectorAll('.disparos-pricing-lane[data-disparos-api="alternativa"]').forEach((lane) => {
+          lane.hidden = hideAlternativa;
+        });
+        document.body.classList.toggle("waba-subscriber-bets-segment", hideAlternativa);
+      }
+
+      function syncDisparoEvoMenuVisibility() {
+        const show = shouldShowDisparoEvoMenu();
+        document.querySelectorAll('.tab-button[data-menu-key="disparo-evo"]').forEach((btn) => {
+          btn.hidden = !show;
+          btn.setAttribute("aria-hidden", show ? "false" : "true");
+        });
+        document.body.classList.toggle("waba-disparo-evo-menu-hidden", !show);
+      }
 
       let disparosBillingConfigCache = null;
       let disparosBillingPollTimer = null;
@@ -23072,7 +23141,7 @@
       }
 
       function getDisparosPricingLastTier(apiKind) {
-        const tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
+        const tiers = getDisparosPricingTiers(apiKind);
         return tiers.reduce(
           (max, tier) => (tier.shipments > (max?.shipments ?? 0) ? tier : max),
           null
@@ -23226,6 +23295,7 @@
         const name = escapeAdminHtml(item?.fullName || "—");
         const email = subscriberEmail;
         const cpf = escapeAdminHtml(item?.cpfCnpjFormatted || item?.cpfCnpj || "—");
+        const segment = escapeAdminHtml(item?.segmentLabel || item?.segment || "Outros");
         const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
         const credits = escapeAdminHtml(item?.creditsValueLabel || formatDisparosMoneyFromCents(0));
         const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
@@ -23267,6 +23337,7 @@
                   <span class="admin-subscribers-name">${name}${newMarker}</span>
                   ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
                 </td>
+                <td>${segment}</td>
                 <td>${cpf}</td>
                 <td>${createdAt}</td>
                 <td class="admin-subscribers-num">${credits}</td>
@@ -23293,7 +23364,7 @@
 
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td colspan="8" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            '<tr><td colspan="9" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
           return;
         }
 
@@ -23492,6 +23563,13 @@
                   <input id="admin-subscriber-detail-cpf" type="text" required inputmode="numeric" autocomplete="off" value="${escapeAdminHtml(profile.cpfCnpjFormatted || profile.cpfCnpj || "")}" />
                 </div>
                 <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-segment">Segmento</label>
+                  <select id="admin-subscriber-detail-segment" required>
+                    <option value="outros" ${profile.segment === "outros" || !profile.segment ? "selected" : ""}>Outros</option>
+                    <option value="bets" ${profile.segment === "bets" ? "selected" : ""}>Bets</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
                   <label for="admin-subscriber-detail-password">Nova senha</label>
                   <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter a senha atual" />
                 </div>
@@ -23624,6 +23702,7 @@
         const aquecedorGranted = Boolean(
           document.getElementById("admin-subscriber-detail-aquecedor-granted")?.checked
         );
+        const segment = String(document.getElementById("admin-subscriber-detail-segment")?.value || "").trim();
         const saveBtn = document.getElementById("admin-subscriber-detail-save-btn");
 
         if (fullName.length < 2) {
@@ -23646,6 +23725,10 @@
           showToast("A nova senha deve ter pelo menos 6 caracteres.", "warning");
           return;
         }
+        if (segment !== "bets" && segment !== "outros") {
+          showToast("Selecione o segmento do assinante.", "warning");
+          return;
+        }
 
         if (saveBtn) {
           saveBtn.disabled = true;
@@ -23666,6 +23749,7 @@
                 phone: whatsapp,
                 cpfCnpj,
                 aquecedorGranted,
+                segment,
                 password: password || undefined,
               }),
             },
@@ -26026,14 +26110,14 @@
         if (!hasMasterAccess()) {
           if (tbody) {
             tbody.innerHTML =
-              '<tr><td colspan="8" class="muted">Área restrita ao usuário master.</td></tr>';
+              '<tr><td colspan="9" class="muted">Área restrita ao usuário master.</td></tr>';
           }
           if (summary) summary.textContent = "Acesso negado.";
           return;
         }
 
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="8" class="muted">Carregando…</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="muted">Carregando…</td></tr>';
         }
         if (summary) summary.textContent = "Carregando assinantes…";
 
@@ -26046,7 +26130,7 @@
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="8" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="9" class="muted">${escapeAdminHtml(
               resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes.")
             )}</td></tr>`;
           }
@@ -26627,6 +26711,7 @@
         const aquecedorGranted = Boolean(
           document.getElementById("admin-subscriber-aquecedor-granted")?.checked
         );
+        const segment = String(document.getElementById("admin-subscriber-segment")?.value || "").trim();
         const submitBtn = document.getElementById("admin-subscriber-create-btn");
         const errEl = document.getElementById("admin-subscriber-create-error");
         if (errEl) {
@@ -26671,6 +26756,10 @@
           );
           return;
         }
+        if (segment !== "bets" && segment !== "outros") {
+          showAdminSubscriberCreateValidation("Selecione o segmento do assinante.", "admin-subscriber-segment");
+          return;
+        }
 
         if (submitBtn) {
           submitBtn.disabled = true;
@@ -26692,6 +26781,7 @@
                 phone: whatsapp,
                 cpfCnpj,
                 aquecedorGranted,
+                segment,
               }),
             },
             12000
@@ -26711,6 +26801,8 @@
           document.getElementById("admin-subscriber-password").value = "";
           document.getElementById("admin-subscriber-whatsapp").value = "";
           document.getElementById("admin-subscriber-cpf").value = "";
+          const segmentSelect = document.getElementById("admin-subscriber-segment");
+          if (segmentSelect) segmentSelect.value = "outros";
           const aquecedorCheckbox = document.getElementById("admin-subscriber-aquecedor-granted");
           if (aquecedorCheckbox) aquecedorCheckbox.checked = false;
           resetAdminSubscriberCreateFormState();
@@ -28105,7 +28197,7 @@
           if (createSegmentBlock) createSegmentBlock.hidden = !isOperacional;
           if (createSegmentSelect) {
             createSegmentSelect.required = isOperacional;
-            if (!isOperacional) createSegmentSelect.value = "todos";
+            if (!isOperacional) createSegmentSelect.value = "outros";
           }
         }
         if (mode === "edit" || mode === "both") {
@@ -28117,7 +28209,7 @@
           if (editSegmentBlock) editSegmentBlock.hidden = !isOperacional;
           if (editSegmentSelect) {
             editSegmentSelect.required = isOperacional;
-            if (!isOperacional) editSegmentSelect.value = "todos";
+            if (!isOperacional) editSegmentSelect.value = "outros";
           }
         }
         syncAdminUserMasterPolicyField(role, options);
@@ -28176,7 +28268,7 @@
       function readAdminUserOperacionalSegmentValue(mode = "create") {
         const id =
           mode === "edit" ? "admin-user-edit-operacional-segment" : "admin-user-operacional-segment";
-        return String(document.getElementById(id)?.value || "todos").trim() || "todos";
+        return String(document.getElementById(id)?.value || "outros").trim() || "outros";
       }
 
       function syncAdminCampanhasScopeHint() {
@@ -28198,9 +28290,12 @@
           return;
         }
         if (wabaAuthRole === "operacional") {
+          const segmentLabel = wabaOperacionalSegment === "bets" ? "Bets" : "Outros";
           if (wabaOperacionalDispatchesApi === "oficial") {
             hint.innerHTML = [
-              "Campanhas contratadas na ",
+              "Campanhas de assinantes ",
+              `<strong>${segmentLabel}</strong>`,
+              " contratadas na ",
               renderWabaApiKindLabelHtml("oficial", { inline: true }),
               " — em aberto para operação ou finalizadas para consulta.",
             ].join("");
@@ -28208,7 +28303,9 @@
           }
           if (wabaOperacionalDispatchesApi === "alternativa") {
             hint.innerHTML = [
-              "Campanhas contratadas na ",
+              "Campanhas de assinantes ",
+              `<strong>${segmentLabel}</strong>`,
+              " contratadas na ",
               renderWabaApiKindLabelHtml("alternativa", { inline: true }),
               " — em aberto para operação ou finalizadas para consulta.",
             ].join("");
@@ -28370,7 +28467,8 @@
         }
         const operacionalSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
         if (operacionalSegmentSelect) {
-          operacionalSegmentSelect.value = String(user.operacionalSegment || user.segment || "todos");
+          operacionalSegmentSelect.value = String(user.operacionalSegment || user.segment || "outros");
+          if (operacionalSegmentSelect.value === "todos") operacionalSegmentSelect.value = "outros";
         }
         if (menusBlock) {
           menusBlock.hidden = user.role === "master";
@@ -28636,7 +28734,7 @@
           const operacionalApiSelect = document.getElementById("admin-user-operacional-api");
           if (operacionalApiSelect) operacionalApiSelect.value = "";
           const operacionalSegmentSelect = document.getElementById("admin-user-operacional-segment");
-          if (operacionalSegmentSelect) operacionalSegmentSelect.value = "todos";
+          if (operacionalSegmentSelect) operacionalSegmentSelect.value = "outros";
           syncAdminUserCreateMenuChecklist();
           await loadAdminUsers();
         } catch (error) {
@@ -33050,7 +33148,7 @@
       function renderDisparosPricingTable(apiKind) {
         const tbody = document.getElementById("disparos-pricing-tbody");
         if (!tbody) return;
-        const tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
+        const tiers = getDisparosPricingTiers(apiKind);
         tbody.innerHTML = "";
         disparosSelectedPackage = null;
         resetDisparosPricingCustomUi();
@@ -33125,6 +33223,10 @@
       }
 
       function openDisparosPricingModal(apiKind) {
+        if (isBetsSubscriberAccount() && apiKind === "alternativa") {
+          showToast("Assinantes do segmento Bets contratam créditos apenas na API Oficial.", "warning", 5200);
+          apiKind = "oficial";
+        }
         disparosBillingSelectedKind = apiKind;
         disparosSelectedPackage = null;
         const title = document.getElementById("disparos-pricing-title");

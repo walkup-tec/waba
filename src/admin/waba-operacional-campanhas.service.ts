@@ -13,6 +13,7 @@ import {
 } from "../disparos/waba-campaign-spreadsheet.util";
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
+import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import {
   WabaCampaignIntakeRepository,
   type WabaCampaignIntake,
@@ -25,6 +26,7 @@ import {
   toCampaignIntakeDisplayStatus,
 } from "../disparos/waba-campaign-intake-status";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
+import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { notifyCampaignCompletedEmail, notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
 import {
@@ -207,6 +209,22 @@ export class WabaOperacionalCampanhasService {
     return apiKind ?? "unassigned";
   }
 
+  private resolveStaffSegmentFilter(
+    staff: OperacionalCampanhasStaffContext,
+  ): WabaSubscriberSegment | null | "unassigned" {
+    if (staff.role === "master" || isWabaMasterEmail(staff.email)) return null;
+    if (staff.role === "suporte") return null;
+    if (staff.role !== "operacional") return null;
+    const segment = this.systemUserService.getOperacionalSegmentForEmail(staff.email);
+    return segment ?? "unassigned";
+  }
+
+  private resolveSubscriberSegmentForIntake(intake: WabaCampaignIntake): WabaSubscriberSegment {
+    const email = normalizeEmail(intake.ownerEmail);
+    const subscriber = this.subscriberRepository.getByEmail(email);
+    return subscriber?.segment ?? "outros";
+  }
+
   private matchesStaffApiFilter(
     intake: WabaCampaignIntake,
     staff: OperacionalCampanhasStaffContext,
@@ -217,13 +235,32 @@ export class WabaOperacionalCampanhasService {
     return resolveIntakeApiKind(intake, this.orderRepository) === filter;
   }
 
+  private matchesStaffSegmentFilter(
+    intake: WabaCampaignIntake,
+    staff: OperacionalCampanhasStaffContext,
+  ): boolean {
+    const filter = this.resolveStaffSegmentFilter(staff);
+    if (filter === null) return true;
+    if (filter === "unassigned") return false;
+    return this.resolveSubscriberSegmentForIntake(intake) === filter;
+  }
+
+  private matchesStaffCampaignFilter(
+    intake: WabaCampaignIntake,
+    staff: OperacionalCampanhasStaffContext,
+  ): boolean {
+    return (
+      this.matchesStaffApiFilter(intake, staff) && this.matchesStaffSegmentFilter(intake, staff)
+    );
+  }
+
   private getIntakeForStaffOrThrow(
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
   ): WabaCampaignIntake {
     const intake = this.intakeRepository.getById(campaignId);
     if (!intake) throw new Error("Campanha não encontrada.");
-    if (!this.matchesStaffApiFilter(intake, staff)) {
+    if (!this.matchesStaffCampaignFilter(intake, staff)) {
       throw new Error("Campanha não disponível para o seu tipo de operação.");
     }
     return intake;
@@ -263,7 +300,7 @@ export class WabaOperacionalCampanhasService {
   listCampaigns(staff: OperacionalCampanhasStaffContext): OperacionalCampaignListItem[] {
     return this.intakeRepository
       .listAll()
-      .filter((intake) => this.matchesStaffApiFilter(intake, staff))
+      .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
       .map((intake) => this.toListItem(intake))
       .sort((a, b) => {
         if (a.needsConfiguration !== b.needsConfiguration) {
@@ -278,7 +315,7 @@ export class WabaOperacionalCampanhasService {
     staff: OperacionalCampanhasStaffContext,
   ): OperacionalCampaignDetail | null {
     const intake = this.intakeRepository.getById(campaignId);
-    if (!intake || !this.matchesStaffApiFilter(intake, staff)) return null;
+    if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
 
     const base = this.toListItem(intake);
     const plannedSendCount = base.plannedSendCount;
@@ -481,7 +518,7 @@ export class WabaOperacionalCampanhasService {
     staff: OperacionalCampanhasStaffContext,
   ): { filePath: string; fileName: string } | null {
     const intake = this.intakeRepository.getById(intakeId);
-    if (!intake || !this.matchesStaffApiFilter(intake, staff)) return null;
+    if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
     if (!intake.imageStoredPath || !existsSync(intake.imageStoredPath)) {
       return null;
     }
@@ -496,7 +533,7 @@ export class WabaOperacionalCampanhasService {
     staff: OperacionalCampanhasStaffContext,
   ): { buffer: Buffer; fileName: string } | null {
     const intake = this.intakeRepository.getById(intakeId);
-    if (!intake || !this.matchesStaffApiFilter(intake, staff)) return null;
+    if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
 
     const plannedSendCount = resolvePlannedSendCount(intake);
     const trimmedFileName =
