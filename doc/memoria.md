@@ -15,7 +15,7 @@ Como usar:
 ## Última atualização
 2026-07-07
 
-**WABA — OG wabadisparos OGwaba (produção):** origem `D:\Waba\media\OGwaba.png` (1556×1011, 1.5 MB) → `media/OGwaba.jpg` + `dist/media/OGwaba.jpg` (JPEG q82, ~207 KB). Link público DRAX `https://waba.draxsistemas.com.br/media/OGwaba.jpg` (servido por `express.static(dist)` no `waba_disparador`). Publish imediato: `scripts/publish-wabadisparos-og-image-drax-vps.sh` (auto-baixa raw GitHub → container). Patch SSR wabadisparos: `scripts/deploy-paginadevendas-og-vps.sh`. Ver `doc/LOG-2026-07-07__004200__og-wabadisparos-imagem-face2.md`.
+**WABA — OG SÓ na wabadisparos (produção):** config OG (título "DRAX WABA - Plataforma Oficial...", descrição API Oficial/Alternativa, imagem `https://waba.draxsistemas.com.br/media/OGwaba.jpg`, 1200×630) aplicada APENAS na landing wabadisparos.com.br via patch SSR `scripts/patch-paginadevendas-router-og.cjs` + `scripts/deploy-paginadevendas-og-vps.sh`. `index.html`/`dist/index.html` do app waba.draxsistemas REVERTIDOS ao original (compBoasvindasV3). Imagem: `media/OGwaba.jpg` (~207 KB, servida pelo waba_disparador). Recovery 502: `scripts/recover-wabadisparos-502-vps.sh`. Ver `doc/LOG-2026-07-07__102500__og-somente-wabadisparos-index-revertido.md`.
 
 **WABA — paginadevendas verde Easypanel (script v3):** `scripts/fix-paginadevendas-green-vps.sh` v2 (`60fb7d7`) — `docker service scale -d` (detach) para não travar terminal; pula scale se container já HTTP 200 + Health healthy. Commit anterior `4631b91` travava em scale bloqueante com Swarm 0/1. Ver `doc/LOG-2026-07-07__003500__fix-paginadevendas-green-scale-detach-v2.md`. Palavras-chave: `waba_paginadevendas`, Easypanel amarelo, scale detach.
 

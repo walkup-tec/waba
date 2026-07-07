@@ -19,6 +19,6 @@ curl -fsSL "${MASTER}/scripts/deploy-paginadevendas-og-vps.sh" -o /tmp/deploy-pv
 sed -i 's/\r$//' /tmp/deploy-pv-og.sh && chmod +x /tmp/deploy-pv-og.sh
 OG_IMAGE="https://waba.draxsistemas.com.br/media/OGwaba.jpg" \
 OG_TYPE="image/jpeg" \
-OG_WIDTH="1556" \
-OG_HEIGHT="1011" \
+OG_WIDTH="1200" \
+OG_HEIGHT="630" \
 /tmp/deploy-pv-og.sh

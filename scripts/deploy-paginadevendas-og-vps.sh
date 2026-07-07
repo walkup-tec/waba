@@ -14,8 +14,11 @@ set +H
 
 OG_IMAGE="${OG_IMAGE:-https://waba.draxsistemas.com.br/media/OGwaba.jpg}"
 OG_TYPE="${OG_TYPE:-image/jpeg}"
-OG_WIDTH="${OG_WIDTH:-1556}"
-OG_HEIGHT="${OG_HEIGHT:-1011}"
+OG_WIDTH="${OG_WIDTH:-1200}"
+OG_HEIGHT="${OG_HEIGHT:-630}"
+OG_TITLE="${OG_TITLE:-DRAX WABA - Plataforma Oficial de Disparos WhatsApp}"
+OG_DESCRIPTION="${OG_DESCRIPTION:-Envie mensagens em massa pelo WhatsApp utilizando API Oficial e API Alternativa. Plataforma completa para automação, aquecimento de números e gestão de campanhas.}"
+TW_DESCRIPTION="${TW_DESCRIPTION:-Envie mensagens em massa pelo WhatsApp utilizando API Oficial e API Alternativa.}"
 ROUTER="/app/.output/server/_ssr/router-aV5ItMUH.mjs"
 PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/patch-paginadevendas-router-og.cjs}"
 SITE="https://wabadisparos.com.br"
@@ -36,6 +39,7 @@ docker cp "$TMP" "${CID}:/tmp/patch-paginadevendas-router-og.cjs"
 rm -f "$TMP"
 
 docker exec -e OG_IMAGE="$OG_IMAGE" -e OG_TYPE="$OG_TYPE" -e OG_WIDTH="$OG_WIDTH" -e OG_HEIGHT="$OG_HEIGHT" \
+  -e OG_TITLE="$OG_TITLE" -e OG_DESCRIPTION="$OG_DESCRIPTION" -e TW_DESCRIPTION="$TW_DESCRIPTION" \
   "$CID" node /tmp/patch-paginadevendas-router-og.cjs
 
 echo "Reiniciando container (sem force update do serviço)..."

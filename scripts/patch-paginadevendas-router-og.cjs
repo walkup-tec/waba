@@ -3,16 +3,22 @@
  * Patch Open Graph no bundle SSR da landing wabadisparos.com.br.
  * Arquivo alvo: /app/.output/server/_ssr/router-aV5ItMUH.mjs
  *
- * Variáveis de ambiente (opcionais — defaults em wabadisparos-og.config.mjs):
- *   OG_IMAGE  OG_TYPE  OG_WIDTH  OG_HEIGHT  ROUTER
+ * Aplica APENAS na landing wabadisparos (não toca no app waba.draxsistemas).
+ * Variáveis de ambiente (opcionais — defaults abaixo):
+ *   OG_IMAGE OG_TYPE OG_WIDTH OG_HEIGHT OG_TITLE OG_DESCRIPTION TW_DESCRIPTION ROUTER
  */
 const fs = require("fs");
 
 const DEFAULT_OG = {
   image: "https://waba.draxsistemas.com.br/media/OGwaba.jpg",
   type: "image/jpeg",
-  width: "1556",
-  height: "1011",
+  width: "1200",
+  height: "630",
+  title: "DRAX WABA - Plataforma Oficial de Disparos WhatsApp",
+  description:
+    "Envie mensagens em massa pelo WhatsApp utilizando API Oficial e API Alternativa. Plataforma completa para automação, aquecimento de números e gestão de campanhas.",
+  twitterDescription:
+    "Envie mensagens em massa pelo WhatsApp utilizando API Oficial e API Alternativa.",
 };
 
 const LEGACY_OG_URLS = [
@@ -28,6 +34,9 @@ const ogImage = process.env.OG_IMAGE || DEFAULT_OG.image;
 const ogImageType = process.env.OG_TYPE || DEFAULT_OG.type;
 const ogWidth = process.env.OG_WIDTH || DEFAULT_OG.width;
 const ogHeight = process.env.OG_HEIGHT || DEFAULT_OG.height;
+const ogTitle = process.env.OG_TITLE || DEFAULT_OG.title;
+const ogDescription = process.env.OG_DESCRIPTION || DEFAULT_OG.description;
+const twDescription = process.env.TW_DESCRIPTION || DEFAULT_OG.twitterDescription;
 
 if (!fs.existsSync(routerPath)) {
   console.error("ERRO: router não encontrado:", routerPath);
@@ -63,6 +72,23 @@ function stripOgImageMeta(text) {
     .replace(/\n\s*\{ property: "og:image:height", content: "[^"]*" \},/g, "");
 }
 
+function esc(value) {
+  return value.replace(/"/g, '\\"');
+}
+
+/** Atualiza content de uma meta { property|name: "<key>", content: "..." } se existir. */
+function updateMetaContent(text, keyKind, key, value) {
+  const re = new RegExp(
+    `(\\{ ${keyKind}: "${key}", content: ")(?:[^"\\\\]|\\\\.)*(" \\})`,
+  );
+  if (re.test(text)) {
+    console.log(`Atualizado ${key}`);
+    return text.replace(re, `$1${esc(value)}$2`);
+  }
+  return text;
+}
+
+// og:image (insere/atualiza bloco)
 if (source.includes(marker)) {
   source = stripOgImageMeta(source);
   if (!source.includes(anchor)) {
@@ -71,17 +97,20 @@ if (source.includes(marker)) {
   }
   fs.copyFileSync(routerPath, `${routerPath}.bak-og`);
   source = source.replace(anchor, ogBlock);
-  fs.writeFileSync(routerPath, source, "utf8");
-  console.log("OK: og:image atualizado →", ogImage);
-  process.exit(0);
+} else {
+  if (!source.includes(anchor)) {
+    console.error("ERRO: âncora não encontrada no router");
+    process.exit(1);
+  }
+  fs.copyFileSync(routerPath, `${routerPath}.bak-og`);
+  source = source.replace(anchor, ogBlock);
 }
 
-if (!source.includes(anchor)) {
-  console.error("ERRO: âncora não encontrada no router");
-  process.exit(1);
-}
+// título / descrição (só se as chaves já existirem — não quebra estrutura)
+source = updateMetaContent(source, "property", "og:title", ogTitle);
+source = updateMetaContent(source, "property", "og:description", ogDescription);
+source = updateMetaContent(source, "name", "twitter:title", ogTitle);
+source = updateMetaContent(source, "name", "twitter:description", twDescription);
 
-fs.copyFileSync(routerPath, `${routerPath}.bak-og`);
-source = source.replace(anchor, ogBlock);
 fs.writeFileSync(routerPath, source, "utf8");
-console.log("OK: og:image inserido →", ogImage);
+console.log("OK: OG wabadisparos aplicado →", ogImage);
