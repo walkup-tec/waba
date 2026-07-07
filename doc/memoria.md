@@ -12,10 +12,11 @@ Como usar:
 
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
-## Regra de trabalho (2026-07-06)
-- **Desenvolvimento:** sempre no **V02 local** (`D:\Waba`, branch `v02`, http://localhost:3012/version-02/)
-- **Produção:** só quando o usuário autorizar explicitamente (merge `v02` → `master` + deploy Easypanel)
-- **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem pedido
+## Regra de trabalho (2026-07-06, reafirmada 2026-07-07)
+- **Desenvolvimento:** sempre no **V02 local** (`D:\Waba`/`E:\Waba`, branch `v02`, http://localhost:3012/version-02/)
+- **Testes:** o **usuário faz os testes** localmente no V02; não iniciar servidor/testes sem pedido.
+- **Produção:** só quando o usuário **avisar explicitamente** (merge `v02` → `master` + build `dist/` + deploy Easypanel)
+- **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
 2026-07-06
@@ -2053,3 +2054,4 @@ Palavras-chave para buscar:
 - **Validação local 2026-07-05:** `npm install` + `npm run build` OK; `GET /live` → 200 `ok`; marker `DEPLOY-2026-07-05-healthcheck-live-waba-disparador` em `/health`.
 - **Produção deploy healthcheck (2026-07-05):** marker `DEPLOY-2026-07-05-healthcheck-live-waba-disparador`; serviço verde estável.
 - **Fix overlay falso positivo (2026-07-05):** modal «Atualizando» disparava a cada restart do container porque `watchDeployInBackground` tratava mudança de `serverBootId` como deploy (poll 8s). Fix: gatilho por drift só via `deployMarker`; `serverBootId` só após `shuttingDown` real. Marker `DEPLOY-2026-07-05-deploy-overlay-bootid-false-alarm-fix`. Log `doc/LOG-2026-07-05__deploy-overlay-bootid-false-alarm-fix.md`.
+- **404/flapping bet.waba.info + wabadisparos.com.br (2026-07-07):** domínios custom com router Traefik intermitente (ora 200 landing Drax, ora 404 padrão Easypanel, ora timeout). Causa: router do host custom some no redeploy Easypanel; scripts self-healing `traefik-permanent-paginadevendas-vps.sh` e `traefik-permanent-bets-pv-vps.sh` (em `origin/master`) ainda **não instalados no VPS**. Fix: rodar `install` de ambos no VPS root (timer 20s + watch). `waba_bets_pv` easypanel host = 404 → confirmar publicação/up. Log `doc/LOG-2026-07-07__144500__fix-404-bet-waba-info-wabadisparos-traefik.md`. Palavras-chave: traefik permanent, paginadevendas, bets_pv, 404 flapping, easypanel router.
