@@ -17,10 +17,14 @@
 #   sed -i 's/\r$//' /tmp/fix-paginadevendas-green.sh && chmod +x /tmp/fix-paginadevendas-green.sh
 #   /tmp/fix-paginadevendas-green.sh
 #
-# Versão: paginadevendas-green-2026-07-07-v2
+# Versão: paginadevendas-green-2026-07-07-v3
+# Modos:
+#   (padrão)     — diagnóstico + mantém site no ar (pode ficar amarelo se Swarm 0/1)
+#   --reconcile-swarm — remove órfão + scale -d para Swarm 1/1 (~30–60s possível blip)
+#   --diagnose   — só imprime estado (Swarm, task, health, labels)
 set -euo pipefail
 
-VERSION="paginadevendas-green-2026-07-07-v2"
+VERSION="paginadevendas-green-2026-07-07-v3"
 SERVICE="${WABA_SWARM_SERVICE:-waba_paginadevendas}"
 FILTER="${WABA_CONTAINER_FILTER:-waba_paginadevendas}"
 PORT="${WABA_PORT:-3000}"
@@ -28,6 +32,39 @@ ROUTER="/app/.output/server/_ssr/router-aV5ItMUH.mjs"
 LOG="/var/log/fix-paginadevendas-green.log"
 
 log() { echo "[$(date -Is)] $*" | tee -a "$LOG"; }
+
+get_replicas() {
+  docker service ls --filter "name=${SERVICE}" --format '{{.Replicas}}' 2>/dev/null | head -1 || echo "?"
+}
+
+is_swarm_task() {
+  local cid="$1" task_id
+  task_id=$(docker inspect "$cid" --format '{{index .Config.Labels "com.docker.swarm.task.id"}}' 2>/dev/null || true)
+  [[ -n "$task_id" && "$task_id" != "<no value>" ]]
+}
+
+print_diagnose() {
+  local cid replicas task_id h code_root code_health
+  replicas=$(get_replicas)
+  cid=$(pick_primary_cid || true)
+  log "=== DIAGNÓSTICO ${VERSION} ==="
+  log "Swarm replicas: ${replicas}"
+  docker service ps "$SERVICE" --no-trunc 2>/dev/null | head -6 | while read -r line; do log "  ps: ${line}"; done
+  if [[ -n "$cid" ]]; then
+    task_id=$(docker inspect "$cid" --format '{{index .Config.Labels "com.docker.swarm.task.id"}}' 2>/dev/null || echo "")
+    h=$(docker_health "$cid")
+    code_root=$(http_code_in_container "$cid" "/" || echo "000")
+    code_health=$(http_code_in_container "$cid" "/health" || echo "000")
+    log "Container: ${cid} task_id=${task_id:-ORFAO} health=${h} GET/=${code_root} GET/health=${code_health}"
+    docker service inspect "$SERVICE" --format 'Healthcheck={{json .Spec.TaskTemplate.ContainerSpec.Healthcheck}}' 2>/dev/null | while read -r line; do log "  ${line}"; done
+  else
+    log "Container: nenhum running"
+  fi
+  if [[ "$replicas" != "1/1" ]]; then
+    log "Easypanel AMARELO: Swarm não está 1/1 (painel ignora container órfão healthy)"
+    log "Site pode estar OK via órfão; para VERDE: $0 --reconcile-swarm"
+  fi
+}
 
 http_code_in_container() {
   local cid="$1" path="$2"
@@ -113,14 +150,19 @@ scale_service_detach() {
 
 reconcile_swarm_replicas() {
   local cid="${1:-}" replicas code h
-  replicas=$(docker service ls --filter "name=${SERVICE}" --format '{{.Replicas}}' 2>/dev/null | head -1 || echo "?")
+  replicas=$(get_replicas)
   log "Swarm replicas antes: ${replicas}"
 
   if [[ -n "$cid" ]]; then
     code=$(http_code_in_container "$cid" "/" || echo "000")
     h=$(docker_health "$cid")
-    if [[ "$code" == "200" && "$h" == "healthy" ]]; then
-      log "Container já OK (HTTP 200, Health=healthy) — pulando scale (Swarm ${replicas} pode lagar)"
+    if [[ "$code" == "200" && "$h" == "healthy" && "$(get_replicas)" == "1/1" && is_swarm_task "$cid" ]]; then
+      log "Swarm 1/1 + task ativa + HTTP 200 — nada a fazer"
+      return 0
+    fi
+    if [[ "$code" == "200" && "$h" == "healthy" && ! is_swarm_task "$cid" ]]; then
+      log "Container healthy mas ÓRFÃO (fora do Swarm) — Easypanel fica amarelo com ${replicas}"
+      log "Use: $0 --reconcile-swarm  (blip ~30–60s)"
       return 0
     fi
   fi
@@ -128,11 +170,62 @@ reconcile_swarm_replicas() {
   if [[ "$replicas" == "0/1" || "$replicas" == "0/0" ]]; then
     scale_service_detach
   fi
-  replicas=$(docker service ls --filter "name=${SERVICE}" --format '{{.Replicas}}' 2>/dev/null | head -1 || echo "?")
+  replicas=$(get_replicas)
   log "Swarm replicas depois: ${replicas}"
 }
 
+reconcile_swarm_strict() {
+  local i cid replicas h code
+  log "=== RECONCILE SWARM (sem --force) ==="
+  log "Remove órfãos e recria task Swarm para Easypanel 1/1 — possível blip 30–60s"
+
+  while read -r cid; do
+    [[ -z "$cid" ]] && continue
+    log "Parando container: ${cid} ($(docker inspect --format '{{.Name}}' "$cid" 2>/dev/null | sed 's|^/||'))"
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+  done < <(docker ps -q -f "name=${FILTER}")
+
+  scale_service_detach
+
+  for i in $(seq 1 36); do
+    replicas=$(get_replicas)
+    cid=$(swarm_task_cid || true)
+    if [[ -n "$cid" ]]; then
+      h=$(docker_health "$cid")
+      code=$(http_code_in_container "$cid" "/" || echo "000")
+      log "Aguardando (${i}/36) replicas=${replicas} cid=${cid} health=${h} GET/=${code}"
+      if [[ "$replicas" == "1/1" && "$h" == "healthy" && "$code" == "200" ]]; then
+        log "Swarm 1/1 + healthy — Easypanel deve ficar VERDE em ~1 min"
+        return 0
+      fi
+    else
+      log "Aguardando task (${i}/36) replicas=${replicas}"
+    fi
+    sleep 5
+  done
+
+  log "ERRO: reconcile não atingiu 1/1. Saída:"
+  docker service ps "$SERVICE" --no-trunc 2>/dev/null | head -8 | while read -r line; do log "  ${line}"; done
+  return 1
+}
+
 main() {
+  local mode="${1:-}"
+  case "$mode" in
+    --diagnose) print_diagnose; exit 0 ;;
+    --reconcile-swarm)
+      log "=== ${VERSION} reconcile-swarm ==="
+      reconcile_swarm_strict
+      exit $?
+      ;;
+    --help|-h)
+      echo "Uso: $0 [--diagnose | --reconcile-swarm]"
+      exit 0
+      ;;
+    "") ;;
+    *) log "Opção desconhecida: $mode (use --help)"; exit 2 ;;
+  esac
+
   log "=== ${VERSION} início ==="
 
   if ! docker service ls --format '{{.Name}}' 2>/dev/null | grep -qx "$SERVICE"; then
@@ -172,7 +265,7 @@ main() {
   code_root=$(http_code_in_container "$cid" "/" || echo "000")
   code_health=$(http_code_in_container "$cid" "/health" || echo "000")
   h=$(docker_health "$cid")
-  replicas=$(docker service ls --filter "name=${SERVICE}" --format '{{.Replicas}}' 2>/dev/null | head -1)
+  replicas=$(get_replicas)
 
   log "=== RESULTADO ==="
   log "  Swarm:     ${replicas}"
@@ -184,8 +277,11 @@ main() {
     log "OK — app saudável (HTTP 200, Health=healthy)"
     if [[ "$replicas" == "1/1" ]]; then
       log "Swarm 1/1 — Easypanel deve ficar VERDE em ~1 min"
+    elif [[ -n "$cid" ]] && ! is_swarm_task "$cid"; then
+      log "Swarm=${replicas} + container ÓRFÃO — Easypanel AMARELO (site OK)"
+      log "Para verde: $0 --reconcile-swarm  (~30–60s blip possível)"
     else
-      log "Swarm=${replicas} (desync) — Easypanel pode usar Health Docker; confira painel"
+      log "Swarm=${replicas} — confira: $0 --diagnose"
     fi
     exit 0
   fi

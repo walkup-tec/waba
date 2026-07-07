@@ -13,7 +13,9 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-07-06
+2026-07-07
+
+**WABA — paginadevendas verde Easypanel (script v2):** `scripts/fix-paginadevendas-green-vps.sh` v2 (`60fb7d7`) — `docker service scale -d` (detach) para não travar terminal; pula scale se container já HTTP 200 + Health healthy. Commit anterior `4631b91` travava em scale bloqueante com Swarm 0/1. Ver `doc/LOG-2026-07-07__003500__fix-paginadevendas-green-scale-detach-v2.md`. Palavras-chave: `waba_paginadevendas`, Easypanel amarelo, scale detach.
 
 **WABA — OG wabadisparos.com.br (produção):** imagem `wabadisparos-og.jpg` (1200×630, ~127 KB) + script `deploy-wabadisparos-og-vps.sh` para publicar no container `waba_paginadevendas`. URL OG: `https://wabadisparos.com.br/wabadisparos-og.jpg`. Ver `doc/LOG-2026-07-06__193000__og-wabadisparos-share-image-producao.md`. Palavras-chave: `wabadisparos`, `og:image`, `paginadevendas`.
 
