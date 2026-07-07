@@ -13,15 +13,10 @@
 const fs = require("fs");
 
 const routerPath = process.env.ROUTER || "/app/.output/server/_ssr/router-aV5ItMUH.mjs";
-const ogImage = process.env.OG_IMAGE || "";
-const ogImageType = process.env.OG_TYPE || "image/jpg";
-const ogWidth = process.env.OG_WIDTH || "800";
-const ogHeight = process.env.OG_HEIGHT || "600";
-
-if (!ogImage) {
-  console.error("ERRO: defina OG_IMAGE");
-  process.exit(1);
-}
+const ogImage = process.env.OG_IMAGE || "https://waba.draxsistemas.com.br/media/OGwaba.jpg";
+const ogImageType = process.env.OG_TYPE || "image/jpeg";
+const ogWidth = process.env.OG_WIDTH || "1556";
+const ogHeight = process.env.OG_HEIGHT || "1011";
 
 if (!fs.existsSync(routerPath)) {
   console.error("ERRO: router não encontrado:", routerPath);

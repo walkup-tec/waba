@@ -12,10 +12,10 @@
 set -euo pipefail
 set +H
 
-OG_IMAGE="${OG_IMAGE:-https://waba.draxsistemas.com.br/media/imagem-face2.jpg}"
+OG_IMAGE="${OG_IMAGE:-https://waba.draxsistemas.com.br/media/OGwaba.jpg}"
 OG_TYPE="${OG_TYPE:-image/jpeg}"
-OG_WIDTH="${OG_WIDTH:-800}"
-OG_HEIGHT="${OG_HEIGHT:-600}"
+OG_WIDTH="${OG_WIDTH:-1556}"
+OG_HEIGHT="${OG_HEIGHT:-1011}"
 ROUTER="/app/.output/server/_ssr/router-aV5ItMUH.mjs"
 PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/patch-paginadevendas-router-og.cjs}"
 SITE="https://wabadisparos.com.br"

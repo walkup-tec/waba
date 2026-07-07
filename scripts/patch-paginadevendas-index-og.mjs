@@ -8,10 +8,10 @@ import path from "path";
 
 const indexPath = process.argv[2] || path.join(process.cwd(), "paginadevendas-index-live.html");
 const siteUrl = "https://wabadisparos.com.br";
-const ogImage = process.env.OG_IMAGE || "https://waba.draxsistemas.com.br/media/imagem-face2.jpg";
+const ogImage = process.env.OG_IMAGE || "https://waba.draxsistemas.com.br/media/OGwaba.jpg";
 const ogImageType = process.env.OG_TYPE || "image/jpeg";
-const ogWidth = process.env.OG_WIDTH || "800";
-const ogHeight = process.env.OG_HEIGHT || "600";
+const ogWidth = process.env.OG_WIDTH || "1556";
+const ogHeight = process.env.OG_HEIGHT || "1011";
 
 const ogBlock = [
   `<meta property="og:image" content="${ogImage}"/>`,

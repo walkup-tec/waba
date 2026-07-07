@@ -2,23 +2,22 @@
 # Publica imagem OG da wabadisparos.com.br em waba.draxsistemas.com.br/media/
 #
 # Link público gerado:
-#   https://waba.draxsistemas.com.br/media/imagem-face2.jpg
+#   https://waba.draxsistemas.com.br/media/OGwaba.jpg
 #
-# Uso no VPS (root):
-#   # 1) Coloque o arquivo em /tmp/imagem-face2.jpg (800x600 JPG)
+# Uso no VPS (root) — baixa a imagem do GitHub automaticamente:
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/publish-wabadisparos-og-image-drax-vps.sh" -o /tmp/publish-og-drax.sh
 #   sed -i 's/\r$//' /tmp/publish-og-drax.sh && chmod +x /tmp/publish-og-drax.sh
 #   /tmp/publish-og-drax.sh
 #
 # Variáveis:
-#   IMAGE_FILE  — caminho local do JPG (default: /tmp/imagem-face2.jpg)
-#   IMAGE_SRC   — URL para baixar se IMAGE_FILE não existir (opcional)
+#   IMAGE_FILE  — caminho local do JPG (default: /tmp/OGwaba.jpg)
+#   IMAGE_SRC   — URL para baixar se IMAGE_FILE não existir (default: raw GitHub)
 set -euo pipefail
 
-IMAGE_FILE="${IMAGE_FILE:-/tmp/imagem-face2.jpg}"
-IMAGE_SRC="${IMAGE_SRC:-}"
-PUBLIC_URL="https://waba.draxsistemas.com.br/media/imagem-face2.jpg"
-MEDIA_NAME="imagem-face2.jpg"
+IMAGE_FILE="${IMAGE_FILE:-/tmp/OGwaba.jpg}"
+IMAGE_SRC="${IMAGE_SRC:-https://raw.githubusercontent.com/walkup-tec/waba/master/media/OGwaba.jpg}"
+PUBLIC_URL="https://waba.draxsistemas.com.br/media/OGwaba.jpg"
+MEDIA_NAME="OGwaba.jpg"
 FILTER="${WABA_CONTAINER_FILTER:-waba_disparador}"
 
 echo "=== publish-wabadisparos-og-image-drax $(date -Is) ==="
