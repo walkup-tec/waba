@@ -5,13 +5,14 @@
  */
 import fs from "fs";
 import path from "path";
+import { WABADISPAROS_OG, WABADISPAROS_OG_LEGACY_URLS } from "./wabadisparos-og.config.mjs";
 
 const indexPath = process.argv[2] || path.join(process.cwd(), "paginadevendas-index-live.html");
 const siteUrl = "https://wabadisparos.com.br";
-const ogImage = process.env.OG_IMAGE || "https://waba.draxsistemas.com.br/media/OGwaba.jpg";
-const ogImageType = process.env.OG_TYPE || "image/jpeg";
-const ogWidth = process.env.OG_WIDTH || "1556";
-const ogHeight = process.env.OG_HEIGHT || "1011";
+const ogImage = process.env.OG_IMAGE || WABADISPAROS_OG.image;
+const ogImageType = process.env.OG_TYPE || WABADISPAROS_OG.type;
+const ogWidth = process.env.OG_WIDTH || WABADISPAROS_OG.width;
+const ogHeight = process.env.OG_HEIGHT || WABADISPAROS_OG.height;
 
 const ogBlock = [
   `<meta property="og:image" content="${ogImage}"/>`,
@@ -22,6 +23,11 @@ const ogBlock = [
 ].join("");
 
 let html = fs.readFileSync(indexPath, "utf8");
+
+for (const legacyUrl of WABADISPAROS_OG_LEGACY_URLS) {
+  html = html.split(legacyUrl).join(ogImage);
+}
+
 if (html.includes("og:image")) {
   html = html.replace(/<meta property="og:image"[^>]*\/?>/g, "");
   html = html.replace(/<meta property="og:image:[^"]+"[^>]*\/?>/g, "");
@@ -42,4 +48,4 @@ if (!html.includes("og:image")) {
 }
 
 fs.writeFileSync(indexPath, html, "utf8");
-console.log(`OK: OG injetado em ${indexPath}`);
+console.log(`OK: OG injetado em ${indexPath} → ${ogImage}`);

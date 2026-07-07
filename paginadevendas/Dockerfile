@@ -1,8 +1,7 @@
 # Landing wabadisparos.com.br — serviço Easypanel waba_paginadevendas
-# Imagem OG estática + patch do index (React/Vite) no build ou via deploy-wabadisparos-og-vps.sh
+# OG share: https://waba.draxsistemas.com.br/media/OGwaba.jpg (media/OGwaba.jpg no waba_disparador)
+# Patch SSR: scripts/deploy-paginadevendas-og-vps.sh
 FROM nginx:alpine
 
-COPY paginadevendas/public/wabadisparos-og.jpg /usr/share/nginx/html/wabadisparos-og.jpg
-
-# Se o build Vite copiar dist/ para /usr/share/nginx/html, manter a imagem na raiz.
 # Easypanel: usar este Dockerfile apenas se o serviço paginadevendas apontar para este path.
+# A imagem OG não fica neste container — é servida pelo waba_disparador em /media/OGwaba.jpg.
