@@ -3585,6 +3585,87 @@
         display: none !important;
       }
 
+      /* Faixa de status (luzes) acima do Monitor CPU */
+      .uptime-lights {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 18px;
+        margin: 4px 0 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .uptime-light-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.82rem;
+        color: #cbd5e1;
+        white-space: nowrap;
+      }
+
+      .uptime-light-dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 999px;
+        flex: 0 0 auto;
+        background: #64748b;
+        box-shadow: 0 0 0 0 rgba(100, 116, 139, 0);
+      }
+
+      .uptime-light-dot.is-ok {
+        background: #22c55e;
+        box-shadow: 0 0 8px 1px rgba(34, 197, 94, 0.55);
+      }
+
+      .uptime-light-dot.is-down {
+        background: #ef4444;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+        animation: uptime-light-pulse 1.2s ease-in-out infinite;
+      }
+
+      @keyframes uptime-light-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+        }
+      }
+
+      /* Sininho em estado "sistema fora do ar" (somente walkup) */
+      .waba-push-bell-btn.has-system-down {
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.6);
+        background: rgba(127, 29, 29, 0.35);
+        animation: waba-push-bell-pulse-red 1.1s ease-in-out infinite;
+      }
+
+      .waba-push-bell-btn.has-system-down .waba-push-bell-count {
+        background: #ef4444;
+        color: #fff;
+      }
+
+      @keyframes waba-push-bell-pulse-red {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+          transform: scale(1);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+          transform: scale(1.05);
+        }
+      }
+
+      .waba-push-bell-item.is-system-down .waba-push-bell-item-title {
+        color: #fca5a5;
+      }
+
       .admin-push-image-wrap {
         margin-top: 12px;
         display: flex;
@@ -18107,6 +18188,14 @@
                   Consumo da VPS em tempo quase real — alerta quando a CPU permanece alta por período sustentado.
                 </span>
               </div>
+              <div
+                id="admin-uptime-lights"
+                class="uptime-lights"
+                role="status"
+                aria-live="polite"
+                aria-label="Status dos serviços em produção"
+                hidden
+              ></div>
               <div class="aquecedor-section">
                 <div class="admin-subscribers-toolbar">
                   <span id="admin-monitor-cpu-status" class="admin-subscribers-summary">Carregando monitor…</span>
@@ -20660,6 +20749,9 @@
       let masterMenuBadgePollTimer = null;
       let masterCpuAlertPollTimer = null;
       let masterCpuAlertActive = false;
+      let uptimeLightsCache = [];
+      let systemDownActive = false;
+      const WABA_SYSTEM_DOWN_EMAIL = "walkup@walkuptec.com.br";
       let lastMasterMenuBadges = {};
       let lastMasterMenuSeenAt = {};
       let masterMenuHighlightBaseline = {};
@@ -20703,8 +20795,10 @@
           return;
         }
         void refreshMasterCpuAlertStatus();
+        void refreshUptimeLights();
         masterCpuAlertPollTimer = window.setInterval(() => {
           void refreshMasterCpuAlertStatus();
+          void refreshUptimeLights();
         }, MASTER_CPU_ALERT_POLL_MS);
       }
 
@@ -20714,6 +20808,64 @@
           masterCpuAlertPollTimer = null;
         }
         syncMasterCpuAlertHeaderDot(false);
+        uptimeLightsCache = [];
+        renderUptimeLights([]);
+        setSystemDownActive(false);
+      }
+
+      function renderUptimeLights(lights) {
+        const strip = document.getElementById("admin-uptime-lights");
+        if (!strip) return;
+        const rows = Array.isArray(lights) ? lights : [];
+        if (!rows.length) {
+          strip.hidden = true;
+          strip.innerHTML = "";
+          return;
+        }
+        strip.hidden = false;
+        strip.innerHTML = rows
+          .map((light) => {
+            const ok = Boolean(light?.ok);
+            const label = escapeAdminHtml(String(light?.label || light?.key || "serviço"));
+            const detail = escapeAdminHtml(String(light?.detail || (ok ? "no ar" : "sem resposta")));
+            const cls = ok ? "is-ok" : "is-down";
+            const title = `${label}: ${ok ? "no ar" : "fora do ar"} (${detail})`;
+            return `
+              <span class="uptime-light-item" title="${title}">
+                <span class="uptime-light-dot ${cls}" aria-hidden="true"></span>
+                <span class="uptime-light-label">${label}</span>
+              </span>
+            `;
+          })
+          .join("");
+      }
+
+      function setSystemDownActive(active) {
+        const next = Boolean(active) &&
+          String(wabaSessionEmail || "").trim().toLowerCase() === WABA_SYSTEM_DOWN_EMAIL;
+        if (next === systemDownActive) return;
+        systemDownActive = next;
+        syncWabaPushBellUi();
+      }
+
+      async function refreshUptimeLights() {
+        if (!hasMasterAccess()) {
+          uptimeLightsCache = [];
+          renderUptimeLights([]);
+          setSystemDownActive(false);
+          return;
+        }
+        try {
+          const response = await fetchWithTimeout("/admin/infra/uptime-monitor/lights", {}, 16000);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) return;
+          uptimeLightsCache = Array.isArray(payload.lights) ? payload.lights : [];
+          renderUptimeLights(uptimeLightsCache);
+          const anyDown = uptimeLightsCache.some((light) => !light?.ok);
+          setSystemDownActive(anyDown);
+        } catch {
+          /* ignora falhas transitórias */
+        }
       }
 
       function isMasterMenuNewRecord(menuKey, itemAt, extraCondition = true) {
@@ -27817,15 +27969,34 @@
         if (btn) btn.setAttribute("aria-expanded", wabaPushBellPanelOpen ? "true" : "false");
       }
 
+      function buildSystemDownBellItemHtml() {
+        if (!systemDownActive) return "";
+        const down = (uptimeLightsCache || []).filter((light) => !light?.ok);
+        const detail = down.length
+          ? escapeAdminHtml(down.map((light) => String(light?.label || "serviço")).join(", "))
+          : "";
+        return `
+          <article class="waba-push-bell-item is-system-down">
+            <div class="waba-push-bell-item-title">⚠️ Sistema fora do ar</div>
+            <div class="waba-push-bell-item-message">${
+              detail ? `Sem resposta: ${detail}` : "Um ou mais serviços não estão respondendo."
+            }</div>
+          </article>
+        `;
+      }
+
       function renderWabaPushBellList(items) {
         const list = document.getElementById("waba-push-bell-list");
         if (!list) return;
         const rows = Array.isArray(items) ? items : [];
+        const systemDownHtml = buildSystemDownBellItemHtml();
         if (!rows.length) {
-          list.innerHTML = '<p class="waba-push-bell-empty">Nenhum comunicado no momento.</p>';
+          list.innerHTML =
+            systemDownHtml ||
+            '<p class="waba-push-bell-empty">Nenhum comunicado no momento.</p>';
           return;
         }
-        list.innerHTML = rows
+        list.innerHTML = systemDownHtml + rows
           .map((alert) => {
             const title = escapeAdminHtml(String(alert?.title || "Comunicado"));
             const message = escapeAdminHtml(sanitizePushAlertMessage(alert?.message || ""));
@@ -27849,20 +28020,29 @@
         const wrap = document.getElementById("waba-push-bell-wrap");
         const btn = document.getElementById("waba-push-bell-btn");
         const countEl = document.getElementById("waba-push-bell-count");
-        const unreadCount = wabaPushAlertsCache.length;
+        const pushCount = wabaPushAlertsCache.length;
+        const totalCount = pushCount + (systemDownActive ? 1 : 0);
         if (wrap) wrap.hidden = !wabaAuthEnabled;
-        if (btn) btn.classList.toggle("has-unread", unreadCount > 0);
+        if (btn) {
+          btn.classList.toggle("has-system-down", systemDownActive);
+          btn.classList.toggle("has-unread", !systemDownActive && pushCount > 0);
+          btn.title = systemDownActive ? "Sistema fora do ar" : "Comunicados";
+          btn.setAttribute(
+            "aria-label",
+            systemDownActive ? "Sistema fora do ar" : "Comunicados push"
+          );
+        }
         if (countEl) {
-          if (unreadCount > 0) {
+          if (totalCount > 0) {
             countEl.hidden = false;
-            countEl.textContent = String(Math.min(unreadCount, 9));
+            countEl.textContent = String(Math.min(totalCount, 9));
           } else {
             countEl.hidden = true;
             countEl.textContent = "0";
           }
         }
         renderWabaPushBellList(wabaPushAlertsCache);
-        if (!unreadCount) setWabaPushBellPanelOpen(false);
+        if (!totalCount) setWabaPushBellPanelOpen(false);
       }
 
       async function dismissWabaPushAlertById(alertId) {

@@ -364,6 +364,19 @@ const registerWabaAdminRoutes = (app) => {
             });
         }
     });
+    app.get("/admin/infra/uptime-monitor/lights", async (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const fresh = ["1", "true"].includes(String(req.query.fresh ?? "").trim().toLowerCase());
+            return res.status(200).json(await (0, uptime_monitor_service_1.getUptimeLights)({ fresh }));
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível ler as luzes do monitor.",
+            });
+        }
+    });
     app.post("/admin/infra/uptime-monitor/run", async (req, res) => {
         if (!rejectNonMaster(req, res))
             return;

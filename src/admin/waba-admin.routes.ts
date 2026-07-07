@@ -24,6 +24,7 @@ import {
   runUptimeMonitorCheck,
   sendUptimeMonitorTestAlert,
   getUptimeMonitorStatus,
+  getUptimeLights,
 } from "../monitoring/uptime-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
@@ -361,6 +362,18 @@ export const registerWabaAdminRoutes = (app: Express) => {
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível ler o status do monitor.",
+      });
+    }
+  });
+
+  app.get("/admin/infra/uptime-monitor/lights", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const fresh = ["1", "true"].includes(String(req.query.fresh ?? "").trim().toLowerCase());
+      return res.status(200).json(await getUptimeLights({ fresh }));
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível ler as luzes do monitor.",
       });
     }
   });

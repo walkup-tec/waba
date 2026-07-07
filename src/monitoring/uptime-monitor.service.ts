@@ -137,13 +137,16 @@ export const resolveUptimeTargets = (): UptimeTarget[] => {
   return httpTargets;
 };
 
-async function checkHttpTarget(target: UptimeTarget): Promise<UptimeCheckResult> {
+async function checkHttpTarget(
+  target: UptimeTarget,
+  options?: { attempts?: number; timeoutMs?: number },
+): Promise<UptimeCheckResult> {
   const url = String(target.url || "").trim();
   if (!url) {
     return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
   }
-  const timeoutMs = resolveHttpTimeoutMs();
-  const attempts = Math.max(1, DEFAULT_HTTP_ATTEMPTS);
+  const timeoutMs = options?.timeoutMs ?? resolveHttpTimeoutMs();
+  const attempts = Math.max(1, options?.attempts ?? DEFAULT_HTTP_ATTEMPTS);
   let lastDetail = "";
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -489,6 +492,47 @@ export function startUptimeMonitorScheduler(): void {
   setInterval(() => {
     void monitorTick();
   }, intervalMs).unref?.();
+}
+
+type UptimeLight = { key: string; label: string; ok: boolean; detail: string };
+type UptimeLightsPayload = { checkedAt: string; allOk: boolean; lights: UptimeLight[] };
+
+const LIGHTS_CACHE_MS = Math.max(
+  10_000,
+  Math.min(120_000, Number(process.env.WABA_UPTIME_MONITOR_LIGHTS_CACHE_MS ?? 45_000) || 45_000),
+);
+let lightsCache: { at: number; payload: UptimeLightsPayload } | null = null;
+
+/**
+ * Estado atual (para as luzes da UI): checagem rápida (1 tentativa, timeout curto)
+ * com cache curto para não sobrecarregar. Não envia alertas nem grava estado.
+ */
+export async function getUptimeLights(options?: { fresh?: boolean }): Promise<UptimeLightsPayload> {
+  if (!options?.fresh && lightsCache && Date.now() - lightsCache.at < LIGHTS_CACHE_MS) {
+    return lightsCache.payload;
+  }
+  const targets = resolveUptimeTargets();
+  const fastTimeout = Math.min(resolveHttpTimeoutMs(), 6_000);
+  const results = await Promise.all(
+    targets.map((target) =>
+      target.kind === "asaas"
+        ? checkAsaasTarget(target)
+        : checkHttpTarget(target, { attempts: 2, timeoutMs: fastTimeout }),
+    ),
+  );
+  const lights: UptimeLight[] = results.map((result) => ({
+    key: result.key,
+    label: result.label,
+    ok: result.ok,
+    detail: result.detail,
+  }));
+  const payload: UptimeLightsPayload = {
+    checkedAt: new Date().toISOString(),
+    allOk: lights.every((light) => light.ok),
+    lights,
+  };
+  lightsCache = { at: Date.now(), payload };
+  return payload;
 }
 
 export async function getUptimeMonitorStatus(): Promise<{
