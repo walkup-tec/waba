@@ -20,6 +20,11 @@ import {
   sendAsaasIntegrationTestAlert,
   getAsaasIntegrationMonitorStatus,
 } from "../monitoring/asaas-integration-monitor.service";
+import {
+  runUptimeMonitorCheck,
+  sendUptimeMonitorTestAlert,
+  getUptimeMonitorStatus,
+} from "../monitoring/uptime-monitor.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
@@ -339,6 +344,45 @@ export const registerWabaAdminRoutes = (app: Express) => {
     if (!rejectNonMaster(req, res)) return;
     try {
       const alerts = await sendAsaasIntegrationTestAlert();
+      return res.status(200).json({ ok: true, test: true, alerts });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
+      });
+    }
+  });
+
+  app.get("/admin/infra/uptime-monitor/status", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      return res.status(200).json(await getUptimeMonitorStatus());
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível ler o status do monitor.",
+      });
+    }
+  });
+
+  app.post("/admin/infra/uptime-monitor/run", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const forceAlert =
+        ["1", "true"].includes(
+          String(req.query.forceAlert ?? req.body?.forceAlert ?? "").trim().toLowerCase(),
+        );
+      const result = await runUptimeMonitorCheck({ forceAlert, skipState: forceAlert });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível executar o monitor de uptime.",
+      });
+    }
+  });
+
+  app.post("/admin/infra/uptime-monitor/test-alert", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const alerts = await sendUptimeMonitorTestAlert();
       return res.status(200).json({ ok: true, test: true, alerts });
     } catch (error) {
       return res.status(500).json({
