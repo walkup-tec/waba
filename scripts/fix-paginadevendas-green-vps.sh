@@ -17,10 +17,10 @@
 #   sed -i 's/\r$//' /tmp/fix-paginadevendas-green.sh && chmod +x /tmp/fix-paginadevendas-green.sh
 #   /tmp/fix-paginadevendas-green.sh
 #
-# Versão: paginadevendas-green-2026-07-07-v1
+# Versão: paginadevendas-green-2026-07-07-v2
 set -euo pipefail
 
-VERSION="paginadevendas-green-2026-07-07-v1"
+VERSION="paginadevendas-green-2026-07-07-v2"
 SERVICE="${WABA_SWARM_SERVICE:-waba_paginadevendas}"
 FILTER="${WABA_CONTAINER_FILTER:-waba_paginadevendas}"
 PORT="${WABA_PORT:-3000}"
@@ -105,14 +105,28 @@ wait_healthy() {
   return 1
 }
 
+scale_service_detach() {
+  log "Scale detach: ${SERVICE}=1 (não bloqueia — evita travar terminal)"
+  docker service scale -d "${SERVICE}=1" >/dev/null 2>&1 || docker service scale "${SERVICE}=1" >/dev/null 2>&1 &
+  sleep 15
+}
+
 reconcile_swarm_replicas() {
-  local replicas
+  local cid="${1:-}" replicas code h
   replicas=$(docker service ls --filter "name=${SERVICE}" --format '{{.Replicas}}' 2>/dev/null | head -1 || echo "?")
   log "Swarm replicas antes: ${replicas}"
+
+  if [[ -n "$cid" ]]; then
+    code=$(http_code_in_container "$cid" "/" || echo "000")
+    h=$(docker_health "$cid")
+    if [[ "$code" == "200" && "$h" == "healthy" ]]; then
+      log "Container já OK (HTTP 200, Health=healthy) — pulando scale (Swarm ${replicas} pode lagar)"
+      return 0
+    fi
+  fi
+
   if [[ "$replicas" == "0/1" || "$replicas" == "0/0" ]]; then
-    log "Reconciliando: docker service scale ${SERVICE}=1 (sem --force)"
-    docker service scale "${SERVICE}=1" >/dev/null
-    sleep 20
+    scale_service_detach
   fi
   replicas=$(docker service ls --filter "name=${SERVICE}" --format '{{.Replicas}}' 2>/dev/null | head -1 || echo "?")
   log "Swarm replicas depois: ${replicas}"
@@ -129,9 +143,8 @@ main() {
   local cid
   cid=$(pick_primary_cid || true)
   if [[ -z "$cid" ]]; then
-    log "Nenhum container running — scale 1 (sem force update)"
-    docker service scale "${SERVICE}=1" >/dev/null
-    sleep 25
+    log "Nenhum container running — scale detach (sem force update)"
+    scale_service_detach
     cid=$(pick_primary_cid || true)
   fi
   if [[ -z "$cid" ]]; then
@@ -148,7 +161,7 @@ main() {
   restore_router_if_broken "$cid"
   cid=$(pick_primary_cid || true)
 
-  reconcile_swarm_replicas
+  reconcile_swarm_replicas "$cid"
 
   cid=$(pick_primary_cid || true)
   [[ -z "$cid" ]] && { log "ERRO: sem container após reconcile"; exit 1; }
@@ -167,8 +180,13 @@ main() {
   log "  GET /:     HTTP ${code_root}"
   log "  GET /health: HTTP ${code_health}"
 
-  if [[ "$code_root" == "200" && "$h" == "healthy" && "$replicas" == "1/1" ]]; then
-    log "OK — Easypanel deve ficar VERDE em ~1 min"
+  if [[ "$code_root" == "200" && "$h" == "healthy" ]]; then
+    log "OK — app saudável (HTTP 200, Health=healthy)"
+    if [[ "$replicas" == "1/1" ]]; then
+      log "Swarm 1/1 — Easypanel deve ficar VERDE em ~1 min"
+    else
+      log "Swarm=${replicas} (desync) — Easypanel pode usar Health Docker; confira painel"
+    fi
     exit 0
   fi
 
