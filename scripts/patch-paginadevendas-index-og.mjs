@@ -8,14 +8,16 @@ import path from "path";
 
 const indexPath = process.argv[2] || path.join(process.cwd(), "paginadevendas-index-live.html");
 const siteUrl = "https://wabadisparos.com.br";
-const ogImage = `${siteUrl}/wabadisparos-og.jpg`;
+const ogImage = process.env.OG_IMAGE || "http://agenciadigitalcorban.com.br/img/imagem-face2.jpg";
+const ogImageType = process.env.OG_TYPE || "image/jpg";
+const ogWidth = process.env.OG_WIDTH || "800";
+const ogHeight = process.env.OG_HEIGHT || "600";
 
 const ogBlock = [
   `<meta property="og:image" content="${ogImage}"/>`,
-  `<meta property="og:image:type" content="image/jpeg"/>`,
-  `<meta property="og:image:width" content="1200"/>`,
-  `<meta property="og:image:height" content="630"/>`,
-  `<meta property="og:image:alt" content="DRAX WABA — Dispare WhatsApp em massa com segurança"/>`,
+  `<meta property="og:image:type" content="${ogImageType}"/>`,
+  `<meta property="og:image:width" content="${ogWidth}"/>`,
+  `<meta property="og:image:height" content="${ogHeight}"/>`,
   `<meta name="twitter:image" content="${ogImage}"/>`,
 ].join("");
 
