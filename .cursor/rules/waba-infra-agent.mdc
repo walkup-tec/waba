@@ -13,5 +13,6 @@ Quando o usuário trabalhar nestes ficheiros ou pedir VPS/Traefik/CPU/deploy pro
 3. Usar `scripts/infra/vps-health-audit.sh` e `vps-cpu-report.sh`
 4. Uma etapa SSH por vez; snapshot antes de `restart docker` ou prune agressivo
 5. Registar incidentes em `doc/LOG-*` + `doc/memoria.md`
+6. Antes de patch Traefik: Rule `ucp-traefik-static-dynamic.mdc` + doc oficial (static vs dynamic) — MD sozinha não basta
 
 Invocação explícita: `@waba-infrastructure-specialist`

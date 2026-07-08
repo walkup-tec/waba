@@ -1,0 +1,63 @@
+---
+description: Obriga estudar a documentação oficial das tecnologias do stack antes de alterar código/infra
+alwaysApply: true
+---
+
+# Estudo obrigatório de documentação (upstream)
+
+Antes de projetar, patchar ou “consertar” qualquer peça que dependa de software de terceiro, **estude a documentação oficial** (e o formato real no nosso ambiente). Inventar a partir de memória ou de YAML genérico é erro de processo.
+
+## Rule + MD (não são a mesma coisa)
+
+| Artefato | O que garante |
+|----------|----------------|
+| **Rule** (`.cursor/rules/*.mdc`, `alwaysApply`) | Entra no contexto **automaticamente** — é a salvaguarda |
+| **MD** (`doc/LOG-*.md`, `FIX-*.md`, `memoria.md`) | Arquivo profundo; o agente **pode não abrir** — é arquivo, não enforcement |
+
+**Regra de ouro:** se o aprendizado precisa ser respeitado em todo chat → **Rule**. MD complementa (detalhe, histórico, URLs). Nunca “só documentei em MD” para evitar repetir o erro.
+
+Após incidente relevante: atualizar **Rule** + LOG/memoria (os dois).
+
+## Quando aplicar (sempre que tocar em)
+
+Traefik / Easypanel / Docker Swarm, Evolution API, Supabase, n8n, Asaas/Meta/WhatsApp SDKs, Express/Node, qualquer proxy, gateway, ORM, filas ou painel que **não** foi escrito neste repositório.
+
+Traefik em especial: também aplicar `ucp-traefik-static-dynamic.mdc`.
+
+## Rotina (antes de codar)
+
+1. **Identificar** o produto + versão aproximada em uso (ex.: Traefik 3.6.x no VPS).
+2. **Abrir a doc oficial** da feature envolvida (visão geral + página da API/conceito).
+3. **Classificar o modelo** do produto (ex.: Traefik *install/static* vs *routing/dynamic*).
+4. **Confrontar com o ambiente real** (arquivo no VPS, labels Swarm, env Easypanel) — doc ≠ nosso dump.
+5. **Só então** escrever patch/script; se a doc e o ambiente divergirem, prevalece o ambiente documentado em `doc/` **e** nas Rules UCP.
+
+## Checklist mínimo na resposta
+
+- Cite 1–3 URLs oficiais relevantes (não só blog/tutorial).
+- Diga o conceito da doc que impede o erro (ex.: hot-reload da routing config).
+- Se não deu para ler a doc (offline/404), **declare o bloqueio** e peça confirmação — não invente.
+
+## Mapa rápido — stack WABA
+
+| Tecnologia | Doc a priorizar |
+|------------|-----------------|
+| Traefik | https://doc.traefik.io/traefik/ — config overview (static vs dynamic), File provider, Router/Rules, ACME |
+| Easypanel Traefik | https://easypanel.io/docs/guides/custom-traefik-config — `main.yaml` / `custom.yaml` |
+| Docker / Swarm | docs.docker.com — services, publish modes |
+| Supabase | supabase.com/docs — Auth, RLS, JS client |
+| n8n | docs.n8n.io — webhooks, credentials |
+| Evolution API | doc do vendor na versão deployada |
+| Meta / WhatsApp Cloud | developers.facebook.com — Graph / webhooks |
+
+## Anti-padrões (proibidos)
+
+- Patch “bonito” com schema da doc genérica sem inspecionar `main.yaml` / labels reais.
+- Tratar config **dinâmica** como estática (restart/`force` desnecessário → derruba :443).
+- Matar `docker-proxy` / force Traefik sem provar que o serviço está `0/1`.
+- Assumir porta/host/protocolo sem checar doc + `service inspect` / curl local.
+- Depender só de um MD “estar no repo” sem Rule `alwaysApply` para o aprendizado crítico.
+
+## Após o estudo
+
+Registrar em `doc/LOG-…` + linha em `doc/memoria.md` **e**, se for lição permanente do stack, atualizar/criar Rule em `.cursor/rules/`.

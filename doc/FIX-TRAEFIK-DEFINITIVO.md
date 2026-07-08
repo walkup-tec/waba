@@ -1,5 +1,9 @@
 # Fix Traefik DEFINITIVO — WABA + Evolution
 
+> **Enforcement no Cursor:** a lição static vs dynamic e o formato Easypanel estão na Rule  
+> `.cursor/rules/ucp-traefik-static-dynamic.mdc` (`alwaysApply`). Este MD é detalhe operacional —  
+> **não substituir a Rule**. Ver também `study-upstream-docs.mdc`.
+
 ## Problema recorrente
 
 Após **redeploy no Easypanel**, o Traefik regenera `/etc/easypanel/traefik/config/main.yaml` com upstream errado (`http://servico-swarm:8080`) ou **remove routers** → **404/502** em:

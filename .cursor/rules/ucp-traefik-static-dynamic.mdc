@@ -1,0 +1,39 @@
+---
+description: Traefik static vs dynamic + formato Easypanel — evita derrubar HTTPS e patch no schema errado
+alwaysApply: true
+---
+
+# Traefik / Easypanel (UCP)
+
+Complementa `study-upstream-docs.mdc`. **Não depende** de o agente abrir `doc/FIX-TRAEFIK*.md`.
+
+## Doc obrigatória (abrir antes de patch)
+
+- https://doc.traefik.io/traefik/getting-started/configuration-overview/ — **install/static** vs **routing/dynamic**
+- https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
+- https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/router/
+- https://easypanel.io/docs/guides/custom-traefik-config
+
+## Modelo (não misturar)
+
+| Camada | Conteúdo | Ação permitida |
+|--------|----------|----------------|
+| **Static / install** | entryPoints, providers, env Traefik | mudar raro; restart só se Traefik `0/1` |
+| **Dynamic / routing** | routers, services, TLS/certs no `main.yaml` | patch + hot-reload (`HUP`); **nunca** `force` por hábito |
+
+Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Traefik = sites inteiros em `000`.
+
+## Formato real neste VPS (Easypanel)
+
+- Routing vive em `/etc/easypanel/traefik/config/main.yaml` com chaves tipo `"https-waba_paginadevendas-0"` e `"rule": "Host(...) && PathPrefix(\`/\`)"`.
+- Domínio custom: injetar `|| Host(\`dominio\`)` na rule existente; opcional `tls.domains.sans`.
+- Backend neste VPS: preferir `http://172.17.0.1:PORTA/` se a porta host já responde 200 (overlay `tasks.*` costuma falhar).
+- `custom.yaml` aqui = accessLog/api (estático-ish). **Não** colocar `http.routers` dinâmicos lá.
+- Script canônico landings: `scripts/restore-landing-routers-vps.sh` (v6+).
+
+## Proibido
+
+- Assumir schema `http:\n  routers:` da doc genérica sem `grep` no `main.yaml` real.
+- `docker service update --force easypanel-traefik` / kill docker-proxy com Traefik `1/1` + `:443` up.
+- `publish` em porta já usada (ex.: 30210 = v02) → task Pending forever.
+- Confiar só em `doc/FIX-TRAEFIK*.md` sem abrir a doc Traefik + inspeção no VPS.
