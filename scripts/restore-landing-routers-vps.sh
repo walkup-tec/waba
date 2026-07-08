@@ -2,10 +2,10 @@
 # Landings wabadisparos.com.br + bet.waba.info via Traefik custom.yaml (Easypanel não usa routers: no main.yaml).
 #
 # curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/restore-landing-routers-vps.sh" | bash
-# Versão: restore-landing-routers-2026-07-08-v4
+# Versão: restore-landing-routers-2026-07-08-v5
 set -euo pipefail
 
-RESTORE_VERSION="restore-landing-routers-2026-07-08-v4"
+RESTORE_VERSION="restore-landing-routers-2026-07-08-v5"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 CUSTOM_CFG="${CFG_DIR}/custom.yaml"
 LANDINGS_CFG="${CFG_DIR}/waba-landings.yaml"
@@ -15,7 +15,7 @@ REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/wab
 
 PV_SWARM="waba_paginadevendas"
 BETS_SWARM="waba_bets_pv"
-PV_HOST_PORT="${LANDING_PV_HOST_PORT:-30210}"
+PV_HOST_PORT="${LANDING_PV_HOST_PORT:-30211}"
 BETS_HOST_PORT="${LANDING_BETS_HOST_PORT:-30201}"
 HOST_GW="${TRAEFIK_HOST_GW:-172.17.0.1}"
 
