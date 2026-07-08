@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-08-bets-v02-paridade-landing-cadastro";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-08-bets-landing-logo-30pct";

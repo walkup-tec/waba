@@ -21,6 +21,10 @@ Como usar:
 ## Última atualização
 2026-07-08
 
+**WABA — Landing Bets logo +30% (2026-07-08):** `public-pages/bets.html` usa `media/drax-bets-logo.png` (header 3.36375rem, footer 2.925rem). Marker `DEPLOY-2026-07-08-bets-landing-logo-30pct`. Log `doc/LOG-2026-07-08__233600__bets-landing-logo-30pct.md`.
+
+**WABA — V02 Admin Financeiro pronto teste (2026-07-08):** split com ordem CET→fornecedor→parceiro (`sortSplitSettlementLines`), select plano fornecedor e select master no rateio; build + `dev:v02` reiniciado. Sem commits novos desta semana só de Financeiro — features de jun/2026. Log `doc/LOG-2026-07-08__203500__v02-admin-financeiro-teste.md`. Palavras-chave: `admin financeiro`, `split fornecedores`, `buildSplitMasterSelectOptions`.
+
 **WABA — Deploy produção Bets V02 (2026-07-08):** merge `v02` → `master` — tarifador Bets, landing/cadastro telefone, boas-vindas equipe, creditBet_02, admin menus bulk. Marker `DEPLOY-2026-07-08-bets-v02-paridade-landing-cadastro`.
 
 **WABA — V02 draxsistemas apenas assinante (2026-07-08):** removido usuário Master `Teste Split`; mantido assinante Ana Cristina. Log `doc/LOG-2026-07-08__200500__v02-draxsistemas-apenas-assinante.md`.

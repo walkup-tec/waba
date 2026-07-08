@@ -21,7 +21,7 @@ RUN echo ">>> npm ci --omit=dev" \
 COPY dist ./dist
 COPY scripts ./scripts
 COPY public-pages ./public-pages
-COPY media/Drax-logo-footer.png media/favcon.png media/favicon.ico media/favicon.png ./media/
+COPY media/Drax-logo-footer.png media/drax-bets-logo.png media/favcon.png media/favicon.ico media/favicon.png ./media/
 
 RUN test -f dist/index.js || (echo "ERRO: dist/index.js ausente — rode npm run build antes do deploy" && exit 1)
 RUN test -f dist/disparos/alternativa-dispatch-rules.js || (echo "ERRO: dist/disparos/alternativa-dispatch-rules.js ausente — rode npm run build e commit dist/" && exit 1)

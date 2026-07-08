@@ -23,8 +23,9 @@
     .btn-ghost{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1)}
     header{position:fixed;inset:0 0 auto;z-index:50;height:4rem;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(5,5,5,.85);backdrop-filter:blur(12px)}
     header .wrap{height:100%;display:flex;align-items:center;justify-content:space-between;gap:1rem}
-    .logo{display:flex;align-items:center;gap:.5rem;font-weight:800;font-size:1.05rem}
-    .logo span{color:var(--accent)}
+    .logo{display:flex;align-items:center}
+    .logo img{display:block;height:3.36375rem;width:auto}
+    footer .logo img{height:2.925rem;width:auto;margin:0 auto}
     nav{display:none;gap:1.5rem;font-size:.875rem;color:rgba(255,255,255,.6)}
     nav a:hover{color:var(--brand)}
     @media(min-width:768px){nav{display:flex}}
@@ -70,7 +71,15 @@
 <body>
   <header id="top">
     <div class="wrap">
-      <a href="#top" class="logo">Drax <span>Bets</span></a>
+      <a href="#top" class="logo" aria-label="Drax Bets — início">
+        <img
+          src="/media/drax-bets-logo.png"
+          alt="Drax Bets"
+          width="269"
+          height="53"
+          decoding="async"
+        />
+      </a>
       <nav>
         <a href="#beneficios">Benefícios</a>
         <a href="#como-funciona">Como funciona</a>
@@ -180,6 +189,15 @@
 
   <footer>
     <div class="wrap">
+      <a href="#top" class="logo" style="justify-content:center;margin-bottom:1rem" aria-label="Drax Bets — início">
+        <img
+          src="/media/drax-bets-logo.png"
+          alt="Drax Bets"
+          width="234"
+          height="47"
+          decoding="async"
+        />
+      </a>
       <p><strong>Bet Waba</strong> — plataforma especializada em disparos de WhatsApp para o mercado de Bets.</p>
       <p style="margin-top:1rem;font-size:.75rem">© Bet Waba · Todos os direitos reservados</p>
     </div>
