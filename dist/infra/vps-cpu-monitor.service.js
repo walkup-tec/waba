@@ -1,11 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VpsCpuMonitorService = void 0;
+exports.startVpsCpuLocalSampler = startVpsCpuLocalSampler;
+const os_1 = __importDefault(require("os"));
 const vps_cpu_playbooks_1 = require("./vps-cpu-playbooks");
 const vps_cpu_monitor_repository_1 = require("./vps-cpu-monitor.repository");
 const UI_REFRESH_SEC = 60;
 const COLLECTOR_INTERVAL_SEC = 60;
 const CHART_MAX_POINTS = 120;
+let localSamplerRunning = false;
+let localSamplerTimer = null;
 const parseThresholdPct = () => {
     const raw = Number(process.env.WABA_VPS_CPU_ALERT_THRESHOLD_PCT ?? 65);
     if (!Number.isFinite(raw))
@@ -30,6 +37,29 @@ const parseUiRefreshSec = () => {
         return UI_REFRESH_SEC;
     return Math.min(300, Math.max(30, Math.round(raw)));
 };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const cpuTimesTotal = () => {
+    let idle = 0;
+    let total = 0;
+    for (const cpu of os_1.default.cpus()) {
+        const t = cpu.times;
+        idle += t.idle;
+        total += t.user + t.nice + t.sys + t.idle + t.irq;
+    }
+    return { idle, total };
+};
+/** Amostra CPU do host local (duas leituras ~400ms). */
+async function estimateLocalCpuPct() {
+    const a = cpuTimesTotal();
+    await sleep(400);
+    const b = cpuTimesTotal();
+    const idleDelta = b.idle - a.idle;
+    const totalDelta = b.total - a.total;
+    if (totalDelta <= 0)
+        return 0;
+    const busy = 1 - idleDelta / totalDelta;
+    return Math.round(Math.min(100, Math.max(0, busy * 100)) * 10) / 10;
+}
 const avg = (values) => {
     if (!values.length)
         return 0;
@@ -189,6 +219,52 @@ class VpsCpuMonitorService {
             return true;
         return wabaEnv !== "v01" && wabaEnv !== "v02";
     }
+    /** Em v01/v02 não há coletor do VPS; sampler local popula o JSONL para a UI. */
+    shouldRunLocalSampler() {
+        if (!this.isEnabled())
+            return false;
+        const forced = String(process.env.WABA_VPS_CPU_LOCAL_SAMPLER ?? "").trim().toLowerCase();
+        if (forced === "0" || forced === "false" || forced === "no")
+            return false;
+        if (forced === "1" || forced === "true" || forced === "yes")
+            return true;
+        const wabaEnv = String(process.env.WABA_ENV ?? "").trim().toLowerCase();
+        return wabaEnv === "v01" || wabaEnv === "v02";
+    }
+    async collectLocalSample() {
+        const cores = Math.max(1, os_1.default.cpus().length);
+        const loads = os_1.default.loadavg();
+        const hostCpuPctEst = await estimateLocalCpuPct();
+        const totalMem = os_1.default.totalmem();
+        const freeMem = os_1.default.freemem();
+        const usedMem = Math.max(0, totalMem - freeMem);
+        const hostMemPct = totalMem > 0 ? Math.round((usedMem / totalMem) * 1000) / 10 : 0;
+        const rss = process.memoryUsage().rss;
+        const sample = {
+            ts: new Date().toISOString(),
+            hostLoad1m: Number(loads[0] || 0),
+            hostLoad5m: Number(loads[1] || 0),
+            hostLoad15m: Number(loads[2] || 0),
+            cpuCores: cores,
+            hostCpuPctEst,
+            hostMemPct,
+            hostMemUsedBytes: usedMem,
+            hostMemTotalBytes: totalMem,
+            hostDiskPct: 0,
+            hostDiskUsedBytes: 0,
+            hostDiskTotalBytes: 0,
+            containers: [
+                {
+                    name: `waba-local-${String(process.env.WABA_ENV || "dev").trim() || "dev"}`,
+                    cpuPct: hostCpuPctEst,
+                    mem: `${Math.round(rss / (1024 * 1024))}MiB`,
+                },
+            ],
+            swarmServiceCount: 1,
+        };
+        await this.repo.appendSample(sample);
+        return sample;
+    }
     async getDashboard(rangeInput = "1h") {
         const range = parseChartRange(rangeInput);
         const thresholdPct = parseThresholdPct();
@@ -211,6 +287,7 @@ class VpsCpuMonitorService {
             }))
             : [];
         const alert = buildAlert(allSamples, thresholdPct, sustainedMinutes, sampleIntervalSec);
+        const localSampler = this.shouldRunLocalSampler();
         return {
             enabled: this.isEnabled(),
             collectorReady: status.ready,
@@ -227,7 +304,14 @@ class VpsCpuMonitorService {
             current: buildCurrent(last),
             topContainers,
             alert,
-            setupSteps: status.ready ? [] : vps_cpu_monitor_repository_1.VpsCpuMonitorRepository.resolveSetupInstructions(),
+            setupSteps: status.ready
+                ? []
+                : localSampler
+                    ? [
+                        "Sampler local ativo neste ambiente — aguarde a primeira amostra (~1 min) e clique em Atualizar.",
+                        "Em produção as métricas vêm do coletor no VPS (scripts/infra/install-vps-monitor.sh).",
+                    ]
+                    : vps_cpu_monitor_repository_1.VpsCpuMonitorRepository.resolveSetupInstructions(),
         };
     }
     async getAlertStatus() {
@@ -239,3 +323,22 @@ class VpsCpuMonitorService {
     }
 }
 exports.VpsCpuMonitorService = VpsCpuMonitorService;
+function startVpsCpuLocalSampler(service = new VpsCpuMonitorService()) {
+    if (localSamplerRunning)
+        return;
+    if (!service.shouldRunLocalSampler()) {
+        console.log("[vps-cpu] sampler local desativado (produção usa coletor no VPS; ou WABA_VPS_CPU_MONITOR_ENABLED=false).");
+        return;
+    }
+    localSamplerRunning = true;
+    const intervalMs = parseSampleIntervalSec() * 1000;
+    console.log(`[vps-cpu] sampler local ativo — amostra a cada ${Math.round(intervalMs / 1000)}s → data/*/vps-infra/cpu-samples.jsonl`);
+    const tick = () => {
+        void service.collectLocalSample().catch((error) => {
+            console.warn("[vps-cpu] amostra local falhou:", error instanceof Error ? error.message : error);
+        });
+    };
+    tick();
+    localSamplerTimer = setInterval(tick, intervalMs);
+    localSamplerTimer.unref?.();
+}

@@ -323,18 +323,46 @@ async function discoverPushCommunityInstanceWithGroups(
 
 const normalizePhoneHintDigits = (value: string): string => String(value || "").replace(/\D/g, "");
 
-const phoneHintMatchesInstance = (row: EvoCatalogRow, phoneHint: string): boolean => {
+const expandPhoneHintDigits = (phoneHint: string): string[] => {
   const hint = normalizePhoneHintDigits(phoneHint);
-  if (!hint) return false;
+  if (!hint) return [];
+  const variants = new Set<string>([hint]);
+  const withCountry = (digits: string) => (digits.startsWith("55") ? digits : `55${digits}`);
+  const withoutCountry = (digits: string) =>
+    digits.startsWith("55") && digits.length > 2 ? digits.slice(2) : digits;
+
+  const base = withoutCountry(hint);
+  variants.add(base);
+  variants.add(withCountry(base));
+
+  if (base.length === 11 && base.charAt(2) === "9") {
+    const legacyTen = `${base.slice(0, 2)}${base.slice(3)}`;
+    variants.add(legacyTen);
+    variants.add(withCountry(legacyTen));
+  } else if (base.length === 10) {
+    const mobileEleven = `${base.slice(0, 2)}9${base.slice(2)}`;
+    variants.add(mobileEleven);
+    variants.add(withCountry(mobileEleven));
+  }
+
+  return [...variants].filter(Boolean);
+};
+
+const phoneHintMatchesInstance = (row: EvoCatalogRow, phoneHint: string): boolean => {
+  const hints = expandPhoneHintDigits(phoneHint);
+  if (!hints.length) return false;
   const numberDigits = normalizePhoneHintDigits(row.number);
   const nameDigits = normalizePhoneHintDigits(row.name);
-  const candidates = [numberDigits, nameDigits].filter(Boolean);
-  for (const digits of candidates) {
-    if (digits === hint || digits.endsWith(hint) || hint.endsWith(digits)) return true;
-    const digitsBr = digits.startsWith("55") ? digits.slice(2) : digits;
-    const hintBr = hint.startsWith("55") ? hint.slice(2) : hint;
-    if (digitsBr === hintBr || digitsBr.endsWith(hintBr) || hintBr.endsWith(digitsBr)) return true;
-    if (digitsBr.includes(hintBr) || hintBr.includes(digitsBr)) return true;
+  const instanceDigits = [numberDigits, nameDigits].filter(Boolean);
+
+  for (const hint of hints) {
+    for (const digits of instanceDigits) {
+      if (digits === hint || digits.endsWith(hint) || hint.endsWith(digits)) return true;
+      const digitsBr = digits.startsWith("55") ? digits.slice(2) : digits;
+      const hintBr = hint.startsWith("55") ? hint.slice(2) : hint;
+      if (digitsBr === hintBr || digitsBr.endsWith(hintBr) || hintBr.endsWith(digitsBr)) return true;
+      if (digitsBr.includes(hintBr) || hintBr.includes(digitsBr)) return true;
+    }
   }
   return false;
 };

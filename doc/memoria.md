@@ -12,24 +12,32 @@ Como usar:
 
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
+## Regra de trabalho (2026-07-06, reafirmada 2026-07-07)
+- **Desenvolvimento:** sempre no **V02 local** (`D:\Waba`/`E:\Waba`, branch `v02`, http://localhost:3012/version-02/)
+- **Testes:** o **usuário faz os testes** localmente no V02; não iniciar servidor/testes sem pedido.
+- **Produção:** só quando o usuário **avisar explicitamente** (merge `v02` → `master` + build `dist/` + deploy Easypanel)
+- **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
+
 ## Última atualização
 2026-07-08
 
-**WABA — Disable overkill heal Traefik (2026-07-08):** `scripts/infra/traefik-heal-disable-overkill-vps.sh` (`status`|`apply`) desliga só timers 20s / docker-events / cron; **não** pausa containers nem serviços WABA/Evolution/DB. Manter bootstrap+guard. Log `doc/LOG-2026-07-08__092650__traefik-heal-disable-overkill-sem-pausar-apps.md`.
+**WABA — Deploy produção Bets V02 (2026-07-08):** merge `v02` → `master` — tarifador Bets, landing/cadastro telefone, boas-vindas equipe, creditBet_02, admin menus bulk. Marker `DEPLOY-2026-07-08-bets-v02-paridade-landing-cadastro`.
 
-**WABA — Auditoria Traefik overkill + CPU (2026-07-08):** timers 20s ×4 + `docker events` ×4 + cron/min são desnecessários com File Provider hot-reload; manter bootstrap/restores manuais. Análise ChatGPT (steal time, dockerd, load, accessLog) faz sentido e alinha com LOG 2026-06-27; não trocar proxy. Desligar heal hiperativo no VPS. Log `doc/LOG-2026-07-08__092011__auditoria-traefik-scripts-cpu-overkill.md`. Palavras-chave: traefik overkill, steal time, docker events CPU.
+**WABA — V02 draxsistemas apenas assinante (2026-07-08):** removido usuário Master `Teste Split`; mantido assinante Ana Cristina. Log `doc/LOG-2026-07-08__200500__v02-draxsistemas-apenas-assinante.md`.
 
-**WABA — Regra Cursor study-upstream-docs (2026-07-08):** alwaysApply `.cursor/rules/study-upstream-docs.mdc` e `ucp-traefik-static-dynamic.mdc`; MD sozinha não garante leitura. Log `doc/LOG-2026-07-08__090032__regra-cursor-study-upstream-docs.md`.
+**WABA — Boas-vindas operacional/suporte (2026-07-08):** `notifyStaffWelcome` em `WabaSystemUserService.create`. Log `doc/LOG-2026-07-08__195500__boas-vindas-automatica-operacional-suporte.md`.
 
-**WABA — Restore landings Traefik v6 (2026-07-08):** formato Easypanel `https-*` + Host OR inject; HUP soft; wabadisparos + bet.waba.info. Log `doc/LOG-2026-07-08__085407__restore-landing-traefik-v6-easypanel-format.md`.
+**WABA — Cadastro Bets telefone/WhatsApp (2026-07-08):** `resolveSubscriberWhatsAppMobile`, máscara landing. Log `doc/LOG-2026-07-08__165100__bets-cadastro-telefone-whatsapp-fix.md`.
 
-**WABA — OG wabadisparos DEFINITIVO (código-fonte):** causa do "compartilha favicon" = og:image só via patch runtime no container (apagado em todo redeploy/restart). Fix definitivo no repo da landing `walkup-tec/pv-waba-disparador` (branch `main`, commit `854b19d`): imagem em `public/OGwaba.jpg` (→ `https://wabadisparos.com.br/OGwaba.jpg`, autocontida) + meta `og:image`/twitter em `src/routes/__root.tsx` (title "DRAX WABA - Plataforma Oficial de Disparos WhatsApp", 1200×630). Fonte local: `D:\pv-waba-disparador`. **Falta:** redeploy do serviço `paginadevendas` no Easypanel (rebuild) + Facebook Scrape Again. Depois disso NÃO precisa mais patch no container. Ver `doc/LOG-2026-07-07__105500__og-wabadisparos-definitivo-codigo-fonte.md`.
+**WABA — Tarifador Bets 5k–50k + creditBet_02 + oculta Alternativa (2026-07-08):** ver LOGs `181800`, `190700`, `184700`.
 
-**WABA — OG SÓ na wabadisparos (produção):** config OG (título "DRAX WABA - Plataforma Oficial...", descrição API Oficial/Alternativa, imagem `https://waba.draxsistemas.com.br/media/OGwaba.jpg`, 1200×630) aplicada APENAS na landing wabadisparos.com.br via patch SSR `scripts/patch-paginadevendas-router-og.cjs` + `scripts/deploy-paginadevendas-og-vps.sh`. `index.html`/`dist/index.html` do app waba.draxsistemas REVERTIDOS ao original (compBoasvindasV3). Imagem: `media/OGwaba.jpg` (~207 KB, servida pelo waba_disparador). Recovery 502: `scripts/recover-wabadisparos-502-vps.sh`. Ver `doc/LOG-2026-07-07__102500__og-somente-wabadisparos-index-revertido.md`.
+**WABA — Disable overkill heal Traefik (2026-07-08):** `scripts/infra/traefik-heal-disable-overkill-vps.sh`. Log `doc/LOG-2026-07-08__092650__traefik-heal-disable-overkill-sem-pausar-apps.md`.
 
-**WABA — paginadevendas verde Easypanel (script v3):** `scripts/fix-paginadevendas-green-vps.sh` v2 (`60fb7d7`) — `docker service scale -d` (detach) para não travar terminal; pula scale se container já HTTP 200 + Health healthy. Commit anterior `4631b91` travava em scale bloqueante com Swarm 0/1. Ver `doc/LOG-2026-07-07__003500__fix-paginadevendas-green-scale-detach-v2.md`. Palavras-chave: `waba_paginadevendas`, Easypanel amarelo, scale detach.
+**WABA — Auditoria Traefik overkill + CPU (2026-07-08):** Log `doc/LOG-2026-07-08__092011__auditoria-traefik-scripts-cpu-overkill.md`.
 
-**WABA — OG wabadisparos.com.br (produção):** imagem `wabadisparos-og.jpg` (1200×630, ~127 KB) + script `deploy-wabadisparos-og-vps.sh` para publicar no container `waba_paginadevendas`. URL OG: `https://wabadisparos.com.br/wabadisparos-og.jpg`. Ver `doc/LOG-2026-07-06__193000__og-wabadisparos-share-image-producao.md`. Palavras-chave: `wabadisparos`, `og:image`, `paginadevendas`.
+**WABA — Restore landings Traefik v6 (2026-07-08):** Log `doc/LOG-2026-07-08__085407__restore-landing-traefik-v6-easypanel-format.md`.
+
+**WABA — OG wabadisparos DEFINITIVO (código-fonte):** Ver `doc/LOG-2026-07-07__105500__og-wabadisparos-definitivo-codigo-fonte.md`.
 
 **WABA — Operacional: persistência de WhatsApp + notify por WhatsApp:** `Admin · Usuários` agora persiste `whatsapp` e `segmento` do operador; campanha nova envia e-mail e também WhatsApp com fallback de instância `51981077770` -> `5197462102`. Ver `doc/LOG-2026-07-03__operacional-whatsapp-persistencia-e-notify.md`. Palavras-chave: `waba-system-user`, `operacionalNotify`, `whatsapp`, `segmento`, `final 77770`.
 
@@ -2030,7 +2038,29 @@ Palavras-chave para buscar:
 - **2026-06-25 (backdrop contratar):** luzes + véu blur + conteúdo; ver `doc/LOG-2026-06-25__creditos-contratar-backdrop-luz-blur.md`.
 - **2026-06-25 (backdrop tela inteira):** `#tab-disparos-lancamento` full bleed; PNG hexa-corrigi-2 atualizado.
 
-## 2026-07-05 — Healthcheck estável: `/live` + `/ready` antecipado
+
+## 2026-07-06 — Segmento assinante + tarifador Bet (V02)
+
+- Assinantes com `segment`: **bets** | **outros** (admin obrigatório; landing infere origem).
+- **Outros:** tarifas atuais Oficial + Alternativa.
+- **Bets:** tabela Oficial Bet; sem Alternativa (menu, checkout, campanhas).
+- Cadastro `wabadisparos` → outros; `bet.waba.info` → bets (referer/origin ou `signupOrigin`).
+- Log: `doc/LOG-2026-07-06__114500__assinante-segmento-tarifador-bet.md`.
+
+## 2026-07-06 — Operacional: segmento filtra campanhas (V02)
+
+- Operacional **Bets** atende só campanhas de assinantes **Bets** (mesmo plano API).
+- Operacional **Outros** atende só assinantes **Outros**.
+- Notificação nova campanha respeita apiKind + segmento.
+- Log: `doc/LOG-2026-07-06__120000__operacional-segmento-campanhas.md`.
+
+## 2026-07-06 — Segmento operacional: Outros (V02)
+
+- Select **Segmento** do usuário operacional: opções **Bets** e **Outros** (valor `outros`; antes `todos`).
+- Backend aceita legado `todos` e migra para `outros`.
+- Branch **v02** apenas; sem deploy produção.
+- Log: `doc/LOG-2026-07-06__113500__segmento-operacional-outros.md`.
+
 
 - **Problema:** Docker HEALTHCHECK em `/ready` atravessava body parsers, maintenance e middlewares pesados → falhas intermitentes e restarts no Easypanel (`waba_disparador`).
 - **Fix:**
@@ -2042,9 +2072,8 @@ Palavras-chave para buscar:
 - **Validação local 2026-07-05:** `npm install` + `npm run build` OK; `GET /live` → 200 `ok`; marker `DEPLOY-2026-07-05-healthcheck-live-waba-disparador` em `/health`.
 - **Produção deploy healthcheck (2026-07-05):** marker `DEPLOY-2026-07-05-healthcheck-live-waba-disparador`; serviço verde estável.
 - **Fix overlay falso positivo (2026-07-05):** modal «Atualizando» disparava a cada restart do container porque `watchDeployInBackground` tratava mudança de `serverBootId` como deploy (poll 8s). Fix: gatilho por drift só via `deployMarker`; `serverBootId` só após `shuttingDown` real. Marker `DEPLOY-2026-07-05-deploy-overlay-bootid-false-alarm-fix`. Log `doc/LOG-2026-07-05__deploy-overlay-bootid-false-alarm-fix.md`.
-- **Monitor de uptime unificado (2026-07-07):** `src/monitoring/uptime-monitor.service.ts` — 15min, checa draxsistemas/bet.waba/wabadisparos/waba.draxsistemas/health + Asaas; alerta WhatsApp `5551999666841` (instância `51981077770`→`51997462102`) + e-mail `walkup@walkuptec.com.br`. Rotas `GET/POST /admin/infra/uptime-monitor/*`. Env `WABA_UPTIME_MONITOR_*`. Log `doc/LOG-2026-07-07__150500__monitor-uptime-15min-whatsapp-email.md`.
-- **Luzes de status + sininho vermelho (2026-07-07):** faixa `#admin-uptime-lights` acima do Monitor CPU; `GET /admin/infra/uptime-monitor/lights`; sininho vermelho "Sistema fora do ar" só para `walkup@walkuptec.com.br`. Log `doc/LOG-2026-07-07__154000__ui-luzes-status-monitor-cpu-sininho-walkup.md`.
-- **404/flapping bet.waba.info + wabadisparos.com.br (2026-07-07):** domínios custom com router Traefik intermitente (ora 200 landing Drax, ora 404 padrão Easypanel, ora timeout). Causa: router do host custom some no redeploy Easypanel; scripts self-healing existiam no repo mas **não instalados no VPS**. **Fix definitivo (2026-07-07 tarde):** `bootstrap-vps-definitivo.sh` (1 comando), `vps-traefik-autoheal.sh` (timer 2min), `install-vps-monitor.sh` v2 integra Traefik ALL, workflow GitHub `vps-infra-heal.yml` (SSH 5min). Aplicar no VPS: `curl -fsSL .../bootstrap-vps-definitivo.sh | bash`. Secret `VPS_SSH_PRIVATE_KEY` no GitHub. Log `doc/LOG-2026-07-07__192500__fix-definitivo-traefik-landings-autoheal.md`. Palavras-chave: traefik autoheal, bootstrap definitivo, bet.waba.info, wabadisparos, flapping.
-- **Restore landing routers (2026-07-08):** routers Easypanel (`waba-paginadevendas...`, `waba-bets-pv...`) **ausentes** do `main.yaml` — inject por OR na regra falhou. Novo `scripts/restore-landing-routers-vps.sh` cria router+service do zero (backend via `tasks.SWARM:80`); `traefik-permanent-waba-vps.sh` v7; `fix-wabadisparos-bet-now-vps.sh`. Validar no VPS com `curl --resolve host:443:127.0.0.1` (hairpin NAT). Log `doc/LOG-2026-07-08__073134__fix-404-wabadisparos-bet-router-inject-v7.md`. Palavras-chave: restore-landing-routers, main.yaml sem easypanel host, router inject v7.
-- **Restore landings v6 (2026-07-08):** estudo Traefik docs (File provider, Host\|\|, ACME Host/tls.domains). Causa: Easypanel usa chaves `"https-SERVICE-0"` no `main.yaml` (não `http.routers` YAML); `custom.yaml` dinâmico quebrou easypanel host; publish porta ocupada trava Swarm; Traefik 0/1 = HTTPS 000 global. Script `restore-landing-routers-vps.sh` **v6**: garante Traefik → limpa custom → OR Host(public) + SAN + backend `172.17.0.1:PORT` → HUP → validate. Log `doc/LOG-2026-07-08__085407__restore-landing-traefik-v6-easypanel-format.md`. Palavras-chave: restore-landing v6, easypanel https-SERVICE-0, traefik file provider.
-- **Regra Cursor study-upstream-docs + Rule/MD (2026-07-08):** alwaysApply `.cursor/rules/study-upstream-docs.mdc` e `ucp-traefik-static-dynamic.mdc`; MD sozinha não garante leitura — Enforcement = Rule. Cabeçalho em `FIX-TRAEFIK-DEFINITIVO.md` aponta para a Rule. Log `doc/LOG-2026-07-08__090032__regra-cursor-study-upstream-docs.md`.
+- **Monitor de uptime unificado (2026-07-07):** `uptime-monitor.service.ts` — 15min, alerta WhatsApp + e-mail; fallback `5197462102`. Rotas admin infra.
+- **Luzes de status + sininho vermelho (2026-07-07):** faixa `#admin-uptime-lights`; sininho vermelho só `walkup@walkuptec.com.br`.
+- **404/flapping bet.waba.info + wabadisparos (2026-07-07/08):** scripts restore/bootstrap Traefik no VPS. Logs `144500`, `073134`, `085407`.
+- **Regra Cursor study-upstream-docs (2026-07-08):** `.cursor/rules/study-upstream-docs.mdc`.
+

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveDataFile } from "../data-path";
+import type { WabaSubscriberSegment } from "./waba-subscriber-segment";
 
 export type WabaSubscriber = {
   id: string;
@@ -10,6 +11,8 @@ export type WabaSubscriber = {
   whatsapp: string;
   phone: string;
   cpfCnpj: string;
+  /** Segmento comercial: Bets (bet.waba.info) ou Outros (wabadisparos / demais). */
+  segment?: WabaSubscriberSegment;
   /** Liberado pelo master sem exigir compra de envios (parceiros). */
   aquecedorGranted?: boolean;
   createdAt: string;

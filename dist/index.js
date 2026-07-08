@@ -71,6 +71,7 @@ const waba_push_routes_1 = require("./push/waba-push.routes");
 const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
 const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
 const uptime_monitor_service_1 = require("./monitoring/uptime-monitor.service");
+const vps_cpu_monitor_service_1 = require("./infra/vps-cpu-monitor.service");
 const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_public_base_url_1 = require("./lib/waba-public-base-url");
@@ -84,6 +85,7 @@ const waba_entitlement_routes_1 = require("./entitlements/waba-entitlement.route
 const waba_entitlement_service_1 = require("./entitlements/waba-entitlement.service");
 const waba_cors_1 = require("./lib/waba-cors");
 const waba_subscriber_routes_1 = require("./subscribers/waba-subscriber.routes");
+const waba_subscriber_segment_1 = require("./subscribers/waba-subscriber-segment");
 const waba_support_routes_1 = require("./support/waba-support.routes");
 const instance_integration_probe_1 = require("./instance-integration-probe");
 const instance_inbound_validation_service_1 = require("./instance-inbound-validation.service");
@@ -2997,6 +2999,8 @@ async function resolveDispatchCreditsApiKindForOwner(ownerEmail) {
     const normalized = String(ownerEmail || "").trim().toLowerCase();
     if (!normalized.includes("@"))
         return "oficial";
+    if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(normalized))
+        return "oficial";
     const summary = disparosCreditsService.getCreditsSummary(normalized);
     if (summary.activeApiKind === "alternativa")
         return "alternativa";
@@ -3019,6 +3023,8 @@ function debitsDisparosCreditsPerSuccessfulSend(apiKind) {
 async function shouldApplyAlternativaDispatchProfile(email) {
     const normalized = String(email || "").trim().toLowerCase();
     if (!normalized.includes("@"))
+        return false;
+    if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(normalized))
         return false;
     if ((0, waba_feature_flags_1.isAlternativaNumbersPurchaseEnabled)()) {
         const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
@@ -3543,8 +3549,20 @@ const sendVendasPage = (res) => {
     });
     return res.type("html").send(html);
 };
+const sendBetsLandingPage = (res) => {
+    const betsPath = path_1.default.join(rootPath, "public-pages", "bets.html");
+    if (!(0, fs_1.existsSync)(betsPath)) {
+        return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
+    }
+    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(betsPath, "utf8"), {
+        basePath: base_path_1.BASE_PATH,
+        uiProfile: "production",
+    });
+    return res.type("html").send(html);
+};
 app.get("/cadastro", (_req, res) => sendVendasPage(res));
 app.get("/vendas", (_req, res) => sendVendasPage(res));
+app.get("/bets", (_req, res) => sendBetsLandingPage(res));
 if (base_path_1.BASE_PATH) {
     // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
     app.use((req, res, next) => {
@@ -10493,6 +10511,7 @@ const httpServer = app.listen(PORT, () => {
         }
         (0, asaas_integration_monitor_service_1.startAsaasIntegrationMonitorScheduler)();
         (0, uptime_monitor_service_1.startUptimeMonitorScheduler)();
+        (0, vps_cpu_monitor_service_1.startVpsCpuLocalSampler)();
     })();
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer);

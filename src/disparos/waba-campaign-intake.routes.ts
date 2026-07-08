@@ -10,6 +10,7 @@ import {
 } from "../auth/waba-auth.service";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-policy.service";
+import { isBetsSubscriberEmail } from "../subscribers/waba-subscriber-segment";
 import {
   resolveCampaignIntakeStorageDir,
   WabaCampaignIntakeRepository,
@@ -168,7 +169,9 @@ const parseResponseLink = (body: Record<string, unknown>): string | null => {
 const listAvailableApiKindsForEmail = (ownerEmail: string): WabaDispatchesApiKind[] => {
   const email = ownerEmail.trim().toLowerCase();
   const kinds: WabaDispatchesApiKind[] = [];
+  const betsOnlyOficial = isBetsSubscriberEmail(email);
   for (const kind of ["oficial", "alternativa"] as const) {
+    if (betsOnlyOficial && kind === "alternativa") continue;
     if (disparosCreditsService.getRemainingShipmentsForApi(email, kind) > 0) {
       kinds.push(kind);
     }
@@ -182,6 +185,13 @@ const parseRequestedApiKind = (
 ): { apiKind: WabaDispatchesApiKind; error?: string } => {
   const email = ownerEmail.trim().toLowerCase();
   const requested = normalizeDispatchesApiKind(body.apiKind);
+
+  if (isBetsSubscriberEmail(email) && requested === "alternativa") {
+    return {
+      apiKind: "oficial",
+      error: "Assinantes do segmento Bets geram campanhas apenas na API Oficial.",
+    };
+  }
 
   if (masterPolicyService.hasUnlimitedCredits(email)) {
     return { apiKind: requested === "alternativa" ? "alternativa" : "oficial" };

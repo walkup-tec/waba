@@ -19,14 +19,24 @@ export const registerWabaSubscriberRoutes = (app: Express) => {
   app.post("/subscribers/register", (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
-      const profile = subscriberService.register({
-        email: String(body.email ?? ""),
-        password: String(body.password ?? ""),
-        fullName: String(body.fullName ?? body.name ?? ""),
-        whatsapp: String(body.whatsapp ?? ""),
-        phone: String(body.phone ?? ""),
-        cpfCnpj: String(body.cpfCnpj ?? ""),
-      });
+      const profile = subscriberService.register(
+        {
+          email: String(body.email ?? ""),
+          password: String(body.password ?? ""),
+          fullName: String(body.fullName ?? body.name ?? ""),
+          whatsapp: String(body.whatsapp ?? ""),
+          phone: String(body.phone ?? ""),
+          cpfCnpj: String(body.cpfCnpj ?? ""),
+          segment: body.segment,
+          signupOrigin: body.signupOrigin ?? body.signupSource,
+        },
+        {
+          requestHeaders: {
+            origin: String(req.headers.origin ?? ""),
+            referer: String(req.headers.referer ?? ""),
+          },
+        },
+      );
       const loginUrl = resolveAppLoginUrl();
       return res.status(201).json({
         ok: true,

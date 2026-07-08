@@ -77,9 +77,11 @@ const sendSession = (req, res) => {
                 email: systemUser.email,
                 role: systemUser.role,
                 operacionalDispatchesApi: systemUser.operacionalDispatchesApi ?? null,
+                operacionalSegment: systemUser.operacionalSegment ?? null,
             }
             : null,
         operacionalDispatchesApi: systemUser?.operacionalDispatchesApi ?? null,
+        operacionalSegment: systemUser?.operacionalSegment ?? null,
         allowedMenuIds: menuAccess?.allowedMenuIds ?? [],
         menuPermissions: menuAccess?.menuPermissions ?? null,
     });
@@ -113,6 +115,7 @@ const isAuthBypassPath = (method, reqPath) => {
         p === "/index.html" ||
         p === "/cadastro" ||
         p === "/vendas" ||
+        p === "/bets" ||
         p === "/favicon.ico" ||
         p === "/logo.png" ||
         p === "/drax-logo.png" ||
@@ -179,8 +182,10 @@ const registerWabaAuthRoutes = (app) => {
                         email: user.email,
                         role: user.role,
                         operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+                        operacionalSegment: user.operacionalSegment ?? null,
                     },
                     operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+                    operacionalSegment: user.operacionalSegment ?? null,
                     allowedMenuIds: menuAccess.allowedMenuIds,
                     menuPermissions: menuAccess.menuPermissions,
                 });

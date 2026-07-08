@@ -2764,8 +2764,28 @@
         letter-spacing: 0.01em;
       }
 
-      body.waba-ui-production .integration-env-btn[data-integration-env="alternativa"] {
+      body.waba-ui-production:not(.waba-subscriber-bets-segment)
+        .integration-env-btn[data-integration-env="alternativa"] {
         display: inline-flex;
+      }
+
+      body.waba-ui-production.waba-subscriber-bets-segment
+        .integration-env-btn[data-integration-env="alternativa"],
+      body.waba-ui-production.waba-subscriber-bets-segment
+        .menu-group-items
+        .tab-button[data-menu-key="disparo-evo"],
+      body.waba-ui-production.waba-subscriber-bets-segment
+        .mobile-tabs-drawer
+        .tab-button[data-menu-key="disparo-evo"],
+      body.waba-ui-production.waba-disparo-evo-menu-hidden
+        .menu-group-items
+        .tab-button[data-menu-key="disparo-evo"],
+      body.waba-ui-production.waba-disparo-evo-menu-hidden
+        .mobile-tabs-drawer
+        .tab-button[data-menu-key="disparo-evo"],
+      body.waba-subscriber-bets-segment .disparos-pricing-lane[data-disparos-api="alternativa"],
+      body.waba-subscriber-bets-segment #disparos-credits-api-alternativa {
+        display: none !important;
       }
 
       @media (max-width: 720px) {
@@ -6815,6 +6835,20 @@
         line-height: 1.45;
       }
 
+      .admin-user-menus-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-top: 2px;
+      }
+
+      .admin-user-menus-toolbar .instance-action-btn {
+        min-height: 30px;
+        padding: 4px 12px;
+        font-size: 0.76rem;
+      }
+
       .admin-user-master-policy-block {
         grid-column: 1 / -1;
         display: flex;
@@ -10623,15 +10657,20 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: 0;
       }
       .disparos-pricing-board {
         display: grid;
         grid-template-columns: minmax(406px, 530px) minmax(0, 1fr);
-        gap: 16px 32px;
-        align-items: center;
-        padding: 12px 0 8px;
+        grid-template-rows: auto auto;
+        column-gap: 12px;
+        row-gap: 0;
+        align-items: start;
+        padding: 0;
       }
       .disparos-pricing-hex-cluster {
+        grid-column: 1;
+        grid-row: 1;
         position: relative;
         width: 100%;
         max-width: 500px;
@@ -10717,15 +10756,51 @@
           opacity: 0.12;
         }
       }
+      body.waba-subscriber-bets-segment .disparos-hex-light-lines {
+        display: none !important;
+      }
+      body.waba-subscriber-bets-segment .disparos-hex-cluster-stage {
+        aspect-ratio: 1 / 1;
+      }
+      body.waba-subscriber-bets-segment .disparos-hex-cluster-art {
+        mix-blend-mode: normal;
+      }
+      body.waba-subscriber-bets-segment
+        .disparos-pricing-lane[data-disparos-api="oficial"]
+        .disparos-api-price-outros,
+      body.waba-subscriber-bets-segment
+        .disparos-pricing-lane[data-disparos-api="oficial"]
+        .disparos-api-min-outros {
+        display: none !important;
+      }
+      body.waba-subscriber-bets-segment
+        .disparos-pricing-lane[data-disparos-api="oficial"]
+        .disparos-api-price-bets,
+      body.waba-subscriber-bets-segment
+        .disparos-pricing-lane[data-disparos-api="oficial"]
+        .disparos-api-min-bets {
+        display: block !important;
+      }
+      body:not(.waba-subscriber-bets-segment)
+        .disparos-pricing-lane[data-disparos-api="oficial"]
+        .disparos-api-price-bets,
+      body:not(.waba-subscriber-bets-segment)
+        .disparos-pricing-lane[data-disparos-api="oficial"]
+        .disparos-api-min-bets {
+        display: none !important;
+      }
       .disparos-pricing-lanes {
+        grid-column: 2;
+        grid-row: 1;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        gap: 40px;
+        justify-content: flex-start;
+        gap: 16px;
         padding: 0;
         min-height: 0;
         width: 100%;
         min-width: 0;
+        align-self: start;
       }
       .disparos-pricing-lane {
         display: grid;
@@ -10751,7 +10826,7 @@
       .disparos-pricing-lane-body {
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 12px;
         min-width: 0;
       }
       .disparos-pricing-lane-action {
@@ -10887,13 +10962,15 @@
         box-shadow: 0 0 10px rgba(56, 189, 248, 0.18);
       }
       .disparos-pricing-benefits {
+        grid-column: 1 / -1;
+        grid-row: 2;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0;
+        gap: 15px;
         width: 100%;
         max-width: none;
-        margin: 28px 0 0;
-        padding: 0;
+        margin: 0;
+        padding: 15px;
         border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 14px;
         background: rgba(8, 14, 24, 0.85);
@@ -10906,7 +10983,7 @@
         text-align: center;
         gap: 10px;
         padding: 24px 20px 26px;
-        border-right: 1px solid rgba(148, 163, 184, 0.16);
+        border-right: none;
       }
       .disparos-pricing-benefit:last-child {
         border-right: none;
@@ -10956,7 +11033,8 @@
       @media (min-width: 1100px) {
         .disparos-pricing-board {
           grid-template-columns: minmax(468px, 593px) minmax(0, 1fr);
-          gap: 20px 40px;
+          column-gap: 12px;
+          row-gap: 0;
         }
         .disparos-pricing-hex-cluster,
         .disparos-hex-cluster-art {
@@ -10969,19 +11047,30 @@
       @media (max-width: 960px) {
         .disparos-pricing-board {
           grid-template-columns: 1fr;
-          gap: 20px;
+          grid-template-rows: auto auto auto;
+          column-gap: 0;
+          row-gap: 0;
           justify-items: center;
+        }
+        .disparos-pricing-hex-cluster {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .disparos-pricing-lanes {
+          grid-column: 1;
+          grid-row: 2;
+          gap: 16px;
+          padding: 0;
+          width: 100%;
+        }
+        .disparos-pricing-benefits {
+          grid-column: 1;
+          grid-row: 3;
         }
         .disparos-pricing-hex-cluster,
         .disparos-hex-cluster-art {
           max-width: min(468px, 96vw);
           margin: 0 auto;
-        }
-        .disparos-pricing-lanes {
-          min-height: 0;
-          gap: 32px;
-          padding: 0;
-          width: 100%;
         }
         .disparos-pricing-lane {
           grid-template-columns: 1fr;
@@ -11010,7 +11099,7 @@
         }
         .disparos-pricing-benefit {
           border-right: none;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+          border-bottom: none;
         }
         .disparos-pricing-benefit:last-child {
           border-bottom: none;
@@ -16243,9 +16332,15 @@
                         </div>
                         <div class="disparos-pricing-lane-action-row">
                           <div class="disparos-pricing-lane-action-pricing">
-                            <p class="disparos-api-price">De R$ 0,25 a R$ 0,32</p>
+                            <p class="disparos-api-price">
+                              <span class="disparos-api-price-outros">De R$ 0,25 a R$ 0,32</span>
+                              <span class="disparos-api-price-bets" hidden>De R$ 0,33 a R$ 0,40</span>
+                            </p>
                             <p class="disparos-api-min-creditos">
-                              Valor mínimo de créditos: <strong>R$ 320,00</strong>
+                              <span class="disparos-api-min-outros">
+                                Valor mínimo de créditos: <strong>R$ 320,00</strong>
+                              </span>
+                              <span class="disparos-api-min-bets" hidden>Escolha o melhor pacote para você</span>
                             </p>
                           </div>
                           <button
@@ -16310,7 +16405,6 @@
                   </article>
 
                 </div>
-              </div>
 
               <div class="disparos-pricing-benefits" aria-label="Diferenciais da plataforma">
                 <div class="disparos-pricing-benefit">
@@ -16349,6 +16443,7 @@
                   <strong>Flexível</strong>
                   <p>Soluções que se adaptam ao seu negócio e ao seu objetivo.</p>
                 </div>
+              </div>
               </div>
           </div>
           </div>
@@ -17932,6 +18027,13 @@
                         <label for="admin-subscriber-cpf">CPF ou CNPJ</label>
                         <input id="admin-subscriber-cpf" type="text" required placeholder="000.000.000-00 ou 00.000.000/0000-00" inputmode="numeric" autocomplete="off" />
                       </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-subscriber-segment">Segmento</label>
+                        <select id="admin-subscriber-segment" required>
+                          <option value="outros" selected>Outros</option>
+                          <option value="bets">Bets</option>
+                        </select>
+                      </div>
                       <div class="admin-subscriber-options">
                         <p class="admin-subscriber-options-title">Recursos do assinante</p>
                         <label class="admin-subscriber-option-check" for="admin-subscriber-aquecedor-granted">
@@ -18057,6 +18159,7 @@
                     <thead>
                       <tr>
                         <th scope="col">Nome</th>
+                        <th scope="col">Segmento</th>
                         <th scope="col">CPF ou CNPJ</th>
                         <th scope="col">Data inscrição</th>
                         <th scope="col" class="admin-subscribers-num">Créditos</th>
@@ -18068,7 +18171,7 @@
                     </thead>
                     <tbody id="admin-subscribers-tbody">
                       <tr>
-                        <td colspan="8" class="muted">Carregando…</td>
+                        <td colspan="9" class="muted">Carregando…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -18519,8 +18622,11 @@
                       <label for="admin-user-operacional-segment">Segmento</label>
                       <select id="admin-user-operacional-segment" required>
                         <option value="bets">Bets</option>
-                        <option value="todos" selected>Todos</option>
+                        <option value="outros" selected>Outros</option>
                       </select>
+                      <p class="admin-users-menus-hint" style="margin-top: 6px">
+                        Somente campanhas de assinantes deste segmento aparecem para este operacional.
+                      </p>
                     </div>
                     <div id="admin-user-master-policy-block" class="admin-user-master-policy-block" hidden>
                       <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -18549,6 +18655,22 @@
                     <p class="admin-users-menus-hint">
                       Lista dinâmica do sistema. Novos menus aparecem aqui desmarcados para usuários já existentes.
                     </p>
+                    <div id="admin-user-menus-toolbar" class="admin-user-menus-toolbar">
+                      <button
+                        id="admin-user-menus-select-all-btn"
+                        class="instance-action-btn btn-refresh enabled"
+                        type="button"
+                      >
+                        Marcar tudo
+                      </button>
+                      <button
+                        id="admin-user-menus-clear-all-btn"
+                        class="instance-action-btn btn-refresh enabled"
+                        type="button"
+                      >
+                        Desmarcar tudo
+                      </button>
+                    </div>
                     <div id="admin-user-menus-checklist" class="admin-user-menus-checklist"></div>
                   </div>
                   <div class="admin-users-form-footer">
@@ -19446,8 +19568,11 @@
               <label for="admin-user-edit-operacional-segment">Segmento</label>
               <select id="admin-user-edit-operacional-segment" required>
                 <option value="bets">Bets</option>
-                <option value="todos" selected>Todos</option>
+                <option value="outros" selected>Outros</option>
               </select>
+              <p class="admin-users-menus-hint" style="margin-top: 6px">
+                Somente campanhas de assinantes deste segmento aparecem para este operacional.
+              </p>
             </div>
             <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block" hidden>
               <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -19474,6 +19599,22 @@
           <div id="admin-user-edit-menus-block" class="admin-users-menus-block">
             <h3 class="admin-users-menus-title">Menus liberados</h3>
             <p class="admin-users-menus-hint">Marque os menus que este usuário pode acessar.</p>
+            <div id="admin-user-edit-menus-toolbar" class="admin-user-menus-toolbar">
+              <button
+                id="admin-user-edit-menus-select-all-btn"
+                class="instance-action-btn btn-refresh enabled"
+                type="button"
+              >
+                Marcar tudo
+              </button>
+              <button
+                id="admin-user-edit-menus-clear-all-btn"
+                class="instance-action-btn btn-refresh enabled"
+                type="button"
+              >
+                Desmarcar tudo
+              </button>
+            </div>
             <div id="admin-user-edit-menus-checklist" class="admin-user-menus-checklist"></div>
           </div>
           <div class="confirm-actions">
@@ -20280,6 +20421,7 @@
       let wabaSessionEmail = "";
       let wabaSubscriberProfile = null;
       let wabaOperacionalDispatchesApi = "";
+      let wabaOperacionalSegment = "";
       let wabaStaffAllowedMenuIds = new Set();
       let wabaMenuRegistryCache = [];
       let adminUsersCache = [];
@@ -20553,6 +20695,9 @@
           wabaOperacionalDispatchesApi = String(
             session.operacionalDispatchesApi || session.systemUser?.operacionalDispatchesApi || ""
           ).trim();
+          wabaOperacionalSegment = String(
+            session.operacionalSegment || session.systemUser?.operacionalSegment || ""
+          ).trim();
           const allowedMenus = Array.isArray(session.allowedMenuIds) ? session.allowedMenuIds : [];
           wabaStaffAllowedMenuIds = new Set(allowedMenus.map((id) => String(id || "").trim()).filter(Boolean));
           document.body.classList.add("waba-auth-enabled");
@@ -20566,6 +20711,7 @@
           wabaSessionEmail = "";
           wabaSubscriberProfile = null;
           wabaOperacionalDispatchesApi = "";
+          wabaOperacionalSegment = "";
           wabaStaffAllowedMenuIds = new Set();
           document.body.classList.remove("waba-auth-enabled");
         }
@@ -20589,6 +20735,9 @@
         wabaStaffAllowedMenuIds = new Set(allowedMenus.map((id) => String(id || "").trim()).filter(Boolean));
         wabaOperacionalDispatchesApi = String(
           sessionLike?.operacionalDispatchesApi || sessionLike?.systemUser?.operacionalDispatchesApi || ""
+        ).trim();
+        wabaOperacionalSegment = String(
+          sessionLike?.operacionalSegment || sessionLike?.systemUser?.operacionalSegment || ""
         ).trim();
         applyMenuSectionAccess();
         syncAdminCampanhasScopeHint();
@@ -21064,6 +21213,7 @@
 
       function shouldShowDisparoEvoMenu() {
         if (!isProductionUi()) return false;
+        if (isBetsSubscriberAccount()) return false;
         if (isStaffRole(wabaAuthRole) && wabaAuthRole !== "master") {
           return hasStaffMenuAccess("disparo-evo");
         }
@@ -21082,7 +21232,7 @@
         const enable = isSubscriberAccount();
         document.body.classList.toggle("waba-subscriber-disparos-menus", enable);
         if (enable && typeof setDesktopMenuGroupOpen === "function") {
-          setDesktopMenuGroupOpen("oficial", true);
+          setDesktopMenuGroupOpen(resolveMenuGroupForTab(activeTab), true);
         }
       }
 
@@ -21140,6 +21290,8 @@
         syncCampanhasMenuHighlight();
         syncOfficialSectionLabels();
         syncSubscriberDisparosMenuLayout();
+        syncDisparoEvoMenuVisibility();
+        syncDisparosPricingBoardForSegment();
       }
 
       function getMenuSectionForTab(tabName) {
@@ -21297,8 +21449,10 @@
           oficialBtn.toggleAttribute("disabled", !showOficial);
         }
         if (alternativaBtn) {
-          const showAlternativa = isProductionUi() && showOficial;
+          const showAlternativa =
+            isProductionUi() && showOficial && !isBetsSubscriberAccount();
           alternativaBtn.hidden = !showAlternativa;
+          alternativaBtn.style.display = showAlternativa ? "" : "none";
           alternativaBtn.toggleAttribute("disabled", !showAlternativa);
         }
         if (strip) {
@@ -21781,9 +21935,61 @@
 
       function normalizeIntegrationEnv(env) {
         const raw = String(env || "").trim().toLowerCase();
+        if (isBetsSubscriberAccount() && raw === "alternativa") return "oficial";
         if (raw === "alternativa") return "alternativa";
         if (raw === "oficial") return "oficial";
         return "nao-oficial";
+      }
+
+      function isAquecedorSectionTab(tabName) {
+        return tabName === "dashboard" || tabName === "instancias" || tabName === "aquecedor";
+      }
+
+      function enforceBetsSubscriberIntegrationEnv() {
+        if (!isBetsSubscriberAccount()) return;
+
+        syncDisparoEvoMenuVisibility();
+
+        if (activeTab === "disparo-evo" || readActiveIntegrationEnv() === "alternativa") {
+          const targetTab = resolveOfficialApiTab();
+          applyIntegrationEnvironment("oficial");
+          try {
+            localStorage.setItem("waba.integration.env", "oficial");
+          } catch {
+            /* ignore */
+          }
+          if (!isTabBlockedByMenuPolicy(targetTab)) {
+            setActiveTab(targetTab);
+          }
+          syncIntegrationEnvAccess();
+          return;
+        }
+
+        if (isAquecedorSectionTab(activeTab)) {
+          applyIntegrationEnvironment("nao-oficial");
+          try {
+            localStorage.setItem("waba.integration.env", "nao-oficial");
+          } catch {
+            /* ignore */
+          }
+          syncIntegrationEnvAccess();
+          return;
+        }
+
+        if (
+          activeTab === "disparos" ||
+          activeTab === "disparos-dashboard" ||
+          activeTab === "disparos-lancamento"
+        ) {
+          applyIntegrationEnvironment("oficial");
+          try {
+            localStorage.setItem("waba.integration.env", "oficial");
+          } catch {
+            /* ignore */
+          }
+        }
+
+        syncIntegrationEnvAccess();
       }
 
       function isDisparosApiIntegrationEnv(env) {
@@ -21792,6 +21998,9 @@
       }
 
       function selectDisparosApiKind(kind) {
+        if (isBetsSubscriberAccount() && kind === "alternativa") {
+          return selectDisparosApiKind("oficial");
+        }
         const normalized = kind === "alternativa" ? "alternativa" : "oficial";
         document.querySelectorAll(".disparos-api-card[data-disparos-api]").forEach((card) => {
           card.classList.toggle(
@@ -22128,6 +22337,14 @@
         } catch {
           /* ignore */
         }
+        if (isBetsSubscriberAccount() && saved === "alternativa") {
+          saved = "oficial";
+          try {
+            localStorage.setItem("waba.integration.env", "oficial");
+          } catch {
+            /* ignore */
+          }
+        }
         if (saved === "oficial" || saved === "alternativa") {
           const officialTab = resolveTabForIntegrationEnv(saved);
           if (!isTabBlockedByMenuPolicy(officialTab)) {
@@ -22141,6 +22358,10 @@
         }
         applyIntegrationEnvironment(saved);
         enhanceWabaProductLabelElements(document);
+        syncDisparosPricingBoardForSegment();
+        if (isBetsSubscriberAccount()) {
+          enforceBetsSubscriberIntegrationEnv();
+        }
       }
 
       const DISPAROS_PRICING_TIERS = {
@@ -22154,6 +22375,14 @@
           { shipments: 20000, pricePerSend: 0.26, totalCents: 520000 },
           { shipments: 30000, pricePerSend: 0.25, totalCents: 750000 },
         ],
+        betsOficial: [
+          { shipments: 5000, pricePerSend: 0.4, totalCents: 200000 },
+          { shipments: 10000, pricePerSend: 0.38, totalCents: 380000 },
+          { shipments: 20000, pricePerSend: 0.37, totalCents: 740000 },
+          { shipments: 30000, pricePerSend: 0.36, totalCents: 1080000 },
+          { shipments: 40000, pricePerSend: 0.35, totalCents: 1400000 },
+          { shipments: 50000, pricePerSend: 0.33, totalCents: 1650000 },
+        ],
         alternativa: [
           { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
           { shipments: 1000, pricePerSend: 0.2, totalCents: 20000 },
@@ -22165,6 +22394,152 @@
           { shipments: 30000, pricePerSend: 0.13, totalCents: 390000 },
         ],
       };
+
+      function getSubscriberSegment() {
+        const raw = String(wabaSubscriberProfile?.segment || "outros").trim().toLowerCase();
+        return raw === "bets" ? "bets" : "outros";
+      }
+
+      function isBetsSubscriberAccount() {
+        return isSubscriberAccount() && getSubscriberSegment() === "bets";
+      }
+
+      function getDisparosPricingTiers(apiKind) {
+        if (getSubscriberSegment() === "bets") {
+          if (apiKind === "alternativa") return [];
+          return DISPAROS_PRICING_TIERS.betsOficial || [];
+        }
+        return DISPAROS_PRICING_TIERS[apiKind] || [];
+      }
+
+      function resolveDisparosSaleTiersForDisplay(tiers) {
+        return (Array.isArray(tiers) ? tiers : []).filter((tier) => !tier?.testOnly);
+      }
+
+      function formatDisparosPriceRangeFromTiers(tiers) {
+        const saleTiers = resolveDisparosSaleTiersForDisplay(tiers);
+        if (!saleTiers.length) return "";
+        const prices = saleTiers
+          .map((tier) => Number(tier.pricePerSend))
+          .filter((price) => Number.isFinite(price) && price > 0);
+        if (!prices.length) return "";
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        return `De ${formatDisparosUnitPrice(minPrice)} a ${formatDisparosUnitPrice(maxPrice)}`;
+      }
+
+      function resolveDisparosOficialCardPricingCopy() {
+        if (isBetsSubscriberAccount()) {
+          return {
+            priceLabel: formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.betsOficial),
+            subLabel: "Escolha o melhor pacote para você",
+            subHtml: false,
+          };
+        }
+        return {
+          priceLabel: formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.oficial),
+          subLabel: 'Valor mínimo de créditos: <strong>R$ 320,00</strong>',
+          subHtml: true,
+        };
+      }
+
+      function applyDisparosOficialCardPricingCopy(root) {
+        const scope = root && typeof root.querySelectorAll === "function" ? root : document;
+        const copy = resolveDisparosOficialCardPricingCopy();
+        scope.querySelectorAll('.disparos-pricing-lane[data-disparos-api="oficial"]').forEach((lane) => {
+          const priceOutros = lane.querySelector(".disparos-api-price-outros");
+          const priceBets = lane.querySelector(".disparos-api-price-bets");
+          const minOutros = lane.querySelector(".disparos-api-min-outros");
+          const minBets = lane.querySelector(".disparos-api-min-bets");
+          const legacyPrice = lane.querySelector(".disparos-api-price:not(:has(.disparos-api-price-outros))");
+          const legacyMin = lane.querySelector(
+            ".disparos-api-min-creditos:not(:has(.disparos-api-min-outros))"
+          );
+
+          const outrosPrice = formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.oficial);
+          const betsPrice = formatDisparosPriceRangeFromTiers(DISPAROS_PRICING_TIERS.betsOficial);
+
+          if (priceOutros && outrosPrice) priceOutros.textContent = outrosPrice;
+          if (priceBets && betsPrice) priceBets.textContent = betsPrice;
+          if (minBets) minBets.textContent = "Escolha o melhor pacote para você";
+
+          if (isBetsSubscriberAccount()) {
+            if (priceBets && copy.priceLabel) priceBets.textContent = copy.priceLabel;
+            if (legacyPrice && copy.priceLabel) legacyPrice.textContent = copy.priceLabel;
+            if (minBets) minBets.textContent = copy.subLabel;
+            if (legacyMin) legacyMin.textContent = copy.subLabel;
+          } else {
+            if (priceOutros && copy.priceLabel) priceOutros.textContent = copy.priceLabel;
+            if (legacyPrice && copy.priceLabel) legacyPrice.textContent = copy.priceLabel;
+            if (minOutros && copy.subHtml) minOutros.innerHTML = copy.subLabel;
+            if (legacyMin && copy.subHtml) legacyMin.innerHTML = copy.subLabel;
+          }
+        });
+      }
+
+      const DISPAROS_HEX_CLUSTER_ART_DEFAULT = {
+        src: "/media/hexa-corrigi-2.png",
+        alt: "Pacotes e serviços, API Oficial e API Alternativa",
+        width: 3000,
+        height: 4000,
+      };
+      const DISPAROS_HEX_CLUSTER_ART_BETS = {
+        src: "/media/creditBet_02.png",
+        alt: "API Oficial Meta Business para assinantes Bets",
+        width: 1024,
+        height: 1024,
+      };
+
+      function syncDisparosHexClusterArt() {
+        const img = document.querySelector(".disparos-hex-cluster-art");
+        if (!img) return;
+        const art = isBetsSubscriberAccount()
+          ? DISPAROS_HEX_CLUSTER_ART_BETS
+          : DISPAROS_HEX_CLUSTER_ART_DEFAULT;
+        const resolvedSrc =
+          typeof resolveWabaPublicPath === "function"
+            ? resolveWabaPublicPath(art.src)
+            : art.src;
+        if (img.getAttribute("src") !== resolvedSrc) img.setAttribute("src", resolvedSrc);
+        if (img.getAttribute("alt") !== art.alt) img.setAttribute("alt", art.alt);
+        if (String(img.getAttribute("width")) !== String(art.width)) {
+          img.setAttribute("width", String(art.width));
+        }
+        if (String(img.getAttribute("height")) !== String(art.height)) {
+          img.setAttribute("height", String(art.height));
+        }
+      }
+
+      function syncDisparosPricingBoardForSegment() {
+        const hideAlternativa = isBetsSubscriberAccount();
+        document.querySelectorAll('.disparos-pricing-lane[data-disparos-api="alternativa"]').forEach((lane) => {
+          lane.hidden = hideAlternativa;
+        });
+        document.body.classList.toggle("waba-subscriber-bets-segment", hideAlternativa);
+        if (hideAlternativa) {
+          document
+            .querySelectorAll('.disparos-pricing-lane[data-disparos-api="alternativa"]')
+            .forEach((lane) => {
+              lane.hidden = true;
+              lane.style.display = "none";
+            });
+          enforceBetsSubscriberIntegrationEnv();
+        } else {
+          syncDisparoEvoMenuVisibility();
+          syncIntegrationEnvAccess();
+        }
+        applyDisparosOficialCardPricingCopy(document);
+        syncDisparosHexClusterArt();
+      }
+
+      function syncDisparoEvoMenuVisibility() {
+        const show = shouldShowDisparoEvoMenu();
+        document.querySelectorAll('.tab-button[data-menu-key="disparo-evo"]').forEach((btn) => {
+          btn.hidden = !show;
+          btn.setAttribute("aria-hidden", show ? "false" : "true");
+        });
+        document.body.classList.toggle("waba-disparo-evo-menu-hidden", !show);
+      }
 
       let disparosBillingConfigCache = null;
       let disparosBillingPollTimer = null;
@@ -23224,7 +23599,7 @@
       }
 
       function getDisparosPricingLastTier(apiKind) {
-        const tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
+        const tiers = getDisparosPricingTiers(apiKind);
         return tiers.reduce(
           (max, tier) => (tier.shipments > (max?.shipments ?? 0) ? tier : max),
           null
@@ -23378,6 +23753,7 @@
         const name = escapeAdminHtml(item?.fullName || "—");
         const email = subscriberEmail;
         const cpf = escapeAdminHtml(item?.cpfCnpjFormatted || item?.cpfCnpj || "—");
+        const segment = escapeAdminHtml(item?.segmentLabel || item?.segment || "Outros");
         const createdAt = escapeAdminHtml(item?.createdAtLabel || "—");
         const credits = escapeAdminHtml(item?.creditsValueLabel || formatDisparosMoneyFromCents(0));
         const disparos = escapeAdminHtml(formatDisparosQty(item?.contractedShipments));
@@ -23419,6 +23795,7 @@
                   <span class="admin-subscribers-name">${name}${newMarker}</span>
                   ${email ? `<span class="admin-subscribers-email">${email}</span>` : ""}
                 </td>
+                <td>${segment}</td>
                 <td>${cpf}</td>
                 <td>${createdAt}</td>
                 <td class="admin-subscribers-num">${credits}</td>
@@ -23445,7 +23822,7 @@
 
         if (!rows.length) {
           tbody.innerHTML =
-            '<tr><td colspan="8" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
+            '<tr><td colspan="9" class="muted">Nenhum assinante cadastrado ainda.</td></tr>';
           return;
         }
 
@@ -23644,6 +24021,13 @@
                   <input id="admin-subscriber-detail-cpf" type="text" required inputmode="numeric" autocomplete="off" value="${escapeAdminHtml(profile.cpfCnpjFormatted || profile.cpfCnpj || "")}" />
                 </div>
                 <div class="aquecedor-field">
+                  <label for="admin-subscriber-detail-segment">Segmento</label>
+                  <select id="admin-subscriber-detail-segment" required>
+                    <option value="outros" ${profile.segment === "outros" || !profile.segment ? "selected" : ""}>Outros</option>
+                    <option value="bets" ${profile.segment === "bets" ? "selected" : ""}>Bets</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
                   <label for="admin-subscriber-detail-password">Nova senha</label>
                   <input id="admin-subscriber-detail-password" type="password" minlength="6" autocomplete="new-password" placeholder="Deixe em branco para manter a senha atual" />
                 </div>
@@ -23776,6 +24160,7 @@
         const aquecedorGranted = Boolean(
           document.getElementById("admin-subscriber-detail-aquecedor-granted")?.checked
         );
+        const segment = String(document.getElementById("admin-subscriber-detail-segment")?.value || "").trim();
         const saveBtn = document.getElementById("admin-subscriber-detail-save-btn");
 
         if (fullName.length < 2) {
@@ -23798,6 +24183,10 @@
           showToast("A nova senha deve ter pelo menos 6 caracteres.", "warning");
           return;
         }
+        if (segment !== "bets" && segment !== "outros") {
+          showToast("Selecione o segmento do assinante.", "warning");
+          return;
+        }
 
         if (saveBtn) {
           saveBtn.disabled = true;
@@ -23818,6 +24207,7 @@
                 phone: whatsapp,
                 cpfCnpj,
                 aquecedorGranted,
+                segment,
                 password: password || undefined,
               }),
             },
@@ -26178,14 +26568,14 @@
         if (!hasMasterAccess()) {
           if (tbody) {
             tbody.innerHTML =
-              '<tr><td colspan="8" class="muted">Área restrita ao usuário master.</td></tr>';
+              '<tr><td colspan="9" class="muted">Área restrita ao usuário master.</td></tr>';
           }
           if (summary) summary.textContent = "Acesso negado.";
           return;
         }
 
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="8" class="muted">Carregando…</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="muted">Carregando…</td></tr>';
         }
         if (summary) summary.textContent = "Carregando assinantes…";
 
@@ -26198,7 +26588,7 @@
           renderAdminSubscribersTable(payload.items);
         } catch (error) {
           if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="8" class="muted">${escapeAdminHtml(
+            tbody.innerHTML = `<tr><td colspan="9" class="muted">${escapeAdminHtml(
               resolveAdminSubscriberFetchError(error, "Falha ao carregar assinantes.")
             )}</td></tr>`;
           }
@@ -26779,6 +27169,7 @@
         const aquecedorGranted = Boolean(
           document.getElementById("admin-subscriber-aquecedor-granted")?.checked
         );
+        const segment = String(document.getElementById("admin-subscriber-segment")?.value || "").trim();
         const submitBtn = document.getElementById("admin-subscriber-create-btn");
         const errEl = document.getElementById("admin-subscriber-create-error");
         if (errEl) {
@@ -26823,6 +27214,10 @@
           );
           return;
         }
+        if (segment !== "bets" && segment !== "outros") {
+          showAdminSubscriberCreateValidation("Selecione o segmento do assinante.", "admin-subscriber-segment");
+          return;
+        }
 
         if (submitBtn) {
           submitBtn.disabled = true;
@@ -26844,6 +27239,7 @@
                 phone: whatsapp,
                 cpfCnpj,
                 aquecedorGranted,
+                segment,
               }),
             },
             12000
@@ -26863,6 +27259,8 @@
           document.getElementById("admin-subscriber-password").value = "";
           document.getElementById("admin-subscriber-whatsapp").value = "";
           document.getElementById("admin-subscriber-cpf").value = "";
+          const segmentSelect = document.getElementById("admin-subscriber-segment");
+          if (segmentSelect) segmentSelect.value = "outros";
           const aquecedorCheckbox = document.getElementById("admin-subscriber-aquecedor-granted");
           if (aquecedorCheckbox) aquecedorCheckbox.checked = false;
           resetAdminSubscriberCreateFormState();
@@ -28188,6 +28586,20 @@
         return permissions;
       }
 
+      function applyAdminUserMenuChecklistBulk(container, checked) {
+        if (!container) return;
+        container
+          .querySelectorAll('input[type="checkbox"][data-menu-id]:not(:disabled)')
+          .forEach((input) => {
+            input.checked = Boolean(checked);
+          });
+      }
+
+      function syncAdminUserMenusToolbarVisibility(toolbar, role) {
+        if (!toolbar) return;
+        toolbar.hidden = String(role || "").toLowerCase() === "master";
+      }
+
       function renderAdminMenuChecklist(container, menus, selectedPermissions, options = {}) {
         if (!container) return;
         const disabled = Boolean(options.disabled);
@@ -28285,7 +28697,7 @@
           if (createSegmentBlock) createSegmentBlock.hidden = !isOperacional;
           if (createSegmentSelect) {
             createSegmentSelect.required = isOperacional;
-            if (!isOperacional) createSegmentSelect.value = "todos";
+            if (!isOperacional) createSegmentSelect.value = "outros";
           }
         }
         if (mode === "edit" || mode === "both") {
@@ -28297,7 +28709,7 @@
           if (editSegmentBlock) editSegmentBlock.hidden = !isOperacional;
           if (editSegmentSelect) {
             editSegmentSelect.required = isOperacional;
-            if (!isOperacional) editSegmentSelect.value = "todos";
+            if (!isOperacional) editSegmentSelect.value = "outros";
           }
         }
         syncAdminUserMasterPolicyField(role, options);
@@ -28356,7 +28768,7 @@
       function readAdminUserOperacionalSegmentValue(mode = "create") {
         const id =
           mode === "edit" ? "admin-user-edit-operacional-segment" : "admin-user-operacional-segment";
-        return String(document.getElementById(id)?.value || "todos").trim() || "todos";
+        return String(document.getElementById(id)?.value || "outros").trim() || "outros";
       }
 
       function syncAdminCampanhasScopeHint() {
@@ -28378,9 +28790,12 @@
           return;
         }
         if (wabaAuthRole === "operacional") {
+          const segmentLabel = wabaOperacionalSegment === "bets" ? "Bets" : "Outros";
           if (wabaOperacionalDispatchesApi === "oficial") {
             hint.innerHTML = [
-              "Campanhas contratadas na ",
+              "Campanhas de assinantes ",
+              `<strong>${segmentLabel}</strong>`,
+              " contratadas na ",
               renderWabaApiKindLabelHtml("oficial", { inline: true }),
               " — em aberto para operação ou finalizadas para consulta.",
             ].join("");
@@ -28388,7 +28803,9 @@
           }
           if (wabaOperacionalDispatchesApi === "alternativa") {
             hint.innerHTML = [
-              "Campanhas contratadas na ",
+              "Campanhas de assinantes ",
+              `<strong>${segmentLabel}</strong>`,
+              " contratadas na ",
               renderWabaApiKindLabelHtml("alternativa", { inline: true }),
               " — em aberto para operação ou finalizadas para consulta.",
             ].join("");
@@ -28407,6 +28824,10 @@
         syncAdminUserOperacionalApiField(role, { mode: "create" });
         const container = document.getElementById("admin-user-menus-checklist");
         if (!container) return;
+        syncAdminUserMenusToolbarVisibility(
+          document.getElementById("admin-user-menus-toolbar"),
+          role
+        );
 
         if (role === "master") {
           const allEnabled = {};
@@ -28550,11 +28971,16 @@
         }
         const operacionalSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
         if (operacionalSegmentSelect) {
-          operacionalSegmentSelect.value = String(user.operacionalSegment || user.segment || "todos");
+          operacionalSegmentSelect.value = String(user.operacionalSegment || user.segment || "outros");
+          if (operacionalSegmentSelect.value === "todos") operacionalSegmentSelect.value = "outros";
         }
         if (menusBlock) {
           menusBlock.hidden = user.role === "master";
         }
+        syncAdminUserMenusToolbarVisibility(
+          document.getElementById("admin-user-edit-menus-toolbar"),
+          user.role
+        );
         if (user.role !== "master") {
           renderAdminMenuChecklist(checklist, wabaMenuRegistryCache, user.menuPermissions || {}, {
             disabled: false,
@@ -28816,7 +29242,7 @@
           const operacionalApiSelect = document.getElementById("admin-user-operacional-api");
           if (operacionalApiSelect) operacionalApiSelect.value = "";
           const operacionalSegmentSelect = document.getElementById("admin-user-operacional-segment");
-          if (operacionalSegmentSelect) operacionalSegmentSelect.value = "todos";
+          if (operacionalSegmentSelect) operacionalSegmentSelect.value = "outros";
           syncAdminUserCreateMenuChecklist();
           await loadAdminUsers();
         } catch (error) {
@@ -28837,6 +29263,30 @@
         });
         document.getElementById("admin-user-role")?.addEventListener("change", () => {
           syncAdminUserCreateMenuChecklist();
+        });
+        document.getElementById("admin-user-menus-select-all-btn")?.addEventListener("click", () => {
+          applyAdminUserMenuChecklistBulk(
+            document.getElementById("admin-user-menus-checklist"),
+            true
+          );
+        });
+        document.getElementById("admin-user-menus-clear-all-btn")?.addEventListener("click", () => {
+          applyAdminUserMenuChecklistBulk(
+            document.getElementById("admin-user-menus-checklist"),
+            false
+          );
+        });
+        document.getElementById("admin-user-edit-menus-select-all-btn")?.addEventListener("click", () => {
+          applyAdminUserMenuChecklistBulk(
+            document.getElementById("admin-user-edit-menus-checklist"),
+            true
+          );
+        });
+        document.getElementById("admin-user-edit-menus-clear-all-btn")?.addEventListener("click", () => {
+          applyAdminUserMenuChecklistBulk(
+            document.getElementById("admin-user-edit-menus-checklist"),
+            false
+          );
         });
         document.getElementById("admin-users-tbody")?.addEventListener("click", (event) => {
           const editBtn = event.target?.closest?.(".btn-admin-user-edit");
@@ -31732,6 +32182,7 @@
         const choice = document.getElementById("disparos-purchase-choice-wrap");
         if (!targetEl || !choice) return;
         targetEl.appendChild(choice);
+        syncDisparosPricingBoardForSegment();
       }
 
       function openDisparosRepurchaseModal() {
@@ -32001,6 +32452,7 @@
         if (purchasePanel) purchasePanel.hidden = isHistory;
         if (historyPanel) historyPanel.hidden = !isHistory;
         if (isHistory) void loadDisparosCreditsHubHistory();
+        if (!isHistory) syncDisparosPricingBoardForSegment();
         renderDisparosCreditsPanel(disparosCreditsCache);
       }
 
@@ -33230,7 +33682,7 @@
       function renderDisparosPricingTable(apiKind) {
         const tbody = document.getElementById("disparos-pricing-tbody");
         if (!tbody) return;
-        const tiers = DISPAROS_PRICING_TIERS[apiKind] || [];
+        const tiers = getDisparosPricingTiers(apiKind);
         tbody.innerHTML = "";
         disparosSelectedPackage = null;
         resetDisparosPricingCustomUi();
@@ -33305,6 +33757,10 @@
       }
 
       function openDisparosPricingModal(apiKind) {
+        if (isBetsSubscriberAccount() && apiKind === "alternativa") {
+          showToast("Assinantes do segmento Bets contratam créditos apenas na API Oficial.", "warning", 5200);
+          apiKind = "oficial";
+        }
         disparosBillingSelectedKind = apiKind;
         disparosSelectedPackage = null;
         const title = document.getElementById("disparos-pricing-title");
@@ -33784,6 +34240,7 @@
           );
         });
 
+        syncDisparosPricingBoardForSegment();
       }
 
       let instancesSearchTerm = "";
@@ -43970,6 +44427,14 @@
             const env = normalizeIntegrationEnv(
               btn.getAttribute("data-integration-env") || "nao-oficial"
             );
+            if (isBetsSubscriberAccount() && env === "alternativa") {
+              showToast(
+                "Assinantes do segmento Bets utilizam apenas a API Oficial.",
+                "warning",
+                5200
+              );
+              return;
+            }
             const targetTab = resolveTabForIntegrationEnv(env);
 
             if (env === "nao-oficial") {

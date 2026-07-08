@@ -9,11 +9,15 @@ import {
   buildCampaignCompletedTemplate,
   buildCampaignErrorReportedTemplate,
   buildOperacionalNewCampaignTemplate,
+  buildStaffWelcomeTemplate,
   buildSubscriberWelcomeTemplate,
   buildSupportTicketClosedTemplate,
 } from "./waba-mail.templates";
 import { wabaMailService } from "./waba-mail.service";
-import { notifySubscriberWelcomeWhatsApp } from "./waba-welcome-whatsapp.service";
+import {
+  notifyStaffWelcomeWhatsApp,
+  notifySubscriberWelcomeWhatsApp,
+} from "./waba-welcome-whatsapp.service";
 
 export type WabaEmailDeliveryStatus = "sent" | "skipped" | "failed";
 
@@ -301,5 +305,63 @@ export const notifySubscriberWelcomeEmail = (input: {
     password: input.password,
     whatsapp: input.whatsapp,
     loginUrl: input.loginUrl,
+  });
+};
+
+export const deliverStaffWelcomeEmail = async (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  roleLabel: string;
+  loginUrl?: string;
+  operacionalDispatchesApiLabel?: string;
+  operacionalSegmentLabel?: string;
+}): Promise<WabaEmailDeliveryResult> => {
+  const email = String(input.email || "")
+    .trim()
+    .toLowerCase();
+  const loginUrl = String(input.loginUrl || resolveWabaAppLoginUrl()).trim() || resolveWabaAppLoginUrl();
+  const mail = buildStaffWelcomeTemplate({
+    recipientName: input.fullName,
+    recipientEmail: email,
+    password: String(input.password ?? ""),
+    whatsapp: input.whatsapp,
+    roleLabel: input.roleLabel,
+    loginUrl,
+    operacionalDispatchesApiLabel: input.operacionalDispatchesApiLabel,
+    operacionalSegmentLabel: input.operacionalSegmentLabel,
+  });
+  return deliverEmail({
+    toEmail: email,
+    subject: mail.subject,
+    html: mail.html,
+    logLabel: `boas-vindas equipe ${email}`,
+  });
+};
+
+export const notifyStaffWelcome = (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  roleLabel: string;
+  loginUrl?: string;
+  operacionalDispatchesApiLabel?: string;
+  operacionalSegmentLabel?: string;
+}): void => {
+  void deliverStaffWelcomeEmail(input).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[mail] boas-vindas equipe (async):", message);
+  });
+  notifyStaffWelcomeWhatsApp({
+    email: input.email,
+    password: input.password,
+    whatsapp: input.whatsapp,
+    fullName: input.fullName,
+    roleLabel: input.roleLabel,
+    loginUrl: input.loginUrl,
+    operacionalDispatchesApiLabel: input.operacionalDispatchesApiLabel,
+    operacionalSegmentLabel: input.operacionalSegmentLabel,
   });
 };

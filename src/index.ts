@@ -79,6 +79,7 @@ import { registerWabaPushRoutes } from "./push/waba-push.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integration-monitor.service";
 import { startUptimeMonitorScheduler } from "./monitoring/uptime-monitor.service";
+import { startVpsCpuLocalSampler } from "./infra/vps-cpu-monitor.service";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, defaultEvoSendTextTimeoutMs, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
 import {
   createWabaShortUrl,
@@ -107,6 +108,7 @@ import { registerWabaEntitlementRoutes } from "./entitlements/waba-entitlement.r
 import { WabaEntitlementService } from "./entitlements/waba-entitlement.service";
 import { registerWabaCors } from "./lib/waba-cors";
 import { registerWabaSubscriberRoutes } from "./subscribers/waba-subscriber.routes";
+import { isBetsSubscriberEmail } from "./subscribers/waba-subscriber-segment";
 import { registerWabaSupportRoutes } from "./support/waba-support.routes";
 import {
   getIntegrationProbeStatus,
@@ -3741,6 +3743,7 @@ async function resolveDispatchCreditsApiKindForOwner(
 ): Promise<WabaDispatchesApiKind> {
   const normalized = String(ownerEmail || "").trim().toLowerCase();
   if (!normalized.includes("@")) return "oficial";
+  if (isBetsSubscriberEmail(normalized)) return "oficial";
   const summary = disparosCreditsService.getCreditsSummary(normalized);
   if (summary.activeApiKind === "alternativa") return "alternativa";
   if (summary.byApi.alternativa.remainingShipments > 0) return "alternativa";
@@ -3763,6 +3766,7 @@ function debitsDisparosCreditsPerSuccessfulSend(apiKind: WabaDispatchesApiKind):
 async function shouldApplyAlternativaDispatchProfile(email: string): Promise<boolean> {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized.includes("@")) return false;
+  if (isBetsSubscriberEmail(normalized)) return false;
   if (isAlternativaNumbersPurchaseEnabled()) {
     const purchased = alternativaNumbersService.getPurchasedSlots(normalized);
     const activated = alternativaActivationRepository.listForEmail(normalized).length;
@@ -4446,9 +4450,23 @@ const sendVendasPage = (res: express.Response) => {
   return res.type("html").send(html);
 };
 
+const sendBetsLandingPage = (res: express.Response) => {
+  const betsPath = path.join(rootPath, "public-pages", "bets.html");
+  if (!existsSync(betsPath)) {
+    return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
+  }
+  const html = injectRuntimeIntoIndexHtml(readFileSync(betsPath, "utf8"), {
+    basePath: BASE_PATH,
+    uiProfile: "production",
+  });
+  return res.type("html").send(html);
+};
+
 app.get("/cadastro", (_req, res) => sendVendasPage(res));
 
 app.get("/vendas", (_req, res) => sendVendasPage(res));
+
+app.get("/bets", (_req, res) => sendBetsLandingPage(res));
 
 if (BASE_PATH) {
   // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
@@ -12129,6 +12147,7 @@ const httpServer = app.listen(PORT, () => {
 
     startAsaasIntegrationMonitorScheduler();
     startUptimeMonitorScheduler();
+    startVpsCpuLocalSampler();
   })();
 });
 

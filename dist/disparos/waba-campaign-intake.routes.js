@@ -11,6 +11,7 @@ const multer_1 = __importDefault(require("multer"));
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_master_disparos_policy_service_1 = require("../users/waba-master-disparos-policy.service");
+const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
@@ -144,7 +145,10 @@ const parseResponseLink = (body) => {
 const listAvailableApiKindsForEmail = (ownerEmail) => {
     const email = ownerEmail.trim().toLowerCase();
     const kinds = [];
+    const betsOnlyOficial = (0, waba_subscriber_segment_1.isBetsSubscriberEmail)(email);
     for (const kind of ["oficial", "alternativa"]) {
+        if (betsOnlyOficial && kind === "alternativa")
+            continue;
         if (disparosCreditsService.getRemainingShipmentsForApi(email, kind) > 0) {
             kinds.push(kind);
         }
@@ -154,6 +158,12 @@ const listAvailableApiKindsForEmail = (ownerEmail) => {
 const parseRequestedApiKind = (body, ownerEmail) => {
     const email = ownerEmail.trim().toLowerCase();
     const requested = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(body.apiKind);
+    if ((0, waba_subscriber_segment_1.isBetsSubscriberEmail)(email) && requested === "alternativa") {
+        return {
+            apiKind: "oficial",
+            error: "Assinantes do segmento Bets geram campanhas apenas na API Oficial.",
+        };
+    }
     if (masterPolicyService.hasUnlimitedCredits(email)) {
         return { apiKind: requested === "alternativa" ? "alternativa" : "oficial" };
     }

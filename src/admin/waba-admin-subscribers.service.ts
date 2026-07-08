@@ -14,6 +14,7 @@ import {
   WabaSubscriberService,
   type UpdateSubscriberInput,
 } from "../subscribers/waba-subscriber.service";
+import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import {
   deliverSubscriberWelcomeEmail,
   type WabaEmailDeliveryResult,
@@ -29,6 +30,8 @@ export type AdminSubscriberListItem = {
   fullName: string;
   cpfCnpj: string;
   cpfCnpjFormatted: string;
+  segment: string;
+  segmentLabel: string;
   createdAt: string;
   createdAtLabel: string;
   creditsValueCents: number;
@@ -69,6 +72,8 @@ export type AdminSubscriberDetail = {
     whatsappFormatted: string;
     phone: string;
     phoneFormatted: string;
+    segment: string;
+    segmentLabel: string;
     aquecedorGranted: boolean;
     createdAt: string;
     createdAtLabel: string;
@@ -238,6 +243,7 @@ export class WabaAdminSubscribersService {
         const email = normalizeEmail(subscriber.email);
         const credits = summarizePaidDisparosOrders(paidDisparosByEmail.get(email) ?? []);
         const intakes = intakesByEmail.get(email) ?? [];
+        const segment = subscriber.segment ?? "outros";
 
         return {
           id: subscriber.id,
@@ -245,6 +251,8 @@ export class WabaAdminSubscribersService {
           fullName: subscriber.fullName,
           cpfCnpj: subscriber.cpfCnpj,
           cpfCnpjFormatted: formatCpfCnpj(subscriber.cpfCnpj),
+          segment,
+          segmentLabel: WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
           createdAt: subscriber.createdAt,
           createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),
           creditsValueCents: credits.contractedValueCents,
@@ -265,6 +273,7 @@ export class WabaAdminSubscribersService {
     const email = normalizeEmail(subscriber.email);
     const credits = this.creditsService.getCreditsSummary(email);
     const intakes = this.intakeRepository.listByEmail(email);
+    const segment = subscriber.segment ?? "outros";
 
     return {
       profile: {
@@ -277,6 +286,8 @@ export class WabaAdminSubscribersService {
         whatsappFormatted: formatPhoneDisplay(subscriber.whatsapp),
         phone: subscriber.phone,
         phoneFormatted: formatPhoneDisplay(subscriber.phone || subscriber.whatsapp),
+        segment,
+        segmentLabel: WABA_SUBSCRIBER_SEGMENT_LABELS[segment],
         aquecedorGranted: Boolean(subscriber.aquecedorGranted),
         createdAt: subscriber.createdAt,
         createdAtLabel: formatCreatedAtLabel(subscriber.createdAt),
@@ -299,10 +310,7 @@ export class WabaAdminSubscribersService {
     return this.getSubscriberDetail(subscriberId);
   }
 
-  async resendSubscriberWelcome(
-    subscriberId: string,
-    password: string,
-  ): Promise<{
+  async resendSubscriberWelcome(subscriberId: string): Promise<{
     email: WabaEmailDeliveryResult;
     whatsapp: WabaWhatsAppDeliveryResult;
   }> {
@@ -311,15 +319,11 @@ export class WabaAdminSubscribersService {
     const subscriber = this.subscriberRepository.getById(id);
     if (!subscriber) throw new Error("Assinante não encontrado.");
 
-    const plainPassword = String(password ?? "").trim();
-    if (plainPassword.length < 6) {
-      throw new Error("Informe a senha de acesso (mín. 6 caracteres) para reenviar as boas-vindas.");
-    }
-
+    // Senha em plaintext não é armazenada — reenvio sem exigir nova senha do master.
     const payload = {
       email: subscriber.email,
       fullName: subscriber.fullName,
-      password: plainPassword,
+      password: "",
       whatsapp: subscriber.whatsapp,
       phone: subscriber.phone ?? subscriber.whatsapp,
       cpfCnpj: subscriber.cpfCnpj,

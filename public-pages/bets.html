@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bet Waba — Disparo de WhatsApp em larga escala para Bets</title>
+  <meta name="description" content="Plataforma especializada em envio em massa via WhatsApp para o segmento de Bets. Alta estabilidade, grande capacidade operacional — pague apenas pelo que enviar." />
+  <link rel="icon" type="image/png" href="/media/favcon.png" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/media/favcon.png" />
+  <meta name="theme-color" content="#2ee4a0" />
+  <style>
+    :root { --bg:#050505; --card:#0a0a0a; --brand:#25d366; --brand-dark:#128c7e; --text:#f8fafc; --muted:#94a3b8; --accent:#fbbf24; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:72rem;margin:0 auto;padding:0 1.5rem}
+    .label{display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .75rem;border-radius:999px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.28);font-size:.65rem;font-family:monospace;text-transform:uppercase;letter-spacing:.2em;color:var(--accent)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.5rem;border-radius:.75rem;font-weight:700;background:var(--brand);color:#000;transition:.2s;border:0;cursor:pointer}
+    .btn:hover{box-shadow:0 0 40px rgba(37,211,102,.35);transform:translateY(-1px)}
+    .btn-ghost{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1)}
+    header{position:fixed;inset:0 0 auto;z-index:50;height:4rem;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(5,5,5,.85);backdrop-filter:blur(12px)}
+    header .wrap{height:100%;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+    .logo{display:flex;align-items:center;gap:.5rem;font-weight:800;font-size:1.05rem}
+    .logo span{color:var(--accent)}
+    nav{display:none;gap:1.5rem;font-size:.875rem;color:rgba(255,255,255,.6)}
+    nav a:hover{color:var(--brand)}
+    @media(min-width:768px){nav{display:flex}}
+    .header-actions{display:flex;align-items:center;gap:.5rem}
+    section{padding:5rem 0;border-top:1px solid rgba(255,255,255,.05)}
+    .hero{padding-top:8rem;padding-bottom:4rem;text-align:center}
+    .hero h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;line-height:1.08;margin:1.25rem 0}
+    .grad{background:linear-gradient(90deg,var(--brand),var(--brand-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .hero p{color:rgba(255,255,255,.62);font-size:1.1rem;max-width:40rem;margin:0 auto}
+    .badges{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;margin:1.5rem 0}
+    .badge{padding:.35rem .85rem;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:.78rem;color:rgba(255,255,255,.75)}
+    h2{font-size:clamp(1.6rem,3.5vw,2.5rem);font-weight:700;line-height:1.12}
+    .sub{color:rgba(255,255,255,.5);margin-top:.85rem;font-size:1rem}
+    .grid-3{display:grid;gap:1px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:1rem;overflow:hidden;margin-top:2rem}
+    @media(min-width:640px){.grid-3{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1024px){.grid-3.cols-3{grid-template-columns:repeat(3,1fr)}}
+    .cell{background:var(--card);padding:1.75rem}
+    .cell h3{font-size:1rem;margin-bottom:.4rem}
+    .cell p{font-size:.875rem;color:rgba(255,255,255,.5)}
+    .metrics{display:grid;gap:1px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:1rem;overflow:hidden;margin:2rem 0}
+    @media(min-width:768px){.metrics{grid-template-columns:repeat(4,1fr)}}
+    .metric{background:var(--card);padding:1.5rem;text-align:center}
+    .metric strong{display:block;font-size:1.75rem;color:var(--brand)}
+    .metric span{font-size:.68rem;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.08em}
+    .price-box{margin-top:2rem;padding:2.5rem;border:1px solid rgba(255,255,255,.1);border-radius:1.25rem;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent);text-align:center}
+    .price{font-size:clamp(2.5rem,7vw,4rem);font-weight:900;background:linear-gradient(90deg,var(--brand),var(--brand-dark));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    #cadastro{text-align:center}
+    form{margin-top:2rem;text-align:left;padding:2rem;border:1px solid rgba(255,255,255,.1);border-radius:1rem;background:rgba(255,255,255,.03)}
+    .form-grid{display:grid;gap:1rem}
+    @media(min-width:768px){.form-grid{grid-template-columns:1fr 1fr}}
+    label{display:block;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.7);margin-bottom:.35rem}
+    input{width:100%;padding:.75rem 1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.4);color:#fff;font-size:1rem}
+    input:focus{outline:none;border-color:rgba(37,211,102,.5)}
+    .pw{position:relative}
+    .pw input{padding-right:2.75rem}
+    .pw button{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);border:0;background:0;color:var(--muted);cursor:pointer}
+    .msg{margin-top:.75rem;font-size:.875rem;text-align:center}
+    .msg.err{color:#fca5a5}.msg.ok{color:#86efac}
+    footer{padding:3rem 0 2rem;border-top:1px solid rgba(255,255,255,.05);color:rgba(255,255,255,.4);font-size:.875rem;text-align:center}
+    .env-pill{display:inline-block;margin-top:.5rem;padding:.2rem .6rem;border-radius:999px;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.25);font-size:.7rem;color:#86efac}
+  </style>
+</head>
+<body>
+  <header id="top">
+    <div class="wrap">
+      <a href="#top" class="logo">Drax <span>Bets</span></a>
+      <nav>
+        <a href="#beneficios">Benefícios</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#preco">Plano</a>
+        <a href="#cadastro">Cadastro</a>
+      </nav>
+      <div class="header-actions">
+        <a href="#" id="login-link" class="btn btn-ghost" style="font-size:.8rem;padding:.45rem .9rem">Entrar</a>
+        <a href="#cadastro" class="btn" style="font-size:.8rem;padding:.45rem .9rem">Criar Conta</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap">
+      <div class="label">Feito para o mercado de Bets</div>
+      <h1>Disparo de WhatsApp em larga escala para <span class="grad">casas de apostas</span></h1>
+      <p>Plataforma especializada em envio em massa via WhatsApp para o segmento de Bets. Alta estabilidade, grande capacidade operacional e continuidade nos envios — pague apenas pelo que enviar.</p>
+      <div class="badges">
+        <span class="badge">API Oficial Meta</span>
+        <span class="badge">Sem mensalidade</span>
+        <span class="badge">Sem fidelidade</span>
+        <span class="badge">A partir de R$ 0,33/envio</span>
+      </div>
+      <div style="margin-top:1.5rem">
+        <a href="#cadastro" class="btn">Criar Conta →</a>
+        <a href="#como-funciona" class="btn btn-ghost" style="margin-left:.5rem">Ver como funciona</a>
+      </div>
+      <p class="env-pill" id="env-hint">Cadastro com segmento Bets · ambiente local V02</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="metrics">
+        <div class="metric"><strong>Milhões</strong><span>de envios/mês</span></div>
+        <div class="metric"><strong>99,9%</strong><span>disponibilidade</span></div>
+        <div class="metric"><strong>24/7</strong><span>operação contínua</span></div>
+        <div class="metric"><strong>R$ 0,33</strong><span>envio a partir de</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="beneficios">
+    <div class="wrap">
+      <div class="label">Benefícios</div>
+      <h2 style="margin-top:1rem">Por que escolher o Bet Waba</h2>
+      <p class="sub">Infraestrutura pensada para operações de apostas que precisam escalar com segurança.</p>
+      <div class="grid-3 cols-3">
+        <div class="cell"><h3>Larga escala</h3><p>Envios massivos com alta capacidade de processamento.</p></div>
+        <div class="cell"><h3>Alta estabilidade</h3><p>Arquitetura robusta para campanhas sem interrupções.</p></div>
+        <div class="cell"><h3>Cadastro rápido</h3><p>Crie sua conta em minutos e comece no mesmo dia.</p></div>
+        <div class="cell"><h3>API Oficial</h3><p>Plano exclusivo API Oficial Meta para o segmento Bets.</p></div>
+        <div class="cell"><h3>Interface simples</h3><p>Painel moderno para times de marketing.</p></div>
+        <div class="cell"><h3>Operação contínua</h3><p>Monitoramento e alta disponibilidade 24/7.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona">
+    <div class="wrap">
+      <div class="label">Como funciona</div>
+      <h2 style="margin-top:1rem">Do cadastro ao primeiro disparo</h2>
+      <div class="grid-3" style="margin-top:2rem">
+        <div class="cell"><h3>1. Crie sua conta</h3><p>Preencha o formulário abaixo em poucos minutos.</p></div>
+        <div class="cell"><h3>2. Contrate créditos</h3><p>Escolha o pacote na API Oficial no painel WABA.</p></div>
+        <div class="cell"><h3>3. Dispare em escala</h3><p>Importe contatos e acompanhe entregas em tempo real.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="preco">
+    <div class="wrap" style="text-align:center">
+      <div class="label">Plano</div>
+      <h2 style="margin-top:1rem">Pague apenas pelo que enviar</h2>
+      <p class="sub">Sem mensalidade. Sem fidelidade. Sem taxa de adesão.</p>
+      <div class="price-box">
+        <p style="font-size:.7rem;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.2em">A partir de</p>
+        <div class="price">R$ 0,33 <span style="font-size:1.25rem;-webkit-text-fill-color:rgba(255,255,255,.4)">/ envio</span></div>
+        <a href="#cadastro" class="btn" style="margin-top:1.5rem">Criar Conta</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="cadastro">
+    <div class="wrap" style="max-width:40rem">
+      <div class="label">Cadastro Bet Waba</div>
+      <h2 style="margin-top:1rem">Crie sua conta</h2>
+      <p class="sub">Seu cadastro será criado no segmento <strong>Bets</strong> com acesso à API Oficial.</p>
+      <form id="register-form">
+        <div class="form-grid">
+          <div><label for="fullName">Nome completo</label><input id="fullName" required autocomplete="name" /></div>
+          <div><label for="email">E-mail</label><input id="email" type="email" required autocomplete="email" /></div>
+          <div><label for="whatsapp">WhatsApp</label><input id="whatsapp" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999" maxlength="16" required /><small style="display:block;margin-top:.35rem;color:var(--muted,#64748b);font-size:.8rem">DDD brasileiro (ex.: 51), sem +55. Se inválido, usamos o celular do campo Telefone.</small></div>
+          <div><label for="phone">Telefone</label><input id="phone" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="(11) 3333-4444" maxlength="16" required /></div>
+          <div><label for="cpfCnpj">CPF ou CNPJ</label><input id="cpfCnpj" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="18" required /></div>
+          <div><label for="password">Senha de acesso</label>
+            <div class="pw"><input id="password" type="password" minlength="6" required autocomplete="new-password" /><button type="button" id="toggle-eye" aria-label="Mostrar senha">👁</button></div>
+          </div>
+        </div>
+        <button type="submit" id="submit-btn" class="btn" style="width:100%;margin-top:1.25rem">Criar conta Bet Waba →</button>
+        <p id="message" class="msg" hidden></p>
+        <p style="text-align:center;font-size:.75rem;color:rgba(255,255,255,.4);margin-top:.75rem">Após o cadastro você será direcionado ao painel WABA</p>
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <p><strong>Bet Waba</strong> — plataforma especializada em disparos de WhatsApp para o mercado de Bets.</p>
+      <p style="margin-top:1rem;font-size:.75rem">© Bet Waba · Todos os direitos reservados</p>
+    </div>
+  </footer>
+
+  <script>
+    const apiBase = (window.WABA_BASE_PATH || "").replace(/\/$/, "") ||
+      window.location.pathname.replace(/\/(vendas|cadastro|bets)\/?$/, "").replace(/\/$/, "") || "";
+    const loginUrl = apiBase + "/";
+    document.getElementById("login-link").href = loginUrl;
+    const envHint = document.getElementById("env-hint");
+    if (envHint && apiBase) {
+      envHint.textContent = "Cadastro segmento Bets · " + apiBase;
+    }
+    const pw = document.getElementById("password");
+    const onlyDigits = (value) => String(value || "").replace(/\D/g, "");
+    const stripCountryCode = (digits) => {
+      let normalized = onlyDigits(digits);
+      while (normalized.startsWith("55") && normalized.length > 11) {
+        normalized = normalized.slice(2);
+      }
+      if (normalized.startsWith("55") && normalized.length === 11 && normalized.charAt(2) !== "9") {
+        normalized = normalized.slice(2);
+      }
+      return normalized.slice(0, 11);
+    };
+    const maskMobile = (value) => {
+      const digits = stripCountryCode(value);
+      if (digits.length <= 2) return digits ? "(" + digits : "";
+      if (digits.length <= 7) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
+      return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
+    };
+    const maskPhone = (value) => {
+      const digits = stripCountryCode(value).slice(0, 11);
+      if (digits.length <= 2) return digits ? "(" + digits : "";
+      if (digits.length <= 6) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
+      if (digits.length <= 10) return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 6) + "-" + digits.slice(6);
+      return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
+    };
+    const maskCpfCnpj = (value) => {
+      const digits = onlyDigits(value).slice(0, 14);
+      if (digits.length <= 11) {
+        return digits
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+      }
+      return digits
+        .replace(/^(\d{2})(\d)/, "$1.$2")
+        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1/$2")
+        .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+    };
+    const bindMask = (id, maskFn) => {
+      const input = document.getElementById(id);
+      input.addEventListener("input", () => {
+        const start = input.selectionStart;
+        const before = input.value;
+        input.value = maskFn(before);
+        const delta = input.value.length - before.length;
+        input.setSelectionRange(Math.max(0, (start || 0) + delta), Math.max(0, (start || 0) + delta));
+      });
+    };
+    bindMask("whatsapp", maskMobile);
+    bindMask("phone", maskPhone);
+    bindMask("cpfCnpj", maskCpfCnpj);
+    document.getElementById("toggle-eye").onclick = () => {
+      pw.type = pw.type === "text" ? "password" : "text";
+    };
+    document.getElementById("register-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("message");
+      const btn = document.getElementById("submit-btn");
+      msg.hidden = true;
+      btn.disabled = true;
+      try {
+        const res = await fetch(apiBase + "/subscribers/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: document.getElementById("fullName").value.trim(),
+            email: document.getElementById("email").value.trim(),
+            password: pw.value,
+            whatsapp: stripCountryCode(document.getElementById("whatsapp").value),
+            phone: stripCountryCode(document.getElementById("phone").value),
+            cpfCnpj: document.getElementById("cpfCnpj").value.trim(),
+            segment: "bets",
+            signupOrigin: "bet-waba",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Falha no cadastro.");
+        msg.className = "msg ok";
+        msg.textContent = data.message || "Cadastro realizado. Redirecionando…";
+        msg.hidden = false;
+        setTimeout(() => {
+          window.location.href = data.loginUrl || loginUrl;
+        }, 1200);
+      } catch (err) {
+        msg.className = "msg err";
+        msg.textContent = err.message || "Não foi possível cadastrar.";
+        msg.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

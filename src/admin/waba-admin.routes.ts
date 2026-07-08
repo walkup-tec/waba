@@ -124,6 +124,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         phone: String(body.phone ?? whatsapp),
         cpfCnpj: String(body.cpfCnpj ?? ""),
         aquecedorGranted: body.aquecedorGranted === true,
+        segment: body.segment,
         password: body.password !== undefined ? String(body.password) : undefined,
       });
       return res.status(200).json({ ok: true, ...detail });
@@ -178,6 +179,7 @@ export const registerWabaAdminRoutes = (app: Express) => {
         phone: String(body.phone ?? whatsapp),
         cpfCnpj: String(body.cpfCnpj ?? ""),
         aquecedorGranted: body.aquecedorGranted === true,
+        segment: body.segment,
       });
       return res.status(201).json({ ok: true, subscriber });
     } catch (error) {
@@ -190,12 +192,22 @@ export const registerWabaAdminRoutes = (app: Express) => {
   app.post("/admin/subscribers/:subscriberId/resend-welcome", async (req, res) => {
     if (!rejectNonMaster(req, res)) return;
     try {
-      const body = req.body as Record<string, unknown>;
       const result = await adminSubscribersService.resendSubscriberWelcome(
         String(req.params.subscriberId ?? ""),
-        String(body.password ?? ""),
       );
-      return res.status(200).json({ ok: true, ...result });
+      const emailSent = String(result?.email?.status || "").toLowerCase() === "sent";
+      const whatsappSent = String(result?.whatsapp?.status || "").toLowerCase() === "sent";
+      return res.status(200).json({
+        ok: true,
+        emailSent,
+        whatsappSent,
+        bothSent: emailSent && whatsappSent,
+        message:
+          emailSent && whatsappSent
+            ? "Mensagem de boas-vindas reenviada no WhatsApp e e-mail"
+            : undefined,
+        ...result,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível reenviar as boas-vindas.";
       const status = message.includes("não encontrado") ? 404 : 400;

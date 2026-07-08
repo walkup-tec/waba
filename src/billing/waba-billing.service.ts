@@ -23,6 +23,11 @@ import {
   WabaAlternativaNumbersService,
 } from "./waba-alternativa-numbers.service";
 import { WabaCouponService } from "./waba-coupon.service";
+import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
+import {
+  getSubscriberSegmentByEmail,
+  isBetsSubscriberEmail,
+} from "../subscribers/waba-subscriber-segment";
 
 export type CreateAlternativaNumbersCheckoutInput = {
   customerName: string;
@@ -84,6 +89,16 @@ const DISPAROS_OFICIAL_SALE_PACKAGES: ReadonlyArray<{ shipments: number; valueCe
   { shipments: 30000, valueCents: 750000 },
 ];
 
+/** Tabela de venda API Oficial — segmento Bets (envios × valor total em centavos). */
+const DISPAROS_BETS_OFICIAL_SALE_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: number }> = [
+  { shipments: 5000, valueCents: 200000 },
+  { shipments: 10000, valueCents: 380000 },
+  { shipments: 20000, valueCents: 740000 },
+  { shipments: 30000, valueCents: 1080000 },
+  { shipments: 40000, valueCents: 1400000 },
+  { shipments: 50000, valueCents: 1650000 },
+];
+
 /** Tabela de venda API Alternativa (envios × valor total em centavos). */
 const DISPAROS_ALTERNATIVA_SALE_PACKAGES: ReadonlyArray<{ shipments: number; valueCents: number }> = [
   { shipments: 1000, valueCents: 20000 },
@@ -112,14 +127,21 @@ const isDisparosAlternativaSalePackage = (shipmentCount: number, valueCents: num
 
 const getDisparosSalePackages = (
   apiKind: "oficial" | "alternativa",
-): ReadonlyArray<{ shipments: number; valueCents: number }> =>
-  apiKind === "oficial" ? DISPAROS_OFICIAL_SALE_PACKAGES : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+  segment: WabaSubscriberSegment = "outros",
+): ReadonlyArray<{ shipments: number; valueCents: number }> => {
+  if (segment === "bets") {
+    if (apiKind === "alternativa") return [];
+    return DISPAROS_BETS_OFICIAL_SALE_PACKAGES;
+  }
+  return apiKind === "oficial" ? DISPAROS_OFICIAL_SALE_PACKAGES : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
+};
 
 const resolveDisparosCustomListValueCents = (
   apiKind: "oficial" | "alternativa",
   shipmentCount: number,
+  segment: WabaSubscriberSegment = "outros",
 ): number | null => {
-  const salePackages = getDisparosSalePackages(apiKind);
+  const salePackages = getDisparosSalePackages(apiKind, segment);
   const lastTier = salePackages[salePackages.length - 1];
   if (!lastTier || shipmentCount <= lastTier.shipments) return null;
   const unitCents = lastTier.valueCents / lastTier.shipments;
@@ -129,15 +151,19 @@ const resolveDisparosCustomListValueCents = (
 const resolveListValueCentsForPackage = (
   apiKind: "oficial" | "alternativa",
   shipmentCount: number,
+  segment: WabaSubscriberSegment = "outros",
 ): number | null => {
+  if (segment === "bets" && apiKind === "alternativa") return null;
   if (shipmentCount <= 0) return null;
   const tables =
     apiKind === "oficial"
-      ? [...DISPAROS_TEST_PACKAGES, ...DISPAROS_OFICIAL_SALE_PACKAGES]
+      ? segment === "bets"
+        ? [...DISPAROS_TEST_PACKAGES, ...DISPAROS_BETS_OFICIAL_SALE_PACKAGES]
+        : [...DISPAROS_TEST_PACKAGES, ...DISPAROS_OFICIAL_SALE_PACKAGES]
       : [...DISPAROS_TEST_PACKAGES, ...DISPAROS_ALTERNATIVA_SALE_PACKAGES];
   const match = tables.find((pack) => pack.shipments === shipmentCount);
   if (match) return match.valueCents;
-  return resolveDisparosCustomListValueCents(apiKind, shipmentCount);
+  return resolveDisparosCustomListValueCents(apiKind, shipmentCount, segment);
 };
 
 const ASAAS_MIN_CHARGE_CENTS = 500;
@@ -218,13 +244,18 @@ export class WabaBillingService {
     alias: string;
     apiKind: "oficial" | "alternativa";
     shipmentCount: number;
+    ownerEmail?: string;
   }) {
     const apiKind = input.apiKind;
     if (apiKind !== "oficial" && apiKind !== "alternativa") {
       throw new Error("Selecione API Oficial ou API Alternativa.");
     }
+    const segment = getSubscriberSegmentByEmail(String(input.ownerEmail ?? ""));
+    if (segment === "bets" && apiKind === "alternativa") {
+      throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
+    }
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
-    const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount);
+    const listValueCents = resolveListValueCentsForPackage(apiKind, shipmentCount, segment);
     if (!listValueCents) {
       throw new Error("Pacote de envios inválido.");
     }
@@ -258,6 +289,11 @@ export class WabaBillingService {
       throw new Error("Informe um e-mail válido.");
     }
 
+    const segment = getSubscriberSegmentByEmail(ownerEmail);
+    if (segment === "bets" && apiKind === "alternativa") {
+      throw new Error("Assinantes do segmento Bets contratam créditos apenas na API Oficial.");
+    }
+
     const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
     if (cpfCnpj.length < 11) {
       throw new Error("Informe CPF ou CNPJ válido.");
@@ -268,7 +304,7 @@ export class WabaBillingService {
     const minCreditCents = resolveMinCreditCents();
     const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
     const listValueCentsFromPackage =
-      shipmentCount > 0 ? resolveListValueCentsForPackage(apiKind, shipmentCount) : null;
+      shipmentCount > 0 ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment) : null;
 
     let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));
     if (!Number.isFinite(listValueCents) || listValueCents <= 0) {
@@ -277,7 +313,7 @@ export class WabaBillingService {
 
     if (shipmentCount > 0) {
       if (!listValueCentsFromPackage) {
-        const salePackages = getDisparosSalePackages(apiKind);
+        const salePackages = getDisparosSalePackages(apiKind, segment);
         const maxShipments = salePackages[salePackages.length - 1]?.shipments ?? 0;
         throw new Error(
           maxShipments > 0
