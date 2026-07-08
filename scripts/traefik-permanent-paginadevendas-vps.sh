@@ -8,10 +8,10 @@
 #   chmod +x /root/traefik-permanent-paginadevendas-vps.sh
 #   /root/traefik-permanent-paginadevendas-vps.sh install
 #
-# Versão: paginadevendas-traefik-2026-07-06-v1
+# Versão: paginadevendas-traefik-2026-07-08-v2
 set -euo pipefail
 
-PV_VERSION="paginadevendas-traefik-2026-07-06-v1"
+PV_VERSION="paginadevendas-traefik-2026-07-08-v2"
 INSTALL_PATH="/root/traefik-permanent-paginadevendas-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-paginadevendas-fix"
 LOG="/var/log/traefik-permanent-paginadevendas-fix.log"
@@ -31,15 +31,12 @@ export_waba_env() {
   export WABA_CONTAINER_FILTER="${WABA_CONTAINER_FILTER:-waba_paginadevendas}"
   export WABA_EASYPANEL_HOST="${WABA_EASYPANEL_HOST:-waba-paginadevendas.achpyp.easypanel.host}"
   export WABA_NET="${WABA_NET:-easypanel}"
-  export WABA_PORT="${WABA_PORT:-3000}"
-  export WABA_BACKEND_URL="${WABA_BACKEND_URL:-http://tasks.waba_paginadevendas:3000/}"
+  export WABA_PORT="${WABA_PORT:-80}"
+  unset WABA_BACKEND_URL
 }
 
 ensure_core() {
-  if [[ -x "$WABA_CORE" ]]; then
-    return 0
-  fi
-  echo "Baixando core Traefik WABA → ${WABA_CORE}"
+  echo "Atualizando core Traefik WABA → ${WABA_CORE}"
   curl -fsSL "${REPO_BASE}/traefik-permanent-waba-vps.sh" -o "$WABA_CORE"
   sed -i 's/\r$//' "$WABA_CORE" 2>/dev/null || true
   chmod +x "$WABA_CORE"

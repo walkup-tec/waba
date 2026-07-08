@@ -68,6 +68,8 @@ install_scripts() {
   copy_local_or_curl "traefik-permanent-walkup-evo-vps.sh" "$EVO_SCRIPT"
   copy_local_or_curl "traefik-permanent-paginadevendas-vps.sh" "$PV_SCRIPT"
   copy_local_or_curl "traefik-permanent-bets-pv-vps.sh" "$BETS_SCRIPT"
+  copy_local_or_curl "restore-landing-routers-vps.sh" "/root/restore-landing-routers-vps.sh"
+  copy_local_or_curl "fix-wabadisparos-bet-now-vps.sh" "/root/fix-wabadisparos-bet-now-vps.sh"
   copy_local_or_curl "traefik-easypanel-config-guard.sh" "$GUARD_SCRIPT"
   copy_local_or_curl "restore-waba-traefik-router-vps.sh" "$RESTORE_WABA"
   copy_local_or_curl "restore-walkup-evo-traefik-router-vps.sh" "$RESTORE_EVO"

@@ -11,7 +11,7 @@
 # Versão (validar após curl): waba-traefik-2026-06-20-v6
 set -euo pipefail
 
-WABA_SCRIPT_VERSION="waba-traefik-2026-06-20-v6"
+WABA_SCRIPT_VERSION="waba-traefik-2026-07-08-v7"
 TRAEFIK_BOOTSTRAP_SCRIPT="/root/traefik-easypanel-bootstrap-vps.sh"
 
 INSTALL_PATH="/root/traefik-permanent-waba-vps.sh"
@@ -46,6 +46,15 @@ script_path() {
     return
   fi
   readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}"
+}
+
+is_landing_service() {
+  case "${WABA_SWARM_SERVICE:-}${WABA_PUBLIC_HOST:-}${WABA_CONTAINER_FILTER:-}" in
+    *paginadevendas*|*bets_pv*|*wabadisparos*|*bet.waba*)
+      return 0
+      ;;
+  esac
+  return 1
 }
 
 traefik_container() {
@@ -118,8 +127,13 @@ resolve_waba_ip() {
 
 # Easypanel costuma publicar PORT=80 no serviço; Dockerfile usa 3000. Detecta a porta real.
 resolve_waba_port() {
-  local cid port traefik ip p
+  local cid port traefik ip p probe_path
   cid=$(resolve_waba_cid || true)
+  if is_landing_service; then
+    probe_path="/"
+  else
+    probe_path="/health"
+  fi
   if [[ -n "$cid" ]]; then
     port=$(docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
       | grep -E '^PORT=' | head -1 | cut -d= -f2- | tr -d '\r')
@@ -132,7 +146,12 @@ resolve_waba_port() {
   ip=$(resolve_waba_ip || true)
   if [[ -n "$traefik" && -n "$ip" ]]; then
     for p in 80 3000; do
-      if docker exec "$traefik" wget -qO- --timeout=3 "http://${ip}:${p}/health" 2>/dev/null \
+      if is_landing_service; then
+        docker exec "$traefik" wget -q --spider --timeout=3 "http://${ip}:${p}${probe_path}" 2>/dev/null && {
+          echo "$p"
+          return 0
+        }
+      elif docker exec "$traefik" wget -qO- --timeout=3 "http://${ip}:${p}${probe_path}" 2>/dev/null \
         | grep -q '"ok"'; then
         echo "$p"
         return 0
@@ -141,12 +160,21 @@ resolve_waba_port() {
   fi
   if [[ -n "$cid" ]]; then
     for p in 80 3000; do
-      if docker exec "$cid" wget -qO- --timeout=3 "http://127.0.0.1:${p}/health" 2>/dev/null \
+      if is_landing_service; then
+        docker exec "$cid" wget -q --spider --timeout=3 "http://127.0.0.1:${p}${probe_path}" 2>/dev/null && {
+          echo "$p"
+          return 0
+        }
+      elif docker exec "$cid" wget -qO- --timeout=3 "http://127.0.0.1:${p}${probe_path}" 2>/dev/null \
         | grep -q '"ok"'; then
         echo "$p"
         return 0
       fi
     done
+  fi
+  if is_landing_service; then
+    echo "80"
+    return 0
   fi
   echo "${WABA_PORT:-3000}"
 }
@@ -179,6 +207,11 @@ resolve_waba_backend_url() {
   [[ -z "$traefik" ]] && return 1
 
   traefik_health_ok() {
+    if is_landing_service; then
+      docker exec "$traefik" wget -q --spider --timeout=4 "${1%/health}/" 2>/dev/null \
+        || docker exec "$traefik" wget -q --spider --timeout=4 "$1" 2>/dev/null
+      return $?
+    fi
     docker exec "$traefik" wget -qO- --timeout=4 "$1" 2>/dev/null | grep -q '"ok"'
   }
 
@@ -254,6 +287,14 @@ find_backup_with_host() {
   return 1
 }
 
+reload_traefik_config() {
+  local traefik
+  traefik=$(traefik_container)
+  [[ -z "$traefik" ]] && return 1
+  docker kill -s HUP "$traefik" 2>/dev/null || docker restart "$traefik" >/dev/null
+  sleep 2
+}
+
 ensure_waba_public_router() {
   [[ -f "$CFG" ]] || return 1
   if grep -q "Host(\`${WABA_PUBLIC_HOST}\`)" "$CFG" 2>/dev/null; then
@@ -261,14 +302,73 @@ ensure_waba_public_router() {
   fi
   local bak
   bak=$(find_backup_with_host "$WABA_PUBLIC_HOST" || true)
-  if [[ -z "$bak" ]]; then
-    echo "ERRO: router ${WABA_PUBLIC_HOST} ausente e sem backup em ${CFG}.bak*"
+  if [[ -n "$bak" ]]; then
+    echo "ALERTA: router ${WABA_PUBLIC_HOST} removido — restaurando de ${bak}"
+    cp -a "$CFG" "${CFG}.bak-before-auto-waba-restore-$(date +%Y%m%d-%H%M%S)"
+    cp -a "$bak" "$CFG"
+    reload_traefik_config || true
+    return 0
+  fi
+
+  if [[ -z "${WABA_EASYPANEL_HOST:-}" ]]; then
+    echo "ERRO: router ${WABA_PUBLIC_HOST} ausente e sem backup nem WABA_EASYPANEL_HOST"
     return 1
   fi
-  echo "ALERTA: router ${WABA_PUBLIC_HOST} removido — restaurando de ${bak}"
-  cp -a "$CFG" "${CFG}.bak-before-auto-waba-restore-$(date +%Y%m%d-%H%M%S)"
-  cp -a "$bak" "$CFG"
-  return 0
+
+  echo "ALERTA: router ${WABA_PUBLIC_HOST} ausente — injetando a partir de ${WABA_EASYPANEL_HOST}"
+  cp -a "$CFG" "${CFG}.bak-before-public-host-clone-$(date +%Y%m%d-%H%M%S)"
+
+  python3 - "$CFG" "$WABA_PUBLIC_HOST" "$WABA_EASYPANEL_HOST" "$WABA_SWARM_SERVICE" <<'PY'
+import re, sys
+path, public_host, easypanel_host, swarm = sys.argv[1:5]
+text = open(path, encoding="utf-8").read()
+
+if f"Host(`{public_host}`)" in text:
+    print("  router public já presente")
+    sys.exit(0)
+
+lines = text.splitlines(keepends=True)
+for i, line in enumerate(lines):
+    if "rule:" in line and easypanel_host in line:
+        if f"Host(`{public_host}`)" in line:
+            print("  regra easypanel já inclui domínio public")
+            sys.exit(0)
+        lines[i] = line.rstrip("\n\r") + f" || Host(`{public_host}`)\n"
+        open(path, "w", encoding="utf-8").write("".join(lines))
+        print(f"  OR Host(`{public_host}`) adicionado à regra easypanel (linha {i + 1})")
+        sys.exit(0)
+
+router_pat = rf"(    [^\n]+:\n(?:      [^\n]+\n)+?      rule: [^\n]*{re.escape(easypanel_host)}[^\n]*\n(?:      [^\n]+\n)+?      service: )([^\n]+)"
+match = re.search(router_pat, text)
+if not match:
+    print(f"  ERRO: nenhum router com host {easypanel_host}")
+    sys.exit(1)
+
+service = match.group(2).strip()
+router_name = "waba-public-" + re.sub(r"[^a-z0-9]+", "-", public_host.lower()).strip("-")[:50]
+new_block = f"""    {router_name}:
+      rule: Host(`{public_host}`)
+      entryPoints:
+        - websecure
+      service: {service}
+      tls: {{}}
+"""
+if "  routers:" not in text:
+    print("  ERRO: seção routers ausente em main.yaml")
+    sys.exit(1)
+
+text = text.replace("  routers:", "  routers:\n" + new_block, 1)
+open(path, "w", encoding="utf-8").write(text)
+print(f"  router {router_name} criado -> service {service}")
+PY
+
+  if grep -q "Host(\`${WABA_PUBLIC_HOST}\`)" "$CFG" 2>/dev/null; then
+    reload_traefik_config || true
+    return 0
+  fi
+
+  echo "ERRO: não foi possível injetar router ${WABA_PUBLIC_HOST}"
+  return 1
 }
 
 patch_main_yaml() {
@@ -512,13 +612,21 @@ run_fix() {
   fi
 
   if [[ -n "$WABA_EASYPANEL_HOST" ]]; then
-    ep=$(http_code "$WABA_EASYPANEL_HOST" "/health")
+    if is_landing_service; then
+      ep=$(http_code "$WABA_EASYPANEL_HOST" "/")
+    else
+      ep=$(http_code "$WABA_EASYPANEL_HOST" "/health")
+    fi
     echo "RESULTADO waba:${public} health:${health} easypanel_host:${ep}"
   else
     echo "RESULTADO waba:${public} health:${health}"
   fi
 
-  [[ "$health" == "200" || "$public" == "200" ]]
+  if is_landing_service; then
+    [[ "$public" =~ ^(200|301|302|304)$ ]]
+  else
+    [[ "$health" == "200" || "$public" == "200" ]]
+  fi
 }
 
 should_patch_for_name() {

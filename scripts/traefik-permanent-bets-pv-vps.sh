@@ -8,10 +8,10 @@
 #   chmod +x /root/traefik-permanent-bets-pv-vps.sh
 #   /root/traefik-permanent-bets-pv-vps.sh install
 #
-# Versão: bets-pv-traefik-2026-07-06-v1
+# Versão: bets-pv-traefik-2026-07-08-v2
 set -euo pipefail
 
-BETS_VERSION="bets-pv-traefik-2026-07-06-v1"
+BETS_VERSION="bets-pv-traefik-2026-07-08-v2"
 INSTALL_PATH="/root/traefik-permanent-bets-pv-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-bets-pv-fix"
 LOG="/var/log/traefik-permanent-bets-pv-fix.log"
@@ -31,8 +31,8 @@ export_waba_env() {
   export WABA_CONTAINER_FILTER="${WABA_CONTAINER_FILTER:-waba_bets_pv}"
   export WABA_EASYPANEL_HOST="${WABA_EASYPANEL_HOST:-waba-bets-pv.achpyp.easypanel.host}"
   export WABA_NET="${WABA_NET:-easypanel}"
-  export WABA_PORT="${WABA_PORT:-3000}"
-  export WABA_BACKEND_URL="${WABA_BACKEND_URL:-http://tasks.waba_bets_pv:3000/}"
+  export WABA_PORT="${WABA_PORT:-80}"
+  unset WABA_BACKEND_URL
 }
 
 ensure_core() {
