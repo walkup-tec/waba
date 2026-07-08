@@ -13,7 +13,15 @@ Como usar:
 Ãšltima atualizaÃ§Ã£o: (gerenciado automaticamente)
 
 ## Última atualização
-2026-07-07
+2026-07-08
+
+**WABA — Disable overkill heal Traefik (2026-07-08):** `scripts/infra/traefik-heal-disable-overkill-vps.sh` (`status`|`apply`) desliga só timers 20s / docker-events / cron; **não** pausa containers nem serviços WABA/Evolution/DB. Manter bootstrap+guard. Log `doc/LOG-2026-07-08__092650__traefik-heal-disable-overkill-sem-pausar-apps.md`.
+
+**WABA — Auditoria Traefik overkill + CPU (2026-07-08):** timers 20s ×4 + `docker events` ×4 + cron/min são desnecessários com File Provider hot-reload; manter bootstrap/restores manuais. Análise ChatGPT (steal time, dockerd, load, accessLog) faz sentido e alinha com LOG 2026-06-27; não trocar proxy. Desligar heal hiperativo no VPS. Log `doc/LOG-2026-07-08__092011__auditoria-traefik-scripts-cpu-overkill.md`. Palavras-chave: traefik overkill, steal time, docker events CPU.
+
+**WABA — Regra Cursor study-upstream-docs (2026-07-08):** alwaysApply `.cursor/rules/study-upstream-docs.mdc` e `ucp-traefik-static-dynamic.mdc`; MD sozinha não garante leitura. Log `doc/LOG-2026-07-08__090032__regra-cursor-study-upstream-docs.md`.
+
+**WABA — Restore landings Traefik v6 (2026-07-08):** formato Easypanel `https-*` + Host OR inject; HUP soft; wabadisparos + bet.waba.info. Log `doc/LOG-2026-07-08__085407__restore-landing-traefik-v6-easypanel-format.md`.
 
 **WABA — OG wabadisparos DEFINITIVO (código-fonte):** causa do "compartilha favicon" = og:image só via patch runtime no container (apagado em todo redeploy/restart). Fix definitivo no repo da landing `walkup-tec/pv-waba-disparador` (branch `main`, commit `854b19d`): imagem em `public/OGwaba.jpg` (→ `https://wabadisparos.com.br/OGwaba.jpg`, autocontida) + meta `og:image`/twitter em `src/routes/__root.tsx` (title "DRAX WABA - Plataforma Oficial de Disparos WhatsApp", 1200×630). Fonte local: `D:\pv-waba-disparador`. **Falta:** redeploy do serviço `paginadevendas` no Easypanel (rebuild) + Facebook Scrape Again. Depois disso NÃO precisa mais patch no container. Ver `doc/LOG-2026-07-07__105500__og-wabadisparos-definitivo-codigo-fonte.md`.
 
