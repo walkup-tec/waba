@@ -144,52 +144,87 @@ ensure_bootstrap() {
 write_landings_yaml() {
   local pv_url="$1" bets_url="$2"
   mkdir -p "$CFG_DIR"
-  cat >"$LANDINGS_CFG" <<EOF
-# Gerado por ${RESTORE_VERSION} — não editar manualmente
-http:
+
+  python3 - "$CFG_DIR/main.yaml" "$CUSTOM_CFG" "$LANDINGS_CFG" "$pv_url" "$bets_url" <<'PY'
+import pathlib, re, sys
+main_path, custom_path, landings_path, pv_url, bets_url = sys.argv[1:6]
+pv_url = pv_url.rstrip("/") + "/"
+bets_url = bets_url.rstrip("/") + "/"
+
+router_svc = f"""
   routers:
     waba-landing-wabadisparos:
-      rule: Host(\`wabadisparos.com.br\`) || Host(\`waba-paginadevendas.achpyp.easypanel.host\`)
+      rule: Host(`wabadisparos.com.br`) || Host(`waba-paginadevendas.achpyp.easypanel.host`)
       entryPoints:
         - websecure
       service: waba-landing-wabadisparos-svc
-      tls: {}
+      tls: {{}}
       priority: 200
     waba-landing-bet-waba:
-      rule: Host(\`bet.waba.info\`) || Host(\`waba-bets-pv.achpyp.easypanel.host\`)
+      rule: Host(`bet.waba.info`) || Host(`waba-bets-pv.achpyp.easypanel.host`)
       entryPoints:
         - websecure
       service: waba-landing-bet-waba-svc
-      tls: {}
+      tls: {{}}
       priority: 200
   services:
     waba-landing-wabadisparos-svc:
       loadBalancer:
         servers:
-          - url: "${pv_url%/}/"
+          - url: "{pv_url}"
     waba-landing-bet-waba-svc:
       loadBalancer:
         servers:
-          - url: "${bets_url%/}/"
-EOF
-  log "Escrito ${LANDINGS_CFG}"
+          - url: "{bets_url}"
+"""
 
-  python3 - "$CUSTOM_CFG" "$LANDINGS_CFG" <<'PY'
-import pathlib, sys
-custom, landings = map(pathlib.Path, sys.argv[1:3])
-block = landings.read_text(encoding="utf-8")
 marker = "# WABA_LANDINGS_MERGE"
-if custom.exists():
-    text = custom.read_text(encoding="utf-8")
-    if marker in text:
-        pre = text.split(marker)[0].rstrip()
-        custom.write_text(pre + "\n\n" + marker + "\n" + block.split("\n", 1)[1], encoding="utf-8")
-    else:
-        custom.write_text(text.rstrip() + "\n\n" + marker + "\n" + block.split("\n", 1)[1], encoding="utf-8")
+landings_body = f"# Gerado automaticamente\nhttp:{router_svc}"
+landings_path = pathlib.Path(landings_path)
+landings_path.write_text(landings_body, encoding="utf-8")
+print(f"  escrito {landings_path}")
+
+custom = pathlib.Path(custom_path)
+if custom.exists() and marker in custom.read_text(encoding="utf-8"):
+    pre = custom.read_text(encoding="utf-8").split(marker)[0].rstrip()
+    custom.write_text(pre + "\n\n" + marker + "\n" + landings_body.split("\n", 1)[1], encoding="utf-8")
 else:
-    custom.write_text(block, encoding="utf-8")
-print(f"  custom.yaml atualizado ({custom})")
+    existing = custom.read_text(encoding="utf-8").rstrip() + "\n\n" if custom.exists() else ""
+    custom.write_text(existing + marker + "\n" + landings_body.split("\n", 1)[1], encoding="utf-8")
+print(f"  custom.yaml atualizado")
+
+main = pathlib.Path(main_path)
+if main.exists():
+    text = main.read_text(encoding="utf-8")
+    if "waba-landing-wabadisparos:" not in text:
+        if re.search(r"^http:\s*$", text, re.M):
+            text = re.sub(r"^http:\s*\n", "http:\n" + router_svc + "\n", text, count=1)
+            print("  main.yaml: bloco inserido após http:")
+        elif "  routers:" in text:
+            text = text.replace("  routers:", "  routers:" + router_svc.split("  services:")[0], 1)
+            if "waba-landing-wabadisparos-svc:" not in text and "  services:" in text:
+                svc_block = "  services:" + router_svc.split("  services:", 1)[1]
+                text = text.replace("  services:", svc_block, 1)
+            print("  main.yaml: routers/services inseridos")
+        else:
+            print("  main.yaml: formato desconhecido — só custom.yaml")
+    else:
+        text = re.sub(
+            r'(waba-landing-wabadisparos-svc:[\s\S]*?url:\s*")[^"]+(")',
+            rf"\g<1>{pv_url}\2",
+            text,
+            count=1,
+        )
+        text = re.sub(
+            r'(waba-landing-bet-waba-svc:[\s\S]*?url:\s*")[^"]+(")',
+            rf"\g<1>{bets_url}\2",
+            text,
+            count=1,
+        )
+        print("  main.yaml: URLs atualizadas")
+    main.write_text(text, encoding="utf-8")
 PY
+  log "Traefik config landings aplicado"
 }
 
 reload_traefik() {
@@ -200,8 +235,13 @@ reload_traefik() {
     sleep 2
   done
   [[ -n "${traefik:-}" ]] || { log "ERRO: Traefik não running"; return 1; }
-  docker kill -s HUP "$traefik" 2>/dev/null || docker restart "$traefik" >/dev/null
-  sleep 8
+  docker kill -s HUP "$traefik" 2>/dev/null || true
+  sleep 5
+  if ! ss -tlnp 2>/dev/null | grep -q ':443 '; then
+    log "AVISO: :443 down após HUP — force easypanel-traefik"
+    timeout 90 docker service update --force easypanel-traefik >>"$LOG" 2>&1 || true
+    sleep 15
+  fi
   log "Traefik recarregado"
 }
 
