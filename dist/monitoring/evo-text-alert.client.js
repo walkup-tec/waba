@@ -72,7 +72,7 @@ async function sendEvoTextAlert(input) {
         apiKey: resolveEvoApiKey(),
         body,
         timeoutMs,
-        retries: 1,
+        retries: Math.max(1, Math.min(4, Math.round(Number(input.retries ?? 1)))),
     });
     const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
     if (accepted) {

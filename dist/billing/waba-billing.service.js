@@ -46,13 +46,12 @@ const DISPAROS_OFICIAL_SALE_PACKAGES = [
 ];
 /** Tabela de venda API Oficial — segmento Bets (envios × valor total em centavos). */
 const DISPAROS_BETS_OFICIAL_SALE_PACKAGES = [
-    { shipments: 1000, valueCents: 40000 },
-    { shipments: 3000, valueCents: 114000 },
-    { shipments: 5000, valueCents: 185000 },
-    { shipments: 8000, valueCents: 288000 },
-    { shipments: 10000, valueCents: 330000 },
-    { shipments: 20000, valueCents: 640000 },
-    { shipments: 30000, valueCents: 930000 },
+    { shipments: 5000, valueCents: 200000 },
+    { shipments: 10000, valueCents: 380000 },
+    { shipments: 20000, valueCents: 740000 },
+    { shipments: 30000, valueCents: 1080000 },
+    { shipments: 40000, valueCents: 1400000 },
+    { shipments: 50000, valueCents: 1650000 },
 ];
 /** Tabela de venda API Alternativa (envios × valor total em centavos). */
 const DISPAROS_ALTERNATIVA_SALE_PACKAGES = [

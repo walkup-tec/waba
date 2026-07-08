@@ -117,6 +117,8 @@ export const buildSubscriberWelcomeTemplate = (input: SubscriberWelcomeTemplateI
   const cpfCnpjLabel = formatCpfCnpjLabel(input.cpfCnpj);
   const phoneLabel = String(input.phone || "").trim();
   const whatsappLabel = String(input.whatsapp || "").trim();
+  const passwordPlain = String(input.password ?? "").trim();
+  const passwordLabel = passwordPlain || "a senha definida no seu cadastro (use \"Esqueci a senha\" se necessário)";
 
   const subject = "Bem-vindo à Drax — seu cadastro foi confirmado";
   const html = baseEmailShell(
@@ -134,7 +136,7 @@ export const buildSubscriberWelcomeTemplate = (input: SubscriberWelcomeTemplateI
     <table style="width:100%;border-collapse:collapse;margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
       ${registrationFieldRow("Nome completo", input.recipientName)}
       ${registrationFieldRow("E-mail de acesso", input.recipientEmail)}
-      ${registrationFieldRow("Senha de acesso", input.password)}
+      ${registrationFieldRow("Senha de acesso", passwordLabel)}
       ${registrationFieldRow("WhatsApp", whatsappLabel)}
       ${phoneLabel && phoneLabel !== whatsappLabel ? registrationFieldRow("Telefone", phoneLabel) : ""}
       ${registrationFieldRow("CPF/CNPJ", cpfCnpjLabel)}
@@ -149,6 +151,66 @@ export const buildSubscriberWelcomeTemplate = (input: SubscriberWelcomeTemplateI
     </p>
     <p style="margin:16px 0 0;color:#1e293b;">
       Um abraço,<br />
+      <strong>Equipe Drax Sistemas</strong>
+    </p>
+  `,
+  );
+
+  return { subject, html };
+};
+
+export type StaffWelcomeTemplateInput = {
+  recipientName: string;
+  recipientEmail: string;
+  password: string;
+  whatsapp: string;
+  roleLabel: string;
+  loginUrl: string;
+  operacionalDispatchesApiLabel?: string;
+  operacionalSegmentLabel?: string;
+};
+
+export const buildStaffWelcomeTemplate = (input: StaffWelcomeTemplateInput) => {
+  const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+  const whatsappLabel = String(input.whatsapp || "").trim() || "—";
+  const passwordPlain = String(input.password ?? "").trim();
+  const passwordLabel =
+    passwordPlain || 'a senha definida no cadastro (use "Esqueci a senha" se necessário)';
+  const roleLabel = String(input.roleLabel || "").trim() || "Equipe";
+  const operacionalApiLabel = String(input.operacionalDispatchesApiLabel || "").trim();
+  const operacionalSegmentLabel = String(input.operacionalSegmentLabel || "").trim();
+  const operacionalRows =
+    operacionalApiLabel || operacionalSegmentLabel
+      ? `
+      ${operacionalApiLabel ? registrationFieldRow("Tipo de disparos", operacionalApiLabel) : ""}
+      ${operacionalSegmentLabel ? registrationFieldRow("Segmento", operacionalSegmentLabel) : ""}
+    `
+      : "";
+
+  const subject = `Bem-vindo à equipe Drax — acesso ${roleLabel}`;
+  const html = baseEmailShell(
+    `Acesso de usuário ${roleLabel}`,
+    `
+    <p style="margin:0 0 12px;color:#1e293b;">Olá, <strong>${escapeHtml(recipient)}</strong>.</p>
+    <p style="margin:0 0 12px;color:#1e293b;">
+      Seu usuário <strong>${escapeHtml(roleLabel)}</strong> foi criado no sistema WABA — Drax.
+      Utilize os dados abaixo para o primeiro acesso.
+    </p>
+    <p style="margin:0 0 8px;color:#1e293b;"><strong>Dados de acesso:</strong></p>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+      ${registrationFieldRow("Nome", input.recipientName)}
+      ${registrationFieldRow("Perfil", roleLabel)}
+      ${registrationFieldRow("E-mail de acesso", input.recipientEmail)}
+      ${registrationFieldRow("Senha de acesso", passwordLabel)}
+      ${registrationFieldRow("WhatsApp", whatsappLabel)}
+      ${operacionalRows}
+    </table>
+    <p style="margin:0 0 12px;color:#1e293b;">
+      Os menus liberados para sua função já estão configurados. Clique no botão abaixo para entrar no painel.
+    </p>
+    ${primaryButtonHtml(input.loginUrl, "Acessar o sistema")}
+    <p style="margin:16px 0 0;color:#1e293b;">
+      Atenciosamente,<br />
       <strong>Equipe Drax Sistemas</strong>
     </p>
   `,

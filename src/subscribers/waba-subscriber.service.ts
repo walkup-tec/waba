@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { randomUUID } from "node:crypto";
-import { formatBrazilMobileForAsaas, formatBrazilPhoneDigits } from "../billing/phone";
+import { formatBrazilMobileForAsaas, formatBrazilPhoneDigits, resolveSubscriberWhatsAppMobile } from "../billing/phone";
 import { notifySubscriberWelcomeEmail } from "../mail/waba-mail-delivery";
+import { resolveWabaAppLoginUrl } from "../mail/waba-app-url";
 import {
   parseWabaSubscriberSegment,
   resolveSignupSegmentFromRequest,
@@ -100,7 +101,10 @@ export class WabaSubscriberService {
     const fullName = String(input.fullName ?? "").trim();
     const password = String(input.password ?? "");
     const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
-    const whatsapp = formatBrazilMobileForAsaas(String(input.whatsapp ?? ""));
+    const whatsapp = resolveSubscriberWhatsAppMobile(
+      String(input.whatsapp ?? ""),
+      String(input.phone ?? ""),
+    );
     const phoneRaw = String(input.phone ?? "").trim();
     const phone = phoneRaw ? formatBrazilPhoneDigits(phoneRaw) : whatsapp;
 
@@ -138,6 +142,7 @@ export class WabaSubscriberService {
       whatsapp: profile.whatsapp,
       phone: profile.phone,
       cpfCnpj: profile.cpfCnpj,
+      loginUrl: resolveWabaAppLoginUrl(),
     });
 
     return profile;
@@ -152,7 +157,10 @@ export class WabaSubscriberService {
     const email = normalizeEmail(input.email);
     const fullName = String(input.fullName ?? "").trim();
     const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
-    const whatsapp = formatBrazilMobileForAsaas(String(input.whatsapp ?? ""));
+    const whatsapp = resolveSubscriberWhatsAppMobile(
+      String(input.whatsapp ?? ""),
+      String(input.phone ?? ""),
+    );
     const phoneRaw = String(input.phone ?? "").trim();
     const phone = phoneRaw ? formatBrazilPhoneDigits(phoneRaw) : whatsapp;
     const password = String(input.password ?? "").trim();

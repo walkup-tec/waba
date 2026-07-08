@@ -19,7 +19,47 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-06
+2026-07-08
+
+**WABA — V02 draxsistemas apenas assinante (2026-07-08):** removido usuário Master `Teste Split`; mantido assinante Ana Cristina. Log `doc/LOG-2026-07-08__200500__v02-draxsistemas-apenas-assinante.md`.
+** pedido teste paid 100.000 envios. Log `doc/LOG-2026-07-08__200100__v02-draxsistemas-100k-creditos-oficial.md`.
+** `notifyStaffWelcome` em `WabaSystemUserService.create` — e-mail + WhatsApp. Log `doc/LOG-2026-07-08__195500__boas-vindas-automatica-operacional-suporte.md`.
+** pedido teste `paid` 100.000 envios API Oficial. Log `doc/LOG-2026-07-08__195100__v02-mozart-hotmart-100k-creditos-oficial.md`.
+** botões em Admin · Usuários (criar + editar); perdidos no `git checkout index.html` sem commit. Log `doc/LOG-2026-07-08__193000__restore-admin-menus-marcar-desmarcar-tudo.md`.
+** `padding: 15px` + `gap: 15px` em `.disparos-pricing-benefits`; sem bordas entre cards. Log `doc/LOG-2026-07-08__192400__diferenciais-cards-margem-15px.md`.
+** substitui `ceditBets.png`; 1024×1024, `aspect-ratio: 1/1`, sem crop CSS. Log `doc/LOG-2026-07-08__190700__bets-imagem-creditBet-02.md`.
+
+**WABA — Hex Contratar Bets `ceditBets.png` (2026-07-08):** *(substituído por `creditBet_02.png`)* Bets usa arte dedicada sem linhas SVG. Log `doc/LOG-2026-07-08__174600__hex-bets-ceditBets-png.md`.
+
+**WABA — Tarifador Bets 5k–50k (2026-07-08):** removidos 1k/2k; faixas 0,40→0,33; card **De R$ 0,33 a R$ 0,40**. Log `doc/LOG-2026-07-08__181800__bets-tarifador-5k-50k.md`.
+
+**WABA — Bets card API Oficial pricing (2026-07-08):** `De 0,33 a 0,38` + `Escolha o melhor pacote para você` em `syncDisparosPricingBoardForSegment`. Log `doc/LOG-2026-07-08__153100__bets-pricing-card-oficial-033-038.md`.
+
+**WABA — Menu Aquecedor inativo sem 2 instâncias conectadas (2026-07-08):** contagem por status conectado + visual acinzentado no sidebar. Log `doc/LOG-2026-07-08__150241__menu-aquecedor-inativo-ate-2-instancias-conectadas.md`.
+
+**WABA — Boas-vindas WhatsApp POST Evolution falha no V02 local (2026-07-08):** números `51982007943`/`51982006019` corretos; instâncias `open`; falha em `POST sendText` (socket hang up) do PC → Easypanel. Fixes: timeout 90s, não pular envio se connectionState vazio, fallback candidatas. Log `doc/LOG-2026-07-08__145403__boas-vindas-whatsapp-sendtext-evo-post-falha-local.md`. Tunel SSH `:30181` ou testar em produção.
+
+**WABA — Menu Bets não pula para API Oficial (2026-07-08):** fix `enforceBetsSubscriberIntegrationEnv` + grupo lateral por aba ativa. Log `doc/LOG-2026-07-08__172600__v02-bets-menu-aquecedor-nao-pula-oficial.md`.
+
+**WABA — Bets cadastro WhatsApp boas-vindas (2026-07-08):** e-mail OK; WhatsApp tentado mas Evolution falhou (`socket hang up` local V02). Melhor fallback multi-instância + retries. Log `doc/LOG-2026-07-08__171200__bets-cadastro-whatsapp-boas-vindas-evo-falha.md`. Reenviar em Admin → Assinantes.
+
+**WABA — V02 paywall Aquecedor = produção (2026-07-08):** fix cache `sessionStorage` que mantinha acesso após API `active:false`; blur + botão **Adicionar créditos** no gate Aquecedor/Disparos. Log `doc/LOG-2026-07-08__170500__v02-aquecedor-gate-blur-creditos-parity.md`. Validar com `mozart.hotmart@gmail.com` (sem créditos), não `mozart.pmo@gmail.com` (tem PIX teste no V02).
+
+**WABA — Cadastro Bets telefone/WhatsApp (2026-07-08):** erro de celular com WhatsApp `(55)…` corrigido — strip `+55`, fallback para telefone celular válido, máscara no front. Log `doc/LOG-2026-07-08__165100__bets-cadastro-telefone-whatsapp-fix.md`. Palavras-chave: `resolveSubscriberWhatsAppMobile`, `bets-cadastro`.
+
+**WABA — Bets sem botão API Alternativa no menu (2026-07-08):** CSS produção não força mais `inline-flex` em Bets; `syncDisparosPricingBoardForSegment` esconde faixa + tab disparo-evo. Log `doc/LOG-2026-07-08__133500__bets-oculta-botao-alternativa-menu-lateral.md`.
+
+**WABA — Landing Bet V02 (2026-07-08):** `GET /version-02/bets` → `public-pages/bets.html` com cadastro segmento Bets (`signupOrigin: bet-waba`). Log `doc/LOG-2026-07-08__133151__landing-bets-v02-rota.md`.
+
+**WABA — Segmento Bets oculta API Alternativa (V02, 2026-07-08):** `initUiProfile` não restaura mais `alternativa` do localStorage para Bets; `normalizeIntegrationEnv`, `syncIntegrationEnvAccess`, CSS `waba-subscriber-bets-segment`. Log `doc/LOG-2026-07-08__131700__bets-oculta-api-alternativa-menu.md`.
+
+**WABA — Toast reenviar boas-vindas (V02, 2026-07-08):** `upgradeToast` in-place (mesmo elemento "Reenviando…" → verde); resumo da aba também verde; mensagem fixa "Mensagem de boas-vindas reenviada no WhatsApp e e-mail". Logs `doc/LOG-2026-07-08__123200__toast-sucesso-reenviar-boas-vindas.md`, `doc/LOG-2026-07-08__131508__toast-sucesso-upgrade-in-place.md`.
+
+**WABA — Monitor CPU no V02 (2026-07-08):** estava desligado (`isEnabled` false em v02) + sem `cpu-samples.jsonl`. Habilitado via `.env.v02` + sampler local Node → gráfico/cards populam. Log `doc/LOG-2026-07-08__123000__v02-monitor-cpu-habilitado-sampler-local.md`.
+
+**WABA — V02 monitor = produção (2026-07-08):** sync `uptime-monitor.service.ts` + fallback `5197462102` de `origin/master` (`d220b92`); rebuild dist; luzes/sininho mantidos; resend sem senha preservado. Marker `DEPLOY-2026-07-08-v02-monitor-parity-prod`. Log `doc/LOG-2026-07-08__122000__v02-monitor-parity-producao.md`.
+
+**WABA — Resend boas-vindas sem senha (V02, 2026-07-08):** clique no ícone reenvia e-mail+WhatsApp sem modal; toast confirma. Senha plaintext não existe no banco — mensagem sugere senha do cadastro / Esqueci a senha. Log `doc/LOG-2026-07-08__121106__resend-boas-vindas-sem-senha-toast-v02.md`.
 
 **WABA — Operacional: persistência de WhatsApp + notify por WhatsApp:** `Admin · Usuários` agora persiste `whatsapp` e `segmento` do operador; campanha nova envia e-mail e também WhatsApp com fallback de instância `51981077770` -> `5197462102`. Ver `doc/LOG-2026-07-03__operacional-whatsapp-persistencia-e-notify.md`. Palavras-chave: `waba-system-user`, `operacionalNotify`, `whatsapp`, `segmento`, `final 77770`.
 

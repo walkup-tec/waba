@@ -56,6 +56,7 @@ export async function sendEvoTextAlert(input: {
   targetNumber: string;
   text: string;
   timeoutMs?: number;
+  retries?: number;
 }): Promise<{ ok: boolean; detail: string; status: number }> {
   const instanceName = String(input.instanceName || "").trim();
   const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
@@ -85,7 +86,7 @@ export async function sendEvoTextAlert(input: {
     apiKey: resolveEvoApiKey(),
     body,
     timeoutMs,
-    retries: 1,
+    retries: Math.max(1, Math.min(4, Math.round(Number(input.retries ?? 1)))),
   });
 
   const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);

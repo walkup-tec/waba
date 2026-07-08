@@ -79,6 +79,7 @@ import { registerWabaPushRoutes } from "./push/waba-push.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
 import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integration-monitor.service";
 import { startUptimeMonitorScheduler } from "./monitoring/uptime-monitor.service";
+import { startVpsCpuLocalSampler } from "./infra/vps-cpu-monitor.service";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, defaultEvoSendTextTimeoutMs, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
 import {
   createWabaShortUrl,
@@ -4449,9 +4450,23 @@ const sendVendasPage = (res: express.Response) => {
   return res.type("html").send(html);
 };
 
+const sendBetsLandingPage = (res: express.Response) => {
+  const betsPath = path.join(rootPath, "public-pages", "bets.html");
+  if (!existsSync(betsPath)) {
+    return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
+  }
+  const html = injectRuntimeIntoIndexHtml(readFileSync(betsPath, "utf8"), {
+    basePath: BASE_PATH,
+    uiProfile: "production",
+  });
+  return res.type("html").send(html);
+};
+
 app.get("/cadastro", (_req, res) => sendVendasPage(res));
 
 app.get("/vendas", (_req, res) => sendVendasPage(res));
+
+app.get("/bets", (_req, res) => sendBetsLandingPage(res));
 
 if (BASE_PATH) {
   // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
@@ -12132,6 +12147,7 @@ const httpServer = app.listen(PORT, () => {
 
     startAsaasIntegrationMonitorScheduler();
     startUptimeMonitorScheduler();
+    startVpsCpuLocalSampler();
   })();
 });
 

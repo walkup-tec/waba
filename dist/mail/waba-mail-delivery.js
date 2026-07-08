@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifySubscriberWelcomeEmail = exports.notifyOperacionalNewCampaignEmail = exports.deliverOperacionalNewCampaignEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
+exports.notifyStaffWelcome = exports.deliverStaffWelcomeEmail = exports.notifySubscriberWelcomeEmail = exports.notifyOperacionalNewCampaignEmail = exports.deliverOperacionalNewCampaignEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_app_url_1 = require("./waba-app-url");
 const waba_mail_templates_1 = require("./waba-mail.templates");
@@ -218,3 +218,43 @@ const notifySubscriberWelcomeEmail = (input) => {
     });
 };
 exports.notifySubscriberWelcomeEmail = notifySubscriberWelcomeEmail;
+const deliverStaffWelcomeEmail = async (input) => {
+    const email = String(input.email || "")
+        .trim()
+        .toLowerCase();
+    const loginUrl = String(input.loginUrl || (0, waba_app_url_1.resolveWabaAppLoginUrl)()).trim() || (0, waba_app_url_1.resolveWabaAppLoginUrl)();
+    const mail = (0, waba_mail_templates_1.buildStaffWelcomeTemplate)({
+        recipientName: input.fullName,
+        recipientEmail: email,
+        password: String(input.password ?? ""),
+        whatsapp: input.whatsapp,
+        roleLabel: input.roleLabel,
+        loginUrl,
+        operacionalDispatchesApiLabel: input.operacionalDispatchesApiLabel,
+        operacionalSegmentLabel: input.operacionalSegmentLabel,
+    });
+    return deliverEmail({
+        toEmail: email,
+        subject: mail.subject,
+        html: mail.html,
+        logLabel: `boas-vindas equipe ${email}`,
+    });
+};
+exports.deliverStaffWelcomeEmail = deliverStaffWelcomeEmail;
+const notifyStaffWelcome = (input) => {
+    void (0, exports.deliverStaffWelcomeEmail)(input).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[mail] boas-vindas equipe (async):", message);
+    });
+    (0, waba_welcome_whatsapp_service_1.notifyStaffWelcomeWhatsApp)({
+        email: input.email,
+        password: input.password,
+        whatsapp: input.whatsapp,
+        fullName: input.fullName,
+        roleLabel: input.roleLabel,
+        loginUrl: input.loginUrl,
+        operacionalDispatchesApiLabel: input.operacionalDispatchesApiLabel,
+        operacionalSegmentLabel: input.operacionalSegmentLabel,
+    });
+};
+exports.notifyStaffWelcome = notifyStaffWelcome;

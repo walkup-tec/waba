@@ -209,21 +209,18 @@ class WabaAdminSubscribersService {
         this.subscriberService.update(subscriberId, input);
         return this.getSubscriberDetail(subscriberId);
     }
-    async resendSubscriberWelcome(subscriberId, password) {
+    async resendSubscriberWelcome(subscriberId) {
         const id = String(subscriberId || "").trim();
         if (!id)
             throw new Error("Assinante inválido.");
         const subscriber = this.subscriberRepository.getById(id);
         if (!subscriber)
             throw new Error("Assinante não encontrado.");
-        const plainPassword = String(password ?? "").trim();
-        if (plainPassword.length < 6) {
-            throw new Error("Informe a senha de acesso (mín. 6 caracteres) para reenviar as boas-vindas.");
-        }
+        // Senha em plaintext não é armazenada — reenvio sem exigir nova senha do master.
         const payload = {
             email: subscriber.email,
             fullName: subscriber.fullName,
-            password: plainPassword,
+            password: "",
             whatsapp: subscriber.whatsapp,
             phone: subscriber.phone ?? subscriber.whatsapp,
             cpfCnpj: subscriber.cpfCnpj,

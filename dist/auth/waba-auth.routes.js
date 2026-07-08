@@ -115,6 +115,7 @@ const isAuthBypassPath = (method, reqPath) => {
         p === "/index.html" ||
         p === "/cadastro" ||
         p === "/vendas" ||
+        p === "/bets" ||
         p === "/favicon.ico" ||
         p === "/logo.png" ||
         p === "/drax-logo.png" ||

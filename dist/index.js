@@ -71,6 +71,7 @@ const waba_push_routes_1 = require("./push/waba-push.routes");
 const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
 const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
 const uptime_monitor_service_1 = require("./monitoring/uptime-monitor.service");
+const vps_cpu_monitor_service_1 = require("./infra/vps-cpu-monitor.service");
 const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_public_base_url_1 = require("./lib/waba-public-base-url");
@@ -3548,8 +3549,20 @@ const sendVendasPage = (res) => {
     });
     return res.type("html").send(html);
 };
+const sendBetsLandingPage = (res) => {
+    const betsPath = path_1.default.join(rootPath, "public-pages", "bets.html");
+    if (!(0, fs_1.existsSync)(betsPath)) {
+        return res.status(404).type("html").send("<p>Landing Bet Waba indisponível.</p>");
+    }
+    const html = (0, base_path_1.injectRuntimeIntoIndexHtml)((0, fs_1.readFileSync)(betsPath, "utf8"), {
+        basePath: base_path_1.BASE_PATH,
+        uiProfile: "production",
+    });
+    return res.type("html").send(html);
+};
 app.get("/cadastro", (_req, res) => sendVendasPage(res));
 app.get("/vendas", (_req, res) => sendVendasPage(res));
+app.get("/bets", (_req, res) => sendBetsLandingPage(res));
 if (base_path_1.BASE_PATH) {
     // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
     app.use((req, res, next) => {
@@ -10498,6 +10511,7 @@ const httpServer = app.listen(PORT, () => {
         }
         (0, asaas_integration_monitor_service_1.startAsaasIntegrationMonitorScheduler)();
         (0, uptime_monitor_service_1.startUptimeMonitorScheduler)();
+        (0, vps_cpu_monitor_service_1.startVpsCpuLocalSampler)();
     })();
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer);

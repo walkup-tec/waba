@@ -8,6 +8,7 @@ const node_crypto_1 = __importDefault(require("node:crypto"));
 const node_crypto_2 = require("node:crypto");
 const phone_1 = require("../billing/phone");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
+const waba_app_url_1 = require("../mail/waba-app-url");
 const waba_subscriber_segment_1 = require("./waba-subscriber-segment");
 const waba_subscriber_repository_1 = require("./waba-subscriber.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -63,7 +64,7 @@ class WabaSubscriberService {
         const fullName = String(input.fullName ?? "").trim();
         const password = String(input.password ?? "");
         const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
-        const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
+        const whatsapp = (0, phone_1.resolveSubscriberWhatsAppMobile)(String(input.whatsapp ?? ""), String(input.phone ?? ""));
         const phoneRaw = String(input.phone ?? "").trim();
         const phone = phoneRaw ? (0, phone_1.formatBrazilPhoneDigits)(phoneRaw) : whatsapp;
         if (!email.includes("@"))
@@ -100,6 +101,7 @@ class WabaSubscriberService {
             whatsapp: profile.whatsapp,
             phone: profile.phone,
             cpfCnpj: profile.cpfCnpj,
+            loginUrl: (0, waba_app_url_1.resolveWabaAppLoginUrl)(),
         });
         return profile;
     }
@@ -113,7 +115,7 @@ class WabaSubscriberService {
         const email = normalizeEmail(input.email);
         const fullName = String(input.fullName ?? "").trim();
         const cpfCnpj = normalizeDigits(String(input.cpfCnpj ?? ""));
-        const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
+        const whatsapp = (0, phone_1.resolveSubscriberWhatsAppMobile)(String(input.whatsapp ?? ""), String(input.phone ?? ""));
         const phoneRaw = String(input.phone ?? "").trim();
         const phone = phoneRaw ? (0, phone_1.formatBrazilPhoneDigits)(phoneRaw) : whatsapp;
         const password = String(input.password ?? "").trim();

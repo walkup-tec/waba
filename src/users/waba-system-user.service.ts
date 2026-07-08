@@ -28,6 +28,8 @@ import {
   resolveMasterDisparosPolicyFromUser,
   type MasterDisparosPolicy,
 } from "./waba-master-disparos-policy.service";
+import { notifyStaffWelcome } from "../mail/waba-mail-delivery";
+import { resolveWabaAppLoginUrl } from "../mail/waba-app-url";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
@@ -359,6 +361,23 @@ export class WabaSystemUserService {
       createdAt: now,
       updatedAt: now,
     });
+
+    if (role === "operacional" || role === "suporte") {
+      notifyStaffWelcome({
+        email,
+        fullName,
+        password,
+        whatsapp,
+        roleLabel: ROLE_LABELS[role],
+        loginUrl: resolveWabaAppLoginUrl(),
+        operacionalDispatchesApiLabel: operacionalDispatchesApi
+          ? WABA_DISPATCHES_API_LABELS[operacionalDispatchesApi]
+          : undefined,
+        operacionalSegmentLabel: operacionalSegment
+          ? OPERACIONAL_SEGMENT_LABELS[operacionalSegment]
+          : undefined,
+      });
+    }
 
     return this.toPublicUser(user);
   }

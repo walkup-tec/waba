@@ -12,6 +12,8 @@ const waba_menu_registry_1 = require("../menus/waba-menu-registry");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_system_user_repository_1 = require("./waba-system-user.repository");
 const waba_master_disparos_policy_service_1 = require("./waba-master-disparos-policy.service");
+const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
+const waba_app_url_1 = require("../mail/waba-app-url");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const hashPassword = (password) => {
     const salt = node_crypto_1.default.randomBytes(16).toString("hex");
@@ -265,6 +267,22 @@ class WabaSystemUserService {
             createdAt: now,
             updatedAt: now,
         });
+        if (role === "operacional" || role === "suporte") {
+            (0, waba_mail_delivery_1.notifyStaffWelcome)({
+                email,
+                fullName,
+                password,
+                whatsapp,
+                roleLabel: ROLE_LABELS[role],
+                loginUrl: (0, waba_app_url_1.resolveWabaAppLoginUrl)(),
+                operacionalDispatchesApiLabel: operacionalDispatchesApi
+                    ? waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[operacionalDispatchesApi]
+                    : undefined,
+                operacionalSegmentLabel: operacionalSegment
+                    ? OPERACIONAL_SEGMENT_LABELS[operacionalSegment]
+                    : undefined,
+            });
+        }
         return this.toPublicUser(user);
     }
     update(userId, input) {
