@@ -8,10 +8,10 @@
 #   chmod +x /root/restore-landing-routers-vps.sh
 #   /root/restore-landing-routers-vps.sh
 #
-# Versão: restore-landing-routers-2026-07-08-v2
+# Versão: restore-landing-routers-2026-07-08-v3
 set -euo pipefail
 
-RESTORE_VERSION="restore-landing-routers-2026-07-08-v2"
+RESTORE_VERSION="restore-landing-routers-2026-07-08-v3"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 CUSTOM_CFG="${CFG_DIR}/custom.yaml"
@@ -52,9 +52,70 @@ http_local() {
     "https://${host}${path}" 2>/dev/null || echo "000"
 }
 
-host_http_ok() {
-  local url="$1"
-  curl -sf -m 5 -o /dev/null "$url" 2>/dev/null
+host_port_ok() {
+  local port="$1"
+  [[ "$port" =~ ^[0-9]+$ ]] || return 1
+  curl -sf -m 5 -o /dev/null "http://127.0.0.1:${port}/" 2>/dev/null \
+    || curl -sf -m 5 -o /dev/null "http://${HOST_GW}:${port}/" 2>/dev/null
+}
+
+service_exists() {
+  docker service ls --format '{{.Name}}' 2>/dev/null | grep -qx "$1"
+}
+
+service_replicas() {
+  local svc="$1"
+  docker service ls --format '{{.Name}} {{.Replicas}}' 2>/dev/null \
+    | awk -v s="$svc" '$1 == s { print $2; exit }'
+}
+
+service_replicas_ok() {
+  local replicas
+  replicas=$(service_replicas "$1")
+  [[ "${replicas:-}" =~ ^[1-9][0-9]*/[1-9] ]]
+}
+
+list_published_ports() {
+  local swarm="$1"
+  docker service inspect "$swarm" --format '{{range .Endpoint.Ports}}{{.PublishedPort}} {{end}}' 2>/dev/null \
+    | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u
+}
+
+service_target_port() {
+  local swarm="$1"
+  local cid port
+  cid=$(docker ps -q -f "name=${swarm}" -f status=running | head -1)
+  if [[ -n "$cid" ]]; then
+    port=$(docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+      | grep -E '^PORT=' | head -1 | cut -d= -f2- | tr -d '\r' || true)
+    [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && { echo "$port"; return 0; }
+  fi
+  docker service inspect "$swarm" --format '{{range .Endpoint.Ports}}{{.TargetPort}}{{end}}' 2>/dev/null \
+    | grep -E '^[0-9]+$' | head -1 || echo "3000"
+}
+
+ensure_host_publish() {
+  local swarm="$1" default_port="$2"
+  local published target
+  for published in $(list_published_ports "$swarm"); do
+    if host_port_ok "$published"; then
+      echo "$published"
+      return 0
+    fi
+  done
+  for target in $(service_target_port "$swarm") 3000 80; do
+    [[ "$target" =~ ^[0-9]+$ ]] || continue
+    log "Publicando ${swarm} → host:${default_port} target:${target}"
+    timeout 120 docker service update \
+      --publish-add "mode=host,published=${default_port},target=${target},protocol=tcp" \
+      "$swarm" >>"$LOG" 2>&1 || true
+    sleep 8
+    if host_port_ok "$default_port"; then
+      echo "$default_port"
+      return 0
+    fi
+  done
+  echo "$default_port"
 }
 
 ensure_bootstrap() {
@@ -83,99 +144,89 @@ ensure_traefik_networks() {
   done
 }
 
-service_replicas_ok() {
-  local svc="$1"
-  local replicas
-  replicas=$(docker service ls --filter "name=^${svc}$" --format '{{.Replicas}}' 2>/dev/null | head -1)
-  [[ "${replicas:-}" =~ ^[1-9][0-9]*/[1-9] ]]
-}
-
-service_target_port() {
-  local swarm="$1"
-  local cid port
-  cid=$(docker ps -q -f "name=${swarm}" -f status=running | head -1)
-  if [[ -n "$cid" ]]; then
-    port=$(docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
-      | grep -E '^PORT=' | head -1 | cut -d= -f2- | tr -d '\r' || true)
-    [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && { echo "$port"; return 0; }
-  fi
-  echo "80"
-}
-
-ensure_host_publish() {
-  local swarm="$1" default_port="$2"
-  local target published
-  target=$(service_target_port "$swarm")
-  published=$(docker service inspect "$swarm" --format \
-    "{{range .Endpoint.Ports}}{{if eq .TargetPort ${target}}}{{.PublishedPort}}{{end}}{{end}}" 2>/dev/null || true)
-  if [[ -n "${published:-}" && "$published" =~ ^[0-9]+$ ]]; then
-    echo "$published"
-    return 0
-  fi
-  log "Publicando ${swarm} → host:${default_port} target:${target}"
-  timeout 120 docker service update \
-    --publish-add "mode=host,published=${default_port},target=${target},protocol=tcp" \
-    "$swarm" >>"$LOG" 2>&1 || true
-  sleep 10
-  echo "$default_port"
-}
-
 extract_backend_from_yaml() {
-  local needle="$1"
-  python3 - "$CFG_DIR" "$needle" <<'PY'
+  local needle="$1" easypanel_host="${2:-}"
+  python3 - "$CFG_DIR" "$needle" "$easypanel_host" <<'PY'
 import re, sys, pathlib
-cfg_dir, needle = sys.argv[1:3]
+cfg_dir, needle, easypanel_host = sys.argv[1:4]
+
+def find_url(text: str) -> str | None:
+    if easypanel_host and easypanel_host in text:
+        m = re.search(
+            rf'rule:[^\n]*{re.escape(easypanel_host)}[^\n]*\n(?:[^\n]+\n){{0,12}}?\s+service:\s*(\S+)',
+            text,
+        )
+        if m:
+            svc = m.group(1).strip()
+            sm = re.search(
+                rf'    {re.escape(svc)}:\n(?:      [^\n]+\n){{0,6}}?\s+-\s+url:\s*"([^"]+)"',
+                text,
+            )
+            if sm:
+                return sm.group(1).rstrip("/") + "/"
+    for m in re.finditer(
+        rf'[\s\S]{{0,500}}{re.escape(needle)}[\s\S]{{0,500}}?"url"\s*:\s*"([^"]+)"',
+        text,
+        re.I,
+    ):
+        return m.group(1).rstrip("/") + "/"
+    return None
+
 for path in sorted(pathlib.Path(cfg_dir).glob("*.yaml")):
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
         continue
-    if needle not in text:
+    if needle not in text and (not easypanel_host or easypanel_host not in text):
         continue
-    for m in re.finditer(
-        rf'"{re.escape(needle)}[^"]*"\s*:\s*\{{[\s\S]*?"url"\s*:\s*"([^"]+)"',
-        text,
-        re.I,
-    ):
-        print(m.group(1).rstrip("/") + "/")
-        sys.exit(0)
-    for m in re.finditer(
-        rf'[\s\S]{{0,400}}{re.escape(needle)}[\s\S]{{0,400}}?"url"\s*:\s*"([^"]+)"',
-        text,
-        re.I,
-    ):
-        print(m.group(1).rstrip("/") + "/")
+    url = find_url(text)
+    if url:
+        print(url)
         sys.exit(0)
 PY
 }
 
 discover_backend() {
   local swarm="$1" default_host_port="$2"
-  local url target_port published traefik
+  local url published p traefik
 
-  url=$(extract_backend_from_yaml "$swarm" 2>/dev/null || true)
-  if [[ -n "${url:-}" ]] && host_http_ok "${url%/}/"; then
+  if ! service_exists "$swarm"; then
+    echo ""
+    return 1
+  fi
+
+  url=$(extract_backend_from_yaml "$swarm" "" 2>/dev/null || true)
+  if [[ -n "${url:-}" ]]; then
     log "  ${swarm}: yaml ${url}"
     echo "$url"
     return 0
   fi
 
-  target_port=$(service_target_port "$swarm")
+  for p in $(list_published_ports "$swarm") "$default_host_port"; do
+    if host_port_ok "$p"; then
+      url="http://${HOST_GW}:${p}/"
+      log "  ${swarm}: host port ${p} → ${url}"
+      echo "$url"
+      return 0
+    fi
+  done
+
   published=$(ensure_host_publish "$swarm" "$default_host_port")
   url="http://${HOST_GW}:${published}/"
-  if host_http_ok "$url"; then
-    log "  ${swarm}: host gateway ${url}"
+  if host_port_ok "$published"; then
+    log "  ${swarm}: publicado ${url}"
     echo "$url"
     return 0
   fi
 
   traefik=$(traefik_cid || true)
   if [[ -n "${traefik:-}" ]]; then
+    local target_port
+    target_port=$(service_target_port "$swarm")
     for probe in \
       "http://tasks.${swarm}:${target_port}/" \
-      "http://${swarm}:${target_port}/" \
-      "http://tasks.${swarm}:80/" \
-      "http://tasks.${swarm}:3000/"; do
+      "http://tasks.${swarm}:3000/" \
+      "http://tasks.${swarm}:80/"; do
       if docker exec "$traefik" wget -q --spider --timeout=4 "$probe" 2>/dev/null; then
         log "  ${swarm}: overlay ${probe}"
         echo "$probe"
@@ -185,7 +236,7 @@ discover_backend() {
   fi
 
   if service_replicas_ok "$swarm"; then
-    log "  ${swarm}: fallback ${url} (réplicas OK, probe falhou)"
+    log "  ${swarm}: fallback ${url}"
     echo "$url"
     return 0
   fi
@@ -319,12 +370,12 @@ reload_traefik() {
 
 wake_service() {
   local svc="$1"
-  docker service ls --format '{{.Name}}' 2>/dev/null | grep -qx "$svc" || {
+  service_exists "$svc" || {
     log "AVISO: Swarm ${svc} não existe — criar no Easypanel"
     return 1
   }
   local replicas
-  replicas=$(docker service ls --filter "name=^${svc}$" --format '{{.Replicas}}' 2>/dev/null | head -1)
+  replicas=$(service_replicas "$svc")
   log "Swarm ${svc} replicas=${replicas:-?}"
   if [[ "${replicas:-}" == 0/* ]]; then
     timeout 120 docker service scale "${svc}=1" >>"$LOG" 2>&1 || true
@@ -346,6 +397,11 @@ main() {
   local pv_url bets_url
   pv_url=$(discover_backend "$PV_SWARM" "$PV_HOST_PORT" || true)
   bets_url=$(discover_backend "$BETS_SWARM" "$BETS_HOST_PORT" || true)
+
+  if [[ -z "${pv_url:-}" ]]; then
+    pv_url=$(extract_backend_from_yaml "$PV_SWARM" "waba-paginadevendas.achpyp.easypanel.host" 2>/dev/null || true)
+    [[ -n "${pv_url:-}" ]] && log "backend paginadevendas (yaml easypanel host)=${pv_url}"
+  fi
   log "backend paginadevendas=${pv_url:-AUSENTE}"
   log "backend bets_pv=${bets_url:-AUSENTE}"
 
