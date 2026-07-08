@@ -1,32 +1,27 @@
 #!/bin/bash
-# Cria/atualiza routers Traefik para landings wabadisparos + bet.waba.
-# Neste VPS o overlay Swarm é inalcançável pelo Traefik → publica porta no host (172.17.0.1).
+# Landings wabadisparos.com.br + bet.waba.info via Traefik custom.yaml (Easypanel não usa routers: no main.yaml).
 #
-# Uso (root no VPS):
-#   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/restore-landing-routers-vps.sh" -o /root/restore-landing-routers-vps.sh
-#   sed -i 's/\r$//' /root/restore-landing-routers-vps.sh
-#   chmod +x /root/restore-landing-routers-vps.sh
-#   /root/restore-landing-routers-vps.sh
-#
-# Versão: restore-landing-routers-2026-07-08-v3
+# curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/restore-landing-routers-vps.sh" | bash
+# Versão: restore-landing-routers-2026-07-08-v4
 set -euo pipefail
 
-RESTORE_VERSION="restore-landing-routers-2026-07-08-v3"
-CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
+RESTORE_VERSION="restore-landing-routers-2026-07-08-v4"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 CUSTOM_CFG="${CFG_DIR}/custom.yaml"
+LANDINGS_CFG="${CFG_DIR}/waba-landings.yaml"
 LOG="${RESTORE_LANDING_LOG:-/var/log/restore-landing-routers.log}"
 BOOTSTRAP="/root/traefik-easypanel-bootstrap-vps.sh"
 REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
 
 PV_SWARM="waba_paginadevendas"
 BETS_SWARM="waba_bets_pv"
-PV_HOST_PORT="${LANDING_PV_HOST_PORT:-30200}"
+PV_HOST_PORT="${LANDING_PV_HOST_PORT:-30210}"
 BETS_HOST_PORT="${LANDING_BETS_HOST_PORT:-30201}"
 HOST_GW="${TRAEFIK_HOST_GW:-172.17.0.1}"
 
 log() {
-  echo "[$(date -Is)] $*" | tee -a "$LOG"
+  printf '[%s] %s\n' "$(date -Is)" "$*" >>"$LOG"
+  printf '[%s] %s\n' "$(date -Is)" "$*" >&2
 }
 
 traefik_cid() {
@@ -34,29 +29,23 @@ traefik_cid() {
 }
 
 wait_for_traefik() {
-  local i traefik
-  for i in $(seq 1 24); do
-    traefik=$(traefik_cid)
-    if [[ -n "$traefik" ]] && ss -tlnp 2>/dev/null | grep -q ':443 '; then
-      echo "$traefik"
-      return 0
-    fi
+  local i
+  for i in $(seq 1 30); do
+    [[ -n "$(traefik_cid)" ]] && ss -tlnp 2>/dev/null | grep -q ':443 ' && return 0
     sleep 2
   done
   return 1
 }
 
 http_local() {
-  local host="$1" path="${2:-/}"
-  curl -sS -o /dev/null -w "%{http_code}" --resolve "${host}:443:127.0.0.1" --max-time 15 \
-    "https://${host}${path}" 2>/dev/null || echo "000"
+  curl -sS -o /dev/null -w "%{http_code}" --resolve "${1}:443:127.0.0.1" --max-time 15 \
+    "https://${1}${2:-/}" 2>/dev/null || echo "000"
 }
 
 host_port_ok() {
   local port="$1"
   [[ "$port" =~ ^[0-9]+$ ]] || return 1
-  curl -sf -m 5 -o /dev/null "http://127.0.0.1:${port}/" 2>/dev/null \
-    || curl -sf -m 5 -o /dev/null "http://${HOST_GW}:${port}/" 2>/dev/null
+  curl -sf -m 5 -o /dev/null "http://127.0.0.1:${port}/" 2>/dev/null
 }
 
 service_exists() {
@@ -64,323 +53,156 @@ service_exists() {
 }
 
 service_replicas() {
-  local svc="$1"
   docker service ls --format '{{.Name}} {{.Replicas}}' 2>/dev/null \
-    | awk -v s="$svc" '$1 == s { print $2; exit }'
-}
-
-service_replicas_ok() {
-  local replicas
-  replicas=$(service_replicas "$1")
-  [[ "${replicas:-}" =~ ^[1-9][0-9]*/[1-9] ]]
+    | awk -v s="$1" '$1 == s { print $2; exit }'
 }
 
 list_published_ports() {
-  local swarm="$1"
-  docker service inspect "$swarm" --format '{{range .Endpoint.Ports}}{{.PublishedPort}} {{end}}' 2>/dev/null \
+  docker service inspect "$1" --format '{{range .Endpoint.Ports}}{{.PublishedPort}} {{end}}' 2>/dev/null \
     | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u
 }
 
 service_target_port() {
-  local swarm="$1"
-  local cid port
+  local swarm="$1" cid port
   cid=$(docker ps -q -f "name=${swarm}" -f status=running | head -1)
   if [[ -n "$cid" ]]; then
     port=$(docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
       | grep -E '^PORT=' | head -1 | cut -d= -f2- | tr -d '\r' || true)
     [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && { echo "$port"; return 0; }
   fi
-  docker service inspect "$swarm" --format '{{range .Endpoint.Ports}}{{.TargetPort}}{{end}}' 2>/dev/null \
-    | grep -E '^[0-9]+$' | head -1 || echo "3000"
+  port=$(docker service inspect "$swarm" --format '{{range .Endpoint.Ports}}{{.TargetPort}}{{end}}' 2>/dev/null \
+    | grep -E '^[0-9]+$' | head -1 || true)
+  [[ -n "$port" ]] && echo "$port" || echo "3000"
 }
 
 ensure_host_publish() {
-  local swarm="$1" default_port="$2"
-  local published target
-  for published in $(list_published_ports "$swarm"); do
-    if host_port_ok "$published"; then
-      echo "$published"
-      return 0
-    fi
+  local swarm="$1" default_port="$2" p target
+  for p in $(list_published_ports "$swarm"); do
+    host_port_ok "$p" && { echo "$p"; return 0; }
   done
-  for target in $(service_target_port "$swarm") 3000 80; do
-    [[ "$target" =~ ^[0-9]+$ ]] || continue
-    log "Publicando ${swarm} → host:${default_port} target:${target}"
+  target=$(service_target_port "$swarm")
+  log "Publicando ${swarm} host:${default_port} target:${target}"
+  timeout 120 docker service update \
+    --publish-add "mode=host,published=${default_port},target=${target},protocol=tcp" \
+    "$swarm" >>"$LOG" 2>&1 || true
+  sleep 10
+  host_port_ok "$default_port" && { echo "$default_port"; return 0; }
+  for target in 3000 80; do
+    timeout 120 docker service update \
+      --publish-rm "${default_port}" 2>/dev/null || true
     timeout 120 docker service update \
       --publish-add "mode=host,published=${default_port},target=${target},protocol=tcp" \
       "$swarm" >>"$LOG" 2>&1 || true
     sleep 8
-    if host_port_ok "$default_port"; then
-      echo "$default_port"
-      return 0
-    fi
+    host_port_ok "$default_port" && { echo "$default_port"; return 0; }
   done
   echo "$default_port"
 }
 
-ensure_bootstrap() {
-  if [[ -x "$BOOTSTRAP" ]]; then
-    TRAEFIK_BOOTSTRAP_LOG="$LOG"
-    # shellcheck disable=SC1090
-    source "$BOOTSTRAP"
-    traefik_bootstrap_ensure_traefik || true
-    return 0
-  fi
-  if curl -fsSL "${REPO_BASE}/traefik-easypanel-bootstrap-vps.sh" -o "$BOOTSTRAP" 2>/dev/null; then
-    sed -i 's/\r$//' "$BOOTSTRAP" 2>/dev/null || true
-    chmod +x "$BOOTSTRAP"
-    ensure_bootstrap
-  else
-    log "AVISO: bootstrap Traefik ausente"
-  fi
-}
-
-ensure_traefik_networks() {
-  local traefik net
-  traefik=$(traefik_cid || true)
-  [[ -n "${traefik:-}" ]] || return 0
-  for net in $(docker network ls --format '{{.Name}}' | grep -E 'easypanel|waba'); do
-    docker network connect "$net" "$traefik" 2>/dev/null || true
-  done
-}
-
-extract_backend_from_yaml() {
-  local needle="$1" easypanel_host="${2:-}"
-  python3 - "$CFG_DIR" "$needle" "$easypanel_host" <<'PY'
-import re, sys, pathlib
-cfg_dir, needle, easypanel_host = sys.argv[1:4]
-
-def find_url(text: str) -> str | None:
-    if easypanel_host and easypanel_host in text:
-        m = re.search(
-            rf'rule:[^\n]*{re.escape(easypanel_host)}[^\n]*\n(?:[^\n]+\n){{0,12}}?\s+service:\s*(\S+)',
-            text,
-        )
-        if m:
-            svc = m.group(1).strip()
-            sm = re.search(
-                rf'    {re.escape(svc)}:\n(?:      [^\n]+\n){{0,6}}?\s+-\s+url:\s*"([^"]+)"',
-                text,
-            )
-            if sm:
-                return sm.group(1).rstrip("/") + "/"
-    for m in re.finditer(
-        rf'[\s\S]{{0,500}}{re.escape(needle)}[\s\S]{{0,500}}?"url"\s*:\s*"([^"]+)"',
-        text,
-        re.I,
-    ):
-        return m.group(1).rstrip("/") + "/"
-    return None
-
-for path in sorted(pathlib.Path(cfg_dir).glob("*.yaml")):
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        continue
-    if needle not in text and (not easypanel_host or easypanel_host not in text):
-        continue
-    url = find_url(text)
-    if url:
-        print(url)
-        sys.exit(0)
-PY
-}
-
+# stdout = só URL; logs vão para stderr
 discover_backend() {
-  local swarm="$1" default_host_port="$2"
-  local url published p traefik
+  local swarm="$1" default_port="$2" published url
+  service_exists "$swarm" || return 1
 
-  if ! service_exists "$swarm"; then
-    echo ""
-    return 1
-  fi
-
-  url=$(extract_backend_from_yaml "$swarm" "" 2>/dev/null || true)
-  if [[ -n "${url:-}" ]]; then
-    log "  ${swarm}: yaml ${url}"
-    echo "$url"
-    return 0
-  fi
-
-  for p in $(list_published_ports "$swarm") "$default_host_port"; do
-    if host_port_ok "$p"; then
-      url="http://${HOST_GW}:${p}/"
-      log "  ${swarm}: host port ${p} → ${url}"
-      echo "$url"
+  for published in $(list_published_ports "$swarm") "$default_port"; do
+    if host_port_ok "$published"; then
+      url="http://${HOST_GW}:${published}/"
+      log "${swarm}: OK porta ${published} → ${url}"
+      printf '%s\n' "$url"
       return 0
     fi
   done
 
-  published=$(ensure_host_publish "$swarm" "$default_host_port")
+  published=$(ensure_host_publish "$swarm" "$default_port")
   url="http://${HOST_GW}:${published}/"
   if host_port_ok "$published"; then
-    log "  ${swarm}: publicado ${url}"
-    echo "$url"
+    log "${swarm}: publicado ${url}"
+    printf '%s\n' "$url"
     return 0
   fi
 
-  traefik=$(traefik_cid || true)
-  if [[ -n "${traefik:-}" ]]; then
-    local target_port
-    target_port=$(service_target_port "$swarm")
-    for probe in \
-      "http://tasks.${swarm}:${target_port}/" \
-      "http://tasks.${swarm}:3000/" \
-      "http://tasks.${swarm}:80/"; do
-      if docker exec "$traefik" wget -q --spider --timeout=4 "$probe" 2>/dev/null; then
-        log "  ${swarm}: overlay ${probe}"
-        echo "$probe"
-        return 0
-      fi
-    done
-  fi
-
-  if service_replicas_ok "$swarm"; then
-    log "  ${swarm}: fallback ${url}"
-    echo "$url"
+  local replicas
+  replicas=$(service_replicas "$swarm")
+  if [[ "${replicas:-}" =~ ^[1-9] ]]; then
+    log "${swarm}: fallback ${url} (réplicas ${replicas})"
+    printf '%s\n' "$url"
     return 0
   fi
-
-  echo ""
   return 1
 }
 
-patch_main_yaml() {
+ensure_bootstrap() {
+  [[ -x "$BOOTSTRAP" ]] || curl -fsSL "${REPO_BASE}/traefik-easypanel-bootstrap-vps.sh" -o "$BOOTSTRAP" 2>/dev/null || true
+  [[ -x "$BOOTSTRAP" ]] || return 0
+  sed -i 's/\r$//' "$BOOTSTRAP" 2>/dev/null || true
+  TRAEFIK_BOOTSTRAP_LOG="$LOG"
+  # shellcheck disable=SC1090
+  source "$BOOTSTRAP"
+  traefik_bootstrap_ensure_traefik || true
+}
+
+write_landings_yaml() {
   local pv_url="$1" bets_url="$2"
-  [[ -f "$CFG" ]] || { log "ERRO: ${CFG} não existe"; return 1; }
-  cp -a "$CFG" "${CFG}.bak-restore-landing-$(date +%Y%m%d-%H%M%S)"
-
-  python3 - "$CFG" "${pv_url:-}" "${bets_url:-}" <<'PY'
-import re, sys
-path, pv_url, bets_url = sys.argv[1:4]
-text = open(path, encoding="utf-8").read()
-
-injections = [
-    ("wabadisparos.com.br", ["paginadevendas", "waba-paginadevendas", "wabadisparos"]),
-    ("bet.waba.info", ["bets-pv", "bets_pv", "bet.waba"]),
-]
-
-lines = text.splitlines(keepends=True)
-for public_host, needles in injections:
-    if f"Host(`{public_host}`)" in text:
-        print(f"  regra já tem {public_host}")
-        continue
-    injected = False
-    for i, line in enumerate(lines):
-        if "rule:" not in line:
-            continue
-        if not any(n.lower() in line.lower() for n in needles):
-            continue
-        if f"Host(`{public_host}`)" in line:
-            injected = True
-            break
-        lines[i] = line.rstrip("\n\r") + f" || Host(`{public_host}`)\n"
-        print(f"  OR {public_host} na linha {i + 1}")
-        injected = True
-        break
-    if not injected:
-        print(f"  sem regra easypanel para injetar {public_host}")
-
-text = "".join(lines)
-
-landings = [
-    {
-        "router": "waba-landing-wabadisparos",
-        "service": "waba-landing-wabadisparos-svc",
-        "hosts": ["wabadisparos.com.br", "waba-paginadevendas.achpyp.easypanel.host"],
-        "backend": (pv_url or "").strip(),
-        "swarm": "waba_paginadevendas",
-    },
-    {
-        "router": "waba-landing-bet-waba",
-        "service": "waba-landing-bet-waba-svc",
-        "hosts": ["bet.waba.info", "waba-bets-pv.achpyp.easypanel.host"],
-        "backend": (bets_url or "").strip(),
-        "swarm": "waba_bets_pv",
-    },
-]
-
-def host_rule(hosts):
-    return " || ".join(f"Host(`{h}`)" for h in hosts if h)
-
-def upsert_router(name, rule, service, priority=120):
-    global text
-    block = f"""    {name}:
-      rule: {rule}
+  mkdir -p "$CFG_DIR"
+  cat >"$LANDINGS_CFG" <<EOF
+# Gerado por ${RESTORE_VERSION} — não editar manualmente
+http:
+  routers:
+    waba-landing-wabadisparos:
+      rule: Host(\`wabadisparos.com.br\`) || Host(\`waba-paginadevendas.achpyp.easypanel.host\`)
       entryPoints:
         - websecure
-      service: {service}
-      tls: {{}}
-      priority: {priority}
-"""
-    pat = rf"    {re.escape(name)}:\n(?:      [^\n]+\n)*?(?=    [a-zA-Z0-9_.-]+:|  [a-z]+:)"
-    if re.search(pat, text):
-        text = re.sub(pat, block.strip() + "\n", text, count=1)
-        print(f"  router atualizado: {name}")
-    elif "  routers:" in text:
-        text = text.replace("  routers:", "  routers:\n" + block, 1)
-        print(f"  router criado: {name}")
-    else:
-        print(f"  ERRO: seção routers ausente ({name})")
-
-def upsert_service(name, url):
-    global text
-    if not url:
-        print(f"  service pulado: {name}")
-        return
-    url = url.rstrip("/") + "/"
-    block = f"""    {name}:
+      service: waba-landing-wabadisparos-svc
+      tls: {}
+      priority: 200
+    waba-landing-bet-waba:
+      rule: Host(\`bet.waba.info\`) || Host(\`waba-bets-pv.achpyp.easypanel.host\`)
+      entryPoints:
+        - websecure
+      service: waba-landing-bet-waba-svc
+      tls: {}
+      priority: 200
+  services:
+    waba-landing-wabadisparos-svc:
       loadBalancer:
         servers:
-          - url: "{url}"
-"""
-    pat = rf'    {re.escape(name)}:\n(?:      [^\n]+\n)*?(?=    [a-zA-Z0-9_.-]+:|  [a-z]+:)'
-    if re.search(pat, text):
-        text = re.sub(pat, block.strip() + "\n", text, count=1)
-        print(f"  service atualizado: {name} -> {url}")
-    elif "  services:" in text:
-        text = text.replace("  services:", "  services:\n" + block, 1)
-        print(f"  service criado: {name} -> {url}")
+          - url: "${pv_url%/}/"
+    waba-landing-bet-waba-svc:
+      loadBalancer:
+        servers:
+          - url: "${bets_url%/}/"
+EOF
+  log "Escrito ${LANDINGS_CFG}"
+
+  python3 - "$CUSTOM_CFG" "$LANDINGS_CFG" <<'PY'
+import pathlib, sys
+custom, landings = map(pathlib.Path, sys.argv[1:3])
+block = landings.read_text(encoding="utf-8")
+marker = "# WABA_LANDINGS_MERGE"
+if custom.exists():
+    text = custom.read_text(encoding="utf-8")
+    if marker in text:
+        pre = text.split(marker)[0].rstrip()
+        custom.write_text(pre + "\n\n" + marker + "\n" + block.split("\n", 1)[1], encoding="utf-8")
     else:
-        print(f"  ERRO: seção services ausente ({name})")
-
-for item in landings:
-    if not item["backend"]:
-        print(f"AVISO: {item['swarm']} sem backend — pulando {item['router']}")
-        continue
-    upsert_service(item["service"], item["backend"])
-    upsert_router(item["router"], host_rule(item["hosts"]), item["service"])
-
-open(path, "w", encoding="utf-8").write(text)
+        custom.write_text(text.rstrip() + "\n\n" + marker + "\n" + block.split("\n", 1)[1], encoding="utf-8")
+else:
+    custom.write_text(block, encoding="utf-8")
+print(f"  custom.yaml atualizado ({custom})")
 PY
 }
 
 reload_traefik() {
   local traefik i
-  for i in $(seq 1 15); do
+  for i in $(seq 1 20); do
     traefik=$(traefik_cid || true)
     [[ -n "${traefik:-}" ]] && break
     sleep 2
   done
-  [[ -n "${traefik:-}" ]] || { log "ERRO: Traefik não running após espera"; return 1; }
+  [[ -n "${traefik:-}" ]] || { log "ERRO: Traefik não running"; return 1; }
   docker kill -s HUP "$traefik" 2>/dev/null || docker restart "$traefik" >/dev/null
-  sleep 5
-  log "Traefik recarregado (${traefik:0:12})"
-}
-
-wake_service() {
-  local svc="$1"
-  service_exists "$svc" || {
-    log "AVISO: Swarm ${svc} não existe — criar no Easypanel"
-    return 1
-  }
-  local replicas
-  replicas=$(service_replicas "$svc")
-  log "Swarm ${svc} replicas=${replicas:-?}"
-  if [[ "${replicas:-}" == 0/* ]]; then
-    timeout 120 docker service scale "${svc}=1" >>"$LOG" 2>&1 || true
-    sleep 10
-  fi
+  sleep 8
+  log "Traefik recarregado"
 }
 
 main() {
@@ -388,31 +210,26 @@ main() {
   log "=== ${RESTORE_VERSION} início ==="
 
   ensure_bootstrap
-  wait_for_traefik >/dev/null || log "AVISO: Traefik lento — continuando"
-  ensure_traefik_networks
-
-  wake_service "$PV_SWARM" || true
-  wake_service "$BETS_SWARM" || true
+  wait_for_traefik || log "AVISO: Traefik lento"
 
   local pv_url bets_url
   pv_url=$(discover_backend "$PV_SWARM" "$PV_HOST_PORT" || true)
   bets_url=$(discover_backend "$BETS_SWARM" "$BETS_HOST_PORT" || true)
 
-  if [[ -z "${pv_url:-}" ]]; then
-    pv_url=$(extract_backend_from_yaml "$PV_SWARM" "waba-paginadevendas.achpyp.easypanel.host" 2>/dev/null || true)
-    [[ -n "${pv_url:-}" ]] && log "backend paginadevendas (yaml easypanel host)=${pv_url}"
-  fi
-  log "backend paginadevendas=${pv_url:-AUSENTE}"
-  log "backend bets_pv=${bets_url:-AUSENTE}"
+  [[ -n "${pv_url:-}" ]] || { log "ERRO: sem backend ${PV_SWARM}"; exit 1; }
+  [[ -n "${bets_url:-}" ]] || { log "ERRO: sem backend ${BETS_SWARM}"; exit 1; }
 
-  patch_main_yaml "${pv_url:-}" "${bets_url:-}"
-  reload_traefik || true
+  log "backend paginadevendas=${pv_url}"
+  log "backend bets_pv=${bets_url}"
 
-  log "Validação (--resolve 127.0.0.1):"
-  log "  wabadisparos.com.br → $(http_local wabadisparos.com.br /)"
+  write_landings_yaml "$pv_url" "$bets_url"
+  reload_traefik
+
+  log "Validação:"
+  log "  wabadisparos → $(http_local wabadisparos.com.br /)"
   log "  bet.waba.info → $(http_local bet.waba.info /)"
-  log "  paginadevendas easypanel → $(http_local waba-paginadevendas.achpyp.easypanel.host /)"
-  log "  bets_pv easypanel → $(http_local waba-bets-pv.achpyp.easypanel.host /)"
+  log "  pv easypanel → $(http_local waba-paginadevendas.achpyp.easypanel.host /)"
+  log "  bets easypanel → $(http_local waba-bets-pv.achpyp.easypanel.host /)"
   log "=== ${RESTORE_VERSION} fim ==="
 }
 
