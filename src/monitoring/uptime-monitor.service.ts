@@ -18,7 +18,8 @@ const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_HTTP_ATTEMPTS = 3;
 
 const DEFAULT_PRIMARY_PHONE = "51981077770";
-const DEFAULT_FALLBACK_PHONE = "51997462102";
+/** Mesma regra de boas-vindas/operacional: 51981077770 → 5197462102 (NÃO 51997462102). */
+const DEFAULT_FALLBACK_PHONE = "5197462102";
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
 const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
 
@@ -232,7 +233,7 @@ async function writeMonitorState(state: UptimeMonitorState): Promise<void> {
 
 /**
  * Resolve a instância Evolution conectada para envio do alerta.
- * Preferência: telefone primário (51981077770); se não conectado, telefone fallback (51997462102).
+ * Preferência: telefone primário (51981077770); se não conectado, telefone fallback (5197462102).
  */
 async function resolveAlertInstanceName(): Promise<{
   instance: string;
