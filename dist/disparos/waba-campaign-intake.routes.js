@@ -129,6 +129,46 @@ const toPublicIntake = (intake) => {
         source: "intake",
     };
 };
+const parseClientRequestId = (body) => {
+    const raw = String(body.clientRequestId ?? body.idempotencyKey ?? "").trim();
+    if (!raw || raw.length > 128)
+        return "";
+    if (!/^[a-zA-Z0-9:_-]+$/.test(raw))
+        return "";
+    return raw;
+};
+const buildIntakeSuccessPayload = (intake, options = {}) => {
+    const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
+    const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
+    const importSummary = plannedSendCount < importedLineCount
+        ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
+        : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
+    return {
+        ok: true,
+        deduplicated: Boolean(options.deduplicated),
+        ...toPublicIntake(intake),
+        operacionalNotify: options.operacionalNotify,
+        message: options.deduplicated
+            ? "Campanha já havia sido registrada. Não foi criada duplicata."
+            : "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
+        importSummary,
+    };
+};
+const finalizeIntakeAfterCreate = async (intake) => {
+    let current = new waba_campaign_supplier_assignment_service_1.WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
+    let operacionalNotify;
+    try {
+        operacionalNotify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignAssigned)(current);
+    }
+    catch (error) {
+        console.error(`[disparos/campanhas/intake] notify falhou (${current.id}):`, error);
+    }
+    intakeRepository.updateById(current.id, {
+        updatedAt: new Date().toISOString(),
+        ...(operacionalNotify ? { operacionalNotifyAudit: operacionalNotify } : {}),
+    });
+    return intakeRepository.getById(current.id) ?? current;
+};
 const parseResponseLink = (body) => {
     const raw = String(body.responseLink ?? "").trim();
     if (!raw)
@@ -228,6 +268,13 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 return res.status(401).json({ error: "Faça login para enviar a campanha." });
             }
             const body = req.body;
+            const clientRequestId = parseClientRequestId(body);
+            if (clientRequestId) {
+                const existing = intakeRepository.findByOwnerAndClientRequestId(auth.email, clientRequestId);
+                if (existing) {
+                    return res.status(200).json(buildIntakeSuccessPayload(existing, { deduplicated: true }));
+                }
+            }
             const campaignName = String(body.campaignName ?? "").trim();
             const regionDdd = normalizeDdd(String(body.regionDdd ?? ""));
             const textOptions = parseTextOptions(body);
@@ -322,28 +369,15 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 plannedSendCount,
                 apiKind,
                 status: "generated",
+                clientRequestId: clientRequestId || undefined,
                 createdAt: now,
                 updatedAt: now,
             });
             if (!isMaster && plannedSendCount > 0) {
                 disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
             }
-            intake = new waba_campaign_supplier_assignment_service_1.WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
-            const operacionalNotify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignAssigned)(intake);
-            intakeRepository.updateById(intake.id, {
-                updatedAt: new Date().toISOString(),
-                operacionalNotifyAudit: operacionalNotify,
-            });
-            const importSummary = plannedSendCount < importedLineCount
-                ? `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios (limite do seu pacote contratado).`
-                : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${plannedSendCount} envios.`;
-            return res.status(201).json({
-                ok: true,
-                ...toPublicIntake(intake),
-                operacionalNotify,
-                message: "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
-                importSummary,
-            });
+            intake = await finalizeIntakeAfterCreate(intake);
+            return res.status(201).json(buildIntakeSuccessPayload(intake));
         }
         catch (error) {
             console.error("[disparos/campanhas/intake] erro:", error);

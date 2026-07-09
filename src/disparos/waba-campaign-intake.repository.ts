@@ -90,6 +90,8 @@ export type WabaCampaignIntake = {
   masterOverdueAlertSentAt?: string;
   /** Settlement PIX do fornecedor após finalizar campanha. */
   supplierPayoutSettlementId?: string;
+  /** Chave idempotente do cliente (evita duplicar campanha em retry/timeout). */
+  clientRequestId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -160,6 +162,22 @@ export class WabaCampaignIntakeRepository {
     const normalized = String(id ?? "").trim();
     if (!normalized) return null;
     return readStore().intakes.find((item) => item.id === normalized) ?? null;
+  }
+
+  findByOwnerAndClientRequestId(
+    ownerEmail: string,
+    clientRequestId: string,
+  ): WabaCampaignIntake | null {
+    const email = ownerEmail.trim().toLowerCase();
+    const requestId = String(clientRequestId ?? "").trim();
+    if (!email || !requestId) return null;
+    return (
+      readStore().intakes.find(
+        (item) =>
+          item.ownerEmail === email &&
+          String(item.clientRequestId || "").trim() === requestId,
+      ) ?? null
+    );
   }
 
   updateById(id: string, patch: Partial<WabaCampaignIntake>): WabaCampaignIntake | null {

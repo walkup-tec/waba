@@ -63,6 +63,14 @@ class WabaCampaignIntakeRepository {
             return null;
         return readStore().intakes.find((item) => item.id === normalized) ?? null;
     }
+    findByOwnerAndClientRequestId(ownerEmail, clientRequestId) {
+        const email = ownerEmail.trim().toLowerCase();
+        const requestId = String(clientRequestId ?? "").trim();
+        if (!email || !requestId)
+            return null;
+        return (readStore().intakes.find((item) => item.ownerEmail === email &&
+            String(item.clientRequestId || "").trim() === requestId) ?? null);
+    }
     updateById(id, patch) {
         const normalized = String(id ?? "").trim();
         if (!normalized)

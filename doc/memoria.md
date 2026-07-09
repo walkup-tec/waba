@@ -21,6 +21,8 @@ Como usar:
 ## Última atualização
 2026-07-09
 
+**WABA — Fix campanha duplicada Gerar Campanha (2026-07-09):** idempotência `clientRequestId`, API v3, retry seguro, notify não derruba POST. Marker `DEPLOY-2026-07-09-fix-campanha-duplicada-idempotencia`. Ver `doc/LOG-2026-07-09__024500__fix-campanha-duplicada-idempotencia.md`.
+
 **WABA — Deploy fornecedores produção (2026-07-09):** build `dist/` + marker `DEPLOY-2026-07-09-financeiro-fornecedores-producao`. Src já em `bfbda1d`. Redeploy Easypanel `waba_disparador`. Ver `doc/LOG-2026-07-09__022000__deploy-financeiro-fornecedores-producao.md`.
 
 **WABA — Grant 100 créditos obotmoney produção (pendente execução SSH/redeploy):** assinante Bets `obotmoney@gmail.com` (Teste Landing 03). Script `grant-disparos-credits-production.cjs`, promote billing-only, workflow `Grant Disparos Credits (SSH)`. Saldo ainda 0 até rodar workflow ou Easypanel shell. Ver `doc/LOG-2026-07-09__014500__grant-100-creditos-obotmoney-producao.md`.
