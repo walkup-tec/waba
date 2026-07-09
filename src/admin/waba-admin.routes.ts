@@ -3,6 +3,7 @@ import path from "node:path";
 import multer from "multer";
 import { rejectUnlessStaffMenu } from "../auth/waba-staff-menu-auth";
 import { resolveWabaRequestAuth } from "../auth/waba-request-auth";
+import { deliverSubscriberWelcomeNotifications } from "../mail/waba-mail-delivery";
 import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
 import { WabaAdminDashboardService } from "./waba-admin-dashboard.service";
 import { WabaAdminFinanceiroService } from "./waba-admin-financeiro.service";
@@ -165,15 +166,16 @@ export const registerWabaAdminRoutes = (app: Express) => {
     }
   });
 
-  app.post("/admin/subscribers", (req, res) => {
+  app.post("/admin/subscribers", async (req, res) => {
     const auth = rejectNonMaster(req, res);
     if (!auth) return;
     try {
       const body = req.body as Record<string, unknown>;
       const whatsapp = String(body.whatsapp ?? "");
+      const password = String(body.password ?? "");
       const subscriber = adminSubscribersCreateService.createSubscriber({
         email: String(body.email ?? ""),
-        password: String(body.password ?? ""),
+        password,
         fullName: String(body.fullName ?? body.name ?? ""),
         whatsapp,
         phone: String(body.phone ?? whatsapp),
@@ -181,7 +183,15 @@ export const registerWabaAdminRoutes = (app: Express) => {
         aquecedorGranted: body.aquecedorGranted === true,
         segment: body.segment,
       });
-      return res.status(201).json({ ok: true, subscriber });
+      const notifications = await deliverSubscriberWelcomeNotifications({
+        email: subscriber.email,
+        fullName: subscriber.fullName,
+        password,
+        whatsapp: subscriber.whatsapp,
+        phone: subscriber.phone,
+        cpfCnpj: subscriber.cpfCnpj,
+      });
+      return res.status(201).json({ ok: true, subscriber, notifications });
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Não foi possível criar o assinante.",

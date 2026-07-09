@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveDataFile } from "../data-path";
 import type { WabaSubscriberSegment } from "./waba-subscriber-segment";
@@ -50,7 +50,7 @@ export class WabaSubscriberRepository {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const tmp = `${filePath}.tmp`;
     writeFileSync(tmp, JSON.stringify(store, null, 2), "utf8");
-    writeFileSync(filePath, readFileSync(tmp));
+    renameSync(tmp, filePath);
   }
 
   list(): WabaSubscriber[] {

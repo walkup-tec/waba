@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { formatBrazilMobileForAsaas, formatBrazilPhoneDigits, resolveSubscriberWhatsAppMobile } from "../billing/phone";
-import { notifySubscriberWelcomeEmail } from "../mail/waba-mail-delivery";
-import { resolveWabaAppLoginUrl } from "../mail/waba-app-url";
 import {
   parseWabaSubscriberSegment,
   resolveSignupSegmentFromRequest,
@@ -133,19 +131,15 @@ export class WabaSubscriberService {
       updatedAt: now,
     });
 
-    const profile = this.toPublicProfile(subscriber);
+    const persisted = this.repository.getByEmail(email);
+    if (!persisted || persisted.id !== subscriber.id) {
+      throw new Error("Falha ao gravar o cadastro. Tente novamente em instantes.");
+    }
+    if (!verifyPassword(password, persisted.passwordHash)) {
+      throw new Error("Falha ao validar o cadastro salvo. Tente novamente.");
+    }
 
-    notifySubscriberWelcomeEmail({
-      email: profile.email,
-      fullName: profile.fullName,
-      password,
-      whatsapp: profile.whatsapp,
-      phone: profile.phone,
-      cpfCnpj: profile.cpfCnpj,
-      loginUrl: resolveWabaAppLoginUrl(),
-    });
-
-    return profile;
+    return this.toPublicProfile(persisted);
   }
 
   update(subscriberId: string, input: UpdateSubscriberInput) {

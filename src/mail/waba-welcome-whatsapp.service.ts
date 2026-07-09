@@ -113,8 +113,7 @@ const shouldSkipWelcomeInstanceForSend = (liveState: string): boolean => {
   const state = String(liveState || "").trim().toLowerCase();
   if (!state) return false;
   if (isEvoLiveStateOpen(state)) return false;
-  if (state === "close" || state === "closed" || state === "disconnected") return true;
-  return isEvoConnectionInProgress(state);
+  return state === "close" || state === "closed" || state === "disconnected";
 };
 
 const buildWelcomeSendCandidates = async (): Promise<string[]> => {
@@ -141,6 +140,8 @@ const buildWelcomeSendCandidates = async (): Promise<string[]> => {
 
   const legacyCandidates = uniqueInstanceNames([
     preferred,
+    "walkup",
+    "drax-oficial",
     ...resolvePushCommunityEvoInstanceFallbacks(),
     resolveDefaultPushCommunityEvoInstance(),
   ]);

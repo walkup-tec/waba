@@ -4,6 +4,8 @@ import {
   createWabaSessionToken,
   resolveWabaSessionCookieOptions,
 } from "../auth/waba-auth.service";
+import { deliverSubscriberWelcomeNotifications } from "../mail/waba-mail-delivery";
+import { resolveWabaAppLoginUrl } from "../mail/waba-app-url";
 import { WabaSubscriberService } from "./waba-subscriber.service";
 
 const subscriberService = new WabaSubscriberService();
@@ -16,13 +18,14 @@ const resolveAppLoginUrl = (): string => {
 };
 
 export const registerWabaSubscriberRoutes = (app: Express) => {
-  app.post("/subscribers/register", (req, res) => {
+  app.post("/subscribers/register", async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
+      const password = String(body.password ?? "");
       const profile = subscriberService.register(
         {
           email: String(body.email ?? ""),
-          password: String(body.password ?? ""),
+          password,
           fullName: String(body.fullName ?? body.name ?? ""),
           whatsapp: String(body.whatsapp ?? ""),
           phone: String(body.phone ?? ""),
@@ -38,11 +41,29 @@ export const registerWabaSubscriberRoutes = (app: Express) => {
         },
       );
       const loginUrl = resolveAppLoginUrl();
+      const notifications = await deliverSubscriberWelcomeNotifications({
+        email: profile.email,
+        fullName: profile.fullName,
+        password,
+        whatsapp: profile.whatsapp,
+        phone: profile.phone,
+        cpfCnpj: profile.cpfCnpj,
+        loginUrl,
+      });
+      if (notifications.whatsapp.status !== "sent") {
+        console.warn(
+          `[subscribers/register] WhatsApp boas-vindas não enviado para ${profile.email}: ${notifications.whatsapp.message}`,
+        );
+      }
       return res.status(201).json({
         ok: true,
         subscriber: profile,
         loginUrl,
-        message: "Cadastro realizado. Faça login no painel WABA para contratar disparos.",
+        notifications,
+        message:
+          notifications.whatsapp.status === "sent"
+            ? "Cadastro realizado. Você receberá e-mail e WhatsApp de boas-vindas. Faça login no painel WABA."
+            : "Cadastro realizado. E-mail de boas-vindas enviado. Faça login no painel WABA.",
       });
     } catch (error) {
       return res.status(400).json({

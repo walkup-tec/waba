@@ -15,8 +15,10 @@ import {
 } from "./waba-mail.templates";
 import { wabaMailService } from "./waba-mail.service";
 import {
+  deliverStaffWelcomeWhatsApp,
+  deliverSubscriberWelcomeWhatsApp,
   notifyStaffWelcomeWhatsApp,
-  notifySubscriberWelcomeWhatsApp,
+  type WabaWhatsAppDeliveryResult,
 } from "./waba-welcome-whatsapp.service";
 
 export type WabaEmailDeliveryStatus = "sent" | "skipped" | "failed";
@@ -287,6 +289,31 @@ export const notifyOperacionalNewCampaignEmail = (input: {
     });
 };
 
+export const deliverSubscriberWelcomeNotifications = async (input: {
+  email: string;
+  fullName: string;
+  password: string;
+  whatsapp: string;
+  phone: string;
+  cpfCnpj: string;
+  loginUrl?: string;
+}): Promise<{
+  email: WabaEmailDeliveryResult;
+  whatsapp: WabaWhatsAppDeliveryResult;
+}> => {
+  const loginUrl = String(input.loginUrl || resolveWabaAppLoginUrl()).trim() || resolveWabaAppLoginUrl();
+  const [email, whatsapp] = await Promise.all([
+    deliverSubscriberWelcomeEmail({ ...input, loginUrl }),
+    deliverSubscriberWelcomeWhatsApp({
+      email: input.email,
+      password: input.password,
+      whatsapp: input.whatsapp,
+      loginUrl,
+    }),
+  ]);
+  return { email, whatsapp };
+};
+
 export const notifySubscriberWelcomeEmail = (input: {
   email: string;
   fullName: string;
@@ -296,15 +323,9 @@ export const notifySubscriberWelcomeEmail = (input: {
   cpfCnpj: string;
   loginUrl?: string;
 }): void => {
-  void deliverSubscriberWelcomeEmail(input).catch((error) => {
+  void deliverSubscriberWelcomeNotifications(input).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[mail] boas-vindas cadastro (async):", message);
-  });
-  notifySubscriberWelcomeWhatsApp({
-    email: input.email,
-    password: input.password,
-    whatsapp: input.whatsapp,
-    loginUrl: input.loginUrl,
   });
 };
 

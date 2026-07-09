@@ -21,6 +21,10 @@ Como usar:
 ## Última atualização
 2026-07-08
 
+**WABA — Fix cadastro Bet login + WhatsApp (2026-07-09):** persistência atômica assinante, validação pós-gravação, boas-vindas await na API register, fallbacks Evo walkup/drax-oficial. Log `doc/LOG-2026-07-09__011800__fix-cadastro-bet-login-whatsapp.md`.
+
+**WABA — Fix V02 tela branca (2026-07-08):** `SyntaxError` por `const bmInoperanteBtn` duplicado em `closeAdminCampanhasDetailModal()` — quebrava todo JS do `index.html`. Log `doc/LOG-2026-07-08__223800__fix-v02-tela-branca-bm-inoperante-dup.md`.
+
 **WABA — Bets cadastro fluxo V02 imediato (2026-07-08):** após `POST /subscribers/register` (segmento Bets, boas-vindas e-mail+WhatsApp), redirect automático para `loginUrl` — sem “time entrará em contato”. Tela “login em breve” em bet.waba.info é app **bets_pv** (deploy separado). Log `doc/LOG-2026-07-08__220000__bets-cadastro-fluxo-v02-imediato.md`.
 
 **WABA — Financeiro fornecedores + fila operacional deploy (2026-07-08):** prioridade 1–5, atribuição campanha por plano+segmento, BM inoperante, reassign 30h, split fornecedor pós-finalizar. Logs `213500`, `214500`.
