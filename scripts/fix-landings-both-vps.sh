@@ -7,10 +7,10 @@
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/fix-landings-both-vps.sh" -o /tmp/fix-landings.sh
 #   sed -i 's/\r$//' /tmp/fix-landings.sh && bash /tmp/fix-landings.sh
 #
-# Versão: fix-landings-both-2026-07-09-v2
+# Versão: fix-landings-both-2026-07-09-v3
 set -euo pipefail
 
-VERSION="fix-landings-both-2026-07-09-v2"
+VERSION="fix-landings-both-2026-07-09-v3"
 CFG="/etc/easypanel/traefik/config/main.yaml"
 LOG="/var/log/fix-landings-both.log"
 
@@ -182,8 +182,19 @@ docker kill -s HUP "$cid" >/dev/null 2>&1 || true
 sleep 10
 log "HUP ${cid:0:12}"
 
-pv_code=$(http_code --resolve "wabadisparos.com.br:443:127.0.0.1" https://wabadisparos.com.br/)
-bet_code=$(http_code --resolve "bet.waba.info:443:127.0.0.1" https://bet.waba.info/)
+pv_code="000"
+bet_code="000"
+bet_body=""
+pv_body=""
+for i in 1 2 3 4 5 6; do
+  pv_code=$(http_code --resolve "wabadisparos.com.br:443:127.0.0.1" https://wabadisparos.com.br/)
+  bet_code=$(http_code --resolve "bet.waba.info:443:127.0.0.1" https://bet.waba.info/)
+  if [[ "$pv_code" != "000" && "$bet_code" != "000" ]]; then
+    break
+  fi
+  log "HTTPS ainda carregando (tentativa ${i}/6)..."
+  sleep 4
+done
 bet_body=$(body_snip --resolve "bet.waba.info:443:127.0.0.1" https://bet.waba.info/)
 pv_body=$(body_snip --resolve "wabadisparos.com.br:443:127.0.0.1" https://wabadisparos.com.br/)
 
@@ -199,7 +210,7 @@ if [[ "$ok_bet" -eq 1 && "$ok_pv" -eq 1 ]]; then
   exit 0
 fi
 
-log "FALHA: bet_ok=${ok_bet} pv_ok=${pv_pv} (bet_code=${bet_code})"
+log "FALHA: bet_ok=${ok_bet} pv_ok=${ok_pv} (disparos=${pv_code} bet=${bet_code})"
 if echo "$bet_body" | grep -qi "Page not found"; then
   log "bet ainda 404 app — teste direto:"
   log "  curl -H 'Host: bet.waba.info' http://127.0.0.1:30211/ | head -c 200"
