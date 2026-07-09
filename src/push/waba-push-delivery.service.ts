@@ -405,6 +405,31 @@ export function getPushMessageById(id: string): WabaPushMessage | null {
   return pushRepository.getById(id);
 }
 
+export function publishSystemAlertForMasters(input: {
+  title: string;
+  message: string;
+}): WabaPushMessage {
+  const now = new Date().toISOString();
+  const title = String(input.title || "Alerta").trim() || "Alerta";
+  const message = String(input.message || "").trim();
+  const payload: WabaPushMessage = {
+    id: pushRepository.createId(),
+    title,
+    originalText: message,
+    reviewedText: message,
+    image: null,
+    audiences: ["users"],
+    userRoles: ["master"],
+    status: "sent",
+    createdByEmail: "system@waba",
+    createdAt: now,
+    sentAt: now,
+    deliveryResults: { users: { targeted: 0, roles: ["master"] } },
+    dismissedBy: [],
+  };
+  return pushRepository.save(payload);
+}
+
 export function listPushAlertsForAuth(auth: WabaRequestAuth): WabaPushAlertView[] {
   const email = normalizeEmail(auth.email);
   if (!email.includes("@")) return [];

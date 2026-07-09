@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-policy.service";
-import { resolveOrderApiKind } from "../disparos/waba-dispatches-api-kind";
+import { resolveOrderApiKind, resolveIntakeApiKindFromIntake } from "../disparos/waba-dispatches-api-kind";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
+import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
+import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
+import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
 import { WabaBillingOrderRepository } from "./waba-billing-order.repository";
 import { resolveOrderShipmentCount } from "./waba-disparos-order-shipments";
@@ -120,10 +123,16 @@ const normalizeParticipant = (input: Partial<SplitParticipant>): SplitParticipan
 
 const normalizeSupplier = (input: Partial<SplitSupplier>): SplitSupplier => {
   const apiKind: WabaDispatchesApiKind = input.apiKind === "alternativa" ? "alternativa" : "oficial";
+  const segment = input.segment === "bets" ? "bets" : "outros";
+  const priorityRaw = Math.round(Number(input.priority ?? 1));
+  const priority = Math.max(1, Math.min(5, Number.isFinite(priorityRaw) ? priorityRaw : 1));
   return {
     id: String(input.id ?? randomUUID()).trim() || randomUUID(),
     name: String(input.name ?? "").trim(),
     apiKind,
+    systemUserEmail: String(input.systemUserEmail ?? "").trim().toLowerCase(),
+    segment,
+    priority,
     costPerShipmentCents: Math.max(0, Math.round(Number(input.costPerShipmentCents ?? 0))),
     pixKey: String(input.pixKey ?? "").trim(),
     active: input.active !== false,
@@ -162,10 +171,36 @@ export class WabaFinanceiroSplitService {
   private resolveActiveSupplier(
     config: FinanceiroSplitConfig,
     apiKind: WabaDispatchesApiKind,
+    segment: WabaSystemUserOperacionalSegment = "outros",
   ): SplitSupplier | null {
-    return (
-      config.suppliers.find((item) => item.active && item.apiKind === apiKind) ?? null
-    );
+    return this.listActiveSuppliersForPlanSegmentFromConfig(config, apiKind, segment)[0] ?? null;
+  }
+
+  listActiveSuppliersForPlanSegment(
+    apiKind: WabaDispatchesApiKind,
+    segment: WabaSystemUserOperacionalSegment,
+  ): SplitSupplier[] {
+    const config = this.configRepository.get();
+    return this.listActiveSuppliersForPlanSegmentFromConfig(config, apiKind, segment);
+  }
+
+  listActiveSuppliersForPlanSegmentFromConfig(
+    config: FinanceiroSplitConfig,
+    apiKind: WabaDispatchesApiKind,
+    segment: WabaSystemUserOperacionalSegment,
+  ): SplitSupplier[] {
+    return config.suppliers
+      .filter((item) => item.active && item.apiKind === apiKind && item.segment === segment)
+      .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name, "pt-BR"));
+  }
+
+  private shouldDeferSupplierPayout(supplier: SplitSupplier | null): boolean {
+    return Boolean(supplier?.systemUserEmail);
+  }
+
+  private resolveSubscriberSegmentForEmail(email: string): WabaSystemUserOperacionalSegment {
+    const subscriber = new WabaSubscriberRepository().getByEmail(email);
+    return subscriber?.segment === "bets" ? "bets" : "outros";
   }
 
   validateConfig(input: FinanceiroSplitConfig): FinanceiroSplitConfig {
@@ -175,22 +210,30 @@ export class WabaFinanceiroSplitService {
     );
 
     const activeSuppliers = suppliers.filter((item) => item.active);
-    const apiKinds = new Set<WabaDispatchesApiKind>();
+    const priorityKeys = new Set<string>();
+    const operacionalEmails = new Set<string>();
     for (const supplier of activeSuppliers) {
       if (!supplier.name) {
         throw new Error("Cada fornecedor ativo precisa de um nome.");
       }
+      if (!supplier.systemUserEmail) {
+        throw new Error(`Selecione o usuário operacional do fornecedor ${supplier.name || "sem nome"}.`);
+      }
       if (!supplier.pixKey || supplier.pixKey.length < 5) {
         throw new Error(`Informe a chave PIX do fornecedor ${supplier.name || "sem nome"}.`);
       }
-      if (apiKinds.has(supplier.apiKind)) {
+      const groupKey = `${supplier.apiKind}:${supplier.segment}`;
+      const priorityKey = `${groupKey}:${supplier.priority}`;
+      if (priorityKeys.has(priorityKey)) {
         throw new Error(
-          supplier.apiKind === "oficial"
-            ? "Já existe um fornecedor ativo para API Oficial."
-            : "Já existe um fornecedor ativo para API Alternativa.",
+          `Já existe fornecedor ativo com prioridade ${supplier.priority} para ${supplier.apiKind === "oficial" ? "API Oficial" : "API Alternativa"} / ${supplier.segment === "bets" ? "Bets" : "Outros"}.`,
         );
       }
-      apiKinds.add(supplier.apiKind);
+      priorityKeys.add(priorityKey);
+      if (operacionalEmails.has(supplier.systemUserEmail)) {
+        throw new Error("Cada usuário operacional só pode ser fornecedor uma vez.");
+      }
+      operacionalEmails.add(supplier.systemUserEmail);
     }
 
     const activeParticipants = participants.filter((item) => item.active);
@@ -259,7 +302,8 @@ export class WabaFinanceiroSplitService {
 
     const config = this.configRepository.get();
     const apiKind = resolveOrderApiKind(order);
-    const supplier = this.resolveActiveSupplier(config, apiKind);
+    const segment = this.resolveSubscriberSegmentForEmail(order.ownerEmail);
+    const supplier = this.resolveActiveSupplier(config, apiKind, segment);
     const purchasedShipmentCount = this.resolvePurchasedShipmentCount(order);
     const costPerShipmentCents = supplier?.costPerShipmentCents ?? 0;
     const contractedValueCents = Math.max(0, Math.round(Number(order.valueCents ?? 0)));
@@ -302,7 +346,8 @@ export class WabaFinanceiroSplitService {
     const masterPolicy = this.masterPolicyService.resolveForEmail(order.ownerEmail);
     const paySuppliers = !masterPolicy || masterPolicy.splitSuppliers;
     const payProfits = !masterPolicy || masterPolicy.splitProfits;
-    const supplier = this.resolveActiveSupplier(config, apiKind);
+    const segment = this.resolveSubscriberSegmentForEmail(order.ownerEmail);
+    const supplier = this.resolveActiveSupplier(config, apiKind, segment);
     if (paySuppliers && !supplier?.pixKey) {
       this.logSettlementSkip(order, `fornecedor ativo sem PIX para plano ${apiKind}`);
       return null;
@@ -354,18 +399,21 @@ export class WabaFinanceiroSplitService {
     }
 
     if (supplier) {
+      const deferSupplierPayout = this.shouldDeferSupplierPayout(supplier);
       lines.push({
         lineKind: "supplier",
         participantId: supplier.id,
         participantLabel: supplier.name,
-        participantEmail: "",
-        pixKey: paySuppliers ? supplier.pixKey : "",
+        participantEmail: supplier.systemUserEmail || "",
+        pixKey: paySuppliers && !deferSupplierPayout ? supplier.pixKey : "",
         sharePercent: 0,
         amountCents: effectiveSupplierCostCents,
         shipmentCount: purchasedShipmentCount,
         costPerShipmentCents: paySuppliers ? costPerShipmentCents : 0,
         payoutStatus:
-          paySuppliers && effectiveSupplierCostCents > 0 ? "pending" : "skipped",
+          paySuppliers && effectiveSupplierCostCents > 0 && !deferSupplierPayout
+            ? "pending"
+            : "skipped",
       });
     }
 
@@ -465,5 +513,81 @@ export class WabaFinanceiroSplitService {
     }
 
     return { scanned, settled, payoutsTriggered, payoutEnabled: this.isPayoutEnabled() };
+  }
+
+  getSupplierById(supplierId: string): SplitSupplier | null {
+    const normalized = String(supplierId || "").trim();
+    if (!normalized) return null;
+    return this.configRepository.get().suppliers.find((item) => item.id === normalized) ?? null;
+  }
+
+  buildCampaignSupplierOrderId(intakeId: string): string {
+    return `campaign-supplier:${String(intakeId || "").trim()}`;
+  }
+
+  async payoutSupplierForCompletedCampaign(intake: WabaCampaignIntake): Promise<FinanceiroSplitSettlement | null> {
+    if (intake.status !== "completed") return null;
+    const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
+    if (sent <= 0) return null;
+
+    const supplierId = String(intake.assignedSupplierId || "").trim();
+    if (!supplierId) return null;
+    const supplier = this.getSupplierById(supplierId);
+    if (!supplier?.pixKey) return null;
+
+    const orderId = this.buildCampaignSupplierOrderId(intake.id);
+    const existing = this.settlementRepository.getByOrderId(orderId);
+    if (existing) return existing;
+
+    const apiKind = resolveIntakeApiKindFromIntake(intake);
+    const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
+    const supplierCostCents = Math.max(0, Math.round(sent * costPerShipmentCents));
+    if (supplierCostCents <= 0) return null;
+
+    const lines: SplitSettlementLine[] = [
+      {
+        lineKind: "supplier",
+        participantId: supplier.id,
+        participantLabel: supplier.name,
+        participantEmail: supplier.systemUserEmail || "",
+        pixKey: supplier.pixKey,
+        sharePercent: 0,
+        amountCents: supplierCostCents,
+        shipmentCount: sent,
+        costPerShipmentCents,
+        payoutStatus: "pending",
+      },
+    ];
+
+    const settlement = this.settlementRepository.create({
+      orderId,
+      campaignIntakeId: intake.id,
+      apiKind,
+      ownerEmail: intake.ownerEmail,
+      customerName: intake.campaignName,
+      paidValueCents: 0,
+      purchasedShipmentCount: sent,
+      costPerShipmentCents,
+      supplierCostCents,
+      totalCostCents: supplierCostCents,
+      grossProfitCents: 0,
+      cetCents: 0,
+      distributableCents: 0,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      lines,
+      payoutStatus: deriveSettlementPayoutStatus(lines),
+    });
+
+    if (!this.payoutService.isPayoutEnabled()) return settlement;
+    try {
+      return (await this.payoutService.executeForSettlement(settlement)) ?? settlement;
+    } catch (error) {
+      console.error(
+        `[FinanceiroSplit] falha no repasse PIX da campanha ${intake.id}:`,
+        error instanceof Error ? error.message : error,
+      );
+      return settlement;
+    }
   }
 }

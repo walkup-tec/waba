@@ -5376,13 +5376,28 @@
 
       .admin-financeiro-split-supplier-row {
         display: grid;
-        grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 0.9fr) 120px minmax(180px, 1.4fr) 88px;
+        grid-template-columns:
+          minmax(140px, 1.2fr)
+          minmax(100px, 0.8fr)
+          minmax(80px, 0.6fr)
+          72px
+          120px
+          minmax(160px, 1.2fr)
+          88px;
         gap: 10px;
         align-items: center;
         padding: 10px 12px;
         border: 1px solid rgba(148, 163, 184, 0.2);
         border-radius: 10px;
         background: rgba(15, 23, 42, 0.45);
+      }
+
+      .admin-financeiro-split-readonly {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        font-size: 13px;
+        color: #cbd5e1;
       }
 
       .admin-financeiro-split-supplier-row select,
@@ -18548,6 +18563,7 @@
                         ></th>
                         <th scope="col">ID Assinante</th>
                         <th scope="col">Plano</th>
+                        <th scope="col">Segmento</th>
                         <th scope="col">Campanha</th>
                         <th scope="col" class="admin-subscribers-num">Envios</th>
                         <th scope="col">Status</th>
@@ -18557,7 +18573,7 @@
                     </thead>
                     <tbody id="admin-campanhas-tbody">
                       <tr>
-                        <td colspan="7" class="muted">Carregando…</td>
+                        <td colspan="8" class="muted">Carregando…</td>
                       </tr>
                     </tbody>
                   </table>
@@ -19315,6 +19331,14 @@
             type="button"
           >
             Baixar leads (planilha)
+          </button>
+          <button
+            id="admin-campanhas-bm-inoperante-btn"
+            class="instance-action-btn btn-refresh enabled"
+            type="button"
+            hidden
+          >
+            BM inoperante
           </button>
           <button
             id="admin-campanhas-report-error-btn"
@@ -24277,6 +24301,63 @@
       let adminFinanceiroOrdersScrollBound = false;
       let adminFinanceiroSplitDraft = null;
       let adminFinanceiroMasterUsersCache = [];
+      let adminFinanceiroOperacionalUsersCache = [];
+
+      function resolveOperacionalSupplierUser(email) {
+        const normalized = String(email || "").trim().toLowerCase();
+        if (!normalized) return null;
+        return (
+          adminFinanceiroOperacionalUsersCache.find(
+            (user) => String(user?.email || "").trim().toLowerCase() === normalized
+          ) || null
+        );
+      }
+
+      function buildOperacionalSupplierSelectOptions(selectedEmail) {
+        const selected = String(selectedEmail || "").trim().toLowerCase();
+        const users = Array.isArray(adminFinanceiroOperacionalUsersCache)
+          ? adminFinanceiroOperacionalUsersCache
+          : [];
+        const options = ['<option value="">Selecione o operacional</option>'];
+        for (const user of users) {
+          const email = String(user?.email || "").trim().toLowerCase();
+          if (!email) continue;
+          const label = String(user?.fullName || email).trim() || email;
+          options.push(
+            `<option value="${escapeAdminHtml(email)}" ${
+              email === selected ? "selected" : ""
+            }>${escapeAdminHtml(label)}</option>`
+          );
+        }
+        return options.join("");
+      }
+
+      function applyOperacionalSelectionToSupplier(supplier, email) {
+        const user = resolveOperacionalSupplierUser(email);
+        if (!supplier || !user) return;
+        supplier.systemUserEmail = String(user.email || "").trim().toLowerCase();
+        supplier.name = String(user.fullName || user.email || "").trim();
+        supplier.apiKind = user.apiKind === "alternativa" ? "alternativa" : "oficial";
+        supplier.segment = user.segment === "bets" ? "bets" : "outros";
+      }
+
+      function formatSupplierSegmentLabel(segment) {
+        return segment === "bets" ? "Bets" : "Outros";
+      }
+
+      function formatSupplierPlanLabel(apiKind) {
+        return apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+      }
+
+      function buildSupplierPrioritySelectOptions(selectedPriority) {
+        const selected = Math.max(1, Math.min(5, Math.round(Number(selectedPriority ?? 1))));
+        return [1, 2, 3, 4, 5]
+          .map(
+            (value) =>
+              `<option value="${value}" ${value === selected ? "selected" : ""}>${value}</option>`
+          )
+          .join("");
+      }
 
       function resolveSplitMasterUser(email) {
         const normalized = String(email || "").trim().toLowerCase();
@@ -24391,6 +24472,9 @@
           id,
           name: "",
           apiKind: "oficial",
+          systemUserEmail: "",
+          segment: "outros",
+          priority: 1,
           costPerShipmentCents: 0,
           pixKey: "",
           active: true,
@@ -24423,6 +24507,9 @@
                 id: String(item?.id || createEmptySplitSupplier().id),
                 name: String(item?.name || ""),
                 apiKind: item?.apiKind === "alternativa" ? "alternativa" : "oficial",
+                systemUserEmail: String(item?.systemUserEmail || "").trim().toLowerCase(),
+                segment: item?.segment === "bets" ? "bets" : "outros",
+                priority: Math.max(1, Math.min(5, Math.round(Number(item?.priority ?? 1)))),
                 costPerShipmentCents: Math.max(
                   0,
                   Math.round(Number(item?.costPerShipmentCents ?? 0))
@@ -24446,26 +24533,43 @@
       }
 
       function clearAdminFinanceiroSplitSupplierForm() {
-        const name = document.getElementById("admin-split-supplier-draft-name");
-        const plan = document.getElementById("admin-split-supplier-draft-plan");
+        const operacional = document.getElementById("admin-split-supplier-draft-operacional");
+        const plan = document.getElementById("admin-split-supplier-draft-plan-label");
+        const segment = document.getElementById("admin-split-supplier-draft-segment-label");
+        const priority = document.getElementById("admin-split-supplier-draft-priority");
         const cost = document.getElementById("admin-split-supplier-draft-cost");
         const pix = document.getElementById("admin-split-supplier-draft-pix");
-        if (name) name.value = "";
-        if (plan) plan.value = "oficial";
+        if (operacional) operacional.value = "";
+        if (plan) plan.textContent = "—";
+        if (segment) segment.textContent = "—";
+        if (priority) priority.value = "1";
         if (cost) cost.value = formatReaisMaskFromCents(0);
         if (pix) pix.value = "";
       }
 
+      function syncAdminFinanceiroSplitSupplierDraftOperacionalPreview() {
+        const operacional = document.getElementById("admin-split-supplier-draft-operacional");
+        const plan = document.getElementById("admin-split-supplier-draft-plan-label");
+        const segment = document.getElementById("admin-split-supplier-draft-segment-label");
+        const user = resolveOperacionalSupplierUser(operacional?.value);
+        if (plan) plan.textContent = user ? formatSupplierPlanLabel(user.apiKind) : "—";
+        if (segment) segment.textContent = user ? formatSupplierSegmentLabel(user.segment) : "—";
+      }
+
       function upsertAdminFinanceiroSplitSupplier(input) {
         if (!adminFinanceiroSplitDraft) return false;
-        const supplierName = String(input?.name || "").trim();
-        const apiKind = input?.apiKind === "alternativa" ? "alternativa" : "oficial";
+        const systemUserEmail = String(input?.systemUserEmail || "").trim().toLowerCase();
+        const user = resolveOperacionalSupplierUser(systemUserEmail);
+        const supplierName = String(user?.fullName || input?.name || "").trim();
+        const apiKind = user?.apiKind === "alternativa" ? "alternativa" : "oficial";
+        const segment = user?.segment === "bets" ? "bets" : "outros";
+        const priority = Math.max(1, Math.min(5, Math.round(Number(input?.priority ?? 1))));
         const costPerShipmentCents = Math.max(0, Math.round(Number(input?.costPerShipmentCents ?? 0)));
         const pixKey = String(input?.pixKey || "").trim();
 
-        if (!supplierName) {
-          showToast("Informe o nome do fornecedor.", "warning", 4200);
-          input?.nameEl?.focus?.();
+        if (!systemUserEmail || !user) {
+          showToast("Selecione o usuário operacional do fornecedor.", "warning", 4200);
+          input?.operacionalEl?.focus?.();
           return false;
         }
         if (!pixKey) {
@@ -24475,24 +24579,27 @@
         }
 
         const existing = (adminFinanceiroSplitDraft.suppliers || []).find(
-          (item) => item.active !== false && item.apiKind === apiKind
+          (item) =>
+            item.active !== false &&
+            String(item.systemUserEmail || "").trim().toLowerCase() === systemUserEmail
         );
         if (existing) {
           existing.name = supplierName;
+          existing.apiKind = apiKind;
+          existing.segment = segment;
+          existing.priority = priority;
           existing.costPerShipmentCents = costPerShipmentCents;
           existing.pixKey = pixKey;
-          showToast(
-            apiKind === "oficial"
-              ? "Fornecedor API Oficial atualizado."
-              : "Fornecedor API Alternativa atualizado.",
-            "success",
-            3200
-          );
+          existing.systemUserEmail = systemUserEmail;
+          showToast("Fornecedor atualizado.", "success", 3200);
         } else {
           adminFinanceiroSplitDraft.suppliers.push({
             ...createEmptySplitSupplier(),
             name: supplierName,
             apiKind,
+            segment,
+            priority,
+            systemUserEmail,
             costPerShipmentCents,
             pixKey,
             active: true,
@@ -24504,16 +24611,16 @@
 
       function includeAdminFinanceiroSplitSupplier() {
         if (!adminFinanceiroSplitDraft) return;
-        const name = document.getElementById("admin-split-supplier-draft-name");
-        const plan = document.getElementById("admin-split-supplier-draft-plan");
+        const operacional = document.getElementById("admin-split-supplier-draft-operacional");
+        const priority = document.getElementById("admin-split-supplier-draft-priority");
         const cost = document.getElementById("admin-split-supplier-draft-cost");
         const pix = document.getElementById("admin-split-supplier-draft-pix");
         const ok = upsertAdminFinanceiroSplitSupplier({
-          name: name?.value,
-          apiKind: plan?.value === "alternativa" ? "alternativa" : "oficial",
+          systemUserEmail: operacional?.value,
+          priority: priority?.value,
           costPerShipmentCents: parseReaisMaskToCents(cost?.value),
           pixKey: pix?.value,
-          nameEl: name,
+          operacionalEl: operacional,
           pixEl: pix,
         });
         if (!ok) return;
@@ -24537,24 +24644,23 @@
                 (supplier, index) => `
                   <div class="admin-financeiro-split-supplier-row" data-supplier-index="${index}">
                     <div class="admin-financeiro-split-field">
-                      <label class="admin-financeiro-split-mobile-label">Nome</label>
-                      <input
-                        type="text"
-                        data-supplier-field="name"
-                        aria-label="Nome do fornecedor"
-                        value="${escapeAdminHtml(supplier.name || "")}"
-                        placeholder="Nome do fornecedor"
-                      />
+                      <label class="admin-financeiro-split-mobile-label">Operacional</label>
+                      <select data-supplier-field="systemUserEmail" aria-label="Operacional fornecedor">
+                        ${buildOperacionalSupplierSelectOptions(supplier.systemUserEmail || "")}
+                      </select>
                     </div>
                     <div class="admin-financeiro-split-field">
                       <label class="admin-financeiro-split-mobile-label">Plano</label>
-                      <select data-supplier-field="apiKind" aria-label="Plano do fornecedor">
-                        <option value="oficial" ${
-                          supplier.apiKind === "oficial" ? "selected" : ""
-                        }>API Oficial</option>
-                        <option value="alternativa" ${
-                          supplier.apiKind === "alternativa" ? "selected" : ""
-                        }>API Alternativa</option>
+                      <span class="admin-financeiro-split-readonly">${escapeAdminHtml(formatSupplierPlanLabel(supplier.apiKind))}</span>
+                    </div>
+                    <div class="admin-financeiro-split-field">
+                      <label class="admin-financeiro-split-mobile-label">Segmento</label>
+                      <span class="admin-financeiro-split-readonly">${escapeAdminHtml(formatSupplierSegmentLabel(supplier.segment))}</span>
+                    </div>
+                    <div class="admin-financeiro-split-field">
+                      <label class="admin-financeiro-split-mobile-label">Prioridade</label>
+                      <select data-supplier-field="priority" aria-label="Prioridade do fornecedor">
+                        ${buildSupplierPrioritySelectOptions(supplier.priority ?? 1)}
                       </select>
                     </div>
                     <div class="admin-financeiro-split-field">
@@ -24604,30 +24710,36 @@
           <div class="admin-financeiro-split-add-panel">
             <div class="admin-financeiro-split-list-title" style="margin-top: 16px">Adicionar ou atualizar fornecedor</div>
             <p class="admin-financeiro-split-card-desc" style="margin: 0 0 10px">
-              Se o plano já existir na lista acima, os dados serão atualizados ao clicar em Incluir.
+              Selecione o operacional: plano e segmento vêm do cadastro de usuário. Informe custo/envio, PIX e prioridade (1 = maior).
             </p>
             <div class="admin-financeiro-split-supplier-head" aria-hidden="true">
-              <span>Nome</span>
+              <span>Operacional</span>
               <span>Plano</span>
+              <span>Segmento</span>
+              <span>Prioridade</span>
               <span>Custo/envio</span>
               <span>Chave PIX</span>
               <span></span>
             </div>
             <div class="admin-financeiro-split-supplier-row admin-financeiro-split-add-form">
               <div class="admin-financeiro-split-field">
-                <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-name">Nome</label>
-                <input
-                  id="admin-split-supplier-draft-name"
-                  type="text"
-                  aria-label="Nome do fornecedor para incluir"
-                  placeholder="Nome do fornecedor"
-                />
+                <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-operacional">Operacional</label>
+                <select id="admin-split-supplier-draft-operacional" aria-label="Operacional para incluir">
+                  ${buildOperacionalSupplierSelectOptions("")}
+                </select>
               </div>
               <div class="admin-financeiro-split-field">
-                <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-plan">Plano</label>
-                <select id="admin-split-supplier-draft-plan" aria-label="Plano do fornecedor para incluir">
-                  <option value="oficial">API Oficial</option>
-                  <option value="alternativa">API Alternativa</option>
+                <label class="admin-financeiro-split-mobile-label">Plano</label>
+                <span id="admin-split-supplier-draft-plan-label" class="admin-financeiro-split-readonly">—</span>
+              </div>
+              <div class="admin-financeiro-split-field">
+                <label class="admin-financeiro-split-mobile-label">Segmento</label>
+                <span id="admin-split-supplier-draft-segment-label" class="admin-financeiro-split-readonly">—</span>
+              </div>
+              <div class="admin-financeiro-split-field">
+                <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-priority">Prioridade</label>
+                <select id="admin-split-supplier-draft-priority" aria-label="Prioridade para incluir">
+                  ${buildSupplierPrioritySelectOptions(1)}
                 </select>
               </div>
               <div class="admin-financeiro-split-field">
@@ -24992,7 +25104,11 @@
         const suppliers = Array.isArray(payload?.suppliers) ? payload.suppliers : [];
         for (const supplier of suppliers) {
           if (supplier.active === false) continue;
-          const label = String(supplier.name || supplier.apiKind || "fornecedor").trim();
+          const label = String(supplier.name || supplier.systemUserEmail || "fornecedor").trim();
+          if (!String(supplier.systemUserEmail || "").trim()) {
+            showToast(`Selecione o operacional do fornecedor ${label}.`, "warning", 4500);
+            return false;
+          }
           const pixKey = String(supplier.pixKey || "").trim();
           if (!pixKey || pixKey.length < 5) {
             showToast(`Informe a chave PIX do fornecedor ${label}.`, "warning", 4500);
@@ -25035,6 +25151,14 @@
             if (!field) return;
             if (field === "costPerShipmentCents") {
               target.costPerShipmentCents = parseReaisMaskToCents(input.value);
+              return;
+            }
+            if (field === "priority") {
+              target.priority = Math.max(1, Math.min(5, Math.round(Number(input.value ?? 1))));
+              return;
+            }
+            if (field === "systemUserEmail") {
+              applyOperacionalSelectionToSupplier(target, String(input.value || "").trim());
               return;
             }
             if (field === "apiKind") {
@@ -26535,6 +26659,9 @@
           }
           adminFinanceiroMasterUsersCache = Array.isArray(payload?.masterUsers)
             ? payload.masterUsers
+            : [];
+          adminFinanceiroOperacionalUsersCache = Array.isArray(payload?.operacionalUsers)
+            ? payload.operacionalUsers
             : [];
           renderAdminFinanceiroProductMetrics(payload?.productMetrics || {}, {
             compositionRootId: "admin-financeiro-cost-composition-root",
@@ -29549,8 +29676,14 @@
         document
           .getElementById("admin-financeiro-split-suppliers")
           ?.addEventListener("change", (event) => {
+            if (event.target?.id === "admin-split-supplier-draft-operacional") {
+              syncAdminFinanceiroSplitSupplierDraftOperacionalPreview();
+            }
             if (event.target?.closest?.("[data-supplier-field]")) {
               collectAdminFinanceiroSplitDraftFromDom();
+              if (event.target?.getAttribute("data-supplier-field") === "systemUserEmail") {
+                renderAdminFinanceiroSplitSuppliers();
+              }
               scheduleAdminFinanceiroSplitPersist();
             }
           });
@@ -29625,8 +29758,8 @@
       let adminCampanhasReportReadOnly = false;
       let adminCampanhasActiveBucket = "open";
       let adminCampanhasPlanFilter = "all";
-      const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 8;
-      const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 7;
+      const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 9;
+      const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 8;
       const ADMIN_CAMPANHAS_START_BTN_LABEL = "Confirmar início";
       const ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL = "Confirmar erro reportado";
 
@@ -29890,6 +30023,7 @@
             const subscriberId = escapeAdminHtml(item?.subscriberId || "—");
             const planTypeKind = resolveAdminCampanhaApiKind(item);
             const planType = renderWabaApiKindLabelHtml(planTypeKind);
+            const segmentLabel = escapeAdminHtml(item?.subscriberSegmentLabel || "Outros");
             const campaignName = escapeAdminHtml(item?.campaignName || "—");
             const envios = Number(item?.plannedSendCount || 0);
             const statusBadge = renderAdminCampanhasStatusBadge(item?.status, item?.displayStatus);
@@ -29942,6 +30076,7 @@
                 ${overdueCell}
                 <td><code>${subscriberId}</code>${newMarker}</td>
                 <td>${planType}</td>
+                <td>${segmentLabel}</td>
                 <td>${campaignName}</td>
                 <td class="admin-subscribers-num">${envios}</td>
                 <td>${statusBadge}</td>
@@ -30004,6 +30139,7 @@
 
         body.innerHTML = [
           renderAdminCampanhasDetailField("ID do assinante", `<code>${escapeAdminHtml(campaign.subscriberId || "—")}</code>`),
+          renderAdminCampanhasDetailField("Segmento", escapeAdminHtml(campaign.subscriberSegmentLabel || "Outros")),
           renderAdminCampanhasDetailField("Nome da campanha", escapeAdminHtml(campaign.campaignName || "—")),
           renderAdminCampanhasDetailField("DDD da região", escapeAdminHtml(campaign.regionDdd || "—")),
           renderAdminCampanhasDetailField("Envios registrados", escapeAdminHtml(String(campaign.plannedSendCount ?? 0))),
@@ -30038,6 +30174,7 @@
           campaign.spreadsheetTrimmedFileName || "leads-envios.xlsx";
 
         const startBtn = document.getElementById("admin-campanhas-start-btn");
+        const bmInoperanteBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
         const reportErrorBtn = document.getElementById("admin-campanhas-report-error-btn");
         const submitErrorBtn = document.getElementById("admin-campanhas-submit-error-btn");
         const errorBlock = document.getElementById("admin-campanhas-error-report-block");
@@ -30052,6 +30189,11 @@
           startBtn.hidden = !canStart;
           startBtn.removeAttribute("disabled");
           if (!canStart) startBtn.setAttribute("disabled", "true");
+        }
+        if (bmInoperanteBtn) {
+          const canBm = Boolean(campaign.canBmInoperante);
+          bmInoperanteBtn.hidden = !canBm;
+          bmInoperanteBtn.removeAttribute("disabled");
         }
 
         setAdminCampanhasDetailActionError("");
@@ -30088,6 +30230,7 @@
         adminCampanhasDetailTextOptions = [];
         adminCampanhasDetailResponseLink = "";
         const startBtn = document.getElementById("admin-campanhas-start-btn");
+        const bmInoperanteBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
         const reportErrorBtn = document.getElementById("admin-campanhas-report-error-btn");
         const submitErrorBtn = document.getElementById("admin-campanhas-submit-error-btn");
         const errorBlock = document.getElementById("admin-campanhas-error-report-block");
@@ -30097,6 +30240,8 @@
           startBtn.textContent = ADMIN_CAMPANHAS_START_BTN_LABEL;
           startBtn.removeAttribute("disabled");
         }
+        const bmInoperanteBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
+        if (bmInoperanteBtn) bmInoperanteBtn.hidden = true;
         if (reportErrorBtn) reportErrorBtn.hidden = true;
         if (submitErrorBtn) {
           submitErrorBtn.hidden = true;
@@ -30284,6 +30429,52 @@
           if (startBtn) {
             startBtn.textContent = previousLabel;
             startBtn.removeAttribute("disabled");
+          }
+        }
+      }
+
+      async function markAdminCampanhaBmInoperante() {
+        const campaignId = adminCampanhasDetailCampaignId;
+        if (!campaignId) {
+          setAdminCampanhasDetailActionError("Campanha não identificada. Feche e abra os detalhes novamente.");
+          return;
+        }
+
+        const bmBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
+        const previousLabel = bmBtn?.textContent || "BM inoperante";
+        setAdminCampanhasDetailActionError("");
+        if (bmBtn) {
+          bmBtn.textContent = "Reatribuindo…";
+          bmBtn.setAttribute("disabled", "true");
+        }
+
+        try {
+          const response = await fetchAdminOperacionalJson(
+            `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/bm-inoperante`,
+            { method: "POST" },
+            30000,
+            3
+          );
+          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+          const payload = await response.json().catch(() => ({}));
+          if (!contentType.includes("application/json")) {
+            throw new Error("Resposta inválida do servidor. Confirme se a API está atualizada.");
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível reatribuir a campanha.");
+          }
+          closeAdminCampanhasDetailModal();
+          showToast("Campanha reatribuída ao próximo da fila de prioridade.", "success", 3200);
+          await loadAdminCampanhas({ silent: true });
+          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+        } catch (error) {
+          const message = resolveAdminOperacionalFetchError(error, error?.payload);
+          setAdminCampanhasDetailActionError(message);
+          showToast(message, "error", 4200);
+        } finally {
+          if (bmBtn) {
+            bmBtn.textContent = previousLabel;
+            bmBtn.removeAttribute("disabled");
           }
         }
       }
@@ -30933,6 +31124,10 @@
 
         document.getElementById("admin-campanhas-start-btn")?.addEventListener("click", () => {
           void markAdminCampanhaStarted();
+        });
+
+        document.getElementById("admin-campanhas-bm-inoperante-btn")?.addEventListener("click", () => {
+          void markAdminCampanhaBmInoperante();
         });
 
         document.getElementById("admin-campanhas-report-error-btn")?.addEventListener("click", () => {

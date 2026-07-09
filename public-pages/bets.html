@@ -290,11 +290,14 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Falha no cadastro.");
+        const targetLogin = data.loginUrl || loginUrl;
         msg.className = "msg ok";
-        msg.textContent = data.message || "Cadastro realizado. Redirecionando…";
+        msg.textContent =
+          data.message ||
+          "Conta criada no segmento Bets. Você receberá e-mail e WhatsApp de boas-vindas. Redirecionando para o login…";
         msg.hidden = false;
         setTimeout(() => {
-          window.location.href = data.loginUrl || loginUrl;
+          window.location.href = targetLogin;
         }, 1200);
       } catch (err) {
         msg.className = "msg err";

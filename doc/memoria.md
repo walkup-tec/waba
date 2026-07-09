@@ -21,6 +21,14 @@ Como usar:
 ## Última atualização
 2026-07-08
 
+**WABA — Bets cadastro fluxo V02 imediato (2026-07-08):** após `POST /subscribers/register` (segmento Bets, boas-vindas e-mail+WhatsApp), redirect automático para `loginUrl` — sem “time entrará em contato”. Tela “login em breve” em bet.waba.info é app **bets_pv** (deploy separado). Log `doc/LOG-2026-07-08__220000__bets-cadastro-fluxo-v02-imediato.md`.
+
+**WABA — Financeiro fornecedores + fila operacional deploy (2026-07-08):** prioridade 1–5, atribuição campanha por plano+segmento, BM inoperante, reassign 30h, split fornecedor pós-finalizar. Logs `213500`, `214500`.
+
+**WABA — Campanhas coluna segmento + modal (2026-07-08):** tabela operacional e modal de detalhes exibem segmento Bets/Outros. Log `doc/LOG-2026-07-08__214500__campanhas-coluna-segmento-modal.md`.
+
+**WABA — Financeiro fornecedores + fila operacional V02 (2026-07-08):** prioridade 1–5, select operacional, múltiplos fornecedores por plano+segmento, atribuição campanha, BM inoperante, reassign 30h, alerta master sininho, split fornecedor só após finalizar. Log `doc/LOG-2026-07-08__213500__financeiro-fornecedores-prioridade-fila-v02.md`. Palavras-chave: `fornecedor prioridade`, `BM inoperante`, `campaign-supplier-assignment`.
+
 **WABA — Landing Bets logo +30% (2026-07-08):** `public-pages/bets.html` usa `media/drax-bets-logo.png` (header 3.36375rem, footer 2.925rem). Marker `DEPLOY-2026-07-08-bets-landing-logo-30pct`. Log `doc/LOG-2026-07-08__233600__bets-landing-logo-30pct.md`.
 
 **WABA — V02 Admin Financeiro pronto teste (2026-07-08):** split com ordem CET→fornecedor→parceiro (`sortSplitSettlementLines`), select plano fornecedor e select master no rateio; build + `dev:v02` reiniciado. Sem commits novos desta semana só de Financeiro — features de jun/2026. Log `doc/LOG-2026-07-08__203500__v02-admin-financeiro-teste.md`. Palavras-chave: `admin financeiro`, `split fornecedores`, `buildSplitMasterSelectOptions`.

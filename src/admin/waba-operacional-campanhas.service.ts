@@ -27,14 +27,22 @@ import {
 } from "../disparos/waba-campaign-intake-status";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
+import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { notifyCampaignCompletedEmail, notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
 import {
   notifyOperacionalStaffOnCampaignCreated,
+  notifyOperacionalStaffOnCampaignAssigned,
   type OperacionalNotifyResult,
 } from "../mail/waba-operacional-campaign-notify.service";
+import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
+import {
+  CAMPAIGN_START_OVERDUE_MS,
+  WabaCampaignSupplierAssignmentService,
+} from "../services/waba-campaign-supplier-assignment.service";
 
-export const CAMPAIGN_START_DEADLINE_MS = 6 * 60 * 60 * 1000;
+/** @deprecated use CAMPAIGN_START_OVERDUE_MS — mantido para imports legados. */
+export const CAMPAIGN_START_DEADLINE_MS = CAMPAIGN_START_OVERDUE_MS;
 
 export type OperacionalCampaignListItem = {
   id: string;
@@ -43,6 +51,8 @@ export type OperacionalCampaignListItem = {
   subscriberName: string;
   planTypeLabel: string;
   apiKind: WabaDispatchesApiKind;
+  subscriberSegment: WabaSubscriberSegment;
+  subscriberSegmentLabel: string;
   campaignName: string;
   plannedSendCount: number;
   importedLineCount: number;
@@ -52,6 +62,7 @@ export type OperacionalCampaignListItem = {
   canStartCampaign: boolean;
   canFillReport: boolean;
   canReportError: boolean;
+  canBmInoperante: boolean;
   isStartOverdue: boolean;
   startDeadlineAt: string;
   createdAt: string;
@@ -155,34 +166,17 @@ const resolvePlannedSendCount = (intake: WabaCampaignIntake): number => {
   return Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
 };
 
-const resolveCampaignStartDeadlineAt = (createdAt: string): string => {
-  const createdMs = new Date(createdAt).getTime();
-  if (Number.isNaN(createdMs)) return "";
-  return new Date(createdMs + CAMPAIGN_START_DEADLINE_MS).toISOString();
+const resolveCampaignStartDeadlineAt = (intake: WabaCampaignIntake): string => {
+  const anchor = String(intake.assignedAt || intake.createdAt || "").trim();
+  const anchorMs = new Date(anchor).getTime();
+  if (Number.isNaN(anchorMs)) return "";
+  return new Date(anchorMs + CAMPAIGN_START_OVERDUE_MS).toISOString();
 };
 
-const isCampaignStartOverdue = (intake: WabaCampaignIntake): boolean => {
-  const status = normalizeStoredStatus(intake.status);
-  if (status === "completed" || status === "cancelled" || status === "error_reported") return false;
-
-  const createdMs = new Date(intake.createdAt).getTime();
-  if (Number.isNaN(createdMs)) return false;
-  const deadlineMs = createdMs + CAMPAIGN_START_DEADLINE_MS;
-
-  if (status === "generated") {
-    return Date.now() > deadlineMs;
-  }
-
-  if (status === "in_progress") {
-    const startedMs = new Date(String(intake.startedAt ?? "")).getTime();
-    if (!Number.isNaN(startedMs)) {
-      return startedMs > deadlineMs;
-    }
-    return Date.now() > deadlineMs;
-  }
-
-  return false;
-};
+const isCampaignStartOverdue = (
+  intake: WabaCampaignIntake,
+  assignmentService: WabaCampaignSupplierAssignmentService,
+): boolean => assignmentService.isStartOverdue(intake);
 
 export type OperacionalCampanhasStaffContext = {
   email: string;
@@ -197,6 +191,8 @@ export class WabaOperacionalCampanhasService {
     private readonly bonusService = new WabaDisparosBonusService(),
     private readonly creditsService = new WabaDisparosCreditsService(),
     private readonly systemUserService = new WabaSystemUserService(),
+    private readonly assignmentService = new WabaCampaignSupplierAssignmentService(),
+    private readonly splitService = new WabaFinanceiroSplitService(),
   ) {}
 
   private resolveStaffApiFilter(
@@ -249,9 +245,15 @@ export class WabaOperacionalCampanhasService {
     intake: WabaCampaignIntake,
     staff: OperacionalCampanhasStaffContext,
   ): boolean {
-    return (
-      this.matchesStaffApiFilter(intake, staff) && this.matchesStaffSegmentFilter(intake, staff)
-    );
+    if (!this.matchesStaffApiFilter(intake, staff)) return false;
+    if (!this.matchesStaffSegmentFilter(intake, staff)) return false;
+    if (staff.role === "master" || isWabaMasterEmail(staff.email) || staff.role === "suporte") {
+      return true;
+    }
+    if (staff.role === "operacional") {
+      return this.assignmentService.matchesAssignedOperacional(intake, staff.email);
+    }
+    return true;
   }
 
   private getIntakeForStaffOrThrow(
@@ -273,6 +275,7 @@ export class WabaOperacionalCampanhasService {
     const importedLineCount = Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
     const plannedSendCount = resolvePlannedSendCount(intake);
     const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
+    const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
 
     return {
       id: intake.id,
@@ -281,6 +284,8 @@ export class WabaOperacionalCampanhasService {
       subscriberName: subscriber?.fullName ?? "—",
       planTypeLabel: resolvePlanTypeLabel(intake, this.orderRepository),
       apiKind,
+      subscriberSegment,
+      subscriberSegmentLabel: WABA_SUBSCRIBER_SEGMENT_LABELS[subscriberSegment],
       campaignName: intake.campaignName,
       plannedSendCount,
       importedLineCount,
@@ -290,8 +295,9 @@ export class WabaOperacionalCampanhasService {
       canStartCampaign: status === "generated",
       canFillReport: status === "in_progress" || status === "completed",
       canReportError: status === "generated" || status === "in_progress",
-      isStartOverdue: isCampaignStartOverdue(intake),
-      startDeadlineAt: resolveCampaignStartDeadlineAt(intake.createdAt),
+      canBmInoperante: status === "generated",
+      isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
+      startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
       createdAt: intake.createdAt,
       createdAtLabel: formatDateLabel(intake.createdAt),
     };
@@ -300,6 +306,9 @@ export class WabaOperacionalCampanhasService {
   listCampaigns(staff: OperacionalCampanhasStaffContext): OperacionalCampaignListItem[] {
     return this.intakeRepository
       .listAll()
+      .map((intake) =>
+        this.assignmentService.ensureInitialAssignment(intake),
+      )
       .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
       .map((intake) => this.toListItem(intake))
       .sort((a, b) => {
@@ -346,6 +355,12 @@ export class WabaOperacionalCampanhasService {
     const status = normalizeStoredStatus(intake.status);
     if (status !== "generated") {
       throw new Error("Somente campanhas aguardando configuração podem ser iniciadas.");
+    }
+    if (
+      staff.role === "operacional" &&
+      !this.assignmentService.matchesAssignedOperacional(intake, staff.email)
+    ) {
+      throw new Error("Esta campanha está atribuída a outro operacional.");
     }
 
     const now = new Date().toISOString();
@@ -459,6 +474,16 @@ export class WabaOperacionalCampanhasService {
       campaignName: intake.campaignName,
     });
 
+    const completedIntake = this.intakeRepository.getById(campaignId) ?? updated;
+    void this.splitService.payoutSupplierForCompletedCampaign(completedIntake).then((settlement) => {
+      if (settlement?.id) {
+        this.intakeRepository.updateById(campaignId, {
+          supplierPayoutSettlementId: settlement.id,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    });
+
     const detail = this.getCampaignDetail(campaignId, staff);
     if (!detail) throw new Error("Campanha não encontrada.");
     return detail;
@@ -556,6 +581,38 @@ export class WabaOperacionalCampanhasService {
       buffer: trimSpreadsheetBufferToRowCount(originalBuffer, plannedSendCount),
       fileName: trimmedFileName,
     };
+  }
+
+  async markBmInoperante(
+    campaignId: string,
+    staff: OperacionalCampanhasStaffContext,
+  ): Promise<OperacionalCampaignDetail> {
+    const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+    const status = normalizeStoredStatus(intake.status);
+    if (status !== "generated") {
+      throw new Error("BM inoperante só está disponível antes de iniciar a campanha.");
+    }
+    if (
+      staff.role === "operacional" &&
+      !this.assignmentService.matchesAssignedOperacional(intake, staff.email)
+    ) {
+      throw new Error("Esta campanha está atribuída a outro operacional.");
+    }
+
+    const result = await this.assignmentService.reassignCampaign(campaignId, "bm_inoperante");
+    if (!result.reassigned) {
+      throw new Error(
+        "Não há outro fornecedor disponível na fila de prioridade para este plano e segmento.",
+      );
+    }
+
+    const assigneeEmail = normalizeEmail(result.intake.assignedOperacionalEmail || staff.email);
+    const detail = this.getCampaignDetail(campaignId, {
+      email: assigneeEmail,
+      role: "operacional",
+    });
+    if (!detail) throw new Error("Campanha reatribuída, mas não foi possível carregar os detalhes.");
+    return detail;
   }
 
   async resendOperacionalNotifyEmail(

@@ -46,6 +46,13 @@ export type WabaCampaignOperacionalNotifyAudit = {
   }[];
 };
 
+export type WabaCampaignAssignmentHistoryEntry = {
+  at: string;
+  supplierId: string;
+  operacionalEmail: string;
+  reason: "initial" | "bm_inoperante" | "timeout_30h";
+};
+
 export type WabaCampaignIntake = {
   id: string;
   ownerEmail: string;
@@ -74,6 +81,15 @@ export type WabaCampaignIntake = {
   errorReport?: WabaCampaignErrorReport;
   /** Última tentativa de e-mail ao operacional designado. */
   operacionalNotifyAudit?: WabaCampaignOperacionalNotifyAudit;
+  /** Operacional atualmente responsável pela campanha. */
+  assignedOperacionalEmail?: string;
+  assignedSupplierId?: string;
+  assignedAt?: string;
+  assignmentHistory?: WabaCampaignAssignmentHistoryEntry[];
+  /** Alerta master (sininho) enviado quando fila esgotada + 30h. */
+  masterOverdueAlertSentAt?: string;
+  /** Settlement PIX do fornecedor após finalizar campanha. */
+  supplierPayoutSettlementId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -146,21 +162,7 @@ export class WabaCampaignIntakeRepository {
     return readStore().intakes.find((item) => item.id === normalized) ?? null;
   }
 
-  updateById(
-    id: string,
-    patch: Partial<
-      Pick<
-        WabaCampaignIntake,
-        | "status"
-        | "updatedAt"
-        | "startedAt"
-        | "startedByEmail"
-        | "performanceReport"
-        | "errorReport"
-        | "operacionalNotifyAudit"
-      >
-    >,
-  ): WabaCampaignIntake | null {
+  updateById(id: string, patch: Partial<WabaCampaignIntake>): WabaCampaignIntake | null {
     const normalized = String(id ?? "").trim();
     if (!normalized) return null;
     const store = readStore();

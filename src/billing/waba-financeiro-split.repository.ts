@@ -3,11 +3,18 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import path from "node:path";
 import { resolveDataFile } from "../data-path";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
+import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 
 export type SplitSupplier = {
   id: string;
   name: string;
   apiKind: WabaDispatchesApiKind;
+  /** Usuário operacional vinculado (fornecedor). */
+  systemUserEmail: string;
+  /** Segmento de atendimento (plano + segmento definem a fila). */
+  segment: WabaSystemUserOperacionalSegment;
+  /** Prioridade 1 (maior) a 5 (menor) dentro do mesmo plano + segmento. */
+  priority: number;
   costPerShipmentCents: number;
   pixKey: string;
   active: boolean;
@@ -58,6 +65,9 @@ const migrateLegacyConfig = (parsed: Record<string, unknown>): FinanceiroSplitCo
       id: "supplier-oficial",
       name: "Fornecedor API Oficial",
       apiKind: "oficial",
+      systemUserEmail: "",
+      segment: "outros",
+      priority: 1,
       costPerShipmentCents: oficialCost,
       pixKey: "",
       active: true,
@@ -68,6 +78,9 @@ const migrateLegacyConfig = (parsed: Record<string, unknown>): FinanceiroSplitCo
       id: "supplier-alternativa",
       name: "Fornecedor API Alternativa",
       apiKind: "alternativa",
+      systemUserEmail: "",
+      segment: "outros",
+      priority: 1,
       costPerShipmentCents: alternativaCost,
       pixKey: "",
       active: true,
@@ -86,10 +99,16 @@ const migrateLegacyConfig = (parsed: Record<string, unknown>): FinanceiroSplitCo
 
 const normalizeSupplier = (input: Partial<SplitSupplier>): SplitSupplier => {
   const apiKind = input.apiKind === "alternativa" ? "alternativa" : "oficial";
+  const segment = input.segment === "bets" ? "bets" : "outros";
+  const priorityRaw = Math.round(Number(input.priority ?? 1));
+  const priority = Math.max(1, Math.min(5, Number.isFinite(priorityRaw) ? priorityRaw : 1));
   return {
     id: String(input.id ?? randomUUID()).trim() || randomUUID(),
     name: String(input.name ?? "").trim(),
     apiKind,
+    systemUserEmail: String(input.systemUserEmail ?? "").trim().toLowerCase(),
+    segment,
+    priority,
     costPerShipmentCents: Math.max(0, Math.round(Number(input.costPerShipmentCents ?? 0))),
     pixKey: String(input.pixKey ?? "").trim(),
     active: input.active !== false,

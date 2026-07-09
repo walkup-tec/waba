@@ -41,6 +41,8 @@ export type SplitSettlementLine = {
 export type FinanceiroSplitSettlement = {
   id: string;
   orderId: string;
+  /** Campanha vinculada quando settlement é repasse do fornecedor pós-finalização. */
+  campaignIntakeId?: string;
   apiKind: WabaDispatchesApiKind;
   ownerEmail: string;
   customerName: string;

@@ -26,7 +26,8 @@ import {
   countSpreadsheetImportedRows,
   trimSpreadsheetBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
-import { notifyOperacionalStaffOnCampaignCreated } from "../mail/waba-operacional-campaign-notify.service";
+import { notifyOperacionalStaffOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
+import { WabaCampaignSupplierAssignmentService } from "../services/waba-campaign-supplier-assignment.service";
 import { buildDisparosDashboardOverview, buildMasterSubscribersDisparosDashboardOverview } from "./waba-disparos-dashboard.service";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import {
@@ -360,7 +361,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         });
       }
 
-      const intake = intakeRepository.create({
+      let intake = intakeRepository.create({
         id: intakeId,
         ownerEmail: auth.email,
         campaignName,
@@ -385,7 +386,8 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
       }
 
-      const operacionalNotify = await notifyOperacionalStaffOnCampaignCreated(intake);
+      intake = new WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
+      const operacionalNotify = await notifyOperacionalStaffOnCampaignAssigned(intake);
       intakeRepository.updateById(intake.id, {
         updatedAt: new Date().toISOString(),
         operacionalNotifyAudit: operacionalNotify,
