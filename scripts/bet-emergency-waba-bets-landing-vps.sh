@@ -20,7 +20,8 @@ python3 - "$CFG" "$MW" "$BETS_PUB" "$WABA_URL" <<'PY'
 import re, sys
 from pathlib import Path
 
-path, mw, host, waba_url = sys.argv[1:5]
+path = Path(sys.argv[1])
+mw, host, waba_url = sys.argv[2:5]
 text = path.read_text(encoding="utf-8")
 
 mw_block = f'''
