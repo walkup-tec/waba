@@ -5,10 +5,10 @@
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/fix-bet-404-definitivo-vps.sh" -o /tmp/fix-bet.sh
 #   sed -i 's/\r$//' /tmp/fix-bet.sh && bash /tmp/fix-bet.sh
 #
-# Versão: fix-bet-404-definitivo-2026-07-09-v2
+# Versão: fix-bet-404-definitivo-2026-07-09-v3
 set -euo pipefail
 
-VERSION="fix-bet-404-definitivo-2026-07-09-v2"
+VERSION="fix-bet-404-definitivo-2026-07-09-v3"
 CFG="/etc/easypanel/traefik/config/main.yaml"
 LOG="/var/log/fix-bet-404-definitivo.log"
 BETS_URL="http://172.17.0.1:30211/"
@@ -79,7 +79,7 @@ http_router = f'''
         ],
         "service": "{bets_swarm}-0",
         "rule": "{RULE}",
-        "priority": 100
+        "priority": 1000
       }}'''
 
 https_router = f'''
@@ -89,7 +89,7 @@ https_router = f'''
         ],
         "service": "{bets_swarm}-0",
         "rule": "{RULE}",
-        "priority": 100,
+        "priority": 1000,
         "tls": {{
           "domains": [
             {{
