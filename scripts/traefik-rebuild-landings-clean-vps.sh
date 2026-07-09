@@ -7,10 +7,10 @@
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/traefik-rebuild-landings-clean-vps.sh" -o /tmp/rebuild.sh
 #   sed -i 's/\r$//' /tmp/rebuild.sh && bash /tmp/rebuild.sh
 #
-# Versão: traefik-rebuild-landings-clean-2026-07-09-v1
+# Versão: traefik-rebuild-landings-clean-2026-07-09-v2
 set -euo pipefail
 
-VERSION="traefik-rebuild-landings-clean-2026-07-09-v1"
+VERSION="traefik-rebuild-landings-clean-2026-07-09-v2"
 CFG="/etc/easypanel/traefik/config/main.yaml"
 LOG="/var/log/traefik-rebuild-landings-clean.log"
 GW="172.17.0.1"
@@ -31,7 +31,8 @@ done
 log "timers/guard OFF"
 
 [[ -f "$CFG" ]] || { log "ERRO: $CFG ausente"; exit 1; }
-cp -a "$CFG" "${CFG}.bak-${VERSION}-$(date +%s)"
+BACKUP="${CFG}.bak-${VERSION}-$(date +%s)"
+cp -a "$CFG" "$BACKUP"
 
 python3 - "$CFG" "$GW" <<'PY'
 import re, sys
@@ -184,14 +185,23 @@ path.write_text(text, encoding="utf-8")
 print("main.yaml rebuild OK")
 PY
 
-# 2) Recarregar Traefik (file provider watch + HUP)
-CID=$(docker ps -q -f name=easypanel-traefik -f status=running | head -1)
-[[ -n "$CID" ]] || { log "ERRO: Traefik down"; exit 1; }
-
+# 2) Recarregar — NÃO usar HUP se :443 cair; usar recover script
 touch "$CFG"
-docker kill -s HUP "$CID" >/dev/null 2>&1 || true
-sleep 12
-log "HUP Traefik ${CID:0:12}"
+sleep 8
+
+if ! ss -tln 2>/dev/null | grep -q ':443 '; then
+  log "ERRO: :443 caiu após patch — restaurando backup"
+  cp -a "$BACKUP" "$CFG"
+  curl -fsSL "${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}/traefik-easypanel-bootstrap-vps.sh" -o /tmp/tr-bootstrap.sh
+  sed -i 's/\r$//' /tmp/tr-bootstrap.sh && bash /tmp/tr-bootstrap.sh run || true
+  log "Use: bash traefik-recover-443-minimal-vps.sh"
+  exit 1
+fi
+
+CID=$(docker ps -q -f name=easypanel-traefik -f status=running | head -1)
+[[ -n "$CID" ]] && docker kill -s HUP "$CID" >/dev/null 2>&1 || true
+sleep 8
+log "reload Traefik OK"
 
 # 3) Validar
 for host in bet.waba.info wabadisparos.com.br; do
