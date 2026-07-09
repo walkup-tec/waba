@@ -173,17 +173,15 @@ def fix_url(text: str, swarm: str, url: str) -> str:
     changed = 0
     for key in (f"{swarm}-0", f"{swarm}-1", f"{swarm}-2", swarm):
         pat = rf'("{re.escape(key)}"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")[^"]+(")'
-        text, n = re.subn(pat, rf"\g<1>{url}\2", text, count=1)
+        text, n = re.subn(pat, rf"\g<1>{url}\2", text)
         if n:
             print(f"backend {key} -> {url}")
             changed += n
-    if not changed:
-        old = f"http://tasks.{swarm}:3000/"
-        if old in text:
-            print(f"replace {old} -> {url}")
+    for old in (f"http://tasks.{swarm}:3000/", f"http://{swarm}:3000/"):
+        if old in text and old != url:
             text = text.replace(old, url)
-        else:
-            print(f"AVISO: service {swarm} não encontrado para backend")
+            print(f"replace global {old} -> {url}")
+            changed += 1
     return text
 
 
