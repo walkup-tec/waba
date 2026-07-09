@@ -124,11 +124,17 @@ export const registerWabaOperacionalCampanhasRoutes = (app: Express) => {
     const auth = rejectOperacionalCampanhasAccess(req, res);
     if (!auth) return;
     try {
-      const campaign = await operacionalCampanhasService.markBmInoperante(req.params.id, {
+      const result = await operacionalCampanhasService.markBmInoperante(req.params.id, {
         email: auth.email,
         role: auth.role,
       });
-      return res.status(200).json({ ok: true, campaign });
+      return res.status(200).json({
+        ok: true,
+        campaign: result.campaign,
+        reassigned: result.reassigned,
+        exhausted: result.exhausted,
+        message: result.message,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Não foi possível reatribuir a campanha.";

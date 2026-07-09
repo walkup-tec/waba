@@ -63,6 +63,7 @@ export type OperacionalCampaignListItem = {
   canFillReport: boolean;
   canReportError: boolean;
   canBmInoperante: boolean;
+  bmInoperanteRegistered: boolean;
   isStartOverdue: boolean;
   startDeadlineAt: string;
   createdAt: string;
@@ -75,6 +76,13 @@ export type OperacionalCampaignReportInput = {
   delivered: number;
   read: number;
   failed: number;
+};
+
+export type OperacionalBmInoperanteResult = {
+  campaign: OperacionalCampaignDetail;
+  reassigned: boolean;
+  exhausted: boolean;
+  message: string;
 };
 
 export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
@@ -295,7 +303,8 @@ export class WabaOperacionalCampanhasService {
       canStartCampaign: status === "generated",
       canFillReport: status === "in_progress" || status === "completed",
       canReportError: status === "generated" || status === "in_progress",
-      canBmInoperante: status === "generated",
+      canBmInoperante: status === "generated" && !String(intake.bmInoperanteRegisteredAt || "").trim(),
+      bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
       isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
       startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
       createdAt: intake.createdAt,
@@ -586,11 +595,14 @@ export class WabaOperacionalCampanhasService {
   async markBmInoperante(
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
-  ): Promise<OperacionalCampaignDetail> {
+  ): Promise<OperacionalBmInoperanteResult> {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     const status = normalizeStoredStatus(intake.status);
     if (status !== "generated") {
       throw new Error("BM inoperante só está disponível antes de iniciar a campanha.");
+    }
+    if (String(intake.bmInoperanteRegisteredAt || "").trim()) {
+      throw new Error("BM inoperante já foi registrada para esta campanha.");
     }
     if (
       staff.role === "operacional" &&
@@ -601,9 +613,24 @@ export class WabaOperacionalCampanhasService {
 
     const result = await this.assignmentService.reassignCampaign(campaignId, "bm_inoperante");
     if (!result.reassigned) {
-      throw new Error(
-        "Não há outro fornecedor disponível na fila de prioridade para este plano e segmento.",
-      );
+      if (!result.exhausted) {
+        throw new Error("Não foi possível registrar BM inoperante.");
+      }
+      const now = new Date().toISOString();
+      this.intakeRepository.updateById(campaignId, {
+        bmInoperanteRegisteredAt: now,
+        updatedAt: now,
+      });
+      const detail = this.getCampaignDetail(campaignId, staff);
+      if (!detail) {
+        throw new Error("BM inoperante registrada, mas não foi possível carregar os detalhes.");
+      }
+      return {
+        campaign: detail,
+        reassigned: false,
+        exhausted: true,
+        message: "Ok, aguardaremos até que a BM volte",
+      };
     }
 
     const assigneeEmail = normalizeEmail(result.intake.assignedOperacionalEmail || staff.email);
@@ -612,7 +639,12 @@ export class WabaOperacionalCampanhasService {
       role: "operacional",
     });
     if (!detail) throw new Error("Campanha reatribuída, mas não foi possível carregar os detalhes.");
-    return detail;
+    return {
+      campaign: detail,
+      reassigned: true,
+      exhausted: false,
+      message: "Campanha reatribuída ao próximo da fila de prioridade.",
+    };
   }
 
   async resendOperacionalNotifyEmail(

@@ -23,7 +23,9 @@ Como usar:
 
 **WABA — WhatsApp operacional nova campanha 3 instâncias + retry (2026-07-09):** sequência `51981077770` → `51997462102` → `51981082477`, até 15 rodadas síncronas + retry em background até sucesso. Marker `DEPLOY-2026-07-09-operacional-campanha-whatsapp-3instancias`. Ver `doc/LOG-2026-07-09__030500__operacional-campanha-whatsapp-3instancias-retry.md`. Palavras-chave: `deliverOperacionalNewCampaignWhatsApp`, `operacionalNotify`.
 
-**WABA — Campanha intake gateway erro assinante (2026-07-09):** notify operacional em background; POST responde rápido; frontend recupera via clientRequestId após 502/timeout. Marker `DEPLOY-2026-07-09-campanha-intake-resposta-rapida-notify-async`. Ver `doc/LOG-2026-07-09__071800__campanha-intake-gateway-erro-assinante.md`.
+**WABA — BM inoperante botão vermelho estados (2026-07-09):** Processando → Registrado; fila vazia mensagem aguardar BM; `bmInoperanteRegisteredAt`. Marker `DEPLOY-2026-07-09-bm-inoperante-botao-vermelho-estados`. Ver `doc/LOG-2026-07-09__073500__bm-inoperante-botao-vermelho-estados.md`.
+
+**WABA — Campanha intake gateway erro assinante (2026-07-09):**** notify operacional em background; POST responde rápido; frontend recupera via clientRequestId após 502/timeout. Marker `DEPLOY-2026-07-09-campanha-intake-resposta-rapida-notify-async`. Ver `doc/LOG-2026-07-09__071800__campanha-intake-gateway-erro-assinante.md`.
 
 **WABA — Fix campanha duplicada v2 (2026-07-09):**** lock síncrono frontend, mutex backend, fingerprint 5min, API v4. Marker `DEPLOY-2026-07-09-fix-campanha-duplicada-idempotencia-v2`. Ver `doc/LOG-2026-07-09__064000__fix-campanha-duplicada-idempotencia-v2.md`.
 

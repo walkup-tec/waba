@@ -90,6 +90,8 @@ export type WabaCampaignIntake = {
   masterOverdueAlertSentAt?: string;
   /** Settlement PIX do fornecedor após finalizar campanha. */
   supplierPayoutSettlementId?: string;
+  /** Operacional registrou BM inoperante e aguarda retorno (fila esgotada). */
+  bmInoperanteRegisteredAt?: string;
   /** Chave idempotente do cliente (evita duplicar campanha em retry/timeout). */
   clientRequestId?: string;
   /** Hash leve do envio (nome, DDD, envios, API, tamanhos) — dedupe de duplo clique. */

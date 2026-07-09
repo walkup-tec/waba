@@ -7958,6 +7958,22 @@
         border-color: rgba(251, 113, 133, 0.45);
       }
 
+      .instance-action-btn.btn-bm-inoperante.enabled {
+        background: rgba(185, 28, 28, 0.92);
+        border-color: rgba(252, 165, 165, 0.72);
+        color: #fff;
+      }
+
+      .instance-action-btn.btn-bm-inoperante.is-registered,
+      .instance-action-btn.btn-bm-inoperante:disabled {
+        background: rgba(127, 29, 29, 0.45);
+        border-color: rgba(248, 113, 113, 0.35);
+        color: rgba(254, 226, 226, 0.82);
+        cursor: not-allowed;
+        pointer-events: none;
+        opacity: 0.92;
+      }
+
       .instance-action-btn.btn-aquecedor-wait.enabled {
         background: rgba(29, 78, 216, 0.78);
         border-color: rgba(96, 165, 250, 0.62);
@@ -19334,7 +19350,7 @@
           </button>
           <button
             id="admin-campanhas-bm-inoperante-btn"
-            class="instance-action-btn btn-refresh enabled"
+            class="instance-action-btn btn-bm-inoperante enabled"
             type="button"
             hidden
           >
@@ -29761,6 +29777,9 @@
       const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 9;
       const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 8;
       const ADMIN_CAMPANHAS_START_BTN_LABEL = "Confirmar início";
+      const ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL = "BM inoperante";
+      const ADMIN_CAMPANHAS_BM_PROCESSANDO_BTN_LABEL = "Processando";
+      const ADMIN_CAMPANHAS_BM_REGISTRADO_BTN_LABEL = "Registrado";
       const ADMIN_CAMPANHAS_SUBMIT_ERROR_BTN_LABEL = "Confirmar erro reportado";
 
       function resolveAdminOperacionalFetchError(error, payload) {
@@ -30191,9 +30210,7 @@
           if (!canStart) startBtn.setAttribute("disabled", "true");
         }
         if (bmInoperanteBtn) {
-          const canBm = Boolean(campaign.canBmInoperante);
-          bmInoperanteBtn.hidden = !canBm;
-          bmInoperanteBtn.removeAttribute("disabled");
+          applyAdminCampanhasBmInoperanteButtonState(campaign);
         }
 
         setAdminCampanhasDetailActionError("");
@@ -30221,6 +30238,45 @@
         overlay.setAttribute("aria-hidden", "false");
       }
 
+      function applyAdminCampanhasBmInoperanteButtonState(campaign) {
+        const bmInoperanteBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
+        if (!bmInoperanteBtn) return;
+        const status = String(campaign?.status || "").trim().toLowerCase();
+        const isRegistered = Boolean(campaign?.bmInoperanteRegistered);
+        const canBm = Boolean(campaign?.canBmInoperante);
+
+        bmInoperanteBtn.classList.add("btn-bm-inoperante");
+        bmInoperanteBtn.classList.remove("is-registered");
+
+        if (status !== "generated") {
+          bmInoperanteBtn.hidden = true;
+          return;
+        }
+
+        bmInoperanteBtn.hidden = false;
+        if (isRegistered || !canBm) {
+          bmInoperanteBtn.textContent = ADMIN_CAMPANHAS_BM_REGISTRADO_BTN_LABEL;
+          bmInoperanteBtn.setAttribute("disabled", "true");
+          bmInoperanteBtn.classList.add("is-registered");
+          bmInoperanteBtn.classList.remove("enabled");
+          return;
+        }
+
+        bmInoperanteBtn.textContent = ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL;
+        bmInoperanteBtn.removeAttribute("disabled");
+        bmInoperanteBtn.classList.add("enabled");
+      }
+
+      function setAdminCampanhasBmInoperanteRegisteredState() {
+        const bmBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
+        if (!bmBtn) return;
+        bmBtn.hidden = false;
+        bmBtn.textContent = ADMIN_CAMPANHAS_BM_REGISTRADO_BTN_LABEL;
+        bmBtn.setAttribute("disabled", "true");
+        bmBtn.classList.add("btn-bm-inoperante", "is-registered");
+        bmBtn.classList.remove("enabled");
+      }
+
       function closeAdminCampanhasDetailModal() {
         const overlay = document.getElementById("admin-campanhas-detail-overlay");
         if (!overlay) return;
@@ -30240,7 +30296,13 @@
           startBtn.textContent = ADMIN_CAMPANHAS_START_BTN_LABEL;
           startBtn.removeAttribute("disabled");
         }
-        if (bmInoperanteBtn) bmInoperanteBtn.hidden = true;
+        if (bmInoperanteBtn) {
+          bmInoperanteBtn.hidden = true;
+          bmInoperanteBtn.textContent = ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL;
+          bmInoperanteBtn.removeAttribute("disabled");
+          bmInoperanteBtn.classList.remove("is-registered");
+          bmInoperanteBtn.classList.add("enabled");
+        }
         if (reportErrorBtn) reportErrorBtn.hidden = true;
         if (submitErrorBtn) {
           submitErrorBtn.hidden = true;
@@ -30440,11 +30502,12 @@
         }
 
         const bmBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
-        const previousLabel = bmBtn?.textContent || "BM inoperante";
+        const previousLabel = bmBtn?.textContent || ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL;
         setAdminCampanhasDetailActionError("");
         if (bmBtn) {
-          bmBtn.textContent = "Reatribuindo…";
+          bmBtn.textContent = ADMIN_CAMPANHAS_BM_PROCESSANDO_BTN_LABEL;
           bmBtn.setAttribute("disabled", "true");
+          bmBtn.classList.add("btn-bm-inoperante");
         }
 
         try {
@@ -30460,20 +30523,32 @@
             throw new Error("Resposta inválida do servidor. Confirme se a API está atualizada.");
           }
           if (!response.ok) {
-            throw new Error(payload.error || "Não foi possível reatribuir a campanha.");
+            throw new Error(payload.error || "Não foi possível registrar BM inoperante.");
           }
-          closeAdminCampanhasDetailModal();
-          showToast("Campanha reatribuída ao próximo da fila de prioridade.", "success", 3200);
+
+          setAdminCampanhasBmInoperanteRegisteredState();
+
+          const message = String(payload.message || "").trim();
+          if (payload.exhausted) {
+            showToast(message || "Ok, aguardaremos até que a BM volte", "info", 5200);
+            await loadAdminCampanhas({ silent: true });
+            renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+            return;
+          }
+
+          showToast(message || "Campanha reatribuída ao próximo da fila de prioridade.", "success", 3200);
           await loadAdminCampanhas({ silent: true });
           renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+          window.setTimeout(() => closeAdminCampanhasDetailModal(), 1200);
         } catch (error) {
           const message = resolveAdminOperacionalFetchError(error, error?.payload);
           setAdminCampanhasDetailActionError(message);
           showToast(message, "error", 4200);
-        } finally {
           if (bmBtn) {
             bmBtn.textContent = previousLabel;
             bmBtn.removeAttribute("disabled");
+            bmBtn.classList.remove("is-registered");
+            bmBtn.classList.add("enabled");
           }
         }
       }
