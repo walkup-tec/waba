@@ -30665,16 +30665,13 @@
           if (!contentType.includes("application/json")) {
             throw new Error("Resposta inválida do servidor. Confirme se a API está atualizada.");
           }
-          if (!response.ok) {
+          if (!response.ok || payload?.ok === false) {
             throw new Error(payload.error || "Não foi possível registrar BM inoperante.");
           }
 
           setAdminCampanhasBmInoperanteRegisteredState();
 
           const message = String(payload.message || "").trim();
-          await loadAdminCampanhas({ silent: true });
-          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
-
           if (payload.exhausted) {
             showToast(message || "Ok, aguardaremos até que a BM volte", "info", 5200);
           } else {
@@ -30685,6 +30682,13 @@
             );
           }
           window.setTimeout(() => closeAdminCampanhasDetailModal(), 1200);
+
+          try {
+            await loadAdminCampanhas({ silent: true });
+            renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+          } catch (refreshError) {
+            console.warn("[admin-campanhas] falha ao atualizar lista após BM inoperante:", refreshError);
+          }
         } catch (error) {
           const message = resolveAdminOperacionalFetchError(error, error?.payload);
           setAdminCampanhasDetailActionError(message);
