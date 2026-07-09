@@ -314,7 +314,7 @@ main() {
 
   patch_main "${pv_url:-}" "${bets_url:-}"
   reload_hup
-  if [[ -x /root/traefik-reconcile-vps.sh ]]; then
+  if [[ "${SKIP_RECONCILE:-}" != "1" && -x /root/traefik-reconcile-vps.sh ]]; then
     log "delegando reconcile atômico"
     /root/traefik-reconcile-vps.sh >>"$LOG" 2>&1 || true
   else

@@ -195,6 +195,10 @@ run_all() {
   ensure_waba_host_port || true
 
   local ok=0
+  if [[ -x /root/restore-landing-routers-vps.sh ]]; then
+    echo "--- restore-landing-routers (Host público) ---" | tee -a "$LOG"
+    SKIP_RECONCILE=1 /root/restore-landing-routers-vps.sh >>"$LOG" 2>&1 && ok=1 || true
+  fi
   if [[ -x /root/restore-easypanel-traefik-backends-vps.sh ]]; then
     echo "--- restore-easypanel-backends ---" | tee -a "$LOG"
     /root/restore-easypanel-traefik-backends-vps.sh >>"$LOG" 2>&1 && ok=1 || true
