@@ -170,31 +170,8 @@ const buildIntakeSuccessPayload = (intake, options = {}) => {
 };
 const finalizeIntakeAfterCreate = (intake) => {
     const current = new waba_campaign_supplier_assignment_service_1.WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
-    void runOperacionalNotifyInBackground(current.id);
+    (0, waba_operacional_campaign_notify_service_1.scheduleOperacionalStaffNotifyOnCampaignAssigned)(current);
     return current;
-};
-const operacionalNotifyInFlight = new Set();
-const runOperacionalNotifyInBackground = async (intakeId) => {
-    const normalizedId = String(intakeId || "").trim();
-    if (!normalizedId || operacionalNotifyInFlight.has(normalizedId))
-        return;
-    operacionalNotifyInFlight.add(normalizedId);
-    try {
-        const intake = intakeRepository.getById(normalizedId);
-        if (!intake)
-            return;
-        const operacionalNotify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignAssigned)(intake);
-        intakeRepository.updateById(normalizedId, {
-            updatedAt: new Date().toISOString(),
-            operacionalNotifyAudit: operacionalNotify,
-        });
-    }
-    catch (error) {
-        console.error(`[disparos/campanhas/intake] notify background falhou (${normalizedId}):`, error);
-    }
-    finally {
-        operacionalNotifyInFlight.delete(normalizedId);
-    }
 };
 const parseResponseLink = (body) => {
     const raw = String(body.responseLink ?? "").trim();

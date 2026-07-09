@@ -21,7 +21,9 @@ Como usar:
 ## Última atualização
 2026-07-09
 
-**WABA — BM inoperante modal fecha seguro (2026-07-09):** verificado fluxo Processando→Registrado→fecha 1,2s; fix refresh lista não bloqueia fechamento. Marker `DEPLOY-2026-07-09-bm-inoperante-modal-fecha-seguro`. Ver `doc/LOG-2026-07-09__111500__bm-inoperante-modal-processando-fecha.md`.
+**WABA — BM inoperante Processando travado (2026-07-09):** notify assíncrono em reassign; mutex frontend. Marker `DEPLOY-2026-07-09-bm-inoperante-resposta-rapida`. Ver `doc/LOG-2026-07-09__113500__bm-inoperante-processando-travado-fix.md`.
+ +1000 API Oficial; saldo **3295** contratados. Pedido `cff38860-ddc5-4838-8b18-6e9dbae34531`. Ver `doc/LOG-2026-07-09__112500__grant-1000-creditos-mozart-pmo-producao.md`.
+ verificado fluxo Processando→Registrado→fecha 1,2s; fix refresh lista não bloqueia fechamento. Marker `DEPLOY-2026-07-09-bm-inoperante-modal-fecha-seguro`. Ver `doc/LOG-2026-07-09__111500__bm-inoperante-modal-processando-fecha.md`.
  operador Bets atende Bets+Outros; operador Outros só Outros; escalonamento Outros→Bets permitido, inverso não. Marker `DEPLOY-2026-07-09-fila-campanha-segmento-bets-outros`. Ver `doc/LOG-2026-07-09__110300__fila-campanha-segmento-bets-outros.md`.
  footer único no detalhe Admin Campanhas; modal ~920px. Marker `DEPLOY-2026-07-09-modal-campanha-botoes-inline`. Ver `doc/LOG-2026-07-09__104700__modal-campanha-botoes-inline.md`.
 

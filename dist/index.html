@@ -29859,6 +29859,7 @@
 
       let adminCampanhasCache = [];
       let adminCampanhasDetailCampaignId = "";
+      let adminCampanhasBmInoperanteBusy = false;
       let adminCampanhasDetailImageName = "campanha-imagem";
       let adminCampanhasDetailSpreadsheetName = "leads-envios.xlsx";
       let adminCampanhasDetailTextOptions = [];
@@ -30426,6 +30427,7 @@
         overlay.classList.remove("open");
         overlay.setAttribute("aria-hidden", "true");
         adminCampanhasDetailCampaignId = "";
+        adminCampanhasBmInoperanteBusy = false;
         adminCampanhasDetailTextOptions = [];
         adminCampanhasDetailResponseLink = "";
         const startBtn = document.getElementById("admin-campanhas-start-btn");
@@ -30638,6 +30640,8 @@
       }
 
       async function markAdminCampanhaBmInoperante() {
+        if (adminCampanhasBmInoperanteBusy) return;
+
         const campaignId = adminCampanhasDetailCampaignId;
         if (!campaignId) {
           setAdminCampanhasDetailActionError("Campanha não identificada. Feche e abra os detalhes novamente.");
@@ -30646,6 +30650,7 @@
 
         const bmBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
         const previousLabel = bmBtn?.textContent || ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL;
+        adminCampanhasBmInoperanteBusy = true;
         setAdminCampanhasDetailActionError("");
         if (bmBtn) {
           bmBtn.textContent = ADMIN_CAMPANHAS_BM_PROCESSANDO_BTN_LABEL;
@@ -30657,8 +30662,8 @@
           const response = await fetchAdminOperacionalJson(
             `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/bm-inoperante`,
             { method: "POST" },
-            30000,
-            3
+            45000,
+            2
           );
           const contentType = String(response.headers.get("content-type") || "").toLowerCase();
           const payload = await response.json().catch(() => ({}));
@@ -30691,7 +30696,12 @@
           }
         } catch (error) {
           const message = resolveAdminOperacionalFetchError(error, error?.payload);
-          setAdminCampanhasDetailActionError(message);
+          const timeoutLike = /timeout|aborted|failed to fetch/i.test(String(message || error?.message || ""));
+          setAdminCampanhasDetailActionError(
+            timeoutLike
+              ? "A operação demorou demais. Atualize a lista de campanhas — o registro pode ter sido aplicado."
+              : message
+          );
           showToast(message, "error", 4200);
           if (bmBtn) {
             bmBtn.textContent = previousLabel;
@@ -30699,6 +30709,14 @@
             bmBtn.classList.remove("is-registered");
             bmBtn.classList.add("enabled");
           }
+          if (timeoutLike) {
+            window.setTimeout(() => closeAdminCampanhasDetailModal(), 1500);
+            void loadAdminCampanhas({ silent: true }).then(() => {
+              renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+            });
+          }
+        } finally {
+          adminCampanhasBmInoperanteBusy = false;
         }
       }
 

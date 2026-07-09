@@ -129,11 +129,7 @@ class WabaCampaignSupplierAssignmentService {
             return { intake, reassigned: false, exhausted: true };
         }
         const updated = this.assignToSupplier(intake, next, reason);
-        const notify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignAssigned)(updated);
-        this.intakeRepository.updateById(updated.id, {
-            operacionalNotifyAudit: notify,
-            updatedAt: new Date().toISOString(),
-        });
+        (0, waba_operacional_campaign_notify_service_1.scheduleOperacionalStaffNotifyOnCampaignAssigned)(updated);
         const finalIntake = this.intakeRepository.getById(updated.id) ?? updated;
         return { intake: finalIntake, reassigned: true, exhausted: false };
     }

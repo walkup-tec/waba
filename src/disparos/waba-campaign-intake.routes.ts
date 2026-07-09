@@ -26,7 +26,10 @@ import {
   countSpreadsheetImportedRows,
   trimSpreadsheetBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
-import { notifyOperacionalStaffOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
+import {
+  scheduleOperacionalStaffNotifyOnCampaignAssigned,
+  type OperacionalNotifyResult,
+} from "../mail/waba-operacional-campaign-notify.service";
 import { WabaCampaignSupplierAssignmentService } from "../services/waba-campaign-supplier-assignment.service";
 import { buildDisparosDashboardOverview, buildMasterSubscribersDisparosDashboardOverview } from "./waba-disparos-dashboard.service";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
@@ -192,7 +195,7 @@ const buildIntakeSuccessPayload = (
   intake: WabaCampaignIntake,
   options: {
     deduplicated?: boolean;
-    operacionalNotify?: Awaited<ReturnType<typeof notifyOperacionalStaffOnCampaignAssigned>>;
+    operacionalNotify?: OperacionalNotifyResult;
   } = {},
 ) => {
   const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
@@ -217,30 +220,8 @@ const buildIntakeSuccessPayload = (
 
 const finalizeIntakeAfterCreate = (intake: WabaCampaignIntake): WabaCampaignIntake => {
   const current = new WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
-  void runOperacionalNotifyInBackground(current.id);
+  scheduleOperacionalStaffNotifyOnCampaignAssigned(current);
   return current;
-};
-
-const operacionalNotifyInFlight = new Set<string>();
-
-const runOperacionalNotifyInBackground = async (intakeId: string): Promise<void> => {
-  const normalizedId = String(intakeId || "").trim();
-  if (!normalizedId || operacionalNotifyInFlight.has(normalizedId)) return;
-  operacionalNotifyInFlight.add(normalizedId);
-
-  try {
-    const intake = intakeRepository.getById(normalizedId);
-    if (!intake) return;
-    const operacionalNotify = await notifyOperacionalStaffOnCampaignAssigned(intake);
-    intakeRepository.updateById(normalizedId, {
-      updatedAt: new Date().toISOString(),
-      operacionalNotifyAudit: operacionalNotify,
-    });
-  } catch (error) {
-    console.error(`[disparos/campanhas/intake] notify background falhou (${normalizedId}):`, error);
-  } finally {
-    operacionalNotifyInFlight.delete(normalizedId);
-  }
 };
 
 const parseResponseLink = (body: Record<string, unknown>): string | null => {

@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyOperacionalStaffOnCampaignCreated = exports.notifyOperacionalStaffOnCampaignAssigned = void 0;
+exports.scheduleOperacionalStaffNotifyOnCampaignAssigned = exports.notifyOperacionalStaffOnCampaignCreated = exports.notifyOperacionalStaffOnCampaignAssigned = void 0;
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
+const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_mail_delivery_1 = require("./waba-mail-delivery");
@@ -170,3 +171,36 @@ const notifyOperacionalStaffOnCampaignAssigned = async (intake) => notifyAssigne
 exports.notifyOperacionalStaffOnCampaignAssigned = notifyOperacionalStaffOnCampaignAssigned;
 const notifyOperacionalStaffOnCampaignCreated = async (intake) => notifyAssignedOperacionalAndMasters(intake);
 exports.notifyOperacionalStaffOnCampaignCreated = notifyOperacionalStaffOnCampaignCreated;
+const operacionalNotifyInFlight = new Set();
+/** Resposta HTTP rápida — e-mail/WhatsApp rodam em background (evita BM inoperante travado em Processando). */
+const scheduleOperacionalStaffNotifyOnCampaignAssigned = (intake) => {
+    const intakeId = String(intake.id || "").trim();
+    if (!intakeId)
+        return;
+    setImmediate(() => {
+        void runOperacionalNotifyInBackground(intakeId);
+    });
+};
+exports.scheduleOperacionalStaffNotifyOnCampaignAssigned = scheduleOperacionalStaffNotifyOnCampaignAssigned;
+const runOperacionalNotifyInBackground = async (intakeId) => {
+    if (operacionalNotifyInFlight.has(intakeId))
+        return;
+    operacionalNotifyInFlight.add(intakeId);
+    try {
+        const repository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+        const intake = repository.getById(intakeId);
+        if (!intake)
+            return;
+        const operacionalNotify = await (0, exports.notifyOperacionalStaffOnCampaignAssigned)(intake);
+        repository.updateById(intakeId, {
+            updatedAt: new Date().toISOString(),
+            operacionalNotifyAudit: operacionalNotify,
+        });
+    }
+    catch (error) {
+        console.error(`[mail] notify campanha background falhou (${intakeId}):`, error);
+    }
+    finally {
+        operacionalNotifyInFlight.delete(intakeId);
+    }
+};

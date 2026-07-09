@@ -4,6 +4,7 @@ import {
   type WabaDispatchesApiKind,
 } from "../disparos/waba-dispatches-api-kind";
 import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
+import { WabaCampaignIntakeRepository } from "../disparos/waba-campaign-intake.repository";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import type { WabaSystemUser } from "../users/waba-system-user.repository";
@@ -235,3 +236,35 @@ export const notifyOperacionalStaffOnCampaignAssigned = async (
 export const notifyOperacionalStaffOnCampaignCreated = async (
   intake: WabaCampaignIntake,
 ): Promise<OperacionalNotifyResult> => notifyAssignedOperacionalAndMasters(intake);
+
+const operacionalNotifyInFlight = new Set<string>();
+
+/** Resposta HTTP rápida — e-mail/WhatsApp rodam em background (evita BM inoperante travado em Processando). */
+export const scheduleOperacionalStaffNotifyOnCampaignAssigned = (
+  intake: WabaCampaignIntake,
+): void => {
+  const intakeId = String(intake.id || "").trim();
+  if (!intakeId) return;
+  setImmediate(() => {
+    void runOperacionalNotifyInBackground(intakeId);
+  });
+};
+
+const runOperacionalNotifyInBackground = async (intakeId: string): Promise<void> => {
+  if (operacionalNotifyInFlight.has(intakeId)) return;
+  operacionalNotifyInFlight.add(intakeId);
+  try {
+    const repository = new WabaCampaignIntakeRepository();
+    const intake = repository.getById(intakeId);
+    if (!intake) return;
+    const operacionalNotify = await notifyOperacionalStaffOnCampaignAssigned(intake);
+    repository.updateById(intakeId, {
+      updatedAt: new Date().toISOString(),
+      operacionalNotifyAudit: operacionalNotify,
+    });
+  } catch (error) {
+    console.error(`[mail] notify campanha background falhou (${intakeId}):`, error);
+  } finally {
+    operacionalNotifyInFlight.delete(intakeId);
+  }
+};

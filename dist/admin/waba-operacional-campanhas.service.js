@@ -442,15 +442,7 @@ class WabaOperacionalCampanhasService {
                 message: "Ok, aguardaremos até que a BM volte",
             };
         }
-        const assigneeEmail = normalizeEmail(result.intake.assignedOperacionalEmail || staff.email);
-        const detail = this.getCampaignDetail(campaignId, {
-            email: assigneeEmail,
-            role: "operacional",
-        });
-        if (!detail)
-            throw new Error("Campanha reatribuída, mas não foi possível carregar os detalhes.");
         return {
-            campaign: detail,
             reassigned: true,
             exhausted: false,
             message: "Campanha reatribuída ao próximo da fila de prioridade.",

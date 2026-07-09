@@ -16,7 +16,7 @@ import { WabaSystemUserService } from "../users/waba-system-user.service";
 import {
   operacionalCanServeSubscriberCampaign,
 } from "./waba-campaign-operacional-segment-rules";
-import { notifyOperacionalStaffOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
+import { scheduleOperacionalStaffNotifyOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
 
 export const CAMPAIGN_START_OVERDUE_MS = 24 * 60 * 60 * 1000;
 export const CAMPAIGN_REASSIGN_DEADLINE_MS = 30 * 60 * 60 * 1000;
@@ -156,11 +156,7 @@ export class WabaCampaignSupplierAssignmentService {
     }
 
     const updated = this.assignToSupplier(intake, next, reason);
-    const notify = await notifyOperacionalStaffOnCampaignAssigned(updated);
-    this.intakeRepository.updateById(updated.id, {
-      operacionalNotifyAudit: notify,
-      updatedAt: new Date().toISOString(),
-    });
+    scheduleOperacionalStaffNotifyOnCampaignAssigned(updated);
     const finalIntake = this.intakeRepository.getById(updated.id) ?? updated;
     return { intake: finalIntake, reassigned: true, exhausted: false };
   }
