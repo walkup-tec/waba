@@ -21,7 +21,9 @@ Como usar:
 ## Última atualização
 2026-07-09
 
-**WABA — Fix campanha duplicada Gerar Campanha (2026-07-09):** idempotência `clientRequestId`, API v3, retry seguro, notify não derruba POST. Marker `DEPLOY-2026-07-09-fix-campanha-duplicada-idempotencia`. Ver `doc/LOG-2026-07-09__024500__fix-campanha-duplicada-idempotencia.md`.
+**WABA — WhatsApp operacional nova campanha 3 instâncias + retry (2026-07-09):** sequência `51981077770` → `51997462102` → `51981082477`, até 15 rodadas síncronas + retry em background até sucesso. Marker `DEPLOY-2026-07-09-operacional-campanha-whatsapp-3instancias`. Ver `doc/LOG-2026-07-09__030500__operacional-campanha-whatsapp-3instancias-retry.md`. Palavras-chave: `deliverOperacionalNewCampaignWhatsApp`, `operacionalNotify`.
+
+**WABA — Fix campanha duplicada Gerar Campanha (2026-07-09):**** idempotência `clientRequestId`, API v3, retry seguro, notify não derruba POST. Marker `DEPLOY-2026-07-09-fix-campanha-duplicada-idempotencia`. Ver `doc/LOG-2026-07-09__024500__fix-campanha-duplicada-idempotencia.md`.
 
 **WABA — Deploy fornecedores produção (2026-07-09):** build `dist/` + marker `DEPLOY-2026-07-09-financeiro-fornecedores-producao`. Src já em `bfbda1d`. Redeploy Easypanel `waba_disparador`. Ver `doc/LOG-2026-07-09__022000__deploy-financeiro-fornecedores-producao.md`.
 
