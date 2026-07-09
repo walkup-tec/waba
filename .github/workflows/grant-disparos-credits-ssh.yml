@@ -1,0 +1,95 @@
+# Concede créditos de disparos no volume /app/data do container WABA em produção.
+#
+# Secrets: VPS_SSH_PRIVATE_KEY, opcional VPS_HOST (default 72.60.51.127)
+#
+# Uso: Actions → Grant Disparos Credits (SSH) → Run workflow
+
+name: Grant Disparos Credits (SSH)
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: E-mail do assinante
+        required: true
+        type: string
+      count:
+        description: Envios por API
+        required: true
+        default: "100"
+        type: string
+      api:
+        description: oficial | alternativa | both
+        required: false
+        default: oficial
+        type: choice
+        options:
+          - oficial
+          - alternativa
+          - both
+
+jobs:
+  grant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY não configurado."
+            exit 1
+          fi
+
+      - name: SSH — grant créditos no volume WABA
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 4m
+          script: |
+            set -euo pipefail
+            EMAIL="${{ github.event.inputs.email }}"
+            COUNT="${{ github.event.inputs.count }}"
+            API="${{ github.event.inputs.api }}"
+            CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | head -1 || true)"
+            if [ -z "$CONTAINER" ]; then
+              echo "::error::Container waba_disparador não encontrado."
+              docker ps --format '{{.Names}}' | head -20
+              exit 1
+            fi
+            echo "Container: $CONTAINER"
+            docker exec "$CONTAINER" node -e "
+            const crypto=require('crypto');
+            const fs=require('fs');
+            const path=require('path');
+            const email=process.argv[1].trim().toLowerCase();
+            const count=Math.max(1,Math.round(Number(process.argv[2]||0)));
+            const apiMode=String(process.argv[3]||'oficial').toLowerCase();
+            const dataDir='/app/data';
+            const norm=v=>String(v||'').trim().toLowerCase();
+            const read=(f,fallback)=>{try{return JSON.parse(fs.readFileSync(f,'utf8'))}catch{return fallback}};
+            const write=(f,data)=>{const t=f+'.tmp';fs.writeFileSync(t,JSON.stringify(data,null,2));fs.renameSync(t,f)};
+            const subs=read(path.join(dataDir,'waba-subscribers.json'),{subscribers:[]});
+            const sub=(subs.subscribers||[]).find(r=>norm(r.email)===email);
+            if(!sub) throw new Error('Assinante não encontrado: '+email);
+            let kinds=['oficial'];
+            if(apiMode==='both') kinds=sub.segment==='bets'?['oficial']:['oficial','alternativa'];
+            else if(apiMode==='alternativa') kinds=['alternativa'];
+            const now=new Date().toISOString();
+            const orders=kinds.map(apiKind=>{const id=crypto.randomUUID();return{
+              id,product:'waba-disparos',apiKind,customerName:String(sub.fullName||'Assinante'),
+              ownerEmail:email,whatsapp:String(sub.whatsapp||sub.phone||''),cpfCnpj:String(sub.cpfCnpj||''),
+              billingType:'PIX',valueCents:count*30,shipmentCount:count,status:'paid',
+              asaasExternalReference:'waba:grant-credit:'+id,createdAt:now,updatedAt:now,paidAt:now,
+              bonusShipmentsApplied:0,bonusSettlementAt:now
+            }});
+            const store=read(path.join(dataDir,'waba-billing-orders.json'),[]);
+            const list=Array.isArray(store)?store:[];
+            const known=new Set(list.map(r=>String(r.id||'').trim()).filter(Boolean));
+            let added=0;
+            for(const order of orders){if(known.has(order.id))continue;list.unshift(order);known.add(order.id);added++}
+            write(path.join(dataDir,'waba-billing-orders.json'),list);
+            console.log(JSON.stringify({ok:true,email,count,added,orders:orders.map(o=>({id:o.id,apiKind:o.apiKind,shipmentCount:o.shipmentCount}))}));
+            " "$EMAIL" "$COUNT" "$API"
