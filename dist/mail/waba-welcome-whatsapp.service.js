@@ -83,9 +83,7 @@ const shouldSkipWelcomeInstanceForSend = (liveState) => {
         return false;
     if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(state))
         return false;
-    if (state === "close" || state === "closed" || state === "disconnected")
-        return true;
-    return (0, evo_connection_state_service_1.isEvoConnectionInProgress)(state);
+    return state === "close" || state === "closed" || state === "disconnected";
 };
 const buildWelcomeSendCandidates = async () => {
     const primaryPhone = resolveWelcomePrimaryPhoneHint();
@@ -104,6 +102,8 @@ const buildWelcomeSendCandidates = async () => {
     }
     const legacyCandidates = uniqueInstanceNames([
         preferred,
+        "walkup",
+        "drax-oficial",
         ...(0, waba_push_types_1.resolvePushCommunityEvoInstanceFallbacks)(),
         (0, waba_push_types_1.resolveDefaultPushCommunityEvoInstance)(),
     ]);

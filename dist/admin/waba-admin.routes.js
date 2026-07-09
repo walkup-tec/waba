@@ -8,6 +8,7 @@ const node_path_1 = __importDefault(require("node:path"));
 const multer_1 = __importDefault(require("multer"));
 const waba_staff_menu_auth_1 = require("../auth/waba-staff-menu-auth");
 const waba_request_auth_1 = require("../auth/waba-request-auth");
+const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-split.service");
 const waba_admin_dashboard_service_1 = require("./waba-admin-dashboard.service");
 const waba_admin_financeiro_service_1 = require("./waba-admin-financeiro.service");
@@ -160,16 +161,17 @@ const registerWabaAdminRoutes = (app) => {
             return res.status(status).json({ error: message });
         }
     });
-    app.post("/admin/subscribers", (req, res) => {
+    app.post("/admin/subscribers", async (req, res) => {
         const auth = rejectNonMaster(req, res);
         if (!auth)
             return;
         try {
             const body = req.body;
             const whatsapp = String(body.whatsapp ?? "");
+            const password = String(body.password ?? "");
             const subscriber = adminSubscribersCreateService.createSubscriber({
                 email: String(body.email ?? ""),
-                password: String(body.password ?? ""),
+                password,
                 fullName: String(body.fullName ?? body.name ?? ""),
                 whatsapp,
                 phone: String(body.phone ?? whatsapp),
@@ -177,7 +179,15 @@ const registerWabaAdminRoutes = (app) => {
                 aquecedorGranted: body.aquecedorGranted === true,
                 segment: body.segment,
             });
-            return res.status(201).json({ ok: true, subscriber });
+            const notifications = await (0, waba_mail_delivery_1.deliverSubscriberWelcomeNotifications)({
+                email: subscriber.email,
+                fullName: subscriber.fullName,
+                password,
+                whatsapp: subscriber.whatsapp,
+                phone: subscriber.phone,
+                cpfCnpj: subscriber.cpfCnpj,
+            });
+            return res.status(201).json({ ok: true, subscriber, notifications });
         }
         catch (error) {
             return res.status(400).json({

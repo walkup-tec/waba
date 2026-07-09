@@ -19,7 +19,13 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-08
+2026-07-09
+
+**WABA — Deploy fornecedores produção (2026-07-09):** build `dist/` + marker `DEPLOY-2026-07-09-financeiro-fornecedores-producao`. Src já em `bfbda1d`. Redeploy Easypanel `waba_disparador`. Ver `doc/LOG-2026-07-09__022000__deploy-financeiro-fornecedores-producao.md`.
+
+**WABA — Grant 100 créditos obotmoney produção (pendente execução SSH/redeploy):** assinante Bets `obotmoney@gmail.com` (Teste Landing 03). Script `grant-disparos-credits-production.cjs`, promote billing-only, workflow `Grant Disparos Credits (SSH)`. Saldo ainda 0 até rodar workflow ou Easypanel shell. Ver `doc/LOG-2026-07-09__014500__grant-100-creditos-obotmoney-producao.md`.
+
+**WABA — Bets ocultar saldo API Alternativa (2026-07-09):** Resumo Saldos e hub créditos sem bloco Alternativa para segmento Bets. Log `doc/LOG-2026-07-09__013500__bets-ocultar-saldo-api-alternativa.md`.
 
 **WABA — Fix cadastro Bet login + WhatsApp (2026-07-09):** persistência atômica assinante, validação pós-gravação, boas-vindas await na API register, fallbacks Evo walkup/drax-oficial. Log `doc/LOG-2026-07-09__011800__fix-cadastro-bet-login-whatsapp.md`.
 

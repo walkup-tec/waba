@@ -71,6 +71,7 @@ const waba_push_routes_1 = require("./push/waba-push.routes");
 const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
 const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
 const uptime_monitor_service_1 = require("./monitoring/uptime-monitor.service");
+const waba_campaign_supplier_assignment_service_1 = require("./services/waba-campaign-supplier-assignment.service");
 const vps_cpu_monitor_service_1 = require("./infra/vps-cpu-monitor.service");
 const evo_http_client_1 = require("./evo-http.client");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
@@ -10511,6 +10512,7 @@ const httpServer = app.listen(PORT, () => {
         }
         (0, asaas_integration_monitor_service_1.startAsaasIntegrationMonitorScheduler)();
         (0, uptime_monitor_service_1.startUptimeMonitorScheduler)();
+        (0, waba_campaign_supplier_assignment_service_1.startCampaignSupplierAssignmentScheduler)();
         (0, vps_cpu_monitor_service_1.startVpsCpuLocalSampler)();
     })();
 });

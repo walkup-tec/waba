@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWabaSubscriberRoutes = void 0;
 const base_path_1 = require("../base-path");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
+const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_subscriber_service_1 = require("./waba-subscriber.service");
 const subscriberService = new waba_subscriber_service_1.WabaSubscriberService();
 const resolveAppLoginUrl = () => {
@@ -13,12 +14,13 @@ const resolveAppLoginUrl = () => {
     return `http://localhost:${process.env.PORT || 3012}${base}/`;
 };
 const registerWabaSubscriberRoutes = (app) => {
-    app.post("/subscribers/register", (req, res) => {
+    app.post("/subscribers/register", async (req, res) => {
         try {
             const body = req.body;
+            const password = String(body.password ?? "");
             const profile = subscriberService.register({
                 email: String(body.email ?? ""),
-                password: String(body.password ?? ""),
+                password,
                 fullName: String(body.fullName ?? body.name ?? ""),
                 whatsapp: String(body.whatsapp ?? ""),
                 phone: String(body.phone ?? ""),
@@ -32,11 +34,26 @@ const registerWabaSubscriberRoutes = (app) => {
                 },
             });
             const loginUrl = resolveAppLoginUrl();
+            const notifications = await (0, waba_mail_delivery_1.deliverSubscriberWelcomeNotifications)({
+                email: profile.email,
+                fullName: profile.fullName,
+                password,
+                whatsapp: profile.whatsapp,
+                phone: profile.phone,
+                cpfCnpj: profile.cpfCnpj,
+                loginUrl,
+            });
+            if (notifications.whatsapp.status !== "sent") {
+                console.warn(`[subscribers/register] WhatsApp boas-vindas não enviado para ${profile.email}: ${notifications.whatsapp.message}`);
+            }
             return res.status(201).json({
                 ok: true,
                 subscriber: profile,
                 loginUrl,
-                message: "Cadastro realizado. Faça login no painel WABA para contratar disparos.",
+                notifications,
+                message: notifications.whatsapp.status === "sent"
+                    ? "Cadastro realizado. Você receberá e-mail e WhatsApp de boas-vindas. Faça login no painel WABA."
+                    : "Cadastro realizado. E-mail de boas-vindas enviado. Faça login no painel WABA.",
             });
         }
         catch (error) {

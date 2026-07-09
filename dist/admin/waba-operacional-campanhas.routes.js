@@ -115,6 +115,28 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             });
         }
     });
+    app.post("/admin/operacional/campanhas/:id/bm-inoperante", async (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const campaign = await operacionalCampanhasService.markBmInoperante(req.params.id, {
+                email: auth.email,
+                role: auth.role,
+            });
+            return res.status(200).json({ ok: true, campaign });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível reatribuir a campanha.";
+            const status = /não encontrada|não disponível|BM inoperante|Somente campanhas|atribuída|fornecedor/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/bm-inoperante] erro:", error);
+            }
+            return res.status(status).json({ error: message });
+        }
+    });
     app.post("/admin/operacional/campanhas/:id/reenviar-email-operacional", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)

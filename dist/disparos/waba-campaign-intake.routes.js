@@ -16,6 +16,7 @@ const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.reposi
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
+const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
@@ -304,7 +305,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                     error: "Não foi possível gravar os arquivos da campanha no servidor. Tente novamente.",
                 });
             }
-            const intake = intakeRepository.create({
+            let intake = intakeRepository.create({
                 id: intakeId,
                 ownerEmail: auth.email,
                 campaignName,
@@ -327,7 +328,8 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (!isMaster && plannedSendCount > 0) {
                 disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
             }
-            const operacionalNotify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignCreated)(intake);
+            intake = new waba_campaign_supplier_assignment_service_1.WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
+            const operacionalNotify = await (0, waba_operacional_campaign_notify_service_1.notifyOperacionalStaffOnCampaignAssigned)(intake);
             intakeRepository.updateById(intake.id, {
                 updatedAt: new Date().toISOString(),
                 operacionalNotifyAudit: operacionalNotify,

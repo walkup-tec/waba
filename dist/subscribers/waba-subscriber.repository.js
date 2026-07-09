@@ -35,7 +35,7 @@ class WabaSubscriberRepository {
             (0, node_fs_1.mkdirSync)(dir, { recursive: true });
         const tmp = `${filePath}.tmp`;
         (0, node_fs_1.writeFileSync)(tmp, JSON.stringify(store, null, 2), "utf8");
-        (0, node_fs_1.writeFileSync)(filePath, (0, node_fs_1.readFileSync)(tmp));
+        (0, node_fs_1.renameSync)(tmp, filePath);
     }
     list() {
         return this.readStore().subscribers;

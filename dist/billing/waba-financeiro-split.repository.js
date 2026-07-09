@@ -33,6 +33,9 @@ const migrateLegacyConfig = (parsed) => {
             id: "supplier-oficial",
             name: "Fornecedor API Oficial",
             apiKind: "oficial",
+            systemUserEmail: "",
+            segment: "outros",
+            priority: 1,
             costPerShipmentCents: oficialCost,
             pixKey: "",
             active: true,
@@ -43,6 +46,9 @@ const migrateLegacyConfig = (parsed) => {
             id: "supplier-alternativa",
             name: "Fornecedor API Alternativa",
             apiKind: "alternativa",
+            systemUserEmail: "",
+            segment: "outros",
+            priority: 1,
             costPerShipmentCents: alternativaCost,
             pixKey: "",
             active: true,
@@ -59,10 +65,16 @@ const migrateLegacyConfig = (parsed) => {
 };
 const normalizeSupplier = (input) => {
     const apiKind = input.apiKind === "alternativa" ? "alternativa" : "oficial";
+    const segment = input.segment === "bets" ? "bets" : "outros";
+    const priorityRaw = Math.round(Number(input.priority ?? 1));
+    const priority = Math.max(1, Math.min(5, Number.isFinite(priorityRaw) ? priorityRaw : 1));
     return {
         id: String(input.id ?? (0, node_crypto_1.randomUUID)()).trim() || (0, node_crypto_1.randomUUID)(),
         name: String(input.name ?? "").trim(),
         apiKind,
+        systemUserEmail: String(input.systemUserEmail ?? "").trim().toLowerCase(),
+        segment,
+        priority,
         costPerShipmentCents: Math.max(0, Math.round(Number(input.costPerShipmentCents ?? 0))),
         pixKey: String(input.pixKey ?? "").trim(),
         active: input.active !== false,

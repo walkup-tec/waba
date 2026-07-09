@@ -97,6 +97,30 @@ class WabaAdminFinanceiroService {
         }
         return items.sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
     }
+    listOperacionalUsersForSuppliers() {
+        const seen = new Set();
+        const items = [];
+        for (const user of this.systemUserService.listPublicUsers()) {
+            if (user.role !== "operacional")
+                continue;
+            const email = String(user.email || "").trim().toLowerCase();
+            if (!email || seen.has(email))
+                continue;
+            seen.add(email);
+            const apiKind = user.operacionalDispatchesApi ?? null;
+            const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+            items.push({
+                id: user.id,
+                fullName: String(user.fullName || email).trim() || email,
+                email,
+                apiKind,
+                segment,
+                segmentLabel: segment === "bets" ? "Bets" : "Outros",
+                apiKindLabel: apiKind === "alternativa" ? "API Alternativa" : apiKind === "oficial" ? "API Oficial" : "—",
+            });
+        }
+        return items.sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
+    }
     buildProductMetrics(orders) {
         const emptyBucket = () => ({
             contractedValueCents: 0,
@@ -217,6 +241,7 @@ class WabaAdminFinanceiroService {
             },
             productMetrics: this.buildProductMetrics(orders),
             masterUsers: this.listMasterUsersForSplit(),
+            operacionalUsers: this.listOperacionalUsersForSuppliers(),
             splitConfig: this.splitService.getConfig(),
             splitSettlements: this.splitService.listSettlements(100),
             splitPayoutEnabled: this.splitService.isPayoutEnabled(),

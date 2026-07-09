@@ -4,6 +4,7 @@ exports.acceptPushMessage = acceptPushMessage;
 exports.deliverPushMessageById = deliverPushMessageById;
 exports.sendPushMessage = sendPushMessage;
 exports.getPushMessageById = getPushMessageById;
+exports.publishSystemAlertForMasters = publishSystemAlertForMasters;
 exports.listPushAlertsForAuth = listPushAlertsForAuth;
 exports.dismissPushAlert = dismissPushAlert;
 exports.listPushHistory = listPushHistory;
@@ -306,6 +307,27 @@ async function sendPushMessage(input) {
 }
 function getPushMessageById(id) {
     return pushRepository.getById(id);
+}
+function publishSystemAlertForMasters(input) {
+    const now = new Date().toISOString();
+    const title = String(input.title || "Alerta").trim() || "Alerta";
+    const message = String(input.message || "").trim();
+    const payload = {
+        id: pushRepository.createId(),
+        title,
+        originalText: message,
+        reviewedText: message,
+        image: null,
+        audiences: ["users"],
+        userRoles: ["master"],
+        status: "sent",
+        createdByEmail: "system@waba",
+        createdAt: now,
+        sentAt: now,
+        deliveryResults: { users: { targeted: 0, roles: ["master"] } },
+        dismissedBy: [],
+    };
+    return pushRepository.save(payload);
 }
 function listPushAlertsForAuth(auth) {
     const email = normalizeEmail(auth.email);

@@ -7,8 +7,6 @@ exports.WabaSubscriberService = void 0;
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const node_crypto_2 = require("node:crypto");
 const phone_1 = require("../billing/phone");
-const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
-const waba_app_url_1 = require("../mail/waba-app-url");
 const waba_subscriber_segment_1 = require("./waba-subscriber-segment");
 const waba_subscriber_repository_1 = require("./waba-subscriber.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -93,17 +91,14 @@ class WabaSubscriberService {
             createdAt: now,
             updatedAt: now,
         });
-        const profile = this.toPublicProfile(subscriber);
-        (0, waba_mail_delivery_1.notifySubscriberWelcomeEmail)({
-            email: profile.email,
-            fullName: profile.fullName,
-            password,
-            whatsapp: profile.whatsapp,
-            phone: profile.phone,
-            cpfCnpj: profile.cpfCnpj,
-            loginUrl: (0, waba_app_url_1.resolveWabaAppLoginUrl)(),
-        });
-        return profile;
+        const persisted = this.repository.getByEmail(email);
+        if (!persisted || persisted.id !== subscriber.id) {
+            throw new Error("Falha ao gravar o cadastro. Tente novamente em instantes.");
+        }
+        if (!verifyPassword(password, persisted.passwordHash)) {
+            throw new Error("Falha ao validar o cadastro salvo. Tente novamente.");
+        }
+        return this.toPublicProfile(persisted);
     }
     update(subscriberId, input) {
         const id = String(subscriberId ?? "").trim();

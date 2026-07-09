@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyStaffWelcome = exports.deliverStaffWelcomeEmail = exports.notifySubscriberWelcomeEmail = exports.notifyOperacionalNewCampaignEmail = exports.deliverOperacionalNewCampaignEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
+exports.notifyStaffWelcome = exports.deliverStaffWelcomeEmail = exports.notifySubscriberWelcomeEmail = exports.deliverSubscriberWelcomeNotifications = exports.notifyOperacionalNewCampaignEmail = exports.deliverOperacionalNewCampaignEmail = exports.notifyCampaignErrorReportedEmail = exports.notifyCampaignCompletedEmail = exports.notifySupportTicketClosedEmail = exports.deliverSubscriberWelcomeEmail = exports.deliverCampaignErrorReportedEmail = exports.deliverCampaignCompletedEmail = exports.deliverSupportTicketClosedEmail = void 0;
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_app_url_1 = require("./waba-app-url");
 const waba_mail_templates_1 = require("./waba-mail.templates");
@@ -205,16 +205,24 @@ const notifyOperacionalNewCampaignEmail = (input) => {
     });
 };
 exports.notifyOperacionalNewCampaignEmail = notifyOperacionalNewCampaignEmail;
+const deliverSubscriberWelcomeNotifications = async (input) => {
+    const loginUrl = String(input.loginUrl || (0, waba_app_url_1.resolveWabaAppLoginUrl)()).trim() || (0, waba_app_url_1.resolveWabaAppLoginUrl)();
+    const [email, whatsapp] = await Promise.all([
+        (0, exports.deliverSubscriberWelcomeEmail)({ ...input, loginUrl }),
+        (0, waba_welcome_whatsapp_service_1.deliverSubscriberWelcomeWhatsApp)({
+            email: input.email,
+            password: input.password,
+            whatsapp: input.whatsapp,
+            loginUrl,
+        }),
+    ]);
+    return { email, whatsapp };
+};
+exports.deliverSubscriberWelcomeNotifications = deliverSubscriberWelcomeNotifications;
 const notifySubscriberWelcomeEmail = (input) => {
-    void (0, exports.deliverSubscriberWelcomeEmail)(input).catch((error) => {
+    void (0, exports.deliverSubscriberWelcomeNotifications)(input).catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[mail] boas-vindas cadastro (async):", message);
-    });
-    (0, waba_welcome_whatsapp_service_1.notifySubscriberWelcomeWhatsApp)({
-        email: input.email,
-        password: input.password,
-        whatsapp: input.whatsapp,
-        loginUrl: input.loginUrl,
     });
 };
 exports.notifySubscriberWelcomeEmail = notifySubscriberWelcomeEmail;

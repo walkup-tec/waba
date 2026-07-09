@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyOperacionalStaffOnCampaignCreated = void 0;
+exports.notifyOperacionalStaffOnCampaignCreated = exports.notifyOperacionalStaffOnCampaignAssigned = void 0;
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
@@ -29,7 +29,82 @@ const resolvePlannedSendCount = (intake) => {
     return Math.max(0, Math.round(Number(intake.importedLineCount ?? 0)));
 };
 const resolveApiKind = (intake) => (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
+const notifyOperacionalStaffOnCampaignAssigned = async (intake) => {
+    const attemptedAt = new Date().toISOString();
+    const apiKind = resolveApiKind(intake);
+    const apiKindLabel = waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind];
+    const assignedEmail = String(intake.assignedOperacionalEmail || "").trim().toLowerCase();
+    if (!assignedEmail) {
+        return (0, exports.notifyOperacionalStaffOnCampaignCreated)(intake);
+    }
+    const operacional = new waba_system_user_service_1.WabaSystemUserService().getByEmail(assignedEmail);
+    if (!operacional || operacional.role !== "operacional") {
+        console.warn(`[mail] campanha ${intake.id}: operacional atribuído inválido (${assignedEmail}).`);
+        return {
+            attemptedAt,
+            apiKind,
+            apiKindLabel,
+            recipients: [],
+        };
+    }
+    const subscriber = new waba_subscriber_repository_1.WabaSubscriberRepository().getByEmail(intake.ownerEmail);
+    const subscriberId = String(subscriber?.id ?? "").trim() || "—";
+    const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
+    const plannedSendCount = resolvePlannedSendCount(intake);
+    const emailDelivery = await (0, waba_mail_delivery_1.deliverOperacionalNewCampaignEmail)({
+        operacionalEmail: operacional.email,
+        operacionalName: operacional.fullName,
+        campaignId: intake.id,
+        campaignName: intake.campaignName,
+        subscriberId,
+        plannedSendCount,
+        createdAtLabel,
+        apiKindLabel,
+    });
+    const whatsappDelivery = await (0, waba_operacional_campaign_whatsapp_service_1.deliverOperacionalNewCampaignWhatsApp)({
+        recipientEmail: operacional.email,
+        recipientName: operacional.fullName,
+        whatsapp: String(operacional.whatsapp ?? "").trim(),
+        campaignId: intake.id,
+        campaignName: intake.campaignName,
+        subscriberId,
+        plannedSendCount,
+        createdAtLabel,
+        apiKindLabel,
+        campaignUrl: "",
+    });
+    const aggregatedStatus = emailDelivery.status === "sent" || whatsappDelivery.status === "sent"
+        ? "sent"
+        : emailDelivery.status === "failed" || whatsappDelivery.status === "failed"
+            ? "failed"
+            : "skipped";
+    return {
+        attemptedAt,
+        apiKind,
+        apiKindLabel,
+        recipients: [
+            {
+                email: operacional.email.trim().toLowerCase(),
+                fullName: operacional.fullName,
+                status: aggregatedStatus,
+                message: [`E-mail: ${emailDelivery.message}`, `WhatsApp: ${whatsappDelivery.message}`].join(" | "),
+                messageId: emailDelivery.messageId,
+                emailStatus: emailDelivery.status,
+                emailMessage: emailDelivery.message,
+                emailMessageId: emailDelivery.messageId,
+                whatsapp: String(operacional.whatsapp ?? "").trim(),
+                whatsappStatus: whatsappDelivery.status,
+                whatsappMessage: whatsappDelivery.message,
+                whatsappInstanceName: whatsappDelivery.instanceName,
+            },
+        ],
+    };
+};
+exports.notifyOperacionalStaffOnCampaignAssigned = notifyOperacionalStaffOnCampaignAssigned;
 const notifyOperacionalStaffOnCampaignCreated = async (intake) => {
+    if (String(intake.assignedOperacionalEmail || "").trim()) {
+        return (0, exports.notifyOperacionalStaffOnCampaignAssigned)(intake);
+    }
     const attemptedAt = new Date().toISOString();
     const apiKind = resolveApiKind(intake);
     const apiKindLabel = waba_dispatches_api_kind_1.WABA_DISPATCHES_API_LABELS[apiKind];
