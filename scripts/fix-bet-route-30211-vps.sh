@@ -6,10 +6,10 @@
 #   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/fix-bet-route-30211-vps.sh" -o /tmp/fix-bet-route.sh
 #   sed -i 's/\r$//' /tmp/fix-bet-route.sh && bash /tmp/fix-bet-route.sh
 #
-# Versão: fix-bet-route-30211-2026-07-09-v1
+# Versão: fix-bet-route-30211-2026-07-09-v2
 set -euo pipefail
 
-VERSION="fix-bet-route-30211-2026-07-09-v1"
+VERSION="fix-bet-route-30211-2026-07-09-v2"
 CFG="/etc/easypanel/traefik/config/main.yaml"
 LOG="/var/log/fix-bet-route-30211.log"
 BETS_PUB="bet.waba.info"
@@ -22,7 +22,7 @@ log() { printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$LOG"; }
 http_code() { curl -sS -o /dev/null -w "%{http_code}" --max-time 12 "$@" 2>/dev/null || echo "000"; }
 
 body_marker() {
-  curl -sS --max-time 12 "$@" 2>/dev/null | head -c 4000 || true
+  curl -sS --max-time 12 "$@" 2>/dev/null | tr -d '\0' | head -c 5000 || true
 }
 
 log "=== $VERSION ==="
@@ -166,12 +166,27 @@ for sk in (bets_svc, "waba-bets-pv-0"):
 for old in (
     "http://tasks.waba_bets_pv:3000/",
     "http://waba_bets_pv:3000/",
-    "http://172.17.0.1:30210/",
     "http://127.0.0.1:30211/",
 ):
-    if old in text and old != bets_url:
-        text = text.replace(old, bets_url)
-        print(f"replace global {old}")
+    m = re.search(rf'"{re.escape(bets_svc)}"\s*:\s*\{{[\s\S]*?\n      \}}', text)
+    if m and old in m.group(0):
+        nb = m.group(0).replace(old, bets_url)
+        text = text[: m.start()] + nb + text[m.end() :]
+        print(f"replace in {bets_svc}: {old}")
+
+# passHostHeader obrigatório no service bets
+m = re.search(rf'"{re.escape(bets_svc)}"\s*:\s*\{{[\s\S]*?\n      \}}', text)
+if m:
+    blk = m.group(0)
+    if "passHostHeader" not in blk:
+        nb = blk.replace('"loadBalancer": {', '"loadBalancer": {\n          "passHostHeader": true,', 1)
+        text = text[: m.start()] + nb + text[m.end() :]
+        print("passHostHeader true em waba_bets_pv-0")
+    else:
+        nb = re.sub(r'"passHostHeader"\s*:\s*false', '"passHostHeader": true', blk)
+        if nb != blk:
+            text = text[: m.start()] + nb + text[m.end() :]
+            print("passHostHeader corrigido")
 
 # --- 5) Criar blocos se não existir router HTTPS com bet ---
 has_https = bool(
@@ -236,12 +251,16 @@ bet_code=$(http_code --resolve "${BETS_PUB}:443:127.0.0.1" "https://${BETS_PUB}/
 bet_body=$(body_marker --resolve "${BETS_PUB}:443:127.0.0.1" "https://${BETS_PUB}/")
 log "HTTPS bet.waba.info -> $bet_code"
 
-if echo "$bet_body" | grep -qi "Bet Waba\|drax-bets\|segmento de Bets"; then
-  log "SUCESSO: landing Bets no ar"
+if [[ "$bet_code" =~ ^(200|301|302|304)$ ]] && echo "$bet_body" | grep -qi "Bet Waba\|drax-bets\|segmento de Bets"; then
+  log "SUCESSO: bet HTTP ${bet_code} + landing Bets"
   exit 0
 fi
 
-if echo "$bet_body" | grep -qi "DRAX WABA.*Page not found\|Page not found"; then
+if echo "$bet_body" | grep -qi "Bet Waba\|drax-bets\|segmento de Bets"; then
+  log "AVISO: corpo Bets mas HTTP ${bet_code} — app pode precisar redeploy"
+fi
+
+if echo "$bet_body" | grep -qi "Page not found"; then
   log "FALHA: ainda cai no app paginadevendas (backend errado no Traefik)"
   log "Cole no chat:"
   grep -n "bet\.waba\|bets_pv\|paginadevendas" "$CFG" | head -30 | tee -a "$LOG"
