@@ -92,6 +92,8 @@ export type WabaCampaignIntake = {
   supplierPayoutSettlementId?: string;
   /** Chave idempotente do cliente (evita duplicar campanha em retry/timeout). */
   clientRequestId?: string;
+  /** Hash leve do envio (nome, DDD, envios, API, tamanhos) — dedupe de duplo clique. */
+  submissionFingerprint?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -178,6 +180,26 @@ export class WabaCampaignIntakeRepository {
           String(item.clientRequestId || "").trim() === requestId,
       ) ?? null
     );
+  }
+
+  findRecentByOwnerAndSubmissionFingerprint(
+    ownerEmail: string,
+    submissionFingerprint: string,
+    withinMs: number,
+  ): WabaCampaignIntake | null {
+    const email = ownerEmail.trim().toLowerCase();
+    const fingerprint = String(submissionFingerprint ?? "").trim();
+    if (!email || !fingerprint) return null;
+    const cutoff = Date.now() - Math.max(30_000, withinMs);
+    const matches = readStore()
+      .intakes.filter((item) => {
+        if (item.ownerEmail !== email) return false;
+        if (String(item.submissionFingerprint || "").trim() !== fingerprint) return false;
+        const createdMs = new Date(item.createdAt).getTime();
+        return Number.isFinite(createdMs) && createdMs >= cutoff;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return matches[0] ?? null;
   }
 
   updateById(id: string, patch: Partial<WabaCampaignIntake>): WabaCampaignIntake | null {

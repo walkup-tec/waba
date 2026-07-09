@@ -34737,7 +34737,7 @@
         return true;
       }
 
-      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 3;
+      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 4;
       let wabaCampaignIntakeBackendCache = null;
 
       function isCampaignIntakeGatewayStatus(status) {
@@ -35223,27 +35223,30 @@
           showToast("Aguarde, a campanha já está sendo enviada…", "warning", 3200);
           return;
         }
-        clearDisCampaignWizardLeadsCountError();
-        try {
-          await ensureDisCampaignWizardArtifacts();
-        } catch {
-          showDisCampaignWizardSubmitError("Não foi possível ler os arquivos da campanha.", 5);
-          return;
+        disCampaignWizardSubmitInFlight = true;
+        if (!disCampaignWizardSubmitRequestId) {
+          disCampaignWizardSubmitRequestId = createDisCampaignWizardClientRequestId();
         }
-        if (!(await validateDisCampaignWizardForSubmit())) return;
-
-        disCampaignWizardSubmitRequestId = createDisCampaignWizardClientRequestId();
 
         const generateBtn = document.getElementById("dis-wizard-generate-btn");
-        disCampaignWizardSubmitInFlight = true;
-        stopDisparosCampaignsPolling();
         if (generateBtn) {
           generateBtn.disabled = true;
           generateBtn.textContent = "Enviando…";
         }
+        stopDisparosCampaignsPolling();
 
         let submitResponse = null;
+        let submitSucceeded = false;
         try {
+          clearDisCampaignWizardLeadsCountError();
+          try {
+            await ensureDisCampaignWizardArtifacts();
+          } catch {
+            showDisCampaignWizardSubmitError("Não foi possível ler os arquivos da campanha.", 5);
+            return;
+          }
+          if (!(await validateDisCampaignWizardForSubmit())) return;
+
           if (generateBtn) generateBtn.textContent = "Verificando servidor…";
           await assertCampaignIntakeBackendReady();
           if (generateBtn) generateBtn.textContent = "Enviando…";
@@ -35292,6 +35295,7 @@
           if (payload.deduplicated) {
             showToast("Campanha já estava registrada (sem duplicata).", "info", 5200);
           }
+          submitSucceeded = true;
           showDisCampaignWizardSuccess(successMessage);
           const notify = payload?.operacionalNotify;
           const notifySent = Array.isArray(notify?.recipients)
@@ -35314,7 +35318,9 @@
           showToast(message, "error", 5200);
         } finally {
           disCampaignWizardSubmitInFlight = false;
-        disCampaignWizardSubmitRequestId = "";
+          if (submitSucceeded) {
+            disCampaignWizardSubmitRequestId = "";
+          }
           if (activeTab === "disparos" || activeTab === "disparo-evo") {
             startDisparosCampaignsPolling();
           }

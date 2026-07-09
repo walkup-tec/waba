@@ -20,6 +20,7 @@ const waba_campaign_supplier_assignment_service_1 = require("../services/waba-ca
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
+const waba_campaign_intake_idempotency_1 = require("./waba-campaign-intake-idempotency");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
@@ -136,6 +137,19 @@ const parseClientRequestId = (body) => {
     if (!/^[a-zA-Z0-9:_-]+$/.test(raw))
         return "";
     return raw;
+};
+const findDuplicateCampaignIntake = (ownerEmail, clientRequestId, submissionFingerprint, withinMs) => {
+    if (clientRequestId) {
+        const byRequestId = intakeRepository.findByOwnerAndClientRequestId(ownerEmail, clientRequestId);
+        if (byRequestId)
+            return byRequestId;
+    }
+    if (submissionFingerprint) {
+        const byFingerprint = intakeRepository.findRecentByOwnerAndSubmissionFingerprint(ownerEmail, submissionFingerprint, withinMs);
+        if (byFingerprint)
+            return byFingerprint;
+    }
+    return null;
 };
 const buildIntakeSuccessPayload = (intake, options = {}) => {
     const plannedSendCount = Math.max(0, Math.round(Number(intake.plannedSendCount ?? 0)));
@@ -269,12 +283,6 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             }
             const body = req.body;
             const clientRequestId = parseClientRequestId(body);
-            if (clientRequestId) {
-                const existing = intakeRepository.findByOwnerAndClientRequestId(auth.email, clientRequestId);
-                if (existing) {
-                    return res.status(200).json(buildIntakeSuccessPayload(existing, { deduplicated: true }));
-                }
-            }
             const campaignName = String(body.campaignName ?? "").trim();
             const regionDdd = normalizeDdd(String(body.regionDdd ?? ""));
             const textOptions = parseTextOptions(body);
@@ -327,14 +335,18 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             if (plannedSendError) {
                 return res.status(400).json({ error: plannedSendError });
             }
-            const now = new Date().toISOString();
-            const intakeId = (0, node_crypto_1.randomUUID)();
-            const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
-            const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
-            const imageStoredPath = node_path_1.default.join(storageDir, `campaign-image${imageExt}`);
-            const spreadsheetStoredPath = node_path_1.default.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
-            const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
-            const spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
+            const submissionFingerprint = (0, waba_campaign_intake_idempotency_1.buildCampaignIntakeSubmissionFingerprint)({
+                campaignName,
+                regionDdd,
+                plannedSendCount,
+                apiKind,
+                imageByteLength: imageFile.buffer.length,
+                spreadsheetByteLength: spreadsheetFile.buffer.length,
+            });
+            const duplicateWindowMs = (0, waba_campaign_intake_idempotency_1.resolveCampaignIntakeDuplicateWindowMs)();
+            const submissionLockKey = clientRequestId
+                ? `${auth.email}:${clientRequestId}`
+                : `${auth.email}:fp:${submissionFingerprint}`;
             let trimmedSpreadsheetBuffer;
             try {
                 trimmedSpreadsheetBuffer = (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(spreadsheetFile.buffer, plannedSendCount);
@@ -342,44 +354,71 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             catch {
                 return res.status(400).json({ error: "Não foi possível preparar a planilha para envio." });
             }
-            try {
-                (0, node_fs_1.writeFileSync)(imageStoredPath, imageFile.buffer);
-                (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetFile.buffer);
-                (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
-            }
-            catch {
-                return res.status(500).json({
-                    error: "Não foi possível gravar os arquivos da campanha no servidor. Tente novamente.",
+            const intakeResult = await (0, waba_campaign_intake_idempotency_1.withCampaignIntakeSubmissionLock)(submissionLockKey, async () => {
+                const duplicate = findDuplicateCampaignIntake(auth.email, clientRequestId, submissionFingerprint, duplicateWindowMs);
+                if (duplicate) {
+                    return { deduplicated: true, intake: duplicate };
+                }
+                const now = new Date().toISOString();
+                const intakeId = (0, node_crypto_1.randomUUID)();
+                const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
+                const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
+                const imageStoredPath = node_path_1.default.join(storageDir, `campaign-image${imageExt}`);
+                const spreadsheetStoredPath = node_path_1.default.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
+                const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
+                const spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
+                try {
+                    (0, node_fs_1.writeFileSync)(imageStoredPath, imageFile.buffer);
+                    (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetFile.buffer);
+                    (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+                }
+                catch {
+                    throw Object.assign(new Error("Não foi possível gravar os arquivos da campanha no servidor. Tente novamente."), {
+                        statusCode: 500,
+                    });
+                }
+                const intake = intakeRepository.create({
+                    id: intakeId,
+                    ownerEmail: auth.email,
+                    campaignName,
+                    regionDdd,
+                    textOptions,
+                    responseLink,
+                    imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
+                    imageStoredPath,
+                    spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
+                    spreadsheetStoredPath,
+                    spreadsheetTrimmedPath,
+                    spreadsheetTrimmedFileName,
+                    importedLineCount,
+                    plannedSendCount,
+                    apiKind,
+                    status: "generated",
+                    clientRequestId: clientRequestId || undefined,
+                    submissionFingerprint,
+                    createdAt: now,
+                    updatedAt: now,
                 });
-            }
-            let intake = intakeRepository.create({
-                id: intakeId,
-                ownerEmail: auth.email,
-                campaignName,
-                regionDdd,
-                textOptions,
-                responseLink,
-                imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
-                imageStoredPath,
-                spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
-                spreadsheetStoredPath,
-                spreadsheetTrimmedPath,
-                spreadsheetTrimmedFileName,
-                importedLineCount,
-                plannedSendCount,
-                apiKind,
-                status: "generated",
-                clientRequestId: clientRequestId || undefined,
-                createdAt: now,
-                updatedAt: now,
+                if (!isMaster && plannedSendCount > 0) {
+                    disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+                }
+                const finalized = await finalizeIntakeAfterCreate(intake);
+                return { deduplicated: false, intake: finalized };
             });
-            if (!isMaster && plannedSendCount > 0) {
-                disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+            if (intakeResult.deduplicated) {
+                console.info(`[disparos/campanhas/intake] dedupe ${auth.email} ` +
+                    `(clientRequestId=${clientRequestId || "-"}, intake=${intakeResult.intake.id}).`);
+                return res
+                    .status(200)
+                    .json(buildIntakeSuccessPayload(intakeResult.intake, { deduplicated: true }));
             }
-            intake = await finalizeIntakeAfterCreate(intake);
-            return res.status(201).json(buildIntakeSuccessPayload(intake));
+            return res.status(201).json(buildIntakeSuccessPayload(intakeResult.intake));
         }
         catch (error) {
+            const statusCode = Number(error?.statusCode || 0);
+            if (statusCode >= 400 && statusCode < 600) {
+                return res.status(statusCode).json({ error: error.message });
+            }
             console.error("[disparos/campanhas/intake] erro:", error);
             return res.status(500).json({
                 error: "Erro interno ao processar a campanha. Tente novamente em instantes.",

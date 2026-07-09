@@ -34,6 +34,11 @@ import {
   normalizeCampaignIntakeStatus,
   toCampaignIntakeDisplayStatus,
 } from "./waba-campaign-intake-status";
+import {
+  buildCampaignIntakeSubmissionFingerprint,
+  resolveCampaignIntakeDuplicateWindowMs,
+  withCampaignIntakeSubmissionLock,
+} from "./waba-campaign-intake-idempotency";
 
 const intakeRepository = new WabaCampaignIntakeRepository();
 const disparosCreditsService = new WabaDisparosCreditsService();
@@ -160,6 +165,27 @@ const parseClientRequestId = (body: Record<string, unknown>): string => {
   if (!raw || raw.length > 128) return "";
   if (!/^[a-zA-Z0-9:_-]+$/.test(raw)) return "";
   return raw;
+};
+
+const findDuplicateCampaignIntake = (
+  ownerEmail: string,
+  clientRequestId: string,
+  submissionFingerprint: string,
+  withinMs: number,
+): WabaCampaignIntake | null => {
+  if (clientRequestId) {
+    const byRequestId = intakeRepository.findByOwnerAndClientRequestId(ownerEmail, clientRequestId);
+    if (byRequestId) return byRequestId;
+  }
+  if (submissionFingerprint) {
+    const byFingerprint = intakeRepository.findRecentByOwnerAndSubmissionFingerprint(
+      ownerEmail,
+      submissionFingerprint,
+      withinMs,
+    );
+    if (byFingerprint) return byFingerprint;
+  }
+  return null;
 };
 
 const buildIntakeSuccessPayload = (
@@ -315,12 +341,6 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
 
       const body = req.body as Record<string, unknown>;
       const clientRequestId = parseClientRequestId(body);
-      if (clientRequestId) {
-        const existing = intakeRepository.findByOwnerAndClientRequestId(auth.email, clientRequestId);
-        if (existing) {
-          return res.status(200).json(buildIntakeSuccessPayload(existing, { deduplicated: true }));
-        }
-      }
 
       const campaignName = String(body.campaignName ?? "").trim();
       const regionDdd = normalizeDdd(String(body.regionDdd ?? ""));
@@ -390,14 +410,19 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         return res.status(400).json({ error: plannedSendError });
       }
 
-      const now = new Date().toISOString();
-      const intakeId = randomUUID();
-      const storageDir = resolveCampaignIntakeStorageDir(intakeId);
-      const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
-      const imageStoredPath = path.join(storageDir, `campaign-image${imageExt}`);
-      const spreadsheetStoredPath = path.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
-      const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
-      const spreadsheetTrimmedPath = path.join(storageDir, spreadsheetTrimmedFileName);
+      const submissionFingerprint = buildCampaignIntakeSubmissionFingerprint({
+        campaignName,
+        regionDdd,
+        plannedSendCount,
+        apiKind,
+        imageByteLength: imageFile.buffer.length,
+        spreadsheetByteLength: spreadsheetFile.buffer.length,
+      });
+      const duplicateWindowMs = resolveCampaignIntakeDuplicateWindowMs();
+      const submissionLockKey = clientRequestId
+        ? `${auth.email}:${clientRequestId}`
+        : `${auth.email}:fp:${submissionFingerprint}`;
+
       let trimmedSpreadsheetBuffer: Buffer;
       try {
         trimmedSpreadsheetBuffer = trimSpreadsheetBufferToRowCount(
@@ -408,46 +433,83 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
         return res.status(400).json({ error: "Não foi possível preparar a planilha para envio." });
       }
 
-      try {
-        writeFileSync(imageStoredPath, imageFile.buffer);
-        writeFileSync(spreadsheetStoredPath, spreadsheetFile.buffer);
-        writeFileSync(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
-      } catch {
-        return res.status(500).json({
-          error: "Não foi possível gravar os arquivos da campanha no servidor. Tente novamente.",
-        });
-      }
+      const intakeResult = await withCampaignIntakeSubmissionLock(submissionLockKey, async () => {
+        const duplicate = findDuplicateCampaignIntake(
+          auth.email,
+          clientRequestId,
+          submissionFingerprint,
+          duplicateWindowMs,
+        );
+        if (duplicate) {
+          return { deduplicated: true as const, intake: duplicate };
+        }
 
-      let intake = intakeRepository.create({
-        id: intakeId,
-        ownerEmail: auth.email,
-        campaignName,
-        regionDdd,
-        textOptions,
-        responseLink,
-        imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
-        imageStoredPath,
-        spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
-        spreadsheetStoredPath,
-        spreadsheetTrimmedPath,
-        spreadsheetTrimmedFileName,
-        importedLineCount,
-        plannedSendCount,
-        apiKind,
-        status: "generated",
-        clientRequestId: clientRequestId || undefined,
-        createdAt: now,
-        updatedAt: now,
+        const now = new Date().toISOString();
+        const intakeId = randomUUID();
+        const storageDir = resolveCampaignIntakeStorageDir(intakeId);
+        const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
+        const imageStoredPath = path.join(storageDir, `campaign-image${imageExt}`);
+        const spreadsheetStoredPath = path.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
+        const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
+        const spreadsheetTrimmedPath = path.join(storageDir, spreadsheetTrimmedFileName);
+
+        try {
+          writeFileSync(imageStoredPath, imageFile.buffer);
+          writeFileSync(spreadsheetStoredPath, spreadsheetFile.buffer);
+          writeFileSync(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
+        } catch {
+          throw Object.assign(new Error("Não foi possível gravar os arquivos da campanha no servidor. Tente novamente."), {
+            statusCode: 500,
+          });
+        }
+
+        const intake = intakeRepository.create({
+          id: intakeId,
+          ownerEmail: auth.email,
+          campaignName,
+          regionDdd,
+          textOptions,
+          responseLink,
+          imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
+          imageStoredPath,
+          spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
+          spreadsheetStoredPath,
+          spreadsheetTrimmedPath,
+          spreadsheetTrimmedFileName,
+          importedLineCount,
+          plannedSendCount,
+          apiKind,
+          status: "generated",
+          clientRequestId: clientRequestId || undefined,
+          submissionFingerprint,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        if (!isMaster && plannedSendCount > 0) {
+          disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+        }
+
+        const finalized = await finalizeIntakeAfterCreate(intake);
+        return { deduplicated: false as const, intake: finalized };
       });
 
-      if (!isMaster && plannedSendCount > 0) {
-        disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+      if (intakeResult.deduplicated) {
+        console.info(
+          `[disparos/campanhas/intake] dedupe ${auth.email} ` +
+            `(clientRequestId=${clientRequestId || "-"}, intake=${intakeResult.intake.id}).`,
+        );
+        return res
+          .status(200)
+          .json(buildIntakeSuccessPayload(intakeResult.intake, { deduplicated: true }));
       }
 
-      intake = await finalizeIntakeAfterCreate(intake);
-
-      return res.status(201).json(buildIntakeSuccessPayload(intake));
+      return res.status(201).json(buildIntakeSuccessPayload(intakeResult.intake));
     } catch (error) {
+      const statusCode = Number((error as { statusCode?: number })?.statusCode || 0);
+      if (statusCode >= 400 && statusCode < 600) {
+        return res.status(statusCode).json({ error: (error as Error).message });
+      }
       console.error("[disparos/campanhas/intake] erro:", error);
       return res.status(500).json({
         error: "Erro interno ao processar a campanha. Tente novamente em instantes.",

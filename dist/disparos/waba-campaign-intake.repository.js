@@ -71,6 +71,24 @@ class WabaCampaignIntakeRepository {
         return (readStore().intakes.find((item) => item.ownerEmail === email &&
             String(item.clientRequestId || "").trim() === requestId) ?? null);
     }
+    findRecentByOwnerAndSubmissionFingerprint(ownerEmail, submissionFingerprint, withinMs) {
+        const email = ownerEmail.trim().toLowerCase();
+        const fingerprint = String(submissionFingerprint ?? "").trim();
+        if (!email || !fingerprint)
+            return null;
+        const cutoff = Date.now() - Math.max(30000, withinMs);
+        const matches = readStore()
+            .intakes.filter((item) => {
+            if (item.ownerEmail !== email)
+                return false;
+            if (String(item.submissionFingerprint || "").trim() !== fingerprint)
+                return false;
+            const createdMs = new Date(item.createdAt).getTime();
+            return Number.isFinite(createdMs) && createdMs >= cutoff;
+        })
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return matches[0] ?? null;
+    }
     updateById(id, patch) {
         const normalized = String(id ?? "").trim();
         if (!normalized)

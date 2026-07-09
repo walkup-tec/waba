@@ -27,7 +27,9 @@ Como usar:
 
 **WABA — Deploy fornecedores produção (2026-07-09):** build `dist/` + marker `DEPLOY-2026-07-09-financeiro-fornecedores-producao`. Src já em `bfbda1d`. Redeploy Easypanel `waba_disparador`. Ver `doc/LOG-2026-07-09__022000__deploy-financeiro-fornecedores-producao.md`.
 
-**WABA — Grant 100 créditos obotmoney produção (pendente execução SSH/redeploy):** assinante Bets `obotmoney@gmail.com` (Teste Landing 03). Script `grant-disparos-credits-production.cjs`, promote billing-only, workflow `Grant Disparos Credits (SSH)`. Saldo ainda 0 até rodar workflow ou Easypanel shell. Ver `doc/LOG-2026-07-09__014500__grant-100-creditos-obotmoney-producao.md`.
+**WABA — Grant 1000 créditos obotmoney produção (2026-07-09):** +1000 envios API Oficial via `grant-disparos-credits-production.cjs`; saldo **1100** contratados. Pedido `7d8d203f-9528-4773-9b63-b7db41e07ed2`. Ver `doc/LOG-2026-07-09__063200__grant-1000-creditos-obotmoney-producao.md`.
+
+**WABA — Grant 100 créditos obotmoney produção (2026-07-09, substituído):** ver LOG `014500`; saldo acumulado no grant de 1000.
 
 **WABA — Bets ocultar saldo API Alternativa (2026-07-09):** Resumo Saldos e hub créditos sem bloco Alternativa para segmento Bets. Log `doc/LOG-2026-07-09__013500__bets-ocultar-saldo-api-alternativa.md`.
 
