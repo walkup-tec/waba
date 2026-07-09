@@ -5928,6 +5928,67 @@
         margin-top: 14px;
       }
 
+      .admin-campanhas-detail-sections {
+        display: grid;
+        gap: 14px;
+        margin-top: 12px;
+      }
+
+      .admin-campanhas-detail-section {
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(148, 163, 184, 0.05);
+      }
+
+      .admin-campanhas-detail-section-title {
+        margin: 0 0 12px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted, #64748b);
+      }
+
+      .admin-campanhas-detail-section-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 18px;
+      }
+
+      .admin-campanhas-detail-section-stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      @media (max-width: 560px) {
+        .admin-campanhas-detail-section-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .admin-campanhas-detail-downloads {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .admin-campanhas-detail-downloads .instance-action-btn {
+        min-width: 0;
+      }
+
+      .admin-campanhas-detail-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(148, 163, 184, 0.16);
+      }
+
       .admin-campanhas-detail-row {
         display: grid;
         gap: 4px;
@@ -6708,6 +6769,10 @@
         max-width: 720px;
         max-height: min(88vh, 900px);
         overflow: auto;
+      }
+
+      #admin-campanhas-detail-materials-section {
+        margin-top: 14px;
       }
 
       /* Admin: centralizar painel na área útil (à direita da sidebar) */
@@ -19329,25 +19394,49 @@
     </div>
 
     <div id="admin-campanhas-detail-overlay" class="confirm-overlay" aria-hidden="true">
-      <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="admin-campanhas-detail-title">
+      <div
+        class="confirm-modal admin-campanhas-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-campanhas-detail-title"
+      >
         <div class="confirm-title" id="admin-campanhas-detail-title">Detalhes da campanha</div>
         <p class="confirm-text" id="admin-campanhas-detail-subtitle"></p>
-        <div id="admin-campanhas-detail-body" class="admin-campanhas-detail-grid"></div>
-        <div class="admin-campanhas-downloads">
-          <button
-            id="admin-campanhas-download-image"
-            class="instance-action-btn btn-qrcode enabled"
-            type="button"
-          >
-            Baixar imagem
-          </button>
-          <button
-            id="admin-campanhas-download-spreadsheet"
-            class="instance-action-btn btn-refresh enabled"
-            type="button"
-          >
-            Baixar leads (planilha)
-          </button>
+        <div id="admin-campanhas-detail-body" class="admin-campanhas-detail-sections"></div>
+
+        <section class="admin-campanhas-detail-section" id="admin-campanhas-detail-materials-section">
+          <h3 class="admin-campanhas-detail-section-title">Materiais da campanha</h3>
+          <div id="admin-campanhas-detail-materials-body" class="admin-campanhas-detail-section-stack"></div>
+          <div class="admin-campanhas-detail-downloads">
+            <button
+              id="admin-campanhas-download-image"
+              class="instance-action-btn btn-qrcode enabled"
+              type="button"
+            >
+              Baixar imagem
+            </button>
+            <button
+              id="admin-campanhas-download-spreadsheet"
+              class="instance-action-btn btn-refresh enabled"
+              type="button"
+            >
+              Baixar leads (planilha)
+            </button>
+          </div>
+        </section>
+
+        <div id="admin-campanhas-error-report-block" class="admin-campanhas-error-report-block" hidden>
+          <label for="admin-campanhas-error-report-text">Justificativa do erro</label>
+          <textarea
+            id="admin-campanhas-error-report-text"
+            class="admin-chamados-detail-response"
+            rows="4"
+            placeholder="Descreva o motivo pelo qual a campanha não pôde ser configurada…"
+          ></textarea>
+        </div>
+        <p id="admin-campanhas-detail-action-error" class="admin-campanhas-detail-action-error" hidden role="alert"></p>
+
+        <div class="admin-campanhas-detail-actions">
           <button
             id="admin-campanhas-bm-inoperante-btn"
             class="instance-action-btn btn-bm-inoperante enabled"
@@ -19365,16 +19454,7 @@
             Reportar Erro
           </button>
         </div>
-        <div id="admin-campanhas-error-report-block" class="admin-campanhas-error-report-block" hidden>
-          <label for="admin-campanhas-error-report-text">Justificativa do erro</label>
-          <textarea
-            id="admin-campanhas-error-report-text"
-            class="admin-chamados-detail-response"
-            rows="4"
-            placeholder="Descreva o motivo pelo qual a campanha não pôde ser configurada…"
-          ></textarea>
-        </div>
-        <p id="admin-campanhas-detail-action-error" class="admin-campanhas-detail-action-error" hidden role="alert"></p>
+
         <div class="confirm-actions">
           <button
             id="admin-campanhas-start-btn"
@@ -30120,14 +30200,27 @@
         `;
       }
 
+      function renderAdminCampanhasDetailSection(title, rowsHtml, layout = "grid") {
+        const bodyClass =
+          layout === "stack" ? "admin-campanhas-detail-section-stack" : "admin-campanhas-detail-section-grid";
+        return `
+          <section class="admin-campanhas-detail-section">
+            <h3 class="admin-campanhas-detail-section-title">${escapeAdminHtml(title)}</h3>
+            <div class="${bodyClass}">${rowsHtml}</div>
+          </section>
+        `;
+      }
+
       function openAdminCampanhasDetailModal(campaign) {
         const overlay = document.getElementById("admin-campanhas-detail-overlay");
         const subtitle = document.getElementById("admin-campanhas-detail-subtitle");
         const body = document.getElementById("admin-campanhas-detail-body");
+        const materialsBody = document.getElementById("admin-campanhas-detail-materials-body");
         if (!overlay || !body || !campaign?.id) return;
 
+        const campaignName = String(campaign.campaignName || "Campanha").trim() || "Campanha";
         if (subtitle) {
-          subtitle.textContent = `${campaign.campaignName || "Campanha"} · assinante ${campaign.subscriberId || "—"}`;
+          subtitle.textContent = campaignName;
         }
 
         const textOptions = Array.isArray(campaign.textOptions) ? campaign.textOptions : [];
@@ -30156,21 +30249,11 @@
           </div>
         `;
 
-        body.innerHTML = [
-          renderAdminCampanhasDetailField("ID do assinante", `<code>${escapeAdminHtml(campaign.subscriberId || "—")}</code>`),
-          renderAdminCampanhasDetailField("Segmento", escapeAdminHtml(campaign.subscriberSegmentLabel || "Outros")),
-          renderAdminCampanhasDetailField("Nome da campanha", escapeAdminHtml(campaign.campaignName || "—")),
-          renderAdminCampanhasDetailField("DDD da região", escapeAdminHtml(campaign.regionDdd || "—")),
-          renderAdminCampanhasDetailField("Envios registrados", escapeAdminHtml(String(campaign.plannedSendCount ?? 0))),
-          renderAdminCampanhasDetailField("Status", renderAdminCampanhasStatusBadge(campaign.status, campaign.displayStatus)),
-          renderAdminCampanhasDetailField("Criada em", escapeAdminHtml(campaign.createdAtLabel || "—")),
-          renderAdminCampanhasDetailField("Atualizada em", escapeAdminHtml(campaign.updatedAtLabel || "—")),
-          renderAdminCampanhasDetailField("Opções de texto", textOptionsHtml),
-          renderAdminCampanhasDetailField("Link de resposta", (() => {
-            const responseLink = String(campaign.responseLink || "").trim();
-            adminCampanhasDetailResponseLink = responseLink;
-            if (!responseLink) return '<span class="muted">—</span>';
-            return `
+        const responseLink = String(campaign.responseLink || "").trim();
+        adminCampanhasDetailResponseLink = responseLink;
+        const responseLinkHtml = !responseLink
+          ? '<span class="muted">—</span>'
+          : `
               <div class="admin-campanhas-text-option">
                 <div class="admin-campanhas-text-option-content">
                   <a href="${escapeAdminHtml(responseLink)}" target="_blank" rel="noopener noreferrer">${escapeAdminHtml(responseLink)}</a>
@@ -30184,7 +30267,53 @@
                 </button>
               </div>
             `;
-          })()),
+
+        if (materialsBody) {
+          materialsBody.innerHTML = [
+            renderAdminCampanhasDetailField("Opções de texto", textOptionsHtml),
+            renderAdminCampanhasDetailField("Link de resposta", responseLinkHtml),
+          ].join("");
+        }
+
+        body.innerHTML = [
+          renderAdminCampanhasDetailSection(
+            "Assinante",
+            [
+              renderAdminCampanhasDetailField(
+                "ID do assinante",
+                `<code>${escapeAdminHtml(campaign.subscriberId || "—")}</code>`
+              ),
+              renderAdminCampanhasDetailField(
+                "Segmento",
+                escapeAdminHtml(campaign.subscriberSegmentLabel || "Outros")
+              ),
+            ].join("")
+          ),
+          renderAdminCampanhasDetailSection(
+            "Campanha",
+            [
+              renderAdminCampanhasDetailField("Nome da campanha", escapeAdminHtml(campaignName)),
+              renderAdminCampanhasDetailField("DDD da região", escapeAdminHtml(campaign.regionDdd || "—")),
+              renderAdminCampanhasDetailField(
+                "Envios registrados",
+                escapeAdminHtml(String(campaign.plannedSendCount ?? 0))
+              ),
+              renderAdminCampanhasDetailField(
+                "Status",
+                renderAdminCampanhasStatusBadge(campaign.status, campaign.displayStatus)
+              ),
+            ].join("")
+          ),
+          renderAdminCampanhasDetailSection(
+            "Registro",
+            [
+              renderAdminCampanhasDetailField("Criada em", escapeAdminHtml(campaign.createdAtLabel || "—")),
+              renderAdminCampanhasDetailField(
+                "Atualizada em",
+                escapeAdminHtml(campaign.updatedAtLabel || "—")
+              ),
+            ].join("")
+          ),
         ].join("");
 
         adminCampanhasDetailCampaignId = String(campaign.id || "");
@@ -31185,7 +31314,7 @@
           }
         });
 
-        document.getElementById("admin-campanhas-detail-body")?.addEventListener("click", (event) => {
+        document.getElementById("admin-campanhas-detail-materials-body")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
           const copyBtn = target.closest(".admin-campanhas-copy-btn");
