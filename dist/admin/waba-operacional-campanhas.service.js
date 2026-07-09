@@ -15,6 +15,7 @@ const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
+const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
 const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segment");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
@@ -134,7 +135,7 @@ class WabaOperacionalCampanhasService {
             return true;
         if (filter === "unassigned")
             return false;
-        return this.resolveSubscriberSegmentForIntake(intake) === filter;
+        return (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(this.resolveSubscriberSegmentForIntake(intake), filter);
     }
     matchesStaffCampaignFilter(intake, staff) {
         if (!this.matchesStaffApiFilter(intake, staff))

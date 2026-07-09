@@ -21,7 +21,8 @@ Como usar:
 ## Última atualização
 2026-07-09
 
-**WABA — Modal campanha botões inline (2026-07-09):** footer único no detalhe Admin Campanhas; modal ~920px. Marker `DEPLOY-2026-07-09-modal-campanha-botoes-inline`. Ver `doc/LOG-2026-07-09__104700__modal-campanha-botoes-inline.md`.
+**WABA — Fila campanha segmento Bets×Outros (2026-07-09):** operador Bets atende Bets+Outros; operador Outros só Outros; escalonamento Outros→Bets permitido, inverso não. Marker `DEPLOY-2026-07-09-fila-campanha-segmento-bets-outros`. Ver `doc/LOG-2026-07-09__110300__fila-campanha-segmento-bets-outros.md`.
+ footer único no detalhe Admin Campanhas; modal ~920px. Marker `DEPLOY-2026-07-09-modal-campanha-botoes-inline`. Ver `doc/LOG-2026-07-09__104700__modal-campanha-botoes-inline.md`.
 
 **WABA — paginadevendas 30210 + Traefik flapping (2026-07-09):** overlay `waba_paginadevendas:3000` unreachable no Traefik; serviço sem porta publicada (`null`). Fix: `publish-add 30210→3000` + backends `172.17.0.1:30210`. Log `doc/LOG-2026-07-09__101900__emergency-traefik-443-wabadisparos-login.md`.
 

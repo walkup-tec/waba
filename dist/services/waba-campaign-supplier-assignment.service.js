@@ -8,11 +8,11 @@ const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-int
 const waba_push_delivery_service_1 = require("../push/waba-push-delivery.service");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_campaign_operacional_segment_rules_1 = require("./waba-campaign-operacional-segment-rules");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 exports.CAMPAIGN_START_OVERDUE_MS = 24 * 60 * 60 * 1000;
 exports.CAMPAIGN_REASSIGN_DEADLINE_MS = 30 * 60 * 60 * 1000;
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
-const toOperacionalSegment = (segment) => segment === "bets" ? "bets" : "outros";
 class WabaCampaignSupplierAssignmentService {
     constructor(intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository(), subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), systemUserService = new waba_system_user_service_1.WabaSystemUserService(), splitService = new waba_financeiro_split_service_1.WabaFinanceiroSplitService()) {
         this.intakeRepository = intakeRepository;
@@ -29,8 +29,14 @@ class WabaCampaignSupplierAssignmentService {
     }
     listCandidateSuppliers(intake) {
         const apiKind = this.resolveIntakeApiKind(intake);
-        const segment = toOperacionalSegment(this.resolveSubscriberSegmentForIntake(intake));
-        return this.splitService.listActiveSuppliersForPlanSegment(apiKind, segment);
+        const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+        if (subscriberSegment === "bets") {
+            return this.splitService.listActiveSuppliersForPlanSegment(apiKind, "bets");
+        }
+        // Assinante Outros: fila primária (fornecedores Outros) + escalonamento para operadores Bets.
+        const outrosSuppliers = this.splitService.listActiveSuppliersForPlanSegment(apiKind, "outros");
+        const betsSuppliers = this.splitService.listActiveSuppliersForPlanSegment(apiKind, "bets");
+        return [...outrosSuppliers, ...betsSuppliers];
     }
     listTriedOperacionalEmails(intake) {
         const tried = new Set();
@@ -55,11 +61,12 @@ class WabaCampaignSupplierAssignmentService {
             if (!operacional || operacional.role !== "operacional")
                 continue;
             const apiKind = this.resolveIntakeApiKind(intake);
-            const segment = toOperacionalSegment(this.resolveSubscriberSegmentForIntake(intake));
+            const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
             if (operacional.operacionalDispatchesApi !== apiKind)
                 continue;
-            if ((operacional.operacionalSegment ?? "outros") !== segment)
+            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional.operacionalSegment)) {
                 continue;
+            }
             return supplier;
         }
         return null;
@@ -78,6 +85,13 @@ class WabaCampaignSupplierAssignmentService {
             throw new Error("Fornecedor sem usuário operacional vinculado.");
         }
         const operacional = this.systemUserService.getByEmail(operacionalEmail);
+        if (!operacional || operacional.role !== "operacional") {
+            throw new Error("Fornecedor sem usuário operacional válido.");
+        }
+        const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional.operacionalSegment)) {
+            throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+        }
         const name = String(operacional?.fullName || supplier.name || operacionalEmail).trim();
         const now = new Date().toISOString();
         const history = [...(intake.assignmentHistory ?? [])];

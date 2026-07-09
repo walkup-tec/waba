@@ -13,7 +13,9 @@ import { publishSystemAlertForMasters } from "../push/waba-push-delivery.service
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
-import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
+import {
+  operacionalCanServeSubscriberCampaign,
+} from "./waba-campaign-operacional-segment-rules";
 import { notifyOperacionalStaffOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
 
 export const CAMPAIGN_START_OVERDUE_MS = 24 * 60 * 60 * 1000;
@@ -22,9 +24,6 @@ export const CAMPAIGN_REASSIGN_DEADLINE_MS = 30 * 60 * 60 * 1000;
 export type CampaignAssignmentReason = WabaCampaignAssignmentHistoryEntry["reason"];
 
 const normalizeEmail = (value: string): string => String(value || "").trim().toLowerCase();
-
-const toOperacionalSegment = (segment: WabaSubscriberSegment): WabaSystemUserOperacionalSegment =>
-  segment === "bets" ? "bets" : "outros";
 
 export class WabaCampaignSupplierAssignmentService {
   constructor(
@@ -45,8 +44,16 @@ export class WabaCampaignSupplierAssignmentService {
 
   listCandidateSuppliers(intake: WabaCampaignIntake): SplitSupplier[] {
     const apiKind = this.resolveIntakeApiKind(intake);
-    const segment = toOperacionalSegment(this.resolveSubscriberSegmentForIntake(intake));
-    return this.splitService.listActiveSuppliersForPlanSegment(apiKind, segment);
+    const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+
+    if (subscriberSegment === "bets") {
+      return this.splitService.listActiveSuppliersForPlanSegment(apiKind, "bets");
+    }
+
+    // Assinante Outros: fila primária (fornecedores Outros) + escalonamento para operadores Bets.
+    const outrosSuppliers = this.splitService.listActiveSuppliersForPlanSegment(apiKind, "outros");
+    const betsSuppliers = this.splitService.listActiveSuppliersForPlanSegment(apiKind, "bets");
+    return [...outrosSuppliers, ...betsSuppliers];
   }
 
   private listTriedOperacionalEmails(intake: WabaCampaignIntake): Set<string> {
@@ -69,9 +76,11 @@ export class WabaCampaignSupplierAssignmentService {
       const operacional = this.systemUserService.getByEmail(email);
       if (!operacional || operacional.role !== "operacional") continue;
       const apiKind = this.resolveIntakeApiKind(intake);
-      const segment = toOperacionalSegment(this.resolveSubscriberSegmentForIntake(intake));
+      const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
       if (operacional.operacionalDispatchesApi !== apiKind) continue;
-      if ((operacional.operacionalSegment ?? "outros") !== segment) continue;
+      if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+        continue;
+      }
       return supplier;
     }
     return null;
@@ -99,6 +108,13 @@ export class WabaCampaignSupplierAssignmentService {
       throw new Error("Fornecedor sem usuário operacional vinculado.");
     }
     const operacional = this.systemUserService.getByEmail(operacionalEmail);
+    if (!operacional || operacional.role !== "operacional") {
+      throw new Error("Fornecedor sem usuário operacional válido.");
+    }
+    const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+      throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+    }
     const name = String(operacional?.fullName || supplier.name || operacionalEmail).trim();
     const now = new Date().toISOString();
     const history = [...(intake.assignmentHistory ?? [])];

@@ -18,6 +18,7 @@ import {
   WABA_DISPATCHES_API_LABELS,
   type WabaDispatchesApiKind,
 } from "../disparos/waba-dispatches-api-kind";
+import { operacionalCanServeSubscriberCampaign } from "../services/waba-campaign-operacional-segment-rules";
 import {
   WabaSystemUserRepository,
   type WabaSystemUserOperacionalSegment,
@@ -304,7 +305,7 @@ export class WabaSystemUserService {
         (user) =>
           user.role === "operacional" &&
           user.operacionalDispatchesApi === apiKind &&
-          (user.operacionalSegment ?? "outros") === subscriberSegment,
+          operacionalCanServeSubscriberCampaign(subscriberSegment, user.operacionalSegment),
       )
       .map((user) => ({
         ...user,

@@ -11,6 +11,7 @@ const phone_1 = require("../billing/phone");
 const waba_menu_permissions_service_1 = require("../menus/waba-menu-permissions.service");
 const waba_menu_registry_1 = require("../menus/waba-menu-registry");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
+const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
 const waba_system_user_repository_1 = require("./waba-system-user.repository");
 const waba_master_disparos_policy_service_1 = require("./waba-master-disparos-policy.service");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
@@ -219,7 +220,7 @@ class WabaSystemUserService {
             .map((user) => this.ensureUserMigrated(user))
             .filter((user) => user.role === "operacional" &&
             user.operacionalDispatchesApi === apiKind &&
-            (user.operacionalSegment ?? "outros") === subscriberSegment)
+            (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, user.operacionalSegment))
             .map((user) => ({
             ...user,
             email: user.email.trim().toLowerCase(),

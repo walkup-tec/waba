@@ -27,6 +27,7 @@ import {
 } from "../disparos/waba-campaign-intake-status";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
+import { operacionalCanServeSubscriberCampaign } from "../services/waba-campaign-operacional-segment-rules";
 import { WABA_SUBSCRIBER_SEGMENT_LABELS } from "../subscribers/waba-subscriber-segment";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { notifyCampaignCompletedEmail, notifyCampaignErrorReportedEmail } from "../mail/waba-mail-delivery";
@@ -246,7 +247,10 @@ export class WabaOperacionalCampanhasService {
     const filter = this.resolveStaffSegmentFilter(staff);
     if (filter === null) return true;
     if (filter === "unassigned") return false;
-    return this.resolveSubscriberSegmentForIntake(intake) === filter;
+    return operacionalCanServeSubscriberCampaign(
+      this.resolveSubscriberSegmentForIntake(intake),
+      filter,
+    );
   }
 
   private matchesStaffCampaignFilter(
