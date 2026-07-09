@@ -274,8 +274,50 @@ export type OperacionalNewCampaignTemplateInput = {
   subscriberId: string;
   plannedSendCount: number;
   createdAtLabel: string;
+  /** ISO da criação — usado no WhatsApp (dd/mm/aaaa). */
+  createdAtIso?: string;
+  /** Nome do operacional atribuído à campanha (texto do WhatsApp). */
+  assignedOperacionalName?: string;
   apiKindLabel: string;
   campaignUrl: string;
+};
+
+const formatCampaignSendCountLabel = (count: number): string => {
+  const plannedSendCount = Math.max(0, Math.round(Number(count) || 0));
+  if (plannedSendCount >= 1000) {
+    const thousands = plannedSendCount / 1000;
+    const formatted =
+      thousands % 1 === 0
+        ? String(thousands)
+        : thousands.toLocaleString("pt-BR", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 1,
+          });
+    return `${formatted} mil envios`;
+  }
+  return `${plannedSendCount} envios`;
+};
+
+const formatCampaignCreatedDateLabel = (input: {
+  createdAtIso?: string;
+  createdAtLabel?: string;
+}): string => {
+  const iso = String(input.createdAtIso || "").trim();
+  if (iso) {
+    const date = new Date(iso);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    }
+  }
+  const label = String(input.createdAtLabel || "").trim();
+  if (!label) return "—";
+  const datePart = label.split(",")[0]?.trim();
+  return datePart || label;
 };
 
 export const buildOperacionalNewCampaignTemplate = (input: OperacionalNewCampaignTemplateInput) => {
@@ -326,34 +368,12 @@ export const buildOperacionalNewCampaignTemplate = (input: OperacionalNewCampaig
 export const buildOperacionalNewCampaignWhatsAppText = (
   input: OperacionalNewCampaignTemplateInput,
 ): string => {
-  const recipient = resolveRecipientLabel(input.recipientName, input.recipientEmail);
-  const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
-  const subscriberId = String(input.subscriberId || "").trim() || "—";
-  const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
-  const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
-  const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
-  const slaHours = OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+  const sendCountLabel = formatCampaignSendCountLabel(input.plannedSendCount);
+  const dateLabel = formatCampaignCreatedDateLabel(input);
+  const operacionalName =
+    String(input.assignedOperacionalName || input.recipientName || "").trim() || "Operacional";
 
-  return [
-    `Olá, ${recipient}!`,
-    "",
-    `Uma nova campanha foi gerada no plano ${apiKindLabel} e está aguardando sua configuração no painel operacional.`,
-    "",
-    "Resumo da campanha:",
-    `- Data de criação: ${createdAtLabel}`,
-    `- ID do assinante: ${subscriberId}`,
-    `- Nome da campanha: ${campaignName}`,
-    `- Envios registrados: ${plannedSendCount}`,
-    `- Plano de atendimento: ${apiKindLabel}`,
-    "",
-    `Por gentileza, acesse seu painel operador e inicie a configuração desta campanha. O prazo para atendimento é de até ${slaHours} horas a partir da criação.`,
-    "",
-    "Acesse seu painel operador.",
-    "",
-    `Este aviso foi enviado somente para operacionais designados ao plano ${apiKindLabel}. Obrigado pelo cuidado com cada entrega!`,
-    "",
-    "Equipe Drax Sistemas",
-  ].join("\n");
+  return `Nova campanha gerada na plataforma da Drax. ${sendCountLabel} - ${dateLabel} - ${operacionalName}`;
 };
 
 export const buildCampaignErrorReportedTemplate = (input: CampaignErrorReportedTemplateInput) => {

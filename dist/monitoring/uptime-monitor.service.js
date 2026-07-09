@@ -12,19 +12,14 @@ exports.getUptimeMonitorStatus = getUptimeMonitorStatus;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const waba_mail_service_1 = require("../mail/waba-mail.service");
+const waba_evolution_whatsapp_delivery_service_1 = require("../mail/waba-evolution-whatsapp-delivery.service");
 const data_path_1 = require("../data-path");
-const evo_text_alert_client_1 = require("./evo-text-alert.client");
-const evo_connection_state_service_1 = require("../instances/evo-connection-state.service");
-const waba_push_community_service_1 = require("../push/waba-push-community.service");
 const asaas_integration_health_service_1 = require("./asaas-integration-health.service");
 const STATE_FILE = (0, data_path_1.resolveDataFile)("uptime-monitor-state.json");
 const DEFAULT_INTERVAL_MINUTES = 15;
 const DEFAULT_REALERT_MINUTES = 60;
 const DEFAULT_HTTP_TIMEOUT_MS = 15000;
 const DEFAULT_HTTP_ATTEMPTS = 3;
-const DEFAULT_PRIMARY_PHONE = "51981077770";
-/** Mesma regra de boas-vindas/operacional: 51981077770 → 5197462102 (NÃO 51997462102). */
-const DEFAULT_FALLBACK_PHONE = "5197462102";
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
 const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
 let monitorRunning = false;
@@ -71,8 +66,7 @@ const resolveHttpTimeoutMs = () => {
     const raw = Number(process.env.WABA_UPTIME_MONITOR_HTTP_TIMEOUT_MS ?? DEFAULT_HTTP_TIMEOUT_MS);
     return Number.isFinite(raw) && raw >= 3000 ? Math.round(raw) : DEFAULT_HTTP_TIMEOUT_MS;
 };
-const resolvePrimaryPhone = () => String(process.env.WABA_UPTIME_MONITOR_PRIMARY_PHONE ?? DEFAULT_PRIMARY_PHONE).trim();
-const resolveFallbackPhone = () => String(process.env.WABA_UPTIME_MONITOR_FALLBACK_PHONE ?? DEFAULT_FALLBACK_PHONE).trim();
+const resolveWhatsappInstanceSequenceLabel = () => waba_evolution_whatsapp_delivery_service_1.DEFAULT_WABA_WHATSAPP_PHONE_HINTS.join(" → ");
 const resolveAlertWhatsapp = () => String(process.env.WABA_UPTIME_MONITOR_ALERT_WHATSAPP ?? DEFAULT_ALERT_WHATSAPP).trim();
 const resolveAlertEmail = () => String(process.env.WABA_UPTIME_MONITOR_ALERT_EMAIL ?? DEFAULT_ALERT_EMAIL).trim().toLowerCase();
 const resolveUptimeTargets = () => {
@@ -185,39 +179,6 @@ async function writeMonitorState(state) {
     await fs_1.promises.writeFile(tmp, JSON.stringify(state, null, 2), "utf-8");
     await fs_1.promises.rename(tmp, STATE_FILE);
 }
-/**
- * Resolve a instância Evolution conectada para envio do alerta.
- * Preferência: telefone primário (51981077770); se não conectado, telefone fallback (5197462102).
- */
-async function resolveAlertInstanceName() {
-    const primaryPhone = resolvePrimaryPhone();
-    const fallbackPhone = resolveFallbackPhone();
-    const tryPhone = async (phone) => {
-        if (!phone)
-            return null;
-        const name = await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(phone);
-        if (!name)
-            return null;
-        const state = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
-        return (0, evo_connection_state_service_1.isEvoLiveStateOpen)(state) ? name : null;
-    };
-    const primary = await tryPhone(primaryPhone);
-    if (primary) {
-        return { instance: primary, connected: true, detail: `instância ${primary} (primária ${primaryPhone})` };
-    }
-    const fallback = await tryPhone(fallbackPhone);
-    if (fallback) {
-        return { instance: fallback, connected: true, detail: `instância ${fallback} (fallback ${fallbackPhone})` };
-    }
-    const lastResort = (await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(primaryPhone)) ||
-        (await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(fallbackPhone)) ||
-        primaryPhone;
-    return {
-        instance: lastResort,
-        connected: false,
-        detail: `nenhuma instância confirmada conectada — tentando ${lastResort}`,
-    };
-}
 const buildWhatsappMessage = (down, recovered) => {
     const lines = [];
     if (down.length) {
@@ -250,12 +211,16 @@ const buildEmailHtml = (down, recovered) => {
   `.trim();
 };
 async function deliverAlerts(down, recovered) {
-    const resolved = await resolveAlertInstanceName();
-    const whatsapp = await (0, evo_text_alert_client_1.sendEvoTextAlert)({
-        instanceName: resolved.instance,
-        targetNumber: resolveAlertWhatsapp(),
+    const sequenceLabel = resolveWhatsappInstanceSequenceLabel();
+    const delivery = await (0, waba_evolution_whatsapp_delivery_service_1.deliverWabaEvolutionWhatsApp)({
+        targetWhatsapp: resolveAlertWhatsapp(),
         text: buildWhatsappMessage(down, recovered),
+        logLabel: "uptime monitor",
     });
+    const whatsapp = {
+        ok: delivery.status === "sent",
+        detail: delivery.message,
+    };
     let email = { ok: false, detail: "E-mail não tentado." };
     const emailTo = resolveAlertEmail();
     if (!emailTo.includes("@")) {
@@ -269,25 +234,32 @@ async function deliverAlerts(down, recovered) {
             const subject = down.length
                 ? `URGENTE: WABA — ${down.length} serviço(s) fora do ar`
                 : "WABA — serviços recuperados";
-            const delivery = await waba_mail_service_1.wabaMailService.send({
+            const mailDelivery = await waba_mail_service_1.wabaMailService.send({
                 to: emailTo,
                 subject,
                 html: buildEmailHtml(down, recovered),
                 text: buildWhatsappMessage(down, recovered),
             });
-            email = { ok: true, detail: delivery.messageId || "E-mail enviado." };
+            email = { ok: true, detail: mailDelivery.messageId || "E-mail enviado." };
         }
         catch (error) {
             email = { ok: false, detail: error instanceof Error ? error.message : "Falha ao enviar e-mail." };
         }
     }
-    console.warn(`[uptime-monitor] alerta enviado via ${resolved.detail} | whatsapp=${whatsapp.ok} email=${email.ok}`);
+    const instanceDetail = delivery.instanceName
+        ? `instância ${delivery.instanceName} (${sequenceLabel})`
+        : `sequência ${sequenceLabel}`;
+    console.warn(`[uptime-monitor] alerta enviado via ${instanceDetail} | whatsapp=${whatsapp.ok} email=${email.ok}`);
     if (!whatsapp.ok)
         console.warn("[uptime-monitor] whatsapp falhou:", whatsapp.detail);
     if (!email.ok)
         console.warn("[uptime-monitor] email falhou:", email.detail);
     return {
-        instance: { name: resolved.instance, connected: resolved.connected, detail: resolved.detail },
+        instance: {
+            name: delivery.instanceName || sequenceLabel,
+            connected: delivery.status === "sent",
+            detail: instanceDetail,
+        },
         whatsapp,
         email,
     };
@@ -397,7 +369,7 @@ function startUptimeMonitorScheduler() {
     }
     const intervalMs = (0, exports.resolveUptimeIntervalMs)();
     const targets = (0, exports.resolveUptimeTargets)();
-    console.log(`[uptime-monitor] ativo — ${targets.length} alvo(s) a cada ${Math.round(intervalMs / 60000)}min | alerta → WhatsApp ${resolveAlertWhatsapp()} (instância ${resolvePrimaryPhone()}/${resolveFallbackPhone()}) + ${resolveAlertEmail()}`);
+    console.log(`[uptime-monitor] ativo — ${targets.length} alvo(s) a cada ${Math.round(intervalMs / 60000)}min | alerta → WhatsApp ${resolveAlertWhatsapp()} (instância ${resolveWhatsappInstanceSequenceLabel()}) + ${resolveAlertEmail()}`);
     void monitorTick().catch((error) => {
         console.error("[uptime-monitor] bootstrap:", error);
     });
@@ -443,8 +415,8 @@ async function getUptimeMonitorStatus() {
         targets: (0, exports.resolveUptimeTargets)(),
         alertWhatsapp: resolveAlertWhatsapp(),
         alertEmail: resolveAlertEmail(),
-        primaryPhone: resolvePrimaryPhone(),
-        fallbackPhone: resolveFallbackPhone(),
+        primaryPhone: waba_evolution_whatsapp_delivery_service_1.DEFAULT_WABA_WHATSAPP_PHONE_HINTS[0],
+        fallbackPhone: `${waba_evolution_whatsapp_delivery_service_1.DEFAULT_WABA_WHATSAPP_PHONE_HINTS[1]} → ${waba_evolution_whatsapp_delivery_service_1.DEFAULT_WABA_WHATSAPP_PHONE_HINTS[2]}`,
         state,
     };
 }

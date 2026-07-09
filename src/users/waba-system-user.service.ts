@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { formatBrazilPhoneDigits } from "../billing/phone";
 import {
   buildAllMenusEnabled,
@@ -270,6 +271,25 @@ export class WabaSystemUserService {
     const user = this.getUserWithMigration(email);
     if (!user || user.role !== "operacional") return null;
     return user.operacionalSegment ?? "outros";
+  }
+
+  /** Masters com WhatsApp para alertas de campanha (role master ou e-mail master legado). */
+  listMasterUsers(): WabaSystemUser[] {
+    const seen = new Set<string>();
+    const out: WabaSystemUser[] = [];
+    for (const user of this.repository.list().map((item) => this.ensureUserMigrated(item))) {
+      const email = String(user.email || "").trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      if (user.role !== "master" && !isWabaMasterEmail(email)) continue;
+      seen.add(email);
+      out.push({
+        ...user,
+        email,
+        fullName: String(user.fullName || "").trim() || email,
+        whatsapp: String(user.whatsapp ?? "").trim(),
+      });
+    }
+    return out;
   }
 
   /** Operacionais designados para atender campanhas de um plano e segmento de assinante. */

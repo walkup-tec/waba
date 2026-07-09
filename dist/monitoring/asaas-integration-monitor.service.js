@@ -10,13 +10,12 @@ exports.startAsaasIntegrationMonitorScheduler = startAsaasIntegrationMonitorSche
 exports.getAsaasIntegrationMonitorStatus = getAsaasIntegrationMonitorStatus;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
+const waba_evolution_whatsapp_delivery_service_1 = require("../mail/waba-evolution-whatsapp-delivery.service");
 const waba_mail_service_1 = require("../mail/waba-mail.service");
 const data_path_1 = require("../data-path");
 const asaas_integration_health_service_1 = require("./asaas-integration-health.service");
-const evo_text_alert_client_1 = require("./evo-text-alert.client");
 const STATE_FILE = (0, data_path_1.resolveDataFile)("asaas-integration-monitor-state.json");
 const DEFAULT_MONITOR_SLOTS = "08:00,20:00";
-const DEFAULT_ALERT_INSTANCE = "5197462102";
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
 const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
 const URGENT_WHATSAPP_MESSAGE = "URGENTE: ASAAS\nÉ necessário dar atenção para a integração asaas.";
@@ -54,7 +53,7 @@ const resolveAsaasMonitorSlots = () => {
     return slots.length ? Array.from(new Set(slots)) : DEFAULT_MONITOR_SLOTS.split(",");
 };
 exports.resolveAsaasMonitorSlots = resolveAsaasMonitorSlots;
-const resolveAlertInstance = () => String(process.env.WABA_ASAAS_MONITOR_ALERT_INSTANCE ?? DEFAULT_ALERT_INSTANCE).trim();
+const resolveWhatsappInstanceSequenceLabel = () => waba_evolution_whatsapp_delivery_service_1.DEFAULT_WABA_WHATSAPP_PHONE_HINTS.join(" → ");
 const resolveAlertWhatsapp = () => String(process.env.WABA_ASAAS_MONITOR_ALERT_WHATSAPP ?? DEFAULT_ALERT_WHATSAPP).trim();
 const resolveAlertEmail = () => String(process.env.WABA_ASAAS_MONITOR_ALERT_EMAIL ?? DEFAULT_ALERT_EMAIL).trim().toLowerCase();
 const nowInSaoPauloParts = (date = new Date()) => {
@@ -100,11 +99,15 @@ const buildEmailHtml = (report) => {
   `.trim();
 };
 async function deliverAsaasIntegrationAlerts(report) {
-    const whatsappResult = await (0, evo_text_alert_client_1.sendEvoTextAlert)({
-        instanceName: resolveAlertInstance(),
-        targetNumber: resolveAlertWhatsapp(),
+    const delivery = await (0, waba_evolution_whatsapp_delivery_service_1.deliverWabaEvolutionWhatsApp)({
+        targetWhatsapp: resolveAlertWhatsapp(),
         text: URGENT_WHATSAPP_MESSAGE,
+        logLabel: "asaas monitor",
     });
+    const whatsappResult = {
+        ok: delivery.status === "sent",
+        detail: delivery.message,
+    };
     let emailResult = { ok: false, detail: "E-mail não tentado." };
     const email = resolveAlertEmail();
     if (!email.includes("@")) {
@@ -233,7 +236,7 @@ function startAsaasIntegrationMonitorScheduler() {
         return;
     }
     const slots = (0, exports.resolveAsaasMonitorSlots)();
-    console.log(`[asaas-monitor] verificações diárias às ${slots.join(" e ")} (America/Sao_Paulo) | instância ${resolveAlertInstance()} → WhatsApp ${resolveAlertWhatsapp()} / ${resolveAlertEmail()}`);
+    console.log(`[asaas-monitor] verificações diárias às ${slots.join(" e ")} (America/Sao_Paulo) | instância ${resolveWhatsappInstanceSequenceLabel()} → WhatsApp ${resolveAlertWhatsapp()} / ${resolveAlertEmail()}`);
     void monitorTick().catch((error) => {
         console.error("[asaas-monitor] bootstrap:", error);
     });
@@ -247,7 +250,7 @@ async function getAsaasIntegrationMonitorStatus() {
     return {
         enabled: (0, exports.isAsaasIntegrationMonitorEnabled)(),
         slots: (0, exports.resolveAsaasMonitorSlots)(),
-        alertInstance: resolveAlertInstance(),
+        alertInstance: resolveWhatsappInstanceSequenceLabel(),
         alertWhatsapp: resolveAlertWhatsapp(),
         alertEmail: resolveAlertEmail(),
         state,

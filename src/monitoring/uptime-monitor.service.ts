@@ -1,13 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { wabaMailService } from "../mail/waba-mail.service";
+import { deliverWabaEvolutionWhatsApp, DEFAULT_WABA_WHATSAPP_PHONE_HINTS } from "../mail/waba-evolution-whatsapp-delivery.service";
 import { resolveDataFile } from "../data-path";
-import { sendEvoTextAlert } from "./evo-text-alert.client";
-import {
-  fetchEvoInstanceLiveState,
-  isEvoLiveStateOpen,
-} from "../instances/evo-connection-state.service";
-import { resolveConnectedEvoInstanceByPhoneHint } from "../push/waba-push-community.service";
 import { evaluateAsaasIntegrationHealth } from "./asaas-integration-health.service";
 
 const STATE_FILE = resolveDataFile("uptime-monitor-state.json");
@@ -17,9 +12,6 @@ const DEFAULT_REALERT_MINUTES = 60;
 const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_HTTP_ATTEMPTS = 3;
 
-const DEFAULT_PRIMARY_PHONE = "51981077770";
-/** Mesma regra de boas-vindas/operacional: 51981077770 → 5197462102 (NÃO 51997462102). */
-const DEFAULT_FALLBACK_PHONE = "5197462102";
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
 const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
 
@@ -98,11 +90,8 @@ const resolveHttpTimeoutMs = (): number => {
   return Number.isFinite(raw) && raw >= 3_000 ? Math.round(raw) : DEFAULT_HTTP_TIMEOUT_MS;
 };
 
-const resolvePrimaryPhone = (): string =>
-  String(process.env.WABA_UPTIME_MONITOR_PRIMARY_PHONE ?? DEFAULT_PRIMARY_PHONE).trim();
-
-const resolveFallbackPhone = (): string =>
-  String(process.env.WABA_UPTIME_MONITOR_FALLBACK_PHONE ?? DEFAULT_FALLBACK_PHONE).trim();
+const resolveWhatsappInstanceSequenceLabel = (): string =>
+  DEFAULT_WABA_WHATSAPP_PHONE_HINTS.join(" → ");
 
 const resolveAlertWhatsapp = (): string =>
   String(process.env.WABA_UPTIME_MONITOR_ALERT_WHATSAPP ?? DEFAULT_ALERT_WHATSAPP).trim();
@@ -231,47 +220,6 @@ async function writeMonitorState(state: UptimeMonitorState): Promise<void> {
   await fs.rename(tmp, STATE_FILE);
 }
 
-/**
- * Resolve a instância Evolution conectada para envio do alerta.
- * Preferência: telefone primário (51981077770); se não conectado, telefone fallback (5197462102).
- */
-async function resolveAlertInstanceName(): Promise<{
-  instance: string;
-  connected: boolean;
-  detail: string;
-}> {
-  const primaryPhone = resolvePrimaryPhone();
-  const fallbackPhone = resolveFallbackPhone();
-
-  const tryPhone = async (phone: string): Promise<string | null> => {
-    if (!phone) return null;
-    const name = await resolveConnectedEvoInstanceByPhoneHint(phone);
-    if (!name) return null;
-    const state = await fetchEvoInstanceLiveState(name, { fresh: true });
-    return isEvoLiveStateOpen(state) ? name : null;
-  };
-
-  const primary = await tryPhone(primaryPhone);
-  if (primary) {
-    return { instance: primary, connected: true, detail: `instância ${primary} (primária ${primaryPhone})` };
-  }
-
-  const fallback = await tryPhone(fallbackPhone);
-  if (fallback) {
-    return { instance: fallback, connected: true, detail: `instância ${fallback} (fallback ${fallbackPhone})` };
-  }
-
-  const lastResort =
-    (await resolveConnectedEvoInstanceByPhoneHint(primaryPhone)) ||
-    (await resolveConnectedEvoInstanceByPhoneHint(fallbackPhone)) ||
-    primaryPhone;
-  return {
-    instance: lastResort,
-    connected: false,
-    detail: `nenhuma instância confirmada conectada — tentando ${lastResort}`,
-  };
-}
-
 const buildWhatsappMessage = (down: UptimeCheckResult[], recovered: UptimeCheckResult[]): string => {
   const lines: string[] = [];
   if (down.length) {
@@ -312,13 +260,16 @@ async function deliverAlerts(
   whatsapp: { ok: boolean; detail: string };
   email: { ok: boolean; detail: string };
 }> {
-  const resolved = await resolveAlertInstanceName();
-
-  const whatsapp = await sendEvoTextAlert({
-    instanceName: resolved.instance,
-    targetNumber: resolveAlertWhatsapp(),
+  const sequenceLabel = resolveWhatsappInstanceSequenceLabel();
+  const delivery = await deliverWabaEvolutionWhatsApp({
+    targetWhatsapp: resolveAlertWhatsapp(),
     text: buildWhatsappMessage(down, recovered),
+    logLabel: "uptime monitor",
   });
+  const whatsapp = {
+    ok: delivery.status === "sent",
+    detail: delivery.message,
+  };
 
   let email: { ok: boolean; detail: string } = { ok: false, detail: "E-mail não tentado." };
   const emailTo = resolveAlertEmail();
@@ -331,26 +282,35 @@ async function deliverAlerts(
       const subject = down.length
         ? `URGENTE: WABA — ${down.length} serviço(s) fora do ar`
         : "WABA — serviços recuperados";
-      const delivery = await wabaMailService.send({
+      const mailDelivery = await wabaMailService.send({
         to: emailTo,
         subject,
         html: buildEmailHtml(down, recovered),
         text: buildWhatsappMessage(down, recovered),
       });
-      email = { ok: true, detail: delivery.messageId || "E-mail enviado." };
+      email = { ok: true, detail: mailDelivery.messageId || "E-mail enviado." };
     } catch (error) {
       email = { ok: false, detail: error instanceof Error ? error.message : "Falha ao enviar e-mail." };
     }
   }
 
+  const instanceDetail =
+    delivery.instanceName
+      ? `instância ${delivery.instanceName} (${sequenceLabel})`
+      : `sequência ${sequenceLabel}`;
+
   console.warn(
-    `[uptime-monitor] alerta enviado via ${resolved.detail} | whatsapp=${whatsapp.ok} email=${email.ok}`,
+    `[uptime-monitor] alerta enviado via ${instanceDetail} | whatsapp=${whatsapp.ok} email=${email.ok}`,
   );
   if (!whatsapp.ok) console.warn("[uptime-monitor] whatsapp falhou:", whatsapp.detail);
   if (!email.ok) console.warn("[uptime-monitor] email falhou:", email.detail);
 
   return {
-    instance: { name: resolved.instance, connected: resolved.connected, detail: resolved.detail },
+    instance: {
+      name: delivery.instanceName || sequenceLabel,
+      connected: delivery.status === "sent",
+      detail: instanceDetail,
+    },
     whatsapp,
     email,
   };
@@ -483,7 +443,7 @@ export function startUptimeMonitorScheduler(): void {
   const intervalMs = resolveUptimeIntervalMs();
   const targets = resolveUptimeTargets();
   console.log(
-    `[uptime-monitor] ativo — ${targets.length} alvo(s) a cada ${Math.round(intervalMs / 60_000)}min | alerta → WhatsApp ${resolveAlertWhatsapp()} (instância ${resolvePrimaryPhone()}/${resolveFallbackPhone()}) + ${resolveAlertEmail()}`,
+    `[uptime-monitor] ativo — ${targets.length} alvo(s) a cada ${Math.round(intervalMs / 60_000)}min | alerta → WhatsApp ${resolveAlertWhatsapp()} (instância ${resolveWhatsappInstanceSequenceLabel()}) + ${resolveAlertEmail()}`,
   );
 
   void monitorTick().catch((error) => {
@@ -555,8 +515,8 @@ export async function getUptimeMonitorStatus(): Promise<{
     targets: resolveUptimeTargets(),
     alertWhatsapp: resolveAlertWhatsapp(),
     alertEmail: resolveAlertEmail(),
-    primaryPhone: resolvePrimaryPhone(),
-    fallbackPhone: resolveFallbackPhone(),
+    primaryPhone: DEFAULT_WABA_WHATSAPP_PHONE_HINTS[0],
+    fallbackPhone: `${DEFAULT_WABA_WHATSAPP_PHONE_HINTS[1]} → ${DEFAULT_WABA_WHATSAPP_PHONE_HINTS[2]}`,
     state,
   };
 }

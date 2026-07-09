@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getStaffRoleLabel = exports.isStaffRole = exports.WabaSystemUserService = void 0;
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const node_crypto_2 = require("node:crypto");
+const waba_auth_service_1 = require("../auth/waba-auth.service");
 const phone_1 = require("../billing/phone");
 const waba_menu_permissions_service_1 = require("../menus/waba-menu-permissions.service");
 const waba_menu_registry_1 = require("../menus/waba-menu-registry");
@@ -190,6 +191,26 @@ class WabaSystemUserService {
         if (!user || user.role !== "operacional")
             return null;
         return user.operacionalSegment ?? "outros";
+    }
+    /** Masters com WhatsApp para alertas de campanha (role master ou e-mail master legado). */
+    listMasterUsers() {
+        const seen = new Set();
+        const out = [];
+        for (const user of this.repository.list().map((item) => this.ensureUserMigrated(item))) {
+            const email = String(user.email || "").trim().toLowerCase();
+            if (!email || seen.has(email))
+                continue;
+            if (user.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(email))
+                continue;
+            seen.add(email);
+            out.push({
+                ...user,
+                email,
+                fullName: String(user.fullName || "").trim() || email,
+                whatsapp: String(user.whatsapp ?? "").trim(),
+            });
+        }
+        return out;
     }
     /** Operacionais designados para atender campanhas de um plano e segmento de assinante. */
     listOperacionalUsersForCampaign(apiKind, subscriberSegment) {

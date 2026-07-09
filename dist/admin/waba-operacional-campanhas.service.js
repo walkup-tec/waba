@@ -464,7 +464,7 @@ class WabaOperacionalCampanhasService {
         });
         const anySent = result.recipients.some((item) => item.status === "sent");
         if (!result.recipients.length) {
-            throw new Error(`Nenhum operacional designado para ${result.apiKindLabel}. Ajuste em Admin · Usuários.`);
+            throw new Error("Campanha sem operacional atribuído ou sem destinatários para notificar. Verifique a atribuição da campanha.");
         }
         if (!anySent) {
             throw new Error(result.recipients.map((item) => `${item.email}: ${item.message}`).join(" | ") ||

@@ -6,6 +6,7 @@ import {
 import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
+import type { WabaSystemUser } from "../users/waba-system-user.repository";
 import {
   deliverOperacionalNewCampaignEmail,
   type WabaEmailDeliveryStatus,
@@ -13,7 +14,10 @@ import {
 import { deliverOperacionalNewCampaignWhatsApp } from "./waba-operacional-campaign-whatsapp.service";
 import type { WabaWhatsAppDeliveryStatus } from "./waba-welcome-whatsapp.service";
 
+export type OperacionalNotifyRecipientRole = "operacional" | "master";
+
 export type OperacionalNotifyRecipientResult = {
+  role: OperacionalNotifyRecipientRole;
   email: string;
   fullName: string;
   status: WabaEmailDeliveryStatus;
@@ -59,7 +63,24 @@ const resolvePlannedSendCount = (intake: WabaCampaignIntake): number => {
 const resolveApiKind = (intake: WabaCampaignIntake): WabaDispatchesApiKind =>
   resolveIntakeApiKindFromIntake(intake);
 
-export const notifyOperacionalStaffOnCampaignAssigned = async (
+const buildSkippedRecipient = (input: {
+  role: OperacionalNotifyRecipientRole;
+  user: Pick<WabaSystemUser, "email" | "fullName" | "whatsapp">;
+  message: string;
+}): OperacionalNotifyRecipientResult => ({
+  role: input.role,
+  email: String(input.user.email || "").trim().toLowerCase(),
+  fullName: String(input.user.fullName || "").trim(),
+  status: "skipped",
+  message: input.message,
+  emailStatus: "skipped",
+  emailMessage: input.role === "master" ? "E-mail não enviado para master." : input.message,
+  whatsapp: String(input.user.whatsapp ?? "").trim(),
+  whatsappStatus: "skipped",
+  whatsappMessage: input.message,
+});
+
+const notifyAssignedOperacionalAndMasters = async (
   intake: WabaCampaignIntake,
 ): Promise<OperacionalNotifyResult> => {
   const attemptedAt = new Date().toISOString();
@@ -68,10 +89,19 @@ export const notifyOperacionalStaffOnCampaignAssigned = async (
   const assignedEmail = String(intake.assignedOperacionalEmail || "").trim().toLowerCase();
 
   if (!assignedEmail) {
-    return notifyOperacionalStaffOnCampaignCreated(intake);
+    console.warn(
+      `[mail] campanha ${intake.id}: sem operacional atribuído — notificação de campanha ignorada.`,
+    );
+    return {
+      attemptedAt,
+      apiKind,
+      apiKindLabel,
+      recipients: [],
+    };
   }
 
-  const operacional = new WabaSystemUserService().getByEmail(assignedEmail);
+  const userService = new WabaSystemUserService();
+  const operacional = userService.getByEmail(assignedEmail);
   if (!operacional || operacional.role !== "operacional") {
     console.warn(`[mail] campanha ${intake.id}: operacional atribuído inválido (${assignedEmail}).`);
     return {
@@ -86,6 +116,21 @@ export const notifyOperacionalStaffOnCampaignAssigned = async (
   const subscriberId = String(subscriber?.id ?? "").trim() || "—";
   const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
   const plannedSendCount = resolvePlannedSendCount(intake);
+  const assignedOperacionalName = String(operacional.fullName || "").trim() || assignedEmail;
+
+  const templateBase = {
+    campaignId: intake.id,
+    campaignName: intake.campaignName,
+    subscriberId,
+    plannedSendCount,
+    createdAtLabel,
+    createdAtIso: intake.createdAt,
+    assignedOperacionalName,
+    apiKindLabel,
+    campaignUrl: "",
+  };
+
+  const recipients: OperacionalNotifyRecipientResult[] = [];
 
   const emailDelivery = await deliverOperacionalNewCampaignEmail({
     operacionalEmail: operacional.email,
@@ -97,144 +142,82 @@ export const notifyOperacionalStaffOnCampaignAssigned = async (
     createdAtLabel,
     apiKindLabel,
   });
-  const whatsappDelivery = await deliverOperacionalNewCampaignWhatsApp({
+  const operacionalWhatsappDelivery = await deliverOperacionalNewCampaignWhatsApp({
     recipientEmail: operacional.email,
     recipientName: operacional.fullName,
     whatsapp: String(operacional.whatsapp ?? "").trim(),
-    campaignId: intake.id,
-    campaignName: intake.campaignName,
-    subscriberId,
-    plannedSendCount,
-    createdAtLabel,
-    apiKindLabel,
-    campaignUrl: "",
+    ...templateBase,
   });
-  const aggregatedStatus: WabaEmailDeliveryStatus =
-    emailDelivery.status === "sent" || whatsappDelivery.status === "sent"
+  const operacionalAggregatedStatus: WabaEmailDeliveryStatus =
+    emailDelivery.status === "sent" || operacionalWhatsappDelivery.status === "sent"
       ? "sent"
-      : emailDelivery.status === "failed" || whatsappDelivery.status === "failed"
+      : emailDelivery.status === "failed" || operacionalWhatsappDelivery.status === "failed"
         ? "failed"
         : "skipped";
 
-  return {
-    attemptedAt,
-    apiKind,
-    apiKindLabel,
-    recipients: [
-      {
-        email: operacional.email.trim().toLowerCase(),
-        fullName: operacional.fullName,
-        status: aggregatedStatus,
-        message: [`E-mail: ${emailDelivery.message}`, `WhatsApp: ${whatsappDelivery.message}`].join(
-          " | ",
-        ),
-        messageId: emailDelivery.messageId,
-        emailStatus: emailDelivery.status,
-        emailMessage: emailDelivery.message,
-        emailMessageId: emailDelivery.messageId,
-        whatsapp: String(operacional.whatsapp ?? "").trim(),
-        whatsappStatus: whatsappDelivery.status,
-        whatsappMessage: whatsappDelivery.message,
-        whatsappInstanceName: whatsappDelivery.instanceName,
-      },
-    ],
-  };
-};
+  recipients.push({
+    role: "operacional",
+    email: operacional.email.trim().toLowerCase(),
+    fullName: operacional.fullName,
+    status: operacionalAggregatedStatus,
+    message: [
+      `E-mail: ${emailDelivery.message}`,
+      `WhatsApp: ${operacionalWhatsappDelivery.message}`,
+    ].join(" | "),
+    messageId: emailDelivery.messageId,
+    emailStatus: emailDelivery.status,
+    emailMessage: emailDelivery.message,
+    emailMessageId: emailDelivery.messageId,
+    whatsapp: String(operacional.whatsapp ?? "").trim(),
+    whatsappStatus: operacionalWhatsappDelivery.status,
+    whatsappMessage: operacionalWhatsappDelivery.message,
+    whatsappInstanceName: operacionalWhatsappDelivery.instanceName,
+  });
 
-export const notifyOperacionalStaffOnCampaignCreated = async (
-  intake: WabaCampaignIntake,
-): Promise<OperacionalNotifyResult> => {
-  if (String(intake.assignedOperacionalEmail || "").trim()) {
-    return notifyOperacionalStaffOnCampaignAssigned(intake);
-  }
-
-  const attemptedAt = new Date().toISOString();
-  const apiKind = resolveApiKind(intake);
-  const apiKindLabel = WABA_DISPATCHES_API_LABELS[apiKind];
-  const subscriber = new WabaSubscriberRepository().getByEmail(intake.ownerEmail);
-  const subscriberSegment = subscriber?.segment ?? "outros";
-  const operacionais = new WabaSystemUserService().listOperacionalUsersForCampaign(
-    apiKind,
-    subscriberSegment,
-  );
-
-  if (!operacionais.length) {
-    const message =
-      `Nenhum usuário operacional designado para ${apiKindLabel} no segmento ` +
-      `${subscriberSegment === "bets" ? "Bets" : "Outros"}. ` +
-      "Configure em Admin · Usuários o plano de atendimento e o segmento.";
-    console.warn(`[mail] campanha ${intake.id}: ${message}`);
-    return {
-      attemptedAt,
-      apiKind,
-      apiKindLabel,
-      recipients: [],
-    };
-  }
-
-  const subscriberId = String(subscriber?.id ?? "").trim() || "—";
-  const createdAtLabel = formatCreatedAtLabel(intake.createdAt);
-  const plannedSendCount = resolvePlannedSendCount(intake);
-
+  const masters = userService.listMasterUsers();
   console.log(
-    `[mail] campanha ${intake.id} (${apiKindLabel}): notificando ${operacionais.length} operacional(is): ` +
-      operacionais.map((user) => user.email).join(", "),
+    `[mail] campanha ${intake.id} (${apiKindLabel}): WhatsApp para operacional ${assignedEmail} e ${masters.length} master(s).`,
   );
 
-  const recipients: OperacionalNotifyRecipientResult[] = [];
-  for (const operacional of operacionais) {
-    const emailDelivery = await deliverOperacionalNewCampaignEmail({
-      operacionalEmail: operacional.email,
-      operacionalName: operacional.fullName,
-      campaignId: intake.id,
-      campaignName: intake.campaignName,
-      subscriberId,
-      plannedSendCount,
-      createdAtLabel,
-      apiKindLabel,
+  for (const master of masters) {
+    const masterWhatsapp = String(master.whatsapp ?? "").trim();
+    if (!masterWhatsapp.replace(/\D/g, "") || masterWhatsapp.replace(/\D/g, "").length < 10) {
+      recipients.push(
+        buildSkippedRecipient({
+          role: "master",
+          user: master,
+          message: "WhatsApp master inválido ou ausente.",
+        }),
+      );
+      continue;
+    }
+
+    const masterWhatsappDelivery = await deliverOperacionalNewCampaignWhatsApp({
+      recipientEmail: master.email,
+      recipientName: master.fullName,
+      whatsapp: masterWhatsapp,
+      ...templateBase,
     });
-    const whatsappDelivery = await deliverOperacionalNewCampaignWhatsApp({
-      recipientEmail: operacional.email,
-      recipientName: operacional.fullName,
-      whatsapp: String(operacional.whatsapp ?? "").trim(),
-      campaignId: intake.id,
-      campaignName: intake.campaignName,
-      subscriberId,
-      plannedSendCount,
-      createdAtLabel,
-      apiKindLabel,
-      campaignUrl: "",
-    });
-    const aggregatedStatus: WabaEmailDeliveryStatus =
-      emailDelivery.status === "sent" || whatsappDelivery.status === "sent"
+    const masterStatus: WabaEmailDeliveryStatus =
+      masterWhatsappDelivery.status === "sent"
         ? "sent"
-        : emailDelivery.status === "failed" || whatsappDelivery.status === "failed"
+        : masterWhatsappDelivery.status === "failed"
           ? "failed"
           : "skipped";
-    const aggregatedMessage = [
-      `E-mail: ${emailDelivery.message}`,
-      `WhatsApp: ${whatsappDelivery.message}`,
-    ].join(" | ");
 
     recipients.push({
-      email: operacional.email.trim().toLowerCase(),
-      fullName: operacional.fullName,
-      status: aggregatedStatus,
-      message: aggregatedMessage,
-      messageId: emailDelivery.messageId,
-      emailStatus: emailDelivery.status,
-      emailMessage: emailDelivery.message,
-      emailMessageId: emailDelivery.messageId,
-      whatsapp: String(operacional.whatsapp ?? "").trim(),
-      whatsappStatus: whatsappDelivery.status,
-      whatsappMessage: whatsappDelivery.message,
-      whatsappInstanceName: whatsappDelivery.instanceName,
+      role: "master",
+      email: master.email.trim().toLowerCase(),
+      fullName: master.fullName,
+      status: masterStatus,
+      message: `WhatsApp: ${masterWhatsappDelivery.message}`,
+      emailStatus: "skipped",
+      emailMessage: "E-mail não enviado para master.",
+      whatsapp: masterWhatsapp,
+      whatsappStatus: masterWhatsappDelivery.status,
+      whatsappMessage: masterWhatsappDelivery.message,
+      whatsappInstanceName: masterWhatsappDelivery.instanceName,
     });
-    if (aggregatedStatus === "skipped") {
-      console.warn(`[notify] ${operacional.email}: ${aggregatedMessage}`);
-    } else if (aggregatedStatus === "failed") {
-      console.error(`[notify] operacional nova campanha: ${operacional.email}: ${aggregatedMessage}`);
-    }
   }
 
   return {
@@ -244,3 +227,11 @@ export const notifyOperacionalStaffOnCampaignCreated = async (
     recipients,
   };
 };
+
+export const notifyOperacionalStaffOnCampaignAssigned = async (
+  intake: WabaCampaignIntake,
+): Promise<OperacionalNotifyResult> => notifyAssignedOperacionalAndMasters(intake);
+
+export const notifyOperacionalStaffOnCampaignCreated = async (
+  intake: WabaCampaignIntake,
+): Promise<OperacionalNotifyResult> => notifyAssignedOperacionalAndMasters(intake);

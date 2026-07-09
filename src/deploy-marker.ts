@@ -1,3 +1,3 @@
 /** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-09-operacional-modal-campanha-secoes-ui";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-09-campanha-whatsapp-masters-operacional";

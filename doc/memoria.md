@@ -21,6 +21,10 @@ Como usar:
 ## Última atualização
 2026-07-09
 
+**WABA — Landing pages 502 (2026-07-09):** `bet.waba.info` e `wabadisparos.com.br` fora (502/flapping); `waba.draxsistemas.com.br/health` e `draxsistemas.com.br` OK. Easypanel hosts `bets-pv` 502, `paginadevendas` 000. Causa: backends `waba_paginadevendas` / `waba_bets_pv` ou router Traefik. Fix VPS: `restore-landing-routers-vps.sh` + `traefik-permanent-all-vps.sh`. Log `doc/LOG-2026-07-09__084500__landing-pages-502-uptime-monitor.md`. Palavras-chave: `uptime-monitor`, `502 landing`, `bets_pv`, `paginadevendas`.
+
+**WABA — Campanha WhatsApp masters + operacional + sequência unificada (2026-07-09):** sem broadcast operacionais; mensagem curta com envios/data/nome operacional; masters + atribuído; módulo `deliverWabaEvolutionWhatsApp` (51981077770→51997462102→51981082477) em campanha, boas-vindas, uptime e asaas. Marker `DEPLOY-2026-07-09-campanha-whatsapp-masters-operacional`. Ver `doc/LOG-2026-07-09__084744__campanha-whatsapp-masters-operacional-sequencia.md`. Palavras-chave: `listMasterUsers`, `waba-evolution-whatsapp-delivery`.
+
 **WABA — WhatsApp operacional nova campanha 3 instâncias + retry (2026-07-09):** sequência `51981077770` → `51997462102` → `51981082477`, até 15 rodadas síncronas + retry em background até sucesso. Marker `DEPLOY-2026-07-09-operacional-campanha-whatsapp-3instancias`. Ver `doc/LOG-2026-07-09__030500__operacional-campanha-whatsapp-3instancias-retry.md`. Palavras-chave: `deliverOperacionalNewCampaignWhatsApp`, `operacionalNotify`.
 
 **WABA — BM inoperante botão vermelho estados (2026-07-09):** Processando → Registrado; fila vazia mensagem aguardar BM; `bmInoperanteRegisteredAt`. Marker `DEPLOY-2026-07-09-bm-inoperante-botao-vermelho-estados`. Ver `doc/LOG-2026-07-09__073500__bm-inoperante-botao-vermelho-estados.md`.
