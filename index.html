@@ -34745,6 +34745,36 @@
         return code === 502 || code === 503 || code === 504;
       }
 
+      function isCampaignIntakeRecoverableSubmitFailure(error, response) {
+        if (isCampaignIntakeGatewayStatus(response?.status)) return true;
+        const raw = String(error?.message || "").trim().toLowerCase();
+        return (
+          raw === "timeout" ||
+          raw === "failed to fetch" ||
+          /networkerror|load failed|econnreset|socket hang up/i.test(raw)
+        );
+      }
+
+      async function recoverDisCampaignWizardIntakeAfterFailure(timeoutMs = 60000) {
+        if (!disCampaignWizardSubmitRequestId) return null;
+        try {
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath("/disparos/campanhas/intake"),
+            {
+              method: "POST",
+              body: buildDisCampaignWizardFormData(),
+              credentials: "same-origin",
+            },
+            Math.min(90000, Math.max(30000, Number(timeoutMs || 60000)))
+          );
+          if (!response.ok) return null;
+          const payload = await response.json().catch(() => null);
+          return payload?.ok ? payload : null;
+        } catch {
+          return null;
+        }
+      }
+
       async function fetchCampaignIntakeBackendStatus(force = false) {
         if (!force && wabaCampaignIntakeBackendCache) return wabaCampaignIntakeBackendCache;
         try {
@@ -34891,7 +34921,7 @@
       function resolveDisCampaignWizardSubmitErrorMessage(error, response) {
         const status = Number(response?.status || 0);
         if (status === 502 || status === 503 || status === 504) {
-          return "Servidor temporariamente indisponível. Aguarde alguns segundos e tente novamente. Se persistir, verifique o serviço Node no painel.";
+          return "Servidor demorou para responder, mas a campanha pode ter sido criada. Verifique em Minhas campanhas antes de tentar de novo.";
         }
         const raw = String(error?.message || "").trim();
         if (!raw) return "Erro ao enviar campanha.";
@@ -35313,6 +35343,30 @@
           }
           void refreshDisparosCampaignsAndResumo();
         } catch (error) {
+          const timeoutMs = resolveDisCampaignWizardSubmitTimeoutMs();
+          if (isCampaignIntakeRecoverableSubmitFailure(error, submitResponse)) {
+            if (generateBtn) generateBtn.textContent = "Confirmando campanha…";
+            const recovered = await recoverDisCampaignWizardIntakeAfterFailure(timeoutMs);
+            if (recovered) {
+              const successMessage = [
+                recovered.importSummary || "",
+                recovered.message ||
+                  "Nosso time está trabalhando em sua campanha, em breve retornaremos com os indicadores de performance.",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              if (recovered.deduplicated) {
+                showToast("Campanha confirmada — já estava registrada.", "info", 5200);
+              } else {
+                showToast("Campanha confirmada com sucesso.", "success", 4200);
+              }
+              submitSucceeded = true;
+              showDisCampaignWizardSuccess(successMessage);
+              void refreshDisparosCampaignsAndResumo();
+              return;
+            }
+            void refreshDisparosCampaignsAndResumo();
+          }
           const message = resolveDisCampaignWizardSubmitErrorMessage(error, submitResponse);
           showDisCampaignWizardSubmitError(message, disCampaignWizardStep);
           showToast(message, "error", 5200);

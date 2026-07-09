@@ -215,19 +215,32 @@ const buildIntakeSuccessPayload = (
   };
 };
 
-const finalizeIntakeAfterCreate = async (intake: WabaCampaignIntake) => {
-  let current = new WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
-  let operacionalNotify: Awaited<ReturnType<typeof notifyOperacionalStaffOnCampaignAssigned>> | undefined;
+const finalizeIntakeAfterCreate = (intake: WabaCampaignIntake): WabaCampaignIntake => {
+  const current = new WabaCampaignSupplierAssignmentService().ensureInitialAssignment(intake);
+  void runOperacionalNotifyInBackground(current.id);
+  return current;
+};
+
+const operacionalNotifyInFlight = new Set<string>();
+
+const runOperacionalNotifyInBackground = async (intakeId: string): Promise<void> => {
+  const normalizedId = String(intakeId || "").trim();
+  if (!normalizedId || operacionalNotifyInFlight.has(normalizedId)) return;
+  operacionalNotifyInFlight.add(normalizedId);
+
   try {
-    operacionalNotify = await notifyOperacionalStaffOnCampaignAssigned(current);
+    const intake = intakeRepository.getById(normalizedId);
+    if (!intake) return;
+    const operacionalNotify = await notifyOperacionalStaffOnCampaignAssigned(intake);
+    intakeRepository.updateById(normalizedId, {
+      updatedAt: new Date().toISOString(),
+      operacionalNotifyAudit: operacionalNotify,
+    });
   } catch (error) {
-    console.error(`[disparos/campanhas/intake] notify falhou (${current.id}):`, error);
+    console.error(`[disparos/campanhas/intake] notify background falhou (${normalizedId}):`, error);
+  } finally {
+    operacionalNotifyInFlight.delete(normalizedId);
   }
-  intakeRepository.updateById(current.id, {
-    updatedAt: new Date().toISOString(),
-    ...(operacionalNotify ? { operacionalNotifyAudit: operacionalNotify } : {}),
-  });
-  return intakeRepository.getById(current.id) ?? current;
 };
 
 const parseResponseLink = (body: Record<string, unknown>): string | null => {
@@ -490,7 +503,7 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
         }
 
-        const finalized = await finalizeIntakeAfterCreate(intake);
+        const finalized = finalizeIntakeAfterCreate(intake);
         return { deduplicated: false as const, intake: finalized };
       });
 
