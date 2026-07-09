@@ -2,7 +2,8 @@
 #
 # Secrets: VPS_SSH_PRIVATE_KEY, opcional VPS_HOST (default 72.60.51.127)
 #
-# Uso: Actions → Grant Disparos Credits (SSH) → Run workflow
+# Manual: Actions → Grant Disparos Credits (SSH) → Run workflow
+# Auto: push em .github/grant-triggers/*.json (master)
 
 name: Grant Disparos Credits (SSH)
 
@@ -27,12 +28,55 @@ on:
           - oficial
           - alternativa
           - both
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/grant-triggers/**"
 
 jobs:
   grant:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout (trigger por push)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+
+      - name: Resolver parâmetros
+        id: params
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "email=${{ github.event.inputs.email }}" >> "$GITHUB_OUTPUT"
+            echo "count=${{ github.event.inputs.count }}" >> "$GITHUB_OUTPUT"
+            echo "api=${{ github.event.inputs.api }}" >> "$GITHUB_OUTPUT"
+            echo "request_id=manual-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            FILE="$(find .github/grant-triggers -maxdepth 1 -name '*.json' -type f | head -1)"
+            if [ -z "$FILE" ]; then
+              echo "::error::Nenhum arquivo em .github/grant-triggers/"
+              exit 1
+            fi
+            EMAIL="$(jq -r '.email // empty' "$FILE")"
+            COUNT="$(jq -r '.count // 100' "$FILE")"
+            API="$(jq -r '.api // "oficial"' "$FILE")"
+            REQUEST_ID="$(jq -r '.requestId // empty' "$FILE")"
+            if [ -z "$EMAIL" ]; then
+              echo "::error::Campo email ausente em $FILE"
+              exit 1
+            fi
+            if [ -z "$REQUEST_ID" ]; then
+              REQUEST_ID="$(basename "$FILE" .json)"
+            fi
+            echo "email=$EMAIL" >> "$GITHUB_OUTPUT"
+            echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+            echo "api=$API" >> "$GITHUB_OUTPUT"
+            echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+            echo "Trigger: $FILE"
+          fi
+
       - name: Validar secrets
         run: |
           if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
@@ -50,9 +94,10 @@ jobs:
           command_timeout: 4m
           script: |
             set -euo pipefail
-            EMAIL="${{ github.event.inputs.email }}"
-            COUNT="${{ github.event.inputs.count }}"
-            API="${{ github.event.inputs.api }}"
+            EMAIL="${{ steps.params.outputs.email }}"
+            COUNT="${{ steps.params.outputs.count }}"
+            API="${{ steps.params.outputs.api }}"
+            REQUEST_ID="${{ steps.params.outputs.request_id }}"
             CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | head -1 || true)"
             if [ -z "$CONTAINER" ]; then
               echo "::error::Container waba_disparador não encontrado."
@@ -67,6 +112,7 @@ jobs:
             const email=process.argv[1].trim().toLowerCase();
             const count=Math.max(1,Math.round(Number(process.argv[2]||0)));
             const apiMode=String(process.argv[3]||'oficial').toLowerCase();
+            const requestId=String(process.argv[4]||'').trim();
             const dataDir='/app/data';
             const norm=v=>String(v||'').trim().toLowerCase();
             const read=(f,fallback)=>{try{return JSON.parse(fs.readFileSync(f,'utf8'))}catch{return fallback}};
@@ -74,22 +120,28 @@ jobs:
             const subs=read(path.join(dataDir,'waba-subscribers.json'),{subscribers:[]});
             const sub=(subs.subscribers||[]).find(r=>norm(r.email)===email);
             if(!sub) throw new Error('Assinante não encontrado: '+email);
+            const store=read(path.join(dataDir,'waba-billing-orders.json'),[]);
+            const list=Array.isArray(store)?store:[];
+            const refPrefix='waba:grant-credit:'+requestId;
+            const existing=list.filter(r=>norm(r.ownerEmail)===email && String(r.asaasExternalReference||'').startsWith(refPrefix));
+            if(existing.length>0){
+              console.log(JSON.stringify({ok:true,email,count,added:0,skipped:true,requestId,orders:existing.map(o=>({id:o.id,apiKind:o.apiKind,shipmentCount:o.shipmentCount}))}));
+              process.exit(0);
+            }
             let kinds=['oficial'];
             if(apiMode==='both') kinds=sub.segment==='bets'?['oficial']:['oficial','alternativa'];
             else if(apiMode==='alternativa') kinds=['alternativa'];
             const now=new Date().toISOString();
-            const orders=kinds.map(apiKind=>{const id=crypto.randomUUID();return{
+            const orders=kinds.map((apiKind,idx)=>{const id=crypto.randomUUID();return{
               id,product:'waba-disparos',apiKind,customerName:String(sub.fullName||'Assinante'),
               ownerEmail:email,whatsapp:String(sub.whatsapp||sub.phone||''),cpfCnpj:String(sub.cpfCnpj||''),
               billingType:'PIX',valueCents:count*30,shipmentCount:count,status:'paid',
-              asaasExternalReference:'waba:grant-credit:'+id,createdAt:now,updatedAt:now,paidAt:now,
+              asaasExternalReference:refPrefix+':'+apiKind+':'+idx,createdAt:now,updatedAt:now,paidAt:now,
               bonusShipmentsApplied:0,bonusSettlementAt:now
             }});
-            const store=read(path.join(dataDir,'waba-billing-orders.json'),[]);
-            const list=Array.isArray(store)?store:[];
             const known=new Set(list.map(r=>String(r.id||'').trim()).filter(Boolean));
             let added=0;
             for(const order of orders){if(known.has(order.id))continue;list.unshift(order);known.add(order.id);added++}
             write(path.join(dataDir,'waba-billing-orders.json'),list);
-            console.log(JSON.stringify({ok:true,email,count,added,orders:orders.map(o=>({id:o.id,apiKind:o.apiKind,shipmentCount:o.shipmentCount}))}));
-            " "$EMAIL" "$COUNT" "$API"
+            console.log(JSON.stringify({ok:true,email,count,added,requestId,orders:orders.map(o=>({id:o.id,apiKind:o.apiKind,shipmentCount:o.shipmentCount}))}));
+            " "$EMAIL" "$COUNT" "$API" "$REQUEST_ID"
