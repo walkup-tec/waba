@@ -319,9 +319,10 @@ export class WabaOperacionalCampanhasService {
   listCampaigns(staff: OperacionalCampanhasStaffContext): OperacionalCampaignListItem[] {
     return this.intakeRepository
       .listAll()
-      .map((intake) =>
-        this.assignmentService.ensureInitialAssignment(intake),
-      )
+      .map((intake) => {
+        if (normalizeEmail(intake.assignedOperacionalEmail ?? "")) return intake;
+        return this.assignmentService.ensureInitialAssignment(intake);
+      })
       .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
       .map((intake) => this.toListItem(intake))
       .sort((a, b) => {
@@ -363,7 +364,7 @@ export class WabaOperacionalCampanhasService {
   markCampaignStarted(
     campaignId: string,
     staff: OperacionalCampanhasStaffContext,
-  ): OperacionalCampaignDetail {
+  ): OperacionalCampaignListItem {
     const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
     const status = normalizeStoredStatus(intake.status);
     if (status !== "generated") {
@@ -385,9 +386,7 @@ export class WabaOperacionalCampanhasService {
     });
     if (!updated) throw new Error("Não foi possível atualizar a campanha.");
 
-    const detail = this.getCampaignDetail(campaignId, staff);
-    if (!detail) throw new Error("Campanha não encontrada.");
-    return detail;
+    return this.toListItem(updated);
   }
 
   getCampaignReport(

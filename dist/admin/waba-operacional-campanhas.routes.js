@@ -67,7 +67,12 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
                 email: auth.email,
                 role: auth.role,
             });
-            return res.status(200).json({ ok: true, campaign });
+            return res.status(200).json({
+                ok: true,
+                campaignId: campaign.id,
+                status: campaign.status,
+                displayStatus: campaign.displayStatus,
+            });
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Não foi possível iniciar a campanha.";
