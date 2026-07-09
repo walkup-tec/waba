@@ -81,7 +81,12 @@ import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integr
 import { startUptimeMonitorScheduler } from "./monitoring/uptime-monitor.service";
 import { startCampaignSupplierAssignmentScheduler } from "./services/waba-campaign-supplier-assignment.service";
 import { startVpsCpuLocalSampler } from "./infra/vps-cpu-monitor.service";
+import { evoHttpRequestWithBaseFailover } from "./evo-api-config";
 import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, defaultEvoSendTextTimeoutMs, evoHttpRequest, isEvoTlsInsecure } from "./evo-http.client";
+import {
+  isEvoSendTransientError,
+  recoverEvoSendTextAfterFailure,
+} from "./services/evo-send-recovery.service";
 import {
   createWabaShortUrl,
   fetchWabaShortUrlClicks,
@@ -6142,7 +6147,7 @@ async function callEvoAction(
   body?: Record<string, any>,
   options?: { timeoutMs?: number; retries?: number },
 ) {
-  const result = await evoHttpRequest(url, method, {
+  const result = await evoHttpRequestWithBaseFailover(url, method, {
     apiKey: EVO_API_KEY,
     body,
     timeoutMs: options?.timeoutMs ?? defaultEvoHttpTimeoutMs(),
@@ -6637,22 +6642,45 @@ async function callEvoSendTextWithRetry(
         ),
       };
     }
-    const bodyLc = String(last.body || last.error || "").toLowerCase();
-    const isTransient =
-      last.status === 0 ||
-      last.status === 429 ||
-      last.status === 500 ||
-      last.status === 502 ||
-      last.status === 503 ||
-      last.status === 504 ||
-      bodyLc.includes("connection closed") ||
-      bodyLc.includes("timeout") ||
-      bodyLc.includes("econnreset") ||
-      bodyLc.includes("socket hang up");
+    const detailStr = String(last.body || last.error || "");
+    const isTransient = isEvoSendTransientError(detailStr, last.status);
     if (!isTransient || attempt >= maxAttempts) break;
     const waitMs = Math.floor(500 * Math.pow(2, attempt - 1) + Math.random() * 250);
     await new Promise((r) => setTimeout(r, waitMs));
   }
+
+  if (last && !last.ok) {
+    const detailStr = String(last.body || last.error || "");
+    const recovered = await recoverEvoSendTextAfterFailure({
+      url,
+      body,
+      apiKey: EVO_API_KEY,
+      timeoutMs,
+      status: last.status,
+      detail: detailStr,
+    });
+    const recoveredAccepted =
+      recovered.ok && isEvoSendTextAccepted(recovered.json, recovered.body);
+    if (recoveredAccepted) {
+      return {
+        ok: true,
+        status: recovered.status,
+        body: recovered.body,
+        json: recovered.json as any,
+        error: recovered.error,
+      };
+    }
+    if (recovered.status && recovered.body) {
+      last = {
+        ok: false,
+        status: recovered.status,
+        body: recovered.body,
+        json: recovered.json as any,
+        error: recovered.error,
+      };
+    }
+  }
+
   return (
     last || {
       ok: false,

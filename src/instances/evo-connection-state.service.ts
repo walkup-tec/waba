@@ -1,10 +1,7 @@
-import { evoHttpRequest } from "../evo-http.client";
+import { evoHttpRequestWithBaseFailover, resolvePrimaryEvoApiBase } from "../evo-api-config";
 import { resolveEvoInstanceKey } from "./evo-instance-key";
 
-const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080").replace(
-  /\/$/,
-  "",
-);
+const EVO_API_BASE = resolvePrimaryEvoApiBase();
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
 
 export type EvoLiveConnectionSnapshot = {
@@ -93,7 +90,7 @@ export async function fetchEvoInstanceLiveState(
   ];
 
   for (const url of urls) {
-    const result = await evoHttpRequest(url, "GET", {
+    const result = await evoHttpRequestWithBaseFailover(url, "GET", {
       apiKey: EVO_API_KEY,
       timeoutMs: 10_000,
       retries: 1,

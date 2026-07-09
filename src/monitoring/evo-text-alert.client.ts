@@ -1,15 +1,16 @@
-import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "../evo-http.client";
-
-const resolveEvoApiBase = (): string =>
-  String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080")
-    .trim()
-    .replace(/\/$/, "");
+import { defaultEvoSendTextTimeoutMs } from "../evo-http.client";
+import { evoHttpRequestWithBaseFailover } from "../evo-api-config";
+import {
+  isEvoSendInternalDbError,
+  recoverEvoSendTextAfterFailure,
+} from "../services/evo-send-recovery.service";
+import { resolvePrimaryEvoApiBase } from "../evo-api-config";
 
 const resolveEvoApiKey = (): string =>
   String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11").trim();
 
 const resolveSendTextUrlTemplate = (): string => {
-  const base = resolveEvoApiBase();
+  const base = resolvePrimaryEvoApiBase();
   return (
     process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${base}/message/sendText/{instance}`
   ).trim();
@@ -82,16 +83,45 @@ export async function sendEvoTextAlert(input: {
       ? Math.round(input.timeoutMs)
       : defaultEvoSendTextTimeoutMs();
 
-  const result = await evoHttpRequest(url, "POST", {
+  const result = await evoHttpRequestWithBaseFailover(url, "POST", {
     apiKey: resolveEvoApiKey(),
     body,
     timeoutMs,
     retries: Math.max(1, Math.min(4, Math.round(Number(input.retries ?? 1)))),
   });
 
-  const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
+  let accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
   if (accepted) {
     return { ok: true, detail: "sendText OK.", status: result.status };
+  }
+
+  const initialDetail =
+    result.error ||
+    result.body ||
+    (result.json && typeof result.json === "object"
+      ? String((result.json as Record<string, unknown>).message ?? "")
+      : "") ||
+    "Falha no envio via sistema WABA - Drax.";
+
+  if (isEvoSendInternalDbError(String(initialDetail), result.status)) {
+    const recovered = await recoverEvoSendTextAfterFailure({
+      url,
+      body,
+      apiKey: resolveEvoApiKey(),
+      timeoutMs,
+      status: result.status,
+      detail: String(initialDetail),
+    });
+    accepted = recovered.ok && isEvoSendTextAccepted(recovered.json, recovered.body);
+    if (accepted) {
+      return { ok: true, detail: "sendText OK (após restart EVO).", status: recovered.status };
+    }
+    const recoveredDetail = recovered.error || recovered.body || initialDetail;
+    return {
+      ok: false,
+      detail: String(recoveredDetail).slice(0, 300),
+      status: recovered.status || result.status,
+    };
   }
 
   const detail =
