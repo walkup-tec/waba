@@ -16,7 +16,7 @@
 # Versão: restore-landing-routers-2026-07-09-v7
 set -euo pipefail
 
-RESTORE_VERSION="restore-landing-routers-2026-07-09-v7"
+RESTORE_VERSION="restore-landing-routers-2026-07-09-v8"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 CUSTOM="/etc/easypanel/traefik/config/custom.yaml"
 LOG="${RESTORE_LANDING_LOG:-/var/log/restore-landing-routers.log}"
@@ -186,8 +186,11 @@ def fix_url(text: str, swarm: str, url: str) -> str:
 
 
 def clone_bets_if_missing(text: str) -> str:
-    if bets_ep in text or f"{bets_swarm}-0" in text:
-        print("bets_pv já no main.yaml")
+    has_https_router = bool(
+        re.search(rf'"https-{re.escape(bets_swarm)}[^"]*"\s*:\s*\{{[\s\S]*?Host\(`{re.escape(bets_pub)}`\)', text)
+    )
+    if has_https_router:
+        print("bets_pv router HTTPS com Host público já presente")
         return text
     # Template mínimo no formato Easypanel (espelha paginadevendas)
     backend = bets_url if bets_url.startswith("http://172.17.0.1:") else f"http://tasks.{bets_swarm}:3000/"
@@ -229,12 +232,16 @@ def clone_bets_if_missing(text: str) -> str:
         }}
       }}'''
 
-    # Insere routers após o bloco https-paginadevendas-0 (âncora estável)
-    anchor = f'"https-{pv_swarm}-0"'
-    idx = text.find(anchor)
-    if idx < 0:
-        print("ERRO: âncora https-paginadevendas-0 ausente — não clonei bets")
+    # Insere routers após âncora paginadevendas (waba ou typebot)
+    anchor = None
+    for cand in (f'"https-{pv_swarm}-0"', '"https-typebot_paginadevendas-0"', '"https-waba_paginadevendas-0"'):
+        if cand in text:
+            anchor = cand
+            break
+    if anchor is None:
+        print("ERRO: âncora https paginadevendas ausente — não clonei bets")
         return text
+    idx = text.find(anchor)
     # achar fim do objeto desse router (linha "      }," após o bloco)
     # encontrar após o key, o matching closing brace do objeto
     brace_start = text.find("{", idx)
