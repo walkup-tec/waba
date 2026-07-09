@@ -173,7 +173,7 @@ resolve_waba_port() {
     done
   fi
   if is_landing_service; then
-    echo "80"
+    echo "${WABA_PORT:-3000}"
     return 0
   fi
   echo "${WABA_PORT:-3000}"

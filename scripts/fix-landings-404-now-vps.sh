@@ -9,10 +9,10 @@
 #   chmod +x /root/fix-landings-404-now-vps.sh /root/restore-landing-routers-vps.sh
 #   bash /root/fix-landings-404-now-vps.sh
 #
-# Versão: fix-landings-404-2026-07-09-v1
+# Versão: fix-landings-404-2026-07-09-v2
 set -euo pipefail
 
-VERSION="fix-landings-404-2026-07-09-v1"
+VERSION="fix-landings-404-2026-07-09-v2"
 LOG="/var/log/fix-landings-404-now.log"
 RESTORE="/root/restore-landing-routers-vps.sh"
 GH="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
@@ -88,6 +88,12 @@ main() {
 
   log "--- restore landing routers (sem reconcile) ---"
   SKIP_RECONCILE=1 bash "$RESTORE" >>"$LOG" 2>&1
+
+  log "--- patch bets (serviço + Traefik) ---"
+  if [[ -x /root/traefik-permanent-bets-pv-vps.sh ]]; then
+    /root/traefik-permanent-bets-pv-vps.sh run >>"$LOG" 2>&1 || true
+  fi
+  SKIP_RECONCILE=1 bash "$RESTORE" >>"$LOG" 2>&1 || true
 
   log "=== validação externa (localhost) ==="
   log "  wabadisparos → $(http_code --resolve wabadisparos.com.br:443:127.0.0.1 https://wabadisparos.com.br/)"
