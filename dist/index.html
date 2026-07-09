@@ -6766,9 +6766,26 @@
       }
 
       #admin-campanhas-detail-overlay .confirm-modal {
-        max-width: 720px;
+        max-width: min(920px, 96vw);
         max-height: min(88vh, 900px);
         overflow: auto;
+      }
+
+      #admin-campanhas-detail-overlay .admin-campanhas-detail-actions {
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-start;
+      }
+
+      #admin-campanhas-detail-overlay .admin-campanhas-detail-actions .instance-action-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 720px) {
+        #admin-campanhas-detail-overlay .admin-campanhas-detail-actions {
+          flex-wrap: wrap;
+        }
       }
 
       #admin-campanhas-detail-materials-section {
@@ -19453,9 +19470,6 @@
           >
             Reportar Erro
           </button>
-        </div>
-
-        <div class="confirm-actions">
           <button
             id="admin-campanhas-start-btn"
             class="instance-action-btn btn-qrcode enabled"
