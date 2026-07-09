@@ -36,40 +36,56 @@ class WabaAdminSubscriberPromoteService {
         if (!email.includes("@"))
             throw new Error("E-mail inválido no bundle.");
         const subscriber = bundle.subscriber;
-        if (!subscriber?.passwordHash || normalizeEmail(subscriber.email) !== email) {
+        const billingOrders = Array.isArray(bundle.billingOrders) ? bundle.billingOrders : [];
+        const hasValidSubscriberBundle = Boolean(subscriber?.passwordHash) && normalizeEmail(String(subscriber?.email || "")) === email;
+        const existing = this.subscriberRepository.getByEmail(email);
+        const billingOnly = !hasValidSubscriberBundle;
+        if (billingOnly) {
+            if (!existing)
+                throw new Error("Bundle de assinante inválido.");
+            if (billingOrders.length === 0) {
+                throw new Error("Nenhum pedido informado para promover.");
+            }
+        }
+        else if (!hasValidSubscriberBundle) {
             throw new Error("Bundle de assinante inválido.");
         }
         const summary = {
             email,
-            subscriber: "created",
+            subscriber: "unchanged",
             billingOrdersAdded: 0,
             creditUsage: false,
             instanceOwners: 0,
         };
-        const existing = this.subscriberRepository.getByEmail(email);
-        const subscribersPath = (0, data_path_1.resolveDataFile)("waba-subscribers.json");
-        const store = readJson(subscribersPath, {
-            version: 1,
-            subscribers: [],
-        });
-        if (!Array.isArray(store.subscribers))
-            store.subscribers = [];
-        const payload = {
-            ...subscriber,
-            email,
-            phone: String(subscriber.phone || subscriber.whatsapp || "").trim(),
-            updatedAt: new Date().toISOString(),
-        };
-        const idx = store.subscribers.findIndex((row) => normalizeEmail(row.email) === email);
-        if (idx >= 0) {
-            store.subscribers[idx] = { ...store.subscribers[idx], ...payload, id: store.subscribers[idx].id };
-            summary.subscriber = "updated";
+        if (!billingOnly) {
+            const subscribersPath = (0, data_path_1.resolveDataFile)("waba-subscribers.json");
+            const store = readJson(subscribersPath, {
+                version: 1,
+                subscribers: [],
+            });
+            if (!Array.isArray(store.subscribers))
+                store.subscribers = [];
+            const payload = {
+                ...subscriber,
+                email,
+                phone: String(subscriber.phone || subscriber.whatsapp || "").trim(),
+                updatedAt: new Date().toISOString(),
+            };
+            const idx = store.subscribers.findIndex((row) => normalizeEmail(row.email) === email);
+            if (idx >= 0) {
+                store.subscribers[idx] = {
+                    ...store.subscribers[idx],
+                    ...payload,
+                    id: store.subscribers[idx].id,
+                };
+                summary.subscriber = "updated";
+            }
+            else {
+                store.subscribers.push(payload);
+                summary.subscriber = "created";
+            }
+            writeJsonAtomic(subscribersPath, store);
         }
-        else {
-            store.subscribers.push(payload);
-            summary.subscriber = "created";
-        }
-        writeJsonAtomic(subscribersPath, store);
         const ordersPath = (0, data_path_1.resolveDataFile)("waba-billing-orders.json");
         const orders = readJson(ordersPath, []);
         const orderList = Array.isArray(orders) ? orders : [];

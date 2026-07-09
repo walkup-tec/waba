@@ -6,7 +6,7 @@ import { resolveDataFile } from "../data-path";
 
 export type SubscriberPromoteFromV02Bundle = {
   email: string;
-  subscriber: WabaSubscriber;
+  subscriber: Partial<WabaSubscriber> & { email: string };
   billingOrders?: Array<Record<string, unknown>>;
   creditUsage?: {
     consumedOficial?: number;
@@ -45,42 +45,58 @@ export class WabaAdminSubscriberPromoteService {
     const email = normalizeEmail(bundle.email);
     if (!email.includes("@")) throw new Error("E-mail inválido no bundle.");
     const subscriber = bundle.subscriber;
-    if (!subscriber?.passwordHash || normalizeEmail(subscriber.email) !== email) {
+    const billingOrders = Array.isArray(bundle.billingOrders) ? bundle.billingOrders : [];
+    const hasValidSubscriberBundle =
+      Boolean(subscriber?.passwordHash) && normalizeEmail(String(subscriber?.email || "")) === email;
+    const existing = this.subscriberRepository.getByEmail(email);
+    const billingOnly = !hasValidSubscriberBundle;
+
+    if (billingOnly) {
+      if (!existing) throw new Error("Bundle de assinante inválido.");
+      if (billingOrders.length === 0) {
+        throw new Error("Nenhum pedido informado para promover.");
+      }
+    } else if (!hasValidSubscriberBundle) {
       throw new Error("Bundle de assinante inválido.");
     }
 
     const summary = {
       email,
-      subscriber: "created" as "created" | "updated",
+      subscriber: "unchanged" as "created" | "updated" | "unchanged",
       billingOrdersAdded: 0,
       creditUsage: false,
       instanceOwners: 0,
     };
 
-    const existing = this.subscriberRepository.getByEmail(email);
-    const subscribersPath = resolveDataFile("waba-subscribers.json");
-    const store = readJson<{ version: number; subscribers: WabaSubscriber[] }>(subscribersPath, {
-      version: 1,
-      subscribers: [],
-    });
-    if (!Array.isArray(store.subscribers)) store.subscribers = [];
+    if (!billingOnly) {
+      const subscribersPath = resolveDataFile("waba-subscribers.json");
+      const store = readJson<{ version: number; subscribers: WabaSubscriber[] }>(subscribersPath, {
+        version: 1,
+        subscribers: [],
+      });
+      if (!Array.isArray(store.subscribers)) store.subscribers = [];
 
-    const payload: WabaSubscriber = {
-      ...subscriber,
-      email,
-      phone: String(subscriber.phone || subscriber.whatsapp || "").trim(),
-      updatedAt: new Date().toISOString(),
-    };
+      const payload: WabaSubscriber = {
+        ...(subscriber as WabaSubscriber),
+        email,
+        phone: String(subscriber.phone || subscriber.whatsapp || "").trim(),
+        updatedAt: new Date().toISOString(),
+      };
 
-    const idx = store.subscribers.findIndex((row) => normalizeEmail(row.email) === email);
-    if (idx >= 0) {
-      store.subscribers[idx] = { ...store.subscribers[idx], ...payload, id: store.subscribers[idx].id };
-      summary.subscriber = "updated";
-    } else {
-      store.subscribers.push(payload);
-      summary.subscriber = "created";
+      const idx = store.subscribers.findIndex((row) => normalizeEmail(row.email) === email);
+      if (idx >= 0) {
+        store.subscribers[idx] = {
+          ...store.subscribers[idx],
+          ...payload,
+          id: store.subscribers[idx].id,
+        };
+        summary.subscriber = "updated";
+      } else {
+        store.subscribers.push(payload);
+        summary.subscriber = "created";
+      }
+      writeJsonAtomic(subscribersPath, store);
     }
-    writeJsonAtomic(subscribersPath, store);
 
     const ordersPath = resolveDataFile("waba-billing-orders.json");
     const orders = readJson<Array<Record<string, unknown>>>(ordersPath, []);
