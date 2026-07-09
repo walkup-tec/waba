@@ -32,6 +32,7 @@ export_waba_env() {
   export WABA_EASYPANEL_HOST="${WABA_EASYPANEL_HOST:-waba-bets-pv.achpyp.easypanel.host}"
   export WABA_NET="${WABA_NET:-easypanel}"
   export WABA_PORT="${WABA_PORT:-3000}"
+  export WABA_HOST_PUBLISHED_PORT="${WABA_HOST_PUBLISHED_PORT:-30211}"
   unset WABA_BACKEND_URL
 }
 

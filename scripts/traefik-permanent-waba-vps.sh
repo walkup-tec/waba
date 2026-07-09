@@ -208,8 +208,10 @@ resolve_waba_backend_url() {
 
   traefik_health_ok() {
     if is_landing_service; then
-      docker exec "$traefik" wget -q --spider --timeout=4 "${1%/health}/" 2>/dev/null \
-        || docker exec "$traefik" wget -q --spider --timeout=4 "$1" 2>/dev/null
+      # Landing pode responder 404 no / (ex.: bets_pv TanStack) — conta como vivo se HTTP responder.
+      local probe="${1%/health}/"
+      docker exec "$traefik" wget -S --spider --timeout=4 "$probe" 2>&1 \
+        | grep -qE 'HTTP/[0-9.]+ [0-9]{3}'
       return $?
     fi
     docker exec "$traefik" wget -qO- --timeout=4 "$1" 2>/dev/null | grep -q '"ok"'
