@@ -24,6 +24,10 @@
 
 `DEPLOY-2026-07-09-bm-inoperante-botao-vermelho-estados`
 
-## Palavras-chave
+## Comportamento confirmado (ajuste 2026-07-09)
+
+- Após **Registrado**, modal **fecha** nos dois cenários (reatribuída ou último da fila).
+- **Reatribuída:** campanha some da fila do operacional que registrou (filtro `matchesAssignedOperacional`).
+- **Último da fila:** campanha permanece com o operacional; alerta master após **30h** via `processDueReassignments` / `maybeSendMasterOverdueAlert` (regra existente).
 
 `BM inoperante`, `btn-bm-inoperante`, `bmInoperanteRegisteredAt`, `op_jose`, operacional campanhas

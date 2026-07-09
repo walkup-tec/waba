@@ -621,6 +621,7 @@ export class WabaOperacionalCampanhasService {
         bmInoperanteRegisteredAt: now,
         updatedAt: now,
       });
+      // Campanha permanece com este operacional; alerta master após 30h via processDueReassignments.
       const detail = this.getCampaignDetail(campaignId, staff);
       if (!detail) {
         throw new Error("BM inoperante registrada, mas não foi possível carregar os detalhes.");

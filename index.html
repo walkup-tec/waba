@@ -30529,16 +30529,18 @@
           setAdminCampanhasBmInoperanteRegisteredState();
 
           const message = String(payload.message || "").trim();
-          if (payload.exhausted) {
-            showToast(message || "Ok, aguardaremos até que a BM volte", "info", 5200);
-            await loadAdminCampanhas({ silent: true });
-            renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
-            return;
-          }
-
-          showToast(message || "Campanha reatribuída ao próximo da fila de prioridade.", "success", 3200);
           await loadAdminCampanhas({ silent: true });
           renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+
+          if (payload.exhausted) {
+            showToast(message || "Ok, aguardaremos até que a BM volte", "info", 5200);
+          } else {
+            showToast(
+              message || "Campanha reatribuída ao próximo da fila de prioridade.",
+              "success",
+              3200
+            );
+          }
           window.setTimeout(() => closeAdminCampanhasDetailModal(), 1200);
         } catch (error) {
           const message = resolveAdminOperacionalFetchError(error, error?.payload);
