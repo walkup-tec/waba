@@ -9,9 +9,9 @@ exports.invalidateEvoLiveStateCache = invalidateEvoLiveStateCache;
 exports.resolveEvoLiveConnectionSnapshots = resolveEvoLiveConnectionSnapshots;
 exports.filterInstanceNamesTrulyOpen = filterInstanceNamesTrulyOpen;
 exports.describeEvoConnectionMismatch = describeEvoConnectionMismatch;
-const evo_http_client_1 = require("../evo-http.client");
+const evo_api_config_1 = require("../evo-api-config");
 const evo_instance_key_1 = require("./evo-instance-key");
-const EVO_API_BASE = String(process.env.EVO_API_URL || "http://walkup-evo-walkup-api:8080").replace(/\/$/, "");
+const EVO_API_BASE = (0, evo_api_config_1.resolvePrimaryEvoApiBase)();
 const EVO_API_KEY = String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11");
 const LIVE_STATE_TTL_MS = Math.max(2000, Math.min(120000, Number(process.env.EVO_CONNECTION_STATE_CACHE_MS ?? 4000) || 4000));
 let liveStateCache = new Map();
@@ -72,7 +72,7 @@ async function fetchEvoInstanceLiveState(instanceName, options) {
         `${EVO_API_BASE}/instance/connection-state/${enc}`,
     ];
     for (const url of urls) {
-        const result = await (0, evo_http_client_1.evoHttpRequest)(url, "GET", {
+        const result = await (0, evo_api_config_1.evoHttpRequestWithBaseFailover)(url, "GET", {
             apiKey: EVO_API_KEY,
             timeoutMs: 10000,
             retries: 1,

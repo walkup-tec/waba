@@ -10794,89 +10794,21 @@
       .disparos-hex-cluster-stage {
         position: relative;
         width: 100%;
-        aspect-ratio: 3000 / 4000;
         overflow: visible;
       }
       .disparos-hex-cluster-art {
         display: block;
         width: 100%;
-        height: 100%;
+        height: auto;
         max-width: 500px;
         margin: 0;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
-        mix-blend-mode: lighten;
+        mix-blend-mode: normal;
         position: relative;
         z-index: 1;
         object-fit: contain;
-      }
-      .disparos-hex-light-lines {
-        position: absolute;
-        inset: 0;
-        z-index: 2;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        overflow: visible;
-      }
-      .disparos-hex-light-lines path {
-        fill: none;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-      .disparos-hex-light-lines .hex-orbit-comet,
-      .disparos-hex-light-lines .hex-orbit-comet-glow {
-        pathLength: 1000;
-        stroke-linecap: round;
-        stroke-dasharray: var(--hex-comet-len, 185) calc(1000 - var(--hex-comet-len, 185));
-        animation: disparosHexCometFlow var(--hex-orbit-dur, 10s) linear infinite;
-        animation-delay: var(--hex-orbit-delay, 0s);
-      }
-      .disparos-hex-light-lines .hex-orbit-comet-glow {
-        stroke: url(#disparosHexCometTailGrad);
-        stroke-width: calc(var(--hex-comet-width, 1.2) * 2.6);
-        opacity: var(--hex-comet-glow, 0.38);
-        filter: url(#disparosHexCometBlur);
-        stroke-dasharray: calc(var(--hex-comet-len, 185) * 1.28)
-          calc(1000 - var(--hex-comet-len, 185) * 1.28);
-      }
-      .disparos-hex-light-lines .hex-orbit-comet {
-        stroke: url(#disparosHexCometGrad);
-        stroke-width: var(--hex-comet-width, 1.2);
-        opacity: var(--hex-orbit-peak, 0.88);
-      }
-      .disparos-hex-light-lines .hex-orbit-comet.is-reverse,
-      .disparos-hex-light-lines .hex-orbit-comet-glow.is-reverse {
-        animation-direction: reverse;
-      }
-      .disparos-hex-light-lines .hex-orbit-comet.is-reverse {
-        stroke: url(#disparosHexCometGradRev);
-      }
-      .disparos-hex-light-lines .hex-orbit-comet-glow.is-reverse {
-        stroke: url(#disparosHexCometTailGradRev);
-      }
-      @keyframes disparosHexCometFlow {
-        to {
-          stroke-dashoffset: -1000;
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .disparos-hex-light-lines .hex-orbit-comet,
-        .disparos-hex-light-lines .hex-orbit-comet-glow {
-          animation: none !important;
-          stroke-dasharray: none;
-          opacity: 0.12;
-        }
-      }
-      body.waba-subscriber-bets-segment .disparos-hex-light-lines {
-        display: none !important;
-      }
-      body.waba-subscriber-bets-segment .disparos-hex-cluster-stage {
-        aspect-ratio: 1 / 1;
-      }
-      body.waba-subscriber-bets-segment .disparos-hex-cluster-art {
-        mix-blend-mode: normal;
       }
       body.waba-subscriber-bets-segment
         .disparos-pricing-lane[data-disparos-api="oficial"]
@@ -14482,6 +14414,27 @@
         color: #022c22;
         background: linear-gradient(135deg, #2ee4a0, #22d3ee);
         cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .waba-login-submit.is-loading::before {
+        content: "";
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(2, 44, 34, 0.22);
+        border-top-color: #022c22;
+        border-radius: 50%;
+        animation: waba-login-submit-spin 0.7s linear infinite;
+        flex-shrink: 0;
+      }
+
+      @keyframes waba-login-submit-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       .waba-login-submit:disabled {
@@ -16292,126 +16245,12 @@
                   <div class="disparos-hex-cluster-stage">
                     <img
                       class="disparos-hex-cluster-art"
-                      src="/media/hexa-corrigi-2.png"
+                      src="/media/disparos-hex-cluster.png"
                       alt="Pacotes e serviços, API Oficial e API Alternativa"
-                      width="3000"
-                      height="4000"
+                      width="1024"
+                      height="1024"
                       decoding="async"
                     />
-                    <svg
-                      class="disparos-hex-light-lines"
-                      viewBox="0 0 3000 4000"
-                      preserveAspectRatio="xMidYMid meet"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <defs>
-                        <linearGradient
-                          id="disparosHexCometGrad"
-                          gradientUnits="objectBoundingBox"
-                          x1="0"
-                          y1="0.5"
-                          x2="1"
-                          y2="0.5"
-                        >
-                          <stop offset="0%" stop-color="#2ee4a0" stop-opacity="0" />
-                          <stop offset="28%" stop-color="#2ee4a0" stop-opacity="0.06" />
-                          <stop offset="58%" stop-color="#5eead4" stop-opacity="0.28" />
-                          <stop offset="82%" stop-color="#38bdf8" stop-opacity="0.72" />
-                          <stop offset="100%" stop-color="#e0f2fe" stop-opacity="1" />
-                        </linearGradient>
-                        <linearGradient
-                          id="disparosHexCometGradRev"
-                          gradientUnits="objectBoundingBox"
-                          x1="1"
-                          y1="0.5"
-                          x2="0"
-                          y2="0.5"
-                        >
-                          <stop offset="0%" stop-color="#00b1f0" stop-opacity="0" />
-                          <stop offset="28%" stop-color="#00b1f0" stop-opacity="0.06" />
-                          <stop offset="58%" stop-color="#38bdf8" stop-opacity="0.26" />
-                          <stop offset="82%" stop-color="#5eead4" stop-opacity="0.68" />
-                          <stop offset="100%" stop-color="#ecfdf5" stop-opacity="1" />
-                        </linearGradient>
-                        <linearGradient
-                          id="disparosHexCometTailGrad"
-                          gradientUnits="objectBoundingBox"
-                          x1="0"
-                          y1="0.5"
-                          x2="1"
-                          y2="0.5"
-                        >
-                          <stop offset="0%" stop-color="#2ee4a0" stop-opacity="0" />
-                          <stop offset="45%" stop-color="#2ee4a0" stop-opacity="0.04" />
-                          <stop offset="100%" stop-color="#00b1f0" stop-opacity="0.22" />
-                        </linearGradient>
-                        <linearGradient
-                          id="disparosHexCometTailGradRev"
-                          gradientUnits="objectBoundingBox"
-                          x1="1"
-                          y1="0.5"
-                          x2="0"
-                          y2="0.5"
-                        >
-                          <stop offset="0%" stop-color="#00b1f0" stop-opacity="0" />
-                          <stop offset="45%" stop-color="#00b1f0" stop-opacity="0.04" />
-                          <stop offset="100%" stop-color="#2ee4a0" stop-opacity="0.2" />
-                        </linearGradient>
-                        <filter id="disparosHexCometBlur" x="-30%" y="-30%" width="160%" height="160%">
-                          <feGaussianBlur stdDeviation="2.6" />
-                        </filter>
-                        <filter id="disparosHexLightGlow" x="-25%" y="-8%" width="150%" height="116%">
-                          <feGaussianBlur stdDeviation="1.6" result="blur" />
-                          <feMerge>
-                            <feMergeNode in="blur" />
-                            <feMergeNode in="SourceGraphic" />
-                          </feMerge>
-                        </filter>
-                      </defs>
-                      <g filter="url(#disparosHexLightGlow)">
-                        <g transform="rotate(-24 1500 2050)">
-                          <path class="hex-orbit-comet-glow" d="M 1500 260 A 1220 1780 0 1 1 1499.2 260" style="--hex-orbit-dur: 13s; --hex-orbit-delay: 0s; --hex-comet-len: 210; --hex-comet-width: 1.15; --hex-orbit-peak: 0.72" />
-                          <path class="hex-orbit-comet" d="M 1500 260 A 1220 1780 0 1 1 1499.2 260" style="--hex-orbit-dur: 13s; --hex-orbit-delay: 0s; --hex-comet-len: 210; --hex-comet-width: 1.15; --hex-orbit-peak: 0.72" />
-                        </g>
-                        <g transform="rotate(19 1500 2050)">
-                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 320 A 1180 1720 0 1 1 1499.3 320" style="--hex-orbit-dur: 11.5s; --hex-orbit-delay: 1.2s; --hex-comet-len: 195; --hex-comet-width: 1; --hex-orbit-peak: 0.68" />
-                          <path class="hex-orbit-comet is-reverse" d="M 1500 320 A 1180 1720 0 1 1 1499.3 320" style="--hex-orbit-dur: 11.5s; --hex-orbit-delay: 1.2s; --hex-comet-len: 195; --hex-comet-width: 1; --hex-orbit-peak: 0.68" />
-                        </g>
-                        <g transform="rotate(36 1500 1980)">
-                          <path class="hex-orbit-comet-glow" d="M 1500 420 A 980 1280 0 1 1 1499.4 420" style="--hex-orbit-dur: 9.5s; --hex-orbit-delay: 0.6s; --hex-comet-len: 175; --hex-comet-width: 1.05; --hex-orbit-peak: 0.74" />
-                          <path class="hex-orbit-comet" d="M 1500 420 A 980 1280 0 1 1 1499.4 420" style="--hex-orbit-dur: 9.5s; --hex-orbit-delay: 0.6s; --hex-comet-len: 175; --hex-comet-width: 1.05; --hex-orbit-peak: 0.74" />
-                        </g>
-                        <g transform="rotate(-42 1500 2120)">
-                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 480 A 1020 1320 0 1 1 1499.5 480" style="--hex-orbit-dur: 10.8s; --hex-orbit-delay: 2.4s; --hex-comet-len: 168; --hex-comet-width: 0.95; --hex-orbit-peak: 0.65" />
-                          <path class="hex-orbit-comet is-reverse" d="M 1500 480 A 1020 1320 0 1 1 1499.5 480" style="--hex-orbit-dur: 10.8s; --hex-orbit-delay: 2.4s; --hex-comet-len: 168; --hex-comet-width: 0.95; --hex-orbit-peak: 0.65" />
-                        </g>
-                        <g transform="rotate(-58 1500 2050)">
-                          <path class="hex-orbit-comet-glow" d="M 1500 980 A 1320 760 0 1 1 1499.6 980" style="--hex-orbit-dur: 8.2s; --hex-orbit-delay: 1.8s; --hex-comet-len: 155; --hex-comet-width: 0.9; --hex-orbit-peak: 0.62" />
-                          <path class="hex-orbit-comet" d="M 1500 980 A 1320 760 0 1 1 1499.6 980" style="--hex-orbit-dur: 8.2s; --hex-orbit-delay: 1.8s; --hex-comet-len: 155; --hex-comet-width: 0.9; --hex-orbit-peak: 0.62" />
-                        </g>
-                        <g transform="rotate(52 1500 2050)">
-                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 1040 A 1280 720 0 1 1 1499.7 1040" style="--hex-orbit-dur: 7.6s; --hex-orbit-delay: 0.3s; --hex-comet-len: 148; --hex-comet-width: 0.88; --hex-orbit-peak: 0.6" />
-                          <path class="hex-orbit-comet is-reverse" d="M 1500 1040 A 1280 720 0 1 1 1499.7 1040" style="--hex-orbit-dur: 7.6s; --hex-orbit-delay: 0.3s; --hex-comet-len: 148; --hex-comet-width: 0.88; --hex-orbit-peak: 0.6" />
-                        </g>
-                        <g transform="rotate(-11 1480 1880)">
-                          <path class="hex-orbit-comet-glow" d="M 1480 620 A 760 980 0 1 1 1479.4 620" style="--hex-orbit-dur: 7.2s; --hex-orbit-delay: 3.1s; --hex-comet-len: 162; --hex-comet-width: 1.1; --hex-orbit-peak: 0.7" />
-                          <path class="hex-orbit-comet" d="M 1480 620 A 760 980 0 1 1 1479.4 620" style="--hex-orbit-dur: 7.2s; --hex-orbit-delay: 3.1s; --hex-comet-len: 162; --hex-comet-width: 1.1; --hex-orbit-peak: 0.7" />
-                        </g>
-                        <g transform="rotate(28 1520 2220)">
-                          <path class="hex-orbit-comet-glow is-reverse" d="M 1520 760 A 820 1040 0 1 1 1519.3 760" style="--hex-orbit-dur: 8.8s; --hex-orbit-delay: 2s; --hex-comet-len: 178; --hex-comet-width: 1.02; --hex-orbit-peak: 0.66" />
-                          <path class="hex-orbit-comet is-reverse" d="M 1520 760 A 820 1040 0 1 1 1519.3 760" style="--hex-orbit-dur: 8.8s; --hex-orbit-delay: 2s; --hex-comet-len: 178; --hex-comet-width: 1.02; --hex-orbit-peak: 0.66" />
-                        </g>
-                        <g transform="rotate(8 1500 2050)">
-                          <path class="hex-orbit-comet-glow" d="M 1500 380 A 860 1180 0 1 1 1499.5 380" style="--hex-orbit-dur: 12.4s; --hex-orbit-delay: 3.8s; --hex-comet-len: 140; --hex-comet-width: 0.82; --hex-orbit-peak: 0.58" />
-                          <path class="hex-orbit-comet" d="M 1500 380 A 860 1180 0 1 1 1499.5 380" style="--hex-orbit-dur: 12.4s; --hex-orbit-delay: 3.8s; --hex-comet-len: 140; --hex-comet-width: 0.82; --hex-orbit-peak: 0.58" />
-                        </g>
-                        <g transform="rotate(-31 1500 2050)">
-                          <path class="hex-orbit-comet-glow is-reverse" d="M 1500 340 A 1100 1580 0 1 1 1499.2 340" style="--hex-orbit-dur: 14.2s; --hex-orbit-delay: 4.5s; --hex-comet-len: 225; --hex-comet-width: 1.22; --hex-orbit-peak: 0.76" />
-                          <path class="hex-orbit-comet is-reverse" d="M 1500 340 A 1100 1580 0 1 1 1499.2 340" style="--hex-orbit-dur: 14.2s; --hex-orbit-delay: 4.5s; --hex-comet-len: 225; --hex-comet-width: 1.22; --hex-orbit-peak: 0.76" />
-                        </g>
-                      </g>
-                    </svg>
                   </div>
                 </div>
 
@@ -21903,6 +21742,16 @@
       function initWabaAuthUi() {
         const form = document.getElementById("waba-login-form");
         const submitBtn = document.getElementById("waba-login-submit");
+        const LOGIN_SUBMIT_LABEL = "Entrar";
+        const LOGIN_SUBMIT_LOADING_LABEL = "Entrando...";
+
+        const setWabaLoginSubmitLoading = (isLoading) => {
+          if (!submitBtn) return;
+          submitBtn.disabled = Boolean(isLoading);
+          submitBtn.classList.toggle("is-loading", Boolean(isLoading));
+          submitBtn.textContent = isLoading ? LOGIN_SUBMIT_LOADING_LABEL : LOGIN_SUBMIT_LABEL;
+          submitBtn.setAttribute("aria-busy", isLoading ? "true" : "false");
+        };
 
         document.getElementById("waba-login-toggle-password")?.addEventListener("click", () => {
           const input = document.getElementById("waba-login-password");
@@ -21941,7 +21790,7 @@
             setWabaLoginError("Informe e-mail e senha.");
             return;
           }
-          if (submitBtn) submitBtn.disabled = true;
+          setWabaLoginSubmitLoading(true);
           try {
             const response = await fetchWabaAuthJson(
               "/auth/login",
@@ -21971,7 +21820,7 @@
             const payload = error?.payload;
             setWabaLoginError(resolveWabaLoginErrorMessage(error, payload));
           } finally {
-            if (submitBtn) submitBtn.disabled = false;
+            setWabaLoginSubmitLoading(false);
           }
         });
 
@@ -22612,10 +22461,10 @@
       }
 
       const DISPAROS_HEX_CLUSTER_ART_DEFAULT = {
-        src: "/media/hexa-corrigi-2.png",
+        src: "/media/disparos-hex-cluster.png",
         alt: "Pacotes e serviços, API Oficial e API Alternativa",
-        width: 3000,
-        height: 4000,
+        width: 1024,
+        height: 1024,
       };
       const DISPAROS_HEX_CLUSTER_ART_BETS = {
         src: "/media/creditBet_02.png",

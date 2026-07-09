@@ -15,6 +15,8 @@ export type AquecedorRuntimeStatus = {
 export type AquecedorRuntimePersistedSnapshot = AquecedorRuntimeStatus & {
   workerId: string | null;
   workerHeartbeatAt: string | null;
+  /** Índice de rotação de pares — isolado por proprietário (não usar controle_ciclo global). */
+  cicloGlobal?: number;
 };
 
 export type AquecedorConnectedSummary = {
@@ -157,6 +159,7 @@ export function buildPersistedSnapshotFromMotor(
     lastEvoError: motor.runtime.lastEvoError,
     workerId: motor.snapshot.workerId,
     workerHeartbeatAt: motor.snapshot.workerHeartbeatAt,
+    cicloGlobal: getAquecedorOwnerCicloGlobal(motor),
     ...overrides,
   };
 }
@@ -183,7 +186,20 @@ function parseOwnerSnapshot(raw: unknown): AquecedorRuntimePersistedSnapshot {
     workerId: typeof snapRaw.workerId === "string" ? snapRaw.workerId : null,
     workerHeartbeatAt:
       typeof snapRaw.workerHeartbeatAt === "string" ? snapRaw.workerHeartbeatAt : null,
+    cicloGlobal:
+      typeof snapRaw.cicloGlobal === "number" && Number.isFinite(snapRaw.cicloGlobal)
+        ? Math.max(0, Math.floor(snapRaw.cicloGlobal))
+        : 0,
   };
+}
+
+export function getAquecedorOwnerCicloGlobal(motor: AquecedorOwnerMotor): number {
+  const value = motor.snapshot.cicloGlobal;
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+export function setAquecedorOwnerCicloGlobal(motor: AquecedorOwnerMotor, value: number): void {
+  motor.snapshot.cicloGlobal = Math.max(0, Math.floor(value));
 }
 
 function loadOwnerFromPersisted(

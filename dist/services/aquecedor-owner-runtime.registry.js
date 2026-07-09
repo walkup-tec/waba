@@ -12,6 +12,8 @@ exports.listAquecedorOwnersWithDesiredRunning = listAquecedorOwnersWithDesiredRu
 exports.applyPersistedSnapshotToMotor = applyPersistedSnapshotToMotor;
 exports.buildPersistedSnapshotFromMotor = buildPersistedSnapshotFromMotor;
 exports.shouldProcessLeadOwnerMotor = shouldProcessLeadOwnerMotor;
+exports.getAquecedorOwnerCicloGlobal = getAquecedorOwnerCicloGlobal;
+exports.setAquecedorOwnerCicloGlobal = setAquecedorOwnerCicloGlobal;
 exports.reloadAquecedorOwnerMotorsFromDisk = reloadAquecedorOwnerMotorsFromDisk;
 exports.persistAquecedorOwnerSnapshot = persistAquecedorOwnerSnapshot;
 exports.persistAquecedorOwnerIntent = persistAquecedorOwnerIntent;
@@ -130,6 +132,7 @@ function buildPersistedSnapshotFromMotor(motor, overrides = {}) {
         lastEvoError: motor.runtime.lastEvoError,
         workerId: motor.snapshot.workerId,
         workerHeartbeatAt: motor.snapshot.workerHeartbeatAt,
+        cicloGlobal: getAquecedorOwnerCicloGlobal(motor),
         ...overrides,
     };
 }
@@ -155,7 +158,17 @@ function parseOwnerSnapshot(raw) {
             : null,
         workerId: typeof snapRaw.workerId === "string" ? snapRaw.workerId : null,
         workerHeartbeatAt: typeof snapRaw.workerHeartbeatAt === "string" ? snapRaw.workerHeartbeatAt : null,
+        cicloGlobal: typeof snapRaw.cicloGlobal === "number" && Number.isFinite(snapRaw.cicloGlobal)
+            ? Math.max(0, Math.floor(snapRaw.cicloGlobal))
+            : 0,
     };
+}
+function getAquecedorOwnerCicloGlobal(motor) {
+    const value = motor.snapshot.cicloGlobal;
+    return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+function setAquecedorOwnerCicloGlobal(motor, value) {
+    motor.snapshot.cicloGlobal = Math.max(0, Math.floor(value));
 }
 function loadOwnerFromPersisted(ownerEmail, desired, snapshot) {
     const motor = getAquecedorOwnerMotor(ownerEmail);

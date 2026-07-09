@@ -31,7 +31,7 @@ export_waba_env() {
   export WABA_CONTAINER_FILTER="${WABA_CONTAINER_FILTER:-waba_paginadevendas}"
   export WABA_EASYPANEL_HOST="${WABA_EASYPANEL_HOST:-waba-paginadevendas.achpyp.easypanel.host}"
   export WABA_NET="${WABA_NET:-easypanel}"
-  export WABA_PORT="${WABA_PORT:-80}"
+  export WABA_PORT="${WABA_PORT:-3000}"
   unset WABA_BACKEND_URL
 }
 

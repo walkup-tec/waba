@@ -11,7 +11,8 @@
 # Versão: traefik-permanent-all-2026-07-07-v4
 set -euo pipefail
 
-ALL_VERSION="traefik-permanent-all-2026-07-07-v4"
+ALL_VERSION="traefik-permanent-all-2026-07-09-v5"
+RECONCILE_SCRIPT="/root/traefik-reconcile-vps.sh"
 WABA_SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
 WABA_HOST_PUBLISHED_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
 INSTALL_PATH="/root/traefik-permanent-all-vps.sh"
@@ -69,6 +70,8 @@ install_scripts() {
   copy_local_or_curl "traefik-permanent-paginadevendas-vps.sh" "$PV_SCRIPT"
   copy_local_or_curl "traefik-permanent-bets-pv-vps.sh" "$BETS_SCRIPT"
   copy_local_or_curl "restore-landing-routers-vps.sh" "/root/restore-landing-routers-vps.sh"
+  copy_local_or_curl "restore-easypanel-traefik-backends-vps.sh" "/root/restore-easypanel-traefik-backends-vps.sh"
+  copy_local_or_curl "traefik-reconcile-vps.sh" "$RECONCILE_SCRIPT"
   copy_local_or_curl "fix-wabadisparos-bet-now-vps.sh" "/root/fix-wabadisparos-bet-now-vps.sh"
   copy_local_or_curl "traefik-easypanel-config-guard.sh" "$GUARD_SCRIPT"
   copy_local_or_curl "restore-waba-traefik-router-vps.sh" "$RESTORE_WABA"
@@ -178,6 +181,12 @@ ensure_waba_host_port() {
 run_all() {
   echo "=== ${ALL_VERSION} run $(date -Is) ===" | tee -a "$LOG"
 
+  # Evita herdar WABA_HOST_PUBLISHED_PORT=30210 de sessões anteriores (contamina disparador).
+  unset WABA_BACKEND_URL WABA_PUBLIC_HOST WABA_SWARM_SERVICE WABA_CONTAINER_FILTER WABA_PORT WABA_EASYPANEL_HOST
+  WABA_SWARM_SERVICE=waba_waba_disparador
+  WABA_HOST_PUBLISHED_PORT=30180
+  export WABA_SWARM_SERVICE WABA_HOST_PUBLISHED_PORT
+
   if load_bootstrap; then
     traefik_bootstrap_ensure_traefik || true
   else
@@ -185,36 +194,25 @@ run_all() {
   fi
   ensure_waba_host_port || true
 
-  local ok_waba=0 ok_evo=0 ok_pv=0 ok_bets=0
-
-  if [[ -x "$RESTORE_WABA" ]]; then
-    echo "--- restore WABA router ---" | tee -a "$LOG"
-    "$RESTORE_WABA" >>"$LOG" 2>&1 && ok_waba=1 || true
-  fi
-  if [[ -x "$RESTORE_EVO" ]]; then
-    echo "--- restore Evolution router ---" | tee -a "$LOG"
-    "$RESTORE_EVO" >>"$LOG" 2>&1 && ok_evo=1 || true
-  fi
-
-  if [[ -x "$WABA_SCRIPT" ]]; then
-    echo "--- traefik-permanent-waba ---" | tee -a "$LOG"
-    "$WABA_SCRIPT" run | tee -a "$LOG" && ok_waba=1 || true
-  fi
-  if [[ -x "$EVO_SCRIPT" ]]; then
-    echo "--- traefik-permanent-walkup-evo ---" | tee -a "$LOG"
-    "$EVO_SCRIPT" run | tee -a "$LOG" && ok_evo=1 || true
-  fi
-  if [[ -x "$PV_SCRIPT" ]]; then
-    echo "--- traefik-permanent-paginadevendas ---" | tee -a "$LOG"
-    "$PV_SCRIPT" run | tee -a "$LOG" && ok_pv=1 || true
-  fi
-  if [[ -x "$BETS_SCRIPT" ]]; then
-    echo "--- traefik-permanent-bets-pv ---" | tee -a "$LOG"
-    "$BETS_SCRIPT" run | tee -a "$LOG" && ok_bets=1 || true
+  local ok=0
+  if [[ -x /root/restore-easypanel-traefik-backends-vps.sh ]]; then
+    echo "--- restore-easypanel-backends ---" | tee -a "$LOG"
+    /root/restore-easypanel-traefik-backends-vps.sh >>"$LOG" 2>&1 && ok=1 || true
+  elif [[ -x "$RECONCILE_SCRIPT" ]]; then
+    echo "--- traefik-reconcile (patch atômico) ---" | tee -a "$LOG"
+    "$RECONCILE_SCRIPT" >>"$LOG" 2>&1 && ok=1 || true
+  else
+    echo "AVISO: ${RECONCILE_SCRIPT} ausente — fallback scripts legados" | tee -a "$LOG"
+    [[ -x "$RESTORE_WABA" ]] && "$RESTORE_WABA" >>"$LOG" 2>&1 || true
+    [[ -x "$RESTORE_EVO" ]] && "$RESTORE_EVO" >>"$LOG" 2>&1 || true
+    [[ -x "$WABA_SCRIPT" ]] && "$WABA_SCRIPT" run >>"$LOG" 2>&1 || true
+    [[ -x "$EVO_SCRIPT" ]] && "$EVO_SCRIPT" run >>"$LOG" 2>&1 || true
+    [[ -x /root/restore-landing-routers-vps.sh ]] && /root/restore-landing-routers-vps.sh >>"$LOG" 2>&1 || true
+    ok=1
   fi
 
-  echo "RESULTADO all: waba=${ok_waba} evo=${ok_evo} pv=${ok_pv} bets=${ok_bets}" | tee -a "$LOG"
-  [[ "$ok_waba" -eq 1 || "$ok_evo" -eq 1 || "$ok_pv" -eq 1 || "$ok_bets" -eq 1 ]]
+  echo "RESULTADO all: reconcile=${ok}" | tee -a "$LOG"
+  [[ "$ok" -eq 1 ]]
 }
 
 install_all() {

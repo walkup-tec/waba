@@ -73,7 +73,9 @@ const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integrat
 const uptime_monitor_service_1 = require("./monitoring/uptime-monitor.service");
 const waba_campaign_supplier_assignment_service_1 = require("./services/waba-campaign-supplier-assignment.service");
 const vps_cpu_monitor_service_1 = require("./infra/vps-cpu-monitor.service");
+const evo_api_config_1 = require("./evo-api-config");
 const evo_http_client_1 = require("./evo-http.client");
+const evo_send_recovery_service_1 = require("./services/evo-send-recovery.service");
 const waba_shortener_service_1 = require("./shortener/waba-shortener.service");
 const waba_public_base_url_1 = require("./lib/waba-public-base-url");
 const waba_system_user_service_1 = require("./users/waba-system-user.service");
@@ -1018,8 +1020,6 @@ function aquecedorEnvioMatchesOwner(instanciaOrigem, instanciaDestino, allowed) 
 async function resolveAquecedorEnviosAllowedInstances(ownerEmail) {
     if (!(0, waba_auth_service_1.isWabaAuthConfigured)())
         return null;
-    if (isAquecedorGlobalScopeOwner(ownerEmail))
-        return null;
     const names = await listAquecedorScopedInstanceNames(ownerEmail);
     const aliasesMap = await loadInstanceAliasesMap();
     const allowed = new Set();
@@ -1036,9 +1036,6 @@ async function resolveAquecedorEnviosAllowedInstances(ownerEmail) {
 }
 async function resolveAquecedorDashboardScope(ownerEmail) {
     const email = String(ownerEmail || "").trim().toLowerCase();
-    if (isAquecedorGlobalScopeOwner(email)) {
-        return { globalScope: true, instanceNames: [], filterValues: [] };
-    }
     const names = await listAquecedorScopedInstanceNames(email);
     const aliasesMap = await loadInstanceAliasesMap();
     const filterValues = [];
@@ -1148,13 +1145,16 @@ function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
 }
 async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance) {
     const events = [];
-    const instanceNames = connected.map((item) => item.instancia);
+    const instanceNames = connected.map((item) => item.instancia).filter(Boolean);
+    if (instanceNames.length < 2)
+        return events;
     const connectedCanonical = new Set(instanceNames.map((name) => resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase()));
     try {
         const { data, error } = await (supabase
             .from("aquecedor")
             .select("instancia, numero_destino, sent_at")
             .eq("status", "ENVIADO")
+            .in("instancia", instanceNames)
             .order("sent_at", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
@@ -1179,6 +1179,8 @@ async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, nu
         const { data, error } = await (supabase
             .from("logs_envios")
             .select("instancia_origem, instancia_destino, data_envio")
+            .in("instancia_origem", instanceNames)
+            .in("instancia_destino", instanceNames)
             .order("data_envio", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
@@ -1706,31 +1708,49 @@ async function resolveAquecedorMessageForSend(supabase, pendingId, pendingText, 
         .eq("id", pendingId);
     return mensagem;
 }
-async function releaseStuckAquecedorQueueRows(supabase) {
+async function releaseStuckAquecedorQueueRows(supabase, scopedInstanceNames) {
     const cutoff = new Date(Date.now() - AQUECEDOR_QUEUE_STUCK_MS).toISOString();
     const resetPayload = {
         status: "PENDENTE",
-        instancia: null,
-        numero_destino: null,
         processing_at: null,
         sent_at: null,
     };
-    await supabase.from("aquecedor")
+    const scoped = (scopedInstanceNames || []).map((n) => String(n || "").trim()).filter(Boolean);
+    const applyScope = (query) => (scoped.length ? query.in("instancia", scoped) : query);
+    await applyScope(supabase.from("aquecedor")
         .update(resetPayload)
         .eq("status", "PROCESSANDO")
-        .lt("processing_at", cutoff);
-    await supabase.from("aquecedor")
+        .lt("processing_at", cutoff));
+    await applyScope(supabase.from("aquecedor")
         .update(resetPayload)
         .eq("status", "PROCESSANDO")
         .is("processing_at", null)
-        .lt("scheduled_at", cutoff);
+        .lt("scheduled_at", cutoff));
 }
-async function fetchProcessableAquecedorPending(supabase) {
+async function fetchProcessableAquecedorPending(supabase, scopedInstanceNames, preferredOrigem) {
+    const scoped = scopedInstanceNames.map((n) => String(n || "").trim()).filter(Boolean);
+    if (!scoped.length)
+        return null;
     const now = new Date().toISOString();
+    const preferred = String(preferredOrigem || "").trim();
+    if (preferred) {
+        const { data: preferredRow } = (await (supabase
+            .from("aquecedor")
+            .select("id, mensagem, status, scheduled_at")
+            .eq("status", "PENDENTE")
+            .eq("instancia", preferred)
+            .lte("scheduled_at", now)
+            .order("scheduled_at", { ascending: true })
+            .limit(1)
+            .maybeSingle()));
+        if (preferredRow?.id)
+            return preferredRow;
+    }
     const { data } = (await (supabase
         .from("aquecedor")
         .select("id, mensagem, status, scheduled_at")
         .eq("status", "PENDENTE")
+        .in("instancia", scoped)
         .lte("scheduled_at", now)
         .order("scheduled_at", { ascending: true })
         .limit(1)
@@ -1742,12 +1762,17 @@ async function ensureAquecedorPendingMessageOnce(pair) {
     if (!supabase) {
         return { ok: false, reason: "Supabase não configurado ao preparar fila do aquecedor." };
     }
+    if (!pair?.instanciaOrigem) {
+        return { ok: true };
+    }
+    const origem = String(pair.instanciaOrigem).trim();
     const now = new Date().toISOString();
     const nowMs = Date.now();
     const { count: processableCount, error: processableError } = (await (supabase
         .from("aquecedor")
         .select("id", { count: "exact", head: true })
         .eq("status", "PENDENTE")
+        .eq("instancia", origem)
         .lte("scheduled_at", now)));
     if (processableError) {
         return {
@@ -1762,6 +1787,7 @@ async function ensureAquecedorPendingMessageOnce(pair) {
         .from("aquecedor")
         .select("id, mensagem, scheduled_at")
         .eq("status", "PENDENTE")
+        .eq("instancia", origem)
         .order("scheduled_at", { ascending: true, nullsFirst: true })
         .order("id", { ascending: true })
         .limit(1)
@@ -1777,13 +1803,11 @@ async function ensureAquecedorPendingMessageOnce(pair) {
             ? new Date(String(oldestPending.scheduled_at)).getTime()
             : Number.NaN;
         const processableNow = Number.isFinite(schedMs) && schedMs <= nowMs;
+        const exclude = await buildAquecedorExcludeSet(supabase, pair);
+        const current = String(oldestPending.mensagem || "").trim();
         let mensagem;
-        if (pair) {
-            const exclude = await buildAquecedorExcludeSet(supabase, pair);
-            const current = String(oldestPending.mensagem || "").trim();
-            if (!current || isAquecedorSystemMessage(current) || exclude.has(current)) {
-                mensagem = await pickAquecedorMessageText(supabase, exclude);
-            }
+        if (!current || isAquecedorSystemMessage(current) || exclude.has(current)) {
+            mensagem = await pickAquecedorMessageText(supabase, exclude);
         }
         if (!processableNow || mensagem) {
             const payload = { scheduled_at: now };
@@ -1801,13 +1825,14 @@ async function ensureAquecedorPendingMessageOnce(pair) {
         }
         return { ok: true, pendingId: oldestPending.id };
     }
-    const exclude = pair ? await buildAquecedorExcludeSet(supabase, pair) : undefined;
+    const exclude = await buildAquecedorExcludeSet(supabase, pair);
     const mensagem = await pickAquecedorMessageText(supabase, exclude);
     const { data: inserted, error: insertError } = await supabase.from("aquecedor")
         .insert({
         mensagem,
         status: "PENDENTE",
         scheduled_at: now,
+        instancia: origem,
     })
         .select("id")
         .single();
@@ -2347,7 +2372,6 @@ function startAquecedorRuntimeLocal(ownerEmail) {
     if (motor.runtime.running && motor.scheduleTimer)
         return;
     motor.runtime.running = true;
-    void ensureAquecedorPendingMessage();
     void runAquecedorCycle(ownerEmail).finally(() => scheduleAquecedorCycleTick(ownerEmail));
 }
 async function stopAquecedorRuntimeForOwner(ownerEmail) {
@@ -2629,16 +2653,6 @@ async function listAquecedorScopedInstanceNames(ownerEmail) {
                 console.info(`[Aquecedor] ${reconciled} instância(s) órfã(s) vinculada(s) ao master ${email}.`);
             }
         }
-        const usageMap = await loadInstanceUsageMap();
-        const connected = await listConnectedEvoInstancesUnscoped();
-        const scoped = new Set();
-        for (const item of connected) {
-            const usage = getInstanceUsageFromMap(usageMap, item.instancia);
-            if (usage ? usage.useAquecedor !== false : true) {
-                scoped.add(item.instancia);
-            }
-        }
-        return Array.from(scoped).sort((a, b) => a.localeCompare(b, "pt-BR"));
     }
     const owned = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.listOwnedInstanceNames(email);
     const activations = new alternativa_number_activation_repository_1.AlternativaNumberActivationRepository()
@@ -3195,7 +3209,9 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
         const detail = String(sendResult.body || sendResult.error || "").slice(0, 160);
         aquecedorCycleRuntime().lastResult = `Ciclo teste falhou: ${chosen.instancia_origem} → ${chosen.instancia_destino}. EVO HTTP ${sendResult.status}${detail ? `: ${detail}` : ""}.`;
     }
-    await supabase.from("controle_ciclo").upsert({ id: 1, ciclo_global: proximo }, { onConflict: "id" });
+    if (aquecedorCycleMotor) {
+        (0, aquecedor_owner_runtime_registry_1.setAquecedorOwnerCicloGlobal)(aquecedorCycleMotor, proximo);
+    }
 }
 function deferAquecedorOutsideWindow(config, fromSp) {
     const nextOpen = nextAquecedorWindowOpenAt(config, fromSp);
@@ -3278,7 +3294,8 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             runtime.lastResult = "Supabase não configurado.";
             return;
         }
-        await releaseStuckAquecedorQueueRows(supabase);
+        const scopedInstanceNames = connected.map((item) => item.instancia);
+        await releaseStuckAquecedorQueueRows(supabase, scopedInstanceNames);
         await syncAquecedorConnectedInstances(supabase, connectedAll);
         const combinations = [];
         for (const origem of connected) {
@@ -3296,14 +3313,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             runtime.lastResult = "Sem combinações válidas.";
             return;
         }
-        await ensureAquecedorPendingMessage();
-        const { data: cicloData } = await (supabase
-            .from("controle_ciclo")
-            .select("id, ciclo_global")
-            .order("id", { ascending: true })
-            .limit(1)
-            .maybeSingle());
-        const cicloGlobal = typeof cicloData?.ciclo_global === "number" ? Math.floor(cicloData.ciclo_global) : 0;
+        const cicloGlobal = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerCicloGlobal)(motor);
         if (forceTest) {
             await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config);
             return;
@@ -3314,6 +3324,12 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             return;
         }
         const chosen = picked.chosen;
+        const scopedKeys = new Set((await listAquecedorScopedInstanceNames(ownerEmail)).map((name) => name.toLowerCase()));
+        if (!scopedKeys.has(chosen.instancia_origem.toLowerCase()) ||
+            !scopedKeys.has(chosen.instancia_destino.toLowerCase())) {
+            deferAquecedorRetryOrWindow(config, nowSp, 60, `Par ${chosen.instancia_origem} → ${chosen.instancia_destino} fora do escopo do assinante; envio bloqueado.`);
+            return;
+        }
         const dailyQuota = await (0, aquecedor_instance_lifecycle_service_1.canAquecedorInstanceSendToday)(chosen.instancia_origem);
         if (!dailyQuota.ok) {
             deferAquecedorRetryOrWindow(config, nowSp, 300, `${chosen.instancia_origem}: ${dailyQuota.reason}`);
@@ -3322,7 +3338,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         const proximo = picked.index + 1;
         const pairContext = buildAquecedorPairContext(chosen, connected);
         const ensured = await ensureAquecedorPendingMessage(pairContext);
-        const pendingData = await fetchProcessableAquecedorPending(supabase);
+        const pendingData = await fetchProcessableAquecedorPending(supabase, scopedInstanceNames, chosen.instancia_origem);
         if (!pendingData?.id) {
             const reason = ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
             if (!ensured.ok && isSupabaseTransientError({ message: reason })) {
@@ -3437,7 +3453,12 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         await (0, aquecedor_instance_lifecycle_service_1.recordAquecedorInstanceDailySend)(chosen.instancia_origem);
         const nextPick = await pickAquecedorCombinationAsync(supabase, connected, combinations, proximo);
         await ensureAquecedorPendingMessage(nextPick ? buildAquecedorPairContext(nextPick.chosen, connected) : null);
-        await supabase.from("controle_ciclo").upsert({ id: 1, ciclo_global: proximo }, { onConflict: "id" });
+        (0, aquecedor_owner_runtime_registry_1.setAquecedorOwnerCicloGlobal)(motor, proximo);
+        void (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerSnapshot)(ownerEmail, {
+            cicloGlobal: proximo,
+            workerId: getAquecedorWorkerId(),
+            workerHeartbeatAt: new Date().toISOString(),
+        });
         const waitMin = config.waitMinSeconds;
         const waitMax = config.waitMaxSeconds;
         const waitSeconds = Math.floor(Math.random() * (waitMax - waitMin + 1)) + waitMin;
@@ -5021,7 +5042,7 @@ function describeEvoInstancesFetchError(status, detail) {
     return normalized || "Erro ao buscar dados no sistema WABA - Drax.";
 }
 async function callEvoAction(url, method, body, options) {
-    const result = await (0, evo_http_client_1.evoHttpRequest)(url, method, {
+    const result = await (0, evo_api_config_1.evoHttpRequestWithBaseFailover)(url, method, {
         apiKey: EVO_API_KEY,
         body,
         timeoutMs: options?.timeoutMs ?? (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
@@ -5457,21 +5478,42 @@ async function callEvoSendTextWithRetry(url, body, maxAttempts = 3) {
                 body: `${result.body || ""} | EVO retornou HTTP OK, mas corpo indica falha no envio.`.slice(0, 500),
             };
         }
-        const bodyLc = String(last.body || last.error || "").toLowerCase();
-        const isTransient = last.status === 0 ||
-            last.status === 429 ||
-            last.status === 500 ||
-            last.status === 502 ||
-            last.status === 503 ||
-            last.status === 504 ||
-            bodyLc.includes("connection closed") ||
-            bodyLc.includes("timeout") ||
-            bodyLc.includes("econnreset") ||
-            bodyLc.includes("socket hang up");
+        const detailStr = String(last.body || last.error || "");
+        const isTransient = (0, evo_send_recovery_service_1.isEvoSendTransientError)(detailStr, last.status);
         if (!isTransient || attempt >= maxAttempts)
             break;
         const waitMs = Math.floor(500 * Math.pow(2, attempt - 1) + Math.random() * 250);
         await new Promise((r) => setTimeout(r, waitMs));
+    }
+    if (last && !last.ok) {
+        const detailStr = String(last.body || last.error || "");
+        const recovered = await (0, evo_send_recovery_service_1.recoverEvoSendTextAfterFailure)({
+            url,
+            body,
+            apiKey: EVO_API_KEY,
+            timeoutMs,
+            status: last.status,
+            detail: detailStr,
+        });
+        const recoveredAccepted = recovered.ok && isEvoSendTextAccepted(recovered.json, recovered.body);
+        if (recoveredAccepted) {
+            return {
+                ok: true,
+                status: recovered.status,
+                body: recovered.body,
+                json: recovered.json,
+                error: recovered.error,
+            };
+        }
+        if (recovered.status && recovered.body) {
+            last = {
+                ok: false,
+                status: recovered.status,
+                body: recovered.body,
+                json: recovered.json,
+                error: recovered.error,
+            };
+        }
     }
     return (last || {
         ok: false,
@@ -7097,9 +7139,8 @@ app.get("/aquecedor/envios", async (req, res) => {
             return aliasesMap.get(key) || key;
         };
         const allowed = await resolveAquecedorEnviosAllowedInstances(ownerEmail);
-        const globalScope = isAquecedorGlobalScopeOwner(ownerEmail);
-        const scopedTechnicalNames = globalScope ? [] : await listAquecedorScopedInstanceNames(ownerEmail);
-        if (!globalScope && scopedTechnicalNames.length === 0) {
+        const scopedTechnicalNames = await listAquecedorScopedInstanceNames(ownerEmail);
+        if (scopedTechnicalNames.length === 0) {
             const ownerMotor = ownerEmail ? (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail) : null;
             const ownerMotorRunning = ownerMotor?.runtime.running === true || ownerMotor?.desired === true;
             let hint = "";
@@ -7129,11 +7170,9 @@ app.get("/aquecedor/envios", async (req, res) => {
         const supabase = getSupabaseClient();
         const localRows = await readAquecedorEnviosLog();
         for (const row of localRows) {
-            if (!globalScope) {
-                const rowOwner = String(row.ownerEmail || "").trim().toLowerCase();
-                if (rowOwner !== ownerEmail)
-                    continue;
-            }
+            const rowOwner = String(row.ownerEmail || "").trim().toLowerCase();
+            if (rowOwner && rowOwner !== ownerEmail)
+                continue;
             // Com Supabase, envios concluídos vêm só de logs_envios (evita linha duplicada no painel).
             if (supabase && row.status === "Envio com Sucesso")
                 continue;
@@ -7297,12 +7336,9 @@ app.get("/aquecedor/command-logs", async (req, res) => {
         const limit = Number.isFinite(rawLimit)
             ? Math.max(1, Math.min(120, Math.floor(rawLimit)))
             : 30;
-        const globalScope = isAquecedorGlobalScopeOwner(ownerEmail);
         const items = (await readAquecedorCommandLog()).filter((row) => {
-            if (globalScope)
-                return true;
             const rowOwner = String(row.ownerEmail || "").trim().toLowerCase();
-            return rowOwner === ownerEmail;
+            return !ownerEmail || rowOwner === ownerEmail;
         });
         return res.json({ items: items.slice(0, limit) });
     }
@@ -7349,7 +7385,6 @@ app.post("/aquecedor/start", async (req, res) => {
     }
     await (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerIntent)(ownerEmail, true);
     startAquecedorRuntimeLocal(ownerEmail);
-    void ensureAquecedorPendingMessage();
     const motor = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail);
     motor.runtime.lastResult = "Aquecedor iniciado.";
     void appendAquecedorCommandLog("Aquecedor iniciado.", ownerEmail);

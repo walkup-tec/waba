@@ -21,6 +21,14 @@ Como usar:
 ## Última atualização
 2026-07-09
 
+**WABA — Aquecedor isolamento + pares regressão (2026-07-09):** master não aquece instâncias de outros assinantes; fila/ciclo/turnos por escopo do owner; `cicloGlobal` por motor. Marker `DEPLOY-2026-07-09-aquecedor-isolamento-pares-fix`. Ver `doc/LOG-2026-07-09__133000__aquecedor-isolamento-pares-regressao-fix.md`. Palavras-chave: `aquecedor cross-tenant`, `pares A→B`, `mozart walkup`.
+
+**WABA — Hex Créditos Outros imagem restaurada (2026-07-09):** tela Contratar volta a usar `disparos-hex-cluster.png` (3 hexágonos inteiros); removido SVG `.disparos-hex-light-lines` e CSS `mix-blend-mode: lighten` / `aspect-ratio` que cortavam o topo. Bets mantém `creditBet_02.png`. Ver `doc/LOG-2026-07-09__162500__hex-outros-restaurar-imagem-sem-svg.md`. Palavras-chave: `disparos-hex-cluster`, `hex-orbit`, `Contratar créditos Outros`.
+
+**WABA — Mensagem masters + BM inoperante (2026-07-09):** masters nova campanha com Operador no resumo; BM inoperante → `# BM INOPERANTE ATRIBUÍDA` para masters. Marker `DEPLOY-2026-07-09-operacional-mensagem-masters-bm`.
+
+**WABA — Evolution P1001 overlay Swarm (2026-07-09):** DB `pg_isready` OK mas `nc` → Host unreachable `10.11.0.19`; fix `docker service update --force` DB→redis→EVO ou `systemctl restart docker`. Ver LOG P1001 seção overlay.
+
 **WABA — EVO HTTP 500 send recovery + failover (2026-07-09):** failover URL (`172.17.0.1:30181`), restart leve da instância em 500 Prisma/integrationSession, reenvio único em aquecedor/disparos/operacional/boas-vindas; monitor uptime checa `fetchInstances`. Marker `DEPLOY-2026-07-09-evo-send-recovery-failover`. Ver `doc/LOG-2026-07-09__121500__evo-http-500-send-recovery-failover.md`. Palavras-chave: `evo 500`, `integrationSession`, `aquecedor pendente`, `failover 30181`.
 
 **WABA — Iniciar campanha resposta rápida (2026-07-09):**** modal fecha em ~400ms; lista em background; listCampanhas sem ensure em todas. Marker `DEPLOY-2026-07-09-iniciar-campanha-resposta-rapida`. Ver `doc/LOG-2026-07-09__115500__iniciar-campanha-salvando-travado-fix.md`.

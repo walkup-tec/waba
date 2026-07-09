@@ -34,6 +34,7 @@ import { notifyCampaignCompletedEmail, notifyCampaignErrorReportedEmail } from "
 import {
   notifyOperacionalStaffOnCampaignCreated,
   notifyOperacionalStaffOnCampaignAssigned,
+  scheduleMastersBmInoperanteNotify,
   type OperacionalNotifyResult,
 } from "../mail/waba-operacional-campaign-notify.service";
 import { WabaFinanceiroSplitService } from "../billing/waba-financeiro-split.service";
@@ -624,6 +625,7 @@ export class WabaOperacionalCampanhasService {
         bmInoperanteRegisteredAt: now,
         updatedAt: now,
       });
+      scheduleMastersBmInoperanteNotify(campaignId);
       // Campanha permanece com este operacional; alerta master após 30h via processDueReassignments.
       const detail = this.getCampaignDetail(campaignId, staff);
       if (!detail) {

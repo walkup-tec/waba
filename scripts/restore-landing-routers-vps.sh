@@ -13,10 +13,10 @@
 #   sed -i 's/\r$//' /root/restore-landing-routers-vps.sh && chmod +x /root/restore-landing-routers-vps.sh
 #   /root/restore-landing-routers-vps.sh
 #
-# Versão: restore-landing-routers-2026-07-08-v6
+# Versão: restore-landing-routers-2026-07-09-v7
 set -euo pipefail
 
-RESTORE_VERSION="restore-landing-routers-2026-07-08-v6"
+RESTORE_VERSION="restore-landing-routers-2026-07-09-v7"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 CUSTOM="/etc/easypanel/traefik/config/custom.yaml"
 LOG="${RESTORE_LANDING_LOG:-/var/log/restore-landing-routers.log}"
@@ -170,17 +170,20 @@ def fix_url(text: str, swarm: str, url: str) -> str:
     if not url or not url.startswith("http://172.17.0.1:"):
         print(f"skip backend {swarm} url={url!r}")
         return text
-    for key in (f"{swarm}-0", f"{swarm}-1", swarm):
+    changed = 0
+    for key in (f"{swarm}-0", f"{swarm}-1", f"{swarm}-2", swarm):
         pat = rf'("{re.escape(key)}"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")[^"]+(")'
-        new, n = re.subn(pat, rf"\g<1>{url}\2", text, count=1)
+        text, n = re.subn(pat, rf"\g<1>{url}\2", text, count=1)
         if n:
             print(f"backend {key} -> {url}")
-            return new
-    old = f"http://tasks.{swarm}:3000/"
-    if old in text:
-        print(f"replace {old} -> {url}")
-        return text.replace(old, url)
-    print(f"AVISO: service {swarm} não encontrado para backend")
+            changed += n
+    if not changed:
+        old = f"http://tasks.{swarm}:3000/"
+        if old in text:
+            print(f"replace {old} -> {url}")
+            text = text.replace(old, url)
+        else:
+            print(f"AVISO: service {swarm} não encontrado para backend")
     return text
 
 
@@ -311,7 +314,12 @@ main() {
 
   patch_main "${pv_url:-}" "${bets_url:-}"
   reload_hup
-  validate
+  if [[ -x /root/traefik-reconcile-vps.sh ]]; then
+    log "delegando reconcile atômico"
+    /root/traefik-reconcile-vps.sh >>"$LOG" 2>&1 || true
+  else
+    validate
+  fi
   log "=== ${RESTORE_VERSION} fim ==="
 }
 

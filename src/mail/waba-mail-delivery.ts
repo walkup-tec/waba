@@ -240,6 +240,7 @@ export const deliverOperacionalNewCampaignEmail = async (input: {
   plannedSendCount: number;
   createdAtLabel: string;
   apiKindLabel: string;
+  segmentLabel?: string;
 }): Promise<WabaEmailDeliveryResult> => {
   const operacionalEmail = String(input.operacionalEmail || "")
     .trim()
@@ -249,12 +250,14 @@ export const deliverOperacionalNewCampaignEmail = async (input: {
   const mail = buildOperacionalNewCampaignTemplate({
     recipientName: operacionalName,
     recipientEmail: operacionalEmail,
+    recipientRole: "operacional",
     campaignId: input.campaignId,
     campaignName: input.campaignName,
     subscriberId: input.subscriberId,
     plannedSendCount: input.plannedSendCount,
     createdAtLabel: input.createdAtLabel,
     apiKindLabel: input.apiKindLabel,
+    segmentLabel: input.segmentLabel,
     campaignUrl,
   });
   return deliverEmail({

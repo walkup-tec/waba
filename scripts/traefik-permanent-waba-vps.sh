@@ -432,6 +432,7 @@ def fix_service(name: str, url: str) -> int:
 for key in service_keys:
     fix_service(key, backend_url)
 
+# Só altera blocos do próprio serviço — NUNCA patch em massa em paginadevendas/bets ao rodar disparador
 block_pats = []
 if is_disparador:
     block_pats.append(
@@ -478,66 +479,7 @@ for host in host_aliases:
                 text = text.replace(old, backend_url.rstrip("/"))
                 print(f"  replace {old}* -> {backend_url}")
 
-needles = [public_host]
-if easypanel_host:
-    needles.append(easypanel_host)
-if is_disparador:
-    needles.extend([
-        "waba.draxsistemas",
-        "waba_disparador",
-        "waba-disparador",
-        "waba-waba",
-    ])
-if is_paginadevendas:
-    needles.extend([
-        "wabadisparos",
-        "paginadevendas",
-        "waba_paginadevendas",
-        "typebot_paginadevendas",
-    ])
-if is_bets_pv:
-    needles.extend([
-        "bet.waba",
-        "bets_pv",
-        "waba_bets_pv",
-        "waba-bets-pv",
-    ])
-
-def fix_host_windows(host_needle, backend):
-    global text
-    if not host_needle or not backend:
-        return 0
-    lines = text.splitlines(keepends=True)
-    i = 0
-    changed = 0
-    while i < len(lines):
-        line = lines[i]
-        if host_needle in line and re.search(r"Host|host|rule", line):
-            end = min(i + 40, len(lines))
-            block = "".join(lines[i:end])
-            orig = block
-            block = re.sub(
-                rf'("url"\s*:\s*")http://[^"]+(")',
-                rf'\g<1>{backend}\2',
-                block,
-                count=1,
-            )
-            if block != orig:
-                newlines = block.splitlines(keepends=True)
-                if len(newlines) < (end - i):
-                    newlines.extend(lines[i + len(newlines) : end])
-                lines[i:end] = newlines[: end - i]
-                changed += 1
-            i = end
-        else:
-            i += 1
-    text = "".join(lines)
-    return changed
-
-for needle in needles:
-    n = fix_host_windows(needle, backend_url)
-    if n:
-        print(f"  janela Host {needle} -> {backend_url} ({n}x)")
+# Não usar fix_host_windows: contamina backends entre serviços (ex. disparador → 30210).
 
 open(path, "w", encoding="utf-8").write(text)
 PY

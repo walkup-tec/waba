@@ -269,55 +269,27 @@ export const OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS = 24;
 export type OperacionalNewCampaignTemplateInput = {
   recipientName: string;
   recipientEmail: string;
+  /** operacional: saudação "Operador {nome}"; master: saudação com nome apenas. */
+  recipientRole?: "operacional" | "master";
   campaignId: string;
   campaignName: string;
   subscriberId: string;
   plannedSendCount: number;
   createdAtLabel: string;
-  /** ISO da criação — usado no WhatsApp (dd/mm/aaaa). */
   createdAtIso?: string;
-  /** Nome do operacional atribuído à campanha (texto do WhatsApp). */
   assignedOperacionalName?: string;
   apiKindLabel: string;
+  segmentLabel?: string;
   campaignUrl: string;
 };
 
-const formatCampaignSendCountLabel = (count: number): string => {
-  const plannedSendCount = Math.max(0, Math.round(Number(count) || 0));
-  if (plannedSendCount >= 1000) {
-    const thousands = plannedSendCount / 1000;
-    const formatted =
-      thousands % 1 === 0
-        ? String(thousands)
-        : thousands.toLocaleString("pt-BR", {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 1,
-          });
-    return `${formatted} mil envios`;
+const resolveOperacionalNewCampaignGreeting = (input: OperacionalNewCampaignTemplateInput): string => {
+  const name = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+  if (input.recipientRole === "operacional") {
+    const firstName = name.split(/\s+/).filter(Boolean)[0] || name;
+    return `Olá, Operador ${firstName}!`;
   }
-  return `${plannedSendCount} envios`;
-};
-
-const formatCampaignCreatedDateLabel = (input: {
-  createdAtIso?: string;
-  createdAtLabel?: string;
-}): string => {
-  const iso = String(input.createdAtIso || "").trim();
-  if (iso) {
-    const date = new Date(iso);
-    if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleDateString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
-    }
-  }
-  const label = String(input.createdAtLabel || "").trim();
-  if (!label) return "—";
-  const datePart = label.split(",")[0]?.trim();
-  return datePart || label;
+  return `Olá, ${name}!`;
 };
 
 export const buildOperacionalNewCampaignTemplate = (input: OperacionalNewCampaignTemplateInput) => {
@@ -326,16 +298,18 @@ export const buildOperacionalNewCampaignTemplate = (input: OperacionalNewCampaig
   const subscriberId = String(input.subscriberId || "").trim() || "—";
   const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
   const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+  const segmentLabel = String(input.segmentLabel || "").trim() || "—";
   const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
   const slaHours = OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+  const greeting = resolveOperacionalNewCampaignGreeting(input);
 
   const subject = `Nova campanha ${apiKindLabel} aguardando sua configuração`;
   const html = baseEmailShell(
     "Nova campanha para atendimento",
     `
-    <p style="margin:0 0 12px;color:#1e293b;">Olá, <strong>${escapeHtml(recipient)}</strong>!</p>
+    <p style="margin:0 0 12px;color:#1e293b;">${escapeHtml(greeting)}</p>
     <p style="margin:0 0 12px;color:#1e293b;">
-      Tudo bem? Uma nova campanha foi gerada no plano <strong>${escapeHtml(apiKindLabel)}</strong>
+      Uma nova campanha foi gerada no plano <strong>${escapeHtml(apiKindLabel)}</strong>
       e está aguardando sua configuração no painel operacional.
     </p>
     <p style="margin:0 0 8px;color:#1e293b;"><strong>Resumo da campanha:</strong></p>
@@ -345,18 +319,18 @@ export const buildOperacionalNewCampaignTemplate = (input: OperacionalNewCampaig
       ${registrationFieldRow("Nome da campanha", campaignName)}
       ${registrationFieldRow("Envios registrados", String(plannedSendCount))}
       ${registrationFieldRow("Plano de atendimento", apiKindLabel)}
+      ${registrationFieldRow("Segmento", segmentLabel)}
     </table>
     <p style="margin:0 0 12px;color:#1e293b;">
-      Por gentileza, acesse o sistema e inicie a configuração desta campanha.
+      Por gentileza, acesse seu painel operador e inicie a configuração desta campanha.
       O prazo para atendimento é de até <strong>${slaHours} horas</strong> a partir da criação.
     </p>
-    ${primaryButtonHtml(input.campaignUrl, "Abrir campanha no painel")}
+    ${primaryButtonHtml(input.campaignUrl, "Acesse seu painel operador")}
     <p style="margin:16px 0 0;color:#1e293b;">
       Este aviso foi enviado somente para operacionais designados ao plano
       <strong>${escapeHtml(apiKindLabel)}</strong>. Obrigado pelo cuidado com cada entrega!
     </p>
     <p style="margin:16px 0 0;color:#1e293b;">
-      Um abraço,<br />
       <strong>Equipe Drax Sistemas</strong>
     </p>
   `,
@@ -368,12 +342,108 @@ export const buildOperacionalNewCampaignTemplate = (input: OperacionalNewCampaig
 export const buildOperacionalNewCampaignWhatsAppText = (
   input: OperacionalNewCampaignTemplateInput,
 ): string => {
-  const sendCountLabel = formatCampaignSendCountLabel(input.plannedSendCount);
-  const dateLabel = formatCampaignCreatedDateLabel(input);
-  const operacionalName =
-    String(input.assignedOperacionalName || input.recipientName || "").trim() || "Operacional";
+  const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
+  const subscriberId = String(input.subscriberId || "").trim() || "—";
+  const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
+  const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+  const segmentLabel = String(input.segmentLabel || "").trim() || "—";
+  const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+  const slaHours = OPERACIONAL_CAMPAIGN_ATTENDANCE_SLA_HOURS;
+  const greeting = resolveOperacionalNewCampaignGreeting({
+    ...input,
+    recipientRole: "operacional",
+  });
+  const campaignUrl = String(input.campaignUrl || "").trim();
+  const panelAccessLine = campaignUrl
+    ? `Acesse seu painel operador:\n${campaignUrl}`
+    : "Acesse seu painel operador.";
 
-  return `Nova campanha gerada na plataforma da Drax. ${sendCountLabel} - ${dateLabel} - ${operacionalName}`;
+  return [
+    greeting,
+    "",
+    `Uma nova campanha foi gerada no plano ${apiKindLabel} e está aguardando sua configuração no painel operacional.`,
+    "",
+    "Resumo da campanha:",
+    `- Data de criação: ${createdAtLabel}`,
+    `- ID do assinante: ${subscriberId}`,
+    `- Nome da campanha: ${campaignName}`,
+    `- Envios registrados: ${plannedSendCount}`,
+    `- Plano de atendimento: ${apiKindLabel}`,
+    `- Segmento: ${segmentLabel}`,
+    "",
+    `Por gentileza, acesse seu painel operador e inicie a configuração desta campanha. O prazo para atendimento é de até ${slaHours} horas a partir da criação.`,
+    "",
+    panelAccessLine,
+    "",
+    `Este aviso foi enviado somente para operacionais designados ao plano ${apiKindLabel}. Obrigado pelo cuidado com cada entrega!`,
+    "",
+    "Equipe Drax Sistemas",
+  ].join("\n");
+};
+
+const resolveMasterGreeting = (input: { recipientName: string; recipientEmail: string }): string => {
+  const name = resolveRecipientLabel(input.recipientName, input.recipientEmail);
+  return `Olá, ${name}!`;
+};
+
+/** WhatsApp para masters — nova campanha (visão supervisão). */
+export const buildMasterNewCampaignWhatsAppText = (
+  input: OperacionalNewCampaignTemplateInput,
+): string => {
+  const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
+  const subscriberId = String(input.subscriberId || "").trim() || "—";
+  const createdAtLabel = String(input.createdAtLabel || "").trim() || "—";
+  const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+  const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+  const operadorName =
+    String(input.assignedOperacionalName || "").trim() || "—";
+
+  return [
+    resolveMasterGreeting(input),
+    "",
+    `Uma nova campanha foi gerada no plano ${apiKindLabel} e está aguardando sua configuração no painel operacional.`,
+    "",
+    "Resumo da campanha:",
+    `- Operador: ${operadorName}`,
+    `- Data de criação: ${createdAtLabel}`,
+    `- ID do assinante: ${subscriberId}`,
+    `- Nome da campanha: ${campaignName}`,
+    `- Envios registrados: ${plannedSendCount}`,
+    `- Plano de atendimento: ${apiKindLabel}`,
+  ].join("\n");
+};
+
+export type MasterBmInoperanteCampaignTemplateInput = {
+  recipientName: string;
+  recipientEmail: string;
+  campaignId: string;
+  campaignName: string;
+  subscriberId: string;
+  plannedSendCount: number;
+  updatedAtLabel: string;
+  apiKindLabel: string;
+};
+
+/** WhatsApp para masters — BM inoperante registrada pelo operacional. */
+export const buildMasterBmInoperanteCampaignWhatsAppText = (
+  input: MasterBmInoperanteCampaignTemplateInput,
+): string => {
+  const campaignName = String(input.campaignName || "").trim() || "Nova campanha";
+  const subscriberId = String(input.subscriberId || "").trim() || "—";
+  const updatedAtLabel = String(input.updatedAtLabel || "").trim() || "—";
+  const apiKindLabel = String(input.apiKindLabel || "").trim() || "API";
+  const plannedSendCount = Math.max(0, Math.round(Number(input.plannedSendCount) || 0));
+
+  return [
+    "# BM INOPERANTE ATRIBUÍDA",
+    "",
+    "Resumo da campanha:",
+    `- Data da Atualização: ${updatedAtLabel}`,
+    `- ID do assinante: ${subscriberId}`,
+    `- Nome da campanha: ${campaignName}`,
+    `- Envios registrados: ${plannedSendCount}`,
+    `- Plano de atendimento: ${apiKindLabel}`,
+  ].join("\n");
 };
 
 export const buildCampaignErrorReportedTemplate = (input: CampaignErrorReportedTemplateInput) => {

@@ -15,6 +15,8 @@ const waba_mail_service_1 = require("../mail/waba-mail.service");
 const waba_evolution_whatsapp_delivery_service_1 = require("../mail/waba-evolution-whatsapp-delivery.service");
 const data_path_1 = require("../data-path");
 const asaas_integration_health_service_1 = require("./asaas-integration-health.service");
+const evo_api_config_1 = require("../evo-api-config");
+const evo_send_recovery_service_1 = require("../services/evo-send-recovery.service");
 const STATE_FILE = (0, data_path_1.resolveDataFile)("uptime-monitor-state.json");
 const DEFAULT_INTERVAL_MINUTES = 15;
 const DEFAULT_REALERT_MINUTES = 60;
@@ -51,6 +53,7 @@ const isUptimeMonitorEnabled = () => {
 };
 exports.isUptimeMonitorEnabled = isUptimeMonitorEnabled;
 const isAsaasCheckEnabled = () => parseBoolEnv(process.env.WABA_UPTIME_MONITOR_CHECK_ASAAS) ?? true;
+const isEvoCheckEnabled = () => parseBoolEnv(process.env.WABA_UPTIME_MONITOR_CHECK_EVO) ?? true;
 const resolveUptimeIntervalMs = () => {
     const raw = Number(process.env.WABA_UPTIME_MONITOR_INTERVAL_MINUTES ?? DEFAULT_INTERVAL_MINUTES);
     const minutes = Number.isFinite(raw) && raw >= 1 ? Math.round(raw) : DEFAULT_INTERVAL_MINUTES;
@@ -89,13 +92,19 @@ const resolveUptimeTargets = () => {
         }
     }
     const httpTargets = targets.length ? targets : DEFAULT_TARGETS;
-    if (isAsaasCheckEnabled()) {
-        return [
+    const withAsaas = isAsaasCheckEnabled()
+        ? [
             ...httpTargets,
             { key: "asaas_webhook", label: "Asaas (integração/webhook)", kind: "asaas" },
+        ]
+        : httpTargets;
+    if (isEvoCheckEnabled()) {
+        return [
+            ...withAsaas,
+            { key: "evo_api", label: "Evolution API (fetchInstances)", kind: "evo" },
         ];
     }
-    return httpTargets;
+    return withAsaas;
 };
 exports.resolveUptimeTargets = resolveUptimeTargets;
 async function checkHttpTarget(target, options) {
@@ -159,8 +168,51 @@ async function checkAsaasTarget(target) {
         };
     }
 }
+async function checkEvoTarget(target) {
+    const apiKey = String(process.env.EVO_API_KEY || "").trim();
+    if (!apiKey) {
+        return { key: target.key, label: target.label, ok: false, detail: "EVO_API_KEY ausente." };
+    }
+    try {
+        const url = (0, evo_send_recovery_service_1.resolveEvoInstancesUrl)();
+        const result = await (0, evo_api_config_1.evoHttpRequestWithBaseFailover)(url, "GET", {
+            apiKey,
+            timeoutMs: resolveHttpTimeoutMs(),
+            retries: 2,
+        });
+        if (result.ok) {
+            return {
+                key: target.key,
+                label: target.label,
+                ok: true,
+                detail: `fetchInstances HTTP ${result.status}`,
+            };
+        }
+        const detail = String(result.body || result.error || "sem corpo").slice(0, 200);
+        return {
+            key: target.key,
+            label: target.label,
+            ok: false,
+            detail: `fetchInstances HTTP ${result.status}: ${detail}`,
+        };
+    }
+    catch (error) {
+        return {
+            key: target.key,
+            label: target.label,
+            ok: false,
+            detail: error instanceof Error ? error.message : "erro ao consultar Evolution",
+        };
+    }
+}
 async function runChecks(targets) {
-    const results = await Promise.all(targets.map((target) => target.kind === "asaas" ? checkAsaasTarget(target) : checkHttpTarget(target)));
+    const results = await Promise.all(targets.map((target) => {
+        if (target.kind === "asaas")
+            return checkAsaasTarget(target);
+        if (target.kind === "evo")
+            return checkEvoTarget(target);
+        return checkHttpTarget(target);
+    }));
     return results;
 }
 async function readMonitorState() {
@@ -389,9 +441,13 @@ async function getUptimeLights(options) {
     }
     const targets = (0, exports.resolveUptimeTargets)();
     const fastTimeout = Math.min(resolveHttpTimeoutMs(), 6000);
-    const results = await Promise.all(targets.map((target) => target.kind === "asaas"
-        ? checkAsaasTarget(target)
-        : checkHttpTarget(target, { attempts: 2, timeoutMs: fastTimeout })));
+    const results = await Promise.all(targets.map((target) => {
+        if (target.kind === "asaas")
+            return checkAsaasTarget(target);
+        if (target.kind === "evo")
+            return checkEvoTarget(target);
+        return checkHttpTarget(target, { attempts: 2, timeoutMs: fastTimeout });
+    }));
     const lights = results.map((result) => ({
         key: result.key,
         label: result.label,

@@ -431,6 +431,7 @@ class WabaOperacionalCampanhasService {
                 bmInoperanteRegisteredAt: now,
                 updatedAt: now,
             });
+            (0, waba_operacional_campaign_notify_service_1.scheduleMastersBmInoperanteNotify)(campaignId);
             // Campanha permanece com este operacional; alerta master após 30h via processDueReassignments.
             const detail = this.getCampaignDetail(campaignId, staff);
             if (!detail) {
