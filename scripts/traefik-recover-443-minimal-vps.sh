@@ -66,7 +66,7 @@ BETS_URL = f"http://{gw}:30211/"
 PV_URL = f"http://{gw}:30210/"
 
 HTTP_BETS = '''      "http-waba_bets_pv-0": {
-        "entryPoints": ["web"],
+        "entryPoints": ["http"],
         "service": "waba_bets_pv-0",
         "rule": "''' + BETS_RULE + '''",
         "priority": 1000

@@ -19,9 +19,19 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-10 (12:41 — chamados criar todos usuários)
+2026-07-10 (13:08 — deploy Easypanel chamados)
+
+**WABA — Deploy Easypanel chamados (2026-07-10):** push `master` `d8e2aaf` assunto `[a331459] feat: permitir criar chamado para todos os usuarios`; marker `DEPLOY-2026-07-10-chamados-todos-usuarios`. Confirmar rebuild `waba_disparador` no Easypanel. Ver `doc/LOG-2026-07-10__130800__deploy-easypanel-chamados.md`.
 
 **WABA — Criar chamado todos usuários (2026-07-10):** API libera qualquer autenticado; Master usa botão na tela Chamados; demais usam FAB como assinantes; mesmo modal. Marker `DEPLOY-2026-07-10-chamados-todos-usuarios`. Ver `doc/LOG-2026-07-10__124100__chamados-criar-todos-usuarios.md`. Palavras-chave: `admin-chamados-create-btn`, `canOpenSupportTickets`, `waba-support-fab`.
+
+**WABA — Cobranças Financeiro limpas (2026-07-10):** `waba-billing-orders.json` = 3 B (`[]`); split-config 1211 B preservado.
+
+**WABA — Purge + serviço OK (2026-07-10):** health `ok:true`; intakes/push/tickets/settlements ~36–40 B; split-config 1211 B + billing-orders 7780 B preservados. Marker `DEPLOY-2026-07-10-chamados-todos-usuarios`.
+
+**WABA — Purge Admin menus OK (2026-07-10):** intakes/push/tickets/settlements ~36–40 B; billing-orders + split-config preservados; Supabase OK. Backup `purge-admin-menus-20260710T203516Z`. Ver `doc/LOG-2026-07-10__173600__purge-admin-menus-sucesso.md`.
+
+**WABA — Pós-purge Admin (2026-07-10):** health mostra purge **incompleto** — intakes/push/settlements/tickets ainda com sizeBytes altos; só `disparosLocal` parece limpo. Split-config e billing-orders OK. Reaplicar com `--apply --with-supabase`. Ver `doc/LOG-2026-07-10__152200__pos-purge-admin-menus-checklist.md`.
 
 **WABA — Purge Admin menus (2026-07-10):** escopo OK (Push = só histórico; Financeiro mantém split-config + pedidos). Script `purge-admin-menus-production.cjs` pronto. **Bloqueado:** sem chave SSH nesta máquina — aplicar via Hostinger console. Ver `doc/LOG-2026-07-10__121800__purge-admin-menus-ssh-bloqueado.md`.
 
@@ -2158,3 +2168,63 @@ Palavras-chave para buscar:
 - `E:\Waba` inexistente; script copiado para `D:\Waba\scripts\`. Dry-run local D:\v02 com dados de teste (não apply).
 - **Não** apagar `waba-financeiro-split-config.json` / `waba-billing-orders.json`.
 - Keywords: `purge-admin-menus`, `VPS_SSH_PRIVATE_KEY`, `waba_disparador`.
+
+- **2026-07-10** — Validação /health pós-purge Admin: campaignIntakes/push/settlements/tickets ainda com sizeBytes altos; só disparosLocal (~93B) parece limpo; split+billing preservados. Restart não necessário. Keywords: purge admin, dataPersistence.
+
+## 2026-07-10 — Diagnose purge Admin producao
+- Health: intakes 86KB, tickets 9.7KB, push 37KB, settlements 17KB ainda cheios; disparosLocal 93B (vazio). Purge nao aplicado (SSH). Empty JSON do script bate com repos. Catalog health nome badges errado vs waba-master-menu-seen.json.
+- Keywords: purge-admin-menus, dataPersistence catalog, docker exec
+
+
+## 2026-07-10 — /health purge validate
+- **Bloqueio:** waba.draxsistemas.com.br/health = **502** (SPA HTML). Catalog sizeBytes nao lido.
+- SSH local sem chave. Revalidar apos backend/Traefik OK.
+- Keywords: health 502, purge catalog
+
+## 2026-07-10 — Traefik bootstrap OK; bet ainda 404
+- Bootstrap: Traefik 1/1 + :443; WABA /health 200; wabadisparos.com.br **200**; bet.waba.info **404** (meta DRAX → backend :30210 errado).
+- Não usar HUP neste VPS; file provider hot-reload. Patch: `fix-bet-route-30211-vps.sh` sem linha HUP.
+- Keywords: traefik bootstrap, bet 404, 30211, fix-bet-route, no-HUP
+
+## 2026-07-10 — bet yaml patched, Traefik sem reload
+- :30211 OK (landing Bets). Patch main.yaml OK. `ERRO: Traefik down` = filtro docker ps falso; :443 up.
+- Sem HUP/force → Traefik não leu URL nova → bet continua 404. Próximo: `docker service update --force easypanel-traefik` + validar.
+- Keywords: fsnotify, force traefik reload, fix-bet-route
+
+## 2026-07-10 — force Traefik OK; bet ainda SPA 404 disparos
+- Yaml: bets→30211 + Host bet. Force convergiu; :443 up; disparos/waba 200.
+- Body bet = 404 idêntico a path morto em wabadisparos (não é drax-bets). Rota ativa ≠ service file esperado.
+- Keywords: bet 404 paginadevendas, router steal, traefik API diagnose
+
+## 2026-07-10 — easypanel-bets host também 404 SPA
+- Sem labels Traefik nos services. Router file parece correto; Host easypanel bets via Traefik = SPA disparos.
+- :30211 direto = Bets OK. Suspeita: service name `waba_bets_pv-0` não efetivo na memória.
+- Fix: service único `waba_bets_landing_fix` → 30211 + force.
+- Keywords: easypanel-bets 404, service name collision, landing_fix
+
+## 2026-07-10 — ROOT: paginadevendas tem Host bets
+- `https-waba_paginadevendas-0` listado com hosts bets no yaml. Rouba rota → SPA 404.
+- Pós-force :443 caiu (000). Bootstrap + remover Hosts bets de *paginadevendas*.
+- Keywords: cross-contamination Host, paginadevendas bet.waba, traefik 443 down
+
+## 2026-07-10 — decontam sem efeito; suspeita mount/regen
+- Extract completo: só routers bets têm Host. landing_fix no patch. HTTPS ainda SPA 404.
+- Falso positivo janela 800b. Próximo: disco vs cat no container Traefik pós-force; senão emergency :30180/bets.
+- Keywords: traefik mount main.yaml, easypanel regen, bet-emergency
+
+## 2026-07-10 — entrypoints reais = http/https
+- Env Traefik: ENTRYPOINTS_HTTP/HTTPS (não web/websecure). File watch OK; sem labels docker.
+- Cert bet OK. Suspeita: router bets em `websecure` inativo. Fix: entryPoints https/http.
+- Keywords: TRAEFIK_ENTRYPOINTS_HTTPS, websecure, entrypoint mismatch
+
+## 2026-07-10 — BET FIXED: web/websecure → http/https
+- Causa raiz confirmada: bets routers em `web`/`websecure` (inexistentes); paginadevendas em `http`/`https`.
+- Patch entryPoints + file watch 8s → local/pub bet **200** + disparos 200; sem force.
+- Lição: main.yaml Easypanel neste VPS só `http`/`https`. Rule UCP + scripts atualizados.
+- Keywords: bet.waba.info 200, entryPoints https, websecure bug
+
+## 2026-07-10 — Prevenção entryPoint guard
+- Criado `traefik-entrypoint-guard-vps.sh` + timer 3min; autoheal/monitor/health-audit; `npm run check:traefik-entrypoints`; rule `traefik-entrypoints-http-https.mdc`; doc `TRAEFIK-ENTRYPOINTS-HTTP-HTTPS.md`.
+- Instalar no VPS após push: guard `install` ou `install-vps-monitor.sh install`.
+- Keywords: entrypoint guard, prevenção websecure, waba-traefik-entrypoint-guard.timer
+

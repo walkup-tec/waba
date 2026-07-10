@@ -197,7 +197,7 @@ def clone_bets_if_missing(text: str) -> str:
     http_router = f'''
       "http-{bets_swarm}-0": {{
         "entryPoints": [
-          "web"
+          "http"
         ],
         "service": "{bets_swarm}-0",
         "rule": "(Host(`{bets_ep}`) || Host(`{bets_pub}`)) && PathPrefix(`/`)",
@@ -206,7 +206,7 @@ def clone_bets_if_missing(text: str) -> str:
     https_router = f'''
       "https-{bets_swarm}-0": {{
         "entryPoints": [
-          "websecure"
+          "https"
         ],
         "service": "{bets_swarm}-0",
         "rule": "(Host(`{bets_ep}`) || Host(`{bets_pub}`)) && PathPrefix(`/`)",

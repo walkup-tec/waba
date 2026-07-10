@@ -30,10 +30,12 @@ Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Trae
 - Backend neste VPS: preferir `http://172.17.0.1:PORTA/` se a porta host já responde 200 (overlay `tasks.*` costuma falhar).
 - `custom.yaml` aqui = accessLog/api (estático-ish). **Não** colocar `http.routers` dinâmicos lá.
 - Script canônico landings: `scripts/restore-landing-routers-vps.sh` (v6+).
+- **Entrypoints reais (env):** `TRAEFIK_ENTRYPOINTS_HTTP` / `TRAEFIK_ENTRYPOINTS_HTTPS` → nomes **`http`** e **`https`**. **Nunca** `web` / `websecure` neste VPS (router fica órfão → 404 SPA / host “some”). Incidente 2026-07-10: `bet.waba.info` quebrado só por `websecure` nos routers bets; paginadevendas já usava `https`. Preferir file `watch` (~8s) a force/HUP.
 
 ## Proibido
 
 - Assumir schema `http:\n  routers:` da doc genérica sem `grep` no `main.yaml` real.
+- Usar `entryPoints: ["web"]` / `["websecure"]` em patches do `main.yaml` deste VPS.
 - `docker service update --force easypanel-traefik` / kill docker-proxy com Traefik `1/1` + `:443` up.
 - `publish` em porta já usada (ex.: 30210 = v02) → task Pending forever.
 - Confiar só em `doc/FIX-TRAEFIK*.md` sem abrir a doc Traefik + inspeção no VPS.

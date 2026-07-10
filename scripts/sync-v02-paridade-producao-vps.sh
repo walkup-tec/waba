@@ -91,7 +91,7 @@ def upsert_router(name, rule, service, middleware=None, priority=100):
     {name}:
       rule: {rule}
       entryPoints:
-        - websecure
+        - https
       service: {service}
       tls: {{}}
       priority: {priority}

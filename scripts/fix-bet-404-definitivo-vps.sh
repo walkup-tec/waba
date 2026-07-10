@@ -75,7 +75,7 @@ while True:
 http_router = f'''
       "http-{bets_swarm}-0": {{
         "entryPoints": [
-          "web"
+          "http"
         ],
         "service": "{bets_swarm}-0",
         "rule": "{RULE}",
@@ -85,7 +85,7 @@ http_router = f'''
 https_router = f'''
       "https-{bets_swarm}-0": {{
         "entryPoints": [
-          "websecure"
+          "https"
         ],
         "service": "{bets_swarm}-0",
         "rule": "{RULE}",

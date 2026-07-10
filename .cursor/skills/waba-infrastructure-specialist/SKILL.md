@@ -75,6 +75,7 @@ bash scripts/infra/vps-cpu-report.sh
 |---------|------|
 | `curl (7)` na `:443` | `/root/traefik-easypanel-bootstrap-vps.sh run` ou `traefik-permanent-all-vps.sh run` |
 | 502 / router sumiu | `/root/traefik-permanent-all-vps.sh run` |
+| Landing `bet.waba.info` 404 SPA (disparos) com `:30211` OK | **entryPoints** `web`/`websecure` no router bets — deve ser `http`/`https`. Rodar `/root/waba-infra/traefik-entrypoint-guard-vps.sh run` |
 | Cert `CN=Easypanel` | Verificar `acme.json` (`python3 -m json.tool`); backup → `{}` → restart traefik |
 | WABA OK em 30180, HTTPS falha | Guard Traefik + `run` no script permanente |
 | CPU alta, serviços OK | `vps-cpu-report.sh` → identificar container → otimizar (abaixo) |
@@ -109,8 +110,10 @@ Gera:
 - `/var/log/waba-infra-audit.log` — auditoria a cada 15 min
 - `/var/log/waba-infra-cpu.log` — snapshot CPU a cada 15 min
 - `waba-infra-audit.timer` — systemd
+- `waba-traefik-autoheal.timer` — landings a cada 2 min
+- `waba-traefik-entrypoint-guard.timer` — **impede regressão `web`/`websecure`** (a cada 3 min)
 
-Validar: `systemctl status waba-infra-audit.timer`
+Validar: `systemctl status waba-infra-audit.timer waba-traefik-entrypoint-guard.timer`
 
 ## Monitoramento no Cursor
 

@@ -90,6 +90,22 @@ mem_avail_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || ec
 [[ ! "$landing_bet_code" =~ ^[23] ]] && note_issue "landing_bet_not_ok"
 [[ ! "$landing_disparos_code" =~ ^[23] ]] && note_issue "landing_disparos_not_ok"
 
+# entryPoints web/websecure quebram routers neste VPS (env = http/https)
+entrypoint_bad=0
+CFG_MAIN="/etc/easypanel/traefik/config/main.yaml"
+if [[ -f "$CFG_MAIN" ]]; then
+  if grep -qE '"entryPoints"[[:space:]]*:[[:space:]]*\[[^]]*"web(secure)?"' "$CFG_MAIN" 2>/dev/null \
+    || grep -qE '^[[:space:]]*-[[:space:]]*websecure[[:space:]]*$' "$CFG_MAIN" 2>/dev/null \
+    || grep -qE '^[[:space:]]*-[[:space:]]*web[[:space:]]*$' "$CFG_MAIN" 2>/dev/null; then
+    entrypoint_bad=1
+    note_issue "traefik_entrypoint_web_or_websecure"
+  fi
+fi
+if [[ "$entrypoint_bad" -eq 1 ]] && [[ -x /root/waba-infra/traefik-entrypoint-guard-vps.sh ]]; then
+  echo "ENTRYPOINT_GUARD: corrigindo web/websecure -> http/https"
+  /root/waba-infra/traefik-entrypoint-guard-vps.sh run || true
+fi
+
 if [[ "$JSON_MODE" -eq 1 ]]; then
   issues_json="[]"
   if ((${#issues[@]})); then

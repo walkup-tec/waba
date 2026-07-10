@@ -35,7 +35,12 @@ chmod +x /tmp/install-vps-monitor.sh
 /tmp/install-vps-monitor.sh status
 ```
 
-Logs: `/var/log/waba-infra-audit.log`, `/var/log/waba-infra-cpu.log`
+Logs: `/var/log/waba-infra-audit.log`, `/var/log/waba-infra-cpu.log`, `/var/log/waba-traefik-entrypoint-guard.log`
+
+### Entrypoints Traefik (crítico)
+
+Neste VPS: só **`http`** / **`https`** — nunca `web` / `websecure`.  
+Guard: `scripts/infra/traefik-entrypoint-guard-vps.sh` — doc `doc/TRAEFIK-ENTRYPOINTS-HTTP-HTTPS.md`
 
 ### Outros agentes do projeto
 

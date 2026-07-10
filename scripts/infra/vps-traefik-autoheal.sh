@@ -5,11 +5,12 @@
 # Versão: waba-traefik-autoheal-2026-07-07-v1
 set -euo pipefail
 
-AUTOHEAL_VERSION="waba-traefik-autoheal-2026-07-07-v1"
+AUTOHEAL_VERSION="waba-traefik-autoheal-2026-07-10-v2"
 LOG="${WABA_TRAEFIK_AUTOHEAL_LOG:-/var/log/waba-traefik-autoheal.log}"
 LOCK_FILE="${WABA_TRAEFIK_AUTOHEAL_LOCK:-/var/run/waba-traefik-autoheal.lock}"
 ALL_SCRIPT="${TRAEFIK_ALL_SCRIPT:-/root/traefik-permanent-all-vps.sh}"
 REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
+ENTRYPOINT_GUARD="${WABA_ENTRYPOINT_GUARD:-/root/waba-infra/traefik-entrypoint-guard-vps.sh}"
 
 PUBLIC_HOSTS=(
   "waba.draxsistemas.com.br|/health"
@@ -74,13 +75,33 @@ run_heal() {
   fi
 }
 
+run_entrypoint_guard() {
+  local guard="$ENTRYPOINT_GUARD"
+  if [[ ! -x "$guard" ]]; then
+    mkdir -p /root/waba-infra
+    if curl -fsSL "${REPO_BASE}/infra/traefik-entrypoint-guard-vps.sh" -o "$guard" 2>/dev/null; then
+      sed -i 's/\r$//' "$guard" 2>/dev/null || true
+      chmod +x "$guard"
+    else
+      log "AVISO: entrypoint guard ausente — skip"
+      return 0
+    fi
+  fi
+  log "Rodando entrypoint guard (http/https)"
+  bash "$guard" run >>"$LOG" 2>&1 || true
+}
+
 cmd_check_and_heal() {
+  # Sempre normaliza entryPoints antes de probes/heal pesado (incidente bet 2026-07-10)
+  run_entrypoint_guard
+
   if check_hosts; then
     return 0
   fi
   log "Hosts com falha — iniciando auto-heal"
   run_heal
   sleep 5
+  run_entrypoint_guard
   if check_hosts; then
     log "Auto-heal concluído com sucesso"
     return 0

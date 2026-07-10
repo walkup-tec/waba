@@ -1,0 +1,38 @@
+---
+description: Entrypoints Traefik neste VPS são http/https — nunca web/websecure
+alwaysApply: true
+---
+
+# Traefik entryPoints (Easypanel VPS)
+
+Incidente **2026-07-10**: `bet.waba.info` 404 SPA enquanto `wabadisparos.com.br` 200.
+
+## Causa
+
+Env do `easypanel-traefik`:
+
+- `TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS=:80` → nome **`http`**
+- `TRAEFIK_ENTRYPOINTS_HTTPS_ADDRESS=:443` → nome **`https`**
+
+Routers com `entryPoints: ["web"]` / `["websecure"]` **não anexam** a nenhuma porta → órfãos. Cert ACME pode existir; a rota HTTPS não usa o service certo.
+
+## Obrigatório em todo patch `main.yaml`
+
+| Router prefix | entryPoints |
+|---------------|-------------|
+| `http-*` | `["http"]` |
+| `https-*` | `["https"]` |
+
+Espelhar `https-waba_paginadevendas-0` (já correto). **Nunca** copiar exemplos genéricos Traefik com `web`/`websecure`.
+
+## Guardas
+
+- VPS: `scripts/infra/traefik-entrypoint-guard-vps.sh` (`check|fix|run|install`)
+- Autoheal chama o guard antes do heal
+- Repo: `npm run check:traefik-entrypoints`
+- Rule irmã: `ucp-traefik-static-dynamic.mdc`
+
+## Doc
+
+- https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/
+- https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/router/

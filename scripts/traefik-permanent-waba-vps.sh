@@ -351,7 +351,7 @@ router_name = "waba-public-" + re.sub(r"[^a-z0-9]+", "-", public_host.lower()).s
 new_block = f"""    {router_name}:
       rule: Host(`{public_host}`)
       entryPoints:
-        - websecure
+        - https
       service: {service}
       tls: {{}}
 """

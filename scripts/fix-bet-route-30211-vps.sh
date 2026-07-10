@@ -122,13 +122,24 @@ while True:
             continue
     pos = bend
 
-# --- 2) Qualquer router bets: rule + service corretos ---
+# --- 2) Qualquer router bets: rule + service + entryPoints (http/https, NÃO web/websecure) ---
 for prefix in ("http", "https"):
+    ep_name = "http" if prefix == "http" else "https"
     pat = rf'("{prefix}-[^"]*(?:bets[_-]pv|bets_pv)[^"]*"\s*:\s*\{{)([\s\S]*?)(\n\s*\}})'
-    def fix_bets_router(m: re.Match) -> str:
+    def fix_bets_router(m: re.Match, _ep=ep_name) -> str:
         head, body, tail = m.group(1), m.group(2), m.group(3)
         body = re.sub(r'("rule"\s*:\s*")[^"]+(")', rf"\g<1>{rule}\2", body, count=1)
         body = re.sub(r'("service"\s*:\s*")[^"]+(")', rf"\g<1>{bets_svc}\2", body, count=1)
+        if '"entryPoints"' in body:
+            body = re.sub(
+                r'"entryPoints"\s*:\s*\[[^\]]*\]',
+                f'"entryPoints": ["{_ep}"]',
+                body,
+                count=1,
+                flags=re.S,
+            )
+        else:
+            body = body.replace('"rule":', f'"entryPoints": ["{_ep}"],\n        "rule":', 1)
         if '"priority"' in body:
             body = re.sub(r'("priority"\s*:\s*)\d+', r"\g<1>1000", body, count=1)
         else:
@@ -136,7 +147,7 @@ for prefix in ("http", "https"):
         return head + body + tail
     text, n = re.subn(pat, fix_bets_router, text, flags=re.I)
     if n:
-        print(f"PATCH routers {prefix}-bets ({n}x)")
+        print(f"PATCH routers {prefix}-bets ({n}x) entryPoints={ep_name}")
 
 # --- 3) Se router com bet ainda aponta service errado, corrigir ---
 pos = 0
@@ -199,14 +210,14 @@ has_https = bool(
 if not has_https:
     http_router = f'''
       "http-waba_bets_pv-0": {{
-        "entryPoints": ["web"],
+        "entryPoints": ["http"],
         "service": "{bets_svc}",
         "rule": "{rule}",
         "priority": 1000
       }}'''
     https_router = f'''
       "https-waba_bets_pv-0": {{
-        "entryPoints": ["websecure"],
+        "entryPoints": ["https"],
         "service": "{bets_svc}",
         "rule": "{rule}",
         "priority": 1000,

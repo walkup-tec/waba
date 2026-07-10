@@ -88,14 +88,14 @@ def replace_router_block(swarm: str, http_block: str, https_block: str) -> None:
             print(f"AVISO: {prefix}-{swarm} ausente — inserir manualmente")
 
 HTTP_BETS = f'''      "http-{BETS_SWARM}-0": {{
-        "entryPoints": ["web"],
+        "entryPoints": ["http"],
         "service": "{BETS_SWARM}-0",
         "rule": "{BETS_RULE}",
         "priority": 1000
       }}'''
 
 HTTPS_BETS = f'''      "https-{BETS_SWARM}-0": {{
-        "entryPoints": ["websecure"],
+        "entryPoints": ["https"],
         "service": "{BETS_SWARM}-0",
         "rule": "{BETS_RULE}",
         "priority": 1000,
@@ -105,14 +105,14 @@ HTTPS_BETS = f'''      "https-{BETS_SWARM}-0": {{
       }}'''
 
 HTTP_PV = f'''      "http-{PV_SWARM}-0": {{
-        "entryPoints": ["web"],
+        "entryPoints": ["http"],
         "service": "{PV_SWARM}-0",
         "rule": "{PV_RULE}",
         "priority": 1000
       }}'''
 
 HTTPS_PV = f'''      "https-{PV_SWARM}-0": {{
-        "entryPoints": ["websecure"],
+        "entryPoints": ["https"],
         "service": "{PV_SWARM}-0",
         "rule": "{PV_RULE}",
         "priority": 1000,

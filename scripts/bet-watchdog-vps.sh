@@ -129,14 +129,14 @@ has_https_bets = bool(
 if not has_https_bets:
     http_router = f'''
       "http-{bets_swarm}-0": {{
-        "entryPoints": ["web"],
+        "entryPoints": ["http"],
         "service": "{bets_swarm}-0",
         "rule": "{rule}",
         "priority": 1000
       }}'''
     https_router = f'''
       "https-{bets_swarm}-0": {{
-        "entryPoints": ["websecure"],
+        "entryPoints": ["https"],
         "service": "{bets_swarm}-0",
         "rule": "{rule}",
         "priority": 1000,

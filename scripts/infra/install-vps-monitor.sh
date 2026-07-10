@@ -1,7 +1,7 @@
 #!/bin/bash
 # Instala monitor periódico de infra WABA no VPS (systemd timer, 15 min)
 # Uso (root): bash install-vps-monitor.sh install|status|run-once
-# Versão: waba-infra-install-2026-07-07-v2
+# Versão: waba-infra-install-2026-07-10-v3
 set -euo pipefail
 
 INSTALL_DIR="/root/waba-infra"
@@ -16,6 +16,7 @@ TRAEFIK_ALL="/root/traefik-permanent-all-vps.sh"
 AUTOHEAL_SCRIPT="${INSTALL_DIR}/vps-traefik-autoheal.sh"
 AUTOHEAL_SERVICE="waba-traefik-autoheal.service"
 AUTOHEAL_TIMER="waba-traefik-autoheal.timer"
+ENTRYPOINT_GUARD_SCRIPT="${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh"
 
 script_dir() {
   dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
@@ -55,6 +56,7 @@ cmd_install() {
   fetch_or_copy "vps-cpu-report.sh" "$INSTALL_DIR/vps-cpu-report.sh"
   fetch_or_copy "collect-vps-cpu-metrics-for-waba.sh" "$INSTALL_DIR/collect-vps-cpu-metrics-for-waba.sh"
   fetch_or_copy "vps-traefik-autoheal.sh" "$AUTOHEAL_SCRIPT"
+  fetch_or_copy "traefik-entrypoint-guard-vps.sh" "$ENTRYPOINT_GUARD_SCRIPT"
   ensure_traefik_permanent_all
 
   cat >"${UNIT_DIR}/${SERVICE}" <<EOF
@@ -143,8 +145,11 @@ EOF
   systemctl enable --now "${AUTOHEAL_TIMER}"
   bash "$AUTOHEAL_SCRIPT" heal || true
 
-  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}"
-  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log"
+  # Guard entryPoints http/https (nunca web/websecure) — incidente bet 2026-07-10
+  bash "$ENTRYPOINT_GUARD_SCRIPT" install || true
+
+  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer"
+  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log"
   bash "$INSTALL_DIR/vps-health-audit.sh" || true
 }
 
@@ -158,8 +163,13 @@ cmd_status() {
   systemctl status waba-infra-cpu-collector.timer --no-pager 2>/dev/null || echo "(timer cpu collector não instalado)"
   echo "--- traefik autoheal timer ---"
   systemctl status waba-traefik-autoheal.timer --no-pager 2>/dev/null || echo "(timer autoheal não instalado)"
+  echo "--- traefik entrypoint guard ---"
+  systemctl status waba-traefik-entrypoint-guard.timer --no-pager 2>/dev/null || echo "(timer entrypoint guard não instalado)"
+  bash "${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh" status 2>/dev/null || true
   echo "--- tail traefik autoheal ---"
   tail -15 /var/log/waba-traefik-autoheal.log 2>/dev/null || echo "(sem log autoheal ainda)"
+  echo "--- tail entrypoint guard ---"
+  tail -15 /var/log/waba-traefik-entrypoint-guard.log 2>/dev/null || echo "(sem log entrypoint guard ainda)"
 }
 
 cmd_run_once() {
@@ -167,6 +177,7 @@ cmd_run_once() {
   bash "${INSTALL_DIR}/vps-cpu-report.sh"
   bash "${INSTALL_DIR}/collect-vps-cpu-metrics-for-waba.sh" 2>/dev/null || true
   bash "${AUTOHEAL_SCRIPT}" heal 2>/dev/null || true
+  bash "${ENTRYPOINT_GUARD_SCRIPT}" run 2>/dev/null || true
 }
 
 case "${1:-}" in
