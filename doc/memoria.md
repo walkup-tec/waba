@@ -2228,3 +2228,17 @@ Palavras-chave para buscar:
 - Instalar no VPS após push: guard `install` ou `install-vps-monitor.sh install`.
 - Keywords: entrypoint guard, prevenção websecure, waba-traefik-entrypoint-guard.timer
 
+## 2026-07-10 — Push master d22698a
+- Commit/push: `fix: Traefik entryPoints http/https + guard anti-websecure` → `origin/master`.
+- VPS: instalar timer com raw GitHub do guard.
+- Keywords: d22698a, deploy FTP, entrypoint guard install
+
+## 2026-07-10 — Guard OK; bet 502→200 via URL 30211
+- Timer entrypoint ativo; entryPoints limpos. 502 = URL service; patch `172.17.0.1:30211/` → bet/disparos 200.
+- Contingência: entryPoints SIM; URL backend 502 ainda só detecta (não auto-fix URL) — gap residual.
+- Keywords: bet 502, 30211, contingência parcial
+
+## 2026-07-10 — Guard v2 auto-fix backend
+- `traefik-entrypoint-guard-vps.sh` v2: 502+`:30211` OK → força URL gateway; `fix-backend` + heal no `run`.
+- Keywords: guard v2, autofix 30211, fix-backend
+

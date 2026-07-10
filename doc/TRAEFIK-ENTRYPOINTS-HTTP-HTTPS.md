@@ -20,7 +20,7 @@ File provider `watch=true` aplicou a correção em ~8s **sem** `force`/HUP.
 
 | Recurso | Função |
 |---------|--------|
-| `scripts/infra/traefik-entrypoint-guard-vps.sh` | Detecta + corrige `web`/`websecure` → `http`/`https`; probe Bets; timer 3 min |
+| `scripts/infra/traefik-entrypoint-guard-vps.sh` | **v2:** detecta + corrige `web`/`websecure` → `http`/`https`; se bet=502 e `:30211`=200, força URL `http://172.17.0.1:30211/`; probe Bets; timer 3 min |
 | `scripts/infra/vps-traefik-autoheal.sh` | Chama o guard antes/depois do heal |
 | `scripts/infra/install-vps-monitor.sh` | Instala o timer do guard junto com o monitor |
 | `scripts/infra/vps-health-audit.sh` | Issue `traefik_entrypoint_web_or_websecure` + dispara guard |
@@ -31,7 +31,16 @@ File provider `watch=true` aplicou a correção em ~8s **sem** `force`/HUP.
 
 Scripts geradores de routers (restore/fix-bet/rebuild/…) alinhados para `http`/`https`.
 
-## Instalar no VPS (uma vez, após push)
+## Contingência v2 (2026-07-10)
+
+Além de entryPoints, o guard **auto-corrige backend**:
+
+1. Probe HTTPS `bet.waba.info`
+2. Se **502/503/504** e `http://127.0.0.1:30211/` = 200 → patch services `waba_bets_*` / `waba_bets_landing_fix` para `http://172.17.0.1:30211/`
+3. Aguarda file provider watch (~10s), re-probe
+4. Se `:30211` local DOWN → só log (precisa redeploy Easypanel)
+
+Comando: `fix-backend` ou `run` (heal completo).
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/infra/traefik-entrypoint-guard-vps.sh" \
