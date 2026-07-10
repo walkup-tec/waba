@@ -19,7 +19,9 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-09 (21:18 — retomada sessão)
+2026-07-09 (21:27 — deploy prod + V02 paridade)
+
+**WABA — Deploy prod uptime diagnose + V02 paridade (2026-07-09):** master `0638e8d` marker `DEPLOY-2026-07-09-uptime-diagnose-playbooks`; v02 `18b3d46` marker `DEPLOY-2026-07-09-v02-paridade-prod-uptime-diagnose` (force push). Pendente: redeploy Easypanel prod + v02, sync VPS `/tmp/sync-v02.sh run`. Ver `doc/LOG-2026-07-09__212700__deploy-prod-uptime-diagnose-v02-paridade.md`.
 
 **WABA — Uptime diagnose finalizado (2026-07-09):** fix Asaas sem alertas WhatsApp no diagnóstico; `npm run verify:uptime-diagnose`; UI botão nas luzes vermelhas (walkup only). Ver `doc/LOG-2026-07-09__212200__uptime-diagnose-finalizar-validar.md`. Palavras-chave: `uptime diagnose`, `verify:uptime-diagnose`.
 
