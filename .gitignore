@@ -1,4 +1,5 @@
 node_modules
+tsconfig.build.local.json
 .env
 .env.v01
 .env.v02

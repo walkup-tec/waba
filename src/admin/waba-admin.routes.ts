@@ -27,6 +27,10 @@ import {
   getUptimeMonitorStatus,
   getUptimeLights,
 } from "../monitoring/uptime-monitor.service";
+import {
+  diagnoseUptimeTarget,
+  isUptimeDiagnosticMasterEmail,
+} from "../monitoring/uptime-monitor-diagnostics.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
@@ -423,6 +427,29 @@ export const registerWabaAdminRoutes = (app: Express) => {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
       });
+    }
+  });
+
+  app.post("/admin/infra/uptime-monitor/diagnose", async (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    if (!isUptimeDiagnosticMasterEmail(auth.email)) {
+      return res.status(403).json({
+        error: "Diagnóstico de uptime restrito ao e-mail walkup@walkuptec.com.br.",
+      });
+    }
+    try {
+      const body = req.body as Record<string, unknown>;
+      const targetKey = String(body.targetKey ?? "").trim();
+      const execute =
+        ["1", "true"].includes(String(body.execute ?? "").trim().toLowerCase());
+      const result = await diagnoseUptimeTarget(targetKey, { execute });
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível executar o diagnóstico.";
+      const status = message.includes("inválido") || message.includes("inválida") ? 400 : 500;
+      return res.status(status).json({ error: message });
     }
   });
 

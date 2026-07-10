@@ -12,6 +12,8 @@
     "dev:v02": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-v02.ps1",
     "init:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-env-v01-v02.ps1",
     "build": "node scripts/generate-brand-logo-module.mjs && tsc && node scripts/copy-index-html.mjs",
+    "build:h": "node scripts/build-with-local-deps.cjs",
+    "verify:uptime-diagnose": "node scripts/verify-uptime-diagnose.cjs",
     "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
     "backup:production-data": "node scripts/backup-production-data.mjs",
     "verify:data-safety": "node scripts/verify-production-data-safety.mjs",

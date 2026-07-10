@@ -23,8 +23,17 @@ if (fs.existsSync(faviconIco)) {
 }
 
 if (fs.existsSync(mediaSrcDir)) {
-  await fs.promises.rm(mediaDistDir, { recursive: true, force: true });
-  await fs.promises.cp(mediaSrcDir, mediaDistDir, { recursive: true });
+  await fs.promises.mkdir(mediaDistDir, { recursive: true });
+  const entries = await fs.promises.readdir(mediaSrcDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const from = path.join(mediaSrcDir, entry.name);
+    const to = path.join(mediaDistDir, entry.name);
+    if (entry.isDirectory()) {
+      await fs.promises.cp(from, to, { recursive: true, force: true });
+    } else {
+      await fs.promises.copyFile(from, to);
+    }
+  }
 }
 
 console.log(`Copied ${srcPath} -> ${destPath}`);

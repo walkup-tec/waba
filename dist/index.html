@@ -6875,6 +6875,67 @@
       #tab-admin-monitor-cpu .panel.col-12 {
         max-width: none;
       }
+/* === CSS: inserir após regras do monitor CPU (ex.: após #tab-admin-monitor-cpu) === */
+
+.admin-uptime-light-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-uptime-diagnose-btn {
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.admin-uptime-diagnose-btn:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.45);
+}
+
+.admin-uptime-diagnose-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+#admin-uptime-diagnose-overlay .admin-monitor-cpu-playbook {
+  margin-top: 12px;
+}
+
+.admin-uptime-diagnose-meta {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.admin-uptime-diagnose-hints {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.admin-uptime-diagnose-inapp {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  font-size: 0.78rem;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 
       #admin-monitor-cpu-chart-wrap svg {
         width: 100%;
@@ -18322,6 +18383,19 @@
           </div>
         </div>
 
+        <div id="admin-uptime-diagnose-overlay" class="confirm-overlay" aria-hidden="true">
+          <div class="confirm-modal admin-uptime-diagnose-modal" role="dialog" aria-modal="true" aria-labelledby="admin-uptime-diagnose-title">
+            <div class="confirm-title" id="admin-uptime-diagnose-title">Diagnóstico de uptime</div>
+            <p id="admin-uptime-diagnose-meta" class="admin-uptime-diagnose-meta"></p>
+            <ul id="admin-uptime-diagnose-hints" class="admin-uptime-diagnose-hints" hidden></ul>
+            <pre id="admin-uptime-diagnose-inapp" class="admin-uptime-diagnose-inapp" hidden></pre>
+            <div id="admin-uptime-diagnose-playbook" class="admin-monitor-cpu-playbook" hidden></div>
+            <div class="confirm-actions">
+              <button type="button" id="admin-uptime-diagnose-close-btn" class="instance-action-btn" type="button">Fechar</button>
+            </div>
+          </div>
+        </div>
+
         <div id="tab-admin-push" class="tab-panel tab-hidden" aria-hidden="true">
           <div class="row g-3">
             <section class="panel col-12">
@@ -20913,6 +20987,136 @@
         setSystemDownActive(false);
       }
 
+      function canRunUptimeDiagnosticUi() {
+        return (
+          hasMasterAccess() &&
+          String(wabaSessionEmail || "").trim().toLowerCase() === WABA_SYSTEM_DOWN_EMAIL
+        );
+      }
+
+      function renderAdminUptimeDiagnosePlaybook(playbook, steps) {
+        const root = document.getElementById("admin-uptime-diagnose-playbook");
+        if (!root) return;
+        if (!playbook?.steps?.length) {
+          root.hidden = true;
+          root.innerHTML = "";
+          return;
+        }
+        root.hidden = false;
+        const stepRows = Array.isArray(steps) ? steps : [];
+        const stepsHtml = (playbook.steps || [])
+          .slice()
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map((step) => {
+            const command = String(step.command || "").trim();
+            const note = step.note
+              ? `<p class="admin-monitor-cpu-step-note">${escapeAdminHtml(step.note)}</p>`
+              : "";
+            const result = stepRows.find((row) => Number(row.order) === Number(step.order));
+            const output = result?.executed
+              ? `<pre class="admin-uptime-diagnose-step-output">${escapeAdminHtml(String(result.output || ""))}</pre>`
+              : "";
+            const copyBtn =
+              command && !command.startsWith("#") && !command.startsWith("POST ")
+                ? `<button type="button" class="admin-monitor-cpu-copy-btn admin-uptime-diagnose-copy-btn">Copiar comando</button>`
+                : "";
+            return `
+              <div class="admin-monitor-cpu-step admin-uptime-diagnose-step">
+                <strong>Passo ${Number(step.order || 0)} — ${escapeAdminHtml(step.title || "Comando")}</strong>
+                ${note}
+                <pre>${escapeAdminHtml(command || "—")}</pre>
+                ${output}
+                ${copyBtn}
+              </div>`;
+          })
+          .join("");
+        root.innerHTML = `
+          <h4>Playbook — ${escapeAdminHtml(playbook.label || "Resolução")}</h4>
+          <p>${escapeAdminHtml(playbook.summary || "")}</p>
+          <p class="muted">Execute um passo por vez no VPS (SSH). Aguarde cada comando terminar.</p>
+          ${stepsHtml}`;
+      }
+
+      function closeAdminUptimeDiagnoseModal() {
+        const overlay = document.getElementById("admin-uptime-diagnose-overlay");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      function openAdminUptimeDiagnoseModal() {
+        const overlay = document.getElementById("admin-uptime-diagnose-overlay");
+        if (!overlay) return;
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      async function runAdminUptimeDiagnose(targetKey, triggerBtn) {
+        const key = String(targetKey || "").trim();
+        if (!key || !canRunUptimeDiagnosticUi()) return;
+        const meta = document.getElementById("admin-uptime-diagnose-meta");
+        const hintsEl = document.getElementById("admin-uptime-diagnose-hints");
+        const inAppEl = document.getElementById("admin-uptime-diagnose-inapp");
+        const title = document.getElementById("admin-uptime-diagnose-title");
+        if (triggerBtn) {
+          triggerBtn.disabled = true;
+          triggerBtn.textContent = "Analisando…";
+        }
+        if (meta) meta.textContent = "Executando diagnóstico…";
+        if (hintsEl) {
+          hintsEl.hidden = true;
+          hintsEl.innerHTML = "";
+        }
+        if (inAppEl) {
+          inAppEl.hidden = true;
+          inAppEl.textContent = "";
+        }
+        openAdminUptimeDiagnoseModal();
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/infra/uptime-monitor/diagnose",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify({ targetKey: key }),
+            },
+            30000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Falha no diagnóstico.");
+          }
+          if (title) {
+            title.textContent = `Diagnóstico — ${payload.label || key}`;
+          }
+          if (meta) {
+            const status = payload.light?.ok ? "no ar" : "fora do ar";
+            meta.textContent = `${payload.label || key}: ${status} (${payload.light?.detail || "—"}) · ${formatAdminDateTimeLabel(payload.checkedAt)}`;
+          }
+          const hints = Array.isArray(payload.hints) ? payload.hints : [];
+          if (hintsEl && hints.length) {
+            hintsEl.hidden = false;
+            hintsEl.innerHTML = hints.map((line) => `<li>${escapeAdminHtml(String(line))}</li>`).join("");
+          }
+          if (inAppEl && payload.inApp) {
+            inAppEl.hidden = false;
+            inAppEl.textContent = JSON.stringify(payload.inApp, null, 2);
+          }
+          renderAdminUptimeDiagnosePlaybook(payload.playbook, payload.steps);
+        } catch (error) {
+          if (meta) {
+            meta.textContent = error?.message || "Falha ao executar diagnóstico.";
+          }
+          renderAdminUptimeDiagnosePlaybook(null, []);
+          showToast(error?.message || "Falha no diagnóstico de uptime.", "error");
+        } finally {
+          if (triggerBtn) {
+            triggerBtn.disabled = false;
+            triggerBtn.textContent = "Diagnóstico";
+          }
+        }
+      }
+
       function renderUptimeLights(lights) {
         const strip = document.getElementById("admin-uptime-lights");
         if (!strip) return;
@@ -20922,18 +21126,25 @@
           strip.innerHTML = "";
           return;
         }
+        const showDiagnose = canRunUptimeDiagnosticUi();
         strip.hidden = false;
         strip.innerHTML = rows
           .map((light) => {
             const ok = Boolean(light?.ok);
+            const key = escapeAdminHtml(String(light?.key || ""));
             const label = escapeAdminHtml(String(light?.label || light?.key || "serviço"));
             const detail = escapeAdminHtml(String(light?.detail || (ok ? "no ar" : "sem resposta")));
             const cls = ok ? "is-ok" : "is-down";
             const title = `${label}: ${ok ? "no ar" : "fora do ar"} (${detail})`;
+            const diagnoseBtn =
+              showDiagnose && !ok
+                ? `<button type="button" class="admin-uptime-diagnose-btn" data-uptime-diagnose-key="${key}">Diagnóstico</button>`
+                : "";
             return `
-              <span class="uptime-light-item" title="${title}">
+              <span class="admin-uptime-light-row uptime-light-item ${cls}" title="${title}">
                 <span class="uptime-light-dot ${cls}" aria-hidden="true"></span>
                 <span class="uptime-light-label">${label}</span>
+                ${diagnoseBtn}
               </span>
             `;
           })
@@ -31734,6 +31945,40 @@
           try {
             await navigator.clipboard.writeText(command);
             showToast("Comando copiado para a área de transferência.", "success", 2200);
+          } catch {
+            showToast("Não foi possível copiar o comando.", "error");
+          }
+        });
+
+        document.getElementById("admin-uptime-lights")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-uptime-diagnose-key]");
+          if (!btn) return;
+          void runAdminUptimeDiagnose(btn.getAttribute("data-uptime-diagnose-key"), btn);
+        });
+
+        document.getElementById("admin-uptime-diagnose-close-btn")?.addEventListener("click", () => {
+          closeAdminUptimeDiagnoseModal();
+        });
+
+        document.getElementById("admin-uptime-diagnose-overlay")?.addEventListener("click", (event) => {
+          if (event.target?.id === "admin-uptime-diagnose-overlay") {
+            closeAdminUptimeDiagnoseModal();
+          }
+        });
+
+        document.getElementById("admin-uptime-diagnose-playbook")?.addEventListener("click", async (event) => {
+          const btn = event.target.closest(".admin-uptime-diagnose-copy-btn, .admin-monitor-cpu-copy-btn");
+          if (!btn) return;
+          const command = String(
+            btn.closest(".admin-monitor-cpu-step")?.querySelector("pre")?.textContent || ""
+          ).trim();
+          if (!command || command === "—") {
+            showToast("Comando vazio.", "error");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(command);
+            showToast("Comando copiado.", "success", 2200);
           } catch {
             showToast("Não foi possível copiar o comando.", "error");
           }

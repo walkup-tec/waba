@@ -19,7 +19,13 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-09
+2026-07-09 (21:18 — retomada sessão)
+
+**WABA — Uptime diagnose finalizado (2026-07-09):** fix Asaas sem alertas WhatsApp no diagnóstico; `npm run verify:uptime-diagnose`; UI botão nas luzes vermelhas (walkup only). Ver `doc/LOG-2026-07-09__212200__uptime-diagnose-finalizar-validar.md`. Palavras-chave: `uptime diagnose`, `verify:uptime-diagnose`.
+
+**WABA — Retomada sessão (2026-07-09):** workspace em H: confirmado; pendências: commit diagnóstico uptime + setup H:, sync `.env`, remover cópia antiga em `C:\Users\Usuario\Waba`. Ver `doc/LOG-2026-07-09__211800__snapshot-recuperacao-retomada-sessao.md`. Palavras-chave: `retomada`, `uptime diagnose`, `commit pendente`.
+
+**WABA — Workspace Google Drive H: (2026-07-09):** repositório montado em `H:\Meu Drive\Drive Profissional\Waba` via `git clone`; `npm install` no H: não funciona (Drive não NTFS) — usar `npm run build:h` (deps em `%USERPROFILE%\.waba-h-deps`). Ver `doc/SETUP-H-DRIVE.md` e `doc/LOG-2026-07-09__210700__montagem-waba-git-unidade-h.md`. Palavras-chave: `H-drive`, `build:h`, `waba-h-deps`, `google drive workspace`.
 
 **WABA — Aquecedor isolamento + pares regressão (2026-07-09):** master não aquece instâncias de outros assinantes; fila/ciclo/turnos por escopo do owner; `cicloGlobal` por motor. Marker `DEPLOY-2026-07-09-aquecedor-isolamento-pares-fix`. Ver `doc/LOG-2026-07-09__133000__aquecedor-isolamento-pares-regressao-fix.md`. Palavras-chave: `aquecedor cross-tenant`, `pares A→B`, `mozart walkup`.
 

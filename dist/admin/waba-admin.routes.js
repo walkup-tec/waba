@@ -23,6 +23,7 @@ const waba_admin_master_menu_badges_service_1 = require("./waba-admin-master-men
 const waba_admin_master_menu_badges_repository_1 = require("./waba-admin-master-menu-badges.repository");
 const asaas_integration_monitor_service_1 = require("../monitoring/asaas-integration-monitor.service");
 const uptime_monitor_service_1 = require("../monitoring/uptime-monitor.service");
+const uptime_monitor_diagnostics_service_1 = require("../monitoring/uptime-monitor-diagnostics.service");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const waba_admin_instances_service_1 = require("./waba-admin-instances.service");
 const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
@@ -422,6 +423,28 @@ const registerWabaAdminRoutes = (app) => {
             return res.status(500).json({
                 error: error instanceof Error ? error.message : "Não foi possível enviar alerta de teste.",
             });
+        }
+    });
+    app.post("/admin/infra/uptime-monitor/diagnose", async (req, res) => {
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
+            return;
+        if (!(0, uptime_monitor_diagnostics_service_1.isUptimeDiagnosticMasterEmail)(auth.email)) {
+            return res.status(403).json({
+                error: "Diagnóstico de uptime restrito ao e-mail walkup@walkuptec.com.br.",
+            });
+        }
+        try {
+            const body = req.body;
+            const targetKey = String(body.targetKey ?? "").trim();
+            const execute = ["1", "true"].includes(String(body.execute ?? "").trim().toLowerCase());
+            const result = await (0, uptime_monitor_diagnostics_service_1.diagnoseUptimeTarget)(targetKey, { execute });
+            return res.status(200).json({ ok: true, ...result });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível executar o diagnóstico.";
+            const status = message.includes("inválido") || message.includes("inválida") ? 400 : 500;
+            return res.status(status).json({ error: message });
         }
     });
     app.get("/admin/financeiro/orders", (req, res) => {
