@@ -74,7 +74,7 @@ const sendSession = (req: Request, res: Response) => {
   const menuAccess = isStaffRole(role)
     ? systemUserService.getSessionMenuAccess(session.email)
     : null;
-  const canOpenSupportTickets = Boolean(session.email) && !isStaffRole(role);
+  const canOpenSupportTickets = Boolean(session.email);
 
   return res.status(200).json({
     authenticated: true,

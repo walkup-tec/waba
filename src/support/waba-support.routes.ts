@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import multer from "multer";
 import { readWabaSessionCookie, resolveSessionRole, verifyWabaSessionToken } from "../auth/waba-auth.service";
-import { isStaffRole } from "../users/waba-system-user.service";
 import { WabaSupportTicketService } from "./waba-support-ticket.service";
 
 const supportTicketService = new WabaSupportTicketService();
@@ -23,14 +22,11 @@ const resolveRequestAuth = (req: Request) => {
   };
 };
 
-const rejectUnlessSubscriber = (req: Request, res: Response): string | null => {
+/** Qualquer usuário autenticado (assinante, master, operacional, suporte) pode abrir chamado. */
+const rejectUnlessAuthenticated = (req: Request, res: Response): string | null => {
   const auth = resolveRequestAuth(req);
   if (!auth.email) {
     res.status(401).json({ error: "Faça login para abrir um chamado de suporte." });
-    return null;
-  }
-  if (isStaffRole(auth.role)) {
-    res.status(403).json({ error: "O suporte por chamado é exclusivo para assinantes." });
     return null;
   }
   return auth.email;
@@ -38,7 +34,7 @@ const rejectUnlessSubscriber = (req: Request, res: Response): string | null => {
 
 export const registerWabaSupportRoutes = (app: Express) => {
   app.post("/support/tickets/open", (req, res) => {
-    const ownerEmail = rejectUnlessSubscriber(req, res);
+    const ownerEmail = rejectUnlessAuthenticated(req, res);
     if (!ownerEmail) return;
 
     try {
@@ -72,7 +68,7 @@ export const registerWabaSupportRoutes = (app: Express) => {
       });
     },
     (req, res) => {
-      const ownerEmail = rejectUnlessSubscriber(req, res);
+      const ownerEmail = rejectUnlessAuthenticated(req, res);
       if (!ownerEmail) return;
 
       const ticketId = String(req.params.ticketId || "").trim();

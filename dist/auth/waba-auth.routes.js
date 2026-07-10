@@ -62,7 +62,7 @@ const sendSession = (req, res) => {
     const menuAccess = (0, waba_system_user_service_1.isStaffRole)(role)
         ? systemUserService.getSessionMenuAccess(session.email)
         : null;
-    const canOpenSupportTickets = Boolean(session.email) && !(0, waba_system_user_service_1.isStaffRole)(role);
+    const canOpenSupportTickets = Boolean(session.email);
     return res.status(200).json({
         authenticated: true,
         authConfigured: true,

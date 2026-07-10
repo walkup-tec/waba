@@ -18200,7 +18200,7 @@
             <section class="panel col-12">
               <div class="panel-header">
                 <div class="panel-title">Suporte · Chamados</div>
-                <span class="muted">Acompanhe chamados abertos pelos assinantes e finalize com resposta.</span>
+                <span class="muted">Acompanhe chamados abertos e finalize com resposta. Masters também podem abrir novos chamados por aqui.</span>
               </div>
               <div class="aquecedor-section">
                 <div class="admin-subscribers-toolbar">
@@ -18230,6 +18230,16 @@
                     </button>
                   </div>
                   <button
+                    id="admin-chamados-create-btn"
+                    class="instance-action-btn btn-qrcode enabled"
+                    type="button"
+                    hidden
+                    aria-haspopup="dialog"
+                    aria-controls="waba-support-overlay"
+                  >
+                    Criar chamado
+                  </button>
+                  <button
                     id="admin-chamados-refresh-btn"
                     class="instance-action-btn btn-refresh enabled"
                     type="button"
@@ -18249,7 +18259,7 @@
                         <th scope="col">ID</th>
                         <th scope="col">Data da abertura</th>
                         <th scope="col">Data do fechamento</th>
-                        <th scope="col">Assinante</th>
+                        <th scope="col">Solicitante</th>
                         <th scope="col">Título do chamado</th>
                         <th scope="col">Anexos</th>
                         <th scope="col">Ações</th>
@@ -19764,7 +19774,7 @@
       >
         <div class="waba-support-modal-head">
           <div>
-            <div class="confirm-title" id="waba-support-title">Suporte ao assinante</div>
+            <div class="confirm-title" id="waba-support-title">Abrir chamado</div>
             <p class="waba-support-modal-subtitle">
               Descreva o problema e, se quiser, anexe áudios, vídeos ou arquivos de texto.
             </p>
@@ -20715,10 +20725,7 @@
           if (session.canOpenSupportTickets !== undefined) {
             wabaCanOpenSupportTickets = Boolean(session.canOpenSupportTickets);
           } else {
-            wabaCanOpenSupportTickets =
-              !isStaffRole(wabaAuthRole) &&
-              wabaAuthRole !== "master" &&
-              Boolean(String(session.email || "").trim());
+            wabaCanOpenSupportTickets = Boolean(String(session.email || "").trim());
           }
           const nextSessionEmail = String(session.email || "").trim().toLowerCase();
           if (nextSessionEmail && nextSessionEmail !== wabaSessionEmail) {
@@ -28724,7 +28731,7 @@
               <dd><code>${escapeAdminHtml(ticket.displayId || "—")}</code></dd>
             </div>
             <div>
-              <dt>Assinante</dt>
+              <dt>Solicitante</dt>
               <dd><code>${escapeAdminHtml(ticket.ownerEmail || "—")}</code></dd>
             </div>
             <div>
@@ -28737,7 +28744,7 @@
             </div>
           </dl>
           <div class="admin-chamados-detail-block">
-            <label>Descrição do assinante</label>
+            <label>Descrição do solicitante</label>
             <p class="admin-chamados-detail-description">${escapeAdminHtml(ticket.description || "—")}</p>
           </div>
           <div class="admin-chamados-detail-block">
@@ -32000,6 +32007,10 @@
           });
         });
 
+        document.getElementById("admin-chamados-create-btn")?.addEventListener("click", () => {
+          void openWabaSupportModal();
+        });
+
         document.querySelectorAll("[data-chamados-bucket]").forEach((btn) => {
           btn.addEventListener("click", () => {
             setAdminChamadosBucket(btn.getAttribute("data-chamados-bucket"));
@@ -32418,11 +32429,17 @@
 
       function syncWabaSupportButtonVisibility() {
         const btn = mountWabaSupportFab();
-        const shouldShow =
-          wabaCanOpenSupportTickets &&
-          !document.body.classList.contains("waba-auth-locked");
-        btn.hidden = !shouldShow;
-        if (shouldShow) syncWabaSupportFabPosition();
+        const unlocked = !document.body.classList.contains("waba-auth-locked");
+        // Masters abrem chamado pela tela Suporte · Chamados; demais usam o FAB (como assinantes).
+        const shouldShowFab =
+          wabaCanOpenSupportTickets && unlocked && wabaAuthRole !== "master";
+        btn.hidden = !shouldShowFab;
+        if (shouldShowFab) syncWabaSupportFabPosition();
+
+        const createBtn = document.getElementById("admin-chamados-create-btn");
+        if (createBtn) {
+          createBtn.hidden = !(wabaCanOpenSupportTickets && unlocked && wabaAuthRole === "master");
+        }
       }
 
       async function refreshSessionSupportAccess() {
@@ -32435,10 +32452,7 @@
           if (session.canOpenSupportTickets !== undefined) {
             wabaCanOpenSupportTickets = Boolean(session.canOpenSupportTickets);
           } else {
-            wabaCanOpenSupportTickets =
-              !isStaffRole(wabaAuthRole) &&
-              wabaAuthRole !== "master" &&
-              Boolean(String(session.email || "").trim());
+            wabaCanOpenSupportTickets = Boolean(String(session.email || "").trim());
           }
           syncWabaSupportButtonVisibility();
           void refreshPushAlerts();
@@ -32709,6 +32723,9 @@
             "success"
           );
           if (submitBtn) submitBtn.textContent = "Enviado";
+          if (wabaAuthRole === "master" && typeof loadAdminChamados === "function") {
+            void loadAdminChamados();
+          }
           window.setTimeout(() => closeWabaSupportModal(), 1800);
         } catch (error) {
           if (submitBtn) {

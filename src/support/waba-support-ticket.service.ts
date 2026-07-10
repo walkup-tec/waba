@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Express } from "express";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
+import { WabaSystemUserRepository } from "../users/waba-system-user.repository";
 import {
   resolveSupportTicketStorageDir,
   WabaSupportTicketRepository,
@@ -13,6 +14,7 @@ import {
 
 const ticketRepository = new WabaSupportTicketRepository();
 const subscriberRepository = new WabaSubscriberRepository();
+const systemUserRepository = new WabaSystemUserRepository();
 
 const MAX_ATTACHMENTS = 8;
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
@@ -77,7 +79,10 @@ const resolveAttachmentKind = (
 
 const resolveOwnerName = (email: string): string => {
   const subscriber = subscriberRepository.getByEmail(email);
-  return String(subscriber?.fullName || email).trim() || email;
+  if (subscriber?.fullName) return String(subscriber.fullName).trim();
+  const systemUser = systemUserRepository.getByEmail(email);
+  if (systemUser?.fullName) return String(systemUser.fullName).trim();
+  return email;
 };
 
 export class WabaSupportTicketService {

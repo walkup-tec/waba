@@ -19,7 +19,15 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-09 (21:27 — deploy prod + V02 paridade)
+2026-07-10 (12:41 — chamados criar todos usuários)
+
+**WABA — Criar chamado todos usuários (2026-07-10):** API libera qualquer autenticado; Master usa botão na tela Chamados; demais usam FAB como assinantes; mesmo modal. Marker `DEPLOY-2026-07-10-chamados-todos-usuarios`. Ver `doc/LOG-2026-07-10__124100__chamados-criar-todos-usuarios.md`. Palavras-chave: `admin-chamados-create-btn`, `canOpenSupportTickets`, `waba-support-fab`.
+
+**WABA — Purge Admin menus (2026-07-10):** escopo OK (Push = só histórico; Financeiro mantém split-config + pedidos). Script `purge-admin-menus-production.cjs` pronto. **Bloqueado:** sem chave SSH nesta máquina — aplicar via Hostinger console. Ver `doc/LOG-2026-07-10__121800__purge-admin-menus-ssh-bloqueado.md`.
+
+**WABA — E:\Waba sync master (2026-07-09):** merge `origin/master` `4c3f0d6` (uptime diagnose); `.env.v02` e `data/v02` preservados; V02 http://localhost:3012/version-02/ OK (mail, assinantes, EVO prod). Ver `E:\Waba\doc\LOG-2026-07-09__215300__sync-e-drive-master-uptime-diagnose.md`. **Dev canônico: E:\Waba**.
+
+**WABA — V02 local montado H: (2026-07-09):** `init:env` + `build:h` + `dev:v02` OK em http://localhost:3012/version-02/; `run-ts-dev.cjs` usa dist no Drive H:. Dados/segredos vazios — sem backup D:\\Waba. Ver `doc/LOG-2026-07-09__213900__v02-local-montado-workspace-h.md`.
 
 **WABA — Deploy prod uptime diagnose + V02 paridade (2026-07-09):** master `0638e8d` marker `DEPLOY-2026-07-09-uptime-diagnose-playbooks`; v02 `18b3d46` marker `DEPLOY-2026-07-09-v02-paridade-prod-uptime-diagnose` (force push). Pendente: redeploy Easypanel prod + v02, sync VPS `/tmp/sync-v02.sh run`. Ver `doc/LOG-2026-07-09__212700__deploy-prod-uptime-diagnose-v02-paridade.md`.
 
@@ -2142,3 +2150,11 @@ Palavras-chave para buscar:
 - **404/flapping bet.waba.info + wabadisparos (2026-07-07/08):** scripts restore/bootstrap Traefik no VPS. Logs `144500`, `073134`, `085407`.
 - **Regra Cursor study-upstream-docs (2026-07-08):** `.cursor/rules/study-upstream-docs.mdc`.
 
+
+## 2026-07-10 — Purge Admin menus produção (SSH bloqueado)
+
+- Tentativa de purge via `scripts/purge-admin-menus-production.cjs` em `/app/data` (container `waba_disparador`).
+- **Bloqueio:** máquina local sem chave SSH; `Permission denied` em `srv1261237.hstgr.cloud` / `72.60.51.127`. Chave só em secret `VPS_SSH_PRIVATE_KEY`.
+- `E:\Waba` inexistente; script copiado para `D:\Waba\scripts\`. Dry-run local D:\v02 com dados de teste (não apply).
+- **Não** apagar `waba-financeiro-split-config.json` / `waba-billing-orders.json`.
+- Keywords: `purge-admin-menus`, `VPS_SSH_PRIVATE_KEY`, `waba_disparador`.

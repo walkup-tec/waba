@@ -8,9 +8,11 @@ const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
+const waba_system_user_repository_1 = require("../users/waba-system-user.repository");
 const waba_support_ticket_repository_1 = require("./waba-support-ticket.repository");
 const ticketRepository = new waba_support_ticket_repository_1.WabaSupportTicketRepository();
 const subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository();
+const systemUserRepository = new waba_system_user_repository_1.WabaSystemUserRepository();
 const MAX_ATTACHMENTS = 8;
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const MIN_DESCRIPTION_LENGTH = 10;
@@ -70,7 +72,12 @@ const resolveAttachmentKind = (mimeType, fileName) => {
 };
 const resolveOwnerName = (email) => {
     const subscriber = subscriberRepository.getByEmail(email);
-    return String(subscriber?.fullName || email).trim() || email;
+    if (subscriber?.fullName)
+        return String(subscriber.fullName).trim();
+    const systemUser = systemUserRepository.getByEmail(email);
+    if (systemUser?.fullName)
+        return String(systemUser.fullName).trim();
+    return email;
 };
 class WabaSupportTicketService {
     constructor(repository = ticketRepository) {
