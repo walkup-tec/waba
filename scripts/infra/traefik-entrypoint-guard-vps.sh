@@ -13,10 +13,10 @@
 # Uso (root no VPS):
 #   bash traefik-entrypoint-guard-vps.sh check|fix|fix-backend|run|install|status
 #
-# Versão: traefik-entrypoint-guard-2026-07-10-v2
+# Versão: traefik-entrypoint-guard-2026-07-10-v2.1
 set -euo pipefail
 
-VERSION="traefik-entrypoint-guard-2026-07-10-v2"
+VERSION="traefik-entrypoint-guard-2026-07-10-v2.1"
 CFG="${TRAEFIK_MAIN_YAML:-/etc/easypanel/traefik/config/main.yaml}"
 LOG="${WABA_ENTRYPOINT_GUARD_LOG:-/var/log/waba-traefik-entrypoint-guard.log}"
 LOCK="${WABA_ENTRYPOINT_GUARD_LOCK:-/var/run/waba-traefik-entrypoint-guard.lock}"
@@ -37,8 +37,12 @@ LAST_BET_BODY=""
 
 log() { printf '[%s] [%s] %s\n' "$(date -Is)" "$VERSION" "$*" | tee -a "$LOG"; }
 
+# NÃO use `curl ... || echo 000` — em falha o -w já imprime 000 e o || duplica → "000000"
 http_code() {
-  curl -sS -o /dev/null -w "%{http_code}" --max-time 12 "$@" 2>/dev/null || echo "000"
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "$@" 2>/dev/null || true)"
+  [[ -n "$code" ]] || code="000"
+  printf '%s\n' "$code"
 }
 
 body_snip() {
@@ -252,6 +256,10 @@ probe_landings() {
   fi
   if [[ "$bet_code" == "000" ]]; then
     log "probe Bets 000 — Traefik/:443 down? rode bootstrap"
+    # Se disparos também 000, quase certo que :443 caiu
+    if [[ "$disparos_code" == "000" ]]; then
+      log "probe disparos também 000 — confirme: ss -tlnp | grep :443"
+    fi
     return 1
   fi
   if echo "$bet_body" | grep -qiE 'Page not found|styles-DY5U|drax-waba'; then
@@ -355,8 +363,12 @@ EOF
   systemctl daemon-reload
   systemctl enable --now "${TIMER}"
   log "instalado ${TIMER} (${VERSION})"
+  # Libera lock residual de run anterior
+  rm -f "$LOCK" 2>/dev/null || true
   bash "$dest" run || true
   systemctl status "${TIMER}" --no-pager | head -15 || true
+  echo "INSTALLED_VERSION=${VERSION} path=${dest}"
+  grep -m1 '^VERSION=' "$dest" || true
 }
 
 cmd_status() {
