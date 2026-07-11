@@ -200,7 +200,7 @@ run_all() {
     SKIP_RECONCILE=1 /root/restore-landing-routers-vps.sh >>"$LOG" 2>&1 && ok=1 || true
   fi
   if [[ -x /root/restore-easypanel-traefik-backends-vps.sh ]]; then
-    echo "--- restore-easypanel-backends ---" | tee -a "$LOG"
+    echo "--- restore-easypanel-backends (host gateway; NÃO overlay DNS) ---" | tee -a "$LOG"
     /root/restore-easypanel-traefik-backends-vps.sh >>"$LOG" 2>&1 && ok=1 || true
   elif [[ -x "$RECONCILE_SCRIPT" ]]; then
     echo "--- traefik-reconcile (patch atômico) ---" | tee -a "$LOG"
