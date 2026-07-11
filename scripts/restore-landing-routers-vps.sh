@@ -16,7 +16,7 @@
 # Versão: restore-landing-routers-2026-07-09-v7
 set -euo pipefail
 
-RESTORE_VERSION="restore-landing-routers-2026-07-09-v8"
+RESTORE_VERSION="restore-landing-routers-2026-07-10-v9"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 CUSTOM="/etc/easypanel/traefik/config/custom.yaml"
 LOG="${RESTORE_LANDING_LOG:-/var/log/restore-landing-routers.log}"
@@ -72,6 +72,12 @@ pick_backend() {
 }
 
 reload_hup() {
+  # Neste VPS HUP frequentemente derruba :443. Preferir file provider watch.
+  if [[ "${FORCE_TRAEFIK_HUP:-0}" != "1" ]]; then
+    log "reload: file watch (~12s) — sem HUP (FORCE_TRAEFIK_HUP=1 para forçar)"
+    sleep 12
+    return 0
+  fi
   local cid
   cid=$(docker ps -q -f name=easypanel-traefik -f status=running | head -1)
   [[ -n "$cid" ]] || return 1

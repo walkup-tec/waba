@@ -1,50 +1,54 @@
 #!/bin/bash
-# Restaura backends no main.yaml para o formato NATIVO do Easypanel (overlay DNS).
-# Corrige contaminação dos scripts waba (paginadevendas apontando para 30180 = tela de login).
+# Ajusta backends no main.yaml para o que FUNCIONA neste VPS:
+#   http://172.17.0.1:<porta_host>/  (publish host)
+# Overlay DNS (waba_paginadevendas:3000) costuma dar 502 — Traefik não alcança.
 #
-# Doc Traefik: https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/router/
-# Router → service → loadBalancer.servers[].url (deve ser alcançável pela rede do Traefik)
+# Doc: https://doc.traefik.io/traefik/reference/routing-configuration/http/load-balancing/service/
+# File provider watch: https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
 #
-# Uso (root@srv1261237):
+# NÃO usa HUP (neste VPS HUP derruba :443).
+#
+# Uso:
 #   bash /root/restore-easypanel-traefik-backends-vps.sh
 #
-# Versão: restore-easypanel-backends-2026-07-09-v1
+# Versão: restore-easypanel-backends-2026-07-10-v2
 set -euo pipefail
 
-VERSION="restore-easypanel-backends-2026-07-09-v1"
+VERSION="restore-easypanel-backends-2026-07-10-v2"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 LOG="${RESTORE_EP_LOG:-/var/log/restore-easypanel-backends.log}"
+HOST_GW="${WABA_HOST_GW:-172.17.0.1}"
 
 log() { printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$LOG"; }
 
 [[ -f "$CFG" ]] || { log "ERRO: $CFG ausente"; exit 1; }
 cp -a "$CFG" "${CFG}.bak-${VERSION}-$(date +%Y%m%d-%H%M%S)"
 
-python3 - "$CFG" <<'PY'
+python3 - "$CFG" "$HOST_GW" <<'PY'
 import re, sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+gw = sys.argv[2]
 text = path.read_text(encoding="utf-8")
 
-# URLs canônicas — iguais ao painel Easypanel (Domínios → serviço:porta interna)
+# Host gateway — portas publicadas neste VPS (não overlay DNS)
 CANONICAL = {
-    "waba_paginadevendas": "http://waba_paginadevendas:3000/",
-    "waba_bets_pv": "http://waba_bets_pv:3000/",
-    "waba_waba_disparador": "http://waba_waba_disparador:80/",
-    "waba_waba-disparador": "http://waba_waba_disparador:80/",
-    "walkup_evo-walkup-api": "http://walkup_evo-walkup-api:8080/",
-    "walkup_evo_walkup-api": "http://walkup_evo-walkup-api:8080/",
+    "waba_paginadevendas": f"http://{gw}:30210/",
+    "waba_bets_pv": f"http://{gw}:30211/",
+    "waba_waba_disparador": f"http://{gw}:30180/",
+    "waba_waba-disparador": f"http://{gw}:30180/",
+    "walkup_evo-walkup-api": f"http://{gw}:30181/",
+    "walkup_evo_walkup-api": f"http://{gw}:30181/",
 }
 
-# 1) Restaurar URL de cada service block por família
 for family, url in CANONICAL.items():
     pat = rf'("(?:[^"]*{re.escape(family)}[^"]*)"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")[^"]+(")'
     text, n = re.subn(pat, rf"\g<1>{url}\2", text, flags=re.I)
     if n:
         print(f"service {family}* -> {url} ({n}x)")
 
-# 2) wabadisparos NUNCA no router do disparador
+# wabadisparos NUNCA no router do disparador
 for marker in ("disparador", "waba_waba", "waba-waba", "waba.draxsistemas"):
     pat = rf'("https?-[^"]*{re.escape(marker)}[^"]*"\s*:\s*\{{[\s\S]*?"rule"\s*:\s*")([^"]*wabadisparos[^"]*)(")'
     def strip_pv(m: re.Match) -> str:
@@ -55,7 +59,6 @@ for marker in ("disparador", "waba_waba", "waba-waba", "waba.draxsistemas"):
         return m.group(1) + rule + m.group(3)
     text, _ = re.subn(pat, strip_pv, text, flags=re.I)
 
-# 3) Routers Host(wabadisparos) → service paginadevendas-0 (Easypanel)
 host_fixes = {
     "wabadisparos.com.br": "waba_paginadevendas-0",
     "waba-paginadevendas.achpyp.easypanel.host": "waba_paginadevendas-0",
@@ -101,25 +104,19 @@ while True:
     pos = end
 
 path.write_text(text, encoding="utf-8")
-print("OK main.yaml restaurado (formato Easypanel)")
+print("OK main.yaml backends = host gateway (sem overlay DNS)")
 PY
 
-CID=$(docker ps -q -f name=easypanel-traefik -f status=running | head -1)
-if [[ -n "$CID" ]]; then
-  docker kill -s HUP "$CID" >/dev/null 2>&1 || true
-  sleep 5
-  log "HUP Traefik ${CID:0:12}"
-else
-  log "AVISO: Traefik container não encontrado — suba o proxy antes de testar HTTPS"
-fi
+log "=== ${VERSION} — aguardando file watch (~12s), SEM HUP ==="
+sleep 12
 
 log "=== validação ==="
-curl -sS -o /dev/null -w "wabadisparos: %{http_code}\n" --max-time 15 \
-  --resolve wabadisparos.com.br:443:127.0.0.1 https://wabadisparos.com.br/ 2>/dev/null || echo "wabadisparos: 000"
-body=$(curl -sS --max-time 15 --resolve wabadisparos.com.br:443:127.0.0.1 https://wabadisparos.com.br/ 2>/dev/null | head -c 500 || true)
-if echo "$body" | grep -q "Acesso WABA"; then
-  log "ERRO: ainda serve LOGIN — confira URL em waba_paginadevendas-0 no main.yaml"
-elif echo "$body" | grep -qiE "disparos|cadastro|drax-waba-logo"; then
-  log "OK: landing paginadevendas"
-fi
+for u in \
+  "https://wabadisparos.com.br/" \
+  "https://bet.waba.info/" \
+  "https://waba.draxsistemas.com.br/health"
+do
+  code=$(curl -sk -o /dev/null -m 12 -w '%{http_code}' "$u" || true)
+  echo "${code}  ${u}" | tee -a "$LOG"
+done
 log "=== ${VERSION} fim ==="
