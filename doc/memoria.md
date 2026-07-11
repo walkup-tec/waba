@@ -19,7 +19,9 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-10 (13:08 — deploy Easypanel chamados)
+2026-07-10 (21:10 — mitigação Traefik down)
+
+**WABA — Mitigação Traefik down (2026-07-10):** commit `e361029` — watchdog `:443` 45s (`traefik-443-watchdog-vps.sh`), autoheal v3 + bootstrap prioritário, guard v2.2 chama bootstrap se bet+disparos=000, bootstrap timer 1min, uptime default 5min/realert 30, `doc/CLOUDFLARE-ALWAYS-ONLINE-LANDINGS.md`, SW parcial em `public-pages/`. **VPS:** instalar watchdog + reinstall guard; Cloudflare Always Online manual. Ver `doc/LOG-2026-07-10__211000__mitigacao-completa-traefik-down.md`. Keywords: `traefik-443-watchdog`, Always Online, bootstrap 45s.
 
 **WABA — Deploy Easypanel chamados (2026-07-10):** push `master` `d8e2aaf` assunto `[a331459] feat: permitir criar chamado para todos os usuarios`; marker `DEPLOY-2026-07-10-chamados-todos-usuarios`. Confirmar rebuild `waba_disparador` no Easypanel. Ver `doc/LOG-2026-07-10__130800__deploy-easypanel-chamados.md`.
 
