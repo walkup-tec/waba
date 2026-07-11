@@ -37,5 +37,6 @@ Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Trae
 - Assumir schema `http:\n  routers:` da doc genérica sem `grep` no `main.yaml` real.
 - Usar `entryPoints: ["web"]` / `["websecure"]` em patches do `main.yaml` deste VPS.
 - `docker service update --force easypanel-traefik` / kill docker-proxy com Traefik `1/1` + `:443` up.
+- Ligar vários `traefik-permanent-*-fix.timer` (ex.: 20s) + config-guard + watches + bootstrap ao mesmo tempo → **thrash** Traefik `0/1` (Assigned/Shutdown loop). Recuperação canônica: só `traefik-easypanel-bootstrap.timer` + `waba-traefik-443-watchdog` + `waba-traefik-entrypoint-guard`. `permanent-all` v6+ desliga thrash no install.
 - `publish` em porta já usada (ex.: 30210 = v02) → task Pending forever.
 - Confiar só em `doc/FIX-TRAEFIK*.md` sem abrir a doc Traefik + inspeção no VPS.

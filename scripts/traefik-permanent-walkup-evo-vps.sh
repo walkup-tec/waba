@@ -547,6 +547,7 @@ EOF
 }
 
 install_timer_service() {
+  # Default OFF — evita thrash com bootstrap/watchdog (incidente 2026-07-10).
   cat > "$TIMER_SERVICE_UNIT" <<EOF
 [Unit]
 Description=Traefik walkup evo — patch periódico (backup)
@@ -558,19 +559,24 @@ EOF
 
   cat > "$TIMER_UNIT_PATH" <<EOF
 [Unit]
-Description=Traefik walkup evo — timer 20s
+Description=Traefik walkup evo — timer (opt-in; default off)
 
 [Timer]
-OnBootSec=20
-OnUnitActiveSec=20
-AccuracySec=1
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=30s
 
 [Install]
 WantedBy=timers.target
 EOF
   systemctl daemon-reload
-  systemctl enable --now "$TIMER_SERVICE"
-  echo "Systemd: ${TIMER_SERVICE} ativo (patch a cada 20s)"
+  if [[ "${WABA_ENABLE_FIX_TIMER:-0}" == "1" ]]; then
+    systemctl enable --now "$TIMER_SERVICE"
+    echo "Systemd: ${TIMER_SERVICE} ativo (opt-in 15min)"
+  else
+    systemctl disable --now "$TIMER_SERVICE" 2>/dev/null || true
+    echo "Systemd: ${TIMER_SERVICE} instalado mas OFF (WABA_ENABLE_FIX_TIMER=1 para ligar)"
+  fi
 }
 
 install_permanent() {
@@ -584,11 +590,8 @@ install_permanent() {
 
   echo "Instalando fix Evolution API em ${dest} (Easypanel walkup/evo-walkup-api)"
 
-  cat > "$CRON_FILE" <<EOF
-# Traefik walkup evo-walkup-api — backup se watcher falhar
-* * * * * root ${dest} run >> ${LOG} 2>&1
-EOF
-  chmod 644 "$CRON_FILE"
+  # Cron a cada minuto + timers = thrash; não instalar.
+  rm -f "$CRON_FILE" 2>/dev/null || true
 
   if command -v systemctl >/dev/null 2>&1; then
     install_watch_service || echo "AVISO: systemd watch falhou"

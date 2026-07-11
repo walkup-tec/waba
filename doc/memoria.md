@@ -19,7 +19,11 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-10 (21:10 — mitigação Traefik down)
+2026-07-10 (21:35 — Traefik 1/1 + anti-thrash)
+
+**WABA — Traefik thrash 0/1 (2026-07-10):** permanent-all ligou fix.timer 20s + watches + config-guard → force em loop. Estabilizou com timers OFF; só bootstrap+443-watchdog+entrypoint-guard. Repo: `traefik-permanent-all` **v6** desliga thrash no install. Ver `doc/LOG-2026-07-10__213500__traefik-1-1-anti-thrash.md`.
+
+**WABA — VPS install mitigação (2026-07-10):** srv1261237 — watchdog `:443` 45s OK; guard v2.2 OK (bet/disparos 200); `traefik-permanent-all` falhou curl reset GitHub — retry. Ver `doc/LOG-2026-07-10__212200__vps-install-watchdog-guard-ok.md`.
 
 **WABA — Mitigação Traefik down (2026-07-10):** commit `e361029` — watchdog `:443` 45s (`traefik-443-watchdog-vps.sh`), autoheal v3 + bootstrap prioritário, guard v2.2 chama bootstrap se bet+disparos=000, bootstrap timer 1min, uptime default 5min/realert 30, `doc/CLOUDFLARE-ALWAYS-ONLINE-LANDINGS.md`, SW parcial em `public-pages/`. **VPS:** instalar watchdog + reinstall guard; Cloudflare Always Online manual. Ver `doc/LOG-2026-07-10__211000__mitigacao-completa-traefik-down.md`. Keywords: `traefik-443-watchdog`, Always Online, bootstrap 45s.
 

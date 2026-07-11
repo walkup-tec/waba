@@ -11,7 +11,7 @@
 # Versão: traefik-permanent-all-2026-07-07-v4
 set -euo pipefail
 
-ALL_VERSION="traefik-permanent-all-2026-07-09-v5"
+ALL_VERSION="traefik-permanent-all-2026-07-10-v6"
 RECONCILE_SCRIPT="/root/traefik-reconcile-vps.sh"
 WABA_SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
 WABA_HOST_PUBLISHED_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
@@ -219,6 +219,32 @@ run_all() {
   [[ "$ok" -eq 1 ]]
 }
 
+# Após install dos filhos: desliga healers agressivos (timer 20s/cron/watch storm).
+# Recuperação fica com bootstrap + waba-traefik-443-watchdog + entrypoint-guard.
+disable_thrash_healers() {
+  echo "--- desligando healers agressivos (anti-thrash Traefik) ---"
+  local unit
+  for unit in \
+    traefik-permanent-waba-fix.timer \
+    traefik-permanent-walkup-evo-fix.timer \
+    traefik-permanent-paginadevendas-fix.timer \
+    traefik-permanent-bets-pv-fix.timer \
+    traefik-permanent-waba-watch.service \
+    traefik-permanent-walkup-evo-watch.service \
+    traefik-permanent-paginadevendas-watch.service \
+    traefik-permanent-bets-pv-watch.service \
+    traefik-easypanel-config-guard.service; do
+    systemctl disable --now "$unit" 2>/dev/null || true
+  done
+  rm -f \
+    /etc/cron.d/traefik-permanent-waba-fix \
+    /etc/cron.d/traefik-permanent-walkup-evo-fix \
+    /etc/cron.d/traefik-permanent-paginadevendas-fix \
+    /etc/cron.d/traefik-permanent-bets-pv-fix \
+    2>/dev/null || true
+  echo "OK: fix.timer/watch/config-guard OFF; use bootstrap + 443-watchdog + entrypoint-guard"
+}
+
 install_all() {
   install_scripts
   seed_golden_backup
@@ -236,7 +262,15 @@ install_all() {
   "$BETS_SCRIPT" install || true
 
   install_bootstrap_timer
-  install_guard_service
+  # Guarda inotify + permanent-all run em cascata = thrash; só instala unit se pedido.
+  if [[ "${WABA_ENABLE_CONFIG_GUARD:-0}" == "1" ]]; then
+    install_guard_service
+  else
+    echo "AVISO: config-guard NÃO ativado (WABA_ENABLE_CONFIG_GUARD=1 para ligar)"
+    systemctl disable --now "$GUARD_SERVICE" 2>/dev/null || true
+  fi
+
+  disable_thrash_healers
   run_all || true
 
   echo ""
@@ -249,7 +283,8 @@ install_all() {
   echo "  EVO:        ${EVO_SCRIPT}"
   echo "  PV:         ${PV_SCRIPT}"
   echo "  BETS:       ${BETS_SCRIPT}"
-  echo "  Guard:      ${GUARD_SCRIPT} (${GUARD_SERVICE})"
+  echo "  Guard:      OFF por default (anti-thrash)"
+  echo "  Healers:    fix.timer/watch OFF — use waba-traefik-443-watchdog + entrypoint-guard"
   echo "  Log:        ${LOG}"
   echo ""
   echo "Comandos:"

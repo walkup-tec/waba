@@ -76,6 +76,7 @@ EOF
 }
 
 install_timer_service() {
+  # Default OFF — evita thrash com bootstrap/watchdog (incidente 2026-07-10).
   cat >"$TIMER_SERVICE_UNIT" <<EOF
 [Unit]
 Description=Traefik paginadevendas — patch periódico
@@ -87,19 +88,24 @@ EOF
 
   cat >"$TIMER_UNIT_PATH" <<EOF
 [Unit]
-Description=Traefik paginadevendas — timer 20s
+Description=Traefik paginadevendas — timer (opt-in; default off)
 
 [Timer]
-OnBootSec=20
-OnUnitActiveSec=20
-AccuracySec=1
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=30s
 
 [Install]
 WantedBy=timers.target
 EOF
   systemctl daemon-reload
-  systemctl enable --now "$TIMER_SERVICE"
-  echo "Systemd: ${TIMER_SERVICE} ativo (patch a cada 20s)"
+  if [[ "${WABA_ENABLE_FIX_TIMER:-0}" == "1" ]]; then
+    systemctl enable --now "$TIMER_SERVICE"
+    echo "Systemd: ${TIMER_SERVICE} ativo (opt-in 15min)"
+  else
+    systemctl disable --now "$TIMER_SERVICE" 2>/dev/null || true
+    echo "Systemd: ${TIMER_SERVICE} instalado mas OFF (WABA_ENABLE_FIX_TIMER=1 para ligar)"
+  fi
 }
 
 watch_deploy_events() {
@@ -133,11 +139,8 @@ install_fix() {
   fi
   ensure_core
 
-  cat >"$CRON_FILE" <<EOF
-# Traefik paginadevendas — backup se watcher falhar
-* * * * * root ${INSTALL_PATH} run >> ${LOG} 2>&1
-EOF
-  chmod 644 "$CRON_FILE"
+  # Cron a cada minuto = thrash; não instalar.
+  rm -f "$CRON_FILE" 2>/dev/null || true
 
   if command -v systemctl >/dev/null 2>&1; then
     install_watch_service || echo "AVISO: systemd watch falhou"
