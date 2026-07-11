@@ -9,8 +9,8 @@ import { resolveEvoInstancesUrl } from "../services/evo-send-recovery.service";
 
 const STATE_FILE = resolveDataFile("uptime-monitor-state.json");
 
-const DEFAULT_INTERVAL_MINUTES = 15;
-const DEFAULT_REALERT_MINUTES = 60;
+const DEFAULT_INTERVAL_MINUTES = 5;
+const DEFAULT_REALERT_MINUTES = 30;
 const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_HTTP_ATTEMPTS = 3;
 

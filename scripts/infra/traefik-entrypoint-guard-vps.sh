@@ -13,10 +13,10 @@
 # Uso (root no VPS):
 #   bash traefik-entrypoint-guard-vps.sh check|fix|fix-backend|run|install|status
 #
-# Versão: traefik-entrypoint-guard-2026-07-10-v2.1
+# Versão: traefik-entrypoint-guard-2026-07-10-v2.2
 set -euo pipefail
 
-VERSION="traefik-entrypoint-guard-2026-07-10-v2.1"
+VERSION="traefik-entrypoint-guard-2026-07-10-v2.2"
 CFG="${TRAEFIK_MAIN_YAML:-/etc/easypanel/traefik/config/main.yaml}"
 LOG="${WABA_ENTRYPOINT_GUARD_LOG:-/var/log/waba-traefik-entrypoint-guard.log}"
 LOCK="${WABA_ENTRYPOINT_GUARD_LOCK:-/var/run/waba-traefik-entrypoint-guard.lock}"
@@ -256,9 +256,20 @@ probe_landings() {
   fi
   if [[ "$bet_code" == "000" ]]; then
     log "probe Bets 000 — Traefik/:443 down? rode bootstrap"
-    # Se disparos também 000, quase certo que :443 caiu
     if [[ "$disparos_code" == "000" ]]; then
-      log "probe disparos também 000 — confirme: ss -tlnp | grep :443"
+      log "probe disparos também 000 — tentando bootstrap automático"
+      if [[ -x /root/traefik-easypanel-bootstrap-vps.sh ]]; then
+        bash /root/traefik-easypanel-bootstrap-vps.sh run >>"$LOG" 2>&1 || true
+        sleep 12
+        bet_code=$(http_code --resolve "${BETS_HOST}:443:127.0.0.1" "https://${BETS_HOST}/")
+        disparos_code=$(http_code --resolve "${DISPAROS_HOST}:443:127.0.0.1" "https://${DISPAROS_HOST}/")
+        LAST_BET_CODE="$bet_code"
+        LAST_DISPAROS_CODE="$disparos_code"
+        log "após bootstrap: bet=${bet_code} disparos=${disparos_code}"
+        if [[ "$bet_code" =~ ^(200|301|302|304)$ ]]; then
+          return 0
+        fi
+      fi
     fi
     return 1
   fi

@@ -146,11 +146,11 @@ EOF
 
   cat >/etc/systemd/system/${BOOTSTRAP_TIMER} <<EOF
 [Unit]
-Description=Timer bootstrap Traefik Easypanel (a cada 2 min)
+Description=Timer bootstrap Traefik Easypanel (a cada 1 min)
 
 [Timer]
-OnBootSec=90
-OnUnitActiveSec=2min
+OnBootSec=45
+OnUnitActiveSec=1min
 Persistent=true
 
 [Install]
@@ -159,7 +159,7 @@ EOF
 
   systemctl daemon-reload
   systemctl enable --now "$BOOTSTRAP_TIMER"
-  echo "Systemd: ${BOOTSTRAP_TIMER} ativo (2 min)"
+  echo "Systemd: ${BOOTSTRAP_TIMER} ativo (1 min)"
 }
 
 ensure_waba_host_port() {

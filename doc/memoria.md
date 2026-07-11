@@ -2242,3 +2242,13 @@ Palavras-chave para buscar:
 - `traefik-entrypoint-guard-vps.sh` v2: 502+`:30211` OK → força URL gateway; `fix-backend` + heal no `run`.
 - Keywords: guard v2, autofix 30211, fix-backend
 
+## 2026-07-10 — Guard v2.1 instalado e OK no VPS
+- Bootstrap: Traefik 0/1 → OK; disparos/bet 200.
+- Install via SHA `db98a1e`: VERSION v2.1; probe bet=200 disparos=200; :30211=200.
+- Contingência entryPoints+URL ativa. Queda :443 ainda depende do bootstrap/autoheal Traefik.
+- Keywords: v2.1, db98a1e, guard instalado
+
+## 2026-07-10 — Mitigação Traefik down (pacote completo)
+- Watchdog :443 45s; autoheal v3+bootstrap; uptime 5min; CF Always Online doc; SW public-pages.
+- Keywords: traefik-443-watchdog, Always Online, uptime 5min
+

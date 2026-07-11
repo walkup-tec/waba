@@ -17,6 +17,7 @@ AUTOHEAL_SCRIPT="${INSTALL_DIR}/vps-traefik-autoheal.sh"
 AUTOHEAL_SERVICE="waba-traefik-autoheal.service"
 AUTOHEAL_TIMER="waba-traefik-autoheal.timer"
 ENTRYPOINT_GUARD_SCRIPT="${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh"
+WATCHDOG_443_SCRIPT="${INSTALL_DIR}/traefik-443-watchdog-vps.sh"
 
 script_dir() {
   dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
@@ -57,6 +58,7 @@ cmd_install() {
   fetch_or_copy "collect-vps-cpu-metrics-for-waba.sh" "$INSTALL_DIR/collect-vps-cpu-metrics-for-waba.sh"
   fetch_or_copy "vps-traefik-autoheal.sh" "$AUTOHEAL_SCRIPT"
   fetch_or_copy "traefik-entrypoint-guard-vps.sh" "$ENTRYPOINT_GUARD_SCRIPT"
+  fetch_or_copy "traefik-443-watchdog-vps.sh" "$WATCHDOG_443_SCRIPT"
   ensure_traefik_permanent_all
 
   cat >"${UNIT_DIR}/${SERVICE}" <<EOF
@@ -148,8 +150,11 @@ EOF
   # Guard entryPoints http/https (nunca web/websecure) — incidente bet 2026-07-10
   bash "$ENTRYPOINT_GUARD_SCRIPT" install || true
 
-  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer"
-  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log"
+  # Watchdog :443 a cada 45s — recupera Traefik sem esperar 2–15 min
+  bash "$WATCHDOG_443_SCRIPT" install || true
+
+  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer, waba-traefik-443-watchdog.timer"
+  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log /var/log/waba-traefik-443-watchdog.log"
   bash "$INSTALL_DIR/vps-health-audit.sh" || true
 }
 
@@ -163,6 +168,9 @@ cmd_status() {
   systemctl status waba-infra-cpu-collector.timer --no-pager 2>/dev/null || echo "(timer cpu collector não instalado)"
   echo "--- traefik autoheal timer ---"
   systemctl status waba-traefik-autoheal.timer --no-pager 2>/dev/null || echo "(timer autoheal não instalado)"
+  echo "--- traefik 443 watchdog ---"
+  systemctl status waba-traefik-443-watchdog.timer --no-pager 2>/dev/null || echo "(timer 443 watchdog não instalado)"
+  bash "${INSTALL_DIR}/traefik-443-watchdog-vps.sh" status 2>/dev/null || true
   echo "--- traefik entrypoint guard ---"
   systemctl status waba-traefik-entrypoint-guard.timer --no-pager 2>/dev/null || echo "(timer entrypoint guard não instalado)"
   bash "${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh" status 2>/dev/null || true

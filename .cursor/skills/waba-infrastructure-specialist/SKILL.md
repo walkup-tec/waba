@@ -76,6 +76,7 @@ bash scripts/infra/vps-cpu-report.sh
 | `curl (7)` na `:443` | `/root/traefik-easypanel-bootstrap-vps.sh run` ou `traefik-permanent-all-vps.sh run` |
 | 502 / router sumiu | `/root/traefik-permanent-all-vps.sh run` |
 | Landing `bet.waba.info` 404 SPA (disparos) com `:30211` OK | **entryPoints** `web`/`websecure` no router bets — deve ser `http`/`https`. Rodar `/root/waba-infra/traefik-entrypoint-guard-vps.sh run` |
+| `:443` / Traefik `0/1` recorrente | `/root/waba-infra/traefik-443-watchdog-vps.sh install` (45s) + Cloudflare Always Online (`doc/CLOUDFLARE-ALWAYS-ONLINE-LANDINGS.md`) |
 | Cert `CN=Easypanel` | Verificar `acme.json` (`python3 -m json.tool`); backup → `{}` → restart traefik |
 | WABA OK em 30180, HTTPS falha | Guard Traefik + `run` no script permanente |
 | CPU alta, serviços OK | `vps-cpu-report.sh` → identificar container → otimizar (abaixo) |
@@ -112,8 +113,11 @@ Gera:
 - `waba-infra-audit.timer` — systemd
 - `waba-traefik-autoheal.timer` — landings a cada 2 min
 - `waba-traefik-entrypoint-guard.timer` — **impede regressão `web`/`websecure`** (a cada 3 min)
+- `waba-traefik-443-watchdog.timer` — **recupera Traefik/:443 a cada ~45s**
 
-Validar: `systemctl status waba-infra-audit.timer waba-traefik-entrypoint-guard.timer`
+Validar: `systemctl status waba-infra-audit.timer waba-traefik-entrypoint-guard.timer waba-traefik-443-watchdog.timer`
+
+Mitigação visitantes (edge): `doc/CLOUDFLARE-ALWAYS-ONLINE-LANDINGS.md`
 
 ## Monitoramento no Cursor
 

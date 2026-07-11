@@ -2,15 +2,17 @@
 # Auto-heal Traefik — WABA + Evolution + landings (bet.waba.info, wabadisparos.com.br).
 # Roda no VPS (root). Instalado por install-vps-monitor.sh ou bootstrap-vps-definitivo.sh.
 #
-# Versão: waba-traefik-autoheal-2026-07-07-v1
+# Versão: waba-traefik-autoheal-2026-07-10-v3
 set -euo pipefail
 
-AUTOHEAL_VERSION="waba-traefik-autoheal-2026-07-10-v2"
+AUTOHEAL_VERSION="waba-traefik-autoheal-2026-07-10-v3"
 LOG="${WABA_TRAEFIK_AUTOHEAL_LOG:-/var/log/waba-traefik-autoheal.log}"
 LOCK_FILE="${WABA_TRAEFIK_AUTOHEAL_LOCK:-/var/run/waba-traefik-autoheal.lock}"
 ALL_SCRIPT="${TRAEFIK_ALL_SCRIPT:-/root/traefik-permanent-all-vps.sh}"
+BOOTSTRAP="${TRAEFIK_BOOTSTRAP_SCRIPT:-/root/traefik-easypanel-bootstrap-vps.sh}"
 REPO_BASE="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
 ENTRYPOINT_GUARD="${WABA_ENTRYPOINT_GUARD:-/root/waba-infra/traefik-entrypoint-guard-vps.sh}"
+WATCHDOG_443="${WABA_TRAEFIK_443_WATCHDOG:-/root/waba-infra/traefik-443-watchdog-vps.sh}"
 
 PUBLIC_HOSTS=(
   "waba.draxsistemas.com.br|/health"
@@ -22,13 +24,19 @@ log() {
   echo "[$(date -Is)] [$AUTOHEAL_VERSION] $*" | tee -a "$LOG"
 }
 
+# Evita "000000" (curl -w 000 + || echo 000)
 http_code_local() {
   local host="$1"
   local path="${2:-/}"
-  curl -sS -o /dev/null -w "%{http_code}" --max-time 12 \
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 \
     --resolve "${host}:443:127.0.0.1" \
-    "https://${host}${path}" 2>/dev/null || echo "000"
+    "https://${host}${path}" 2>/dev/null || true)"
+  [[ -n "$code" ]] || code="000"
+  printf '%s\n' "$code"
 }
+
+port_443_up() { ss -tlnp 2>/dev/null | grep -q ':443 '; }
 
 check_hosts() {
   local host path code failures=()
@@ -61,6 +69,18 @@ ensure_all_script() {
   "$ALL_SCRIPT" install >>"$LOG" 2>&1 || true
 }
 
+run_bootstrap() {
+  if [[ ! -x "$BOOTSTRAP" ]]; then
+    curl -fsSL "${REPO_BASE}/traefik-easypanel-bootstrap-vps.sh" -o "$BOOTSTRAP" 2>/dev/null || true
+    sed -i 's/\r$//' "$BOOTSTRAP" 2>/dev/null || true
+    chmod +x "$BOOTSTRAP" 2>/dev/null || true
+  fi
+  if [[ -x "$BOOTSTRAP" ]]; then
+    log "bootstrap Traefik (:443)"
+    bash "$BOOTSTRAP" run >>"$LOG" 2>&1 || true
+  fi
+}
+
 run_heal() {
   ensure_all_script
   if [[ ! -x "$ALL_SCRIPT" ]]; then
@@ -87,17 +107,30 @@ run_entrypoint_guard() {
       return 0
     fi
   fi
-  log "Rodando entrypoint guard (http/https)"
+  log "Rodando entrypoint guard (http/https + backend)"
   bash "$guard" run >>"$LOG" 2>&1 || true
 }
 
 cmd_check_and_heal() {
-  # Sempre normaliza entryPoints antes de probes/heal pesado (incidente bet 2026-07-10)
+  # Se :443 morto, bootstrap ANTES de qualquer patch de yaml
+  if ! port_443_up; then
+    log ":443 ausente — bootstrap prioritário"
+    run_bootstrap
+    sleep 10
+  fi
+
   run_entrypoint_guard
 
   if check_hosts; then
     return 0
   fi
+
+  # Se todos 000, bootstrap de novo
+  if ! port_443_up; then
+    run_bootstrap
+    sleep 10
+  fi
+
   log "Hosts com falha — iniciando auto-heal"
   run_heal
   sleep 5
