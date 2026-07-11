@@ -19,7 +19,15 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-10 (21:35 — Traefik 1/1 + anti-thrash)
+2026-07-11 (20:50 — Logs Sistema)
+
+**WABA — Logs Sistema (2026-07-11):** menu Suporte separado de Monitor CPU; eventos conexão/desconexão do uptime com motivo Traefik/Yaml/Docker/Servidor; KPIs + gráficos + export Excel. Ver `doc/LOG-2026-07-11__205000__logs-sistema-monitor-cpu-split.md`.
+
+**WABA — Motivo da queda (2026-07-10 ~22h):** heal rodou `restore-easypanel-traefik-backends` v1 → URLs overlay (`waba_paginadevendas:3000`) → 502; depois HUP → Traefik down → 000. Apps locais OK. Fix backends v2 host gateway. Ver `doc/LOG-2026-07-10__220700__502-overlay-dns-backends.md`.
+
+**WABA — 502 por restore-easypanel (2026-07-10):** script v1 pôs `waba_paginadevendas:3000` (overlay) → 502; HUP → 000. Locais :30210/:30180 OK. Fix `2d2705c` backends v2 = `172.17.0.1` + sem HUP. Ver `doc/LOG-2026-07-10__220700__502-overlay-dns-backends.md`.
+
+**WABA — Contingência Traefik (2026-07-10):** VPS estável 200×3 + 1/1; camadas: bootstrap 1min, 443-watchdog 45s, entrypoint-guard 3min, anti-thrash v6, uptime 5min, doc Always Online. Pendente: Cloudflare Always Online manual. Ver `doc/LOG-2026-07-10__214000__plano-contingencia-status.md` + `doc/CLOUDFLARE-ALWAYS-ONLINE-LANDINGS.md`.
 
 **WABA — Traefik thrash 0/1 (2026-07-10):** permanent-all ligou fix.timer 20s + watches + config-guard → force em loop. Estabilizou com timers OFF; só bootstrap+443-watchdog+entrypoint-guard. Repo: `traefik-permanent-all` **v6** desliga thrash no install. Ver `doc/LOG-2026-07-10__213500__traefik-1-1-anti-thrash.md`.
 

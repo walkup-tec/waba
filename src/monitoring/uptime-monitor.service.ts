@@ -388,6 +388,8 @@ export async function runUptimeMonitorCheck(input?: {
 
   const downNow = results.filter((result) => !result.ok);
   const recoveredNow: UptimeCheckResult[] = [];
+  const newlyDown: UptimeCheckResult[] = [];
+  const recoveredSince = new Map<string, string>();
   let needAlert = Boolean(input?.forceAlert);
 
   for (const result of results) {
@@ -395,6 +397,7 @@ export async function runUptimeMonitorCheck(input?: {
     if (result.ok) {
       if (previous && previous.status === "down") {
         recoveredNow.push(result);
+        recoveredSince.set(result.key, previous.since);
         needAlert = true;
       }
       state.targets[result.key] = {
@@ -410,6 +413,7 @@ export async function runUptimeMonitorCheck(input?: {
       const lastAlertAt = previous?.lastAlertAt ? Date.parse(previous.lastAlertAt) : 0;
       const dueForRealert = wasDown && (now - lastAlertAt >= realertMs);
       if (!wasDown || dueForRealert) needAlert = true;
+      if (!wasDown) newlyDown.push(result);
       state.targets[result.key] = {
         status: "down",
         since: wasDown ? previous!.since : checkedAt,
@@ -437,6 +441,36 @@ export async function runUptimeMonitorCheck(input?: {
 
   if (!input?.skipState) {
     await writeMonitorState(state as UptimeMonitorState);
+    try {
+      const { systemConnectionLogService } = await import("./system-connection-log.service");
+      const downCount = downNow.length;
+      for (const result of newlyDown) {
+        await systemConnectionLogService.recordTransition({
+          status: "desconexao",
+          detail: result.detail,
+          targetKey: result.key,
+          targetLabel: result.label,
+          ts: checkedAt,
+          downCountSameCheck: downCount,
+        });
+      }
+      for (const result of recoveredNow) {
+        await systemConnectionLogService.recordTransition({
+          status: "conexao",
+          detail: result.detail,
+          targetKey: result.key,
+          targetLabel: result.label,
+          ts: checkedAt,
+          previousSince: recoveredSince.get(result.key) ?? null,
+          downCountSameCheck: downCount,
+        });
+      }
+    } catch (logError) {
+      console.warn(
+        "[uptime-monitor] falha ao gravar log de sistema:",
+        logError instanceof Error ? logError.message : logError,
+      );
+    }
   }
 
   if (downNow.length) {

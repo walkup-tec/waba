@@ -34,6 +34,9 @@ import {
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
+import { systemConnectionLogService } from "../monitoring/system-connection-log.service";
+import { SYSTEM_LOG_MOTIVOS } from "../monitoring/system-connection-log.types";
+import type { SystemConnectionLogFilters, SystemLogMotivo } from "../monitoring/system-connection-log.types";
 import { WabaCouponService, parseWabaCouponDiscountPercent } from "../billing/waba-coupon.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
@@ -920,6 +923,65 @@ export const registerWabaAdminRoutes = (app: Express) => {
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível verificar alerta CPU.",
+      });
+    }
+  });
+
+  app.get("/admin/infra/system-logs/dashboard", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const motivosRaw = String(req.query.motivos ?? "").trim();
+      const motivos = motivosRaw
+        ? motivosRaw
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item): item is SystemLogMotivo =>
+              (SYSTEM_LOG_MOTIVOS as readonly string[]).includes(item),
+            )
+        : undefined;
+      const filters: SystemConnectionLogFilters = {
+        preset: (String(req.query.preset || "month") as SystemConnectionLogFilters["preset"]) || "month",
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        status: (String(req.query.status || "all") as SystemConnectionLogFilters["status"]) || "all",
+        month: req.query.month ? Number(req.query.month) : undefined,
+        year: req.query.year ? Number(req.query.year) : undefined,
+        motivos,
+      };
+      return res.status(200).json(await systemConnectionLogService.getDashboard(filters));
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível carregar Logs Sistema.",
+      });
+    }
+  });
+
+  app.get("/admin/infra/system-logs/export", async (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const motivosRaw = String(req.query.motivos ?? "").trim();
+      const motivos = motivosRaw
+        ? motivosRaw
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item): item is SystemLogMotivo =>
+              (SYSTEM_LOG_MOTIVOS as readonly string[]).includes(item),
+            )
+        : undefined;
+      const filters: SystemConnectionLogFilters = {
+        preset: (String(req.query.preset || "month") as SystemConnectionLogFilters["preset"]) || "month",
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        status: (String(req.query.status || "all") as SystemConnectionLogFilters["status"]) || "all",
+        month: req.query.month ? Number(req.query.month) : undefined,
+        year: req.query.year ? Number(req.query.year) : undefined,
+        motivos,
+      };
+      const rows = await systemConnectionLogService.exportRows(filters);
+      return res.status(200).json({ rows, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível exportar Logs Sistema.",
       });
     }
   });
