@@ -67,6 +67,7 @@ function shareByMotivo(events: SystemConnectionLogEvent[]): SystemLogMotivoShare
   for (const event of downs) {
     counts.set(event.motivo, (counts.get(event.motivo) || 0) + 1);
   }
+  const total = Math.max(1, downs.length);
   return SYSTEM_LOG_MOTIVOS.map((motivo) => {
     const count = counts.get(motivo) || 0;
     return { motivo, count, pct: downs.length ? (count / total) * 100 : 0 };
