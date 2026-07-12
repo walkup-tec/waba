@@ -3976,115 +3976,248 @@
         padding: 0;
       }
 
-      .admin-logs-sistema-filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        align-items: flex-end;
-        margin-bottom: 16px;
+      /* Logs Sistema — alinhado ao tema escuro do Monitor CPU */
+      #admin-logs-sistema-page .admin-logs-sistema-filters {
+        display: grid;
+        grid-template-columns: minmax(160px, 200px) repeat(2, minmax(130px, 160px)) auto minmax(140px, 180px) auto;
+        gap: 12px 14px;
+        align-items: end;
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.18));
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.35);
       }
-      .admin-logs-sistema-field {
+      @media (max-width: 1100px) {
+        #admin-logs-sistema-page .admin-logs-sistema-filters {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 640px) {
+        #admin-logs-sistema-page .admin-logs-sistema-filters {
+          grid-template-columns: 1fr;
+        }
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-field {
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        font-size: 12px;
-        color: var(--muted, #64748b);
+        gap: 6px;
+        margin: 0;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        min-width: 0;
       }
-      .admin-logs-sistema-field select,
-      .admin-logs-sistema-field input {
-        min-width: 140px;
-        padding: 6px 8px;
+      #admin-logs-sistema-page .admin-logs-sistema-field select,
+      #admin-logs-sistema-page .admin-logs-sistema-field input {
+        width: 100%;
+        min-width: 0;
+        padding: 8px 10px;
         border-radius: 8px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        background: #fff;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(2, 8, 23, 0.55);
+        color: #e2e8f0;
+        font-size: 0.86rem;
+        text-transform: none;
+        letter-spacing: normal;
+        color-scheme: dark;
       }
-      .admin-logs-sistema-actions {
+      #admin-logs-sistema-page .admin-logs-sistema-field select[multiple] {
+        min-height: 96px;
+        padding: 6px;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-field select option {
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-field select:focus,
+      #admin-logs-sistema-page .admin-logs-sistema-field input:focus {
+        outline: none;
+        border-color: rgba(56, 189, 248, 0.55);
+        box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-preset-group {
+        margin: 0;
+        align-self: end;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+        align-items: center;
       }
-      .admin-logs-sistema-kpis {
+      #admin-logs-sistema-page .admin-logs-sistema-kpis {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+        gap: 0;
         margin-bottom: 16px;
-      }
-      .admin-logs-sistema-kpi-card {
-        border: 1px solid rgba(148, 163, 184, 0.35);
+        border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.18));
         border-radius: 12px;
-        padding: 12px 14px;
-        background: linear-gradient(180deg, #f8fafc, #fff);
+        overflow: hidden;
+        background: rgba(15, 23, 42, 0.35);
       }
-      .admin-logs-sistema-kpi-title {
-        font-size: 12px;
-        font-weight: 700;
+      @media (max-width: 720px) {
+        #admin-logs-sistema-page .admin-logs-sistema-kpis {
+          grid-template-columns: 1fr;
+        }
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-card {
+        padding: 18px 22px;
+        border: 0;
+        border-right: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 0;
+        background: transparent;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-card:last-child {
+        border-right: 0;
+      }
+      @media (max-width: 720px) {
+        #admin-logs-sistema-page .admin-logs-sistema-kpi-card {
+          border-right: 0;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        #admin-logs-sistema-page .admin-logs-sistema-kpi-card:last-child {
+          border-bottom: 0;
+        }
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-title {
+        font-size: 0.72rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: #64748b;
-        margin-bottom: 8px;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+        margin-bottom: 12px;
       }
-      .admin-logs-sistema-kpi-row {
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-row {
         display: flex;
         justify-content: space-between;
-        gap: 8px;
-        font-size: 14px;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 8px;
+        font-size: 0.92rem;
+        color: #cbd5e1;
       }
-      .admin-logs-sistema-kpi-row strong.ok { color: #15803d; }
-      .admin-logs-sistema-kpi-row strong.bad { color: #b91c1c; }
-      .admin-logs-sistema-charts {
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-row strong {
+        font-size: 1.35rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-row strong.ok { color: #34d399; }
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-row strong.bad { color: #f87171; }
+      #admin-logs-sistema-page .admin-logs-sistema-kpi-meta {
+        margin: 10px 0 0;
+        font-size: 0.78rem;
+        color: #94a3b8;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-charts {
         display: grid;
         grid-template-columns: 1fr;
         gap: 12px;
-        margin-bottom: 8px;
+        margin-bottom: 14px;
       }
       @media (min-width: 960px) {
-        .admin-logs-sistema-charts {
+        #admin-logs-sistema-page .admin-logs-sistema-charts {
           grid-template-columns: repeat(3, minmax(0, 1fr));
         }
       }
-      .admin-logs-sistema-chart-card {
-        border: 1px solid rgba(148, 163, 184, 0.35);
+      #admin-logs-sistema-page .admin-logs-sistema-chart-card {
+        border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.18));
         border-radius: 12px;
-        padding: 12px;
-        background: #fff;
+        padding: 14px 16px;
+        background: rgba(15, 23, 42, 0.35);
+        color: #e2e8f0;
+        min-height: 120px;
       }
-      .admin-logs-sistema-chart-card h3 {
-        margin: 0 0 10px;
-        font-size: 13px;
-        font-weight: 700;
+      #admin-logs-sistema-page .admin-logs-sistema-chart-card h3 {
+        margin: 0 0 12px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #94a3b8;
       }
-      .admin-logs-sistema-bar {
+      #admin-logs-sistema-page .admin-logs-sistema-chart .muted {
+        color: #94a3b8;
+        font-size: 0.82rem;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-bar {
         display: grid;
-        grid-template-columns: 72px 1fr 40px;
-        gap: 8px;
+        grid-template-columns: 78px minmax(0, 1fr) 36px;
+        gap: 10px;
         align-items: center;
-        margin-bottom: 6px;
-        font-size: 12px;
+        margin-bottom: 10px;
+        font-size: 0.8rem;
+        color: #cbd5e1;
       }
-      .admin-logs-sistema-bar-track {
+      #admin-logs-sistema-page .admin-logs-sistema-bar-track {
         height: 8px;
         border-radius: 999px;
-        background: #e2e8f0;
+        background: rgba(148, 163, 184, 0.18);
         overflow: hidden;
       }
-      .admin-logs-sistema-bar-fill {
+      #admin-logs-sistema-page .admin-logs-sistema-bar-fill {
         height: 100%;
         border-radius: 999px;
       }
-      .admin-logs-sistema-status-pill {
-        display: inline-block;
-        padding: 2px 8px;
+      #admin-logs-sistema-page .admin-logs-sistema-status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
         border-radius: 999px;
-        font-size: 12px;
+        font-size: 0.75rem;
         font-weight: 600;
+        white-space: nowrap;
       }
-      .admin-logs-sistema-status-pill.is-up {
-        background: #dcfce7;
-        color: #166534;
+      #admin-logs-sistema-page .admin-logs-sistema-status-pill.is-up {
+        background: rgba(52, 211, 153, 0.16);
+        color: #6ee7b7;
+        border: 1px solid rgba(52, 211, 153, 0.28);
       }
-      .admin-logs-sistema-status-pill.is-down {
-        background: #fee2e2;
-        color: #991b1b;
+      #admin-logs-sistema-page .admin-logs-sistema-status-pill.is-down {
+        background: rgba(248, 113, 113, 0.14);
+        color: #fca5a5;
+        border: 1px solid rgba(248, 113, 113, 0.28);
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-table-wrap {
+        overflow-x: auto;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-table {
+        width: 100%;
+        min-width: 720px;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-table thead th {
+        text-align: left;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.9);
+        color: #94a3b8;
+        font-weight: 700;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        white-space: nowrap;
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-table tbody td {
+        padding: 10px 12px;
+        color: #e2e8f0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        vertical-align: top;
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-table tbody tr:hover td {
+        background: rgba(56, 189, 248, 0.04);
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-table td.logs-col-dia,
+      #admin-logs-sistema-page #admin-logs-sistema-table td.logs-col-hora,
+      #admin-logs-sistema-page #admin-logs-sistema-table td.logs-col-motivo {
+        white-space: nowrap;
+      }
+      #admin-logs-sistema-page #admin-logs-sistema-table td.logs-col-detalhes {
+        color: #cbd5e1;
+        line-height: 1.4;
+        word-break: break-word;
+        max-width: 420px;
       }
 
       @media (max-width: 900px) {
@@ -18514,20 +18647,20 @@
               <div id="admin-logs-sistema-page" class="admin-monitor-page" data-monitor-page-panel="logs" hidden>
                 <div class="aquecedor-section">
                 <div class="admin-logs-sistema-filters" id="admin-logs-sistema-filters">
-                  <label class="admin-logs-sistema-field">
-                    <span>Aplicações com falhas</span>
-                    <select id="admin-logs-sistema-motivo" multiple size="4" aria-label="Filtrar por aplicação">
+                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-motivo">
+                    <span>Motivo / causa</span>
+                    <select id="admin-logs-sistema-motivo" multiple size="4" aria-label="Filtrar por motivo">
                       <option value="Traefik">Traefik</option>
                       <option value="Yaml">Yaml</option>
                       <option value="Docker">Docker</option>
                       <option value="Servidor">Servidor</option>
                     </select>
                   </label>
-                  <label class="admin-logs-sistema-field">
+                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-from">
                     <span>De</span>
                     <input type="date" id="admin-logs-sistema-from" />
                   </label>
-                  <label class="admin-logs-sistema-field">
+                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-to">
                     <span>Até</span>
                     <input type="date" id="admin-logs-sistema-to" />
                   </label>
@@ -18536,7 +18669,7 @@
                     <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="week">Semana</button>
                     <button type="button" class="admin-campanhas-bucket-btn is-active" data-logs-preset="month">Mês</button>
                   </div>
-                  <label class="admin-logs-sistema-field">
+                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-month">
                     <span>Mês (ano atual)</span>
                     <select id="admin-logs-sistema-month" aria-label="Mês do ano atual">
                       <option value="">—</option>
@@ -18583,7 +18716,7 @@
                   <button id="admin-logs-sistema-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">Atualizar</button>
                 </div>
 
-                <div class="table-wrap">
+                <div class="admin-logs-sistema-table-wrap">
                   <table class="admin-table" id="admin-logs-sistema-table">
                     <thead>
                       <tr>
@@ -32306,7 +32439,7 @@
               <div class="admin-logs-sistema-kpi-title">Média · Dia (eventos)</div>
               <div class="admin-logs-sistema-kpi-row"><span>Conexão</span><strong class="ok">${Number(kpis.eventsPerDay?.conexao || 0).toFixed(2)}</strong></div>
               <div class="admin-logs-sistema-kpi-row"><span>Desconexão</span><strong class="bad">${Number(kpis.eventsPerDay?.desconexao || 0).toFixed(2)}</strong></div>
-              <p class="muted" style="margin:8px 0 0;font-size:12px">Janela: ${Number(kpis.daysInRange || 1)} dia(s)</p>
+              <p class="admin-logs-sistema-kpi-meta">Janela: ${Number(kpis.daysInRange || 1)} dia(s)</p>
             </div>
             <div class="admin-logs-sistema-kpi-card">
               <div class="admin-logs-sistema-kpi-title">Horas · Dia (média)</div>
@@ -32328,11 +32461,11 @@
                 const isUp = event.status === "conexao";
                 return `
                   <tr>
-                    <td>${escapeAdminHtml(event.dia || "—")}</td>
-                    <td>${escapeAdminHtml(event.horario || "—")}</td>
+                    <td class="logs-col-dia">${escapeAdminHtml(event.dia || "—")}</td>
+                    <td class="logs-col-hora">${escapeAdminHtml(event.horario || "—")}</td>
                     <td><span class="admin-logs-sistema-status-pill ${isUp ? "is-up" : "is-down"}">${escapeAdminHtml(event.statusLabel || event.status)}</span></td>
-                    <td>${escapeAdminHtml(event.motivo || "—")}</td>
-                    <td>${escapeAdminHtml(event.detalhes || "—")}</td>
+                    <td class="logs-col-motivo">${escapeAdminHtml(event.motivo || "—")}</td>
+                    <td class="logs-col-detalhes">${escapeAdminHtml(event.detalhes || "—")}</td>
                   </tr>
                 `;
               })

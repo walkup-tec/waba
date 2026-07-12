@@ -19,7 +19,13 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-11 (22:23 — Logs dentro do Monitor CPU)
+2026-07-11 (22:40 — UI Logs tema escuro)
+
+**WABA — UI Logs Sistema (2026-07-11):** CSS alinhado ao Monitor CPU (cards/inputs/tabela escuros); tabela tinha zero estilo. Marker `DEPLOY-2026-07-11-logs-sistema-ui-dark`. Ver `doc/LOG-2026-07-11__224000__logs-sistema-ui-tema-escuro.md`.
+
+**WABA — Login falha = 502 (2026-07-11):** `/health` HTTPS 502 Bad Gateway (não senha). Pós-redeploy: republicar `:30180` + `restore-easypanel-traefik-backends-vps.sh`. Sem SSH desta máquina — colar no Hostinger. Ver `doc/LOG-2026-07-11__223000__login-502-pos-redeploy.md`.
+
+**WABA — Push `95732f6` (2026-07-11):** Logs Sistema só como página interna do Monitor CPU; registry sem `admin-logs-sistema`; `dist/` no commit. Marker `DEPLOY-2026-07-11-logs-dentro-monitor-cpu`. Redeploy Easypanel `waba_disparador`; validar `/health` + abas no Monitor CPU. Ver `doc/LOG-2026-07-11__222300__logs-dentro-monitor-cpu-fix-vazio.md`.
 
 **WABA — Logs = página dentro do Monitor CPU (2026-07-11):** sem menu lateral; abas Monitor CPU | Logs Sistema. Tela vazia era HTML aninhado (`logs` dentro de `cpu` + `hidden` no pai). Build `dist/` ok; marker `DEPLOY-2026-07-11-logs-dentro-monitor-cpu`. Pendente: commit/push + Redeploy. Ver `doc/LOG-2026-07-11__222300__logs-dentro-monitor-cpu-fix-vazio.md`.
 
