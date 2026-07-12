@@ -19,7 +19,9 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-11 (20:50 — Logs Sistema)
+2026-07-11 (21:12 — sessão ok)
+
+**WABA — Sessão ok (2026-07-11):** usuário confirmou "pronto". Logs Sistema em master. Redeploy Easypanel se painel ainda sem menu. Ver `doc/LOG-2026-07-11__211200__encerramento-logs-sistema.md`.
 
 **WABA — Logs Sistema (2026-07-11):** menu Suporte separado de Monitor CPU; eventos conexão/desconexão do uptime com motivo Traefik/Yaml/Docker/Servidor; KPIs + gráficos + export Excel. Ver `doc/LOG-2026-07-11__205000__logs-sistema-monitor-cpu-split.md`.
 
