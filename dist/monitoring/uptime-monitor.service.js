@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -18,8 +51,8 @@ const asaas_integration_health_service_1 = require("./asaas-integration-health.s
 const evo_api_config_1 = require("../evo-api-config");
 const evo_send_recovery_service_1 = require("../services/evo-send-recovery.service");
 const STATE_FILE = (0, data_path_1.resolveDataFile)("uptime-monitor-state.json");
-const DEFAULT_INTERVAL_MINUTES = 15;
-const DEFAULT_REALERT_MINUTES = 60;
+const DEFAULT_INTERVAL_MINUTES = 5;
+const DEFAULT_REALERT_MINUTES = 30;
 const DEFAULT_HTTP_TIMEOUT_MS = 15000;
 const DEFAULT_HTTP_ATTEMPTS = 3;
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
@@ -325,12 +358,15 @@ async function runUptimeMonitorCheck(input) {
     const state = input?.skipState ? { targets: {} } : await readMonitorState();
     const downNow = results.filter((result) => !result.ok);
     const recoveredNow = [];
+    const newlyDown = [];
+    const recoveredSince = new Map();
     let needAlert = Boolean(input?.forceAlert);
     for (const result of results) {
         const previous = state.targets[result.key];
         if (result.ok) {
             if (previous && previous.status === "down") {
                 recoveredNow.push(result);
+                recoveredSince.set(result.key, previous.since);
                 needAlert = true;
             }
             state.targets[result.key] = {
@@ -348,6 +384,8 @@ async function runUptimeMonitorCheck(input) {
             const dueForRealert = wasDown && (now - lastAlertAt >= realertMs);
             if (!wasDown || dueForRealert)
                 needAlert = true;
+            if (!wasDown)
+                newlyDown.push(result);
             state.targets[result.key] = {
                 status: "down",
                 since: wasDown ? previous.since : checkedAt,
@@ -372,6 +410,34 @@ async function runUptimeMonitorCheck(input) {
     }
     if (!input?.skipState) {
         await writeMonitorState(state);
+        try {
+            const { systemConnectionLogService } = await Promise.resolve().then(() => __importStar(require("./system-connection-log.service")));
+            const downCount = downNow.length;
+            for (const result of newlyDown) {
+                await systemConnectionLogService.recordTransition({
+                    status: "desconexao",
+                    detail: result.detail,
+                    targetKey: result.key,
+                    targetLabel: result.label,
+                    ts: checkedAt,
+                    downCountSameCheck: downCount,
+                });
+            }
+            for (const result of recoveredNow) {
+                await systemConnectionLogService.recordTransition({
+                    status: "conexao",
+                    detail: result.detail,
+                    targetKey: result.key,
+                    targetLabel: result.label,
+                    ts: checkedAt,
+                    previousSince: recoveredSince.get(result.key) ?? null,
+                    downCountSameCheck: downCount,
+                });
+            }
+        }
+        catch (logError) {
+            console.warn("[uptime-monitor] falha ao gravar log de sistema:", logError instanceof Error ? logError.message : logError);
+        }
     }
     if (downNow.length) {
         console.warn(`[uptime-monitor] FALHA — ${downNow.length} alvo(s): ${downNow.map((item) => `${item.label} (${item.detail})`).join("; ")}`);

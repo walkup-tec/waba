@@ -3326,6 +3326,8 @@
       body.suporte-section-active #waba-main > #tab-admin-chamados:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
+      body.admin-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
+      body.suporte-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
         display: block;
@@ -3974,6 +3976,117 @@
       .admin-monitor-cpu-setup ol {
         margin: 8px 0 0 18px;
         padding: 0;
+      }
+
+      .admin-logs-sistema-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-end;
+        margin-bottom: 16px;
+      }
+      .admin-logs-sistema-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--muted, #64748b);
+      }
+      .admin-logs-sistema-field select,
+      .admin-logs-sistema-field input {
+        min-width: 140px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: #fff;
+      }
+      .admin-logs-sistema-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .admin-logs-sistema-kpis {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .admin-logs-sistema-kpi-card {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: linear-gradient(180deg, #f8fafc, #fff);
+      }
+      .admin-logs-sistema-kpi-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-bottom: 8px;
+      }
+      .admin-logs-sistema-kpi-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .admin-logs-sistema-kpi-row strong.ok { color: #15803d; }
+      .admin-logs-sistema-kpi-row strong.bad { color: #b91c1c; }
+      .admin-logs-sistema-charts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      @media (min-width: 960px) {
+        .admin-logs-sistema-charts {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+      .admin-logs-sistema-chart-card {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+      }
+      .admin-logs-sistema-chart-card h3 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .admin-logs-sistema-bar {
+        display: grid;
+        grid-template-columns: 72px 1fr 40px;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+      .admin-logs-sistema-bar-track {
+        height: 8px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        overflow: hidden;
+      }
+      .admin-logs-sistema-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+      }
+      .admin-logs-sistema-status-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .admin-logs-sistema-status-pill.is-up {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .admin-logs-sistema-status-pill.is-down {
+        background: #fee2e2;
+        color: #991b1b;
       }
 
       @media (max-width: 900px) {
@@ -6861,6 +6974,8 @@
       /* Monitor CPU / Push: usar toda a largura útil à direita da sidebar */
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
+      body.admin-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
+      body.suporte-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
         max-width: none;
@@ -15342,6 +15457,26 @@
                   <span class="tab-label">Monitor CPU</span>
                 </button>
                 <button
+                  id="tab-btn-admin-logs-sistema"
+                  class="tab-button admin-tab-button admin-master-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-admin-logs-sistema"
+                  data-tab="admin-logs-sistema"
+                  data-menu-key="admin-logs-sistema"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M6 4h12v16H6z"></path>
+                      <path d="M9 8h6"></path>
+                      <path d="M9 12h6"></path>
+                      <path d="M9 16h4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Logs Sistema</span>
+                </button>
+                <button
                   id="tab-btn-admin-push"
                   class="tab-button admin-tab-button admin-master-only"
                   type="button"
@@ -15616,6 +15751,16 @@
               aria-checked="false"
             >
               <span>Monitor CPU</span>
+            </button>
+            <button
+              class="tab-button admin-tab-button admin-master-only"
+              type="button"
+              data-tab="admin-logs-sistema"
+              data-menu-key="admin-logs-sistema"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              <span>Logs Sistema</span>
             </button>
             <button
               class="tab-button admin-tab-button admin-master-only"
@@ -18388,6 +18533,107 @@
                 </div>
 
                 <div id="admin-monitor-cpu-playbook" class="admin-monitor-cpu-playbook" hidden></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-admin-logs-sistema" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Suporte · Logs Sistema</div>
+                <span class="muted">
+                  Histórico de conexão e desconexão dos serviços monitorados — causa classificada (Traefik, Yaml, Docker, Servidor).
+                </span>
+              </div>
+              <div class="aquecedor-section">
+                <div class="admin-logs-sistema-filters" id="admin-logs-sistema-filters">
+                  <label class="admin-logs-sistema-field">
+                    <span>Aplicações com falhas</span>
+                    <select id="admin-logs-sistema-motivo" multiple size="4" aria-label="Filtrar por aplicação">
+                      <option value="Traefik">Traefik</option>
+                      <option value="Yaml">Yaml</option>
+                      <option value="Docker">Docker</option>
+                      <option value="Servidor">Servidor</option>
+                    </select>
+                  </label>
+                  <label class="admin-logs-sistema-field">
+                    <span>De</span>
+                    <input type="date" id="admin-logs-sistema-from" />
+                  </label>
+                  <label class="admin-logs-sistema-field">
+                    <span>Até</span>
+                    <input type="date" id="admin-logs-sistema-to" />
+                  </label>
+                  <div class="admin-campanhas-buckets" id="admin-logs-sistema-preset-group" role="tablist" aria-label="Período rápido">
+                    <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="day">Dia</button>
+                    <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="week">Semana</button>
+                    <button type="button" class="admin-campanhas-bucket-btn is-active" data-logs-preset="month">Mês</button>
+                  </div>
+                  <label class="admin-logs-sistema-field">
+                    <span>Mês (ano atual)</span>
+                    <select id="admin-logs-sistema-month" aria-label="Mês do ano atual">
+                      <option value="">—</option>
+                      <option value="1">Janeiro</option>
+                      <option value="2">Fevereiro</option>
+                      <option value="3">Março</option>
+                      <option value="4">Abril</option>
+                      <option value="5">Maio</option>
+                      <option value="6">Junho</option>
+                      <option value="7">Julho</option>
+                      <option value="8">Agosto</option>
+                      <option value="9">Setembro</option>
+                      <option value="10">Outubro</option>
+                      <option value="11">Novembro</option>
+                      <option value="12">Dezembro</option>
+                    </select>
+                  </label>
+                  <div class="admin-logs-sistema-actions">
+                    <button type="button" id="admin-logs-sistema-apply-btn" class="instance-action-btn btn-refresh enabled">Aplicar</button>
+                    <button type="button" id="admin-logs-sistema-export-btn" class="instance-action-btn enabled">Exportar</button>
+                    <button type="button" id="admin-logs-sistema-clear-btn" class="instance-action-btn">Limpar Filtros</button>
+                  </div>
+                </div>
+
+                <div id="admin-logs-sistema-kpis" class="admin-logs-sistema-kpis" aria-live="polite"></div>
+
+                <div class="admin-logs-sistema-charts">
+                  <div class="admin-logs-sistema-chart-card">
+                    <h3>Apps Falhas · Dia (24h)</h3>
+                    <div id="admin-logs-sistema-chart-day" class="admin-logs-sistema-chart"></div>
+                  </div>
+                  <div class="admin-logs-sistema-chart-card">
+                    <h3>Apps Falhas · Semana (7d)</h3>
+                    <div id="admin-logs-sistema-chart-week" class="admin-logs-sistema-chart"></div>
+                  </div>
+                  <div class="admin-logs-sistema-chart-card">
+                    <h3>Apps Falhas · Mês (30d)</h3>
+                    <div id="admin-logs-sistema-chart-month" class="admin-logs-sistema-chart"></div>
+                  </div>
+                </div>
+
+                <div class="admin-subscribers-toolbar" style="margin-top:12px">
+                  <span id="admin-logs-sistema-status" class="admin-subscribers-summary">Carregando logs…</span>
+                  <button id="admin-logs-sistema-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">Atualizar</button>
+                </div>
+
+                <div class="table-wrap">
+                  <table class="admin-table" id="admin-logs-sistema-table">
+                    <thead>
+                      <tr>
+                        <th>Dia</th>
+                        <th>Horário</th>
+                        <th>Status</th>
+                        <th>Motivo</th>
+                        <th>Detalhes</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-logs-sistema-tbody">
+                      <tr><td colspan="5" class="muted">Carregando…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           </div>
@@ -21493,7 +21739,7 @@
       }
 
       function isSuporteTab(tabName) {
-        return tabName === "admin-chamados" || tabName === "admin-monitor-cpu" || tabName === "admin-push";
+        return tabName === "admin-chamados" || tabName === "admin-monitor-cpu" || tabName === "admin-logs-sistema" || tabName === "admin-push";
       }
 
       function isMenuSectionLocked(section) {
@@ -21506,7 +21752,7 @@
         if (tabName === "admin-usuarios") return !hasMasterAccess();
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
-        if (tabName === "admin-monitor-cpu") return !hasMasterAccess();
+        if (tabName === "admin-monitor-cpu" || tabName === "admin-logs-sistema") return !hasMasterAccess();
         if (tabName === "admin-push") return !hasMasterAccess();
         if (tabName === "disparos-lancamento" && !shouldShowDisparosLancamentoMenu()) {
           return true;
@@ -31992,6 +32238,232 @@
         });
       }
 
+      const ADMIN_LOGS_MOTIVO_COLORS = {
+        Traefik: "#0ea5e9",
+        Yaml: "#a855f7",
+        Docker: "#f59e0b",
+        Servidor: "#ef4444",
+      };
+      let adminLogsSistemaPreset = "month";
+      let adminLogsSistemaUiBound = false;
+
+      function getAdminLogsSistemaFilters() {
+        const select = document.getElementById("admin-logs-sistema-motivo");
+        const motivos = select
+          ? Array.from(select.selectedOptions).map((opt) => opt.value).filter(Boolean)
+          : [];
+        const from = String(document.getElementById("admin-logs-sistema-from")?.value || "").trim();
+        const to = String(document.getElementById("admin-logs-sistema-to")?.value || "").trim();
+        const monthRaw = String(document.getElementById("admin-logs-sistema-month")?.value || "").trim();
+        const year = new Date().getFullYear();
+        const params = new URLSearchParams();
+        params.set("preset", adminLogsSistemaPreset || "month");
+        if (motivos.length) params.set("motivos", motivos.join(","));
+        if (from) params.set("from", `${from}T00:00:00.000Z`);
+        if (to) params.set("to", `${to}T23:59:59.999Z`);
+        if (monthRaw) {
+          params.set("preset", "month");
+          params.set("month", monthRaw);
+          params.set("year", String(year));
+          adminLogsSistemaPreset = "month";
+        }
+        if (from || to) params.set("preset", "custom");
+        return params;
+      }
+
+      function renderAdminLogsSistemaShareChart(containerId, shares) {
+        const root = document.getElementById(containerId);
+        if (!root) return;
+        const rows = Array.isArray(shares) ? shares : [];
+        if (!rows.length || rows.every((row) => !row.count)) {
+          root.innerHTML = '<p class="muted" style="margin:0">Sem desconexões no período.</p>';
+          return;
+        }
+        root.innerHTML = rows
+          .map((row) => {
+            const color = ADMIN_LOGS_MOTIVO_COLORS[row.motivo] || "#64748b";
+            const pct = Math.max(0, Math.min(100, Number(row.pct) || 0));
+            return `
+              <div class="admin-logs-sistema-bar">
+                <span>${escapeAdminHtml(row.motivo)}</span>
+                <div class="admin-logs-sistema-bar-track" aria-hidden="true">
+                  <div class="admin-logs-sistema-bar-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div>
+                </div>
+                <span>${Number(row.count || 0)}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderAdminLogsSistemaDashboard(payload) {
+        const kpis = payload?.kpis || {};
+        const events = Array.isArray(payload?.events) ? payload.events : [];
+        const kpiRoot = document.getElementById("admin-logs-sistema-kpis");
+        const tbody = document.getElementById("admin-logs-sistema-tbody");
+        const statusEl = document.getElementById("admin-logs-sistema-status");
+        if (kpiRoot) {
+          kpiRoot.innerHTML = `
+            <div class="admin-logs-sistema-kpi-card">
+              <div class="admin-logs-sistema-kpi-title">Média · Dia (eventos)</div>
+              <div class="admin-logs-sistema-kpi-row"><span>Conexão</span><strong class="ok">${Number(kpis.eventsPerDay?.conexao || 0).toFixed(2)}</strong></div>
+              <div class="admin-logs-sistema-kpi-row"><span>Desconexão</span><strong class="bad">${Number(kpis.eventsPerDay?.desconexao || 0).toFixed(2)}</strong></div>
+              <p class="muted" style="margin:8px 0 0;font-size:12px">Janela: ${Number(kpis.daysInRange || 1)} dia(s)</p>
+            </div>
+            <div class="admin-logs-sistema-kpi-card">
+              <div class="admin-logs-sistema-kpi-title">Horas · Dia (média)</div>
+              <div class="admin-logs-sistema-kpi-row"><span>Conexão</span><strong class="ok">${Number(kpis.hoursPerDay?.conexao || 0).toFixed(2)} h</strong></div>
+              <div class="admin-logs-sistema-kpi-row"><span>Desconexão</span><strong class="bad">${Number(kpis.hoursPerDay?.desconexao || 0).toFixed(2)} h</strong></div>
+            </div>
+          `;
+        }
+        renderAdminLogsSistemaShareChart("admin-logs-sistema-chart-day", payload?.appsFailDay);
+        renderAdminLogsSistemaShareChart("admin-logs-sistema-chart-week", payload?.appsFailWeek);
+        renderAdminLogsSistemaShareChart("admin-logs-sistema-chart-month", payload?.appsFailMonth);
+        if (tbody) {
+          if (!events.length) {
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="muted">Nenhum evento no filtro. Os logs passam a ser gravados nas próximas checagens do monitor de uptime.</td></tr>';
+          } else {
+            tbody.innerHTML = events
+              .map((event) => {
+                const isUp = event.status === "conexao";
+                return `
+                  <tr>
+                    <td>${escapeAdminHtml(event.dia || "—")}</td>
+                    <td>${escapeAdminHtml(event.horario || "—")}</td>
+                    <td><span class="admin-logs-sistema-status-pill ${isUp ? "is-up" : "is-down"}">${escapeAdminHtml(event.statusLabel || event.status)}</span></td>
+                    <td>${escapeAdminHtml(event.motivo || "—")}</td>
+                    <td>${escapeAdminHtml(event.detalhes || "—")}</td>
+                  </tr>
+                `;
+              })
+              .join("");
+          }
+        }
+        if (statusEl) {
+          statusEl.textContent = `${events.length} evento(s) · atualizado ${new Date(
+            payload?.generatedAt || Date.now()
+          ).toLocaleString("pt-BR")}`;
+        }
+      }
+
+      async function loadAdminLogsSistema() {
+        const statusEl = document.getElementById("admin-logs-sistema-status");
+        if (!hasMasterAccess()) {
+          if (statusEl) statusEl.textContent = "Acesso negado.";
+          return;
+        }
+        if (statusEl) statusEl.textContent = "Carregando logs…";
+        try {
+          const params = getAdminLogsSistemaFilters();
+          const response = await fetchWithTimeout(
+            `/admin/infra/system-logs/dashboard?${params.toString()}`,
+            {},
+            20000
+          );
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${response.status}`);
+          }
+          const payload = await response.json();
+          renderAdminLogsSistemaDashboard(payload);
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent =
+              error instanceof Error ? error.message : "Falha ao carregar Logs Sistema.";
+          }
+        }
+      }
+
+      async function exportAdminLogsSistemaExcel() {
+        try {
+          if (!window.XLSX) {
+            showToast("Biblioteca Excel ainda não carregada. Tente novamente.", "error");
+            return;
+          }
+          const params = getAdminLogsSistemaFilters();
+          const response = await fetchWithTimeout(
+            `/admin/infra/system-logs/export?${params.toString()}`,
+            {},
+            20000
+          );
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${response.status}`);
+          }
+          const payload = await response.json();
+          const rows = Array.isArray(payload.rows) ? payload.rows : [];
+          if (!rows.length) {
+            showToast("Nenhum dado para exportar com os filtros atuais.", "error");
+            return;
+          }
+          const ws = window.XLSX.utils.json_to_sheet(rows);
+          const wb = window.XLSX.utils.book_new();
+          window.XLSX.utils.book_append_sheet(wb, ws, "Logs Sistema");
+          const stamp = new Date().toISOString().slice(0, 10);
+          window.XLSX.writeFile(wb, `logs-sistema-${stamp}.xlsx`);
+          showToast("Exportação Excel gerada.", "success", 2200);
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : "Falha ao exportar.", "error");
+        }
+      }
+
+      function clearAdminLogsSistemaFilters() {
+        const select = document.getElementById("admin-logs-sistema-motivo");
+        if (select) Array.from(select.options).forEach((opt) => (opt.selected = false));
+        const from = document.getElementById("admin-logs-sistema-from");
+        const to = document.getElementById("admin-logs-sistema-to");
+        const month = document.getElementById("admin-logs-sistema-month");
+        if (from) from.value = "";
+        if (to) to.value = "";
+        if (month) month.value = "";
+        adminLogsSistemaPreset = "month";
+        document.querySelectorAll("#admin-logs-sistema-preset-group [data-logs-preset]").forEach((btn) => {
+          const active = btn.getAttribute("data-logs-preset") === "month";
+          btn.classList.toggle("is-active", active);
+        });
+        void loadAdminLogsSistema();
+      }
+
+      function initAdminLogsSistemaUi() {
+        if (adminLogsSistemaUiBound) return;
+        adminLogsSistemaUiBound = true;
+        document.getElementById("admin-logs-sistema-preset-group")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-logs-preset]");
+          if (!btn) return;
+          adminLogsSistemaPreset = btn.getAttribute("data-logs-preset") || "month";
+          document.querySelectorAll("#admin-logs-sistema-preset-group [data-logs-preset]").forEach((el) => {
+            el.classList.toggle("is-active", el === btn);
+          });
+          const month = document.getElementById("admin-logs-sistema-month");
+          if (month) month.value = "";
+          void loadAdminLogsSistema();
+        });
+        document.getElementById("admin-logs-sistema-apply-btn")?.addEventListener("click", () => {
+          void loadAdminLogsSistema();
+        });
+        document.getElementById("admin-logs-sistema-refresh-btn")?.addEventListener("click", () => {
+          void loadAdminLogsSistema();
+        });
+        document.getElementById("admin-logs-sistema-export-btn")?.addEventListener("click", () => {
+          void exportAdminLogsSistemaExcel();
+        });
+        document.getElementById("admin-logs-sistema-clear-btn")?.addEventListener("click", () => {
+          clearAdminLogsSistemaFilters();
+        });
+        document.getElementById("admin-logs-sistema-month")?.addEventListener("change", () => {
+          const month = document.getElementById("admin-logs-sistema-month");
+          if (month?.value) {
+            adminLogsSistemaPreset = "month";
+            document.querySelectorAll("#admin-logs-sistema-preset-group [data-logs-preset]").forEach((el) => {
+              el.classList.toggle("is-active", el.getAttribute("data-logs-preset") === "month");
+            });
+          }
+          void loadAdminLogsSistema();
+        });
+      }
+
       function initAdminChamadosUi() {
         document.getElementById("admin-chamados-refresh-btn")?.addEventListener("click", () => {
           const btn = document.getElementById("admin-chamados-refresh-btn");
@@ -41168,6 +41640,13 @@
           stopAdminCampanhasPolling();
           void loadAdminMonitorCpu();
           startAdminMonitorCpuPolling();
+        } else if (nextTab === "admin-logs-sistema") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          stopAdminMonitorCpuPolling();
+          void loadAdminLogsSistema();
         } else if (nextTab === "admin-push") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
@@ -47676,6 +48155,7 @@
       initAdminChamadosUi();
       initAdminPushUi();
       initAdminMonitorCpuUi();
+      initAdminLogsSistemaUi();
       initAdminUsersUi();
       initDisCampaignWizard();
       enhanceWabaProductLabelElements(document);
