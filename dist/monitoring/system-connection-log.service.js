@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.systemConnectionLogService = exports.SystemConnectionLogService = void 0;
 const system_connection_log_types_1 = require("./system-connection-log.types");
@@ -108,7 +141,45 @@ class SystemConnectionLogService {
             durationHours,
         });
     }
+    /** Se ainda não há histórico, materializa o estado atual do uptime (evita tela vazia). */
+    async seedFromUptimeStateIfEmpty() {
+        const existing = await system_connection_log_repository_1.systemConnectionLogRepository.listAll();
+        if (existing.length > 0)
+            return 0;
+        try {
+            const { promises: fs } = await Promise.resolve().then(() => __importStar(require("fs")));
+            const { resolveDataFile } = await Promise.resolve().then(() => __importStar(require("../data-path")));
+            const statePath = resolveDataFile("uptime-monitor-state.json");
+            const raw = await fs.readFile(statePath, "utf-8");
+            const parsed = JSON.parse(raw);
+            const targets = parsed?.targets && typeof parsed.targets === "object" ? parsed.targets : {};
+            const entries = Object.entries(targets);
+            if (!entries.length)
+                return 0;
+            let n = 0;
+            for (const [key, target] of entries) {
+                const status = target.status === "down" ? "desconexao" : "conexao";
+                const detail = String(target.lastDetail || (status === "desconexao" ? "offline" : "online"));
+                const ts = String(target.lastCheckedAt || target.since || new Date().toISOString());
+                await this.recordTransition({
+                    status,
+                    detail: `${detail} (seed estado uptime)`,
+                    targetKey: key,
+                    targetLabel: key.replace(/_/g, " "),
+                    ts,
+                    previousSince: status === "conexao" ? target.since || null : null,
+                    downCountSameCheck: entries.filter(([, t]) => t.status === "down").length,
+                });
+                n += 1;
+            }
+            return n;
+        }
+        catch {
+            return 0;
+        }
+    }
     async getDashboard(rawFilters = {}) {
+        await this.seedFromUptimeStateIfEmpty();
         const filters = {
             preset: rawFilters.preset || "month",
             ...rawFilters,

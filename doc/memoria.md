@@ -19,11 +19,15 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-11 (21:12 — sessão ok)
+2026-07-11 (22:23 — Logs dentro do Monitor CPU)
+
+**WABA — Logs = página dentro do Monitor CPU (2026-07-11):** sem menu lateral; abas Monitor CPU | Logs Sistema. Tela vazia era HTML aninhado (`logs` dentro de `cpu` + `hidden` no pai). Build `dist/` ok; marker `DEPLOY-2026-07-11-logs-dentro-monitor-cpu`. Pendente: commit/push + Redeploy. Ver `doc/LOG-2026-07-11__222300__logs-dentro-monitor-cpu-fix-vazio.md`.
+
+**WABA — Prod sem UI nova (2026-07-11):** código em master; falta Redeploy Easypanel `waba_disparador`. Marker `DEPLOY-2026-07-11-logs-sistema` commit `b9d7fa3`. Após deploy conferir `/health` + menu Logs Sistema; republicar `:30180` se 502. Ver `doc/LOG-2026-07-11__212500__prod-sem-logs-sistema-precisa-redeploy.md`.
 
 **WABA — Sessão ok (2026-07-11):** usuário confirmou "pronto". Logs Sistema em master. Redeploy Easypanel se painel ainda sem menu. Ver `doc/LOG-2026-07-11__211200__encerramento-logs-sistema.md`.
 
-**WABA — Logs Sistema (2026-07-11):** menu Suporte separado de Monitor CPU; eventos conexão/desconexão do uptime com motivo Traefik/Yaml/Docker/Servidor; KPIs + gráficos + export Excel. Ver `doc/LOG-2026-07-11__205000__logs-sistema-monitor-cpu-split.md`.
+**WABA — Logs Sistema (2026-07-11):** (corrigido) divisão de páginas *dentro* de Monitor CPU, não menu separado. Ver LOG `222300`.
 
 **WABA — Motivo da queda (2026-07-10 ~22h):** heal rodou `restore-easypanel-traefik-backends` v1 → URLs overlay (`waba_paginadevendas:3000`) → 502; depois HUP → Traefik down → 000. Apps locais OK. Fix backends v2 host gateway. Ver `doc/LOG-2026-07-10__220700__502-overlay-dns-backends.md`.
 

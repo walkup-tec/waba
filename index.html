@@ -3326,8 +3326,6 @@
       body.suporte-section-active #waba-main > #tab-admin-chamados:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
-      body.admin-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
-      body.suporte-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
         display: block;
@@ -6974,8 +6972,6 @@
       /* Monitor CPU / Push: usar toda a largura útil à direita da sidebar */
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
-      body.admin-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
-      body.suporte-section-active #waba-main > #tab-admin-logs-sistema:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
         max-width: none;
@@ -15456,26 +15452,7 @@
                   </span>
                   <span class="tab-label">Monitor CPU</span>
                 </button>
-                <button
-                  id="tab-btn-admin-logs-sistema"
-                  class="tab-button admin-tab-button admin-master-only"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                  aria-controls="tab-admin-logs-sistema"
-                  data-tab="admin-logs-sistema"
-                  data-menu-key="admin-logs-sistema"
-                >
-                  <span class="tab-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M6 4h12v16H6z"></path>
-                      <path d="M9 8h6"></path>
-                      <path d="M9 12h6"></path>
-                      <path d="M9 16h4"></path>
-                    </svg>
-                  </span>
-                  <span class="tab-label">Logs Sistema</span>
-                </button>
+
                 <button
                   id="tab-btn-admin-push"
                   class="tab-button admin-tab-button admin-master-only"
@@ -15752,16 +15729,7 @@
             >
               <span>Monitor CPU</span>
             </button>
-            <button
-              class="tab-button admin-tab-button admin-master-only"
-              type="button"
-              data-tab="admin-logs-sistema"
-              data-menu-key="admin-logs-sistema"
-              role="menuitemradio"
-              aria-checked="false"
-            >
-              <span>Logs Sistema</span>
-            </button>
+
             <button
               class="tab-button admin-tab-button admin-master-only"
               type="button"
@@ -18459,7 +18427,14 @@
                 aria-label="Status dos serviços em produção"
                 hidden
               ></div>
-              <div class="aquecedor-section">
+              
+              <div class="admin-monitor-pages admin-campanhas-buckets" id="admin-monitor-pages" role="tablist" aria-label="Páginas do Monitor CPU" style="margin:0 0 14px">
+                <button type="button" class="admin-campanhas-bucket-btn is-active" data-monitor-page="cpu" role="tab" aria-selected="true">Monitor CPU</button>
+                <button type="button" class="admin-campanhas-bucket-btn" data-monitor-page="logs" role="tab" aria-selected="false">Logs Sistema</button>
+              </div>
+
+              <div id="admin-monitor-cpu-page" class="admin-monitor-page" data-monitor-page-panel="cpu">
+<div class="aquecedor-section">
                 <div class="admin-subscribers-toolbar">
                   <span id="admin-monitor-cpu-status" class="admin-subscribers-summary">Carregando monitor…</span>
                   <button
@@ -18533,21 +18508,11 @@
                 </div>
 
                 <div id="admin-monitor-cpu-playbook" class="admin-monitor-cpu-playbook" hidden></div>
+                </div>
               </div>
-            </section>
-          </div>
-        </div>
 
-        <div id="tab-admin-logs-sistema" class="tab-panel tab-hidden" aria-hidden="true">
-          <div class="row g-3">
-            <section class="panel col-12">
-              <div class="panel-header">
-                <div class="panel-title">Suporte · Logs Sistema</div>
-                <span class="muted">
-                  Histórico de conexão e desconexão dos serviços monitorados — causa classificada (Traefik, Yaml, Docker, Servidor).
-                </span>
-              </div>
-              <div class="aquecedor-section">
+              <div id="admin-logs-sistema-page" class="admin-monitor-page" data-monitor-page-panel="logs" hidden>
+                <div class="aquecedor-section">
                 <div class="admin-logs-sistema-filters" id="admin-logs-sistema-filters">
                   <label class="admin-logs-sistema-field">
                     <span>Aplicações com falhas</span>
@@ -18633,6 +18598,7 @@
                       <tr><td colspan="5" class="muted">Carregando…</td></tr>
                     </tbody>
                   </table>
+                </div>
                 </div>
               </div>
             </section>
@@ -21739,7 +21705,7 @@
       }
 
       function isSuporteTab(tabName) {
-        return tabName === "admin-chamados" || tabName === "admin-monitor-cpu" || tabName === "admin-logs-sistema" || tabName === "admin-push";
+        return tabName === "admin-chamados" || tabName === "admin-monitor-cpu" || tabName === "admin-push";
       }
 
       function isMenuSectionLocked(section) {
@@ -21752,7 +21718,7 @@
         if (tabName === "admin-usuarios") return !hasMasterAccess();
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
-        if (tabName === "admin-monitor-cpu" || tabName === "admin-logs-sistema") return !hasMasterAccess();
+        if (tabName === "admin-monitor-cpu") return !hasMasterAccess();
         if (tabName === "admin-push") return !hasMasterAccess();
         if (tabName === "disparos-lancamento" && !shouldShowDisparosLancamentoMenu()) {
           return true;
@@ -32246,6 +32212,38 @@
       };
       let adminLogsSistemaPreset = "month";
       let adminLogsSistemaUiBound = false;
+      let adminMonitorPage = "cpu";
+
+      function syncAdminMonitorPage() {
+        const cpuPage = document.getElementById("admin-monitor-cpu-page");
+        const logsPage = document.getElementById("admin-logs-sistema-page");
+        const summary = document.getElementById("admin-monitor-cpu-summary");
+        document.querySelectorAll("#admin-monitor-pages [data-monitor-page]").forEach((btn) => {
+          const active = btn.getAttribute("data-monitor-page") === adminMonitorPage;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        if (cpuPage) cpuPage.hidden = adminMonitorPage !== "cpu";
+        if (logsPage) logsPage.hidden = adminMonitorPage !== "logs";
+        if (summary) {
+          summary.textContent =
+            adminMonitorPage === "logs"
+              ? "Histórico de conexão/desconexão e causas (Traefik, Yaml, Docker, Servidor)."
+              : "Consumo da VPS em tempo quase real — alerta quando a CPU permanece alta por período sustentado.";
+        }
+      }
+
+      function setAdminMonitorPage(page) {
+        adminMonitorPage = page === "logs" ? "logs" : "cpu";
+        syncAdminMonitorPage();
+        if (adminMonitorPage === "logs") {
+          stopAdminMonitorCpuPolling();
+          void loadAdminLogsSistema();
+        } else {
+          void loadAdminMonitorCpu();
+          startAdminMonitorCpuPolling();
+        }
+      }
 
       function getAdminLogsSistemaFilters() {
         const select = document.getElementById("admin-logs-sistema-motivo");
@@ -32369,6 +32367,19 @@
           const payload = await response.json();
           renderAdminLogsSistemaDashboard(payload);
         } catch (error) {
+          renderAdminLogsSistemaDashboard({
+            generatedAt: new Date().toISOString(),
+            kpis: {
+              eventsPerDay: { conexao: 0, desconexao: 0 },
+              hoursPerDay: { conexao: 0, desconexao: 0 },
+              daysInRange: 1,
+            },
+            appsFailDay: [],
+            appsFailWeek: [],
+            appsFailMonth: [],
+            events: [],
+            totalEvents: 0,
+          });
           if (statusEl) {
             statusEl.textContent =
               error instanceof Error ? error.message : "Falha ao carregar Logs Sistema.";
@@ -32429,6 +32440,12 @@
       function initAdminLogsSistemaUi() {
         if (adminLogsSistemaUiBound) return;
         adminLogsSistemaUiBound = true;
+        document.getElementById("admin-monitor-pages")?.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-monitor-page]");
+          if (!btn) return;
+          setAdminMonitorPage(btn.getAttribute("data-monitor-page"));
+        });
+        syncAdminMonitorPage();
         document.getElementById("admin-logs-sistema-preset-group")?.addEventListener("click", (event) => {
           const btn = event.target.closest("[data-logs-preset]");
           if (!btn) return;
@@ -41638,15 +41655,14 @@
           stopDisparosCampaignsPolling();
           stopDisparosDashboardPolling();
           stopAdminCampanhasPolling();
-          void loadAdminMonitorCpu();
-          startAdminMonitorCpuPolling();
-        } else if (nextTab === "admin-logs-sistema") {
-          stopAquecedorEnviosPolling();
-          stopDisparosCampaignsPolling();
-          stopDisparosDashboardPolling();
-          stopAdminCampanhasPolling();
-          stopAdminMonitorCpuPolling();
-          void loadAdminLogsSistema();
+          syncAdminMonitorPage();
+          if (adminMonitorPage === "logs") {
+            stopAdminMonitorCpuPolling();
+            void loadAdminLogsSistema();
+          } else {
+            void loadAdminMonitorCpu();
+            startAdminMonitorCpuPolling();
+          }
         } else if (nextTab === "admin-push") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();

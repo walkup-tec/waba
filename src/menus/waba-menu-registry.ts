@@ -173,14 +173,6 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     profile: "all",
   },
   {
-    id: "admin-logs-sistema",
-    label: "Logs Sistema",
-    tab: "admin-logs-sistema",
-    section: "suporte",
-    sectionLabel: SECTION_LABELS.suporte,
-    profile: "all",
-  },
-  {
     id: "admin-push",
     label: "Push",
     tab: "admin-push",

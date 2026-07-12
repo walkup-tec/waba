@@ -133,7 +133,48 @@ export class SystemConnectionLogService {
     });
   }
 
+  /** Se ainda não há histórico, materializa o estado atual do uptime (evita tela vazia). */
+  async seedFromUptimeStateIfEmpty(): Promise<number> {
+    const existing = await systemConnectionLogRepository.listAll();
+    if (existing.length > 0) return 0;
+    try {
+      const { promises: fs } = await import("fs");
+      const { resolveDataFile } = await import("../data-path");
+      const statePath = resolveDataFile("uptime-monitor-state.json");
+      const raw = await fs.readFile(statePath, "utf-8");
+      const parsed = JSON.parse(raw) as {
+        targets?: Record<
+          string,
+          { status?: string; since?: string; lastDetail?: string; lastCheckedAt?: string }
+        >;
+      };
+      const targets = parsed?.targets && typeof parsed.targets === "object" ? parsed.targets : {};
+      const entries = Object.entries(targets);
+      if (!entries.length) return 0;
+      let n = 0;
+      for (const [key, target] of entries) {
+        const status = target.status === "down" ? "desconexao" : "conexao";
+        const detail = String(target.lastDetail || (status === "desconexao" ? "offline" : "online"));
+        const ts = String(target.lastCheckedAt || target.since || new Date().toISOString());
+        await this.recordTransition({
+          status,
+          detail: `${detail} (seed estado uptime)`,
+          targetKey: key,
+          targetLabel: key.replace(/_/g, " "),
+          ts,
+          previousSince: status === "conexao" ? target.since || null : null,
+          downCountSameCheck: entries.filter(([, t]) => t.status === "down").length,
+        });
+        n += 1;
+      }
+      return n;
+    } catch {
+      return 0;
+    }
+  }
+
   async getDashboard(rawFilters: SystemConnectionLogFilters = {}): Promise<SystemConnectionLogDashboard> {
+    await this.seedFromUptimeStateIfEmpty();
     const filters: SystemConnectionLogFilters = {
       preset: rawFilters.preset || "month",
       ...rawFilters,
