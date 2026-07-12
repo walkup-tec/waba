@@ -19,7 +19,9 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-11 (22:40 — UI Logs tema escuro)
+2026-07-11 (22:45 — heal login permanente)
+
+**WABA — Login pós-deploy (2026-07-11):** 502 por perda de `:30180`, não senha. Watchdog `heal-waba-login-vps.sh` + timer 60s; UI retry 502. **Instalar uma vez no VPS.** Marker `DEPLOY-2026-07-11-login-heal-watchdog`. Ver `doc/LOG-2026-07-11__224500__heal-login-pos-redeploy-permanente.md`.
 
 **WABA — UI Logs Sistema (2026-07-11):** CSS alinhado ao Monitor CPU (cards/inputs/tabela escuros); tabela tinha zero estilo. Marker `DEPLOY-2026-07-11-logs-sistema-ui-dark`. Ver `doc/LOG-2026-07-11__224000__logs-sistema-ui-tema-escuro.md`.
 

@@ -18,6 +18,7 @@ AUTOHEAL_SERVICE="waba-traefik-autoheal.service"
 AUTOHEAL_TIMER="waba-traefik-autoheal.timer"
 ENTRYPOINT_GUARD_SCRIPT="${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh"
 WATCHDOG_443_SCRIPT="${INSTALL_DIR}/traefik-443-watchdog-vps.sh"
+LOGIN_HEAL_SCRIPT="${INSTALL_DIR}/heal-waba-login-vps.sh"
 
 script_dir() {
   dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
@@ -59,6 +60,16 @@ cmd_install() {
   fetch_or_copy "vps-traefik-autoheal.sh" "$AUTOHEAL_SCRIPT"
   fetch_or_copy "traefik-entrypoint-guard-vps.sh" "$ENTRYPOINT_GUARD_SCRIPT"
   fetch_or_copy "traefik-443-watchdog-vps.sh" "$WATCHDOG_443_SCRIPT"
+  # Login heal vive em scripts/ (não infra/)
+  if [[ -f "$(script_dir)/../heal-waba-login-vps.sh" ]]; then
+    cp "$(script_dir)/../heal-waba-login-vps.sh" "$LOGIN_HEAL_SCRIPT"
+    sed -i 's/\r$//' "$LOGIN_HEAL_SCRIPT" 2>/dev/null || true
+    chmod +x "$LOGIN_HEAL_SCRIPT"
+  else
+    curl -fsSL "${REPO_SCRIPTS}/heal-waba-login-vps.sh" -o "$LOGIN_HEAL_SCRIPT"
+    sed -i 's/\r$//' "$LOGIN_HEAL_SCRIPT" 2>/dev/null || true
+    chmod +x "$LOGIN_HEAL_SCRIPT"
+  fi
   ensure_traefik_permanent_all
 
   cat >"${UNIT_DIR}/${SERVICE}" <<EOF
@@ -153,8 +164,11 @@ EOF
   # Watchdog :443 a cada 45s — recupera Traefik sem esperar 2–15 min
   bash "$WATCHDOG_443_SCRIPT" install || true
 
-  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer, waba-traefik-443-watchdog.timer"
-  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log /var/log/waba-traefik-443-watchdog.log"
+  # Heal login WABA (:30180 + backends) — evita «Não foi possível entrar.» pós-redeploy
+  bash "$LOGIN_HEAL_SCRIPT" install || true
+
+  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer, waba-traefik-443-watchdog.timer, waba-login-heal.timer"
+  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log /var/log/waba-traefik-443-watchdog.log /var/log/waba-login-heal.log"
   bash "$INSTALL_DIR/vps-health-audit.sh" || true
 }
 
@@ -171,6 +185,9 @@ cmd_status() {
   echo "--- traefik 443 watchdog ---"
   systemctl status waba-traefik-443-watchdog.timer --no-pager 2>/dev/null || echo "(timer 443 watchdog não instalado)"
   bash "${INSTALL_DIR}/traefik-443-watchdog-vps.sh" status 2>/dev/null || true
+  echo "--- waba login heal ---"
+  systemctl status waba-login-heal.timer --no-pager 2>/dev/null || echo "(timer login heal não instalado)"
+  bash "${INSTALL_DIR}/heal-waba-login-vps.sh" status 2>/dev/null || true
   echo "--- traefik entrypoint guard ---"
   systemctl status waba-traefik-entrypoint-guard.timer --no-pager 2>/dev/null || echo "(timer entrypoint guard não instalado)"
   bash "${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh" status 2>/dev/null || true
@@ -186,6 +203,7 @@ cmd_run_once() {
   bash "${INSTALL_DIR}/collect-vps-cpu-metrics-for-waba.sh" 2>/dev/null || true
   bash "${AUTOHEAL_SCRIPT}" heal 2>/dev/null || true
   bash "${ENTRYPOINT_GUARD_SCRIPT}" run 2>/dev/null || true
+  bash "${LOGIN_HEAL_SCRIPT}" run 2>/dev/null || true
 }
 
 case "${1:-}" in

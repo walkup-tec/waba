@@ -1,0 +1,24 @@
+---
+description: Pós-redeploy Easypanel — login WABA 502 não é senha; heal :30180 automático
+alwaysApply: true
+---
+
+# Login WABA após atualização (502 ≠ senha)
+
+Quando o usuário vê **«Não foi possível entrar.»** logo após push/redeploy Easypanel:
+
+1. **Causa real:** HTTPS **502** — `waba_waba_disparador` perdeu publish host `:30180` e/ou backend Traefik deixou de ser `http://172.17.0.1:30180/`.
+2. **Não** diga que a senha está errada; confirme com `curl …/health` (502/Bad Gateway).
+3. **Heal permanente no VPS:** timer `waba-login-heal.timer` → `/root/waba-infra/heal-waba-login-vps.sh` (a cada ~60s).
+4. **Install / fix agora (root Hostinger):**
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/heal-waba-login-vps.sh" -o /tmp/heal-waba-login-vps.sh
+sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
+chmod +x /tmp/heal-waba-login-vps.sh
+/tmp/heal-waba-login-vps.sh install
+/tmp/heal-waba-login-vps.sh status
+```
+
+5. Após qualquer redeploy `waba_disparador`, o timer deve recuperar login em ≤~2 min sem intervenção.
+6. Doc Traefik: backends = routing dinâmica (hot-reload); **sem HUP**/`force` por hábito. Ver `ucp-traefik-static-dynamic.mdc`.

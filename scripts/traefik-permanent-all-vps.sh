@@ -170,9 +170,10 @@ ensure_waba_host_port() {
     echo "AVISO: serviço ${WABA_SWARM_SERVICE} ausente — skip publish ${WABA_HOST_PUBLISHED_PORT}" | tee -a "$LOG"
     return 1
   fi
-  echo "AVISO: :${WABA_HOST_PUBLISHED_PORT} sem resposta — publicando ${WABA_SWARM_SERVICE}" | tee -a "$LOG"
+  echo "AVISO: :${WABA_HOST_PUBLISHED_PORT} sem resposta — publicando ${WABA_SWARM_SERVICE} mode=host" | tee -a "$LOG"
+  docker service update --publish-rm "${WABA_HOST_PUBLISHED_PORT}" "$WABA_SWARM_SERVICE" >>"$LOG" 2>&1 || true
   timeout 90 docker service update \
-    --publish-add "published=${WABA_HOST_PUBLISHED_PORT},target=80,protocol=tcp" \
+    --publish-add "published=${WABA_HOST_PUBLISHED_PORT},target=80,protocol=tcp,mode=host" \
     "$WABA_SWARM_SERVICE" >>"$LOG" 2>&1 || true
   sleep 5
   curl -sf -m 4 "http://127.0.0.1:${WABA_HOST_PUBLISHED_PORT}/health" >/dev/null 2>&1
