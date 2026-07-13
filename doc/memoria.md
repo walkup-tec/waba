@@ -19,7 +19,11 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-13 (17:12 — login heal watch v2 permanente)
+2026-07-13 (17:20 — uptime anti falso alerta)
+
+**WABA — Monitor anti falso alerta (2026-07-13):** confirmação 2 ticks + re-probe antes de WhatsApp; 3ª chance Traefik `:80`; probe local. Marker `DEPLOY-2026-07-13-uptime-anti-false-alert`. Ver `doc/LOG-2026-07-13__172000__uptime-anti-falso-alerta.md`.
+
+**WABA — Login heal v2 ATIVO no srv1261237 (2026-07-13):** `waba-login-heal-watch.service` = **active**; timer 20s; burst HTTPS 200 na rodada 1. Install confirmado pelo usuário. Próximos redeploys devem auto-curar `:30180` sem login Not Found. Ver `doc/LOG-2026-07-13__171200__login-heal-watch-burst-permanente.md`.
 
 **WABA — Login pós-deploy NÃO pode falhar (2026-07-13):** 3 camadas — `waba-login-heal-watch` (docker events→burst), timer 20s, Actions `Heal WABA Login` no push master. UI retry 404/502. **Install v2 no VPS uma vez.** Marker `DEPLOY-2026-07-13-login-heal-watch-v2`. Ver `doc/LOG-2026-07-13__171200__login-heal-watch-burst-permanente.md`.
 

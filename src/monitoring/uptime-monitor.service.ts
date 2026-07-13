@@ -14,6 +14,8 @@ const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_REALERT_MINUTES = 30;
 const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_HTTP_ATTEMPTS = 3;
+/** Falhas consecutivas antes de marcar DOWN + alertar (anti falso positivo). */
+const DEFAULT_CONFIRM_FAILURES = 2;
 
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
 const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
@@ -129,6 +131,11 @@ const resolveRealertMs = (): number => {
 const resolveHttpTimeoutMs = (): number => {
   const raw = Number(process.env.WABA_UPTIME_MONITOR_HTTP_TIMEOUT_MS ?? DEFAULT_HTTP_TIMEOUT_MS);
   return Number.isFinite(raw) && raw >= 3_000 ? Math.round(raw) : DEFAULT_HTTP_TIMEOUT_MS;
+};
+
+const resolveConfirmFailures = (): number => {
+  const raw = Number(process.env.WABA_UPTIME_MONITOR_CONFIRM_FAILURES ?? DEFAULT_CONFIRM_FAILURES);
+  return Number.isFinite(raw) && raw >= 1 ? Math.min(10, Math.round(raw)) : DEFAULT_CONFIRM_FAILURES;
 };
 
 const resolveWhatsappInstanceSequenceLabel = (): string =>
@@ -313,6 +320,24 @@ async function checkHttpTarget(
           detail: `${pub.detail} público (local falhou: ${local.detail})`,
         };
       }
+      // Terceira chance: Traefik :80 com Host — cobre publish :30180/:3021x perdido com router vivo.
+      if (isNetworkProbeFailure(local.detail) || isNetworkProbeFailure(pub.detail)) {
+        const viaGw = await probeHttpViaHostGateway(url, { timeoutMs });
+        if (viaGw.ok) {
+          return {
+            key: target.key,
+            label: target.label,
+            ok: true,
+            detail: `${viaGw.detail} (local ${local.detail}; público ${pub.detail})`,
+          };
+        }
+        return {
+          key: target.key,
+          label: target.label,
+          ok: false,
+          detail: `local ${local.detail}; público ${pub.detail}; gateway ${viaGw.detail}`,
+        };
+      }
       return {
         key: target.key,
         label: target.label,
@@ -350,6 +375,49 @@ async function checkHttpTarget(
   }
 
   return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
+}
+
+/** Re-probe imediato antes de WhatsApp/e-mail — descarta flake/hairpin. */
+async function reconfirmDownResults(
+  targets: UptimeTarget[],
+  down: UptimeCheckResult[],
+): Promise<{ confirmed: UptimeCheckResult[]; falsePositives: UptimeCheckResult[] }> {
+  const byKey = new Map(targets.map((item) => [item.key, item]));
+  const confirmed: UptimeCheckResult[] = [];
+  const falsePositives: UptimeCheckResult[] = [];
+  for (const item of down) {
+    const target = byKey.get(item.key);
+    if (!target) {
+      confirmed.push(item);
+      continue;
+    }
+    if (target.kind === "http") {
+      const again = await checkHttpTarget(target, {
+        attempts: 2,
+        timeoutMs: Math.min(10_000, resolveHttpTimeoutMs()),
+      });
+      if (again.ok) {
+        falsePositives.push({ ...again, detail: `falso positivo descartado — ${again.detail}` });
+      } else {
+        confirmed.push(again);
+      }
+      continue;
+    }
+    if (target.kind === "evo") {
+      const again = await checkEvoTarget(target);
+      if (again.ok) falsePositives.push(again);
+      else confirmed.push(again);
+      continue;
+    }
+    if (target.kind === "asaas") {
+      const again = await checkAsaasTarget(target);
+      if (again.ok) falsePositives.push(again);
+      else confirmed.push(again);
+      continue;
+    }
+    confirmed.push(item);
+  }
+  return { confirmed, falsePositives };
 }
 
 async function checkAsaasTarget(target: UptimeTarget): Promise<UptimeCheckResult> {
@@ -547,49 +615,107 @@ export async function runUptimeMonitorCheck(input?: {
   alerts?: Awaited<ReturnType<typeof deliverAlerts>>;
 }> {
   const targets = resolveUptimeTargets();
-  const results = await runChecks(targets);
+  const rawResults = await runChecks(targets);
   const checkedAt = new Date().toISOString();
   const realertMs = resolveRealertMs();
+  const confirmFailures = resolveConfirmFailures();
   const now = Date.now();
 
   const state = input?.skipState ? { targets: {} as Record<string, TargetState> } : await readMonitorState();
 
-  const downNow = results.filter((result) => !result.ok);
+  // Resultados efetivos após soft-fail (ainda não confirmados contam como OK para luz/alerta).
+  const results: UptimeCheckResult[] = [];
   const recoveredNow: UptimeCheckResult[] = [];
   const newlyDown: UptimeCheckResult[] = [];
   const recoveredSince = new Map<string, string>();
   let needAlert = Boolean(input?.forceAlert);
+  const softSuspects: string[] = [];
 
-  for (const result of results) {
-    const previous = state.targets[result.key];
-    if (result.ok) {
+  for (const raw of rawResults) {
+    const previous = state.targets[raw.key];
+    if (raw.ok) {
       if (previous && previous.status === "down") {
-        recoveredNow.push(result);
-        recoveredSince.set(result.key, previous.since);
+        recoveredNow.push(raw);
+        recoveredSince.set(raw.key, previous.since);
         needAlert = true;
       }
-      state.targets[result.key] = {
+      state.targets[raw.key] = {
         status: "up",
         since: previous && previous.status === "up" ? previous.since : checkedAt,
         lastCheckedAt: checkedAt,
         lastAlertAt: previous?.lastAlertAt ?? null,
         consecutiveFailures: 0,
-        lastDetail: result.detail,
+        lastDetail: raw.detail,
       };
-    } else {
-      const wasDown = previous && previous.status === "down";
-      const lastAlertAt = previous?.lastAlertAt ? Date.parse(previous.lastAlertAt) : 0;
-      const dueForRealert = wasDown && (now - lastAlertAt >= realertMs);
-      if (!wasDown || dueForRealert) needAlert = true;
-      if (!wasDown) newlyDown.push(result);
-      state.targets[result.key] = {
-        status: "down",
-        since: wasDown ? previous!.since : checkedAt,
+      results.push(raw);
+      continue;
+    }
+
+    const failures = (previous?.consecutiveFailures ?? 0) + 1;
+    const forceConfirm = Boolean(input?.forceAlert);
+    const confirmed = forceConfirm || failures >= confirmFailures;
+    const wasDown = previous && previous.status === "down";
+
+    if (!confirmed) {
+      // Soft-fail: mantém UP nas luzes; não alerta; não grava desconexão.
+      softSuspects.push(`${raw.key}(${failures}/${confirmFailures})`);
+      state.targets[raw.key] = {
+        status: previous?.status === "down" ? "down" : "up",
+        since: previous?.since ?? checkedAt,
         lastCheckedAt: checkedAt,
         lastAlertAt: previous?.lastAlertAt ?? null,
-        consecutiveFailures: (previous?.consecutiveFailures ?? 0) + 1,
-        lastDetail: result.detail,
+        consecutiveFailures: failures,
+        lastDetail: `suspeito ${failures}/${confirmFailures}: ${raw.detail}`,
       };
+      results.push({
+        ...raw,
+        ok: state.targets[raw.key].status !== "down",
+        detail: state.targets[raw.key].lastDetail,
+      });
+      continue;
+    }
+
+    const lastAlertAt = previous?.lastAlertAt ? Date.parse(previous.lastAlertAt) : 0;
+    const dueForRealert = wasDown && now - lastAlertAt >= realertMs;
+    if (!wasDown || dueForRealert) needAlert = true;
+    if (!wasDown) newlyDown.push(raw);
+    state.targets[raw.key] = {
+      status: "down",
+      since: wasDown ? previous!.since : checkedAt,
+      lastCheckedAt: checkedAt,
+      lastAlertAt: previous?.lastAlertAt ?? null,
+      consecutiveFailures: failures,
+      lastDetail: raw.detail,
+    };
+    results.push(raw);
+  }
+
+  let downNow = results.filter((result) => !result.ok);
+
+  // Re-probe imediato antes de WhatsApp/e-mail (descarta flake).
+  if (needAlert && downNow.length > 0 && !input?.forceAlert) {
+    const { confirmed, falsePositives } = await reconfirmDownResults(targets, downNow);
+    for (const fp of falsePositives) {
+      console.warn(`[uptime-monitor] falso positivo descartado — ${fp.key}: ${fp.detail}`);
+      state.targets[fp.key] = {
+        status: "up",
+        since: checkedAt,
+        lastCheckedAt: checkedAt,
+        lastAlertAt: state.targets[fp.key]?.lastAlertAt ?? null,
+        consecutiveFailures: 0,
+        lastDetail: fp.detail,
+      };
+      const idx = results.findIndex((item) => item.key === fp.key);
+      if (idx >= 0) results[idx] = fp;
+    }
+    // Reconstrói newlyDown sem falsos positivos
+    const fpKeys = new Set(falsePositives.map((item) => item.key));
+    for (let i = newlyDown.length - 1; i >= 0; i -= 1) {
+      if (fpKeys.has(newlyDown[i].key)) newlyDown.splice(i, 1);
+    }
+    downNow = confirmed;
+    if (downNow.length === 0 && recoveredNow.length === 0) {
+      needAlert = false;
     }
   }
 
@@ -615,6 +741,7 @@ export async function runUptimeMonitorCheck(input?: {
       const peersDown = downNow.map((item) => item.key);
       const targetByKey = new Map(targets.map((item) => [item.key, item]));
       for (const result of newlyDown) {
+        if (!downNow.some((item) => item.key === result.key)) continue;
         const target = targetByKey.get(result.key);
         const st = state.targets[result.key];
         await systemConnectionLogService.recordTransition({
@@ -653,9 +780,12 @@ export async function runUptimeMonitorCheck(input?: {
     }
   }
 
+  if (softSuspects.length) {
+    console.info(`[uptime-monitor] suspeito (sem alerta): ${softSuspects.join(", ")}`);
+  }
   if (downNow.length) {
     console.warn(
-      `[uptime-monitor] FALHA — ${downNow.length} alvo(s): ${downNow.map((item) => `${item.label} (${item.detail})`).join("; ")}`,
+      `[uptime-monitor] FALHA confirmada — ${downNow.length} alvo(s): ${downNow.map((item) => `${item.label} (${item.detail})`).join("; ")}`,
     );
   } else {
     console.info(`[uptime-monitor] OK — ${results.length} alvo(s) no ar.`);
@@ -707,7 +837,7 @@ export function startUptimeMonitorScheduler(): void {
   const intervalMs = resolveUptimeIntervalMs();
   const targets = resolveUptimeTargets();
   console.log(
-    `[uptime-monitor] ativo — ${targets.length} alvo(s) a cada ${Math.round(intervalMs / 60_000)}min | alerta → WhatsApp ${resolveAlertWhatsapp()} (instância ${resolveWhatsappInstanceSequenceLabel()}) + ${resolveAlertEmail()}`,
+    `[uptime-monitor] ativo — ${targets.length} alvo(s) a cada ${Math.round(intervalMs / 60_000)}min | confirma após ${resolveConfirmFailures()} falha(s) | alerta → WhatsApp ${resolveAlertWhatsapp()} (instância ${resolveWhatsappInstanceSequenceLabel()}) + ${resolveAlertEmail()}`,
   );
 
   void monitorTick().catch((error) => {
@@ -764,6 +894,7 @@ export async function getUptimeMonitorStatus(): Promise<{
   enabled: boolean;
   intervalMinutes: number;
   realertMinutes: number;
+  confirmFailures: number;
   targets: UptimeTarget[];
   alertWhatsapp: string;
   alertEmail: string;
@@ -776,6 +907,7 @@ export async function getUptimeMonitorStatus(): Promise<{
     enabled: isUptimeMonitorEnabled(),
     intervalMinutes: Math.round(resolveUptimeIntervalMs() / 60_000),
     realertMinutes: Math.round(resolveRealertMs() / 60_000),
+    confirmFailures: resolveConfirmFailures(),
     targets: resolveUptimeTargets(),
     alertWhatsapp: resolveAlertWhatsapp(),
     alertEmail: resolveAlertEmail(),

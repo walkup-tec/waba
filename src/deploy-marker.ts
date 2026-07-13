@@ -1,3 +1,3 @@
-/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
+﻿/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-13-login-heal-watch-v2";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-13-uptime-anti-false-alert";
