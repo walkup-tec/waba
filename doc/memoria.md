@@ -19,7 +19,15 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-13 (12:05 — handoff técnico Logs)
+2026-07-13 (13:55 — uptime probe local)
+
+**WABA — Monitor falso Fetch failed (2026-07-13):** sites públicos 200; container não fazia hairpin. Probe preferencial `172.17.0.1:30210/30211/30180`. Marker `DEPLOY-2026-07-13-uptime-local-probe-fix`. Ver `doc/LOG-2026-07-13__135500__uptime-fetch-failed-probe-local.md`.
+
+**Drive principal = E:** (2026-07-13): workspace operacional em `E:\Waba` (não H: para venv/npm/crawlers). Doc: `doc/SETUP-E-DRIVE.md`. Cursor: Open Folder → `E:\Waba`.
+
+**Traefik crawler RAG** (2026-07-13): `E:\Waba\traefik-crawler` — async, checkpoint 500, até 50k URLs → `urls.txt`. Rodar: `python main.py`. Ver `doc/LOG-2026-07-13__133500__traefik-crawler-e-drive-padrao.md`.
+
+**WABA — V02 paridade prod (2026-07-13):** branch `v02` = master `fe46ddc` + marker `DEPLOY-2026-07-13-v02-paridade-prod-logs-handoff`. Redeploy Easypanel `waba_disparador_v02` + `/tmp/sync-v02.sh run` no VPS (dados). Testes no V02; prod só à noite. Ver `doc/LOG-2026-07-13__121500__v02-paridade-producao.md`.
 
 **WABA — Detalhes Logs = handoff (2026-07-13):** brief para dev/agente (probe, stack, playbook, comandos); UI Ver/Copiar handoff; Excel com coluna Handoff. Marker `DEPLOY-2026-07-13-logs-handoff-tecnico`. Ver `doc/LOG-2026-07-13__120500__logs-handoff-tecnico-detalhes.md`.
 

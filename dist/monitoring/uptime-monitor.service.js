@@ -58,12 +58,42 @@ const DEFAULT_HTTP_ATTEMPTS = 3;
 const DEFAULT_ALERT_WHATSAPP = "5551999666841";
 const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
 let monitorRunning = false;
-const DEFAULT_TARGETS = [
-    { key: "site_drax", label: "draxsistemas.com.br", kind: "http", url: "https://draxsistemas.com.br/" },
-    { key: "site_bet", label: "bet.waba.info", kind: "http", url: "https://bet.waba.info/" },
-    { key: "site_disparos", label: "wabadisparos.com.br", kind: "http", url: "https://wabadisparos.com.br/" },
-    { key: "app_waba", label: "waba.draxsistemas.com.br", kind: "http", url: "https://waba.draxsistemas.com.br/health" },
-];
+const resolveHostGateway = () => String(process.env.WABA_HOST_GW || process.env.WABA_DOCKER_HOST_GW || "172.17.0.1").trim() ||
+    "172.17.0.1";
+const buildDefaultTargets = () => {
+    const gw = resolveHostGateway();
+    return [
+        {
+            key: "site_drax",
+            label: "draxsistemas.com.br",
+            kind: "http",
+            url: "https://draxsistemas.com.br/",
+            // Site institucional pode estar atrás de Cloudflare; local só se houver backend neste VPS.
+            localUrl: process.env.WABA_UPTIME_DRAX_LOCAL_URL || undefined,
+        },
+        {
+            key: "site_bet",
+            label: "bet.waba.info",
+            kind: "http",
+            url: "https://bet.waba.info/",
+            localUrl: `http://${gw}:30211/`,
+        },
+        {
+            key: "site_disparos",
+            label: "wabadisparos.com.br",
+            kind: "http",
+            url: "https://wabadisparos.com.br/",
+            localUrl: `http://${gw}:30210/`,
+        },
+        {
+            key: "app_waba",
+            label: "waba.draxsistemas.com.br",
+            kind: "http",
+            url: "https://waba.draxsistemas.com.br/health",
+            localUrl: `http://${gw}:30180/health`,
+        },
+    ];
+};
 const parseBoolEnv = (raw) => {
     const value = String(raw ?? "").trim().toLowerCase();
     if (value === "1" || value === "true" || value === "yes")
@@ -124,7 +154,7 @@ const resolveUptimeTargets = () => {
             }
         }
     }
-    const httpTargets = targets.length ? targets : DEFAULT_TARGETS;
+    const httpTargets = targets.length ? targets : buildDefaultTargets();
     const withAsaas = isAsaasCheckEnabled()
         ? [
             ...httpTargets,
@@ -140,17 +170,15 @@ const resolveUptimeTargets = () => {
     return withAsaas;
 };
 exports.resolveUptimeTargets = resolveUptimeTargets;
-async function checkHttpTarget(target, options) {
-    const url = String(target.url || "").trim();
-    if (!url) {
-        return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
-    }
-    const timeoutMs = options?.timeoutMs ?? resolveHttpTimeoutMs();
-    const attempts = Math.max(1, options?.attempts ?? DEFAULT_HTTP_ATTEMPTS);
+const isNetworkProbeFailure = (detail) => {
+    const d = String(detail || "").toLowerCase();
+    return (/fetch failed|econnrefused|econnreset|enotfound|eai_again|network|unreachable|socket hang up|other side closed|tls|cert|unable to verify|timeout/.test(d) || d.trim() === "");
+};
+async function probeHttpUrl(url, options) {
     let lastDetail = "";
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const timer = setTimeout(() => controller.abort(), options.timeoutMs);
         try {
             const response = await fetch(url, {
                 method: "GET",
@@ -161,24 +189,85 @@ async function checkHttpTarget(target, options) {
             clearTimeout(timer);
             const status = response.status;
             if (status >= 200 && status < 400) {
-                return { key: target.key, label: target.label, ok: true, detail: `HTTP ${status}` };
+                return { ok: true, detail: `HTTP ${status}`, status };
             }
             lastDetail = `HTTP ${status}`;
         }
         catch (error) {
             clearTimeout(timer);
+            const cause = error && typeof error === "object" && "cause" in error
+                ? error.cause
+                : undefined;
             const message = error instanceof Error && error.name === "AbortError"
-                ? `timeout (${timeoutMs}ms)`
+                ? `timeout (${options.timeoutMs}ms)`
                 : error instanceof Error
-                    ? error.message
+                    ? [error.message, cause?.code, cause?.message].filter(Boolean).join(" — ")
                     : "erro de rede";
             lastDetail = message;
         }
-        if (attempt < attempts) {
+        if (attempt < options.attempts) {
             await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
         }
     }
-    return { key: target.key, label: target.label, ok: false, detail: lastDetail || "sem resposta" };
+    return { ok: false, detail: lastDetail || "sem resposta" };
+}
+async function checkHttpTarget(target, options) {
+    const url = String(target.url || "").trim();
+    const localUrl = String(target.localUrl || "").trim();
+    if (!url && !localUrl) {
+        return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
+    }
+    const timeoutMs = options?.timeoutMs ?? resolveHttpTimeoutMs();
+    const attempts = Math.max(1, options?.attempts ?? DEFAULT_HTTP_ATTEMPTS);
+    // 1) Preferir probe local (host gateway) — evita hairpin/TLS falso negativo no Swarm.
+    if (localUrl) {
+        const local = await probeHttpUrl(localUrl, { attempts, timeoutMs });
+        if (local.ok) {
+            return {
+                key: target.key,
+                label: target.label,
+                ok: true,
+                detail: `${local.detail} via ${localUrl}`,
+            };
+        }
+        // 2) Se local falhou, tenta público (pode ser Cloudflare / outro host).
+        if (url) {
+            const pub = await probeHttpUrl(url, { attempts: Math.min(2, attempts), timeoutMs });
+            if (pub.ok) {
+                return {
+                    key: target.key,
+                    label: target.label,
+                    ok: true,
+                    detail: `${pub.detail} público (local falhou: ${local.detail})`,
+                };
+            }
+            return {
+                key: target.key,
+                label: target.label,
+                ok: false,
+                detail: `local ${local.detail}; público ${pub.detail}`,
+            };
+        }
+        return { key: target.key, label: target.label, ok: false, detail: `local ${local.detail}` };
+    }
+    // Só URL pública (ex.: drax sem localUrl)
+    if (url) {
+        const pub = await probeHttpUrl(url, { attempts, timeoutMs });
+        if (pub.ok) {
+            return { key: target.key, label: target.label, ok: true, detail: pub.detail };
+        }
+        // Último recurso: se for fetch failed e houver gateway padrão conhecido para o host, nada a fazer
+        if (isNetworkProbeFailure(pub.detail)) {
+            return {
+                key: target.key,
+                label: target.label,
+                ok: false,
+                detail: pub.detail,
+            };
+        }
+        return { key: target.key, label: target.label, ok: false, detail: pub.detail };
+    }
+    return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
 }
 async function checkAsaasTarget(target) {
     try {
