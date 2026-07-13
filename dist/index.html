@@ -3978,23 +3978,36 @@
 
       /* Logs Sistema — alinhado ao tema escuro do Monitor CPU */
       #admin-logs-sistema-page .admin-logs-sistema-filters {
-        display: grid;
-        grid-template-columns: minmax(160px, 200px) repeat(2, minmax(130px, 160px)) auto minmax(140px, 180px) auto;
-        gap: 12px 14px;
-        align-items: end;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
         margin-bottom: 18px;
         padding: 14px 16px;
         border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.18));
         border-radius: 12px;
         background: rgba(15, 23, 42, 0.35);
       }
+      #admin-logs-sistema-page .admin-logs-sistema-filters-row {
+        display: grid;
+        gap: 12px 14px;
+        align-items: end;
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-filters-row--primary {
+        grid-template-columns: minmax(160px, 220px) repeat(2, minmax(130px, 160px)) auto minmax(140px, 180px);
+      }
+      #admin-logs-sistema-page .admin-logs-sistema-filters-row--actions {
+        grid-template-columns: 1fr;
+        justify-items: start;
+        padding-top: 2px;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+      }
       @media (max-width: 1100px) {
-        #admin-logs-sistema-page .admin-logs-sistema-filters {
+        #admin-logs-sistema-page .admin-logs-sistema-filters-row--primary {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
       @media (max-width: 640px) {
-        #admin-logs-sistema-page .admin-logs-sistema-filters {
+        #admin-logs-sistema-page .admin-logs-sistema-filters-row--primary {
           grid-template-columns: 1fr;
         }
       }
@@ -4022,10 +4035,6 @@
         text-transform: none;
         letter-spacing: normal;
         color-scheme: dark;
-      }
-      #admin-logs-sistema-page .admin-logs-sistema-field select[multiple] {
-        min-height: 96px;
-        padding: 6px;
       }
       #admin-logs-sistema-page .admin-logs-sistema-field select option {
         background: #0f172a;
@@ -18647,50 +18656,55 @@
               <div id="admin-logs-sistema-page" class="admin-monitor-page" data-monitor-page-panel="logs" hidden>
                 <div class="aquecedor-section">
                 <div class="admin-logs-sistema-filters" id="admin-logs-sistema-filters">
-                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-motivo">
-                    <span>Motivo / causa</span>
-                    <select id="admin-logs-sistema-motivo" multiple size="4" aria-label="Filtrar por motivo">
-                      <option value="Traefik">Traefik</option>
-                      <option value="Yaml">Yaml</option>
-                      <option value="Docker">Docker</option>
-                      <option value="Servidor">Servidor</option>
-                    </select>
-                  </label>
-                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-from">
-                    <span>De</span>
-                    <input type="date" id="admin-logs-sistema-from" />
-                  </label>
-                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-to">
-                    <span>Até</span>
-                    <input type="date" id="admin-logs-sistema-to" />
-                  </label>
-                  <div class="admin-campanhas-buckets" id="admin-logs-sistema-preset-group" role="tablist" aria-label="Período rápido">
-                    <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="day">Dia</button>
-                    <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="week">Semana</button>
-                    <button type="button" class="admin-campanhas-bucket-btn is-active" data-logs-preset="month">Mês</button>
+                  <div class="admin-logs-sistema-filters-row admin-logs-sistema-filters-row--primary">
+                    <label class="admin-logs-sistema-field" for="admin-logs-sistema-motivo">
+                      <span>Motivo / causa</span>
+                      <select id="admin-logs-sistema-motivo" aria-label="Filtrar por motivo">
+                        <option value="" selected>Todos</option>
+                        <option value="Traefik">Traefik</option>
+                        <option value="Yaml">Yaml</option>
+                        <option value="Docker">Docker</option>
+                        <option value="Servidor">Servidor</option>
+                      </select>
+                    </label>
+                    <label class="admin-logs-sistema-field" for="admin-logs-sistema-from">
+                      <span>De</span>
+                      <input type="date" id="admin-logs-sistema-from" />
+                    </label>
+                    <label class="admin-logs-sistema-field" for="admin-logs-sistema-to">
+                      <span>Até</span>
+                      <input type="date" id="admin-logs-sistema-to" />
+                    </label>
+                    <div class="admin-campanhas-buckets" id="admin-logs-sistema-preset-group" role="tablist" aria-label="Período rápido">
+                      <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="day">Dia</button>
+                      <button type="button" class="admin-campanhas-bucket-btn" data-logs-preset="week">Semana</button>
+                      <button type="button" class="admin-campanhas-bucket-btn is-active" data-logs-preset="month">Mês</button>
+                    </div>
+                    <label class="admin-logs-sistema-field" for="admin-logs-sistema-month">
+                      <span>Mês (ano atual)</span>
+                      <select id="admin-logs-sistema-month" aria-label="Mês do ano atual">
+                        <option value="">—</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                      </select>
+                    </label>
                   </div>
-                  <label class="admin-logs-sistema-field" for="admin-logs-sistema-month">
-                    <span>Mês (ano atual)</span>
-                    <select id="admin-logs-sistema-month" aria-label="Mês do ano atual">
-                      <option value="">—</option>
-                      <option value="1">Janeiro</option>
-                      <option value="2">Fevereiro</option>
-                      <option value="3">Março</option>
-                      <option value="4">Abril</option>
-                      <option value="5">Maio</option>
-                      <option value="6">Junho</option>
-                      <option value="7">Julho</option>
-                      <option value="8">Agosto</option>
-                      <option value="9">Setembro</option>
-                      <option value="10">Outubro</option>
-                      <option value="11">Novembro</option>
-                      <option value="12">Dezembro</option>
-                    </select>
-                  </label>
-                  <div class="admin-logs-sistema-actions">
-                    <button type="button" id="admin-logs-sistema-apply-btn" class="instance-action-btn btn-refresh enabled">Aplicar</button>
-                    <button type="button" id="admin-logs-sistema-export-btn" class="instance-action-btn enabled">Exportar</button>
-                    <button type="button" id="admin-logs-sistema-clear-btn" class="instance-action-btn">Limpar Filtros</button>
+                  <div class="admin-logs-sistema-filters-row admin-logs-sistema-filters-row--actions">
+                    <div class="admin-logs-sistema-actions">
+                      <button type="button" id="admin-logs-sistema-apply-btn" class="instance-action-btn btn-refresh enabled">Aplicar</button>
+                      <button type="button" id="admin-logs-sistema-export-btn" class="instance-action-btn enabled">Exportar</button>
+                      <button type="button" id="admin-logs-sistema-clear-btn" class="instance-action-btn">Limpar Filtros</button>
+                    </div>
                   </div>
                 </div>
 
@@ -32398,17 +32412,14 @@
       }
 
       function getAdminLogsSistemaFilters() {
-        const select = document.getElementById("admin-logs-sistema-motivo");
-        const motivos = select
-          ? Array.from(select.selectedOptions).map((opt) => opt.value).filter(Boolean)
-          : [];
+        const motivo = String(document.getElementById("admin-logs-sistema-motivo")?.value || "").trim();
         const from = String(document.getElementById("admin-logs-sistema-from")?.value || "").trim();
         const to = String(document.getElementById("admin-logs-sistema-to")?.value || "").trim();
         const monthRaw = String(document.getElementById("admin-logs-sistema-month")?.value || "").trim();
         const year = new Date().getFullYear();
         const params = new URLSearchParams();
         params.set("preset", adminLogsSistemaPreset || "month");
-        if (motivos.length) params.set("motivos", motivos.join(","));
+        if (motivo) params.set("motivos", motivo);
         if (from) params.set("from", `${from}T00:00:00.000Z`);
         if (to) params.set("to", `${to}T23:59:59.999Z`);
         if (monthRaw) {
@@ -32574,7 +32585,7 @@
 
       function clearAdminLogsSistemaFilters() {
         const select = document.getElementById("admin-logs-sistema-motivo");
-        if (select) Array.from(select.options).forEach((opt) => (opt.selected = false));
+        if (select) select.value = "";
         const from = document.getElementById("admin-logs-sistema-from");
         const to = document.getElementById("admin-logs-sistema-to");
         const month = document.getElementById("admin-logs-sistema-month");

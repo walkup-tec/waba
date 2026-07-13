@@ -19,7 +19,9 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-11 (22:45 — heal login permanente)
+2026-07-13 (11:55 — filtros Logs 2 linhas)
+
+**WABA — Filtros Logs (2026-07-13):** Motivo com **Todos** + opções; layout em 2 linhas (filtros / botões). Marker `DEPLOY-2026-07-13-logs-filtros-duas-linhas`. Ver `doc/LOG-2026-07-13__115500__logs-filtros-todos-duas-linhas.md`.
 
 **WABA — Login pós-deploy (2026-07-11):** 502 por perda de `:30180`, não senha. Watchdog `heal-waba-login-vps.sh` + timer 60s; UI retry 502. **Instalar uma vez no VPS.** Marker `DEPLOY-2026-07-11-login-heal-watchdog`. Ver `doc/LOG-2026-07-11__224500__heal-login-pos-redeploy-permanente.md`.
 
