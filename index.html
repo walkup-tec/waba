@@ -23023,7 +23023,6 @@
 
       const DISPAROS_PRICING_TIERS = {
         oficial: [
-          { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
           { shipments: 1000, pricePerSend: 0.32, totalCents: 32000 },
           { shipments: 3000, pricePerSend: 0.31, totalCents: 93000 },
           { shipments: 5000, pricePerSend: 0.3, totalCents: 150000 },
@@ -23041,7 +23040,6 @@
           { shipments: 50000, pricePerSend: 0.33, totalCents: 1650000 },
         ],
         alternativa: [
-          { shipments: 100, pricePerSend: 0.03, totalCents: 3000, testOnly: true },
           { shipments: 1000, pricePerSend: 0.2, totalCents: 20000 },
           { shipments: 3000, pricePerSend: 0.19, totalCents: 57000 },
           { shipments: 5000, pricePerSend: 0.17, totalCents: 85000 },
@@ -35043,7 +35041,7 @@
       function renderDisparosPricingTable(apiKind) {
         const tbody = document.getElementById("disparos-pricing-tbody");
         if (!tbody) return;
-        const tiers = getDisparosPricingTiers(apiKind);
+        const tiers = resolveDisparosSaleTiersForDisplay(getDisparosPricingTiers(apiKind));
         tbody.innerHTML = "";
         disparosSelectedPackage = null;
         resetDisparosPricingCustomUi();

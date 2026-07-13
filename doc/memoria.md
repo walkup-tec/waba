@@ -19,7 +19,17 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-13 (17:20 — uptime anti falso alerta)
+2026-07-13 (14:30 — tarifador sem faixa 100/R$30)
+
+**WABA — Tarifador sem faixa 100 · R$ 0,03 · R$ 30 (2026-07-13):** removida da UI (Oficial/Alternativa) e do backend (`DISPAROS_TEST_PACKAGES`). Outros e Bets. Marker `DEPLOY-2026-07-13-tarifador-sem-faixa-100`. Ver `doc/LOG-2026-07-13__143000__tarifador-remove-faixa-100-r30.md`.
+
+2026-07-13 (14:16 — Traefik crawler 50k)
+
+**Traefik crawler 50k** (2026-07-13): `E:\Waba\traefik-crawler\urls.txt` com **50.000** URLs. Ver `doc/LOG-2026-07-13__141600__traefik-crawler-50k-urls.md`.
+
+2026-07-13 (17:19 — anti falso alerta **em produção**)
+
+**WABA — Deploy validado (2026-07-13):** marker `DEPLOY-2026-07-13-uptime-anti-false-alert`; `/health` 200; `:30180` 200; login rota OK. Heal watch ativo.
 
 **WABA — Monitor anti falso alerta (2026-07-13):** confirmação 2 ticks + re-probe antes de WhatsApp; 3ª chance Traefik `:80`; probe local. Marker `DEPLOY-2026-07-13-uptime-anti-false-alert`. Ver `doc/LOG-2026-07-13__172000__uptime-anti-falso-alerta.md`.
 

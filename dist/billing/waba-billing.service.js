@@ -30,10 +30,6 @@ const resolveMinCreditCents = () => {
     const raw = Number(process.env.WABA_DISPAROS_MIN_CREDIT_CENTS ?? 30000);
     return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 30000;
 };
-/** Pacotes de teste (100 envios) — valores abaixo do mínimo comercial. */
-const DISPAROS_TEST_PACKAGES = [
-    { shipments: 100, valueCents: 3000 },
-];
 /** Tabela de venda API Oficial (envios × valor total em centavos). */
 const DISPAROS_OFICIAL_SALE_PACKAGES = [
     { shipments: 1000, valueCents: 32000 },
@@ -63,7 +59,6 @@ const DISPAROS_ALTERNATIVA_SALE_PACKAGES = [
     { shipments: 20000, valueCents: 280000 },
     { shipments: 30000, valueCents: 390000 },
 ];
-const isDisparosTestPackage = (shipmentCount, valueCents) => DISPAROS_TEST_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
 const isDisparosOficialSalePackage = (shipmentCount, valueCents) => DISPAROS_OFICIAL_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
 const isDisparosAlternativaSalePackage = (shipmentCount, valueCents) => DISPAROS_ALTERNATIVA_SALE_PACKAGES.some((pack) => pack.shipments === shipmentCount && pack.valueCents === valueCents);
 const getDisparosSalePackages = (apiKind, segment = "outros") => {
@@ -89,9 +84,9 @@ const resolveListValueCentsForPackage = (apiKind, shipmentCount, segment = "outr
         return null;
     const tables = apiKind === "oficial"
         ? segment === "bets"
-            ? [...DISPAROS_TEST_PACKAGES, ...DISPAROS_BETS_OFICIAL_SALE_PACKAGES]
-            : [...DISPAROS_TEST_PACKAGES, ...DISPAROS_OFICIAL_SALE_PACKAGES]
-        : [...DISPAROS_TEST_PACKAGES, ...DISPAROS_ALTERNATIVA_SALE_PACKAGES];
+            ? DISPAROS_BETS_OFICIAL_SALE_PACKAGES
+            : DISPAROS_OFICIAL_SALE_PACKAGES
+        : DISPAROS_ALTERNATIVA_SALE_PACKAGES;
     const match = tables.find((pack) => pack.shipments === shipmentCount);
     if (match)
         return match.valueCents;
@@ -228,10 +223,8 @@ class WabaBillingService {
             listValueCents = listValueCentsFromPackage;
         }
         else {
-            const isTestPackage = isDisparosTestPackage(shipmentCount, listValueCents);
-            const effectiveMin = isTestPackage ? listValueCents : minCreditCents;
-            if (listValueCents < effectiveMin) {
-                throw new Error(`Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`);
+            if (listValueCents < minCreditCents) {
+                throw new Error(`Valor mínimo de créditos: R$ ${centsToCurrency(minCreditCents).toFixed(2).replace(".", ",")}.`);
             }
         }
         const couponAlias = String(input.couponAlias ?? "").trim();
@@ -246,10 +239,8 @@ class WabaBillingService {
             couponId = quote.couponId;
             normalizedCouponAlias = quote.alias;
         }
-        const isTestPackage = isDisparosTestPackage(shipmentCount, listValueCents);
-        const effectiveMin = isTestPackage ? valueCents : minCreditCents;
-        if (valueCents < effectiveMin && !couponAlias) {
-            throw new Error(`Valor mínimo de créditos: R$ ${centsToCurrency(effectiveMin).toFixed(2).replace(".", ",")}.`);
+        if (valueCents < minCreditCents && !couponAlias) {
+            throw new Error(`Valor mínimo de créditos: R$ ${centsToCurrency(minCreditCents).toFixed(2).replace(".", ",")}.`);
         }
         if (valueCents < ASAAS_MIN_CHARGE_CENTS) {
             throw new Error(`O valor final deve ser de pelo menos R$ ${centsToCurrency(ASAAS_MIN_CHARGE_CENTS)
