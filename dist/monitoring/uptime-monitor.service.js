@@ -413,25 +413,37 @@ async function runUptimeMonitorCheck(input) {
         try {
             const { systemConnectionLogService } = await Promise.resolve().then(() => __importStar(require("./system-connection-log.service")));
             const downCount = downNow.length;
+            const peersDown = downNow.map((item) => item.key);
+            const targetByKey = new Map(targets.map((item) => [item.key, item]));
             for (const result of newlyDown) {
+                const target = targetByKey.get(result.key);
+                const st = state.targets[result.key];
                 await systemConnectionLogService.recordTransition({
                     status: "desconexao",
                     detail: result.detail,
                     targetKey: result.key,
                     targetLabel: result.label,
+                    targetUrl: target?.url || null,
                     ts: checkedAt,
                     downCountSameCheck: downCount,
+                    peersDown,
+                    consecutiveFailures: st?.consecutiveFailures,
                 });
             }
             for (const result of recoveredNow) {
+                const target = targetByKey.get(result.key);
+                const st = state.targets[result.key];
                 await systemConnectionLogService.recordTransition({
                     status: "conexao",
                     detail: result.detail,
                     targetKey: result.key,
                     targetLabel: result.label,
+                    targetUrl: target?.url || null,
                     ts: checkedAt,
                     previousSince: recoveredSince.get(result.key) ?? null,
                     downCountSameCheck: downCount,
+                    peersDown,
+                    consecutiveFailures: st?.consecutiveFailures,
                 });
             }
         }

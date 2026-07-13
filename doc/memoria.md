@@ -19,7 +19,9 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-13 (11:55 — filtros Logs 2 linhas)
+2026-07-13 (12:05 — handoff técnico Logs)
+
+**WABA — Detalhes Logs = handoff (2026-07-13):** brief para dev/agente (probe, stack, playbook, comandos); UI Ver/Copiar handoff; Excel com coluna Handoff. Marker `DEPLOY-2026-07-13-logs-handoff-tecnico`. Ver `doc/LOG-2026-07-13__120500__logs-handoff-tecnico-detalhes.md`.
 
 **WABA — Filtros Logs (2026-07-13):** Motivo com **Todos** + opções; layout em 2 linhas (filtros / botões). Marker `DEPLOY-2026-07-13-logs-filtros-duas-linhas`. Ver `doc/LOG-2026-07-13__115500__logs-filtros-todos-duas-linhas.md`.
 

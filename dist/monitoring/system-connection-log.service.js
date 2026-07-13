@@ -37,6 +37,7 @@ exports.systemConnectionLogService = exports.SystemConnectionLogService = void 0
 const system_connection_log_types_1 = require("./system-connection-log.types");
 const system_connection_log_repository_1 = require("./system-connection-log.repository");
 const system_connection_log_classifier_1 = require("./system-connection-log.classifier");
+const system_connection_log_handoff_1 = require("./system-connection-log-handoff");
 const TZ = "America/Sao_Paulo";
 function parseIso(ts) {
     const n = Date.parse(ts);
@@ -113,6 +114,23 @@ function applyFilters(events, filters, fromMs, toMs) {
     })
         .sort((a, b) => parseIso(b.ts) - parseIso(a.ts));
 }
+function resolveHandoffBrief(event) {
+    if (event.handoff && event.handoff.trim().length > 40)
+        return event.handoff;
+    return (0, system_connection_log_handoff_1.buildSystemLogHandoffBrief)({
+        ts: event.ts,
+        status: event.status,
+        motivo: event.motivo,
+        targetKey: event.targetKey,
+        targetLabel: event.targetLabel,
+        probeDetail: event.probeDetail || event.detalhes || "n/d",
+        targetUrl: event.targetUrl,
+        consecutiveFailures: event.consecutiveFailures,
+        peersDown: event.peersDown,
+        previousSince: null,
+        durationHours: event.durationHours,
+    });
+}
 class SystemConnectionLogService {
     async recordTransition(input) {
         const ts = input.ts || new Date().toISOString();
@@ -128,16 +146,34 @@ class SystemConnectionLogService {
             if (ms > 0)
                 durationHours = Math.round((ms / 3600000) * 1000) / 1000;
         }
-        const detalhes = input.status === "desconexao"
-            ? `Alvo ${input.targetLabel} fora do ar — ${input.detail}`
-            : `Alvo ${input.targetLabel} recuperado — ${input.detail}${durationHours != null ? ` (offline ~${durationHours.toFixed(2)}h)` : ""}`;
+        const handoffInput = {
+            ts,
+            status: input.status,
+            motivo,
+            targetKey: input.targetKey,
+            targetLabel: input.targetLabel,
+            probeDetail: input.detail,
+            targetUrl: input.targetUrl,
+            consecutiveFailures: input.consecutiveFailures,
+            downCountSameCheck: input.downCountSameCheck,
+            peersDown: input.peersDown,
+            previousSince: input.previousSince,
+            durationHours,
+        };
+        const detalhes = (0, system_connection_log_handoff_1.buildSystemLogResumo)(handoffInput);
+        const handoff = (0, system_connection_log_handoff_1.buildSystemLogHandoffBrief)(handoffInput);
         return system_connection_log_repository_1.systemConnectionLogRepository.append({
             ts,
             status: input.status,
             motivo,
             detalhes,
+            handoff,
             targetKey: input.targetKey,
             targetLabel: input.targetLabel,
+            targetUrl: input.targetUrl || undefined,
+            probeDetail: input.detail,
+            consecutiveFailures: input.consecutiveFailures,
+            peersDown: input.peersDown,
             durationHours,
         });
     }
@@ -156,6 +192,7 @@ class SystemConnectionLogService {
             const entries = Object.entries(targets);
             if (!entries.length)
                 return 0;
+            const peersDown = entries.filter(([, t]) => t.status === "down").map(([k]) => k);
             let n = 0;
             for (const [key, target] of entries) {
                 const status = target.status === "down" ? "desconexao" : "conexao";
@@ -168,7 +205,9 @@ class SystemConnectionLogService {
                     targetLabel: key.replace(/_/g, " "),
                     ts,
                     previousSince: status === "conexao" ? target.since || null : null,
-                    downCountSameCheck: entries.filter(([, t]) => t.status === "down").length,
+                    consecutiveFailures: target.consecutiveFailures,
+                    downCountSameCheck: peersDown.length,
+                    peersDown,
                 });
                 n += 1;
             }
@@ -192,14 +231,12 @@ class SystemConnectionLogService {
         const desconexaoHours = filtered
             .filter((e) => e.status === "conexao" && typeof e.durationHours === "number")
             .reduce((sum, e) => sum + (e.durationHours || 0), 0);
-        // horas conectadas aproximadas = janela - offline (não negativa)
         const windowHours = days * 24;
         const conexaoHours = Math.max(0, windowHours - desconexaoHours);
         const now = Date.now();
         const dayEvents = all.filter((e) => parseIso(e.ts) >= now - 24 * 60 * 60 * 1000);
         const weekEvents = all.filter((e) => parseIso(e.ts) >= now - 7 * 24 * 60 * 60 * 1000);
         const monthEvents = all.filter((e) => parseIso(e.ts) >= now - 30 * 24 * 60 * 60 * 1000);
-        // gráficos respeitam filtro de motivo/app quando aplicado
         const motivoFilter = filters.motivos?.length ? new Set(filters.motivos) : null;
         const narrow = (list) => motivoFilter ? list.filter((e) => motivoFilter.has(e.motivo)) : list;
         return {
@@ -224,6 +261,7 @@ class SystemConnectionLogService {
                 dia: formatDay(event.ts),
                 horario: formatTime(event.ts),
                 statusLabel: event.status === "conexao" ? "Conexão" : "Desconexão",
+                handoffBrief: resolveHandoffBrief(event),
             })),
             totalEvents: filtered.length,
         };
@@ -235,8 +273,11 @@ class SystemConnectionLogService {
             Horário: event.horario,
             Status: event.statusLabel,
             Motivo: event.motivo,
-            Detalhes: event.detalhes,
+            Resumo: event.detalhes,
             Alvo: event.targetLabel,
+            Key: event.targetKey,
+            Probe: event.probeDetail || "",
+            Handoff: event.handoffBrief,
         }));
     }
 }

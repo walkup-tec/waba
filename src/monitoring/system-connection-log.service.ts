@@ -9,6 +9,10 @@ import {
 } from "./system-connection-log.types";
 import { systemConnectionLogRepository } from "./system-connection-log.repository";
 import { classifySystemLogMotivo } from "./system-connection-log.classifier";
+import {
+  buildSystemLogHandoffBrief,
+  buildSystemLogResumo,
+} from "./system-connection-log-handoff";
 
 const TZ = "America/Sao_Paulo";
 
@@ -93,14 +97,34 @@ function applyFilters(
     .sort((a, b) => parseIso(b.ts) - parseIso(a.ts));
 }
 
+function resolveHandoffBrief(event: SystemConnectionLogEvent): string {
+  if (event.handoff && event.handoff.trim().length > 40) return event.handoff;
+  return buildSystemLogHandoffBrief({
+    ts: event.ts,
+    status: event.status,
+    motivo: event.motivo,
+    targetKey: event.targetKey,
+    targetLabel: event.targetLabel,
+    probeDetail: event.probeDetail || event.detalhes || "n/d",
+    targetUrl: event.targetUrl,
+    consecutiveFailures: event.consecutiveFailures,
+    peersDown: event.peersDown,
+    previousSince: null,
+    durationHours: event.durationHours,
+  });
+}
+
 export class SystemConnectionLogService {
   async recordTransition(input: {
     status: SystemLogStatus;
     detail: string;
     targetKey: string;
     targetLabel: string;
+    targetUrl?: string | null;
     ts?: string;
     downCountSameCheck?: number;
+    peersDown?: string[];
+    consecutiveFailures?: number;
     previousSince?: string | null;
   }): Promise<SystemConnectionLogEvent> {
     const ts = input.ts || new Date().toISOString();
@@ -115,20 +139,36 @@ export class SystemConnectionLogService {
       const ms = parseIso(ts) - parseIso(input.previousSince);
       if (ms > 0) durationHours = Math.round((ms / 3_600_000) * 1000) / 1000;
     }
-    const detalhes =
-      input.status === "desconexao"
-        ? `Alvo ${input.targetLabel} fora do ar — ${input.detail}`
-        : `Alvo ${input.targetLabel} recuperado — ${input.detail}${
-            durationHours != null ? ` (offline ~${durationHours.toFixed(2)}h)` : ""
-          }`;
+
+    const handoffInput = {
+      ts,
+      status: input.status,
+      motivo,
+      targetKey: input.targetKey,
+      targetLabel: input.targetLabel,
+      probeDetail: input.detail,
+      targetUrl: input.targetUrl,
+      consecutiveFailures: input.consecutiveFailures,
+      downCountSameCheck: input.downCountSameCheck,
+      peersDown: input.peersDown,
+      previousSince: input.previousSince,
+      durationHours,
+    };
+    const detalhes = buildSystemLogResumo(handoffInput);
+    const handoff = buildSystemLogHandoffBrief(handoffInput);
 
     return systemConnectionLogRepository.append({
       ts,
       status: input.status,
       motivo,
       detalhes,
+      handoff,
       targetKey: input.targetKey,
       targetLabel: input.targetLabel,
+      targetUrl: input.targetUrl || undefined,
+      probeDetail: input.detail,
+      consecutiveFailures: input.consecutiveFailures,
+      peersDown: input.peersDown,
       durationHours,
     });
   }
@@ -145,12 +185,19 @@ export class SystemConnectionLogService {
       const parsed = JSON.parse(raw) as {
         targets?: Record<
           string,
-          { status?: string; since?: string; lastDetail?: string; lastCheckedAt?: string }
+          {
+            status?: string;
+            since?: string;
+            lastDetail?: string;
+            lastCheckedAt?: string;
+            consecutiveFailures?: number;
+          }
         >;
       };
       const targets = parsed?.targets && typeof parsed.targets === "object" ? parsed.targets : {};
       const entries = Object.entries(targets);
       if (!entries.length) return 0;
+      const peersDown = entries.filter(([, t]) => t.status === "down").map(([k]) => k);
       let n = 0;
       for (const [key, target] of entries) {
         const status = target.status === "down" ? "desconexao" : "conexao";
@@ -163,7 +210,9 @@ export class SystemConnectionLogService {
           targetLabel: key.replace(/_/g, " "),
           ts,
           previousSince: status === "conexao" ? target.since || null : null,
-          downCountSameCheck: entries.filter(([, t]) => t.status === "down").length,
+          consecutiveFailures: target.consecutiveFailures,
+          downCountSameCheck: peersDown.length,
+          peersDown,
         });
         n += 1;
       }
@@ -188,7 +237,6 @@ export class SystemConnectionLogService {
     const desconexaoHours = filtered
       .filter((e) => e.status === "conexao" && typeof e.durationHours === "number")
       .reduce((sum, e) => sum + (e.durationHours || 0), 0);
-    // horas conectadas aproximadas = janela - offline (não negativa)
     const windowHours = days * 24;
     const conexaoHours = Math.max(0, windowHours - desconexaoHours);
 
@@ -197,7 +245,6 @@ export class SystemConnectionLogService {
     const weekEvents = all.filter((e) => parseIso(e.ts) >= now - 7 * 24 * 60 * 60 * 1000);
     const monthEvents = all.filter((e) => parseIso(e.ts) >= now - 30 * 24 * 60 * 60 * 1000);
 
-    // gráficos respeitam filtro de motivo/app quando aplicado
     const motivoFilter = filters.motivos?.length ? new Set(filters.motivos) : null;
     const narrow = (list: SystemConnectionLogEvent[]) =>
       motivoFilter ? list.filter((e) => motivoFilter.has(e.motivo)) : list;
@@ -224,6 +271,7 @@ export class SystemConnectionLogService {
         dia: formatDay(event.ts),
         horario: formatTime(event.ts),
         statusLabel: event.status === "conexao" ? "Conexão" : "Desconexão",
+        handoffBrief: resolveHandoffBrief(event),
       })),
       totalEvents: filtered.length,
     };
@@ -235,8 +283,11 @@ export class SystemConnectionLogService {
       Horário: string;
       Status: string;
       Motivo: string;
-      Detalhes: string;
+      Resumo: string;
       Alvo: string;
+      Key: string;
+      Probe: string;
+      Handoff: string;
     }>
   > {
     const dashboard = await this.getDashboard(filters);
@@ -245,8 +296,11 @@ export class SystemConnectionLogService {
       Horário: event.horario,
       Status: event.statusLabel,
       Motivo: event.motivo,
-      Detalhes: event.detalhes,
+      Resumo: event.detalhes,
       Alvo: event.targetLabel,
+      Key: event.targetKey,
+      Probe: event.probeDetail || "",
+      Handoff: event.handoffBrief,
     }));
   }
 }

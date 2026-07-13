@@ -9,9 +9,16 @@ export type SystemConnectionLogEvent = {
   ts: string;
   status: SystemLogStatus;
   motivo: SystemLogMotivo;
+  /** Texto curto para listagem. */
   detalhes: string;
+  /** Brief completo para handoff (dev/agente). */
+  handoff?: string;
   targetKey: string;
   targetLabel: string;
+  targetUrl?: string;
+  probeDetail?: string;
+  consecutiveFailures?: number;
+  peersDown?: string[];
   /** Horas do período offline encerrado (preenchido em eventos de conexão). */
   durationHours?: number;
 };
@@ -48,6 +55,8 @@ export type SystemConnectionLogDashboard = {
       dia: string;
       horario: string;
       statusLabel: string;
+      /** Brief técnico para copiar (sempre preenchido na API). */
+      handoffBrief: string;
     }
   >;
   totalEvents: number;

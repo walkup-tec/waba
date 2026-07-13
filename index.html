@@ -4195,7 +4195,7 @@
       }
       #admin-logs-sistema-page #admin-logs-sistema-table {
         width: 100%;
-        min-width: 720px;
+        min-width: 960px;
         border-collapse: collapse;
         font-size: 0.82rem;
       }
@@ -4225,8 +4225,54 @@
       #admin-logs-sistema-page #admin-logs-sistema-table td.logs-col-detalhes {
         color: #cbd5e1;
         line-height: 1.4;
+        min-width: 320px;
+        max-width: 560px;
+      }
+      #admin-logs-sistema-page .logs-handoff {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #admin-logs-sistema-page .logs-handoff-resumo {
+        color: #e2e8f0;
+        font-size: 0.82rem;
+        line-height: 1.35;
+      }
+      #admin-logs-sistema-page .logs-handoff-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      #admin-logs-sistema-page .logs-handoff-actions button {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(15, 23, 42, 0.65);
+        color: #cbd5e1;
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #admin-logs-sistema-page .logs-handoff-actions button:hover {
+        border-color: rgba(56, 189, 248, 0.45);
+        color: #e2e8f0;
+      }
+      #admin-logs-sistema-page .logs-handoff-brief {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(2, 8, 23, 0.55);
+        color: #cbd5e1;
+        font-size: 0.72rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
         word-break: break-word;
-        max-width: 420px;
+        max-height: 280px;
+        overflow: auto;
+      }
+      #admin-logs-sistema-page .logs-handoff-brief[hidden] {
+        display: none;
       }
 
       @media (max-width: 900px) {
@@ -18738,7 +18784,7 @@
                         <th>Horário</th>
                         <th>Status</th>
                         <th>Motivo</th>
-                        <th>Detalhes</th>
+                        <th>Detalhes / Handoff técnico</th>
                       </tr>
                     </thead>
                     <tbody id="admin-logs-sistema-tbody">
@@ -32487,19 +32533,58 @@
               '<tr><td colspan="5" class="muted">Nenhum evento no filtro. Os logs passam a ser gravados nas próximas checagens do monitor de uptime.</td></tr>';
           } else {
             tbody.innerHTML = events
-              .map((event) => {
+              .map((event, index) => {
                 const isUp = event.status === "conexao";
+                const brief = String(event.handoffBrief || event.handoff || event.detalhes || "").trim();
+                const resumo = String(event.detalhes || event.probeDetail || "—").trim();
+                const briefId = `logs-handoff-brief-${index}`;
                 return `
                   <tr>
                     <td class="logs-col-dia">${escapeAdminHtml(event.dia || "—")}</td>
                     <td class="logs-col-hora">${escapeAdminHtml(event.horario || "—")}</td>
                     <td><span class="admin-logs-sistema-status-pill ${isUp ? "is-up" : "is-down"}">${escapeAdminHtml(event.statusLabel || event.status)}</span></td>
                     <td class="logs-col-motivo">${escapeAdminHtml(event.motivo || "—")}</td>
-                    <td class="logs-col-detalhes">${escapeAdminHtml(event.detalhes || "—")}</td>
+                    <td class="logs-col-detalhes">
+                      <div class="logs-handoff" data-handoff-index="${index}">
+                        <div class="logs-handoff-resumo">${escapeAdminHtml(resumo)}</div>
+                        <div class="logs-handoff-actions">
+                          <button type="button" data-logs-handoff-toggle="${briefId}">Ver handoff</button>
+                          <button type="button" data-logs-handoff-copy="${index}">Copiar handoff</button>
+                        </div>
+                        <pre class="logs-handoff-brief" id="${briefId}" hidden>${escapeAdminHtml(brief)}</pre>
+                      </div>
+                    </td>
                   </tr>
                 `;
               })
               .join("");
+            tbody.querySelectorAll("[data-logs-handoff-toggle]").forEach((btn) => {
+              btn.addEventListener("click", () => {
+                const id = btn.getAttribute("data-logs-handoff-toggle");
+                const pre = id ? document.getElementById(id) : null;
+                if (!pre) return;
+                const open = pre.hasAttribute("hidden");
+                if (open) pre.removeAttribute("hidden");
+                else pre.setAttribute("hidden", "");
+                btn.textContent = open ? "Ocultar handoff" : "Ver handoff";
+              });
+            });
+            tbody.querySelectorAll("[data-logs-handoff-copy]").forEach((btn) => {
+              btn.addEventListener("click", async () => {
+                const idx = Number(btn.getAttribute("data-logs-handoff-copy"));
+                const text = String(events[idx]?.handoffBrief || events[idx]?.handoff || events[idx]?.detalhes || "").trim();
+                if (!text) {
+                  showToast("Sem handoff para copiar.", "error");
+                  return;
+                }
+                try {
+                  await navigator.clipboard.writeText(text);
+                  showToast("Handoff técnico copiado.", "success", 2000);
+                } catch {
+                  showToast("Não foi possível copiar. Abra o handoff e selecione o texto.", "error");
+                }
+              });
+            });
           }
         }
         if (statusEl) {
