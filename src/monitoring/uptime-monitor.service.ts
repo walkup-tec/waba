@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import http from "http";
 import { wabaMailService } from "../mail/waba-mail.service";
 import { deliverWabaEvolutionWhatsApp, DEFAULT_WABA_WHATSAPP_PHONE_HINTS } from "../mail/waba-evolution-whatsapp-delivery.service";
 import { resolveDataFile } from "../data-path";
@@ -24,6 +25,8 @@ type UptimeTarget = {
   label: string;
   kind: UptimeTargetKind;
   url?: string;
+  /** Probe direto no host (evita hairpin/TLS falso negativo de dentro do Swarm). */
+  localUrl?: string;
 };
 
 type UptimeCheckResult = {
@@ -48,12 +51,45 @@ type UptimeMonitorState = {
 
 let monitorRunning = false;
 
-const DEFAULT_TARGETS: UptimeTarget[] = [
-  { key: "site_drax", label: "draxsistemas.com.br", kind: "http", url: "https://draxsistemas.com.br/" },
-  { key: "site_bet", label: "bet.waba.info", kind: "http", url: "https://bet.waba.info/" },
-  { key: "site_disparos", label: "wabadisparos.com.br", kind: "http", url: "https://wabadisparos.com.br/" },
-  { key: "app_waba", label: "waba.draxsistemas.com.br", kind: "http", url: "https://waba.draxsistemas.com.br/health" },
-];
+const resolveHostGateway = (): string =>
+  String(process.env.WABA_HOST_GW || process.env.WABA_DOCKER_HOST_GW || "172.17.0.1").trim() ||
+  "172.17.0.1";
+
+/** Alvos HTTP padrão: URL pública + probe local no gateway do host quando aplicável. */
+const buildDefaultTargets = (): UptimeTarget[] => {
+  const gw = resolveHostGateway();
+  return [
+    {
+      key: "site_drax",
+      label: "draxsistemas.com.br",
+      kind: "http",
+      url: "https://draxsistemas.com.br/",
+      // Site institucional (Cloudflare); local só se houver backend neste VPS.
+      localUrl: String(process.env.WABA_UPTIME_DRAX_LOCAL_URL || "").trim() || undefined,
+    },
+    {
+      key: "site_bet",
+      label: "bet.waba.info",
+      kind: "http",
+      url: "https://bet.waba.info/",
+      localUrl: `http://${gw}:30211/`,
+    },
+    {
+      key: "site_disparos",
+      label: "wabadisparos.com.br",
+      kind: "http",
+      url: "https://wabadisparos.com.br/",
+      localUrl: `http://${gw}:30210/`,
+    },
+    {
+      key: "app_waba",
+      label: "waba.draxsistemas.com.br",
+      kind: "http",
+      url: "https://waba.draxsistemas.com.br/health",
+      localUrl: `http://${gw}:30180/health`,
+    },
+  ];
+};
 
 const parseBoolEnv = (raw: string | undefined): boolean | undefined => {
   const value = String(raw ?? "").trim().toLowerCase();
@@ -122,7 +158,7 @@ export const resolveUptimeTargets = (): UptimeTarget[] => {
       }
     }
   }
-  const httpTargets = targets.length ? targets : DEFAULT_TARGETS;
+  const httpTargets = targets.length ? targets : buildDefaultTargets();
   const withAsaas = isAsaasCheckEnabled()
     ? [
         ...httpTargets,
@@ -138,21 +174,78 @@ export const resolveUptimeTargets = (): UptimeTarget[] => {
   return withAsaas;
 };
 
-async function checkHttpTarget(
-  target: UptimeTarget,
-  options?: { attempts?: number; timeoutMs?: number },
-): Promise<UptimeCheckResult> {
-  const url = String(target.url || "").trim();
-  if (!url) {
-    return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
-  }
-  const timeoutMs = options?.timeoutMs ?? resolveHttpTimeoutMs();
-  const attempts = Math.max(1, options?.attempts ?? DEFAULT_HTTP_ATTEMPTS);
-  let lastDetail = "";
+const isNetworkProbeFailure = (detail: string): boolean => {
+  const d = String(detail || "").toLowerCase();
+  return (
+    /fetch failed|econnrefused|econnreset|enotfound|eai_again|network|unreachable|socket hang up|other side closed|tls|cert|unable to verify|timeout/.test(
+      d,
+    ) || d.trim() === ""
+  );
+};
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+/**
+ * Probe via Traefik no host gateway com Host header (node:http).
+ * Contorna hairpin HTTPS + restrição do undici de sobrescrever `Host`.
+ * Doc Traefik Host rule: https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/rules-and-priority/
+ */
+async function probeHttpViaHostGateway(
+  publicUrl: string,
+  options: { timeoutMs: number },
+): Promise<{ ok: boolean; detail: string }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(publicUrl);
+  } catch {
+    return { ok: false, detail: "URL inválida para probe gateway" };
+  }
+  const gw = resolveHostGateway();
+  const pathAndQuery = `${parsed.pathname || "/"}${parsed.search || ""}`;
+
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        host: gw,
+        port: 80,
+        path: pathAndQuery,
+        method: "GET",
+        timeout: options.timeoutMs,
+        headers: {
+          Host: parsed.host,
+          "user-agent": "waba-uptime-monitor/1.0",
+          Accept: "*/*",
+          Connection: "close",
+        },
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        res.resume();
+        // 301/302 para HTTPS ainda conta como router vivo
+        if ((status >= 200 && status < 400) || status === 301 || status === 302 || status === 308) {
+          resolve({ ok: true, detail: `HTTP ${status} via ${gw}:80 Host=${parsed.host}` });
+          return;
+        }
+        resolve({ ok: false, detail: `HTTP ${status} via ${gw}:80 Host=${parsed.host}` });
+      },
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, detail: `timeout gateway ${gw}:80` });
+    });
+    req.on("error", (error) => {
+      resolve({ ok: false, detail: error.message || "erro gateway" });
+    });
+    req.end();
+  });
+}
+
+async function probeHttpUrl(
+  url: string,
+  options: { attempts: number; timeoutMs: number },
+): Promise<{ ok: boolean; detail: string; status?: number }> {
+  let lastDetail = "";
+  for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs);
     try {
       const response = await fetch(url, {
         method: "GET",
@@ -163,25 +256,100 @@ async function checkHttpTarget(
       clearTimeout(timer);
       const status = response.status;
       if (status >= 200 && status < 400) {
-        return { key: target.key, label: target.label, ok: true, detail: `HTTP ${status}` };
+        return { ok: true, detail: `HTTP ${status}`, status };
       }
       lastDetail = `HTTP ${status}`;
     } catch (error) {
       clearTimeout(timer);
+      const cause =
+        error && typeof error === "object" && "cause" in error
+          ? (error as { cause?: { code?: string; message?: string } }).cause
+          : undefined;
       const message =
         error instanceof Error && error.name === "AbortError"
-          ? `timeout (${timeoutMs}ms)`
+          ? `timeout (${options.timeoutMs}ms)`
           : error instanceof Error
-            ? error.message
+            ? [error.message, cause?.code, cause?.message].filter(Boolean).join(" — ")
             : "erro de rede";
       lastDetail = message;
     }
-    if (attempt < attempts) {
+    if (attempt < options.attempts) {
       await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
     }
   }
+  return { ok: false, detail: lastDetail || "sem resposta" };
+}
 
-  return { key: target.key, label: target.label, ok: false, detail: lastDetail || "sem resposta" };
+async function checkHttpTarget(
+  target: UptimeTarget,
+  options?: { attempts?: number; timeoutMs?: number },
+): Promise<UptimeCheckResult> {
+  const url = String(target.url || "").trim();
+  const localUrl = String(target.localUrl || "").trim();
+  if (!url && !localUrl) {
+    return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
+  }
+  const timeoutMs = options?.timeoutMs ?? resolveHttpTimeoutMs();
+  const attempts = Math.max(1, options?.attempts ?? DEFAULT_HTTP_ATTEMPTS);
+
+  // Preferir probe local (host gateway) — evita hairpin/TLS falso negativo no Swarm.
+  if (localUrl) {
+    const local = await probeHttpUrl(localUrl, { attempts, timeoutMs });
+    if (local.ok) {
+      return {
+        key: target.key,
+        label: target.label,
+        ok: true,
+        detail: `${local.detail} via ${localUrl}`,
+      };
+    }
+    if (url) {
+      const pub = await probeHttpUrl(url, { attempts: Math.min(2, attempts), timeoutMs });
+      if (pub.ok) {
+        return {
+          key: target.key,
+          label: target.label,
+          ok: true,
+          detail: `${pub.detail} público (local falhou: ${local.detail})`,
+        };
+      }
+      return {
+        key: target.key,
+        label: target.label,
+        ok: false,
+        detail: `local ${local.detail}; público ${pub.detail}`,
+      };
+    }
+    return { key: target.key, label: target.label, ok: false, detail: `local ${local.detail}` };
+  }
+
+  if (url) {
+    const pub = await probeHttpUrl(url, { attempts, timeoutMs });
+    if (pub.ok) {
+      return { key: target.key, label: target.label, ok: true, detail: pub.detail };
+    }
+    // Hairpin HTTPS comum no Swarm: tenta Traefik :80 com Host do domínio público.
+    if (isNetworkProbeFailure(pub.detail)) {
+      const viaGw = await probeHttpViaHostGateway(url, { timeoutMs });
+      if (viaGw.ok) {
+        return {
+          key: target.key,
+          label: target.label,
+          ok: true,
+          detail: `${viaGw.detail} (público falhou: ${pub.detail})`,
+        };
+      }
+      return {
+        key: target.key,
+        label: target.label,
+        ok: false,
+        detail: `público ${pub.detail}; gateway ${viaGw.detail}`,
+      };
+    }
+    return { key: target.key, label: target.label, ok: false, detail: pub.detail };
+  }
+
+  return { key: target.key, label: target.label, ok: false, detail: "URL não configurada." };
 }
 
 async function checkAsaasTarget(target: UptimeTarget): Promise<UptimeCheckResult> {

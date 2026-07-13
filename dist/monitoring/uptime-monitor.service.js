@@ -60,6 +60,7 @@ const DEFAULT_ALERT_EMAIL = "walkup@walkuptec.com.br";
 let monitorRunning = false;
 const resolveHostGateway = () => String(process.env.WABA_HOST_GW || process.env.WABA_DOCKER_HOST_GW || "172.17.0.1").trim() ||
     "172.17.0.1";
+/** Alvos HTTP padrão: URL pública + probe local no gateway do host quando aplicável. */
 const buildDefaultTargets = () => {
     const gw = resolveHostGateway();
     return [
@@ -68,8 +69,8 @@ const buildDefaultTargets = () => {
             label: "draxsistemas.com.br",
             kind: "http",
             url: "https://draxsistemas.com.br/",
-            // Site institucional pode estar atrás de Cloudflare; local só se houver backend neste VPS.
-            localUrl: process.env.WABA_UPTIME_DRAX_LOCAL_URL || undefined,
+            // Site institucional (Cloudflare); local só se houver backend neste VPS.
+            localUrl: String(process.env.WABA_UPTIME_DRAX_LOCAL_URL || "").trim() || undefined,
         },
         {
             key: "site_bet",
@@ -174,6 +175,55 @@ const isNetworkProbeFailure = (detail) => {
     const d = String(detail || "").toLowerCase();
     return (/fetch failed|econnrefused|econnreset|enotfound|eai_again|network|unreachable|socket hang up|other side closed|tls|cert|unable to verify|timeout/.test(d) || d.trim() === "");
 };
+/**
+ * Probe via Traefik no host gateway com Host header (node:http).
+ * Contorna hairpin HTTPS + restrição do undici de sobrescrever `Host`.
+ * Doc Traefik Host rule: https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/rules-and-priority/
+ */
+async function probeHttpViaHostGateway(publicUrl, options) {
+    let parsed;
+    try {
+        parsed = new URL(publicUrl);
+    }
+    catch {
+        return { ok: false, detail: "URL inválida para probe gateway" };
+    }
+    const gw = resolveHostGateway();
+    const pathAndQuery = `${parsed.pathname || "/"}${parsed.search || ""}`;
+    const { request } = require("http");
+    return new Promise((resolve) => {
+        const req = request({
+            host: gw,
+            port: 80,
+            path: pathAndQuery,
+            method: "GET",
+            timeout: options.timeoutMs,
+            headers: {
+                Host: parsed.host,
+                "user-agent": "waba-uptime-monitor/1.0",
+                Accept: "*/*",
+                Connection: "close",
+            },
+        }, (res) => {
+            const status = res.statusCode ?? 0;
+            res.resume();
+            // 301/302 para HTTPS ainda conta como router vivo
+            if ((status >= 200 && status < 400) || status === 301 || status === 302 || status === 308) {
+                resolve({ ok: true, detail: `HTTP ${status} via ${gw}:80 Host=${parsed.host}` });
+                return;
+            }
+            resolve({ ok: false, detail: `HTTP ${status} via ${gw}:80 Host=${parsed.host}` });
+        });
+        req.on("timeout", () => {
+            req.destroy();
+            resolve({ ok: false, detail: `timeout gateway ${gw}:80` });
+        });
+        req.on("error", (error) => {
+            resolve({ ok: false, detail: error.message || "erro gateway" });
+        });
+        req.end();
+    });
+}
 async function probeHttpUrl(url, options) {
     let lastDetail = "";
     for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
@@ -219,7 +269,7 @@ async function checkHttpTarget(target, options) {
     }
     const timeoutMs = options?.timeoutMs ?? resolveHttpTimeoutMs();
     const attempts = Math.max(1, options?.attempts ?? DEFAULT_HTTP_ATTEMPTS);
-    // 1) Preferir probe local (host gateway) — evita hairpin/TLS falso negativo no Swarm.
+    // Preferir probe local (host gateway) — evita hairpin/TLS falso negativo no Swarm.
     if (localUrl) {
         const local = await probeHttpUrl(localUrl, { attempts, timeoutMs });
         if (local.ok) {
@@ -230,7 +280,6 @@ async function checkHttpTarget(target, options) {
                 detail: `${local.detail} via ${localUrl}`,
             };
         }
-        // 2) Se local falhou, tenta público (pode ser Cloudflare / outro host).
         if (url) {
             const pub = await probeHttpUrl(url, { attempts: Math.min(2, attempts), timeoutMs });
             if (pub.ok) {
@@ -250,19 +299,27 @@ async function checkHttpTarget(target, options) {
         }
         return { key: target.key, label: target.label, ok: false, detail: `local ${local.detail}` };
     }
-    // Só URL pública (ex.: drax sem localUrl)
     if (url) {
         const pub = await probeHttpUrl(url, { attempts, timeoutMs });
         if (pub.ok) {
             return { key: target.key, label: target.label, ok: true, detail: pub.detail };
         }
-        // Último recurso: se for fetch failed e houver gateway padrão conhecido para o host, nada a fazer
+        // Hairpin HTTPS comum no Swarm: tenta Traefik :80 com Host do domínio público.
         if (isNetworkProbeFailure(pub.detail)) {
+            const viaGw = await probeHttpViaHostGateway(url, { timeoutMs });
+            if (viaGw.ok) {
+                return {
+                    key: target.key,
+                    label: target.label,
+                    ok: true,
+                    detail: `${viaGw.detail} (público falhou: ${pub.detail})`,
+                };
+            }
             return {
                 key: target.key,
                 label: target.label,
                 ok: false,
-                detail: pub.detail,
+                detail: `público ${pub.detail}; gateway ${viaGw.detail}`,
             };
         }
         return { key: target.key, label: target.label, ok: false, detail: pub.detail };
