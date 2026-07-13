@@ -19,6 +19,10 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
+2026-07-13 (14:50 — fix encurtador + salvar seção Alternativa)
+
+**WABA — Encurtador + Salvar seção (2026-07-13):** fallbacks is.gd/TinyURL; erros detalhados; `allowPartialSave` não zera WhatsApp/números. Marker `DEPLOY-2026-07-13-fix-encurtador-salvar-secao`. Ver `doc/LOG-2026-07-13__145000__fix-encurtador-salvar-secao-alternativa.md`.
+
 2026-07-13 (14:30 — tarifador sem faixa 100/R$30)
 
 **WABA — Tarifador sem faixa 100 · R$ 0,03 · R$ 30 (2026-07-13):** removida da UI (Oficial/Alternativa) e do backend (`DISPAROS_TEST_PACKAGES`). Outros e Bets. Marker `DEPLOY-2026-07-13-tarifador-sem-faixa-100`. Ver `doc/LOG-2026-07-13__143000__tarifador-remove-faixa-100-r30.md`.

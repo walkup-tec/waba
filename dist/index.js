@@ -2283,13 +2283,18 @@ function normalizeShortenerProvider(value) {
 function getAutoShortenerProviderOrder() {
     const primary = normalizeShortenerProvider(process.env.SHORTENER_PROVIDER);
     const order = [primary];
-    if (primary === "waba" && String(process.env.ENCURTADORPRO_API_KEY || "").trim()) {
-        order.push("encurtadorpro");
+    const pushUnique = (p) => {
+        if (!order.includes(p))
+            order.push(p);
+    };
+    // Fallbacks gratuitos/resilientes — evita «Não foi possível gerar link curto» quando um provedor cai.
+    pushUnique("waba");
+    if (String(process.env.ENCURTADORPRO_API_KEY || "").trim()) {
+        pushUnique("encurtadorpro");
     }
-    else if (primary === "encurtadorpro") {
-        order.push("waba");
-    }
-    return Array.from(new Set(order));
+    pushUnique("isgd");
+    pushUnique("tinyurl");
+    return order;
 }
 let aquecedorCycleMotor = null;
 function aquecedorCycleRuntime() {
@@ -6216,7 +6221,51 @@ async function shortenUrlWithProvider(longUrl, provider, customDomain = "", publ
         }
         throw new Error(lastErrorMessage);
     }
-    throw new Error("Provedor de encurtador não suportado.");
+    if (provider === "isgd") {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+            const endpoint = `https://is.gd/create.php?format=json&url=${encodeURIComponent(safeLongUrl)}`;
+            const response = await fetch(endpoint, { method: "GET", signal: controller.signal });
+            const data = await response.json().catch(() => ({}));
+            const short = String(data?.shorturl || "").trim();
+            if (response.ok && /^https?:\/\//i.test(short))
+                return short;
+            const errText = String(data?.errormessage || data?.error || "").slice(0, 200);
+            throw new Error(`is.gd HTTP ${response.status}${errText ? `: ${errText}` : ""}`);
+        }
+        catch (error) {
+            if (error instanceof Error && error.name === "AbortError") {
+                throw new Error("is.gd timeout");
+            }
+            throw new Error(String(error?.message || "Falha no encurtador is.gd."));
+        }
+        finally {
+            clearTimeout(timeoutId);
+        }
+    }
+    if (provider === "tinyurl") {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+            const endpoint = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(safeLongUrl)}`;
+            const response = await fetch(endpoint, { method: "GET", signal: controller.signal });
+            const text = String(await response.text().catch(() => "")).trim();
+            if (response.ok && /^https?:\/\//i.test(text))
+                return text;
+            throw new Error(`TinyURL HTTP ${response.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
+        }
+        catch (error) {
+            if (error instanceof Error && error.name === "AbortError") {
+                throw new Error("TinyURL timeout");
+            }
+            throw new Error(String(error?.message || "Falha no encurtador TinyURL."));
+        }
+        finally {
+            clearTimeout(timeoutId);
+        }
+    }
+    throw new Error(`Provedor de encurtador não suportado: ${provider}`);
 }
 function appendAntiRepeatParam(rawUrl, attempt) {
     try {
@@ -8313,6 +8362,30 @@ app.post("/disparos/config", async (req, res) => {
         const allowPartialSave = req.body?.allowPartialSave === true;
         const currentConfig = await loadDisparosConfigFromDb();
         const mergedConfig = { ...currentConfig, ...rawConfig };
+        if (allowPartialSave) {
+            // Salvamento por seção: não apagar campos críticos se o form veio vazio.
+            const rawSelected = rawConfig?.selectedDisparadorInstances;
+            if (!Array.isArray(rawSelected) || rawSelected.length === 0) {
+                mergedConfig.selectedDisparadorInstances = currentConfig.selectedDisparadorInstances;
+            }
+            if (!String(rawConfig?.whatsappTargetNumber || "").trim() &&
+                String(currentConfig.whatsappTargetNumber || "").trim()) {
+                mergedConfig.whatsappTargetNumber = currentConfig.whatsappTargetNumber;
+            }
+            if (!String(rawConfig?.responseUrl || "").trim() &&
+                String(currentConfig.responseUrl || "").trim()) {
+                mergedConfig.responseUrl = currentConfig.responseUrl;
+            }
+            if (!String(rawConfig?.aiBriefing || "").trim() &&
+                String(currentConfig.aiBriefing || "").trim()) {
+                mergedConfig.aiBriefing = currentConfig.aiBriefing;
+            }
+            if (Array.isArray(currentConfig.workingDays) &&
+                currentConfig.workingDays.length > 0 &&
+                (!Array.isArray(rawConfig?.workingDays) || rawConfig.workingDays.length === 0)) {
+                mergedConfig.workingDays = currentConfig.workingDays;
+            }
+        }
         if (!allowPartialSave) {
             const validationError = validateRequiredDisparosConfigPayload(mergedConfig);
             if (validationError)
@@ -8331,6 +8404,7 @@ app.post("/disparos/config", async (req, res) => {
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
     }
     catch (error) {
+        console.error("[disparos/config] save error:", error);
         return res.status(400).json({ error: error?.message || "Configuração inválida." });
     }
 });
@@ -8584,6 +8658,7 @@ app.post("/disparos/shorten", async (req, res) => {
         let providerUsed = null;
         const maxAttempts = 5;
         const providers = getAutoShortenerProviderOrder();
+        const providerErrors = [];
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             const candidateUrl = attempt === 1 ? longUrl : appendAntiRepeatParam(longUrl, attempt);
             for (const provider of providers) {
@@ -8594,16 +8669,21 @@ app.post("/disparos/shorten", async (req, res) => {
                     providerUsed = provider;
                     break;
                 }
-                catch {
-                    // tenta próximo provedor
+                catch (error) {
+                    const msg = String(error?.message || "erro").slice(0, 180);
+                    providerErrors.push(`${provider}: ${msg}`);
+                    console.warn(`[disparos/shorten] provider=${provider} falhou:`, msg);
                 }
             }
             if (shortUrl)
                 break;
         }
         if (!shortUrl) {
+            const detail = providerErrors.slice(0, 6).join(" | ") || "nenhum provedor disponível";
+            console.error("[disparos/shorten] todos os provedores falharam:", detail);
             return res.status(502).json({
-                error: "Não foi possível gerar link curto.",
+                error: `Não foi possível gerar link curto. ${detail}`,
+                providersTried: providers,
             });
         }
         return res.json({
@@ -8616,6 +8696,7 @@ app.post("/disparos/shorten", async (req, res) => {
         });
     }
     catch (error) {
+        console.error("[disparos/shorten]", error);
         return res.status(502).json({ error: error?.message || "Falha ao encurtar URL." });
     }
 });

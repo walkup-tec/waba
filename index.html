@@ -39139,10 +39139,13 @@
           const ok = await saveDisparosConfig({
             collapseAll: false,
             useMainButtonLoading: false,
-            skipWhatsappValidation: true,
+            skipWhatsappValidation: !/encurtador/i.test(title),
             skipRequiredValidation: true,
           });
-          if (!ok) return;
+          if (!ok) {
+            showToast("Não foi possível salvar esta seção. Veja o aviso anterior e tente de novo.", "warning", 4500);
+            return;
+          }
           if (/mensageiro/i.test(title)) hideMessengerLibrarySavePanel();
           disparosSectionSavedState[sectionKey] = true;
           disparosSectionCollapsedState[sectionKey] = true;
@@ -39461,7 +39464,11 @@
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showToast(data?.error || "Falha ao salvar configuração.", "error");
+            showToast(
+              data?.error || `Falha ao salvar configuração (HTTP ${response.status}).`,
+              "error",
+              5200
+            );
             return false;
           }
           disparosConfigCache = data?.config || null;
@@ -39471,8 +39478,14 @@
           if (statusLabel) statusLabel.textContent = "Configuração salva";
           showToast("Configuração do Disparador salva com sucesso.", "success");
           return true;
-        } catch {
-          showToast("Erro ao salvar configuração do Disparador.", "error");
+        } catch (error) {
+          const timedOut = error instanceof Error && error.message === "timeout";
+          showToast(
+            timedOut
+              ? "Tempo esgotado ao salvar. Tente novamente."
+              : "Erro ao salvar configuração do Disparador.",
+            "error"
+          );
           return false;
         } finally {
           disparosConfigSaveInFlight = false;
@@ -39516,22 +39529,36 @@
             return;
           }
           const response = await fetchWithTimeout(
-            "/disparos/shorten",
+            resolveWabaPublicPath("/disparos/shorten"),
             {
               method: "POST",
+              credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ longUrl }),
             },
-            12000
+            45000
           );
-          const data = await response.json().catch(() => ({}));
+          const rawText = await response.text().catch(() => "");
+          let data = {};
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = {};
+          }
           if (!response.ok) {
-            const errorMsg = String(data?.error || "Falha ao testar encurtador.");
+            const errorMsg = String(
+              data?.error ||
+                (response.status === 401
+                  ? "Sessão expirada. Faça login novamente."
+                  : rawText
+                    ? rawText.replace(/<[^>]+>/g, " ").trim().slice(0, 180)
+                    : `HTTP ${response.status}`)
+            ).trim() || "Falha ao testar encurtador.";
             if (statusEl) {
               statusEl.textContent = `Falha ao gerar URL: ${errorMsg}`;
               statusEl.style.color = "#fda4af";
             }
-            showToast(errorMsg, "error");
+            showToast(errorMsg, "error", 6500);
             return;
           }
           const shortUrl = String(data?.shortUrl || "").trim();
@@ -39596,12 +39623,16 @@
             }
           }
           showToast(`Link gerado: ${shortUrl}`, "success", 6500);
-        } catch {
+        } catch (error) {
+          const timedOut = error instanceof Error && error.message === "timeout";
+          const msg = timedOut
+            ? "Tempo esgotado ao testar encurtador. Tente novamente."
+            : "Erro de rede ao testar encurtador.";
           if (statusEl) {
-            statusEl.textContent = "Falha ao gerar URL.";
+            statusEl.textContent = `Falha ao gerar URL: ${msg}`;
             statusEl.style.color = "#fda4af";
           }
-          showToast("Erro ao testar encurtador.", "error");
+          showToast(msg, "error");
         } finally {
           if (btn) {
             btn.textContent = original;
