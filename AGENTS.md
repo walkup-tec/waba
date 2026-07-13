@@ -1,5 +1,31 @@
 # Agentes Cursor — Projeto WABA
 
+## Agente Traefik — Incidentes (desconexões)
+
+**Skill:** `.cursor/skills/traefik-incident-specialist/`
+
+**Quando usar:** queda de link/sistema por Traefik (404, 502, HTTPS `000`, entryPoints, ACME, routers), ou evolução de correções definitivas.
+
+```
+@traefik-incident-specialist bet.waba.info 404 de novo
+```
+
+```
+@traefik-incident-specialist login 502 após redeploy — cause Traefik e fixe definitivo
+```
+
+### O que este agente faz
+
+1. **Classifica** se a desconexão é Traefik
+2. **Consulta** `doc/traefik-causes/REGISTRY.md` + corpus `E:\Waba\traefik-crawler\urls.txt` (`scripts/traefik-kb-search.py`)
+3. **Lê** docs oficiais (`doc.traefik.io`) antes de patch
+4. **Aplica** correção definitiva (guard/timer/rule)
+5. **Registra** causa nova no REGISTRY para não repetir
+
+Rule: `.cursor/rules/traefik-incident-agent.mdc`
+
+---
+
 ## Agente de Infraestrutura (principal para VPS)
 
 **Skill:** `.cursor/skills/waba-infrastructure-specialist/`
@@ -46,6 +72,7 @@ Guard: `scripts/infra/traefik-entrypoint-guard-vps.sh` — doc `doc/TRAEFIK-ENTR
 
 | Skill | Uso |
 |-------|-----|
+| `traefik-incident-specialist` | Desconexões Traefik + RAG URLs + causas definitivas |
 | `backend-saas-api-senior` | APIs, services, multi-tenant |
 | `frontend-ux-ui-saas-designer` | UI/UX |
 | `integrations-apis-specialist` | APIs externas, webhooks |

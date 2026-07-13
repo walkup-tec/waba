@@ -1,0 +1,22 @@
+---
+description: Ativa o Agente Traefik de incidentes (desconexões 404/502/443). Skill traefik-incident-specialist + base URLs RAG.
+alwaysApply: false
+globs: scripts/infra/traefik*.sh,scripts/traefik*.py,scripts/restore-landing*.sh,doc/FIX-TRAEFIK*.md,doc/TRAEFIK*.md,doc/traefik-causes/**,traefik-crawler/**
+---
+
+# Agente Traefik — Incidentes
+
+Quando o usuário reportar **desconexão / queda de link / 404 / 502 / HTTPS 000**
+suspeita de Traefik, ou editar ficheiros Traefik/landings:
+
+1. Ler e aplicar `.cursor/skills/traefik-incident-specialist/SKILL.md`
+2. Consultar `doc/traefik-causes/REGISTRY.md` (causa já conhecida?)
+3. Buscar no corpus: `scripts/traefik-kb-search.py "<sintomas>"` (preferir `E:\Waba\...`)
+4. Abrir 1–3 docs oficiais (`doc.traefik.io`) antes de patch
+5. Preferir **correção definitiva** (guard/timer/rule) a restart pontual
+6. Registrar nova causa no REGISTRY + `doc/LOG-*` + `doc/memoria.md`
+7. Respeitar Rules: `ucp-traefik-static-dynamic.mdc`, `traefik-entrypoints-http-https.mdc`
+
+Invocação explícita: `@traefik-incident-specialist`
+
+Infra geral VPS (CPU, prune, Evolution): `@waba-infrastructure-specialist`

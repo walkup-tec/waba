@@ -1,4 +1,4 @@
-# MemÃ³ria Consolidada do Projeto
+﻿# MemÃ³ria Consolidada do Projeto
 
 Este arquivo Ã© atualizado a cada tarefa executada.
 
@@ -19,6 +19,21 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
+
+## 2026-07-13 — Bundle deploy cadastro + docs
+- Marker: `DEPLOY-2026-07-13-bundle-cadastro-cors-docs`
+- Empacota sessão: uptime/login-heal/tarifador/encurtador (já no master) + docs/CORS + agent Traefik
+- Landing cadastro: `pv-waba-disparador` `3826a02` → redeploy `waba_paginadevendas`
+- Validar: `/health` deployMarker + form em wabadisparos.com.br/#cadastro
+- Keywords: bundle-cadastro-cors-docs, deploy marker
+2026-07-13 (14:57 — Agente Traefik Incidentes)
+
+**Agente Traefik Incidentes** (2026-07-13): `@traefik-incident-specialist` + Rule + `doc/traefik-causes/REGISTRY.md` + `scripts/traefik-kb-search.py` (corpus 50k em `E:\Waba\traefik-crawler\urls.txt`). Desconexão → RAG/docs → fix definitivo → registra causa. Ver `doc/LOG-2026-07-13__145700__agente-traefik-incidentes-cursor.md`.
+
+2026-07-13 (14:52 — grant 1000 Oficial+Alternativa mozart)
+
+**WABA — Créditos mozart.pmo (2026-07-13):** +1000 Oficial (`406b62e6…`) e +1000 Alternativa (`8eb8d2f2…`) via `grant-disparos-credits-production.cjs --api both`. Ver `doc/LOG-2026-07-13__145200__grant-1000-oficial-alternativa-mozart.md`.
+
 2026-07-13 (14:50 — fix encurtador + salvar seção Alternativa)
 
 **WABA — Encurtador + Salvar seção (2026-07-13):** fallbacks is.gd/TinyURL; erros detalhados; `allowPartialSave` não zera WhatsApp/números. Marker `DEPLOY-2026-07-13-fix-encurtador-salvar-secao`. Ver `doc/LOG-2026-07-13__145000__fix-encurtador-salvar-secao-alternativa.md`.
@@ -2316,3 +2331,9 @@ Palavras-chave para buscar:
 - Watchdog :443 45s; autoheal v3+bootstrap; uptime 5min; CF Always Online doc; SW public-pages.
 - Keywords: traefik-443-watchdog, Always Online, uptime 5min
 
+
+## 2026-07-13 — Cadastro wabadisparos sem ação
+- Causa: SPA PV só tinha `href="#cadastro"` sem formulário.
+- Fix: `pv-waba-disparador` `3826a02` — form + proxy `/api/subscribers/register`.
+- Ação: Redeploy `waba_paginadevendas` no Easypanel.
+- Keywords: wabadisparos cadastro, #cadastro, pv-waba-disparador
