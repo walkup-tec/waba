@@ -55,14 +55,11 @@ jobs:
             echo "--- probe ---"
             curl -sS -o /dev/null -w "bet:%{http_code}\n" --max-time 15 --resolve bet.waba.info:443:127.0.0.1 https://bet.waba.info/ || echo "bet:000"
             curl -sS -o /dev/null -w "disparos:%{http_code}\n" --max-time 15 --resolve wabadisparos.com.br:443:127.0.0.1 https://wabadisparos.com.br/ || echo "disparos:000"
-            # Login WABA — 502 pós-redeploy Easypanel (publish :30180)
+            # Login WABA — 502/404 pós-redeploy Easypanel (publish :30180) — v2 watch+burst
             REPO_SCRIPTS="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
-            if [[ ! -x /root/waba-infra/heal-waba-login-vps.sh ]]; then
-              curl -fsSL "${REPO_SCRIPTS}/heal-waba-login-vps.sh" -o /tmp/heal-waba-login-vps.sh
-              sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
-              chmod +x /tmp/heal-waba-login-vps.sh
-              /tmp/heal-waba-login-vps.sh install || /tmp/heal-waba-login-vps.sh run || true
-            else
-              /root/waba-infra/heal-waba-login-vps.sh run || true
-            fi
+            curl -fsSL "${REPO_SCRIPTS}/heal-waba-login-vps.sh" -o /tmp/heal-waba-login-vps.sh
+            sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
+            chmod +x /tmp/heal-waba-login-vps.sh
+            /tmp/heal-waba-login-vps.sh install || true
+            /tmp/heal-waba-login-vps.sh burst || /tmp/heal-waba-login-vps.sh run || true
             curl -sS -o /dev/null -w "waba:%{http_code}\n" --max-time 15 --resolve waba.draxsistemas.com.br:443:127.0.0.1 https://waba.draxsistemas.com.br/health || echo "waba:000"

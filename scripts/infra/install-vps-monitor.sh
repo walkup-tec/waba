@@ -185,8 +185,9 @@ cmd_status() {
   echo "--- traefik 443 watchdog ---"
   systemctl status waba-traefik-443-watchdog.timer --no-pager 2>/dev/null || echo "(timer 443 watchdog não instalado)"
   bash "${INSTALL_DIR}/traefik-443-watchdog-vps.sh" status 2>/dev/null || true
-  echo "--- waba login heal ---"
+  echo "--- waba login heal (timer + watch) ---"
   systemctl status waba-login-heal.timer --no-pager 2>/dev/null || echo "(timer login heal não instalado)"
+  systemctl status waba-login-heal-watch.service --no-pager 2>/dev/null || echo "(watch login heal não instalado)"
   bash "${INSTALL_DIR}/heal-waba-login-vps.sh" status 2>/dev/null || true
   echo "--- traefik entrypoint guard ---"
   systemctl status waba-traefik-entrypoint-guard.timer --no-pager 2>/dev/null || echo "(timer entrypoint guard não instalado)"

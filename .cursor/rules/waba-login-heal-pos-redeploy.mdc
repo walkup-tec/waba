@@ -1,16 +1,28 @@
 ---
-description: Pós-redeploy Easypanel — login WABA 502 não é senha; heal :30180 automático
+description: Pós-redeploy Easypanel — login WABA 502/404 NÃO é senha; heal :30180 + watch obrigatório
 alwaysApply: true
 ---
 
-# Login WABA após atualização (502 ≠ senha)
+# Login WABA após atualização (502/404 ≠ senha)
 
-Quando o usuário vê **«Não foi possível entrar.»** logo após push/redeploy Easypanel:
+## Causa (recorrente)
 
-1. **Causa real:** HTTPS **502** — `waba_waba_disparador` perdeu publish host `:30180` e/ou backend Traefik deixou de ser `http://172.17.0.1:30180/`.
-2. **Não** diga que a senha está errada; confirme com `curl …/health` (502/Bad Gateway).
-3. **Heal permanente no VPS:** timer `waba-login-heal.timer` → `/root/waba-infra/heal-waba-login-vps.sh` (a cada ~60s).
-4. **Install / fix agora (root Hostinger):**
+Após Redeploy Easypanel do `waba_disparador`, o Swarm perde publish host **`:30180`** e/ou o Traefik deixa de apontar `http://172.17.0.1:30180/` → HTTPS **502** ou **404 Not Found** → UI de login falha. **Dados em `/app/data` e sessões EVO não são apagados.**
+
+## Precauções obrigatórias (já no repo)
+
+| Camada | O quê |
+|--------|--------|
+| **Watch** `waba-login-heal-watch.service` | `docker events` → `burst` no segundo do redeploy |
+| **Timer** `waba-login-heal.timer` | a cada **~20s** (rede de segurança) |
+| **Actions** `Heal WABA Login (pós-deploy)` | push `master` → SSH install + burst até `/health` 200 |
+| **UI** | retry automático em 502/503/**404**/HTML Not Found |
+
+## Se o usuário não consegue logar agora
+
+1. Confirme `curl …/health` (502/404 ≠ senha).
+2. **Não** peça senha nova; diga que é recuperável em segundos com o heal.
+3. Colar no Hostinger (root) — **uma vez** para ativar watch+timer v2; depois roda sozinho:
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/heal-waba-login-vps.sh" -o /tmp/heal-waba-login-vps.sh
@@ -20,5 +32,10 @@ chmod +x /tmp/heal-waba-login-vps.sh
 /tmp/heal-waba-login-vps.sh status
 ```
 
-5. Após qualquer redeploy `waba_disparador`, o timer deve recuperar login em ≤~2 min sem intervenção.
-6. Doc Traefik: backends = routing dinâmica (hot-reload); **sem HUP**/`force` por hábito. Ver `ucp-traefik-static-dynamic.mdc`.
+4. Validar: `systemctl is-active waba-login-heal-watch.service` → `active` e `https:200`.
+
+## Agente / deploy
+
+- Após qualquer instrução de Redeploy Easypanel, **sempre** lembrar: watch+timer v2 deve estar instalado; Actions `Heal WABA Login` cobre push `master`.
+- Traefik: backends = routing dinâmica; **sem HUP**/`force` por hábito (`ucp-traefik-static-dynamic.mdc`).
+- Secret `VPS_SSH_PRIVATE_KEY` no GitHub é **obrigatório** para o workflow pós-deploy.

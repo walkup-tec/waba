@@ -21030,17 +21030,35 @@
         }
         const status = Number(error?.status || payload?.status || 0);
         const raw = String(error?.message || payload?.error || "").trim();
-        if (status === 502 || status === 503 || /bad gateway|service unavailable/i.test(raw)) {
-          return "Sistema em recuperação após atualização. Aguarde cerca de 1 minuto e tente novamente.";
+        if (
+          status === 502 ||
+          status === 503 ||
+          status === 404 ||
+          /bad gateway|service unavailable|not found|page not found/i.test(raw)
+        ) {
+          return "Sistema em recuperação automática após atualização. Aguarde alguns segundos e tente novamente (não é a senha).";
         }
         if (!raw) return "Não foi possível entrar.";
         if (raw === "Failed to fetch" || /networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(raw)) {
-          return "Não foi possível contactar o servidor. Se acabou de haver deploy, aguarde ~1 minuto e tente de novo.";
+          return "Não foi possível contactar o servidor. Se acabou de haver deploy, aguarde alguns segundos e tente de novo.";
         }
         return raw;
       }
 
-      async function fetchWabaAuthJson(path, options = {}, timeoutMs = 25000, retries = 3) {
+      function isWabaLoginTransientProxyFailure(response, bodyText) {
+        const status = Number(response?.status || 0);
+        if (status === 502 || status === 503 || status === 504) return true;
+        if (status === 404) {
+          const t = String(bodyText || "").toLowerCase();
+          // Traefik/nginx HTML «Not Found» / «404 page not found» — não confundir com JSON de API.
+          if (!t || t.includes("not found") || t.includes("page not found") || t.includes("<html")) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      async function fetchWabaAuthJson(path, options = {}, timeoutMs = 25000, retries = 10) {
         const url = resolveWabaPublicPath(path);
         let lastError = null;
         for (let attempt = 1; attempt <= retries; attempt += 1) {
@@ -21050,22 +21068,36 @@
               { credentials: "same-origin", ...options },
               timeoutMs
             );
-            // Pós-redeploy Easypanel: Traefik devolve 502 até republicar :30180 — retry automático.
-            if (response.status === 502 || response.status === 503) {
-              const err = new Error(response.status === 502 ? "Bad Gateway" : "Service Unavailable");
-              err.status = response.status;
-              lastError = err;
-              if (attempt < retries) {
-                await new Promise((resolve) => setTimeout(resolve, 1200 * attempt));
-                continue;
+            // Pós-redeploy: Traefik 502/404 até watch/burst republicar :30180 — retry automático.
+            if (response.status === 502 || response.status === 503 || response.status === 504 || response.status === 404) {
+              let peek = "";
+              try {
+                peek = await response.clone().text();
+              } catch {
+                peek = "";
               }
-              throw err;
+              if (isWabaLoginTransientProxyFailure(response, peek)) {
+                const err = new Error(
+                  response.status === 404
+                    ? "Not Found"
+                    : response.status === 502
+                      ? "Bad Gateway"
+                      : "Service Unavailable"
+                );
+                err.status = response.status;
+                lastError = err;
+                if (attempt < retries) {
+                  await new Promise((resolve) => setTimeout(resolve, Math.min(2500, 800 * attempt)));
+                  continue;
+                }
+                throw err;
+              }
             }
             return response;
           } catch (error) {
             lastError = error;
             if (attempt < retries) {
-              await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+              await new Promise((resolve) => setTimeout(resolve, Math.min(2000, 600 * attempt)));
             }
           }
         }

@@ -19,7 +19,11 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
-2026-07-13 (17:05 — uptime Fetch failed src+redeploy)
+2026-07-13 (17:12 — login heal watch v2 permanente)
+
+**WABA — Login pós-deploy NÃO pode falhar (2026-07-13):** 3 camadas — `waba-login-heal-watch` (docker events→burst), timer 20s, Actions `Heal WABA Login` no push master. UI retry 404/502. **Install v2 no VPS uma vez.** Marker `DEPLOY-2026-07-13-login-heal-watch-v2`. Ver `doc/LOG-2026-07-13__171200__login-heal-watch-burst-permanente.md`.
+
+**WABA — Login Not Found pós-redeploy (2026-07-13):** janela 502/Traefik após Redeploy; em seguida `/health` 200 marker `DEPLOY-2026-07-13-uptime-local-probe-src`, `POST /auth/login` OK (401 JSON). Hard refresh + retry; se persistir: `heal-waba-login-vps.sh run`. Ver `doc/LOG-2026-07-13__170800__login-not-found-pos-redeploy.md`.
 
 **WABA — Monitor Fetch failed (2026-07-13):** falso negativo hairpin no container. Sites públicos 200; prod ainda em marker `DEPLOY-2026-07-11-logs-sistema-ui-dark`. Fix em src+dist: probe local `172.17.0.1:30210/30211/30180` + fallback Traefik `:80` Host. Marker `DEPLOY-2026-07-13-uptime-local-probe-src`. **Redeploy Easypanel `waba_disparador` obrigatório.** Ver `doc/LOG-2026-07-13__170500__uptime-fetch-failed-src-e-redeploy.md`.
 

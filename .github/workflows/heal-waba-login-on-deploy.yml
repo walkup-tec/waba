@@ -1,0 +1,66 @@
+# Heal login WABA imediatamente após push em master / redeploy.
+# Não espera o timer de 20s: SSH → install (watch+timer) → burst até /health 200.
+#
+# Secrets (GitHub → Settings → Secrets → Actions):
+#   VPS_SSH_PRIVATE_KEY  — obrigatório
+#   VPS_HOST             — opcional; default 72.60.51.127
+#
+# Doc: doc/LOG-2026-07-13__171200__login-heal-watch-burst-permanente.md
+
+name: Heal WABA Login (pós-deploy)
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+  repository_dispatch:
+    types: [easypanel-redeployed, heal-waba-login]
+
+concurrency:
+  group: heal-waba-login
+  cancel-in-progress: false
+
+jobs:
+  heal-login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY ausente — configure o secret para o login não quebrar pós-deploy."
+            exit 1
+          fi
+
+      - name: Aguardar Easypanel iniciar o build/redeploy
+        run: sleep 45
+
+      - name: SSH — install watch+timer e burst até health 200
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+            curl -fsSL "${REPO}/heal-waba-login-vps.sh" -o /tmp/heal-waba-login-vps.sh
+            sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
+            chmod +x /tmp/heal-waba-login-vps.sh
+            # Garante watch + timer v2 no VPS (idempotente)
+            /tmp/heal-waba-login-vps.sh install
+            # Burst agressivo (~2 min) — cobre janela do Swarm/Easypanel
+            /tmp/heal-waba-login-vps.sh burst || true
+            # Segunda passagem se o container ainda estava a subir
+            sleep 20
+            /tmp/heal-waba-login-vps.sh burst
+            echo "--- status ---"
+            /tmp/heal-waba-login-vps.sh status
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+              --resolve waba.draxsistemas.com.br:443:127.0.0.1 \
+              https://waba.draxsistemas.com.br/health || echo 000)"
+            echo "https_health=${code}"
+            test "$code" = "200"
