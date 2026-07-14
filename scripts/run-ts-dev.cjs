@@ -9,9 +9,21 @@ const { spawnSync } = require("child_process");
 const repoRoot = path.resolve(__dirname, "..");
 const depsRoot = path.join(process.env.USERPROFILE || "", ".waba-h-deps", "node_modules");
 const localDeps = path.join(repoRoot, "node_modules");
-const nodeModules = fs.existsSync(path.join(localDeps, "dotenv", "package.json"))
+
+const isUsableNodeModules = (dir) => {
+  const dotenvPkg = path.join(dir, "dotenv", "package.json");
+  if (!fs.existsSync(dotenvPkg)) return false;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(dotenvPkg, "utf8"));
+    return Boolean(parsed && typeof parsed === "object" && parsed.name);
+  } catch {
+    return false;
+  }
+};
+
+const nodeModules = isUsableNodeModules(localDeps)
   ? localDeps
-  : fs.existsSync(path.join(depsRoot, "dotenv", "package.json"))
+  : isUsableNodeModules(depsRoot)
     ? depsRoot
     : depsRoot;
 
