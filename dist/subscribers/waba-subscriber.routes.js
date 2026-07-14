@@ -34,7 +34,8 @@ const registerWabaSubscriberRoutes = (app) => {
                 },
             });
             const loginUrl = resolveAppLoginUrl();
-            const notifications = await (0, waba_mail_delivery_1.deliverSubscriberWelcomeNotifications)({
+            // Não bloquear o HTTP no e-mail/WhatsApp — timeout de SMTP/WA causa "Failed to fetch" no browser.
+            (0, waba_mail_delivery_1.notifySubscriberWelcomeEmail)({
                 email: profile.email,
                 fullName: profile.fullName,
                 password,
@@ -43,17 +44,11 @@ const registerWabaSubscriberRoutes = (app) => {
                 cpfCnpj: profile.cpfCnpj,
                 loginUrl,
             });
-            if (notifications.whatsapp.status !== "sent") {
-                console.warn(`[subscribers/register] WhatsApp boas-vindas não enviado para ${profile.email}: ${notifications.whatsapp.message}`);
-            }
             return res.status(201).json({
                 ok: true,
                 subscriber: profile,
                 loginUrl,
-                notifications,
-                message: notifications.whatsapp.status === "sent"
-                    ? "Cadastro realizado. Você receberá e-mail e WhatsApp de boas-vindas. Faça login no painel WABA."
-                    : "Cadastro realizado. E-mail de boas-vindas enviado. Faça login no painel WABA.",
+                message: "Cadastro realizado. Você receberá e-mail e WhatsApp de boas-vindas. Faça login no painel WABA.",
             });
         }
         catch (error) {
@@ -92,7 +87,7 @@ const registerWabaSubscriberRoutes = (app) => {
         }
         catch (error) {
             return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível entrar.",
+                error: error instanceof Error ? error.message : "Não foi possível fazer login.",
             });
         }
     });

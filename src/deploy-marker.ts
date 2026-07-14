@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-13-bundle-cadastro-cors-docs";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-14-register-async-welcome";

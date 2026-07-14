@@ -1,13 +1,19 @@
 import type { Express, Request, Response, NextFunction } from "express";
 
 const resolveAllowedOrigins = (): string[] => {
+  const defaults = [
+    "http://localhost:3013",
+    "http://127.0.0.1:3013",
+    "https://wabadisparos.com.br",
+    "https://www.wabadisparos.com.br",
+    "https://bet.waba.info",
+  ];
   const raw = String(process.env.WABA_CORS_ORIGINS ?? "").trim();
   const items = raw
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  if (items.length > 0) return items;
-  return ["http://localhost:3013", "http://127.0.0.1:3013"];
+  return [...new Set([...defaults, ...items])];
 };
 
 export const registerWabaCors = (app: Express) => {

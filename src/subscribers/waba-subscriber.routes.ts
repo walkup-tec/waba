@@ -4,7 +4,7 @@ import {
   createWabaSessionToken,
   resolveWabaSessionCookieOptions,
 } from "../auth/waba-auth.service";
-import { deliverSubscriberWelcomeNotifications } from "../mail/waba-mail-delivery";
+import { notifySubscriberWelcomeEmail } from "../mail/waba-mail-delivery";
 import { resolveWabaAppLoginUrl } from "../mail/waba-app-url";
 import { WabaSubscriberService } from "./waba-subscriber.service";
 
@@ -41,7 +41,8 @@ export const registerWabaSubscriberRoutes = (app: Express) => {
         },
       );
       const loginUrl = resolveAppLoginUrl();
-      const notifications = await deliverSubscriberWelcomeNotifications({
+      // Não bloquear o HTTP no e-mail/WhatsApp — timeout de SMTP/WA causa "Failed to fetch" no browser.
+      notifySubscriberWelcomeEmail({
         email: profile.email,
         fullName: profile.fullName,
         password,
@@ -50,20 +51,12 @@ export const registerWabaSubscriberRoutes = (app: Express) => {
         cpfCnpj: profile.cpfCnpj,
         loginUrl,
       });
-      if (notifications.whatsapp.status !== "sent") {
-        console.warn(
-          `[subscribers/register] WhatsApp boas-vindas não enviado para ${profile.email}: ${notifications.whatsapp.message}`,
-        );
-      }
       return res.status(201).json({
         ok: true,
         subscriber: profile,
         loginUrl,
-        notifications,
         message:
-          notifications.whatsapp.status === "sent"
-            ? "Cadastro realizado. Você receberá e-mail e WhatsApp de boas-vindas. Faça login no painel WABA."
-            : "Cadastro realizado. E-mail de boas-vindas enviado. Faça login no painel WABA.",
+          "Cadastro realizado. Você receberá e-mail e WhatsApp de boas-vindas. Faça login no painel WABA.",
       });
     } catch (error) {
       return res.status(400).json({

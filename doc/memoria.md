@@ -2337,3 +2337,17 @@ Palavras-chave para buscar:
 - Fix: `pv-waba-disparador` `3826a02` — form + proxy `/api/subscribers/register`.
 - Ação: Redeploy `waba_paginadevendas` no Easypanel.
 - Keywords: wabadisparos cadastro, #cadastro, pv-waba-disparador
+
+## 2026-07-14 — wabadisparos cadastro ainda antigo
+- Live ainda `Comece Hoje Mesmo` + botão morto; proxy API 404.
+- Fix Git OK (`3826a02`); falta rebuild `waba_paginadevendas`. Trigger push `c7fb6f0`.
+- Keywords: wabadisparos cadastro, paginadevendas redeploy
+
+## 2026-07-14 — Marker paginadevendas cadastro
+- Marker: `DEPLOY-2026-07-14-paginadevendas-cadastro-form`
+- Repo PV `52f6170` — `GET /api/health` + meta `waba-deploy-marker`
+- Keywords: paginadevendas marker, cadastro form redeploy
+
+## 2026-07-14 — wabadisparos 502 pós-redeploy paginadevendas
+- Externo: disparos + host EP **502**; WABA/bet **200**. Classico pós-redeploy (0/1 ou backend Traefik).
+- Keywords: paginadevendas 502, 30210, redeploy
