@@ -20,6 +20,14 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-14 — Deploy prod cupons lista única
+- Marker: `DEPLOY-2026-07-14-cupons-lista-unica-filtro`
+- Ver `doc/LOG-2026-07-14__152100__deploy-cupons-lista-unica.md`
+
+## 2026-07-14 — Cupons lista única + filtro tipo
+- Uma tabela (Ativos/Inativos) com filtro Desconto|Envios; forms lado a lado
+- Ver `doc/LOG-2026-07-14__151644__cupons-lista-unica-filtro.md`
+
 ## 2026-07-14 — Deploy lista + saldo inteiro Bônus Envios
 - Marker: `DEPLOY-2026-07-14-bonus-envios-lista-saldo-inteiro`
 - Lista Ativos/Inativos + grant sem herdar consumo antigo

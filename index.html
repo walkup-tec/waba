@@ -7808,14 +7808,28 @@
         align-items: end;
       }
 
-      @media (max-width: 1200px) {
-        #admin-coupons-create-form .admin-users-form-grid {
+      #admin-bonus-envios-create-form .admin-users-form-grid {
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1.05fr);
+        align-items: end;
+      }
+
+      @media (min-width: 1100px) {
+        #admin-coupons-create-form .admin-users-form-grid,
+        #admin-bonus-envios-create-form .admin-users-form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 1099px) and (min-width: 641px) {
+        #admin-coupons-create-form .admin-users-form-grid,
+        #admin-bonus-envios-create-form .admin-users-form-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
 
       @media (max-width: 640px) {
-        #admin-coupons-create-form .admin-users-form-grid {
+        #admin-coupons-create-form .admin-users-form-grid,
+        #admin-bonus-envios-create-form .admin-users-form-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -7829,23 +7843,6 @@
       #admin-bonus-envios-create-form .aquecedor-field label {
         display: block;
         margin-bottom: 6px;
-      }
-
-      #admin-bonus-envios-create-form .admin-users-form-grid {
-        grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1.05fr);
-        align-items: end;
-      }
-
-      @media (max-width: 1280px) {
-        #admin-bonus-envios-create-form .admin-users-form-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 640px) {
-        #admin-bonus-envios-create-form .admin-users-form-grid {
-          grid-template-columns: 1fr;
-        }
       }
 
       .admin-bonus-subscriber-combobox {
@@ -7895,6 +7892,54 @@
         font-size: 0.82rem;
         color: #94a3b8;
         line-height: 1.45;
+      }
+
+      .admin-cupons-create-stack {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      @media (min-width: 1100px) {
+        .admin-cupons-create-stack {
+          grid-template-columns: 1fr 1fr;
+          align-items: start;
+        }
+      }
+
+      .admin-cupons-create-panel {
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.35);
+        min-width: 0;
+      }
+
+      .admin-cupons-create-subtitle {
+        margin: 0 0 8px;
+        font-size: 0.88rem;
+        font-weight: 650;
+        color: #e2e8f0;
+      }
+
+      .admin-cupons-list-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 2px;
+        margin-bottom: 8px;
+      }
+
+      .admin-cupons-list-toolbar .admin-campanhas-buckets {
+        flex-wrap: nowrap;
+      }
+
+      .admin-cupons-create-panel .admin-users-form-footer {
+        margin-top: 8px;
+      }
+
+      .admin-cupons-create-panel .admin-users-form-grid {
+        gap: 8px 10px;
       }
 
       .aquecedor-field input[type="datetime-local"],
@@ -18437,205 +18482,180 @@
                 </div>
 
                 <div class="admin-assinantes-block">
-                  <h3 class="admin-assinantes-block-title">Bônus Envios</h3>
-                  <p class="admin-bonus-envios-hint">
-                    Credita envios intransferíveis para o assinante selecionado. O saldo aparece em
-                    <strong>Disponíveis</strong> do plano escolhido (API Oficial ou API Alternativa).
-                  </p>
-                  <form id="admin-bonus-envios-create-form" class="admin-users-form" autocomplete="off" novalidate>
-                    <div class="admin-users-form-grid">
-                      <div class="aquecedor-field admin-bonus-subscriber-field">
-                        <label for="admin-bonus-subscriber-search">Assinante</label>
-                        <div class="admin-bonus-subscriber-combobox">
-                          <input
-                            id="admin-bonus-subscriber-search"
-                            type="text"
-                            placeholder="Buscar por nome, e-mail ou WhatsApp"
-                            autocomplete="off"
-                            aria-autocomplete="list"
-                            aria-controls="admin-bonus-subscriber-results"
-                          />
-                          <input id="admin-bonus-subscriber-id" type="hidden" value="" />
-                          <input id="admin-bonus-subscriber-email" type="hidden" value="" />
-                          <div
-                            id="admin-bonus-subscriber-results"
-                            class="admin-bonus-subscriber-results"
-                            role="listbox"
-                            hidden
-                          ></div>
+                  <h3 class="admin-assinantes-block-title">Cupons</h3>
+                  <div class="admin-cupons-create-stack">
+                    <div class="admin-cupons-create-panel">
+                      <h4 class="admin-cupons-create-subtitle">Bônus Envios</h4>
+                      <form id="admin-bonus-envios-create-form" class="admin-users-form" autocomplete="off" novalidate>
+                        <div class="admin-users-form-grid">
+                          <div class="aquecedor-field admin-bonus-subscriber-field">
+                            <label for="admin-bonus-subscriber-search">Assinante</label>
+                            <div class="admin-bonus-subscriber-combobox">
+                              <input
+                                id="admin-bonus-subscriber-search"
+                                type="text"
+                                placeholder="Buscar por nome, e-mail ou WhatsApp"
+                                autocomplete="off"
+                                aria-autocomplete="list"
+                                aria-controls="admin-bonus-subscriber-results"
+                              />
+                              <input id="admin-bonus-subscriber-id" type="hidden" value="" />
+                              <input id="admin-bonus-subscriber-email" type="hidden" value="" />
+                              <div
+                                id="admin-bonus-subscriber-results"
+                                class="admin-bonus-subscriber-results"
+                                role="listbox"
+                                hidden
+                              ></div>
+                            </div>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="admin-bonus-shipment-count">Quantidade de envios</label>
+                            <input
+                              id="admin-bonus-shipment-count"
+                              type="text"
+                              inputmode="numeric"
+                              placeholder="Ex.: 500"
+                              required
+                              autocomplete="off"
+                            />
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="admin-bonus-api-kind">Tipo de plano</label>
+                            <select id="admin-bonus-api-kind" required>
+                              <option value="oficial" selected>API OFICIAL</option>
+                              <option value="alternativa">API ALTERNATIVA</option>
+                            </select>
+                          </div>
+                          <div class="aquecedor-field admin-bonus-validity-field">
+                            <label for="admin-bonus-validity-mode">Validade</label>
+                            <select id="admin-bonus-validity-mode" required>
+                              <option value="12h">12 horas</option>
+                              <option value="24h" selected>24 horas</option>
+                              <option value="custom">Personalizada</option>
+                              <option value="lifetime">Vitalícia</option>
+                            </select>
+                          </div>
+                          <div id="admin-bonus-validity-custom-wrap" class="aquecedor-field admin-bonus-until-field" hidden>
+                            <label for="admin-bonus-valid-until">Válido até</label>
+                            <input id="admin-bonus-valid-until" type="datetime-local" step="60" />
+                          </div>
                         </div>
-                      </div>
-                      <div class="aquecedor-field">
-                        <label for="admin-bonus-shipment-count">Quantidade de envios</label>
-                        <input
-                          id="admin-bonus-shipment-count"
-                          type="text"
-                          inputmode="numeric"
-                          placeholder="Ex.: 500"
-                          required
-                          autocomplete="off"
-                        />
-                      </div>
-                      <div class="aquecedor-field">
-                        <label for="admin-bonus-api-kind">Tipo de plano</label>
-                        <select id="admin-bonus-api-kind" required>
-                          <option value="oficial" selected>API OFICIAL</option>
-                          <option value="alternativa">API ALTERNATIVA</option>
-                        </select>
-                      </div>
-                      <div class="aquecedor-field admin-bonus-validity-field">
-                        <label for="admin-bonus-validity-mode">Validade</label>
-                        <select id="admin-bonus-validity-mode" required>
-                          <option value="12h">12 horas</option>
-                          <option value="24h" selected>24 horas</option>
-                          <option value="custom">Personalizada</option>
-                          <option value="lifetime">Vitalícia</option>
-                        </select>
-                      </div>
-                      <div id="admin-bonus-validity-custom-wrap" class="aquecedor-field admin-bonus-until-field" hidden>
-                        <label for="admin-bonus-valid-until">Válido até</label>
-                        <input id="admin-bonus-valid-until" type="datetime-local" step="60" />
-                      </div>
-                    </div>
-                    <div class="admin-users-form-footer">
-                      <button id="admin-bonus-credit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
-                        Creditar Envios
-                      </button>
-                    </div>
-                  </form>
-                  <div class="admin-subscribers-toolbar" style="margin-top: 16px">
-                    <span id="admin-bonus-envios-summary" class="admin-subscribers-summary">Carregando bônus…</span>
-                    <div class="admin-campanhas-buckets" role="tablist" aria-label="Filtrar bônus de envios">
-                      <button
-                        id="admin-bonus-bucket-active"
-                        class="admin-campanhas-bucket-btn is-active"
-                        type="button"
-                        role="tab"
-                        aria-selected="true"
-                        data-bonus-bucket="active"
-                      >
-                        Ativos
-                        <span id="admin-bonus-count-active" class="admin-campanhas-bucket-count">0</span>
-                      </button>
-                      <button
-                        id="admin-bonus-bucket-inactive"
-                        class="admin-campanhas-bucket-btn"
-                        type="button"
-                        role="tab"
-                        aria-selected="false"
-                        data-bonus-bucket="inactive"
-                      >
-                        Inativos
-                        <span id="admin-bonus-count-inactive" class="admin-campanhas-bucket-count">0</span>
-                      </button>
-                    </div>
-                    <button id="admin-bonus-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">
-                      Atualizar bônus
-                    </button>
-                  </div>
-                  <div id="admin-bonus-envios-table-wrap" class="admin-subscribers-table-wrap">
-                    <table class="admin-subscribers-table" aria-label="Lista de bônus de envios">
-                      <thead>
-                        <tr>
-                          <th scope="col">Assinante</th>
-                          <th scope="col" class="admin-subscribers-num">Envios</th>
-                          <th scope="col">Plano</th>
-                          <th scope="col">Validade</th>
-                          <th scope="col">Status</th>
-                          <th scope="col">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody id="admin-bonus-envios-tbody">
-                        <tr>
-                          <td colspan="6" class="muted">Carregando…</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div class="admin-assinantes-block">
-                  <h3 class="admin-assinantes-block-title">Cupons de desconto</h3>
-                  <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off" novalidate>
-                    <div class="admin-users-form-grid">
-                      <div class="aquecedor-field">
-                        <label for="admin-coupon-alias">Código do cupom</label>
-                        <div class="admin-coupon-alias-row">
-                          <input id="admin-coupon-alias" type="text" placeholder="WABA-#1234" />
-                          <button id="admin-coupon-generate-alias-btn" class="instance-action-btn" type="button">
-                            Gerar
+                        <div class="admin-users-form-footer">
+                          <button id="admin-bonus-credit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                            Creditar Envios
                           </button>
                         </div>
-                      </div>
-                      <div class="aquecedor-field">
-                        <label for="admin-coupon-discount-percent">Desconto (%)</label>
-                        <input id="admin-coupon-discount-percent" type="text" inputmode="decimal" required placeholder="Ex.: 10,00" autocomplete="off" />
-                      </div>
-                      <div class="aquecedor-field admin-coupon-validity-field">
-                        <label for="admin-coupon-validity-mode">Validade</label>
-                        <select id="admin-coupon-validity-mode" required>
-                          <option value="12h">12 horas</option>
-                          <option value="24h" selected>24 horas</option>
-                          <option value="custom">Personalizada</option>
-                          <option value="lifetime">Vitalícia</option>
-                        </select>
-                      </div>
-                      <div id="admin-coupon-validity-custom-wrap" class="aquecedor-field admin-coupon-until-field" hidden>
-                        <label for="admin-coupon-valid-until">Válido até</label>
-                        <input id="admin-coupon-valid-until" type="datetime-local" step="60" />
-                      </div>
+                      </form>
                     </div>
-                    <div class="admin-users-form-footer">
-                      <button id="admin-coupon-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
-                        Criar cupom
-                      </button>
+                    <div class="admin-cupons-create-panel">
+                      <h4 class="admin-cupons-create-subtitle">Cupom de desconto</h4>
+                      <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off" novalidate>
+                        <div class="admin-users-form-grid">
+                          <div class="aquecedor-field">
+                            <label for="admin-coupon-alias">Código do cupom</label>
+                            <div class="admin-coupon-alias-row">
+                              <input id="admin-coupon-alias" type="text" placeholder="WABA-#1234" />
+                              <button id="admin-coupon-generate-alias-btn" class="instance-action-btn" type="button">
+                                Gerar
+                              </button>
+                            </div>
+                          </div>
+                          <div class="aquecedor-field">
+                            <label for="admin-coupon-discount-percent">Desconto (%)</label>
+                            <input id="admin-coupon-discount-percent" type="text" inputmode="decimal" required placeholder="Ex.: 10,00" autocomplete="off" />
+                          </div>
+                          <div class="aquecedor-field admin-coupon-validity-field">
+                            <label for="admin-coupon-validity-mode">Validade</label>
+                            <select id="admin-coupon-validity-mode" required>
+                              <option value="12h">12 horas</option>
+                              <option value="24h" selected>24 horas</option>
+                              <option value="custom">Personalizada</option>
+                              <option value="lifetime">Vitalícia</option>
+                            </select>
+                          </div>
+                          <div id="admin-coupon-validity-custom-wrap" class="aquecedor-field admin-coupon-until-field" hidden>
+                            <label for="admin-coupon-valid-until">Válido até</label>
+                            <input id="admin-coupon-valid-until" type="datetime-local" step="60" />
+                          </div>
+                        </div>
+                        <div class="admin-users-form-footer">
+                          <button id="admin-coupon-create-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                            Criar cupom
+                          </button>
+                        </div>
+                      </form>
                     </div>
-                  </form>
-                  <div class="admin-subscribers-toolbar" style="margin-top: 16px">
-                    <span id="admin-coupons-summary" class="admin-subscribers-summary">Carregando cupons…</span>
-                    <div class="admin-campanhas-buckets" role="tablist" aria-label="Filtrar cupons">
+                  </div>
+
+                  <div class="admin-subscribers-toolbar admin-cupons-list-toolbar">
+                    <span id="admin-cupons-summary" class="admin-subscribers-summary">Carregando cupons…</span>
+                    <div class="admin-campanhas-buckets" role="tablist" aria-label="Tipo de cupom">
                       <button
-                        id="admin-coupons-bucket-active"
+                        id="admin-cupons-kind-desconto"
                         class="admin-campanhas-bucket-btn is-active"
                         type="button"
                         role="tab"
                         aria-selected="true"
-                        data-coupons-bucket="active"
+                        data-cupons-kind="desconto"
                       >
-                        Ativos
-                        <span id="admin-coupons-count-active" class="admin-campanhas-bucket-count">0</span>
+                        Desconto
+                        <span id="admin-cupons-count-desconto" class="admin-campanhas-bucket-count">0</span>
                       </button>
                       <button
-                        id="admin-coupons-bucket-inactive"
+                        id="admin-cupons-kind-envios"
                         class="admin-campanhas-bucket-btn"
                         type="button"
                         role="tab"
                         aria-selected="false"
-                        data-coupons-bucket="inactive"
+                        data-cupons-kind="envios"
                       >
-                        Inativos
-                        <span id="admin-coupons-count-inactive" class="admin-campanhas-bucket-count">0</span>
+                        Envios
+                        <span id="admin-cupons-count-envios" class="admin-campanhas-bucket-count">0</span>
                       </button>
                     </div>
-                    <button id="admin-coupons-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">
-                      Atualizar cupons
+                    <div class="admin-campanhas-buckets" role="tablist" aria-label="Status dos cupons">
+                      <button
+                        id="admin-cupons-bucket-active"
+                        class="admin-campanhas-bucket-btn is-active"
+                        type="button"
+                        role="tab"
+                        aria-selected="true"
+                        data-cupons-bucket="active"
+                      >
+                        Ativos
+                        <span id="admin-cupons-count-active" class="admin-campanhas-bucket-count">0</span>
+                      </button>
+                      <button
+                        id="admin-cupons-bucket-inactive"
+                        class="admin-campanhas-bucket-btn"
+                        type="button"
+                        role="tab"
+                        aria-selected="false"
+                        data-cupons-bucket="inactive"
+                      >
+                        Inativos
+                        <span id="admin-cupons-count-inactive" class="admin-campanhas-bucket-count">0</span>
+                      </button>
+                    </div>
+                    <button id="admin-cupons-refresh-btn" class="instance-action-btn btn-refresh enabled" type="button">
+                      Atualizar
                     </button>
                   </div>
-                  <div id="admin-coupons-table-wrap" class="admin-subscribers-table-wrap">
-                    <table class="admin-subscribers-table" aria-label="Lista de cupons">
+                  <div id="admin-cupons-table-wrap" class="admin-subscribers-table-wrap">
+                    <table class="admin-subscribers-table" aria-label="Lista unificada de cupons">
                       <thead>
                         <tr>
-                          <th scope="col">Código</th>
-                          <th scope="col" class="admin-subscribers-num">Desconto</th>
+                          <th scope="col">Referência</th>
+                          <th scope="col">Benefício</th>
                           <th scope="col">Validade</th>
-                          <th scope="col" class="admin-subscribers-num">Usos</th>
                           <th scope="col">Status</th>
                           <th scope="col">Ações</th>
                         </tr>
                       </thead>
-                      <tbody id="admin-coupons-tbody">
+                      <tbody id="admin-cupons-tbody">
                         <tr>
-                          <td colspan="6" class="muted">Carregando…</td>
+                          <td colspan="5" class="muted">Carregando…</td>
                         </tr>
                       </tbody>
                     </table>
@@ -27797,6 +27817,8 @@
       }
 
       let adminCouponsCache = [];
+      let adminBonusEnviosCache = [];
+      let adminCuponsKindFilter = "desconto";
       let adminCouponsActiveBucket = "active";
       let adminCouponsPollTimer = null;
       const ADMIN_COUPONS_POLL_MS = 30000;
@@ -27825,40 +27847,67 @@
         return "Inativo";
       }
 
-      function updateAdminCouponsBucketUi(counts = {}) {
-        const activeBtn = document.getElementById("admin-coupons-bucket-active");
-        const inactiveBtn = document.getElementById("admin-coupons-bucket-inactive");
-        const activeCountEl = document.getElementById("admin-coupons-count-active");
-        const inactiveCountEl = document.getElementById("admin-coupons-count-inactive");
-        const activeCount = Number(counts.active || 0);
-        const inactiveCount = Number(counts.inactive || 0);
-        if (activeCountEl) activeCountEl.textContent = String(activeCount);
-        if (inactiveCountEl) inactiveCountEl.textContent = String(inactiveCount);
+      function updateAdminCuponsFiltersUi(counts = {}) {
+        const kindDescontoBtn = document.getElementById("admin-cupons-kind-desconto");
+        const kindEnviosBtn = document.getElementById("admin-cupons-kind-envios");
+        const activeBtn = document.getElementById("admin-cupons-bucket-active");
+        const inactiveBtn = document.getElementById("admin-cupons-bucket-inactive");
+        const countDesconto = document.getElementById("admin-cupons-count-desconto");
+        const countEnvios = document.getElementById("admin-cupons-count-envios");
+        const activeCountEl = document.getElementById("admin-cupons-count-active");
+        const inactiveCountEl = document.getElementById("admin-cupons-count-inactive");
+
+        if (countDesconto) countDesconto.textContent = String(Number(counts.desconto || 0));
+        if (countEnvios) countEnvios.textContent = String(Number(counts.envios || 0));
+        if (activeCountEl) activeCountEl.textContent = String(Number(counts.active || 0));
+        if (inactiveCountEl) inactiveCountEl.textContent = String(Number(counts.inactive || 0));
+
+        if (kindDescontoBtn) {
+          kindDescontoBtn.classList.toggle("is-active", adminCuponsKindFilter === "desconto");
+          kindDescontoBtn.setAttribute(
+            "aria-selected",
+            adminCuponsKindFilter === "desconto" ? "true" : "false"
+          );
+        }
+        if (kindEnviosBtn) {
+          kindEnviosBtn.classList.toggle("is-active", adminCuponsKindFilter === "envios");
+          kindEnviosBtn.setAttribute(
+            "aria-selected",
+            adminCuponsKindFilter === "envios" ? "true" : "false"
+          );
+        }
         if (activeBtn) {
           activeBtn.classList.toggle("is-active", adminCouponsActiveBucket === "active");
-          activeBtn.setAttribute("aria-selected", adminCouponsActiveBucket === "active" ? "true" : "false");
+          activeBtn.setAttribute(
+            "aria-selected",
+            adminCouponsActiveBucket === "active" ? "true" : "false"
+          );
         }
         if (inactiveBtn) {
           inactiveBtn.classList.toggle("is-active", adminCouponsActiveBucket === "inactive");
-          inactiveBtn.setAttribute("aria-selected", adminCouponsActiveBucket === "inactive" ? "true" : "false");
+          inactiveBtn.setAttribute(
+            "aria-selected",
+            adminCouponsActiveBucket === "inactive" ? "true" : "false"
+          );
         }
+      }
+
+      function setAdminCuponsKindFilter(kind) {
+        adminCuponsKindFilter = kind === "envios" ? "envios" : "desconto";
+        renderAdminCuponsTableFromCache();
       }
 
       function setAdminCouponsBucket(bucket) {
         adminCouponsActiveBucket = bucket === "inactive" ? "inactive" : "active";
-        updateAdminCouponsBucketUi({
-          active: adminCouponsCache.filter((coupon) => isAdminCouponEffectiveActive(coupon)).length,
-          inactive: adminCouponsCache.filter((coupon) => !isAdminCouponEffectiveActive(coupon)).length,
-        });
-        renderAdminCouponsTableFromCache();
+        renderAdminCuponsTableFromCache();
       }
 
       function startAdminCouponsPolling() {
         stopAdminCouponsPolling();
         adminCouponsPollTimer = window.setInterval(() => {
           if (activeTab !== "admin-assinantes") return;
-          if (!adminCouponsCache.length) return;
-          renderAdminCouponsTableFromCache();
+          if (!adminCouponsCache.length && !adminBonusEnviosCache.length) return;
+          renderAdminCuponsTableFromCache();
         }, ADMIN_COUPONS_POLL_MS);
       }
 
@@ -27869,36 +27918,91 @@
         }
       }
 
-      function renderAdminCouponsTableFromCache() {
-        const all = Array.isArray(adminCouponsCache) ? adminCouponsCache : [];
-        const activeItems = all.filter((coupon) => isAdminCouponEffectiveActive(coupon));
-        const inactiveItems = all.filter((coupon) => !isAdminCouponEffectiveActive(coupon));
-        updateAdminCouponsBucketUi({
+      function renderAdminCuponsTableFromCache() {
+        const descontoAll = Array.isArray(adminCouponsCache) ? adminCouponsCache : [];
+        const enviosAll = Array.isArray(adminBonusEnviosCache) ? adminBonusEnviosCache : [];
+        const kindItems = adminCuponsKindFilter === "envios" ? enviosAll : descontoAll;
+        const isActiveFn =
+          adminCuponsKindFilter === "envios"
+            ? isAdminBonusEnviosEffectiveActive
+            : isAdminCouponEffectiveActive;
+        const activeItems = kindItems.filter((item) => isActiveFn(item));
+        const inactiveItems = kindItems.filter((item) => !isActiveFn(item));
+        updateAdminCuponsFiltersUi({
+          desconto: descontoAll.length,
+          envios: enviosAll.length,
           active: activeItems.length,
           inactive: inactiveItems.length,
         });
-        const filtered = adminCouponsActiveBucket === "inactive" ? inactiveItems : activeItems;
-        renderAdminCouponsTable(filtered, { bucket: adminCouponsActiveBucket });
+        const filtered =
+          adminCouponsActiveBucket === "inactive" ? inactiveItems : activeItems;
+        renderAdminCuponsTable(filtered, {
+          bucket: adminCouponsActiveBucket,
+          kind: adminCuponsKindFilter,
+        });
       }
 
-      function renderAdminCouponsTable(items, options = {}) {
-        const tbody = document.getElementById("admin-coupons-tbody");
-        const summary = document.getElementById("admin-coupons-summary");
+      function renderAdminCuponsTable(items, options = {}) {
+        const tbody = document.getElementById("admin-cupons-tbody");
+        const summary = document.getElementById("admin-cupons-summary");
         const list = Array.isArray(items) ? items : [];
         const bucket = options.bucket === "inactive" ? "inactive" : "active";
+        const kind = options.kind === "envios" ? "envios" : "desconto";
+        const kindLabel = kind === "envios" ? "envios" : "desconto";
         if (summary) {
           summary.textContent =
             bucket === "inactive"
-              ? `${list.length} cupom(ns) inativo(s)`
-              : `${list.length} cupom(ns) ativo(s)`;
+              ? `${list.length} cupom(ns) de ${kindLabel} inativo(s)`
+              : `${list.length} cupom(ns) de ${kindLabel} ativo(s)`;
         }
         if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = `<tr><td colspan="6" class="muted">${
-            bucket === "inactive" ? "Nenhum cupom inativo." : "Nenhum cupom ativo."
+          tbody.innerHTML = `<tr><td colspan="5" class="muted">${
+            bucket === "inactive"
+              ? `Nenhum cupom de ${kindLabel} inativo.`
+              : `Nenhum cupom de ${kindLabel} ativo.`
           }</td></tr>`;
           return;
         }
+
+        if (kind === "envios") {
+          tbody.innerHTML = list
+            .map((item) => {
+              const listedAsActive = isAdminBonusEnviosEffectiveActive(item);
+              const statusClass = listedAsActive ? "is-active" : "is-inactive";
+              const statusLabel = resolveAdminBonusEnviosStatusLabel(item);
+              const name = String(item?.customerName || "Assinante");
+              const email = String(item?.ownerEmail || "");
+              const benefit = `${formatDisparosQty(item?.shipmentCount)} · ${
+                item?.apiKindLabel || item?.apiKind || "—"
+              }`;
+              return `<tr>
+                <td>
+                  <div class="admin-subscribers-name">${escapeAdminHtml(name)}</div>
+                  <div class="admin-subscribers-email">${escapeAdminHtml(email)}</div>
+                </td>
+                <td>${escapeAdminHtml(benefit)}</td>
+                <td>${escapeAdminHtml(formatAdminBonusEnviosValidity(item))}</td>
+                <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(
+                  statusLabel
+                )}</span></td>
+                <td>
+                  <div class="admin-coupon-actions">
+                    ${
+                      listedAsActive
+                        ? `<button type="button" class="instance-action-btn admin-bonus-deactivate-btn" data-bonus-id="${escapeAdminHtml(
+                            item.id || ""
+                          )}">Desativar</button>`
+                        : ""
+                    }
+                  </div>
+                </td>
+              </tr>`;
+            })
+            .join("");
+          return;
+        }
+
         tbody.innerHTML = list
           .map((coupon) => {
             const listedAsActive = isAdminCouponEffectiveActive(coupon);
@@ -27907,12 +28011,16 @@
             const uses = `${Number(coupon.redemptionCount || 0)}${
               coupon.maxRedemptions ? ` / ${coupon.maxRedemptions}` : ""
             }`;
+            const benefit = `${formatAdminCouponDiscountPercentLabel(
+              coupon.discountPercent
+            )}% · ${uses} uso(s)`;
             return `<tr>
               <td><code>${escapeAdminHtml(coupon.alias || "")}</code></td>
-              <td class="admin-subscribers-num">${escapeAdminHtml(formatAdminCouponDiscountPercentLabel(coupon.discountPercent))}%</td>
+              <td>${escapeAdminHtml(benefit)}</td>
               <td>${escapeAdminHtml(formatAdminCouponValidity(coupon))}</td>
-              <td class="admin-subscribers-num">${escapeAdminHtml(uses)}</td>
-              <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(statusLabel)}</span></td>
+              <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(
+                statusLabel
+              )}</span></td>
               <td>
                 <div class="admin-coupon-actions">
                   <button
@@ -27937,17 +28045,20 @@
       }
 
       async function loadAdminCoupons() {
-        const tbody = document.getElementById("admin-coupons-tbody");
-        const summary = document.getElementById("admin-coupons-summary");
+        const tbody = document.getElementById("admin-cupons-tbody");
+        const summary = document.getElementById("admin-cupons-summary");
         if (!hasMasterAccess()) {
           if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="6" class="muted">Área restrita ao usuário master.</td></tr>';
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="muted">Área restrita ao usuário master.</td></tr>';
           }
           if (summary) summary.textContent = "Acesso negado.";
           return;
         }
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="muted">Carregando…</td></tr>';
-        if (summary) summary.textContent = "Carregando cupons…";
+        if (adminCuponsKindFilter === "desconto") {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="muted">Carregando…</td></tr>';
+          if (summary) summary.textContent = "Carregando cupons…";
+        }
         try {
           const response = await fetchWithTimeout("/admin/coupons", {}, 45000);
           const payload = await response.json().catch(() => ({}));
@@ -27955,14 +28066,17 @@
             throw new Error(payload.error || "Não foi possível carregar os cupons.");
           }
           adminCouponsCache = Array.isArray(payload.items) ? payload.items : [];
-          renderAdminCouponsTableFromCache();
+          renderAdminCuponsTableFromCache();
+          startAdminCouponsPolling();
         } catch (error) {
-          if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
-              resolveAdminSubscriberFetchError(error, "Falha ao carregar cupons.")
-            )}</td></tr>`;
+          if (adminCuponsKindFilter === "desconto") {
+            if (tbody) {
+              tbody.innerHTML = `<tr><td colspan="5" class="muted">${escapeAdminHtml(
+                resolveAdminSubscriberFetchError(error, "Falha ao carregar cupons.")
+              )}</td></tr>`;
+            }
+            if (summary) summary.textContent = "Falha ao carregar.";
           }
-          if (summary) summary.textContent = "Falha ao carregar.";
           showToast(resolveAdminSubscriberFetchError(error, "Falha ao carregar cupons."), "error");
         }
       }
@@ -28041,8 +28155,10 @@
           if (modeInput) modeInput.value = "24h";
           if (untilInput) untilInput.value = "";
           syncAdminCouponValidityUi();
+          adminCuponsKindFilter = "desconto";
           adminCouponsActiveBucket = "active";
           await loadAdminCoupons();
+          await loadAdminBonusEnvios();
         } catch (error) {
           showToast(resolveAdminSubscriberFetchError(error, "Erro ao criar cupom."), "error", 5200);
         } finally {
@@ -28093,6 +28209,7 @@
             throw new Error(payload.error || "Não foi possível desativar o cupom.");
           }
           showToast("Cupom desativado.", "success");
+          adminCuponsKindFilter = "desconto";
           await loadAdminCoupons();
           if (adminCouponsActiveBucket === "active") {
             setAdminCouponsBucket("inactive");
@@ -28439,10 +28556,7 @@
         syncAdminBonusValidityUi();
       }
 
-      let adminBonusEnviosCache = [];
-      let adminBonusEnviosActiveBucket = "active";
       let adminBonusEnviosPollTimer = null;
-      const ADMIN_BONUS_ENVIOS_POLL_MS = 30000;
 
       function isAdminBonusEnviosEffectiveActive(item, nowMs = Date.now()) {
         if (!item || item.grantActive === false) return false;
@@ -28478,51 +28592,6 @@
         return "Inativo";
       }
 
-      function updateAdminBonusEnviosBucketUi(counts = {}) {
-        const activeBtn = document.getElementById("admin-bonus-bucket-active");
-        const inactiveBtn = document.getElementById("admin-bonus-bucket-inactive");
-        const activeCountEl = document.getElementById("admin-bonus-count-active");
-        const inactiveCountEl = document.getElementById("admin-bonus-count-inactive");
-        const activeCount = Number(counts.active || 0);
-        const inactiveCount = Number(counts.inactive || 0);
-        if (activeCountEl) activeCountEl.textContent = String(activeCount);
-        if (inactiveCountEl) inactiveCountEl.textContent = String(inactiveCount);
-        if (activeBtn) {
-          activeBtn.classList.toggle("is-active", adminBonusEnviosActiveBucket === "active");
-          activeBtn.setAttribute(
-            "aria-selected",
-            adminBonusEnviosActiveBucket === "active" ? "true" : "false"
-          );
-        }
-        if (inactiveBtn) {
-          inactiveBtn.classList.toggle("is-active", adminBonusEnviosActiveBucket === "inactive");
-          inactiveBtn.setAttribute(
-            "aria-selected",
-            adminBonusEnviosActiveBucket === "inactive" ? "true" : "false"
-          );
-        }
-      }
-
-      function setAdminBonusEnviosBucket(bucket) {
-        adminBonusEnviosActiveBucket = bucket === "inactive" ? "inactive" : "active";
-        updateAdminBonusEnviosBucketUi({
-          active: adminBonusEnviosCache.filter((item) => isAdminBonusEnviosEffectiveActive(item))
-            .length,
-          inactive: adminBonusEnviosCache.filter((item) => !isAdminBonusEnviosEffectiveActive(item))
-            .length,
-        });
-        renderAdminBonusEnviosTableFromCache();
-      }
-
-      function startAdminBonusEnviosPolling() {
-        stopAdminBonusEnviosPolling();
-        adminBonusEnviosPollTimer = window.setInterval(() => {
-          if (activeTab !== "admin-assinantes") return;
-          if (!adminBonusEnviosCache.length) return;
-          renderAdminBonusEnviosTableFromCache();
-        }, ADMIN_BONUS_ENVIOS_POLL_MS);
-      }
-
       function stopAdminBonusEnviosPolling() {
         if (adminBonusEnviosPollTimer) {
           window.clearInterval(adminBonusEnviosPollTimer);
@@ -28530,86 +28599,21 @@
         }
       }
 
-      function renderAdminBonusEnviosTableFromCache() {
-        const all = Array.isArray(adminBonusEnviosCache) ? adminBonusEnviosCache : [];
-        const activeItems = all.filter((item) => isAdminBonusEnviosEffectiveActive(item));
-        const inactiveItems = all.filter((item) => !isAdminBonusEnviosEffectiveActive(item));
-        updateAdminBonusEnviosBucketUi({
-          active: activeItems.length,
-          inactive: inactiveItems.length,
-        });
-        const filtered =
-          adminBonusEnviosActiveBucket === "inactive" ? inactiveItems : activeItems;
-        renderAdminBonusEnviosTable(filtered, { bucket: adminBonusEnviosActiveBucket });
-      }
-
-      function renderAdminBonusEnviosTable(items, options = {}) {
-        const tbody = document.getElementById("admin-bonus-envios-tbody");
-        const summary = document.getElementById("admin-bonus-envios-summary");
-        const list = Array.isArray(items) ? items : [];
-        const bucket = options.bucket === "inactive" ? "inactive" : "active";
-        if (summary) {
-          summary.textContent =
-            bucket === "inactive"
-              ? `${list.length} bônus inativo(s)`
-              : `${list.length} bônus ativo(s)`;
-        }
-        if (!tbody) return;
-        if (!list.length) {
-          tbody.innerHTML = `<tr><td colspan="6" class="muted">${
-            bucket === "inactive" ? "Nenhum bônus inativo." : "Nenhum bônus ativo."
-          }</td></tr>`;
-          return;
-        }
-        tbody.innerHTML = list
-          .map((item) => {
-            const listedAsActive = isAdminBonusEnviosEffectiveActive(item);
-            const statusClass = listedAsActive ? "is-active" : "is-inactive";
-            const statusLabel = resolveAdminBonusEnviosStatusLabel(item);
-            const name = String(item?.customerName || "Assinante");
-            const email = String(item?.ownerEmail || "");
-            return `<tr>
-              <td>
-                <div class="admin-subscribers-name">${escapeAdminHtml(name)}</div>
-                <div class="admin-subscribers-email">${escapeAdminHtml(email)}</div>
-              </td>
-              <td class="admin-subscribers-num">${escapeAdminHtml(
-                formatDisparosQty(item?.shipmentCount)
-              )}</td>
-              <td>${escapeAdminHtml(item?.apiKindLabel || item?.apiKind || "—")}</td>
-              <td>${escapeAdminHtml(formatAdminBonusEnviosValidity(item))}</td>
-              <td><span class="admin-coupon-status-pill ${statusClass}">${escapeAdminHtml(
-                statusLabel
-              )}</span></td>
-              <td>
-                <div class="admin-coupon-actions">
-                  ${
-                    listedAsActive
-                      ? `<button type="button" class="instance-action-btn admin-bonus-deactivate-btn" data-bonus-id="${escapeAdminHtml(
-                          item.id || ""
-                        )}">Desativar</button>`
-                      : ""
-                  }
-                </div>
-              </td>
-            </tr>`;
-          })
-          .join("");
-      }
-
       async function loadAdminBonusEnvios() {
-        const tbody = document.getElementById("admin-bonus-envios-tbody");
-        const summary = document.getElementById("admin-bonus-envios-summary");
+        const tbody = document.getElementById("admin-cupons-tbody");
+        const summary = document.getElementById("admin-cupons-summary");
         if (!hasMasterAccess()) {
-          if (tbody) {
+          if (tbody && adminCuponsKindFilter === "envios") {
             tbody.innerHTML =
-              '<tr><td colspan="6" class="muted">Área restrita ao usuário master.</td></tr>';
+              '<tr><td colspan="5" class="muted">Área restrita ao usuário master.</td></tr>';
           }
-          if (summary) summary.textContent = "Acesso negado.";
+          if (summary && adminCuponsKindFilter === "envios") summary.textContent = "Acesso negado.";
           return;
         }
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="muted">Carregando…</td></tr>';
-        if (summary) summary.textContent = "Carregando bônus…";
+        if (adminCuponsKindFilter === "envios") {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="muted">Carregando…</td></tr>';
+          if (summary) summary.textContent = "Carregando cupons…";
+        }
         try {
           const response = await fetchWithTimeout("/admin/bonus-envios", {}, 45000);
           const payload = await response.json().catch(() => ({}));
@@ -28617,15 +28621,17 @@
             throw new Error(payload.error || "Não foi possível carregar os bônus de envios.");
           }
           adminBonusEnviosCache = Array.isArray(payload.items) ? payload.items : [];
-          renderAdminBonusEnviosTableFromCache();
-          startAdminBonusEnviosPolling();
+          renderAdminCuponsTableFromCache();
+          startAdminCouponsPolling();
         } catch (error) {
-          if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeAdminHtml(
-              resolveAdminSubscriberFetchError(error, "Falha ao carregar bônus.")
-            )}</td></tr>`;
+          if (adminCuponsKindFilter === "envios") {
+            if (tbody) {
+              tbody.innerHTML = `<tr><td colspan="5" class="muted">${escapeAdminHtml(
+                resolveAdminSubscriberFetchError(error, "Falha ao carregar bônus.")
+              )}</td></tr>`;
+            }
+            if (summary) summary.textContent = "Falha ao carregar.";
           }
-          if (summary) summary.textContent = "Falha ao carregar.";
           showToast(resolveAdminSubscriberFetchError(error, "Falha ao carregar bônus."), "error", 4800);
         }
       }
@@ -28648,11 +28654,12 @@
             throw new Error(payload.error || "Não foi possível desativar o bônus.");
           }
           showToast("Bônus de envios desativado. Saldo Disponível atualizado.", "success", 4800);
+          adminCuponsKindFilter = "envios";
           await loadAdminBonusEnvios();
-          if (adminBonusEnviosActiveBucket === "active") {
-            /* stay on active to reflect removal */
-          }
           await loadAdminSubscribers();
+          if (adminCouponsActiveBucket === "active") {
+            setAdminCouponsBucket("inactive");
+          }
         } catch (error) {
           showToast(
             resolveAdminSubscriberFetchError(error, "Erro ao desativar bônus."),
@@ -28751,7 +28758,8 @@
             6200
           );
           resetAdminBonusEnviosForm();
-          adminBonusEnviosActiveBucket = "active";
+          adminCuponsKindFilter = "envios";
+          adminCouponsActiveBucket = "active";
           await loadAdminBonusEnvios();
           await loadAdminSubscribers();
         } catch (error) {
@@ -28845,22 +28853,6 @@
         document.getElementById("admin-bonus-envios-create-form")?.addEventListener("submit", (event) => {
           event.preventDefault();
           void creditAdminBonusEnvios(event);
-        });
-        document.getElementById("admin-bonus-refresh-btn")?.addEventListener("click", () => {
-          void loadAdminBonusEnvios();
-        });
-        document.getElementById("admin-bonus-bucket-active")?.addEventListener("click", () => {
-          setAdminBonusEnviosBucket("active");
-        });
-        document.getElementById("admin-bonus-bucket-inactive")?.addEventListener("click", () => {
-          setAdminBonusEnviosBucket("inactive");
-        });
-        document.getElementById("admin-bonus-envios-tbody")?.addEventListener("click", (event) => {
-          const target = event.target;
-          if (!(target instanceof HTMLElement)) return;
-          const btn = target.closest(".admin-bonus-deactivate-btn");
-          if (!btn) return;
-          void deactivateAdminBonusEnvios(btn.getAttribute("data-bonus-id") || "");
         });
         syncAdminBonusValidityUi();
       }
@@ -30891,21 +30883,33 @@
           const input = document.getElementById("admin-coupon-alias");
           if (input) input.value = generateAdminCouponAlias();
         });
-        document.getElementById("admin-coupons-refresh-btn")?.addEventListener("click", () => {
+        document.getElementById("admin-cupons-refresh-btn")?.addEventListener("click", () => {
           void loadAdminCoupons();
+          void loadAdminBonusEnvios();
         });
-        document.getElementById("admin-coupons-bucket-active")?.addEventListener("click", () => {
+        document.getElementById("admin-cupons-kind-desconto")?.addEventListener("click", () => {
+          setAdminCuponsKindFilter("desconto");
+        });
+        document.getElementById("admin-cupons-kind-envios")?.addEventListener("click", () => {
+          setAdminCuponsKindFilter("envios");
+        });
+        document.getElementById("admin-cupons-bucket-active")?.addEventListener("click", () => {
           setAdminCouponsBucket("active");
         });
-        document.getElementById("admin-coupons-bucket-inactive")?.addEventListener("click", () => {
+        document.getElementById("admin-cupons-bucket-inactive")?.addEventListener("click", () => {
           setAdminCouponsBucket("inactive");
         });
-        document.getElementById("admin-coupons-tbody")?.addEventListener("click", (event) => {
+        document.getElementById("admin-cupons-tbody")?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof HTMLElement)) return;
           const copyBtn = target.closest(".admin-coupon-copy-btn");
           if (copyBtn) {
             void copyAdminCouponAlias(copyBtn.getAttribute("data-coupon-alias") || "");
+            return;
+          }
+          const bonusBtn = target.closest(".admin-bonus-deactivate-btn");
+          if (bonusBtn) {
+            void deactivateAdminBonusEnvios(bonusBtn.getAttribute("data-bonus-id") || "");
             return;
           }
           const btn = target.closest(".admin-coupon-deactivate-btn");
