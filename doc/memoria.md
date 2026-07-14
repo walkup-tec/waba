@@ -2351,3 +2351,11 @@ Palavras-chave para buscar:
 ## 2026-07-14 — wabadisparos 502 pós-redeploy paginadevendas
 - Externo: disparos + host EP **502**; WABA/bet **200**. Classico pós-redeploy (0/1 ou backend Traefik).
 - Keywords: paginadevendas 502, 30210, redeploy
+
+## 2026-07-14 — Failed to fetch cadastro
+- Causa: register WABA await SMTP/WA; fix async + CORS + fallback PV.
+- Markers: `DEPLOY-2026-07-14-register-async-welcome` (WABA) + `DEPLOY-2026-07-14-cadastro-failed-to-fetch-fix` (paginadevendas)
+
+## 2026-07-14 — Easypanel bad-gateway JSON 404
+- Sintoma: `Cannot GET /api/errors/bad-gateway` = landing **502** pós-redeploy.
+- Heal: `scripts/heal-paginadevendas-pos-redeploy-vps.sh`
