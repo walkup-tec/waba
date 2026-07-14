@@ -82,11 +82,20 @@ class WabaDisparosCreditsService {
         }
     }
     buildApiBucket(email, apiKind, paidOrders) {
-        const contractedShipments = paidOrders
-            .filter((order) => (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind)
+        const ordersForApi = paidOrders.filter((order) => (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind);
+        const paidContracted = ordersForApi
+            .filter((order) => order.grantSource !== "admin-bonus-envios")
             .reduce((sum, order) => sum + (0, waba_disparos_order_shipments_1.resolveActiveOrderShipmentCount)(order), 0);
+        const bonusContracted = ordersForApi
+            .filter((order) => order.grantSource === "admin-bonus-envios")
+            .reduce((sum, order) => sum + (0, waba_disparos_order_shipments_1.resolveActiveOrderShipmentCount)(order), 0);
+        const contractedShipments = paidContracted + bonusContracted;
         const consumedShipments = this.usageRepository.getConsumedShipments(email, apiKind);
-        const remainingShipments = Math.max(0, contractedShipments - consumedShipments);
+        const bonusConsumedShipments = this.usageRepository.getBonusConsumedShipments(email, apiKind);
+        // Dívida antiga NÃO reduz bônus admin. Disponível = remanescente pago + bônus ainda não usado.
+        const remainingPaid = Math.max(0, paidContracted - consumedShipments);
+        const remainingBonus = Math.max(0, bonusContracted - bonusConsumedShipments);
+        const remainingShipments = remainingPaid + remainingBonus;
         const pendingBonusShipments = this.bonusService.getPendingBonusShipments(email, apiKind);
         return {
             contractedShipments,
@@ -94,6 +103,12 @@ class WabaDisparosCreditsService {
             remainingShipments,
             pendingBonusShipments,
         };
+    }
+    getPaidRemainingForApi(email, apiKind) {
+        const paidOrders = this.listPaidOrdersForEmail(email).filter((order) => (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind && order.grantSource !== "admin-bonus-envios");
+        const paidContracted = paidOrders.reduce((sum, order) => sum + (0, waba_disparos_order_shipments_1.resolveActiveOrderShipmentCount)(order), 0);
+        const consumedShipments = this.usageRepository.getConsumedShipments(email, apiKind);
+        return Math.max(0, paidContracted - consumedShipments);
     }
     getRemainingShipmentsForApi(email, apiKind) {
         return this.getCreditsSummary(email).byApi[apiKind].remainingShipments;
@@ -142,7 +157,19 @@ class WabaDisparosCreditsService {
         const normalized = normalizeEmail(email);
         if (!normalized)
             return this.getCreditsSummary("");
-        this.usageRepository.incrementConsumedShipments(normalized, delta, apiKind);
+        const amount = Math.max(0, Math.round(Number(delta)));
+        if (amount <= 0)
+            return this.getCreditsSummary(normalized);
+        const paidRemaining = this.getPaidRemainingForApi(normalized, apiKind);
+        const fromPaid = Math.min(amount, paidRemaining);
+        const fromBonus = amount - fromPaid;
+        if (fromPaid > 0) {
+            this.usageRepository.incrementConsumedShipments(normalized, fromPaid, apiKind);
+        }
+        if (fromBonus > 0) {
+            this.usageRepository.incrementConsumedShipments(normalized, fromBonus, apiKind);
+            this.usageRepository.incrementBonusConsumedShipments(normalized, fromBonus, apiKind);
+        }
         return this.getCreditsSummary(normalized);
     }
     refreshConsumedFromIntakes(email) {
@@ -157,7 +184,9 @@ class WabaDisparosCreditsService {
     }
     listPurchaseHistory(email, limit = 20) {
         const cap = Math.max(1, Math.min(50, Math.floor(limit)));
-        return this.listPaidOrdersForEmail(email).slice(0, cap).map((order) => ({
+        return this.listPaidOrdersForEmail(email)
+            .slice(0, cap)
+            .map((order) => ({
             id: order.id,
             apiKind: (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order),
             valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),

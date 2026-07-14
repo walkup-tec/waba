@@ -4,6 +4,7 @@ exports.WabaAdminBonusEnviosService = void 0;
 const node_crypto_1 = require("node:crypto");
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
+const waba_disparos_order_shipments_1 = require("../billing/waba-disparos-order-shipments");
 const waba_disparos_credits_service_1 = require("../billing/waba-disparos-credits.service");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const normalizeEmail = (value) => value.trim().toLowerCase();
@@ -36,11 +37,52 @@ const resolveValidityWindow = (mode, createdAt, customUntil) => {
     }
     return { validFrom: createdAt, validUntil: parsed.toISOString() };
 };
+const resolveApiKindLabel = (apiKind) => apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+const isBonusGrantOrder = (order) => order.product === "waba-disparos" && order.grantSource === "admin-bonus-envios";
 class WabaAdminBonusEnviosService {
     constructor(subscriberRepository = new waba_subscriber_repository_1.WabaSubscriberRepository(), orderRepository = new waba_billing_order_repository_1.WabaBillingOrderRepository(), creditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService()) {
         this.subscriberRepository = subscriberRepository;
         this.orderRepository = orderRepository;
         this.creditsService = creditsService;
+    }
+    toPublicItem(order) {
+        const apiKind = (0, waba_dispatches_api_kind_1.normalizeDispatchesApiKind)(order.apiKind) ?? "oficial";
+        const grantActive = order.grantActive !== false;
+        return {
+            id: order.id,
+            ownerEmail: normalizeEmail(order.ownerEmail),
+            customerName: String(order.customerName || "").trim() || "Assinante",
+            apiKind,
+            apiKindLabel: resolveApiKindLabel(apiKind),
+            shipmentCount: Math.max(0, Math.round(Number(order.shipmentCount ?? 0))),
+            validityMode: String(order.validityMode || (order.creditsValidUntil ? "custom" : "lifetime")),
+            creditsValidUntil: order.creditsValidUntil ? String(order.creditsValidUntil) : null,
+            grantActive,
+            validNow: (0, waba_disparos_order_shipments_1.isOrderCreditsActive)(order),
+            createdByEmail: normalizeEmail(String(order.grantCreatedByEmail || "")),
+            createdAt: String(order.createdAt || ""),
+            paidAt: String(order.paidAt || order.createdAt || ""),
+        };
+    }
+    listPublicGrants() {
+        return this.orderRepository
+            .list()
+            .filter(isBonusGrantOrder)
+            .sort((a, b) => Date.parse(String(b.createdAt || 0)) - Date.parse(String(a.createdAt || 0)))
+            .map((order) => this.toPublicItem(order));
+    }
+    deactivateGrant(grantId) {
+        const id = String(grantId ?? "").trim();
+        if (!id)
+            throw new Error("Bônus de envios inválido.");
+        const current = this.orderRepository.getById(id);
+        if (!current || !isBonusGrantOrder(current)) {
+            throw new Error("Bônus de envios não encontrado.");
+        }
+        const updated = this.orderRepository.update(id, { grantActive: false });
+        if (!updated)
+            throw new Error("Bônus de envios não encontrado.");
+        return this.toPublicItem(updated);
     }
     grant(input) {
         const createdByEmail = normalizeEmail(input.createdByEmail);
@@ -103,6 +145,7 @@ class WabaAdminBonusEnviosService {
             bonusSettlementAt: now,
             grantSource: "admin-bonus-envios",
             grantCreatedByEmail: createdByEmail,
+            grantActive: true,
             creditsValidUntil: validUntil,
             validityMode,
         };
@@ -111,15 +154,7 @@ class WabaAdminBonusEnviosService {
         const bucket = credits.byApi[apiKind];
         return {
             ok: true,
-            order: {
-                id: order.id,
-                ownerEmail,
-                apiKind,
-                shipmentCount,
-                creditsValidUntil: validUntil,
-                validityMode,
-                paidAt: now,
-            },
+            order: this.toPublicItem(order),
             credits: {
                 remainingShipments: bucket.remainingShipments,
                 contractedShipments: bucket.contractedShipments,

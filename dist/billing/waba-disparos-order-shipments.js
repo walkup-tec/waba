@@ -11,8 +11,11 @@ const resolveOrderShipmentCount = (order) => {
     return Math.max(1, Math.round(valueCents / 30));
 };
 exports.resolveOrderShipmentCount = resolveOrderShipmentCount;
-/** Pedidos de grant com validade expirada não entram no saldo Disponível. */
+/** Pedidos de grant desativados ou com validade expirada não entram no Disponível. */
 const isOrderCreditsActive = (order, nowMs = Date.now()) => {
+    if (order.grantSource === "admin-bonus-envios" && order.grantActive === false) {
+        return false;
+    }
     const until = String(order.creditsValidUntil ?? "").trim();
     if (!until)
         return true;

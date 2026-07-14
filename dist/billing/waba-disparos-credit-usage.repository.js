@@ -64,6 +64,18 @@ class WabaDisparosCreditUsageRepository {
         return (Math.max(0, Math.round(Number(entry.consumedOficial ?? 0))) +
             Math.max(0, Math.round(Number(entry.consumedAlternativa ?? 0))));
     }
+    getBonusConsumedShipments(email, apiKind) {
+        const normalized = normalizeEmail(email);
+        if (!normalized)
+            return 0;
+        const entry = readStore().entries.find((item) => item.email === normalized);
+        if (!entry)
+            return 0;
+        if (apiKind === "alternativa") {
+            return Math.max(0, Math.round(Number(entry.bonusConsumedAlternativa ?? 0)));
+        }
+        return Math.max(0, Math.round(Number(entry.bonusConsumedOficial ?? 0)));
+    }
     setConsumedByApi(email, consumedByApi) {
         const normalized = normalizeEmail(email);
         if (!normalized)
@@ -71,10 +83,13 @@ class WabaDisparosCreditUsageRepository {
         const store = readStore();
         const now = new Date().toISOString();
         const index = store.entries.findIndex((item) => item.email === normalized);
+        const current = index >= 0 ? store.entries[index] : null;
         const next = {
             email: normalized,
             consumedOficial: Math.max(0, Math.round(consumedByApi.oficial)),
             consumedAlternativa: Math.max(0, Math.round(consumedByApi.alternativa)),
+            bonusConsumedOficial: Math.max(0, Math.round(Number(current?.bonusConsumedOficial ?? 0))),
+            bonusConsumedAlternativa: Math.max(0, Math.round(Number(current?.bonusConsumedAlternativa ?? 0))),
             updatedAt: now,
         };
         if (index >= 0) {
@@ -99,6 +114,8 @@ class WabaDisparosCreditUsageRepository {
                 email: normalized,
                 consumedOficial: apiKind === "oficial" ? roundedDelta : 0,
                 consumedAlternativa: apiKind === "alternativa" ? roundedDelta : 0,
+                bonusConsumedOficial: 0,
+                bonusConsumedAlternativa: 0,
                 updatedAt: now,
             });
         }
@@ -112,11 +129,48 @@ class WabaDisparosCreditUsageRepository {
                 consumedAlternativa: apiKind === "alternativa"
                     ? Math.max(0, Math.round(Number(current.consumedAlternativa ?? 0))) + roundedDelta
                     : Math.max(0, Math.round(Number(current.consumedAlternativa ?? 0))),
+                bonusConsumedOficial: Math.max(0, Math.round(Number(current.bonusConsumedOficial ?? 0))),
+                bonusConsumedAlternativa: Math.max(0, Math.round(Number(current.bonusConsumedAlternativa ?? 0))),
                 updatedAt: now,
             };
         }
         writeStore(store);
         return this.getConsumedShipments(normalized, apiKind);
+    }
+    incrementBonusConsumedShipments(email, delta = 1, apiKind = "oficial") {
+        const normalized = normalizeEmail(email);
+        if (!normalized || !Number.isFinite(delta) || delta <= 0) {
+            return this.getBonusConsumedShipments(normalized, apiKind);
+        }
+        const store = readStore();
+        const now = new Date().toISOString();
+        const index = store.entries.findIndex((item) => item.email === normalized);
+        const roundedDelta = Math.round(delta);
+        if (index === -1) {
+            store.entries.push({
+                email: normalized,
+                consumedOficial: 0,
+                consumedAlternativa: 0,
+                bonusConsumedOficial: apiKind === "oficial" ? roundedDelta : 0,
+                bonusConsumedAlternativa: apiKind === "alternativa" ? roundedDelta : 0,
+                updatedAt: now,
+            });
+        }
+        else {
+            const current = store.entries[index];
+            store.entries[index] = {
+                ...current,
+                bonusConsumedOficial: apiKind === "oficial"
+                    ? Math.max(0, Math.round(Number(current.bonusConsumedOficial ?? 0))) + roundedDelta
+                    : Math.max(0, Math.round(Number(current.bonusConsumedOficial ?? 0))),
+                bonusConsumedAlternativa: apiKind === "alternativa"
+                    ? Math.max(0, Math.round(Number(current.bonusConsumedAlternativa ?? 0))) + roundedDelta
+                    : Math.max(0, Math.round(Number(current.bonusConsumedAlternativa ?? 0))),
+                updatedAt: now,
+            };
+        }
+        writeStore(store);
+        return this.getBonusConsumedShipments(normalized, apiKind);
     }
 }
 exports.WabaDisparosCreditUsageRepository = WabaDisparosCreditUsageRepository;

@@ -304,6 +304,23 @@ export const registerWabaAdminRoutes = (app: Express) => {
     }
   });
 
+  app.get("/admin/bonus-envios", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    return res.status(200).json({ items: adminBonusEnviosService.listPublicGrants() });
+  });
+
+  app.patch("/admin/bonus-envios/:grantId/deactivate", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      const item = adminBonusEnviosService.deactivateGrant(String(req.params.grantId ?? ""));
+      return res.status(200).json({ ok: true, item });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível desativar o bônus.",
+      });
+    }
+  });
+
   app.get("/admin/instances/lookup", async (req, res) => {
     if (!rejectNonMaster(req, res)) return;
     try {

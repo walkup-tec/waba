@@ -9,8 +9,11 @@ export const resolveOrderShipmentCount = (order: WabaBillingOrder): number => {
   return Math.max(1, Math.round(valueCents / 30));
 };
 
-/** Pedidos de grant com validade expirada não entram no saldo Disponível. */
+/** Pedidos de grant desativados ou com validade expirada não entram no Disponível. */
 export const isOrderCreditsActive = (order: WabaBillingOrder, nowMs = Date.now()): boolean => {
+  if (order.grantSource === "admin-bonus-envios" && order.grantActive === false) {
+    return false;
+  }
   const until = String(order.creditsValidUntil ?? "").trim();
   if (!until) return true;
   const untilMs = Date.parse(until);

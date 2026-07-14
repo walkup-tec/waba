@@ -20,6 +20,20 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-14 — Deploy lista + saldo inteiro Bônus Envios
+- Marker: `DEPLOY-2026-07-14-bonus-envios-lista-saldo-inteiro`
+- Lista Ativos/Inativos + grant sem herdar consumo antigo
+- Ver `doc/LOG-2026-07-14__145300__deploy-bonus-envios-lista-saldo.md`
+
+## 2026-07-14 — Bônus Envios sem dívida de consumo
+- Disponível = pago remanescente + bônus admin intacto; uso antigo não reduz o grant
+- Ver `doc/LOG-2026-07-14__142900__bonus-envios-nao-herda-consumo.md`
+
+## 2026-07-14 — Lista Bônus Envios Ativos/Inativos
+- Tabela abaixo do form (mesmo padrão cupons): Ativos/Inativos por validade + desativação manual
+- `GET/PATCH /admin/bonus-envios`; `grantActive` corta Disponível
+- Ver `doc/LOG-2026-07-14__140840__bonus-envios-lista-ativos-inativos.md`
+
 ## 2026-07-14 — Deploy prod + V02 Bônus Envios
 - Marker: `DEPLOY-2026-07-14-bonus-envios-admin`
 - Feature admin Assinantes: creditar envios intransferíveis no Disponíveis

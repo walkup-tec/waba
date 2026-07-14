@@ -38,6 +38,8 @@ export type WabaBillingOrder = {
   /** Origem de crédito administrativo (Bônus Envios). Isolado por ownerEmail. */
   grantSource?: "admin-bonus-envios";
   grantCreatedByEmail?: string;
+  /** false = desativado manualmente (como cupom inactive). Default true. */
+  grantActive?: boolean;
   /** Quando preenchido, envios deste pedido deixam de contar no Disponível após a data. */
   creditsValidUntil?: string | null;
   validityMode?: "12h" | "24h" | "custom" | "lifetime";

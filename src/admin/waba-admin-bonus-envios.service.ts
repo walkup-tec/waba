@@ -5,6 +5,7 @@ import {
 } from "../billing/waba-billing-order.repository";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 import { normalizeDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
+import { isOrderCreditsActive } from "../billing/waba-disparos-order-shipments";
 import { WabaDisparosCreditsService } from "../billing/waba-disparos-credits.service";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 
@@ -20,17 +21,25 @@ export type GrantBonusEnviosInput = {
   createdByEmail: string;
 };
 
+export type PublicBonusEnviosItem = {
+  id: string;
+  ownerEmail: string;
+  customerName: string;
+  apiKind: WabaDispatchesApiKind;
+  apiKindLabel: string;
+  shipmentCount: number;
+  validityMode: BonusEnviosValidityMode | string;
+  creditsValidUntil: string | null;
+  grantActive: boolean;
+  validNow: boolean;
+  createdByEmail: string;
+  createdAt: string;
+  paidAt: string;
+};
+
 export type GrantBonusEnviosResult = {
   ok: true;
-  order: {
-    id: string;
-    ownerEmail: string;
-    apiKind: WabaDispatchesApiKind;
-    shipmentCount: number;
-    creditsValidUntil: string | null;
-    validityMode: BonusEnviosValidityMode;
-    paidAt: string;
-  };
+  order: PublicBonusEnviosItem;
   credits: {
     remainingShipments: number;
     contractedShipments: number;
@@ -80,12 +89,58 @@ const resolveValidityWindow = (
   return { validFrom: createdAt, validUntil: parsed.toISOString() };
 };
 
+const resolveApiKindLabel = (apiKind: WabaDispatchesApiKind): string =>
+  apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+
+const isBonusGrantOrder = (order: WabaBillingOrder): boolean =>
+  order.product === "waba-disparos" && order.grantSource === "admin-bonus-envios";
+
 export class WabaAdminBonusEnviosService {
   constructor(
     private readonly subscriberRepository = new WabaSubscriberRepository(),
     private readonly orderRepository = new WabaBillingOrderRepository(),
     private readonly creditsService = new WabaDisparosCreditsService(),
   ) {}
+
+  private toPublicItem(order: WabaBillingOrder): PublicBonusEnviosItem {
+    const apiKind = normalizeDispatchesApiKind(order.apiKind) ?? "oficial";
+    const grantActive = order.grantActive !== false;
+    return {
+      id: order.id,
+      ownerEmail: normalizeEmail(order.ownerEmail),
+      customerName: String(order.customerName || "").trim() || "Assinante",
+      apiKind,
+      apiKindLabel: resolveApiKindLabel(apiKind),
+      shipmentCount: Math.max(0, Math.round(Number(order.shipmentCount ?? 0))),
+      validityMode: String(order.validityMode || (order.creditsValidUntil ? "custom" : "lifetime")),
+      creditsValidUntil: order.creditsValidUntil ? String(order.creditsValidUntil) : null,
+      grantActive,
+      validNow: isOrderCreditsActive(order),
+      createdByEmail: normalizeEmail(String(order.grantCreatedByEmail || "")),
+      createdAt: String(order.createdAt || ""),
+      paidAt: String(order.paidAt || order.createdAt || ""),
+    };
+  }
+
+  listPublicGrants(): PublicBonusEnviosItem[] {
+    return this.orderRepository
+      .list()
+      .filter(isBonusGrantOrder)
+      .sort((a, b) => Date.parse(String(b.createdAt || 0)) - Date.parse(String(a.createdAt || 0)))
+      .map((order) => this.toPublicItem(order));
+  }
+
+  deactivateGrant(grantId: string): PublicBonusEnviosItem {
+    const id = String(grantId ?? "").trim();
+    if (!id) throw new Error("Bônus de envios inválido.");
+    const current = this.orderRepository.getById(id);
+    if (!current || !isBonusGrantOrder(current)) {
+      throw new Error("Bônus de envios não encontrado.");
+    }
+    const updated = this.orderRepository.update(id, { grantActive: false });
+    if (!updated) throw new Error("Bônus de envios não encontrado.");
+    return this.toPublicItem(updated);
+  }
 
   grant(input: GrantBonusEnviosInput): GrantBonusEnviosResult {
     const createdByEmail = normalizeEmail(input.createdByEmail);
@@ -157,6 +212,7 @@ export class WabaAdminBonusEnviosService {
       bonusSettlementAt: now,
       grantSource: "admin-bonus-envios",
       grantCreatedByEmail: createdByEmail,
+      grantActive: true,
       creditsValidUntil: validUntil,
       validityMode,
     };
@@ -168,15 +224,7 @@ export class WabaAdminBonusEnviosService {
 
     return {
       ok: true,
-      order: {
-        id: order.id,
-        ownerEmail,
-        apiKind,
-        shipmentCount,
-        creditsValidUntil: validUntil,
-        validityMode,
-        paidAt: now,
-      },
+      order: this.toPublicItem(order),
       credits: {
         remainingShipments: bucket.remainingShipments,
         contractedShipments: bucket.contractedShipments,
