@@ -2359,3 +2359,7 @@ Palavras-chave para buscar:
 ## 2026-07-14 — Easypanel bad-gateway JSON 404
 - Sintoma: `Cannot GET /api/errors/bad-gateway` = landing **502** pós-redeploy.
 - Heal: `scripts/heal-paginadevendas-pos-redeploy-vps.sh`
+
+## 2026-07-14 — Heal permanente paginadevendas
+- Watch+timer `waba-paginadevendas-heal-*` — impede 502/bad-gateway pós-redeploy.
+- Install: `heal-paginadevendas-pos-redeploy-vps.sh install` (VPS uma vez).

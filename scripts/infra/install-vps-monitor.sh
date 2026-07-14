@@ -19,6 +19,7 @@ AUTOHEAL_TIMER="waba-traefik-autoheal.timer"
 ENTRYPOINT_GUARD_SCRIPT="${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh"
 WATCHDOG_443_SCRIPT="${INSTALL_DIR}/traefik-443-watchdog-vps.sh"
 LOGIN_HEAL_SCRIPT="${INSTALL_DIR}/heal-waba-login-vps.sh"
+PV_HEAL_SCRIPT="${INSTALL_DIR}/heal-paginadevendas-pos-redeploy-vps.sh"
 
 script_dir() {
   dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
@@ -69,6 +70,16 @@ cmd_install() {
     curl -fsSL "${REPO_SCRIPTS}/heal-waba-login-vps.sh" -o "$LOGIN_HEAL_SCRIPT"
     sed -i 's/\r$//' "$LOGIN_HEAL_SCRIPT" 2>/dev/null || true
     chmod +x "$LOGIN_HEAL_SCRIPT"
+  fi
+  # Paginadevendas heal (:30210) — evita 502 / bad-gateway UI pós-redeploy landing
+  if [[ -f "$(script_dir)/../heal-paginadevendas-pos-redeploy-vps.sh" ]]; then
+    cp "$(script_dir)/../heal-paginadevendas-pos-redeploy-vps.sh" "$PV_HEAL_SCRIPT"
+    sed -i 's/\r$//' "$PV_HEAL_SCRIPT" 2>/dev/null || true
+    chmod +x "$PV_HEAL_SCRIPT"
+  else
+    curl -fsSL "${REPO_SCRIPTS}/heal-paginadevendas-pos-redeploy-vps.sh" -o "$PV_HEAL_SCRIPT"
+    sed -i 's/\r$//' "$PV_HEAL_SCRIPT" 2>/dev/null || true
+    chmod +x "$PV_HEAL_SCRIPT"
   fi
   ensure_traefik_permanent_all
 
@@ -167,8 +178,11 @@ EOF
   # Heal login WABA (:30180 + backends) — evita «Não foi possível entrar.» pós-redeploy
   bash "$LOGIN_HEAL_SCRIPT" install || true
 
-  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer, waba-traefik-443-watchdog.timer, waba-login-heal.timer"
-  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log /var/log/waba-traefik-443-watchdog.log /var/log/waba-login-heal.log"
+  # Heal paginadevendas (:30210) — evita 502 / Cannot GET /api/errors/bad-gateway
+  bash "$PV_HEAL_SCRIPT" install || true
+
+  echo "Instalado: ${TIMER}, ${CPU_COLLECTOR_TIMER}, ${AUTOHEAL_TIMER}, waba-traefik-entrypoint-guard.timer, waba-traefik-443-watchdog.timer, waba-login-heal.timer, waba-paginadevendas-heal.timer"
+  echo "Logs: ${AUDIT_LOG} ${CPU_LOG} /var/log/waba-traefik-autoheal.log /var/log/waba-traefik-entrypoint-guard.log /var/log/waba-traefik-443-watchdog.log /var/log/waba-login-heal.log /var/log/heal-paginadevendas-pos-redeploy.log"
   bash "$INSTALL_DIR/vps-health-audit.sh" || true
 }
 
@@ -189,6 +203,10 @@ cmd_status() {
   systemctl status waba-login-heal.timer --no-pager 2>/dev/null || echo "(timer login heal não instalado)"
   systemctl status waba-login-heal-watch.service --no-pager 2>/dev/null || echo "(watch login heal não instalado)"
   bash "${INSTALL_DIR}/heal-waba-login-vps.sh" status 2>/dev/null || true
+  echo "--- waba paginadevendas heal (timer + watch) ---"
+  systemctl status waba-paginadevendas-heal.timer --no-pager 2>/dev/null || echo "(timer pv heal não instalado)"
+  systemctl status waba-paginadevendas-heal-watch.service --no-pager 2>/dev/null || echo "(watch pv heal não instalado)"
+  bash "${INSTALL_DIR}/heal-paginadevendas-pos-redeploy-vps.sh" status 2>/dev/null || true
   echo "--- traefik entrypoint guard ---"
   systemctl status waba-traefik-entrypoint-guard.timer --no-pager 2>/dev/null || echo "(timer entrypoint guard não instalado)"
   bash "${INSTALL_DIR}/traefik-entrypoint-guard-vps.sh" status 2>/dev/null || true
@@ -205,6 +223,7 @@ cmd_run_once() {
   bash "${AUTOHEAL_SCRIPT}" heal 2>/dev/null || true
   bash "${ENTRYPOINT_GUARD_SCRIPT}" run 2>/dev/null || true
   bash "${LOGIN_HEAL_SCRIPT}" run 2>/dev/null || true
+  bash "${PV_HEAL_SCRIPT}" run 2>/dev/null || true
 }
 
 case "${1:-}" in
