@@ -35,6 +35,12 @@ export type WabaBillingOrder = {
   bonusShipmentsApplied?: number;
   /** Marca que o saldo bonificado pendente já foi avaliado neste pedido. */
   bonusSettlementAt?: string;
+  /** Origem de crédito administrativo (Bônus Envios). Isolado por ownerEmail. */
+  grantSource?: "admin-bonus-envios";
+  grantCreatedByEmail?: string;
+  /** Quando preenchido, envios deste pedido deixam de contar no Disponível após a data. */
+  creditsValidUntil?: string | null;
+  validityMode?: "12h" | "24h" | "custom" | "lifetime";
 };
 
 const ORDERS_FILE = resolveDataFile("waba-billing-orders.json");

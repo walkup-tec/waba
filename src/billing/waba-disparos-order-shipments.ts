@@ -8,3 +8,20 @@ export const resolveOrderShipmentCount = (order: WabaBillingOrder): number => {
   if (valueCents <= 0) return 0;
   return Math.max(1, Math.round(valueCents / 30));
 };
+
+/** Pedidos de grant com validade expirada não entram no saldo Disponível. */
+export const isOrderCreditsActive = (order: WabaBillingOrder, nowMs = Date.now()): boolean => {
+  const until = String(order.creditsValidUntil ?? "").trim();
+  if (!until) return true;
+  const untilMs = Date.parse(until);
+  if (!Number.isFinite(untilMs)) return true;
+  return nowMs <= untilMs;
+};
+
+export const resolveActiveOrderShipmentCount = (
+  order: WabaBillingOrder,
+  nowMs = Date.now(),
+): number => {
+  if (!isOrderCreditsActive(order, nowMs)) return 0;
+  return resolveOrderShipmentCount(order);
+};

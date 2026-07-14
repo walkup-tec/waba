@@ -30,11 +30,13 @@ const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
 const system_connection_log_service_1 = require("../monitoring/system-connection-log.service");
 const system_connection_log_types_1 = require("../monitoring/system-connection-log.types");
 const waba_coupon_service_1 = require("../billing/waba-coupon.service");
+const waba_admin_bonus_envios_service_1 = require("./waba-admin-bonus-envios.service");
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 const adminSubscribersService = new waba_admin_subscribers_service_1.WabaAdminSubscribersService();
 const adminSubscribersCreateService = new waba_admin_subscribers_create_service_1.WabaAdminSubscribersCreateService();
 const adminSubscriberPurgeService = new waba_admin_subscriber_purge_service_1.WabaAdminSubscriberPurgeService();
 const couponService = new waba_coupon_service_1.WabaCouponService();
+const adminBonusEnviosService = new waba_admin_bonus_envios_service_1.WabaAdminBonusEnviosService();
 const adminSubscriberPromoteService = new waba_admin_subscriber_promote_service_1.WabaAdminSubscriberPromoteService();
 const adminMasterPromoteService = new waba_admin_master_promote_service_1.WabaAdminMasterPromoteService();
 const adminUsersService = new waba_admin_users_service_1.WabaAdminUsersService();
@@ -260,6 +262,30 @@ const registerWabaAdminRoutes = (app) => {
         catch (error) {
             return res.status(400).json({
                 error: error instanceof Error ? error.message : "Não foi possível desativar o cupom.",
+            });
+        }
+    });
+    app.post("/admin/bonus-envios", (req, res) => {
+        const auth = rejectNonMaster(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = req.body;
+            const validityMode = String(body.validityMode ?? "").trim();
+            const result = adminBonusEnviosService.grant({
+                subscriberId: body.subscriberId !== undefined ? String(body.subscriberId) : undefined,
+                email: body.email !== undefined ? String(body.email) : undefined,
+                shipmentCount: Number(body.shipmentCount ?? body.quantity ?? 0),
+                apiKind: String(body.apiKind ?? ""),
+                validityMode,
+                validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
+                createdByEmail: auth.email,
+            });
+            return res.status(201).json(result);
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível creditar os envios.",
             });
         }
     });

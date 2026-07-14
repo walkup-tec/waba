@@ -7820,13 +7820,81 @@
         }
       }
 
-      #admin-coupons-create-form .admin-coupon-until-field[hidden] {
+      #admin-coupons-create-form .admin-coupon-until-field[hidden],
+      #admin-bonus-envios-create-form .admin-bonus-until-field[hidden] {
         display: none;
       }
 
-      #admin-coupons-create-form .aquecedor-field label {
+      #admin-coupons-create-form .aquecedor-field label,
+      #admin-bonus-envios-create-form .aquecedor-field label {
         display: block;
         margin-bottom: 6px;
+      }
+
+      #admin-bonus-envios-create-form .admin-users-form-grid {
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1.05fr);
+        align-items: end;
+      }
+
+      @media (max-width: 1280px) {
+        #admin-bonus-envios-create-form .admin-users-form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        #admin-bonus-envios-create-form .admin-users-form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .admin-bonus-subscriber-combobox {
+        position: relative;
+      }
+
+      .admin-bonus-subscriber-results {
+        position: absolute;
+        z-index: 40;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        max-height: 240px;
+        overflow: auto;
+        background: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 10px;
+        box-shadow: 0 12px 28px rgba(2, 6, 23, 0.45);
+      }
+
+      .admin-bonus-subscriber-option {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        border: 0;
+        background: transparent;
+        color: #e2e8f0;
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .admin-bonus-subscriber-option:hover,
+      .admin-bonus-subscriber-option.is-active {
+        background: rgba(34, 197, 94, 0.12);
+      }
+
+      .admin-bonus-subscriber-option small {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: 0.78rem;
+      }
+
+      .admin-bonus-envios-hint {
+        margin: 0 0 12px;
+        font-size: 0.82rem;
+        color: #94a3b8;
+        line-height: 1.45;
       }
 
       .aquecedor-field input[type="datetime-local"],
@@ -18369,6 +18437,75 @@
                 </div>
 
                 <div class="admin-assinantes-block">
+                  <h3 class="admin-assinantes-block-title">Bônus Envios</h3>
+                  <p class="admin-bonus-envios-hint">
+                    Credita envios intransferíveis para o assinante selecionado. O saldo aparece em
+                    <strong>Disponíveis</strong> do plano escolhido (API Oficial ou API Alternativa).
+                  </p>
+                  <form id="admin-bonus-envios-create-form" class="admin-users-form" autocomplete="off" novalidate>
+                    <div class="admin-users-form-grid">
+                      <div class="aquecedor-field admin-bonus-subscriber-field">
+                        <label for="admin-bonus-subscriber-search">Assinante</label>
+                        <div class="admin-bonus-subscriber-combobox">
+                          <input
+                            id="admin-bonus-subscriber-search"
+                            type="text"
+                            placeholder="Buscar por nome, e-mail ou WhatsApp"
+                            autocomplete="off"
+                            aria-autocomplete="list"
+                            aria-controls="admin-bonus-subscriber-results"
+                          />
+                          <input id="admin-bonus-subscriber-id" type="hidden" value="" />
+                          <input id="admin-bonus-subscriber-email" type="hidden" value="" />
+                          <div
+                            id="admin-bonus-subscriber-results"
+                            class="admin-bonus-subscriber-results"
+                            role="listbox"
+                            hidden
+                          ></div>
+                        </div>
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-bonus-shipment-count">Quantidade de envios</label>
+                        <input
+                          id="admin-bonus-shipment-count"
+                          type="text"
+                          inputmode="numeric"
+                          placeholder="Ex.: 500"
+                          required
+                          autocomplete="off"
+                        />
+                      </div>
+                      <div class="aquecedor-field">
+                        <label for="admin-bonus-api-kind">Tipo de plano</label>
+                        <select id="admin-bonus-api-kind" required>
+                          <option value="oficial" selected>API OFICIAL</option>
+                          <option value="alternativa">API ALTERNATIVA</option>
+                        </select>
+                      </div>
+                      <div class="aquecedor-field admin-bonus-validity-field">
+                        <label for="admin-bonus-validity-mode">Validade</label>
+                        <select id="admin-bonus-validity-mode" required>
+                          <option value="12h">12 horas</option>
+                          <option value="24h" selected>24 horas</option>
+                          <option value="custom">Personalizada</option>
+                          <option value="lifetime">Vitalícia</option>
+                        </select>
+                      </div>
+                      <div id="admin-bonus-validity-custom-wrap" class="aquecedor-field admin-bonus-until-field" hidden>
+                        <label for="admin-bonus-valid-until">Válido até</label>
+                        <input id="admin-bonus-valid-until" type="datetime-local" step="60" />
+                      </div>
+                    </div>
+                    <div class="admin-users-form-footer">
+                      <button id="admin-bonus-credit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
+                        Creditar Envios
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="admin-assinantes-block">
                   <h3 class="admin-assinantes-block-title">Cupons de desconto</h3>
                   <form id="admin-coupons-create-form" class="admin-users-form" autocomplete="off" novalidate>
                     <div class="admin-users-form-grid">
@@ -24468,6 +24605,9 @@
         if (!tbody) return;
 
         const rows = Array.isArray(items) ? items : [];
+        adminBonusSubscribersCache = rows.slice();
+        refreshAdminBonusSubscriberResults();
+
         if (summary) {
           summary.textContent =
             rows.length === 1
@@ -28092,6 +28232,349 @@
         }
       }
 
+      let adminBonusSubscribersCache = [];
+      let adminBonusSubscriberActiveIndex = -1;
+
+      function normalizeAdminBonusSearchText(value) {
+        return String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim();
+      }
+
+      function digitsOnlyAdminBonus(value) {
+        return String(value || "").replace(/\D/g, "");
+      }
+
+      function formatAdminBonusSubscriberLabel(item) {
+        const name = String(item?.fullName || "").trim() || "Assinante";
+        const email = String(item?.email || "").trim();
+        const phone =
+          String(item?.whatsappFormatted || item?.whatsapp || item?.phone || "").trim() || "";
+        return phone ? `${name} · ${email} · ${phone}` : `${name} · ${email}`;
+      }
+
+      function filterAdminBonusSubscribers(query) {
+        const rows = Array.isArray(adminBonusSubscribersCache) ? adminBonusSubscribersCache : [];
+        const q = normalizeAdminBonusSearchText(query);
+        const qDigits = digitsOnlyAdminBonus(query);
+        if (!q && !qDigits) return rows.slice(0, 12);
+        return rows
+          .filter((item) => {
+            const name = normalizeAdminBonusSearchText(item?.fullName);
+            const email = normalizeAdminBonusSearchText(item?.email);
+            const whatsappDigits = digitsOnlyAdminBonus(item?.whatsapp || item?.phone || "");
+            const whatsappText = normalizeAdminBonusSearchText(
+              item?.whatsappFormatted || item?.whatsapp || item?.phone || ""
+            );
+            if (q && (name.includes(q) || email.includes(q) || whatsappText.includes(q))) return true;
+            if (qDigits && whatsappDigits.includes(qDigits)) return true;
+            return false;
+          })
+          .slice(0, 12);
+      }
+
+      function hideAdminBonusSubscriberResults() {
+        const panel = document.getElementById("admin-bonus-subscriber-results");
+        if (!panel) return;
+        panel.hidden = true;
+        panel.innerHTML = "";
+        adminBonusSubscriberActiveIndex = -1;
+      }
+
+      function selectAdminBonusSubscriber(item) {
+        const search = document.getElementById("admin-bonus-subscriber-search");
+        const idInput = document.getElementById("admin-bonus-subscriber-id");
+        const emailInput = document.getElementById("admin-bonus-subscriber-email");
+        if (!item) {
+          if (idInput) idInput.value = "";
+          if (emailInput) emailInput.value = "";
+          hideAdminBonusSubscriberResults();
+          return;
+        }
+        if (search) search.value = formatAdminBonusSubscriberLabel(item);
+        if (idInput) idInput.value = String(item.id || "");
+        if (emailInput) emailInput.value = String(item.email || "").trim().toLowerCase();
+        hideAdminBonusSubscriberResults();
+      }
+
+      function clearAdminBonusSubscriberSelectionIfStale() {
+        const search = document.getElementById("admin-bonus-subscriber-search");
+        const idInput = document.getElementById("admin-bonus-subscriber-id");
+        const emailInput = document.getElementById("admin-bonus-subscriber-email");
+        const selectedId = String(idInput?.value || "").trim();
+        if (!selectedId) return;
+        const current = adminBonusSubscribersCache.find((row) => String(row?.id || "") === selectedId);
+        if (!current) {
+          if (idInput) idInput.value = "";
+          if (emailInput) emailInput.value = "";
+          return;
+        }
+        const expected = formatAdminBonusSubscriberLabel(current);
+        if (search && String(search.value || "").trim() !== expected) {
+          if (idInput) idInput.value = "";
+          if (emailInput) emailInput.value = "";
+        }
+      }
+
+      function refreshAdminBonusSubscriberResults() {
+        const panel = document.getElementById("admin-bonus-subscriber-results");
+        const search = document.getElementById("admin-bonus-subscriber-search");
+        if (!panel || !search) return;
+        if (document.activeElement !== search) {
+          hideAdminBonusSubscriberResults();
+          return;
+        }
+        const matches = filterAdminBonusSubscribers(search.value);
+        if (!matches.length) {
+          panel.hidden = false;
+          panel.innerHTML =
+            '<div class="admin-bonus-subscriber-option" style="cursor:default"><small>Nenhum assinante encontrado</small></div>';
+          adminBonusSubscriberActiveIndex = -1;
+          return;
+        }
+        panel.hidden = false;
+        panel.innerHTML = matches
+          .map((item, index) => {
+            const label = escapeAdminHtml(String(item?.fullName || "Assinante"));
+            const email = escapeAdminHtml(String(item?.email || ""));
+            const phone = escapeAdminHtml(
+              String(item?.whatsappFormatted || item?.whatsapp || item?.phone || "—")
+            );
+            const activeClass = index === adminBonusSubscriberActiveIndex ? " is-active" : "";
+            return `<button type="button" class="admin-bonus-subscriber-option${activeClass}" role="option" data-subscriber-id="${escapeAdminHtml(
+              String(item?.id || "")
+            )}" data-option-index="${index}">
+              ${label}
+              <small>${email} · ${phone}</small>
+            </button>`;
+          })
+          .join("");
+      }
+
+      function syncAdminBonusValidityUi() {
+        const mode = String(document.getElementById("admin-bonus-validity-mode")?.value || "");
+        const wrap = document.getElementById("admin-bonus-validity-custom-wrap");
+        const untilInput = document.getElementById("admin-bonus-valid-until");
+        if (!wrap) return;
+        const showCustom = mode === "custom";
+        wrap.hidden = !showCustom;
+        if (untilInput) {
+          untilInput.required = showCustom;
+          if (showCustom) {
+            untilInput.min = formatAdminCouponDatetimeLocalMin(new Date());
+          } else {
+            untilInput.removeAttribute("min");
+            untilInput.value = "";
+          }
+        }
+      }
+
+      function resetAdminBonusEnviosForm() {
+        const qty = document.getElementById("admin-bonus-shipment-count");
+        const apiKind = document.getElementById("admin-bonus-api-kind");
+        const mode = document.getElementById("admin-bonus-validity-mode");
+        const until = document.getElementById("admin-bonus-valid-until");
+        const search = document.getElementById("admin-bonus-subscriber-search");
+        const idInput = document.getElementById("admin-bonus-subscriber-id");
+        const emailInput = document.getElementById("admin-bonus-subscriber-email");
+        if (qty) qty.value = "";
+        if (apiKind) apiKind.value = "oficial";
+        if (mode) mode.value = "24h";
+        if (until) until.value = "";
+        if (search) search.value = "";
+        if (idInput) idInput.value = "";
+        if (emailInput) emailInput.value = "";
+        hideAdminBonusSubscriberResults();
+        syncAdminBonusValidityUi();
+      }
+
+      async function creditAdminBonusEnvios(event) {
+        event?.preventDefault();
+        if (!hasMasterAccess()) {
+          showToast("Área restrita ao usuário master.", "warning");
+          return;
+        }
+
+        clearAdminBonusSubscriberSelectionIfStale();
+        const subscriberId = String(document.getElementById("admin-bonus-subscriber-id")?.value || "").trim();
+        const email = String(document.getElementById("admin-bonus-subscriber-email")?.value || "")
+          .trim()
+          .toLowerCase();
+        const shipmentCount = parseDisparosQtyInputValue(
+          document.getElementById("admin-bonus-shipment-count")?.value || ""
+        );
+        const apiKind = String(document.getElementById("admin-bonus-api-kind")?.value || "oficial").trim();
+        const validityMode = String(
+          document.getElementById("admin-bonus-validity-mode")?.value || "24h"
+        );
+        const validUntil = String(document.getElementById("admin-bonus-valid-until")?.value || "").trim();
+        const submitBtn = document.getElementById("admin-bonus-credit-btn");
+
+        if (!subscriberId && !email) {
+          showToast("Selecione um assinante na lista de busca.", "warning");
+          document.getElementById("admin-bonus-subscriber-search")?.focus();
+          return;
+        }
+        if (!Number.isFinite(shipmentCount) || shipmentCount <= 0) {
+          showToast("Informe a quantidade de envios a creditar.", "warning");
+          return;
+        }
+        if (apiKind !== "oficial" && apiKind !== "alternativa") {
+          showToast("Selecione o tipo de plano.", "warning");
+          return;
+        }
+
+        let validUntilIso;
+        if (validityMode === "custom") {
+          if (!validUntil) {
+            showToast("Informe a validade personalizada (data e hora).", "warning");
+            return;
+          }
+          try {
+            validUntilIso = resolveAdminCouponCustomUntilIso(validUntil);
+            if (!validUntilIso) {
+              showToast("Informe a validade personalizada (data e hora).", "warning");
+              return;
+            }
+          } catch (error) {
+            showToast(error?.message || "Validade personalizada inválida.", "warning", 4800);
+            return;
+          }
+        }
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Creditando…";
+        }
+
+        try {
+          const response = await fetchWithTimeout(
+            "/admin/bonus-envios",
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                subscriberId: subscriberId || undefined,
+                email: email || undefined,
+                shipmentCount,
+                apiKind,
+                validityMode,
+                validUntil: validUntilIso,
+              }),
+            },
+            20000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível creditar os envios.");
+          }
+          const planLabel = apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+          const available = Number(payload?.credits?.remainingShipments || 0);
+          showToast(
+            `${shipmentCount.toLocaleString("pt-BR")} envio(s) creditados em ${planLabel}. Disponível agora: ${available.toLocaleString("pt-BR")}.`,
+            "success",
+            6200
+          );
+          resetAdminBonusEnviosForm();
+          await loadAdminSubscribers();
+        } catch (error) {
+          showToast(resolveAdminSubscriberFetchError(error, "Erro ao creditar envios."), "error", 5200);
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Creditar Envios";
+          }
+        }
+      }
+
+      function bindAdminBonusEnviosUi() {
+        const search = document.getElementById("admin-bonus-subscriber-search");
+        const panel = document.getElementById("admin-bonus-subscriber-results");
+        const qty = document.getElementById("admin-bonus-shipment-count");
+
+        if (search && search.dataset.bonusBound !== "1") {
+          search.dataset.bonusBound = "1";
+          search.addEventListener("focus", () => {
+            refreshAdminBonusSubscriberResults();
+          });
+          search.addEventListener("input", () => {
+            clearAdminBonusSubscriberSelectionIfStale();
+            adminBonusSubscriberActiveIndex = 0;
+            refreshAdminBonusSubscriberResults();
+          });
+          search.addEventListener("keydown", (event) => {
+            if (!panel || panel.hidden) return;
+            const options = Array.from(panel.querySelectorAll("[data-subscriber-id]"));
+            if (!options.length) return;
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              adminBonusSubscriberActiveIndex = Math.min(
+                options.length - 1,
+                Math.max(0, adminBonusSubscriberActiveIndex) + 1
+              );
+              refreshAdminBonusSubscriberResults();
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              adminBonusSubscriberActiveIndex = Math.max(0, adminBonusSubscriberActiveIndex - 1);
+              refreshAdminBonusSubscriberResults();
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              const idx = adminBonusSubscriberActiveIndex >= 0 ? adminBonusSubscriberActiveIndex : 0;
+              const id = options[idx]?.getAttribute("data-subscriber-id") || "";
+              const item = adminBonusSubscribersCache.find((row) => String(row?.id || "") === id);
+              if (item) selectAdminBonusSubscriber(item);
+            } else if (event.key === "Escape") {
+              hideAdminBonusSubscriberResults();
+            }
+          });
+        }
+
+        if (panel && panel.dataset.bonusBound !== "1") {
+          panel.dataset.bonusBound = "1";
+          panel.addEventListener("mousedown", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const btn = target.closest("[data-subscriber-id]");
+            if (!btn) return;
+            event.preventDefault();
+            const id = btn.getAttribute("data-subscriber-id") || "";
+            const item = adminBonusSubscribersCache.find((row) => String(row?.id || "") === id);
+            if (item) selectAdminBonusSubscriber(item);
+          });
+        }
+
+        document.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof Node)) return;
+          const wrap = document.querySelector(".admin-bonus-subscriber-combobox");
+          if (wrap && wrap.contains(target)) return;
+          hideAdminBonusSubscriberResults();
+        });
+
+        if (qty && qty.dataset.bonusBound !== "1") {
+          qty.dataset.bonusBound = "1";
+          qty.addEventListener("input", () => {
+            const formatted = formatDisparosQtyInputValue(qty.value);
+            if (qty.value !== formatted) qty.value = formatted;
+          });
+        }
+
+        document.getElementById("admin-bonus-validity-mode")?.addEventListener("change", () => {
+          syncAdminBonusValidityUi();
+        });
+        document.getElementById("admin-bonus-credit-btn")?.addEventListener("click", () => {
+          void creditAdminBonusEnvios({ preventDefault: () => {} });
+        });
+        document.getElementById("admin-bonus-envios-create-form")?.addEventListener("submit", (event) => {
+          event.preventDefault();
+          void creditAdminBonusEnvios(event);
+        });
+        syncAdminBonusValidityUi();
+      }
+
       let adminChamadosCacheOpen = [];
       let adminChamadosCacheClosed = [];
       let adminChamadosActiveBucket = "open";
@@ -30095,6 +30578,7 @@
 
       function initAdminSubscribersUi() {
         syncAdminCouponValidityUi();
+        bindAdminBonusEnviosUi();
         bindAdminSubscriberMaskedInputs();
         bindAdminSubscriberCreateFormFeedback();
         resetAdminSubscriberCreateFormState();

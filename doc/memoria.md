@@ -20,6 +20,20 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-14 — Deploy prod + V02 Bônus Envios
+- Marker: `DEPLOY-2026-07-14-bonus-envios-admin`
+- Feature admin Assinantes: creditar envios intransferíveis no Disponíveis
+- Produção: push `master` + Redeploy Easypanel `waba_disparador`; validar `/health`
+- V02 local: branch `v02` alinhada + `build:h` + `dev:v02`
+- Keywords: bonus-envios, deploy-marker, v02
+
+## 2026-07-14 — Bônus Envios (admin)
+- Bloco **Bônus Envios** acima de Cupons (Assinantes): busca assinante + qty + plano + validade → credita no **Disponíveis**
+- `POST /admin/bonus-envios` → pedido pago isolado por `ownerEmail` (`grantSource: admin-bonus-envios`)
+- Validade: mesma dos cupons; `creditsValidUntil` corta saldo ao expirar
+- Ver `doc/LOG-2026-07-14__131751__bonus-envios-admin-create.md`
+- Keywords: bonus-envios, creditar-envios, admin-bonus-envios, creditsValidUntil
+
 ## 2026-07-13 — Bundle deploy cadastro + docs
 - Marker: `DEPLOY-2026-07-13-bundle-cadastro-cors-docs`
 - Empacota sessão: uptime/login-heal/tarifador/encurtador (já no master) + docs/CORS + agent Traefik

@@ -84,7 +84,7 @@ class WabaDisparosCreditsService {
     buildApiBucket(email, apiKind, paidOrders) {
         const contractedShipments = paidOrders
             .filter((order) => (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order) === apiKind)
-            .reduce((sum, order) => sum + (0, waba_disparos_order_shipments_1.resolveOrderShipmentCount)(order), 0);
+            .reduce((sum, order) => sum + (0, waba_disparos_order_shipments_1.resolveActiveOrderShipmentCount)(order), 0);
         const consumedShipments = this.usageRepository.getConsumedShipments(email, apiKind);
         const remainingShipments = Math.max(0, contractedShipments - consumedShipments);
         const pendingBonusShipments = this.bonusService.getPendingBonusShipments(email, apiKind);

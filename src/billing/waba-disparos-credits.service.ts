@@ -17,7 +17,10 @@ import {
 import { WabaDisparosBonusSettlementService } from "./waba-disparos-bonus-settlement.service";
 import { WabaDisparosBonusService } from "./waba-disparos-bonus.service";
 import { WabaDisparosCreditUsageRepository } from "./waba-disparos-credit-usage.repository";
-import { resolveOrderShipmentCount } from "./waba-disparos-order-shipments";
+import {
+  resolveActiveOrderShipmentCount,
+  resolveOrderShipmentCount,
+} from "./waba-disparos-order-shipments";
 import { shouldCountCampaignIntakeCredits } from "../disparos/waba-campaign-intake-status";
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
@@ -121,7 +124,7 @@ export class WabaDisparosCreditsService {
   ): DisparosApiCreditsBucket {
     const contractedShipments = paidOrders
       .filter((order) => resolveOrderApiKind(order) === apiKind)
-      .reduce((sum, order) => sum + resolveOrderShipmentCount(order), 0);
+      .reduce((sum, order) => sum + resolveActiveOrderShipmentCount(order), 0);
     const consumedShipments = this.usageRepository.getConsumedShipments(email, apiKind);
     const remainingShipments = Math.max(0, contractedShipments - consumedShipments);
     const pendingBonusShipments = this.bonusService.getPendingBonusShipments(email, apiKind);

@@ -8,7 +8,10 @@ import {
   WabaCampaignIntakeRepository,
   type WabaCampaignIntake,
 } from "../disparos/waba-campaign-intake.repository";
-import { resolveOrderShipmentCount } from "../billing/waba-disparos-order-shipments";
+import {
+  resolveActiveOrderShipmentCount,
+  resolveOrderShipmentCount,
+} from "../billing/waba-disparos-order-shipments";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import {
   WabaSubscriberService,
@@ -28,6 +31,9 @@ export type AdminSubscriberListItem = {
   id: string;
   email: string;
   fullName: string;
+  whatsapp: string;
+  whatsappFormatted: string;
+  phone: string;
   cpfCnpj: string;
   cpfCnpjFormatted: string;
   segment: string;
@@ -134,7 +140,8 @@ const formatPhoneDisplay = (raw: string): string => {
   return digits || "—";
 };
 
-const resolveProductLabel = (product: string): string => {
+const resolveProductLabel = (product: string, grantSource?: string): string => {
+  if (grantSource === "admin-bonus-envios") return "Bônus Envios";
   if (product === "waba-alternativa-numbers") return "Números API Alternativa";
   return "Créditos de disparos";
 };
@@ -190,7 +197,7 @@ const summarizePaidDisparosOrders = (
 
   for (const order of orders) {
     contractedValueCents += Math.max(0, Math.round(Number(order.valueCents ?? 0)));
-    contractedShipments += Math.max(0, Math.round(Number(resolveOrderShipmentCount(order) || 0)));
+    contractedShipments += Math.max(0, Math.round(Number(resolveActiveOrderShipmentCount(order) || 0)));
   }
 
   return { contractedValueCents, contractedShipments };
@@ -249,6 +256,9 @@ export class WabaAdminSubscribersService {
           id: subscriber.id,
           email,
           fullName: subscriber.fullName,
+          whatsapp: String(subscriber.whatsapp || "").trim(),
+          whatsappFormatted: formatPhoneDisplay(subscriber.whatsapp),
+          phone: String(subscriber.phone || subscriber.whatsapp || "").trim(),
           cpfCnpj: subscriber.cpfCnpj,
           cpfCnpjFormatted: formatCpfCnpj(subscriber.cpfCnpj),
           segment,
@@ -363,7 +373,7 @@ export class WabaAdminSubscribersService {
         return {
           id: order.id,
           product: order.product,
-          productLabel: resolveProductLabel(order.product),
+          productLabel: resolveProductLabel(order.product, order.grantSource),
           apiKind: order.apiKind,
           apiKindLabel: resolveApiKindLabel(order.apiKind),
           valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),

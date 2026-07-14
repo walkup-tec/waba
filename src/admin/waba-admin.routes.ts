@@ -38,6 +38,10 @@ import { systemConnectionLogService } from "../monitoring/system-connection-log.
 import { SYSTEM_LOG_MOTIVOS } from "../monitoring/system-connection-log.types";
 import type { SystemConnectionLogFilters, SystemLogMotivo } from "../monitoring/system-connection-log.types";
 import { WabaCouponService, parseWabaCouponDiscountPercent } from "../billing/waba-coupon.service";
+import {
+  WabaAdminBonusEnviosService,
+  type BonusEnviosValidityMode,
+} from "./waba-admin-bonus-envios.service";
 
 const ADMIN_DASHBOARD_MENU_ID = "admin-dashboard";
 
@@ -45,6 +49,7 @@ const adminSubscribersService = new WabaAdminSubscribersService();
 const adminSubscribersCreateService = new WabaAdminSubscribersCreateService();
 const adminSubscriberPurgeService = new WabaAdminSubscriberPurgeService();
 const couponService = new WabaCouponService();
+const adminBonusEnviosService = new WabaAdminBonusEnviosService();
 const adminSubscriberPromoteService = new WabaAdminSubscriberPromoteService();
 const adminMasterPromoteService = new WabaAdminMasterPromoteService();
 const adminUsersService = new WabaAdminUsersService();
@@ -272,6 +277,29 @@ export const registerWabaAdminRoutes = (app: Express) => {
     } catch (error) {
       return res.status(400).json({
         error: error instanceof Error ? error.message : "Não foi possível desativar o cupom.",
+      });
+    }
+  });
+
+  app.post("/admin/bonus-envios", (req, res) => {
+    const auth = rejectNonMaster(req, res);
+    if (!auth) return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const validityMode = String(body.validityMode ?? "").trim() as BonusEnviosValidityMode;
+      const result = adminBonusEnviosService.grant({
+        subscriberId: body.subscriberId !== undefined ? String(body.subscriberId) : undefined,
+        email: body.email !== undefined ? String(body.email) : undefined,
+        shipmentCount: Number(body.shipmentCount ?? body.quantity ?? 0),
+        apiKind: String(body.apiKind ?? ""),
+        validityMode,
+        validUntil: body.validUntil !== undefined ? String(body.validUntil) : undefined,
+        createdByEmail: auth.email,
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Não foi possível creditar os envios.",
       });
     }
   });

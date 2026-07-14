@@ -171,7 +171,7 @@ class WabaAdminFinanceiroService {
     listDisparosOrdersSorted() {
         return this.orderRepository
             .list()
-            .filter((order) => order.product === "waba-disparos")
+            .filter((order) => order.product === "waba-disparos" && order.grantSource !== "admin-bonus-envios")
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     }
     listOrders(params) {

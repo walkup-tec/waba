@@ -51,7 +51,9 @@ const formatPhoneDisplay = (raw) => {
     }
     return digits || "—";
 };
-const resolveProductLabel = (product) => {
+const resolveProductLabel = (product, grantSource) => {
+    if (grantSource === "admin-bonus-envios")
+        return "Bônus Envios";
     if (product === "waba-alternativa-numbers")
         return "Números API Alternativa";
     return "Créditos de disparos";
@@ -99,7 +101,7 @@ const summarizePaidDisparosOrders = (orders) => {
     let contractedShipments = 0;
     for (const order of orders) {
         contractedValueCents += Math.max(0, Math.round(Number(order.valueCents ?? 0)));
-        contractedShipments += Math.max(0, Math.round(Number((0, waba_disparos_order_shipments_1.resolveOrderShipmentCount)(order) || 0)));
+        contractedShipments += Math.max(0, Math.round(Number((0, waba_disparos_order_shipments_1.resolveActiveOrderShipmentCount)(order) || 0)));
     }
     return { contractedValueCents, contractedShipments };
 };
@@ -151,6 +153,9 @@ class WabaAdminSubscribersService {
                 id: subscriber.id,
                 email,
                 fullName: subscriber.fullName,
+                whatsapp: String(subscriber.whatsapp || "").trim(),
+                whatsappFormatted: formatPhoneDisplay(subscriber.whatsapp),
+                phone: String(subscriber.phone || subscriber.whatsapp || "").trim(),
                 cpfCnpj: subscriber.cpfCnpj,
                 cpfCnpjFormatted: formatCpfCnpj(subscriber.cpfCnpj),
                 segment,
@@ -254,7 +259,7 @@ class WabaAdminSubscribersService {
             return {
                 id: order.id,
                 product: order.product,
-                productLabel: resolveProductLabel(order.product),
+                productLabel: resolveProductLabel(order.product, order.grantSource),
                 apiKind: order.apiKind,
                 apiKindLabel: resolveApiKindLabel(order.apiKind),
                 valueCents: Math.max(0, Math.round(Number(order.valueCents ?? 0))),
