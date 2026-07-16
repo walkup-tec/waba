@@ -2975,19 +2975,26 @@ async function syncAquecedorWorkerLeadership(): Promise<void> {
     }
 
     if (shouldProcessLeadOwnerMotor(motor)) {
+      // desired=true basta: retoma timer mesmo sem sessão HTTP (logout não pode parar envios).
+      motor.snapshot.running = true;
       if (!motor.runtime.running) {
-        applyPersistedSnapshotToMotor(motor, motor.snapshot);
+        applyPersistedSnapshotToMotor(motor, {
+          ...motor.snapshot,
+          running: true,
+        });
       }
       startAquecedorRuntimeLocal(ownerEmail);
       motor.snapshot.workerId = getAquecedorWorkerId();
       motor.snapshot.workerHeartbeatAt = new Date().toISOString();
       await persistAquecedorOwnerSnapshot(ownerEmail, {
+        running: true,
         workerId: motor.snapshot.workerId,
         workerHeartbeatAt: motor.snapshot.workerHeartbeatAt,
       });
       continue;
     }
 
+    // Outro worker tem lease válido — só pausa timer local; não grava desired=false.
     applyPersistedSnapshotToMotor(motor, motor.snapshot);
     stopAquecedorOwnerMotorLocal(ownerEmail);
   }
@@ -4394,6 +4401,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     runtime.isProcessing = false;
     if (shouldProcessLeadOwnerMotor(motor)) {
       void persistAquecedorOwnerSnapshot(ownerEmail, {
+        running: true,
         workerId: getAquecedorWorkerId(),
         workerHeartbeatAt: new Date().toISOString(),
       });

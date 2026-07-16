@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-14-cupons-lista-unica-filtro";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-16-aquecedor-continua-apos-logout";

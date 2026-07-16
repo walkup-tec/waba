@@ -20,6 +20,26 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-16 — Aquecedor continua após logout
+- Pasta canônica: `H:\Meu Drive\Drive Profissional\Waba` (mais nova que backup `D:\Waba`)
+- Bug: motor parava após deslogar; UI só retomava com sessão
+- Fix: `desired=true` basta para liderar/persistir `running`; reload merge sem matar timer
+- Marker: `DEPLOY-2026-07-16-aquecedor-continua-apos-logout`
+- Ver `doc/LOG-2026-07-16__154958__aquecedor-continua-apos-logout.md`
+- Keywords: `aquecedor`, `logout`, `desired`, `runtime-intent`, `daemon`
+
+## 2026-07-16 — Sinal Verde: publicação guiada passo a passo
+- Easypanel **verde**; domínio ainda **Parked Hostinger** (DNS, não app)
+- Etapa: corrigir NS/A para IP real da VPS do Easypanel
+- Keywords: `sinal-verde`, `parked`, `dns`, `hostinger`, `easypanel-verde`
+
+## 2026-07-16 — Sinal Verde: DNS + publicação Easypanel (início)
+- Domínio: `acesso-sinalverde.com` → A `@` = `2.57.91.91` (resolução OK; www via CNAME)
+- Projeto Easypanel: `sinal-verde` (VPS **não** é o WABA `72.60.51.127`)
+- Próximo: confirmar IP da VPS = `2.57.91.91` → adicionar domínio no serviço do app
+- Ver `doc/LOG-2026-07-16__143000__sinal-verde-dns-easypanel-inicio.md`
+- Keywords: `sinal-verde`, `acesso-sinalverde.com`, `easypanel`, `dns`, `2.57.91.91`
+
 ## 2026-07-14 — Deploy prod cupons lista única
 - Marker: `DEPLOY-2026-07-14-cupons-lista-unica-filtro`
 - Ver `doc/LOG-2026-07-14__152100__deploy-cupons-lista-unica.md`
@@ -2399,3 +2419,7 @@ Palavras-chave para buscar:
 ## 2026-07-14 — Heal permanente paginadevendas
 - Watch+timer `waba-paginadevendas-heal-*` — impede 502/bad-gateway pós-redeploy.
 - Install: `heal-paginadevendas-pos-redeploy-vps.sh install` (VPS uma vez).
+
+## 2026-07-14 — Regra comandos locais
+- Regra global: executar comandos locais no terminal; não só listar para o usuário.
+
