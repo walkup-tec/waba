@@ -42252,7 +42252,7 @@
             : `Ação iniciada: ${action}.`;
         addAquecedorCommandLog(actionStartLabel);
         try {
-          const runOnceTimeout = action === "runOnce" ? 90000 : 12000;
+          const runOnceTimeout = action === "runOnce" ? 180000 : 12000;
           const response = await fetchWithTimeout(
             url,
             {
@@ -42292,17 +42292,20 @@
           if (action === "runOnce") {
             const statusPayload = data?.status || {};
             const lastResult = String(statusPayload?.lastResult || data?.message || "").trim();
+            const desiredRunning =
+              statusPayload?.desiredRunning === true ||
+              aquecedorRuntimeStatusCache?.desiredRunning === true;
             aquecedorRuntimeStatusCache = {
               ...(aquecedorRuntimeStatusCache || {}),
               ...statusPayload,
-              running: false,
-              desiredRunning: false,
+              running: desiredRunning ? statusPayload?.running !== false : false,
+              desiredRunning,
               isProcessing: false,
               lastResult: lastResult || aquecedorRuntimeStatusCache?.lastResult,
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
-            updateAquecedorStartStopVisibility(false, aquecedorRuntimeStatusCache);
+            updateAquecedorStartStopVisibility(desiredRunning, aquecedorRuntimeStatusCache);
             if (lastResult) {
               addAquecedorCommandLog("Resultado: " + lastResult);
             } else {

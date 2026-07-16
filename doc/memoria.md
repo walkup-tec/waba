@@ -20,6 +20,13 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-16 — Aquecedor Envio teste EVO
+- Fix: teste usa live-open (não só active/Preparando); não mata motor; EVO `text` raiz; sucesso se HTTP aceito
+- Validado: sendText soma-crm→walkup 201 + `/service/evo-integration-probe` ok
+- Marker: `DEPLOY-2026-07-16-aquecedor-envio-teste-evo-fix`
+- Ver `doc/LOG-2026-07-16__160500__aquecedor-envio-teste-evo-fix.md`
+- Keywords: `aquecedor`, `envio-teste`, `run-once`, `sendText`, `evo`
+
 ## 2026-07-16 — Aquecedor continua após logout
 - Pasta canônica: `H:\Meu Drive\Drive Profissional\Waba` (mais nova que backup `D:\Waba`)
 - Bug: motor parava após deslogar; UI só retomava com sessão
