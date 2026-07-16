@@ -20,6 +20,13 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-16 — Aquecedor status linha clara
+- `próximo` com data completa `dd/mm/aaaa - hh:mm:ss`
+- Fase: processando | em pausa | parado | ativo (não mais lastResult cru)
+- Marker: `DEPLOY-2026-07-16-aquecedor-status-linha-clara`
+- Ver `doc/LOG-2026-07-16__195500__aquecedor-status-linha-clara.md`
+- Keywords: `aquecedor`, `status`, `próximo`, `em pausa`
+
 ## 2026-07-16 — Aquecedor Envio teste EVO
 - Fix: teste usa live-open (não só active/Preparando); não mata motor; EVO `text` raiz; sucesso se HTTP aceito
 - Validado: sendText soma-crm→walkup 201 + `/service/evo-integration-probe` ok
