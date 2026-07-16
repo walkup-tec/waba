@@ -1,4 +1,4 @@
-﻿# MemÃ³ria Consolidada do Projeto
+# MemÃ³ria Consolidada do Projeto
 
 Este arquivo Ã© atualizado a cada tarefa executada.
 
@@ -19,6 +19,13 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
+
+## 2026-07-16 — Aquecedor dist UI + nextAllowedAt
+- Causa: Easypanel usa `dist/` do Git; UI nova só estava na raiz
+- Fix: commit `dist/index.html` + limpar nextAllowedAt passado no status/start
+- Marker: `DEPLOY-2026-07-16-aquecedor-dist-ui-nextallowed`
+- Ver `doc/LOG-2026-07-16__202800__aquecedor-dist-ui-nextallowed-fix.md`
+- Keywords: `dist`, `nextAllowedAt`, `16:02`, `Easypanel`
 
 ## 2026-07-16 — Aquecedor status linha clara
 - `próximo` com data completa `dd/mm/aaaa - hh:mm:ss`

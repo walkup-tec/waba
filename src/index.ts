@@ -8590,8 +8590,19 @@ app.get("/aquecedor/status", async (req, res) => {
     const nowSp = nowInSaoPaulo();
     const windowOpen = isAquecedorWindowOpen(config, nowSp);
     const nextWindowOpenAt = windowOpen ? null : nextAquecedorWindowOpenAt(config, nowSp);
+    const live = buildLiveAquecedorOwnerStatusPayload(ownerEmail);
+    // Não expor nextAllowedAt no passado (ex.: 16:02 preso) — UI mostra "imediato".
+    const nextMs = live.nextAllowedAt ? new Date(String(live.nextAllowedAt)).getTime() : NaN;
+    if (Number.isFinite(nextMs) && nextMs <= Date.now()) {
+      live.nextAllowedAt = null;
+      const motor = getAquecedorOwnerMotor(ownerEmail);
+      if (motor.runtime.nextAllowedAt) {
+        motor.runtime.nextAllowedAt = null;
+        void persistAquecedorOwnerSnapshot(ownerEmail, { nextAllowedAt: null });
+      }
+    }
     return res.json({
-      ...buildLiveAquecedorOwnerStatusPayload(ownerEmail),
+      ...live,
       windowOpen,
       nextWindowOpenAt: nextWindowOpenAt ? nextWindowOpenAt.toISOString() : null,
       nextWindowOpenBr: nextWindowOpenAt ? formatDateBr(nextWindowOpenAt.toISOString()) : null,
@@ -8905,9 +8916,21 @@ app.post("/aquecedor/start", async (req, res) => {
     return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
   }
   await persistAquecedorOwnerIntent(ownerEmail, true);
-  startAquecedorRuntimeLocal(ownerEmail);
   const motor = getAquecedorOwnerMotor(ownerEmail);
+  // Limpa nextAllowedAt velho (ex.: 16:02 no passado) para o status não mentir.
+  const nextMs = motor.runtime.nextAllowedAt
+    ? new Date(motor.runtime.nextAllowedAt).getTime()
+    : NaN;
+  if (!Number.isFinite(nextMs) || nextMs <= Date.now()) {
+    motor.runtime.nextAllowedAt = null;
+  }
   motor.runtime.lastResult = "Aquecedor iniciado.";
+  startAquecedorRuntimeLocal(ownerEmail);
+  void persistAquecedorOwnerSnapshot(ownerEmail, {
+    running: true,
+    nextAllowedAt: motor.runtime.nextAllowedAt,
+    lastResult: motor.runtime.lastResult,
+  });
   void appendAquecedorCommandLog("Aquecedor iniciado.", ownerEmail);
   return res.json({
     ok: true,
@@ -8916,6 +8939,7 @@ app.post("/aquecedor/start", async (req, res) => {
       ...buildLiveAquecedorOwnerStatusPayload(ownerEmail),
       running: true,
       desiredRunning: true,
+      nextAllowedAt: motor.runtime.nextAllowedAt,
       lastResult: motor.runtime.lastResult,
     },
     desiredRunning: true,

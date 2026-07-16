@@ -2350,18 +2350,25 @@ async function syncAquecedorWorkerLeadership() {
             continue;
         }
         if ((0, aquecedor_owner_runtime_registry_1.shouldProcessLeadOwnerMotor)(motor)) {
+            // desired=true basta: retoma timer mesmo sem sessão HTTP (logout não pode parar envios).
+            motor.snapshot.running = true;
             if (!motor.runtime.running) {
-                (0, aquecedor_owner_runtime_registry_1.applyPersistedSnapshotToMotor)(motor, motor.snapshot);
+                (0, aquecedor_owner_runtime_registry_1.applyPersistedSnapshotToMotor)(motor, {
+                    ...motor.snapshot,
+                    running: true,
+                });
             }
             startAquecedorRuntimeLocal(ownerEmail);
             motor.snapshot.workerId = getAquecedorWorkerId();
             motor.snapshot.workerHeartbeatAt = new Date().toISOString();
             await (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerSnapshot)(ownerEmail, {
+                running: true,
                 workerId: motor.snapshot.workerId,
                 workerHeartbeatAt: motor.snapshot.workerHeartbeatAt,
             });
             continue;
         }
+        // Outro worker tem lease válido — só pausa timer local; não grava desired=false.
         (0, aquecedor_owner_runtime_registry_1.applyPersistedSnapshotToMotor)(motor, motor.snapshot);
         (0, aquecedor_owner_runtime_registry_1.stopAquecedorOwnerMotorLocal)(ownerEmail);
     }
@@ -3168,26 +3175,47 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
     const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
     const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
+    if (!numero || numero.length < 10) {
+        aquecedorCycleRuntime().lastResult = `Ciclo teste abortado: destino ${chosen.instancia_destino} sem número WhatsApp válido.`;
+        return;
+    }
+    // Evolution 2.3.x exige `text` na raiz (textMessage sozinho → 400).
     const sendBody = EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text: texto } }
-        : { number: numero, text: texto, textMessage: { text: texto } };
+        : { number: numero, text: texto };
     const sendStartedAtMs = Date.now();
-    const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
+    // Envio teste: 2 tentativas (UI ~3 min); ciclo automático mantém retry mais longo.
+    const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
     const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
     if (sendResult.ok) {
         const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), texto, {
             instanciaOrigem: chosen.instancia_origem,
             numeroDestino: numero,
             sendStartedAtMs,
+            maxAttempts: 6,
+            attemptIntervalMs: 2000,
+            skipInitialDelay: false,
+            relaxTimestampOnLastAttempt: true,
         });
         if (!deliveryCheck.ok) {
+            // EVO já aceitou (HTTP 2xx): conta como sucesso do teste; findMessages pode atrasar.
+            await supabase.from("logs_envios").insert({
+                instancia_origem: chosen.instancia_origem,
+                instancia_destino: chosen.instancia_destino,
+                data_envio: new Date().toISOString(),
+            });
+            await recordAquecedorEnvio({
+                instanciaOrigem: chosen.instancia_origem,
+                instanciaDestino: chosen.instancia_destino,
+                status: "Envio com Sucesso",
+            });
             aquecedorCycleRuntime().lastEvoError = {
                 status: sendResult.status,
                 body: deliveryCheck.detail.slice(0, 500),
                 instance: chosen.instancia_destino,
                 numeroLen: numero.length,
             };
-            aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário.`;
+            aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso (EVO aceitou; confirmação findMessages pendente: ${deliveryCheck.detail.slice(0, 120)}).`;
         }
         else {
             await supabase.from("logs_envios").insert({
@@ -3234,12 +3262,31 @@ function deferAquecedorRetryOrWindow(config, nowSp, retrySeconds, retryReason) {
     aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + boundedRetry * 1000).toISOString();
     aquecedorCycleRuntime().lastResult = retryReason;
 }
+async function waitAquecedorCycleIdle(ownerEmail, maxWaitMs = 45000) {
+    const motor = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail);
+    const started = Date.now();
+    while (motor.runtime.isProcessing) {
+        if (Date.now() - started >= maxWaitMs)
+            return false;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    return true;
+}
 async function runAquecedorCycle(ownerEmail, forceTest = false) {
     const motor = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail);
     aquecedorCycleMotor = motor;
     const runtime = motor.runtime;
-    if (runtime.isProcessing)
-        return;
+    if (runtime.isProcessing) {
+        if (!forceTest)
+            return;
+        // Envio teste não pode abortar em silêncio enquanto o ciclo automático roda.
+        const idle = await waitAquecedorCycleIdle(ownerEmail, 45000);
+        if (!idle || runtime.isProcessing) {
+            runtime.lastResult =
+                "Envio teste aguardou o ciclo atual terminar, mas o motor ainda está processando. Tente novamente em instantes.";
+            return;
+        }
+    }
     runtime.isProcessing = true;
     runtime.lastRunAt = new Date().toISOString();
     try {
@@ -3261,10 +3308,13 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         for (const item of connectedAll) {
             await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(item.instancia);
         }
-        const connected = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(connectedAll);
-        (0, aquecedor_owner_runtime_registry_1.updateAquecedorOwnerConnectedSummary)(ownerEmail, connected, connectedAll);
+        const connectedActive = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(connectedAll);
+        // Envio teste usa instâncias live-open do escopo (inclui Preparando).
+        // O filtro active vale só para o ciclo automático (anti-restrição WhatsApp).
+        const connected = forceTest ? connectedAll : connectedActive;
+        (0, aquecedor_owner_runtime_registry_1.updateAquecedorOwnerConnectedSummary)(ownerEmail, connectedActive, connectedAll);
         const preparingCount = motor.connectedSummary.preparingCount;
-        if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
+        if (!forceTest && preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
             runtime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
             return;
         }
@@ -3392,7 +3442,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
         const sendBody = EVO_SEND_TEXT_V1
             ? { number: numero, textMessage: { text: textoEnvio } }
-            : { number: numero, text: textoEnvio, textMessage: { text: textoEnvio } };
+            : { number: numero, text: textoEnvio };
         const sendStartedAtMs = Date.now();
         const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
         if (!sendResult.ok) {
@@ -3481,6 +3531,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         runtime.isProcessing = false;
         if ((0, aquecedor_owner_runtime_registry_1.shouldProcessLeadOwnerMotor)(motor)) {
             void (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerSnapshot)(ownerEmail, {
+                running: true,
                 workerId: getAquecedorWorkerId(),
                 workerHeartbeatAt: new Date().toISOString(),
             });
@@ -7151,8 +7202,19 @@ app.get("/aquecedor/status", async (req, res) => {
         const nowSp = nowInSaoPaulo();
         const windowOpen = isAquecedorWindowOpen(config, nowSp);
         const nextWindowOpenAt = windowOpen ? null : nextAquecedorWindowOpenAt(config, nowSp);
+        const live = (0, aquecedor_owner_runtime_registry_1.buildLiveAquecedorOwnerStatusPayload)(ownerEmail);
+        // Não expor nextAllowedAt no passado (ex.: 16:02 preso) — UI mostra "imediato".
+        const nextMs = live.nextAllowedAt ? new Date(String(live.nextAllowedAt)).getTime() : NaN;
+        if (Number.isFinite(nextMs) && nextMs <= Date.now()) {
+            live.nextAllowedAt = null;
+            const motor = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail);
+            if (motor.runtime.nextAllowedAt) {
+                motor.runtime.nextAllowedAt = null;
+                void (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerSnapshot)(ownerEmail, { nextAllowedAt: null });
+            }
+        }
         return res.json({
-            ...(0, aquecedor_owner_runtime_registry_1.buildLiveAquecedorOwnerStatusPayload)(ownerEmail),
+            ...live,
             windowOpen,
             nextWindowOpenAt: nextWindowOpenAt ? nextWindowOpenAt.toISOString() : null,
             nextWindowOpenBr: nextWindowOpenAt ? formatDateBr(nextWindowOpenAt.toISOString()) : null,
@@ -7433,9 +7495,21 @@ app.post("/aquecedor/start", async (req, res) => {
         return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
     }
     await (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerIntent)(ownerEmail, true);
-    startAquecedorRuntimeLocal(ownerEmail);
     const motor = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail);
+    // Limpa nextAllowedAt velho (ex.: 16:02 no passado) para o status não mentir.
+    const nextMs = motor.runtime.nextAllowedAt
+        ? new Date(motor.runtime.nextAllowedAt).getTime()
+        : NaN;
+    if (!Number.isFinite(nextMs) || nextMs <= Date.now()) {
+        motor.runtime.nextAllowedAt = null;
+    }
     motor.runtime.lastResult = "Aquecedor iniciado.";
+    startAquecedorRuntimeLocal(ownerEmail);
+    void (0, aquecedor_owner_runtime_registry_1.persistAquecedorOwnerSnapshot)(ownerEmail, {
+        running: true,
+        nextAllowedAt: motor.runtime.nextAllowedAt,
+        lastResult: motor.runtime.lastResult,
+    });
     void appendAquecedorCommandLog("Aquecedor iniciado.", ownerEmail);
     return res.json({
         ok: true,
@@ -7444,6 +7518,7 @@ app.post("/aquecedor/start", async (req, res) => {
             ...(0, aquecedor_owner_runtime_registry_1.buildLiveAquecedorOwnerStatusPayload)(ownerEmail),
             running: true,
             desiredRunning: true,
+            nextAllowedAt: motor.runtime.nextAllowedAt,
             lastResult: motor.runtime.lastResult,
         },
         desiredRunning: true,
@@ -7494,8 +7569,15 @@ app.post("/aquecedor/run-once", async (req, res) => {
         return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
     }
     await runAquecedorCycle(ownerEmail, true);
-    (0, aquecedor_owner_runtime_registry_1.stopAquecedorOwnerMotorLocal)(ownerEmail);
     const motor = (0, aquecedor_owner_runtime_registry_1.getAquecedorOwnerMotor)(ownerEmail);
+    const desiredRunning = motor.desired === true;
+    // Envio teste não pode desligar o motor: se estava desejado ligado, retoma o timer.
+    if (desiredRunning && ENABLE_AQUECEDOR_PROCESSING) {
+        startAquecedorRuntimeLocal(ownerEmail);
+    }
+    else {
+        (0, aquecedor_owner_runtime_registry_1.stopAquecedorOwnerMotorLocal)(ownerEmail);
+    }
     const status = (0, aquecedor_owner_runtime_registry_1.buildLiveAquecedorOwnerStatusPayload)(ownerEmail);
     const lastResult = String(motor.runtime.lastResult || "").trim();
     const ok = /enviado com sucesso|realizado/i.test(lastResult) &&
@@ -7506,8 +7588,8 @@ app.post("/aquecedor/run-once", async (req, res) => {
         message: lastResult || "Ciclo de teste executado.",
         status: {
             ...status,
-            running: false,
-            desiredRunning: motor.desired === true,
+            running: desiredRunning ? true : false,
+            desiredRunning,
             isProcessing: false,
             lastResult: lastResult || status.lastResult,
         },

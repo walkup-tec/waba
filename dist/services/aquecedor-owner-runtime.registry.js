@@ -123,8 +123,11 @@ function applyPersistedSnapshotToMotor(motor, snapshot) {
     motor.snapshot = { ...snapshot };
 }
 function buildPersistedSnapshotFromMotor(motor, overrides = {}) {
+    // Intenção do usuário (desired) manda: com aquecedor ligado, nunca persistir running=false
+    // por glitch de timer/reload — senão o motor morre até alguém logar e dar auto-resume.
+    const runningWhileDesired = motor.desired === true ? true : motor.runtime.running;
     return {
-        running: motor.runtime.running,
+        running: runningWhileDesired,
         isProcessing: motor.runtime.isProcessing,
         nextAllowedAt: motor.runtime.nextAllowedAt,
         lastRunAt: motor.runtime.lastRunAt,
@@ -136,8 +139,13 @@ function buildPersistedSnapshotFromMotor(motor, overrides = {}) {
         ...overrides,
     };
 }
+/**
+ * Quem deve processar ciclos deste proprietário.
+ * Critério: desired=true + lease (não exige snapshot.running — isso travava o motor
+ * após logout quando a UI deixava de chamar /aquecedor/start).
+ */
 function shouldProcessLeadOwnerMotor(motor) {
-    if (motor.desired !== true || !motor.snapshot.running)
+    if (motor.desired !== true)
         return false;
     if (motor.snapshot.workerId === exports.AQUECEDOR_OWNER_WORKER_ID)
         return true;
@@ -175,31 +183,59 @@ function loadOwnerFromPersisted(ownerEmail, desired, snapshot) {
     motor.desired = desired;
     applyPersistedSnapshotToMotor(motor, snapshot);
 }
+function mergeOwnerFromPersisted(ownerEmail, desired, snapshot) {
+    const existing = ownerMotors.get(ownerEmail);
+    if (!existing) {
+        loadOwnerFromPersisted(ownerEmail, desired, snapshot);
+        return;
+    }
+    const keepLocalTimer = desired === true && existing.runtime.running === true && existing.scheduleTimer != null;
+    existing.desired = desired;
+    if (desired === true) {
+        snapshot.running = true;
+    }
+    applyPersistedSnapshotToMotor(existing, snapshot);
+    if (keepLocalTimer) {
+        // Reload do disco não pode matar o timer do processo líder.
+        existing.runtime.running = true;
+    }
+}
 function parsePersistedOwners(raw) {
-    ownerMotors.clear();
     const version = Number(raw.version);
+    const seen = new Set();
     if (version === 3 && raw.owners && typeof raw.owners === "object") {
         for (const [email, value] of Object.entries(raw.owners)) {
             const ownerEmail = normalizeAquecedorOwnerEmail(email);
             if (!ownerEmail)
                 continue;
+            seen.add(ownerEmail);
             const row = (value || {});
             const desired = typeof row.desired === "boolean" ? row.desired : row.desired === true ? true : null;
             const snapshot = parseOwnerSnapshot(row.snapshot);
-            loadOwnerFromPersisted(ownerEmail, desired, snapshot);
+            if (desired === true)
+                snapshot.running = true;
+            mergeOwnerFromPersisted(ownerEmail, desired, snapshot);
         }
-        return;
     }
-    if (version === 1 || version === 2) {
+    else if (version === 1 || version === 2) {
         const desired = typeof raw.aquecedorRuntimeDesired === "boolean" ? raw.aquecedorRuntimeDesired : null;
         const ownerEmail = normalizeAquecedorOwnerEmail(typeof raw.aquecedorOwnerEmail === "string" ? raw.aquecedorOwnerEmail : null);
         const snapshot = parseOwnerSnapshot(raw.aquecedorRuntimeSnapshot);
-        if (version === 1) {
+        if (version === 1 || desired === true) {
             snapshot.running = desired === true;
         }
         if (ownerEmail) {
-            loadOwnerFromPersisted(ownerEmail, desired, snapshot);
+            seen.add(ownerEmail);
+            mergeOwnerFromPersisted(ownerEmail, desired, snapshot);
         }
+    }
+    // Proprietários só em memória e ausentes do disco: se desired!=true, libera timer.
+    for (const [email, motor] of ownerMotors.entries()) {
+        if (seen.has(email))
+            continue;
+        if (motor.desired === true)
+            continue;
+        stopAquecedorOwnerMotorLocal(email);
     }
 }
 async function reloadAquecedorOwnerMotorsFromDisk(force = false) {
@@ -282,7 +318,8 @@ function buildAquecedorOwnerStatusPayload(ownerEmail) {
     const motor = getAquecedorOwnerMotor(ownerEmail);
     const desiredRunning = motor.desired === true;
     const workerActive = isWorkerLeaseValid(motor.snapshot);
-    const running = desiredRunning && (motor.snapshot.running === true || workerActive);
+    const running = desiredRunning &&
+        (motor.runtime.running === true || motor.snapshot.running === true || workerActive);
     const summary = motor.connectedSummary;
     return {
         ...motor.snapshot,

@@ -38240,6 +38240,76 @@
         }
       }
 
+      function formatAquecedorDateTimeBr(value) {
+        const d = value instanceof Date ? value : new Date(value);
+        if (!Number.isFinite(d.getTime())) return "";
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        const ss = String(d.getSeconds()).padStart(2, "0");
+        return `${dd}/${mm}/${yyyy} - ${hh}:${mi}:${ss}`;
+      }
+
+      /** Próximo envio com data completa (evita parecer “amanhã” só com HH:mm). */
+      function formatAquecedorNextSendLabel(status) {
+        const nowMs = Date.now();
+        const running =
+          status?.running === true || status?.desiredRunning === true;
+        const nextAllowedMs = status?.nextAllowedAt
+          ? new Date(status.nextAllowedAt).getTime()
+          : NaN;
+        const nextWindowMs = status?.nextWindowOpenAt
+          ? new Date(status.nextWindowOpenAt).getTime()
+          : NaN;
+        let targetMs = NaN;
+        if (status?.windowOpen === false && Number.isFinite(nextWindowMs) && nextWindowMs > nowMs) {
+          targetMs = nextWindowMs;
+        } else if (Number.isFinite(nextAllowedMs) && nextAllowedMs > nowMs) {
+          targetMs = nextAllowedMs;
+        } else if (status?.windowOpen === false && Number.isFinite(nextWindowMs)) {
+          targetMs = nextWindowMs;
+        } else if (Number.isFinite(nextAllowedMs)) {
+          targetMs = nextAllowedMs;
+        }
+        if (Number.isFinite(targetMs) && targetMs > nowMs) {
+          return formatAquecedorDateTimeBr(targetMs);
+        }
+        if (status?.isProcessing === true) return "agora";
+        if (running) return "imediato";
+        return "sem agendamento";
+      }
+
+      /**
+       * Estado claro do aquecedor (não reutilizar lastResult técnico).
+       * Aquecedor processando | Aquecedor em pausa | Aquecedor parado | Aquecedor ativo
+       */
+      function resolveAquecedorPhaseLabel(status) {
+        const running =
+          status?.running === true || status?.desiredRunning === true;
+        if (status?.isProcessing === true) return "Aquecedor processando";
+        if (!running) return "Aquecedor parado";
+        if (status?.windowOpen === false) return "Aquecedor em pausa";
+        const nextMs = status?.nextAllowedAt
+          ? new Date(status.nextAllowedAt).getTime()
+          : NaN;
+        if (Number.isFinite(nextMs) && nextMs > Date.now()) {
+          return "Aquecedor em pausa";
+        }
+        return "Aquecedor ativo";
+      }
+
+      function buildAquecedorRuntimeStatusLine(status) {
+        const running = status?.running === true;
+        const desiredRunning = status?.desiredRunning === true;
+        const motorLabel = running ? "ativo" : desiredRunning ? "retomando" : "parado";
+        const processing = status?.isProcessing === true ? "sim" : "não";
+        const nextLabel = formatAquecedorNextSendLabel(status);
+        const phaseLabel = resolveAquecedorPhaseLabel(status);
+        return `Motor: ${motorLabel} | processamento: ${processing} | próximo: ${nextLabel} | ${phaseLabel}`;
+      }
+
       async function syncAquecedorRuntimeUi(options = {}) {
         const autoResume = options.autoResume !== false;
         const label = document.getElementById("aquecedor-runtime-label");
@@ -38247,7 +38317,11 @@
           if (aquecedorRuntimeUiPin && Date.now() < aquecedorRuntimeUiPin.until) {
             const pinned = applyAquecedorRuntimeUiPin(aquecedorRuntimeStatusCache || {});
             if (label) {
-              label.textContent = `Motor: ativo | sincronizando status…${reason ? ` (${reason})` : ""}`;
+              label.textContent = `${buildAquecedorRuntimeStatusLine({
+                ...pinned,
+                running: true,
+                desiredRunning: true,
+              })} · sincronizando${reason ? ` (${reason})` : ""}`;
             }
             renderAquecedorRuntimeHero(pinned);
             renderAquecedorRuntimeProgress();
@@ -38257,9 +38331,9 @@
           const cached = aquecedorRuntimeStatusCache;
           if (cached && (cached.running === true || cached.desiredRunning === true)) {
             if (label) {
-              label.textContent = `Motor: ${
-                cached.running ? "ativo" : "retomando"
-              } | atualizando status…${reason ? ` (${reason})` : ""}`;
+              label.textContent = `${buildAquecedorRuntimeStatusLine(cached)} · atualizando${
+                reason ? ` (${reason})` : ""
+              }`;
             }
             renderAquecedorRuntimeHero(cached);
             renderAquecedorRuntimeProgress();
@@ -38324,19 +38398,12 @@
 
           aquecedorRuntimeStatusCache = data || null;
           clearAquecedorRuntimeUiPinIfConfirmed(data);
-          const isProcessing = data?.isProcessing === true;
           const motorRunning = running || desiredRunning;
           if (motorRunning) {
             showAquecedorStartStopButtons();
           }
-          const nextAllowedAt = data?.nextAllowedAt
-            ? new Date(data.nextAllowedAt).toLocaleTimeString("pt-BR")
-            : "sem espera";
-          const lastResult = String(data?.lastResult || "sem histórico");
           if (label) {
-            label.textContent = `Motor: ${
-              running ? "ativo" : desiredRunning ? "retomando" : "parado"
-            } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
+            label.textContent = buildAquecedorRuntimeStatusLine(data || {});
           }
           updateAquecedorStartStopVisibility(motorRunning, data);
           renderAquecedorRuntimeHero(data);
@@ -38510,19 +38577,25 @@
             countEl.textContent = "";
           }
         }
+        const phaseLabel = resolveAquecedorPhaseLabel(status);
         if (processing) {
           hero.classList.add("processing");
-          titleEl.textContent = "Aquecedor processando agora";
+          titleEl.textContent = phaseLabel;
           subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
           syncAquecedorStopButtonLabel(status);
           return;
         }
         if (running) {
           hero.classList.add("active");
-          titleEl.textContent =
-            status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo";
+          titleEl.textContent = phaseLabel;
           if (status?.windowOpen === false) {
             subEl.textContent = buildAquecedorExpedienteHeroSub(status);
+          } else if (phaseLabel === "Aquecedor em pausa") {
+            const nextLabel = formatAquecedorNextSendLabel(status);
+            subEl.textContent =
+              nextLabel && nextLabel !== "imediato" && nextLabel !== "agora"
+                ? `Aguardando intervalo. Próximo envio: ${nextLabel}.`
+                : lastResult || "Aguardando intervalo entre envios.";
           } else {
             const parsed = splitAquecedorLastResultMessage(lastResult);
             subEl.textContent =
@@ -38531,7 +38604,7 @@
           syncAquecedorStopButtonLabel(status);
           return;
         }
-        titleEl.textContent = "Aquecedor parado";
+        titleEl.textContent = phaseLabel;
         subEl.textContent = lastResult || 'Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.';
       }
 
@@ -42252,7 +42325,7 @@
             : `Ação iniciada: ${action}.`;
         addAquecedorCommandLog(actionStartLabel);
         try {
-          const runOnceTimeout = action === "runOnce" ? 90000 : 12000;
+          const runOnceTimeout = action === "runOnce" ? 180000 : 12000;
           const response = await fetchWithTimeout(
             url,
             {
@@ -42292,17 +42365,20 @@
           if (action === "runOnce") {
             const statusPayload = data?.status || {};
             const lastResult = String(statusPayload?.lastResult || data?.message || "").trim();
+            const desiredRunning =
+              statusPayload?.desiredRunning === true ||
+              aquecedorRuntimeStatusCache?.desiredRunning === true;
             aquecedorRuntimeStatusCache = {
               ...(aquecedorRuntimeStatusCache || {}),
               ...statusPayload,
-              running: false,
-              desiredRunning: false,
+              running: desiredRunning ? statusPayload?.running !== false : false,
+              desiredRunning,
               isProcessing: false,
               lastResult: lastResult || aquecedorRuntimeStatusCache?.lastResult,
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
-            updateAquecedorStartStopVisibility(false, aquecedorRuntimeStatusCache);
+            updateAquecedorStartStopVisibility(desiredRunning, aquecedorRuntimeStatusCache);
             if (lastResult) {
               addAquecedorCommandLog("Resultado: " + lastResult);
             } else {
