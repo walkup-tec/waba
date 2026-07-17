@@ -20,6 +20,14 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-17 — Aquecedor: equidade contínua por rodízio LRU
+- Causa: compensar apenas o menor volume fazia um par monopolizar o ciclo até alcançar os demais
+- Fix: priorizar o par há mais tempo sem troca; impedir repetição imediata; volume e direção como desempates
+- Validação real: enviados/recebidos atuais próximos (`Soma 40/38`, `Walkup 38/40`, `Drax 39/39`) e projeção com 2 envios em cada uma das 6 direções nos próximos 12 ciclos
+- Marker: `DEPLOY-2026-07-17-aquecedor-rodizio-pares-lru`
+- Ver `doc/LOG-2026-07-17__120500__aquecedor-rodizio-pares-lru.md`
+- Keywords: `equidade contínua`, `rodízio LRU`, `pares`, `starvation`, `Drax`, `Walkup`, `Soma`
+
 ## 2026-07-17 — Aquecedor: Soma fora do ciclo + contador “…”
 - Causa: equidade usava histórico eterno (281 trocas soma↔walkup) → score punia o par; turno do par nunca expirava
 - Fix: janela equidade 24h + turno stale 6h; persistir `connectedSummary`; refresh no GET `/aquecedor/status`

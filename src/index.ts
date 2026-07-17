@@ -1532,12 +1532,15 @@ type AquecedorTurnManager = {
   getDestReceiveCount: (destinoRaw: string) => number;
   getUndirectedPairSendTotal: (instA: string, instB: string) => number;
   getTotalDirectedSendCount: () => number;
+  /** Par (chave indireta) do evento mais recente — usado para rodízio de conversas. */
+  getLastEventPairKey: () => string | null;
   scoreEquityCombination: (
     origemRaw: string,
     destinoRaw: string,
     comboIndex: number,
     startIndex: number,
     equityBaseline: {
+      minPairTotal: number;
       minDirected: number;
       minOriginSend: number;
       minDestReceive: number;
@@ -1699,12 +1702,19 @@ async function loadAquecedorTurnManager(
     return `${origem} não pode enviar para ${destino} no turno atual.`;
   };
 
+  const lastEvent = events.length ? events[events.length - 1] : null;
+  const lastEventPairKey = lastEvent
+    ? buildAquecedorPairKey(lastEvent.fromInst, lastEvent.toInst)
+    : null;
+  const getLastEventPairKey = (): string | null => lastEventPairKey;
+
   const scoreEquityCombination = (
     origemRaw: string,
     destinoRaw: string,
     comboIndex: number,
     startIndex: number,
     equityBaseline: {
+      minPairTotal: number;
       minDirected: number;
       minOriginSend: number;
       minDestReceive: number;
@@ -1714,16 +1724,31 @@ async function loadAquecedorTurnManager(
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
     const directedKey = buildAquecedorDirectedKey(origem, destino);
     const directed = directedSendCounts.get(directedKey) ?? 0;
+    const pairTotal = getUndirectedPairSendTotal(origem, destino);
     const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
     const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
 
-    let score = (directed - equityBaseline.minDirected) * 1_000_000_000_000;
-    score += (oSend - equityBaseline.minOriginSend) * 1_000_000_000;
-    score += (dRecv - equityBaseline.minDestReceive) * 1_000_000;
+    let score = 0;
+    // Rodízio de conversas: o par que acabou de trocar mensagem cede a vez a outro par.
+    // Se só houver esse par elegível, todos recebem a mesma penalidade e ele ainda sai.
+    if (lastEventPairKey && buildAquecedorPairKey(origem, destino) === lastEventPairKey) {
+      score += 1e18;
+    }
+    // Primário: rodízio LRU por par — quem trocou há MAIS tempo vai primeiro.
+    // Garante que todos os pares circulem continuamente (frequências iguais →
+    // enviados/recebidos convergem), sem pausar um par por horas para "compensar".
+    const pairLastAtMs = pairLastEventAtMs.get(buildAquecedorPairKey(origem, destino)) ?? 0;
+    const recencyMinutes = Math.max(0, (pairLastAtMs - equityWindowStartMs) / 60_000);
+    score += recencyMinutes * 1_000_000_000_000;
+    // Equidade por volume do par na janela — desempate.
+    score += (pairTotal - equityBaseline.minPairTotal) * 1_000_000_000;
+    score += (directed - equityBaseline.minDirected) * 1_000_000;
+    score += (oSend - equityBaseline.minOriginSend) * 1_000;
+    score += (dRecv - equityBaseline.minDestReceive) * 100;
 
     const recentIdx = recentDirectedEdges.indexOf(directedKey);
     if (recentIdx >= 0) {
-      score += (recentIdx + 1) * 10_000;
+      score += (recentIdx + 1) * 10;
     }
 
     // Resposta pendente só desempata — não monopoliza o ciclo (equidade primeiro).
@@ -1774,6 +1799,7 @@ async function loadAquecedorTurnManager(
     getDestReceiveCount,
     getUndirectedPairSendTotal,
     getTotalDirectedSendCount,
+    getLastEventPairKey,
     scoreEquityCombination,
   };
 }
@@ -1823,10 +1849,15 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
     }
   }
 
+  let minPairTotal = Number.POSITIVE_INFINITY;
   let minDirected = Number.POSITIVE_INFINITY;
   let minOriginSend = Number.POSITIVE_INFINITY;
   let minDestReceive = Number.POSITIVE_INFINITY;
   for (const { combo } of eligible) {
+    minPairTotal = Math.min(
+      minPairTotal,
+      manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino),
+    );
     minDirected = Math.min(
       minDirected,
       manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino),
@@ -1834,11 +1865,12 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
     minOriginSend = Math.min(minOriginSend, manager.getOriginSendCount(combo.instancia_origem));
     minDestReceive = Math.min(minDestReceive, manager.getDestReceiveCount(combo.instancia_destino));
   }
+  if (!Number.isFinite(minPairTotal)) minPairTotal = 0;
   if (!Number.isFinite(minDirected)) minDirected = 0;
   if (!Number.isFinite(minOriginSend)) minOriginSend = 0;
   if (!Number.isFinite(minDestReceive)) minDestReceive = 0;
 
-  const equityBaseline = { minDirected, minOriginSend, minDestReceive };
+  const equityBaseline = { minPairTotal, minDirected, minOriginSend, minDestReceive };
   const scored: Array<{ combo: T; index: number; score: number }> = eligible.map(
     ({ combo, index }) => ({
       combo,

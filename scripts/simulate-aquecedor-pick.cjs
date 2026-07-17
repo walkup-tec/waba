@@ -229,12 +229,18 @@ function buildTurnManager(events) {
     return "livre";
   };
 
+  const lastEvent = events.length ? events[events.length - 1] : null;
+  const lastEventPairKey = lastEvent ? pairKey(lastEvent.fromInst, lastEvent.toInst) : null;
+
   return {
     instanceStats,
     pairLastSender,
     pairStates,
     directedSendCounts,
     recentDirectedEdges,
+    lastEventPairKey,
+    pairLastEventAtMs,
+    equityWindowStartMs,
     owesPairReply,
     canSendDirected,
     blockReason,
@@ -271,8 +277,12 @@ function pick(manager, combinations, startIndex) {
     if (nonSaturated.length) eligible = nonSaturated;
   }
 
-  let minDirected = Infinity, minOrigin = Infinity, minDest = Infinity;
+  let minPairTotal = Infinity, minDirected = Infinity, minOrigin = Infinity, minDest = Infinity;
   for (const { combo } of eligible) {
+    minPairTotal = Math.min(
+      minPairTotal,
+      manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino),
+    );
     minDirected = Math.min(
       minDirected,
       manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino),
@@ -280,25 +290,36 @@ function pick(manager, combinations, startIndex) {
     minOrigin = Math.min(minOrigin, manager.getOriginSendCount(combo.instancia_origem));
     minDest = Math.min(minDest, manager.getDestReceiveCount(combo.instancia_destino));
   }
+  if (!Number.isFinite(minPairTotal)) minPairTotal = 0;
   if (!Number.isFinite(minDirected)) minDirected = 0;
   if (!Number.isFinite(minOrigin)) minOrigin = 0;
   if (!Number.isFinite(minDest)) minDest = 0;
 
   const scored = eligible.map(({ combo, index }) => {
     const directed = manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino);
+    const pairTotal = manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino);
     const oSend = manager.getOriginSendCount(combo.instancia_origem);
     const dRecv = manager.getDestReceiveCount(combo.instancia_destino);
-    let score = (directed - minDirected) * 1e12;
-    score += (oSend - minOrigin) * 1e9;
-    score += (dRecv - minDest) * 1e6;
+    let score = 0;
+    const pk = pairKey(combo.instancia_origem, combo.instancia_destino);
+    if (manager.lastEventPairKey && pk === manager.lastEventPairKey) {
+      score += 1e18;
+    }
+    const pairLastAtMs = manager.pairLastEventAtMs.get(pk) ?? 0;
+    const recencyMinutes = Math.max(0, (pairLastAtMs - manager.equityWindowStartMs) / 60000);
+    score += recencyMinutes * 1e12;
+    score += (pairTotal - minPairTotal) * 1e9;
+    score += (directed - minDirected) * 1e6;
+    score += (oSend - minOrigin) * 1e3;
+    score += (dRecv - minDest) * 100;
     const recentIdx = manager.recentDirectedEdges.indexOf(
       directedKey(combo.instancia_origem, combo.instancia_destino),
     );
-    if (recentIdx >= 0) score += (recentIdx + 1) * 1e4;
+    if (recentIdx >= 0) score += (recentIdx + 1) * 10;
     if (manager.owesPairReply(combo.instancia_origem, combo.instancia_destino)) score -= 500;
     const rotation = (((index - startIndex) % 1000) + 1000) % 1000;
     score += rotation * 0.001;
-    return { combo, index, score, directed, oSend, dRecv };
+    return { combo, index, score, pairTotal, directed, oSend, dRecv };
   });
   scored.sort((a, b) => a.score - b.score);
   const best = scored[0].score;
@@ -346,9 +367,10 @@ function pick(manager, combinations, startIndex) {
 
   const result = pick(manager, combos, 0);
   console.log("\n--- Scores (ordenados) ---");
+  console.log(`(último par que trocou: ${manager.lastEventPairKey})`);
   for (const s of result.scored) {
     console.log(
-      `${(s.combo.instancia_origem + " -> " + s.combo.instancia_destino).padEnd(22)} score=${s.score.toExponential(3)} directed=${s.directed} originSend=${s.oSend} destRecv=${s.dRecv}`,
+      `${(s.combo.instancia_origem + " -> " + s.combo.instancia_destino).padEnd(22)} score=${s.score.toExponential(3)} pairTotal=${s.pairTotal} directed=${s.directed} originSend=${s.oSend} destRecv=${s.dRecv}`,
     );
   }
   console.log(
@@ -357,6 +379,21 @@ function pick(manager, combinations, startIndex) {
       ? `${result.chosen.combo.instancia_origem} -> ${result.chosen.combo.instancia_destino}`
       : "nenhum",
   );
+
+  // Projeção: simula os próximos 12 envios aplicando o mesmo algoritmo
+  console.log("\n--- Projeção dos próximos 12 envios ---");
+  const futureEvents = [...events];
+  for (let step = 0; step < 12; step += 1) {
+    const mgr = buildTurnManager(futureEvents);
+    const res = pick(mgr, combos, step);
+    if (!res.chosen) {
+      console.log(`${String(step + 1).padStart(2)}. nenhum par elegível`);
+      break;
+    }
+    const { instancia_origem: o, instancia_destino: d } = res.chosen.combo;
+    console.log(`${String(step + 1).padStart(2)}. ${o} -> ${d}`);
+    futureEvents.push({ at: new Date(Date.now() + step * 1000).toISOString(), fromInst: o, toInst: d });
+  }
 })().catch((e) => {
   console.error("ERRO:", e.message);
   process.exit(1);

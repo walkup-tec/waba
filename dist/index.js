@@ -1359,19 +1359,39 @@ async function loadAquecedorTurnManager(supabase, connected) {
         }
         return `${origem} não pode enviar para ${destino} no turno atual.`;
     };
+    const lastEvent = events.length ? events[events.length - 1] : null;
+    const lastEventPairKey = lastEvent
+        ? buildAquecedorPairKey(lastEvent.fromInst, lastEvent.toInst)
+        : null;
+    const getLastEventPairKey = () => lastEventPairKey;
     const scoreEquityCombination = (origemRaw, destinoRaw, comboIndex, startIndex, equityBaseline) => {
         const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
         const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
         const directedKey = buildAquecedorDirectedKey(origem, destino);
         const directed = directedSendCounts.get(directedKey) ?? 0;
+        const pairTotal = getUndirectedPairSendTotal(origem, destino);
         const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
         const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
-        let score = (directed - equityBaseline.minDirected) * 1000000000000;
-        score += (oSend - equityBaseline.minOriginSend) * 1000000000;
-        score += (dRecv - equityBaseline.minDestReceive) * 1000000;
+        let score = 0;
+        // Rodízio de conversas: o par que acabou de trocar mensagem cede a vez a outro par.
+        // Se só houver esse par elegível, todos recebem a mesma penalidade e ele ainda sai.
+        if (lastEventPairKey && buildAquecedorPairKey(origem, destino) === lastEventPairKey) {
+            score += 1e18;
+        }
+        // Primário: rodízio LRU por par — quem trocou há MAIS tempo vai primeiro.
+        // Garante que todos os pares circulem continuamente (frequências iguais →
+        // enviados/recebidos convergem), sem pausar um par por horas para "compensar".
+        const pairLastAtMs = pairLastEventAtMs.get(buildAquecedorPairKey(origem, destino)) ?? 0;
+        const recencyMinutes = Math.max(0, (pairLastAtMs - equityWindowStartMs) / 60000);
+        score += recencyMinutes * 1000000000000;
+        // Equidade por volume do par na janela — desempate.
+        score += (pairTotal - equityBaseline.minPairTotal) * 1000000000;
+        score += (directed - equityBaseline.minDirected) * 1000000;
+        score += (oSend - equityBaseline.minOriginSend) * 1000;
+        score += (dRecv - equityBaseline.minDestReceive) * 100;
         const recentIdx = recentDirectedEdges.indexOf(directedKey);
         if (recentIdx >= 0) {
-            score += (recentIdx + 1) * 10000;
+            score += (recentIdx + 1) * 10;
         }
         // Resposta pendente só desempata — não monopoliza o ciclo (equidade primeiro).
         if (owesPairReply(origemRaw, destinoRaw)) {
@@ -1409,6 +1429,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
         getDestReceiveCount,
         getUndirectedPairSendTotal,
         getTotalDirectedSendCount,
+        getLastEventPairKey,
         scoreEquityCombination,
     };
 }
@@ -1441,21 +1462,25 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
             eligible = nonSaturated;
         }
     }
+    let minPairTotal = Number.POSITIVE_INFINITY;
     let minDirected = Number.POSITIVE_INFINITY;
     let minOriginSend = Number.POSITIVE_INFINITY;
     let minDestReceive = Number.POSITIVE_INFINITY;
     for (const { combo } of eligible) {
+        minPairTotal = Math.min(minPairTotal, manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino));
         minDirected = Math.min(minDirected, manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino));
         minOriginSend = Math.min(minOriginSend, manager.getOriginSendCount(combo.instancia_origem));
         minDestReceive = Math.min(minDestReceive, manager.getDestReceiveCount(combo.instancia_destino));
     }
+    if (!Number.isFinite(minPairTotal))
+        minPairTotal = 0;
     if (!Number.isFinite(minDirected))
         minDirected = 0;
     if (!Number.isFinite(minOriginSend))
         minOriginSend = 0;
     if (!Number.isFinite(minDestReceive))
         minDestReceive = 0;
-    const equityBaseline = { minDirected, minOriginSend, minDestReceive };
+    const equityBaseline = { minPairTotal, minDirected, minOriginSend, minDestReceive };
     const scored = eligible.map(({ combo, index }) => ({
         combo,
         index,
@@ -7241,7 +7266,7 @@ app.get("/aquecedor/status", async (req, res) => {
         // Contador de instâncias: refresca se nunca houve ciclo neste boot (summary.at=0)
         // ou se o resumo persistido está velho (>2 min). Evita "instâncias: …" na UI.
         const summaryAgeMs = motor.connectedSummary.at > 0 ? Date.now() - motor.connectedSummary.at : Number.POSITIVE_INFINITY;
-        if (motor.desired === true && summaryAgeMs > 120_000) {
+        if (motor.desired === true && summaryAgeMs > 120000) {
             try {
                 const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
                 const connectedActive = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(resolved.connected);
