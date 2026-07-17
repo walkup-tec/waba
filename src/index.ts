@@ -1307,6 +1307,17 @@ function buildAquecedorPairContext(
 }
 
 const AQUECEDOR_PAIR_SENDER_LOOKBACK = 500;
+/**
+ * Janela dos contadores de equidade. Sem ela, histórico antigo (semanas) pune pares
+ * veteranos para sempre: soma↔walkup tinha 281 trocas acumuladas e nunca mais era
+ * escolhido — o ciclo degenerava para um "hub" (todos falam só com uma instância).
+ */
+const AQUECEDOR_TURN_EQUITY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * Par sem troca há mais que isso: o turno do par reinicia (qualquer lado pode iniciar).
+ * Evita par congelado quando o "devedor" da resposta nunca vence a equidade.
+ */
+const AQUECEDOR_PAIR_TURN_STALE_MS = 6 * 60 * 60 * 1000;
 
 function buildAquecedorInstanceCanonicalMap(
   connected: Array<{ instancia: string }>,
@@ -1552,6 +1563,9 @@ async function loadAquecedorTurnManager(
   const pairLastSender = new Map<string, string>();
   const pairStates = new Map<string, AquecedorPairConversationState>();
   const directedSendCounts = new Map<string, number>();
+  const pairLastEventAtMs = new Map<string, number>();
+  const equityWindowStartMs = Date.now() - AQUECEDOR_TURN_EQUITY_WINDOW_MS;
+  const pairTurnStaleBeforeMs = Date.now() - AQUECEDOR_PAIR_TURN_STALE_MS;
 
   const ensureStats = (canonical: string): AquecedorInstanceTurnStats => {
     const key = canonical.toLowerCase();
@@ -1581,26 +1595,49 @@ async function loadAquecedorTurnManager(
   };
 
   for (const ev of events) {
+    const evAtMs = new Date(ev.at).getTime();
+    const withinEquityWindow = Number.isFinite(evAtMs) && evAtMs >= equityWindowStartMs;
     const fromStats = ensureStats(ev.fromInst);
     const toStats = ensureStats(ev.toInst);
-    fromStats.sendCount += 1;
-    toStats.receiveCount += 1;
+    // Contadores de equidade só na janela recente — histórico antigo não pune o par para sempre.
+    if (withinEquityWindow) {
+      fromStats.sendCount += 1;
+      toStats.receiveCount += 1;
+      const directedKey = buildAquecedorDirectedKey(ev.fromInst, ev.toInst);
+      directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
+    }
     fromStats.lastSentAt = ev.at;
     toStats.lastReceivedAt = ev.at;
     toStats.lastReceivedFrom = ev.fromInst;
     fromStats.outboundSinceInbound += 1;
     toStats.outboundSinceInbound = 0;
     pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
-    const directedKey = buildAquecedorDirectedKey(ev.fromInst, ev.toInst);
-    directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
 
     const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
+    if (Number.isFinite(evAtMs)) pairLastEventAtMs.set(pairKey, evAtMs);
     const pairState = ensurePairState(pairKey);
     pairState.exchangeCount += 1;
     if (pairState.pendingReplyFrom?.toLowerCase() === ev.fromInst.toLowerCase()) {
       pairState.pendingReplyFrom = null;
     } else {
       pairState.pendingReplyFrom = ev.toInst;
+    }
+  }
+
+  // Par parado há muito tempo: turno reinicia (qualquer lado pode abrir a conversa).
+  // Sem isso, "soma enviou por último em 08/07" bloqueava soma→walkup indefinidamente.
+  for (const [pairKey, lastAtMs] of pairLastEventAtMs) {
+    if (lastAtMs >= pairTurnStaleBeforeMs) continue;
+    pairLastSender.delete(pairKey);
+    const pairState = pairStates.get(pairKey);
+    if (pairState) pairState.pendingReplyFrom = null;
+  }
+
+  // Instância sem enviar há muito tempo também não fica presa aguardando inbound antigo.
+  for (const stats of instanceStats.values()) {
+    const lastSentMs = stats.lastSentAt ? new Date(stats.lastSentAt).getTime() : Number.NaN;
+    if (Number.isFinite(lastSentMs) && lastSentMs < pairTurnStaleBeforeMs) {
+      stats.outboundSinceInbound = 0;
     }
   }
 
@@ -8589,6 +8626,23 @@ app.get("/aquecedor/status", async (req, res) => {
       return res.status(401).json({ error: "Sessão sem e-mail válido para consultar o Aquecedor." });
     }
     await reloadAquecedorOwnerMotorsFromDisk();
+    const motor = getAquecedorOwnerMotor(ownerEmail);
+    // Contador de instâncias: refresca se nunca houve ciclo neste boot (summary.at=0)
+    // ou se o resumo persistido está velho (>2 min). Evita "instâncias: …" na UI.
+    const summaryAgeMs = motor.connectedSummary.at > 0 ? Date.now() - motor.connectedSummary.at : Number.POSITIVE_INFINITY;
+    if (motor.desired === true && summaryAgeMs > 120_000) {
+      try {
+        const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
+        const connectedActive = await filterAquecedorCycleConnected(resolved.connected);
+        updateAquecedorOwnerConnectedSummary(ownerEmail, connectedActive, resolved.connected);
+        void persistAquecedorOwnerSnapshot(ownerEmail);
+      } catch (refreshErr) {
+        console.warn(
+          "[Aquecedor] falha ao refrescar contagem de instâncias no status:",
+          refreshErr instanceof Error ? refreshErr.message : refreshErr,
+        );
+      }
+    }
     const config = await loadAquecedorEffectiveConfig();
     const nowSp = nowInSaoPaulo();
     const windowOpen = isAquecedorWindowOpen(config, nowSp);
@@ -8598,7 +8652,6 @@ app.get("/aquecedor/status", async (req, res) => {
     const nextMs = live.nextAllowedAt ? new Date(String(live.nextAllowedAt)).getTime() : NaN;
     if (Number.isFinite(nextMs) && nextMs <= Date.now()) {
       live.nextAllowedAt = null;
-      const motor = getAquecedorOwnerMotor(ownerEmail);
       if (motor.runtime.nextAllowedAt) {
         motor.runtime.nextAllowedAt = null;
         void persistAquecedorOwnerSnapshot(ownerEmail, { nextAllowedAt: null });

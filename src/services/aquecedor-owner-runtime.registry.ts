@@ -181,6 +181,33 @@ export function shouldProcessLeadOwnerMotor(motor: AquecedorOwnerMotor): boolean
   return false;
 }
 
+function parseConnectedSummary(raw: unknown): AquecedorConnectedSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const names = Array.isArray(row.names)
+    ? row.names.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const preparingNames = Array.isArray(row.preparingNames)
+    ? row.preparingNames.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const at = typeof row.at === "number" && Number.isFinite(row.at) ? row.at : 0;
+  if (!at) return null;
+  return {
+    count: typeof row.count === "number" && Number.isFinite(row.count) ? row.count : names.length,
+    names,
+    preparingCount:
+      typeof row.preparingCount === "number" && Number.isFinite(row.preparingCount)
+        ? row.preparingCount
+        : preparingNames.length,
+    preparingNames,
+    totalEnabled:
+      typeof row.totalEnabled === "number" && Number.isFinite(row.totalEnabled)
+        ? row.totalEnabled
+        : names.length + preparingNames.length,
+    at,
+  };
+}
+
 function parseOwnerSnapshot(raw: unknown): AquecedorRuntimePersistedSnapshot {
   const snapRaw = (raw || {}) as Record<string, unknown>;
   return {
@@ -260,6 +287,14 @@ function parsePersistedOwners(raw: Record<string, unknown>): void {
       const snapshot = parseOwnerSnapshot(row.snapshot);
       if (desired === true) snapshot.running = true;
       mergeOwnerFromPersisted(ownerEmail, desired, snapshot);
+      // Contador de instâncias sobrevive a restart: usa o resumo persistido se for mais novo.
+      const persistedSummary = parseConnectedSummary(row.connectedSummary);
+      if (persistedSummary) {
+        const motor = getAquecedorOwnerMotor(ownerEmail);
+        if (persistedSummary.at > motor.connectedSummary.at) {
+          motor.connectedSummary = persistedSummary;
+        }
+      }
     }
   } else if (version === 1 || version === 2) {
     const desired =
@@ -312,12 +347,19 @@ export async function reloadAquecedorOwnerMotorsFromDisk(force = false): Promise
 }
 
 async function writeAllOwnerMotorsToDisk(): Promise<void> {
-  const owners: Record<string, { desired: boolean | null; snapshot: AquecedorRuntimePersistedSnapshot }> =
-    {};
+  const owners: Record<
+    string,
+    {
+      desired: boolean | null;
+      snapshot: AquecedorRuntimePersistedSnapshot;
+      connectedSummary: AquecedorConnectedSummary | null;
+    }
+  > = {};
   for (const [email, motor] of ownerMotors.entries()) {
     owners[email] = {
       desired: motor.desired,
       snapshot: buildPersistedSnapshotFromMotor(motor),
+      connectedSummary: motor.connectedSummary.at > 0 ? motor.connectedSummary : null,
     };
   }
   const savedAtMs = Date.now();

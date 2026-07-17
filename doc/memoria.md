@@ -20,6 +20,18 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-17 — Aquecedor: Soma fora do ciclo + contador “…”
+- Causa: equidade usava histórico eterno (281 trocas soma↔walkup) → score punia o par; turno do par nunca expirava
+- Fix: janela equidade 24h + turno stale 6h; persistir `connectedSummary`; refresh no GET `/aquecedor/status`
+- Marker: `DEPLOY-2026-07-17-aquecedor-equidade-janela-24h`
+- Ver `doc/LOG-2026-07-17__101400__aquecedor-equidade-pares-soma.md`
+- Keywords: `pares`, `equidade`, `soma`, `walkup`, `1321-01`, `instâncias: …`
+
+## 2026-07-17 — Easypanel verde/amarelo pós-redeploy
+- Boot 07:45:24; `/health` 200 estável; flapping = 503 no SIGTERM + Traefik
+- Após verde: Iniciar Aquecedor (`aquecedorDesiredOwners=0`)
+- Ver `doc/LOG-2026-07-17__074500__easypanel-verde-amarelo-pos-redeploy.md`
+
 ## 2026-07-17 — Aquecedor parou após redeploy 20:58
 - Causa: `serverBootId` mro66ke4 = restart 16/07 20:58:25 BRT (Redeploy) no meio do ciclo; desired não sobreviveu
 - Fix: `aquecedor-desired-owners.json` + restore no boot + flush no SIGTERM
@@ -2461,4 +2473,12 @@ Palavras-chave para buscar:
 
 ## 2026-07-14 — Regra comandos locais
 - Regra global: executar comandos locais no terminal; não só listar para o usuário.
+
+
+## 2026-07-17 07:39 — Estudo Traefik WABA → Soma
+- Ultima estabilidade Traefik = **anti-thrash 2026-07-10** (separar healers; nao segundo Traefik).
+- Camadas OK: bootstrap + 443-watchdog + entrypoint-guard; heals por app sem force.
+- Soma: manter `heal-soma-gestao-vps.sh` no mesmo padrao; evitar thrash Easypanel.
+- LOG: `LOG--traefik-anti-thrash-para-soma.md`
+- Keywords: TRAEFIK-THRASH-443, anti-thrash, Soma heal 45s
 
