@@ -25,6 +25,8 @@ import {
   listAquecedorOwnerEmails,
   listAquecedorOwnersWithDesiredRunning,
   loadAquecedorOwnerRuntimeIntents,
+  loadAndApplyDurableDesiredOwners,
+  flushAquecedorOwnerMotorsToDisk,
   normalizeAquecedorOwnerEmail,
   persistAquecedorOwnerIntent,
   persistAquecedorOwnerSnapshot,
@@ -539,6 +541,7 @@ app.get("/health", (_req, res) => {
     containerService: resolveWabaContainerServiceId(),
     backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
     aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+    aquecedorDesiredOwners: listAquecedorOwnersWithDesiredRunning().length,
     evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),
     evoTlsInsecure: isEvoTlsInsecure(),
     evoHttpTimeoutMs: defaultEvoHttpTimeoutMs(),
@@ -12322,12 +12325,25 @@ const httpServer = app.listen(PORT, () => {
     );
 
     const desiredOwners = await loadAquecedorOwnerRuntimeIntents();
+    const restoredDesired = await loadAndApplyDurableDesiredOwners();
     if (ENABLE_AQUECEDOR_PROCESSING && !MAINTENANCE_MODE) {
-      const activeOwners = desiredOwners.filter((row) => row.desired === true);
+      const activeOwners = listAquecedorOwnersWithDesiredRunning();
       if (activeOwners.length) {
         await syncAquecedorWorkerLeadership();
         console.log(
-          `[Aquecedor] retomado após restart para ${activeOwners.length} proprietário(s) (runtime-intent v3).`,
+          `[Aquecedor] retomado após restart para ${activeOwners.length} proprietário(s) (runtime-intent + desired durável${
+            restoredDesired.length ? `; restaurados=${restoredDesired.join(",")}` : ""
+          }).`,
+        );
+        for (const email of activeOwners) {
+          void appendAquecedorCommandLog(
+            "Aquecedor retomado automaticamente após restart do servidor.",
+            email,
+          );
+        }
+      } else if (desiredOwners.length) {
+        console.log(
+          `[Aquecedor] ${desiredOwners.length} proprietário(s) no runtime-intent, nenhum com desired=true.`,
         );
       }
     }
@@ -12377,5 +12393,12 @@ const httpServer = app.listen(PORT, () => {
   })();
 });
 
-registerWabaGracefulShutdown(httpServer);
+registerWabaGracefulShutdown(httpServer, async () => {
+  try {
+    await flushAquecedorOwnerMotorsToDisk();
+    console.log("[shutdown] aquecedor desired/runtime-intent persistido.");
+  } catch (err) {
+    console.error("[shutdown] falha ao persistir aquecedor:", err);
+  }
+});
 

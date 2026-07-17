@@ -427,6 +427,7 @@ app.get("/health", (_req, res) => {
         containerService: (0, waba_container_service_1.resolveWabaContainerServiceId)(),
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
         aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+        aquecedorDesiredOwners: (0, aquecedor_owner_runtime_registry_1.listAquecedorOwnersWithDesiredRunning)().length,
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
         evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
@@ -10673,11 +10674,18 @@ const httpServer = app.listen(PORT, () => {
         }, DISPAROS_CHECKPOINT_MS);
         console.log(`[durabilidade] checkpoint campanhas a cada ${Math.round(DISPAROS_CHECKPOINT_MS / 1000)}s → data/disparos-local-state.json`);
         const desiredOwners = await (0, aquecedor_owner_runtime_registry_1.loadAquecedorOwnerRuntimeIntents)();
+        const restoredDesired = await (0, aquecedor_owner_runtime_registry_1.loadAndApplyDurableDesiredOwners)();
         if (ENABLE_AQUECEDOR_PROCESSING && !MAINTENANCE_MODE) {
-            const activeOwners = desiredOwners.filter((row) => row.desired === true);
+            const activeOwners = (0, aquecedor_owner_runtime_registry_1.listAquecedorOwnersWithDesiredRunning)();
             if (activeOwners.length) {
                 await syncAquecedorWorkerLeadership();
-                console.log(`[Aquecedor] retomado após restart para ${activeOwners.length} proprietário(s) (runtime-intent v3).`);
+                console.log(`[Aquecedor] retomado após restart para ${activeOwners.length} proprietário(s) (runtime-intent + desired durável${restoredDesired.length ? `; restaurados=${restoredDesired.join(",")}` : ""}).`);
+                for (const email of activeOwners) {
+                    void appendAquecedorCommandLog("Aquecedor retomado automaticamente após restart do servidor.", email);
+                }
+            }
+            else if (desiredOwners.length) {
+                console.log(`[Aquecedor] ${desiredOwners.length} proprietário(s) no runtime-intent, nenhum com desired=true.`);
             }
         }
         setInterval(() => {
@@ -10714,4 +10722,12 @@ const httpServer = app.listen(PORT, () => {
         (0, vps_cpu_monitor_service_1.startVpsCpuLocalSampler)();
     })();
 });
-(0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer);
+(0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer, async () => {
+    try {
+        await (0, aquecedor_owner_runtime_registry_1.flushAquecedorOwnerMotorsToDisk)();
+        console.log("[shutdown] aquecedor desired/runtime-intent persistido.");
+    }
+    catch (err) {
+        console.error("[shutdown] falha ao persistir aquecedor:", err);
+    }
+});

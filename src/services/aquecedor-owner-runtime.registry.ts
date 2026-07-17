@@ -38,6 +38,8 @@ export type AquecedorOwnerMotor = {
 };
 
 const RUNTIME_INTENT_FILE = resolveDataFile("runtime-intent.json");
+/** Intenção ligada/desligada — arquivo dedicado (não sobrescrito a cada ciclo). Sobrevive a redeploy. */
+const DESIRED_OWNERS_FILE = resolveDataFile("aquecedor-desired-owners.json");
 const AQUECEDOR_WORKER_LEASE_MS = 90_000;
 const AQUECEDOR_PERSISTED_RELOAD_MS = 2_000;
 const AQUECEDOR_PROCESSING_STALE_MS = 8 * 60 * 1000;
@@ -331,6 +333,63 @@ async function writeAllOwnerMotorsToDisk(): Promise<void> {
   persistedSavedAtMs = savedAtMs;
 }
 
+async function writeDesiredOwnersFile(): Promise<void> {
+  const desired: Record<string, true> = {};
+  for (const [email, motor] of ownerMotors.entries()) {
+    if (motor.desired === true) desired[email] = true;
+  }
+  const payload = {
+    version: 1 as const,
+    savedAt: new Date().toISOString(),
+    desired,
+  };
+  await fs.mkdir(path.dirname(DESIRED_OWNERS_FILE), { recursive: true });
+  const tmp = `${DESIRED_OWNERS_FILE}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
+  await fs.rename(tmp, DESIRED_OWNERS_FILE);
+}
+
+/**
+ * Restaura desired=true a partir do arquivo dedicado (após restart/redeploy).
+ * Garante que um snapshot de ciclo corrompido/incompleto não apague a intenção do usuário.
+ */
+export async function loadAndApplyDurableDesiredOwners(): Promise<string[]> {
+  const restored: string[] = [];
+  try {
+    const rawText = await fs.readFile(DESIRED_OWNERS_FILE, "utf-8");
+    const parsed = JSON.parse(rawText) as {
+      desired?: Record<string, unknown>;
+    };
+    const map = parsed?.desired && typeof parsed.desired === "object" ? parsed.desired : {};
+    for (const [email, value] of Object.entries(map)) {
+      if (value !== true) continue;
+      const ownerEmail = normalizeAquecedorOwnerEmail(email);
+      if (!ownerEmail) continue;
+      const motor = getAquecedorOwnerMotor(ownerEmail);
+      if (motor.desired === true) {
+        restored.push(ownerEmail);
+        continue;
+      }
+      motor.desired = true;
+      motor.snapshot.running = true;
+      motor.runtime.running = true;
+      if (!motor.runtime.lastResult || /parado/i.test(motor.runtime.lastResult)) {
+        motor.runtime.lastResult = "Aquecedor retomado após restart do servidor.";
+      }
+      restored.push(ownerEmail);
+      console.log(`[Runtime] desired durável: restaurado ${ownerEmail} = ligado.`);
+    }
+  } catch {
+    /* arquivo ausente na primeira execução */
+  }
+  return restored;
+}
+
+export async function flushAquecedorOwnerMotorsToDisk(): Promise<void> {
+  await writeAllOwnerMotorsToDisk();
+  await writeDesiredOwnersFile();
+}
+
 export async function persistAquecedorOwnerSnapshot(
   ownerEmail: string,
   overrides: Partial<AquecedorRuntimePersistedSnapshot> = {},
@@ -352,7 +411,11 @@ export async function persistAquecedorOwnerIntent(
     workerHeartbeatAt: desired ? new Date().toISOString() : null,
     isProcessing: desired ? motor.runtime.isProcessing : false,
   });
+  if (!desired) {
+    motor.runtime.nextAllowedAt = null;
+  }
   await writeAllOwnerMotorsToDisk();
+  await writeDesiredOwnersFile();
   console.log(
     `[Runtime] runtime-intent: aquecedor ${ownerEmail} desejado = ${desired ? "ligado" : "desligado"}.`,
   );

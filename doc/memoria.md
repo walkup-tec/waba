@@ -20,6 +20,24 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-17 — Aquecedor parou após redeploy 20:58
+- Causa: `serverBootId` mro66ke4 = restart 16/07 20:58:25 BRT (Redeploy) no meio do ciclo; desired não sobreviveu
+- Fix: `aquecedor-desired-owners.json` + restore no boot + flush no SIGTERM
+- Marker: `DEPLOY-2026-07-17-aquecedor-desired-sobrevive-redeploy`
+- Ver `doc/LOG-2026-07-17__073500__aquecedor-parou-apos-redeploy.md`
+- Keywords: `redeploy`, `desired`, `serverBootId`, `20:58`
+
+**2026-07-17 — Soma gestao Traefik:** reincidência 404/502 pós-redeploy = overlay + Host slash + publish :30300. REGISTRY `SOMA-EASYPANEL-REWRITE`. Heal: `soma-master/scripts/heal-soma-gestao-vps.sh`. Sem force Traefik.
+
+
+## 2026-07-16 — Soma SIGTERM (proxy port ≠ Nitro)
+- SSH local bloqueado (`Permission denied`); sem `docker service inspect`.
+- Causa: app escuta **3000**; Domínio Easypanel/Traefik ainda em **80** → health falha → SIGTERM.
+- Probes: `soma-promotora-app…/api/health` **502**; `app.somaconecta` **404**; WABA Traefik OK.
+- Fix painel: Domínios → proxy **3000** + `/api/health`; sem force Traefik.
+- LOG: `doc/LOG-2026-07-16__203800__soma-sigterm-proxy-port-mismatch.md`
+- Keywords: `soma-promotora`, `SIGTERM`, `PORT=80`, `proxy 3000`, `Nitro`, `502`
+
 ## 2026-07-16 — Aquecedor dist UI + nextAllowedAt
 - Causa: Easypanel usa `dist/` do Git; UI nova só estava na raiz
 - Fix: commit `dist/index.html` + limpar nextAllowedAt passado no status/start
