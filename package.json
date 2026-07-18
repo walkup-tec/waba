@@ -17,6 +17,8 @@
     "check:traefik-entrypoints": "bash scripts/check-traefik-entrypoint-names.sh",
     "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
     "backup:production-data": "node scripts/backup-production-data.mjs",
+    "pull:prod-to-v02": "node scripts/pull-production-data-to-v02.cjs",
+    "apply:prod-tarball-v02": "node scripts/apply-prod-data-tarball-to-v02.cjs",
     "verify:data-safety": "node scripts/verify-production-data-safety.mjs",
     "start": "node dist/index.js",
     "free:3000": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/free-port-3000.ps1",

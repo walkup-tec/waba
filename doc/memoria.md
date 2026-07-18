@@ -20,6 +20,13 @@ Como usar:
 
 ## Última atualização
 
+## 2026-07-18 — Produção → localhost V02
+- `.env.v02` sync de `E:\Waba` + aquecedor/background OFF
+- Export SSH via Actions (`export-triggers`) + apply tarball em `data/v02`
+- Endpoint `GET /admin/infra/data-snapshot` (fallback HTTP)
+- Ver `doc/LOG-2026-07-18__181500__producao-para-localhost-v02.md`
+- Keywords: `producao`, `localhost v02`, `data-snapshot`, `export-triggers`
+
 ## 2026-07-17 — Aquecedor: equidade contínua por rodízio LRU
 - Causa: compensar apenas o menor volume fazia um par monopolizar o ciclo até alcançar os demais
 - Fix: priorizar o par há mais tempo sem troca; impedir repetição imediata; volume e direção como desempates

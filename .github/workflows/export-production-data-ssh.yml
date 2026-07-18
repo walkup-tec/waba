@@ -1,0 +1,96 @@
+# Exporta /app/data da produção WABA como artifact (para espelhar em localhost V02).
+#
+# Secrets: VPS_SSH_PRIVATE_KEY, opcional VPS_HOST
+# Manual: Actions → Export Production Data (SSH) → Run workflow
+# Auto: push em .github/export-triggers/*.json (master)
+
+name: Export Production Data (SSH)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/export-triggers/**"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY não configurado."
+            exit 1
+          fi
+
+      - name: SSH — tar /app/data
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 6m
+          script: |
+            set -euo pipefail
+            CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | grep -vE 'v02|v01' | head -1 || true)"
+            if [ -z "$CONTAINER" ]; then
+              CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | head -1 || true)"
+            fi
+            if [ -z "$CONTAINER" ]; then
+              echo "::error::Container waba_disparador não encontrado."
+              docker ps --format '{{.Names}}' | head -30
+              exit 1
+            fi
+            echo "Container: $CONTAINER"
+            OUT="/tmp/waba-prod-data-${{ github.run_id }}.tgz"
+            docker exec "$CONTAINER" sh -c 'cd /app/data && tar czf - --exclude="./_backups" --exclude="./vps-infra" .' > "$OUT"
+            ls -lh "$OUT"
+            docker exec "$CONTAINER" sh -c 'ls -la /app/data/*.json 2>/dev/null | head -80' || true
+
+      - name: SCP artifact from VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          source: /tmp/waba-prod-data-${{ github.run_id }}.tgz
+          target: ./prod-data-export
+          strip_components: 0
+
+      - name: Localizar tarball
+        id: tar
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(find prod-data-export -type f -name 'waba-prod-data-*.tgz' | head -1)"
+          if [ -z "$FILE" ]; then
+            echo "::error::tarball não encontrado após SCP"
+            find prod-data-export -type f | head -50 || true
+            exit 1
+          fi
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          ls -lh "$FILE"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: waba-prod-data
+          path: ${{ steps.tar.outputs.file }}
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Cleanup VPS tmp
+        if: always()
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            rm -f "/tmp/waba-prod-data-${{ github.run_id }}.tgz" || true

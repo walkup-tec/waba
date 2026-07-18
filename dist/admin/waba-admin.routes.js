@@ -26,6 +26,7 @@ const uptime_monitor_service_1 = require("../monitoring/uptime-monitor.service")
 const uptime_monitor_diagnostics_service_1 = require("../monitoring/uptime-monitor-diagnostics.service");
 const waba_admin_users_service_1 = require("./waba-admin-users.service");
 const waba_admin_instances_service_1 = require("./waba-admin-instances.service");
+const waba_admin_data_snapshot_service_1 = require("./waba-admin-data-snapshot.service");
 const vps_cpu_monitor_service_1 = require("../infra/vps-cpu-monitor.service");
 const system_connection_log_service_1 = require("../monitoring/system-connection-log.service");
 const system_connection_log_types_1 = require("../monitoring/system-connection-log.types");
@@ -949,6 +950,19 @@ const registerWabaAdminRoutes = (app) => {
         catch (error) {
             return res.status(500).json({
                 error: error instanceof Error ? error.message : "Não foi possível verificar alerta CPU.",
+            });
+        }
+    });
+    /** Espelho de /app/data → V02 local (somente master). Sem .env/segredos. */
+    app.get("/admin/infra/data-snapshot", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            return res.status(200).json((0, waba_admin_data_snapshot_service_1.buildWabaDataSnapshot)());
+        }
+        catch (error) {
+            return res.status(500).json({
+                error: error instanceof Error ? error.message : "Não foi possível gerar o snapshot de dados.",
             });
         }
     });

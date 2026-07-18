@@ -1,3 +1,3 @@
-﻿/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
+// Gerado/atualizado no deploy. N�o editar manualmente sem necessidade.
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-18-data-snapshot-v02";
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-17-aquecedor-rodizio-pares-lru";
