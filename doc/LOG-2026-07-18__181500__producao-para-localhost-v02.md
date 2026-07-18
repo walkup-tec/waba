@@ -25,9 +25,25 @@ Pedido: pegar tudo de produção e subir no ambiente localhost V02 (`http://loca
 - Marker: `DEPLOY-2026-07-18-data-snapshot-v02`
 
 ## Validar
-1. Após push: Actions → Export Production Data → baixar artifact
-2. `node scripts/apply-prod-data-tarball-to-v02.cjs <tgz>`
+1. Preferencial (Hostinger root) — secret SSH do Actions está ausente (falhou run 29655618510):
+   ```bash
+   curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/export-prod-data-hostinger.sh" \
+     -o /tmp/export-prod-data-hostinger.sh
+   sed -i 's/\r$//' /tmp/export-prod-data-hostinger.sh
+   chmod +x /tmp/export-prod-data-hostinger.sh
+   /tmp/export-prod-data-hostinger.sh
+   ```
+   Baixar `/root/waba-prod-data.tgz` e aplicar: `npm run apply:prod-tarball-v02 -- caminho\waba-prod-data.tgz`
+2. Alternativa: restaurar secret `VPS_SSH_PRIVATE_KEY` no GitHub e re-disparar Export (push em `.github/export-triggers/`)
 3. `npm run dev:v02` → login master → conferir assinantes/instâncias
+
+## Status 2026-07-18 15:20 BRT
+- `.env.v02` OK (secrets de `E:\Waba`, aquecedor/background OFF)
+- Commit `fb9eb02` no `master`
+- Export SSH Actions: **failure** (secret vazio)
+- Deploy FTP: **failure** (envio FTP)
+- Produção ainda no marker antigo (endpoint snapshot ainda não live)
+- `data/v02` local ainda vazio — aguarda tarball do Hostinger
 
 ## Segurança
 - Não commit de `.env`
