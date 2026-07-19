@@ -1,3 +1,6 @@
+﻿## 2026-07-19 11:10 — Endpoint Soma aquecedor-instances
+- GET /integrations/soma/aquecedor-instances + SOMA_WABA_INTEGRATION_KEY / owner mozart.pmo@gmail.com
+- LOG: doc/LOG-2026-07-19__111015__soma-aquecedor-instances-endpoint.md
 # MemÃ³ria Consolidada do Projeto
 
 Este arquivo Ã© atualizado a cada tarefa executada.
@@ -2496,4 +2499,5 @@ Palavras-chave para buscar:
 - Soma: manter `heal-soma-gestao-vps.sh` no mesmo padrao; evitar thrash Easypanel.
 - LOG: `LOG--traefik-anti-thrash-para-soma.md`
 - Keywords: TRAEFIK-THRASH-443, anti-thrash, Soma heal 45s
+
 
