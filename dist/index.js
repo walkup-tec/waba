@@ -4224,6 +4224,69 @@ app.get("/instancias/uso-config", async (req, res) => {
         return res.status(500).json({ error: "Erro ao buscar configuração de uso das instâncias." });
     }
 });
+/**
+ * Integração Soma CRM — lista instâncias do aquecedor do owner configurado
+ * (padrão: mozart.pmo@gmail.com). Auth: header X-Soma-Waba-Key = SOMA_WABA_INTEGRATION_KEY.
+ */
+app.get("/integrations/soma/aquecedor-instances", async (req, res) => {
+    try {
+        const expected = String(process.env.SOMA_WABA_INTEGRATION_KEY || "").trim();
+        if (!expected) {
+            return res.status(503).json({
+                ok: false,
+                error: "SOMA_WABA_INTEGRATION_KEY não configurada no WABA.",
+            });
+        }
+        const provided = String(req.headers["x-soma-waba-key"] || "").trim();
+        if (!provided || provided !== expected) {
+            return res.status(401).json({ ok: false, error: "Não autorizado." });
+        }
+        const ownerEmail = String(process.env.SOMA_WABA_OWNER_EMAIL || "mozart.pmo@gmail.com")
+            .trim()
+            .toLowerCase();
+        if (!ownerEmail.includes("@")) {
+            return res.status(500).json({ ok: false, error: "SOMA_WABA_OWNER_EMAIL inválido." });
+        }
+        const auth = { email: ownerEmail, role: "subscriber" };
+        const snapshot = await buildInstancesSnapshotForAuth(auth);
+        const aquecedorNames = await listAquecedorScopedInstanceNames(ownerEmail);
+        const aquecedorSet = new Set(aquecedorNames.map((n) => n.toLowerCase()));
+        const warmthMap = await (0, aquecedor_instance_warmth_service_1.getAquecedorWarmthMapForInstances)(aquecedorNames, getSupabaseClient());
+        const items = (snapshot.items || [])
+            .filter((row) => aquecedorSet.has(String(row?.name || "").toLowerCase()))
+            .map((row) => {
+            const instanceName = String(row?.name || "").trim();
+            const warmth = warmthMap[instanceName.toLowerCase()];
+            return {
+                instanceName,
+                number: String(row?.number || "").trim(),
+                whatsappName: String(row?.displayName || row?.whatsappNameOverride || instanceName).trim(),
+                instanceAlias: String(row?.instanceAlias || "").trim(),
+                contacts: Number(row?.contacts) || 0,
+                messages: Number(row?.messages) || 0,
+                profilePicUrl: String(row?.profilePicUrl || "").trim(),
+                avatarVersion: String(row?.avatarVersion || "").trim(),
+                connectionStatus: String(row?.connectionStatus || "unknown"),
+                warmthLevel: warmth?.level ?? 0,
+                warmthLabel: warmth?.label ?? "Não aquecido",
+            };
+        });
+        return res.status(200).json({
+            ok: true,
+            ownerEmail,
+            total: items.length,
+            cacheUpdatedAt: snapshot.cacheUpdatedAt || "",
+            items,
+        });
+    }
+    catch (error) {
+        console.error("GET /integrations/soma/aquecedor-instances", error);
+        return res.status(500).json({
+            ok: false,
+            error: "Falha ao listar instâncias do aquecedor para o Soma.",
+        });
+    }
+});
 app.post("/instancias/uso-config", async (req, res) => {
     try {
         const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];

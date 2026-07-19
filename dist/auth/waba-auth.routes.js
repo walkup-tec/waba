@@ -121,9 +121,10 @@ const isAuthBypassPath = (method, reqPath) => {
         p === "/drax-logo.png" ||
         p.startsWith("/media/") ||
         p.startsWith("/push/public-media/") ||
-        p === "/instancias/avatar") {
-        return true;
-    }
+        p === "/instancias/avatar" ||
+        p === "/integrations/soma/aquecedor-instances") {
+            return true;
+        }
     return /\.(js|mjs|css|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|map)$/i.test(p);
 };
 const wabaRequireAuthMiddleware = (req, res, next) => {
