@@ -133,7 +133,8 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
     p.startsWith("/media/") ||
     p.startsWith("/push/public-media/") ||
     p === "/instancias/avatar" ||
-    p === "/integrations/soma/aquecedor-instances"
+    p === "/integrations/soma/aquecedor-instances" ||
+    p === "/integrations/soma/alternativa-campaigns"
   ) {
     return true;
   }

@@ -5368,6 +5368,170 @@ app.get("/integrations/soma/aquecedor-instances", async (req, res) => {
   }
 });
 
+/**
+ * Integração Soma CRM — cria campanha API Alternativa no owner configurado
+ * (padrão mozart.pmo@gmail.com). Auth: X-Soma-Waba-Key.
+ * Body JSON: name, plannedSendCount, config fields, optional numbers[].
+ */
+app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
+  try {
+    const expected = String(process.env.SOMA_WABA_INTEGRATION_KEY || "").trim();
+    if (!expected) {
+      return res.status(503).json({
+        ok: false,
+        error: "SOMA_WABA_INTEGRATION_KEY não configurada no WABA.",
+      });
+    }
+    const provided = String(req.headers["x-soma-waba-key"] || "").trim();
+    if (!provided || provided !== expected) {
+      return res.status(401).json({ ok: false, error: "Não autorizado." });
+    }
+
+    const ownerEmail = String(
+      process.env.SOMA_WABA_OWNER_EMAIL || "mozart.pmo@gmail.com",
+    )
+      .trim()
+      .toLowerCase();
+    if (!ownerEmail.includes("@")) {
+      return res.status(500).json({ ok: false, error: "SOMA_WABA_OWNER_EMAIL inválido." });
+    }
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const name = String(body.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ ok: false, error: "Nome da campanha é obrigatório." });
+    }
+
+    const plannedSendCount = Math.max(0, Math.floor(Number(body.plannedSendCount) || 0));
+    const numbersRaw = Array.isArray(body.numbers) ? body.numbers : [];
+    const bucket = numbersRaw
+      .map((n: unknown) => normalizeCampaignPhone(String(n || "")))
+      .filter((n: string) => n.length >= 12);
+    const extracted = deduplicateCampaignDestinationPhones(bucket);
+    let numbers = extracted.phones;
+
+    const configSnapshot = parseDisparosConfig({
+      delayMinSeconds: body.delayMinSeconds,
+      delayMaxSeconds: body.delayMaxSeconds,
+      startHour: body.startHour,
+      endHour: body.endHour,
+      messageMode: body.messageMode === "fixed" ? "fixed" : "ai",
+      aiBriefing: body.aiBriefing,
+      aiTone: body.aiTone,
+      aiCta: body.aiCta,
+      fixedMessage: body.fixedMessage,
+      linkDestinationMode: body.linkDestinationMode === "url" ? "url" : "whatsapp",
+      whatsappTargetNumber: body.whatsappTargetNumber,
+      responseUrl: body.responseUrl,
+      shortenerProvider: "waba",
+      selectedDisparadorInstances: Array.isArray(body.selectedDisparadorInstances)
+        ? body.selectedDisparadorInstances
+        : [],
+    });
+
+    const campaignInstances = (configSnapshot.selectedDisparadorInstances || [])
+      .map((n) => String(n || "").trim())
+      .filter(Boolean);
+    if (!campaignInstances.length) {
+      return res.status(400).json({
+        ok: false,
+        error: "Selecione ao menos uma instância conectada para o disparo.",
+      });
+    }
+
+    if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
+      numbers = numbers.slice(0, plannedSendCount);
+    }
+
+    if (await shouldApplyAlternativaDispatchProfile(ownerEmail)) {
+      try {
+        await assertAlternativaDispatchReady(ownerEmail);
+      } catch (err: any) {
+        return res.status(400).json({
+          ok: false,
+          error: err?.message || "Requisitos da API Alternativa não atendidos.",
+        });
+      }
+      Object.assign(configSnapshot, applyAlternativaDispatchProfile(configSnapshot));
+    }
+
+    const now = new Date().toISOString();
+    const campaignId = crypto.randomUUID();
+    const totalNumbers = numbers.length > 0 ? numbers.length : plannedSendCount;
+    const campaign: DisparosCampaign = {
+      id: campaignId,
+      name,
+      createdAt: now,
+      status: "paused",
+      totalNumbers,
+      sentCount: 0,
+      ownerEmail,
+      configSnapshot,
+    };
+    const leads: DisparosCampaignLead[] = numbers.map((phone) => ({
+      id: crypto.randomUUID(),
+      campaignId,
+      phone,
+      status: "pending" as const,
+      createdAt: now,
+      sentAt: null,
+    }));
+
+    disparosCampaignsMemory.unshift(campaign);
+    if (leads.length) disparosCampaignLeadsMemory.unshift(...leads);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any).insert({
+          id: campaign.id,
+          campaign_name: campaign.name,
+          status: campaign.status,
+          total_numbers: campaign.totalNumbers,
+          sent_count: campaign.sentCount,
+          config_snapshot: campaign.configSnapshot,
+          created_at: campaign.createdAt,
+        });
+        if (leads.length) {
+          await (supabase.from("disparos_campaign_leads" as any) as any).insert(
+            leads.map((lead) => ({
+              id: lead.id,
+              campaign_id: lead.campaignId,
+              phone: lead.phone,
+              status: lead.status,
+              created_at: lead.createdAt,
+              sent_at: lead.sentAt,
+            })),
+          );
+        }
+      } catch (dbErr) {
+        console.error("[Soma] Falha ao gravar campanha no Supabase:", dbErr);
+      }
+    }
+
+    queuePersistDisparosLocalState();
+
+    return res.status(200).json({
+      ok: true,
+      id: campaignId,
+      campaign: { id: campaignId, name, status: "paused", totalNumbers },
+      message:
+        numbers.length > 0
+          ? "Campanha criada no WABA (pausada). Ative no painel API Alternativa para enviar."
+          : "Campanha criada no WABA (pausada) sem leads ainda. Os números do público do funil podem ser sincronizados na execução.",
+      ownerEmail,
+      leadsCount: numbers.length,
+      plannedSendCount: totalNumbers,
+    });
+  } catch (error) {
+    console.error("POST /integrations/soma/alternativa-campaigns", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Falha ao criar campanha Alternativa para o Soma.",
+    });
+  }
+});
+
 app.post("/instancias/uso-config", async (req, res) => {
   try {
     const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];

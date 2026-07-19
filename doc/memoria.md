@@ -1,4 +1,9 @@
-﻿## 2026-07-19 11:10 — Endpoint Soma aquecedor-instances
+﻿## 2026-07-19 17:47 — Soma → campanha API Alternativa
+- POST /integrations/soma/alternativa-campaigns (X-Soma-Waba-Key, owner mozart)
+- Campanha criada pausada; auth bypass igual ao aquecedor
+- LOG: doc/LOG-2026-07-19__174734__soma-alternativa-campaigns-api.md
+
+## 2026-07-19 11:10 — Endpoint Soma aquecedor-instances
 - GET /integrations/soma/aquecedor-instances + SOMA_WABA_INTEGRATION_KEY / owner mozart.pmo@gmail.com
 - LOG: doc/LOG-2026-07-19__111015__soma-aquecedor-instances-endpoint.md
 # MemÃ³ria Consolidada do Projeto
