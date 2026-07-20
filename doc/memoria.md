@@ -1,4 +1,13 @@
-﻿## 2026-07-20 20:00 — Traefik split: WABA vs Sinal Verde
+﻿## 2026-07-20 20:15 — Traefik split WABA/SV CONCLUÍDO no VPS
+- MODE=directory já existia (`/data/config` + watch)
+- `sinal-verde.yaml` isolado (http.routers); 6 chaves SV removidas do `main.yaml`
+- Validação: disparos/bet/health **200** | SV **307** | `main: limpo SV`
+- Guard v4 ativo (`sinal-verde-overlay-guard` timer+watch) — só edita `sinal-verde.yaml`
+- Scripts: `fix-sinal-verde-isolated-yaml-vps.sh` v2, split v3
+- LOG: `doc/LOG-2026-07-20__200023__traefik-split-sinal-verde-waba.md`
+- Keywords: `traefik-split`, `sinal-verde.yaml`, `http.routers`, `30310`
+
+## 2026-07-20 20:00 — Traefik split: WABA vs Sinal Verde
 - `sinal-verde.yaml` isolado; scripts SV **não** editam `main.yaml` (só strip se Easypanel recriar)
 - Scripts: `traefik-inspect-file-provider-vps.sh`, `traefik-split-sinal-verde-yaml-vps.sh`, fix v5, guard v4
 - Workflow: `.github/workflows/traefik-split-sinal-verde.yml`

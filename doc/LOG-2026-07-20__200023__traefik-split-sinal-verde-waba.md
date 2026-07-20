@@ -54,6 +54,14 @@ Confirmado no Hostinger:
 
 Primeiro `split run` abortou: `health=502` transitório. Segundo run criou `sinal-verde.yaml` **flat inválido** (sem `http.routers`) → SV 404; WABA 200. v3 + `fix-sinal-verde-isolated-yaml-vps.sh` reescreve formato Traefik padrão.
 
+## VPS — sucesso (2026-07-20 23:15 UTC)
+
+- 6 chaves SV stripped do `main.yaml`
+- `sinal-verde.yaml` com `http.routers` / `services` / middleware redirect
+- `certResolver=letsencrypt`
+- Validação: disparos/bet/health **200** | SV **307** | main limpo
+- Guard overlay v4 install OK (timer + watch)
+
 ## Keywords
 
 `traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `acesso-sinalverde`, `main.yaml-isolation`, `30310`, `http.routers`
