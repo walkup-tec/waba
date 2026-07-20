@@ -6,10 +6,10 @@
 #      https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/router/
 #
 # Uso: bash /tmp/fix-sinal-verde-isolated-yaml-vps.sh
-# Versão: fix-sv-isolated-yaml-2026-07-20-v1
+# Versão: fix-sv-isolated-yaml-2026-07-20-v2
 set -euo pipefail
 
-VERSION="fix-sv-isolated-yaml-2026-07-20-v1"
+VERSION="fix-sv-isolated-yaml-2026-07-20-v2"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 MAIN="${CFG_DIR}/main.yaml"
 SV_YAML="${CFG_DIR}/sinal-verde.yaml"
@@ -52,14 +52,13 @@ if docker service ls --format '{{.Name}}' | grep -qx "$CRM"; then
 fi
 log "local :${HOST_PORT}=$(http_code "http://127.0.0.1:${HOST_PORT}/")"
 
-# Detect certResolver (Easypanel)
+# Detect certResolver (Easypanel): TRAEFIK_CERTIFICATESRESOLVERS_<name>_ACME_...
 CERT_RESOLVER=""
 CERT_RESOLVER=$(docker service inspect easypanel-traefik --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null \
-  | grep -iE '^TRAEFIK_CERTIFICATESRESOLVERS_[^=]+=' \
+  | grep -iE '^TRAEFIK_CERTIFICATESRESOLVERS_' \
   | head -1 \
-  | sed -E 's/^TRAEFIK_CERTIFICATESRESOLVERS_([^=]+)=.*/\1/' \
+  | sed -E 's/^TRAEFIK_CERTIFICATESRESOLVERS_([^_]+)_.*/\1/i' \
   | tr '[:upper:]' '[:lower:]' || true)
-# Fallback comum Easypanel
 [[ -n "$CERT_RESOLVER" ]] || CERT_RESOLVER="letsencrypt"
 log "certResolver=${CERT_RESOLVER}"
 
@@ -70,7 +69,8 @@ cp -a "$SV_YAML" "${SV_YAML}.bak-format-${TS}" 2>/dev/null || true
 python3 - "$SV_YAML" "$URL" "$DOMAIN" "$WWW" "$CERT_RESOLVER" <<'PY'
 import json, sys
 from pathlib import Path
-path, url, domain, www, resolver = sys.argv[1:6]
+path = Path(sys.argv[1])
+url, domain, www, resolver = sys.argv[2:6]
 rule = f"Host(`{domain}`) || Host(`{www}`)"
 https_tls = {
     "domains": [{"main": domain, "sans": [www]}],
@@ -86,14 +86,14 @@ data = {
             }
         },
         "routers": {
-            f"http-sinal-verde_acesso-sinalverde-0": {
+            "http-sinal-verde_acesso-sinalverde-0": {
                 "entryPoints": ["http"],
                 "middlewares": ["sv-redirect-https"],
                 "service": "sinal-verde_acesso-sinalverde-0",
                 "rule": rule,
                 "priority": 1000,
             },
-            f"https-sinal-verde_acesso-sinalverde-0": {
+            "https-sinal-verde_acesso-sinalverde-0": {
                 "entryPoints": ["https"],
                 "service": "sinal-verde_acesso-sinalverde-0",
                 "rule": rule,
@@ -108,7 +108,6 @@ data = {
                     "passHostHeader": True,
                 }
             },
-            # réplica -1 às vezes usada pelo Easypanel
             "sinal-verde_acesso-sinalverde-1": {
                 "loadBalancer": {
                     "servers": [{"url": url}],
@@ -217,7 +216,8 @@ if [[ "$s" != "200" && "$s" != "301" && "$s" != "302" && "$s" != "307" && "$s" !
   python3 - "$SV_YAML" "$URL" "$DOMAIN" "$WWW" <<'PY'
 import json, sys
 from pathlib import Path
-path, url, domain, www = sys.argv[1:5]
+path = Path(sys.argv[1])
+url, domain, www = sys.argv[2:5]
 rule = f"Host(`{domain}`) || Host(`{www}`)"
 data = {
   "http": {
