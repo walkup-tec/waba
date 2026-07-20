@@ -1,0 +1,91 @@
+# Separar Traefik Sinal Verde no VPS (one-shot)
+#
+# Roda via SSH (secret VPS_SSH_PRIVATE_KEY):
+#   1) inspect file provider
+#   2) split main.yaml → sinal-verde.yaml (+ directory se preciso)
+#   3) install guard v4 (só sinal-verde.yaml)
+#
+# Disparo manual: Actions → "Traefik Split Sinal Verde" → Run workflow
+name: Traefik Split Sinal Verde
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "inspect | run | status"
+        required: true
+        default: "run"
+        type: choice
+        options:
+          - inspect
+          - run
+          - status
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check SSH secret
+        id: check
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY ausente"
+            exit 1
+          fi
+
+      - name: Inspect file provider
+        if: ${{ github.event.inputs.mode == 'inspect' || github.event.inputs.mode == 'run' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          command_timeout: 3m
+          script: |
+            set -euo pipefail
+            curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/traefik-inspect-file-provider-vps.sh" \
+              -o /tmp/traefik-inspect-file-provider-vps.sh
+            sed -i 's/\r$//' /tmp/traefik-inspect-file-provider-vps.sh
+            bash /tmp/traefik-inspect-file-provider-vps.sh
+
+      - name: Split yaml + install guard
+        if: ${{ github.event.inputs.mode == 'run' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            mkdir -p /root/waba-infra
+            for f in traefik-inspect-file-provider-vps.sh traefik-split-sinal-verde-yaml-vps.sh \
+                     fix-sinal-verde-traefik-safe-vps.sh sinal-verde-overlay-guard-vps.sh; do
+              curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/${f}" \
+                -o "/root/waba-infra/${f}"
+              sed -i 's/\r$//' "/root/waba-infra/${f}"
+              chmod +x "/root/waba-infra/${f}"
+            done
+            bash /root/waba-infra/traefik-split-sinal-verde-yaml-vps.sh run
+            bash /root/waba-infra/sinal-verde-overlay-guard-vps.sh install
+            bash /root/waba-infra/traefik-split-sinal-verde-yaml-vps.sh status
+            echo -n "disparos:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://wabadisparos.com.br/
+            echo -n "bet:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://bet.waba.info/
+            echo -n "health:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://waba.draxsistemas.com.br/health
+            echo -n "sv:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://acesso-sinalverde.com/
+
+      - name: Status only
+        if: ${{ github.event.inputs.mode == 'status' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          command_timeout: 3m
+          script: |
+            set -euo pipefail
+            curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/traefik-split-sinal-verde-yaml-vps.sh" \
+              -o /tmp/traefik-split-sinal-verde-yaml-vps.sh
+            sed -i 's/\r$//' /tmp/traefik-split-sinal-verde-yaml-vps.sh
+            bash /tmp/traefik-split-sinal-verde-yaml-vps.sh status

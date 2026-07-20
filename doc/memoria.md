@@ -1,4 +1,40 @@
-﻿## 2026-07-19 17:47 — Soma → campanha API Alternativa
+﻿## 2026-07-20 20:00 — Traefik split: WABA vs Sinal Verde
+- `sinal-verde.yaml` isolado; scripts SV **não** editam `main.yaml` (só strip se Easypanel recriar)
+- Scripts: `traefik-inspect-file-provider-vps.sh`, `traefik-split-sinal-verde-yaml-vps.sh`, fix v5, guard v4
+- Workflow: `.github/workflows/traefik-split-sinal-verde.yml`
+- Rules: `sinal-verde-heal-pos-redeploy.mdc` + `ucp-traefik-static-dynamic.mdc`
+- LOG: `doc/LOG-2026-07-20__200023__traefik-split-sinal-verde-waba.md`
+- Keywords: `traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `30310`
+
+## 2026-07-20 19:51 — Landings restauradas (502→200)
+- bet + wabadisparos + health = **200** (validado de fora)
+- Restore Hostinger: publish :30210/:30211 + bak/backends (script emergency-restore-landings-502)
+
+## 2026-07-20 19:46 — Landings 502 (bet + disparos) — restore emergencial
+- Público: bet + wabadisparos **502** bad-gateway; login health **200**
+- Script: `scripts/emergency-restore-landings-502-vps.sh` (Hostinger — sem SSH local)
+- Prefer bak: `main.yaml.bak-restore-easypanel-backends-2026-07-10-v2-20260719-234729`
+- LOG: doc/LOG-2026-07-20__194600__emergency-restore-landings-502.md
+
+## 2026-07-20 19:10 — Push UI bet + logo wabadisparos
+- betwaba-connect `main` `6d6c624` — hero padding
+- pv-waba-disparador `main` `d117da1` — logo +15%
+- Redeploy Easypanel: `waba_bets_pv` + `waba_paginadevendas` (+ heals :30211/:30210 se 502)
+
+## 2026-07-20 19:00 — UI bet margin + logo wabadisparos +15%
+- bet: `D:\betwaba-connect` hero `pt-8 sm:pt-12 md:pt-14` (era pt-16/24/32)
+- disparos: `D:\pv-waba-disparador` Logo nav `h-[2.9756rem]` (+15% vs 2.5875rem)
+- Falta: redeploy Easypanel `waba_bets_pv` + `waba_paginadevendas`
+- LOG: doc/LOG-2026-07-20__190000__ui-bet-margin-wabadisparos-logo.md
+
+## 2026-07-20 18:48 — traefik-agent global (qualquer projeto Cursor)
+- Skill: `C:\Users\Usuario\.cursor\skills\traefik-agent\` (`@traefik-agent`)
+- Rule user alwaysApply: `C:\Users\Usuario\.cursor\rules\traefik-agent.mdc`
+- WABA `AGENTS.md` aponta para o global; `traefik-incident-specialist` = legado
+- Base: REGISTRY + crawler sob `E:\01A-Drax-Servidor\Waba` (quando existir)
+- LOG: doc/LOG-2026-07-20__184800__create-traefik-agent-global.md
+
+## 2026-07-19 17:47 — Soma → campanha API Alternativa
 - POST /integrations/soma/alternativa-campaigns (X-Soma-Waba-Key, owner mozart)
 - Campanha criada pausada; auth bypass igual ao aquecedor
 - LOG: doc/LOG-2026-07-19__174734__soma-alternativa-campaigns-api.md

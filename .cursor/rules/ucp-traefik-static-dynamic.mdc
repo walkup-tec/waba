@@ -25,8 +25,9 @@ Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Trae
 
 ## Formato real neste VPS (Easypanel)
 
-- Routing vive em `/etc/easypanel/traefik/config/main.yaml` com chaves tipo `"https-waba_paginadevendas-0"` e `"rule": "Host(...) && PathPrefix(\`/\`)"`.
-- Domínio custom: injetar `|| Host(\`dominio\`)` na rule existente; opcional `tls.domains.sans`.
+- Routing WABA vive em `/etc/easypanel/traefik/config/main.yaml` com chaves tipo `"https-waba_paginadevendas-0"` e `"rule": "Host(...) && PathPrefix(\`/\`)"`.
+- **Sinal Verde isolado** em `/etc/easypanel/traefik/config/sinal-verde.yaml` (file provider **directory** + watch). Scripts SV **nunca** editam `main.yaml` (exceto strip de chaves SV recriadas pelo Easypanel). Migração: `scripts/traefik-split-sinal-verde-yaml-vps.sh`.
+- Domínio custom WABA: injetar `|| Host(\`dominio\`)` na rule existente; opcional `tls.domains.sans`.
 - Backend neste VPS: preferir `http://172.17.0.1:PORTA/` se a porta host já responde 200 (overlay `tasks.*` costuma falhar).
 - `custom.yaml` aqui = accessLog/api (estático-ish). **Não** colocar `http.routers` dinâmicos lá.
 - Script canônico landings: `scripts/restore-landing-routers-vps.sh` (v6+).

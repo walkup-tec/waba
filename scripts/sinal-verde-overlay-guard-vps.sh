@@ -1,17 +1,22 @@
 #!/bin/bash
-# Guard Sinal Verde — v3 SEGURO: NUNCA usa regex que atravessa blocos.
-# Só altera chaves EXATAS de service SV (não http-/https-).
-# NÃO imprime/consulta WABA. NÃO toca waba_paginadevendas / bets / disparador.
+# Guard Sinal Verde — v4 ISOLADO: edita APENAS sinal-verde.yaml.
+# NUNCA patcha main.yaml (WABA). Se Easypanel recriar chaves SV no main → strip-only.
 #
-# Uso: install|run|status|uninstall
+# Doc: https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
+#
+# Uso: install|run|status|uninstall|watch
 set -euo pipefail
 
-VERSION="sinal-verde-overlay-guard-2026-07-20-v3-isolated"
-CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
+VERSION="sinal-verde-overlay-guard-2026-07-20-v4-isolated-yaml"
+CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
+MAIN="${CFG_DIR}/main.yaml"
+SV_YAML="${TRAEFIK_SV_YAML:-${CFG_DIR}/sinal-verde.yaml}"
 LOG="/var/log/sinal-verde-overlay-guard.log"
 LOCK="/var/run/sinal-verde-overlay-guard.lock"
 INSTALL_DIR="/root/waba-infra"
 SELF="${INSTALL_DIR}/sinal-verde-overlay-guard-vps.sh"
+SPLIT="${INSTALL_DIR}/traefik-split-sinal-verde-yaml-vps.sh"
+FIX="${INSTALL_DIR}/fix-sinal-verde-traefik-safe-vps.sh"
 UNIT_DIR="/etc/systemd/system"
 TIMER="sinal-verde-overlay-guard.timer"
 SERVICE="sinal-verde-overlay-guard.service"
@@ -20,8 +25,7 @@ CRM="sinal-verde_acesso-sinalverde"
 HOST_PORT=30310
 TARGET_PORT=3000
 DOMAIN="acesso-sinalverde.com"
-GW="172.17.0.1"
-URL="http://${GW}:${HOST_PORT}/"
+URL="http://172.17.0.1:${HOST_PORT}/"
 TIMER_SEC=20
 
 log() { printf '[%s] [%s] %s\n' "$(date -Is)" "$VERSION" "$*" | tee -a "$LOG"; }
@@ -49,94 +53,116 @@ ensure_publish() {
   sleep 4
 }
 
-# SOMENTE services SV por chave exata — zero regex atravessando yaml
-patch_sv_urls_only() {
-  python3 - "$CFG" "$URL" <<'PY'
-import re, sys
+# Patch SOMENTE sinal-verde.yaml
+patch_sv_yaml_only() {
+  [[ -f "$SV_YAML" ]] || {
+    log "AVISO: $SV_YAML ausente — precisa split primeiro"
+    return 1
+  }
+  python3 - "$SV_YAML" "$URL" <<'PY'
+import json, re, sys
 from pathlib import Path
-path = Path(sys.argv[1])
-url = sys.argv[2]
-text = path.read_text(encoding="utf-8")
-if text.count("{") != text.count("}"):
-    print("ABORT")
-    sys.exit(2)
-
-EXACT = (
-    "sinal-verde_acesso-sinalverde-0",
-    "sinal-verde_acesso-sinalverde-1",
-)
-
-def extract_block(text, start):
-    brace = text.find("{", start)
-    depth = 0
-    for i, ch in enumerate(text[brace:], brace):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start:i+1], start, i + 1
-    raise RuntimeError("no block")
+path, url = Path(sys.argv[1]), sys.argv[2]
+raw = path.read_text(encoding="utf-8")
+try:
+    data = json.loads(raw)
+except Exception:
+    text = raw
+    n = 0
+    for key in ("sinal-verde_acesso-sinalverde-0", "sinal-verde_acesso-sinalverde-1"):
+        idx = 0
+        while True:
+            pos = text.find(f'"{key}"', idx)
+            if pos < 0:
+                break
+            brace = text.find("{", pos)
+            depth = 0
+            end = None
+            for i, ch in enumerate(text[brace:], brace):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end is None:
+                break
+            block = text[pos:end]
+            if "loadBalancer" in block and url not in block:
+                nb, c = re.subn(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
+                if c:
+                    text = text[:pos] + nb + text[end:]
+                    end = pos + len(nb)
+                    n += 1
+            idx = end
+    if n:
+        path.write_text(text, encoding="utf-8")
+    print(f"patched_raw={n}")
+    sys.exit(0)
 
 n = 0
-for key in EXACT:
-    idx = 0
-    while True:
-        pos = text.find(f'"{key}"', idx)
-        if pos < 0:
-            break
-        if not re.match(rf'"{re.escape(key)}"\s*:\s*\{{', text[pos:]):
-            idx = pos + 1
-            continue
-        block, a, b = extract_block(text, pos)
-        # nunca patchar routers
-        if key.startswith("http-") or "entryPoints" in block and "loadBalancer" not in block:
-            idx = b
-            continue
-        if "loadBalancer" not in block or '"url"' not in block:
-            idx = b
-            continue
-        nb, c = re.subn(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
-        if c and nb != block:
-            text = text[:a] + nb + text[b:]
-            b = a + len(nb)
+for k, v in list(data.items()):
+    if not isinstance(v, dict):
+        continue
+    if "loadBalancer" in v:
+        cur = ""
+        try:
+            cur = (v.get("loadBalancer") or {}).get("servers", [{}])[0].get("url", "")
+        except Exception:
+            cur = ""
+        if cur != url:
+            v.setdefault("loadBalancer", {})["servers"] = [{"url": url}]
             n += 1
-            print(f"{key} -> {url}")
-        idx = b
-
-if text.count("{") != text.count("}"):
-    print("ABORT2")
-    sys.exit(2)
-# Abortar se algum service WABA ficou com :30310 (nunca deve)
-for wk in ("waba_paginadevendas-0", "waba_bets_pv-0", "waba_waba_disparador-0"):
-    p = text.find(f'"{wk}"')
-    if p < 0:
-        continue
-    if not re.match(rf'"{re.escape(wk)}"\s*:\s*\{{', text[p:]):
-        continue
-    block, _, _ = extract_block(text, p)
-    if "30310" in block:
-        print(f"ABORT WABA {wk} has 30310")
-        sys.exit(3)
+            print(f"{k} -> {url}")
+    if "entryPoints" in v and isinstance(v["entryPoints"], list):
+        fixed = []
+        ch = False
+        for ep in v["entryPoints"]:
+            if ep in ("websecure", "web-secure"):
+                fixed.append("https"); ch = True
+            elif ep == "web":
+                fixed.append("http"); ch = True
+            else:
+                fixed.append(ep)
+        if ch:
+            v["entryPoints"] = fixed
+            n += 1
 if n:
-    path.write_text(text, encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 print(f"patched={n}")
 PY
 }
 
+strip_sv_from_main_if_present() {
+  [[ -f "$MAIN" ]] || return 0
+  grep -qiE 'sinal-verde|acesso-sinalverde' "$MAIN" 2>/dev/null || return 0
+  log "Easypanel recriou SV no main.yaml — strip-only (não toca WABA)"
+  if [[ -x "$SPLIT" ]]; then
+    bash "$SPLIT" strip-main >>"$LOG" 2>&1 || log "strip falhou"
+  fi
+}
+
 needs_fix() {
-  # overlay still present on SV services
-  python3 - "$CFG" <<'PY'
-import re, sys
+  [[ -f "$SV_YAML" ]] || return 0
+  python3 - "$SV_YAML" "$URL" <<'PY'
+import json, sys
 from pathlib import Path
-t = Path(sys.argv[1]).read_text(encoding="utf-8")
-for key in ("sinal-verde_acesso-sinalverde-0", "sinal-verde_acesso-sinalverde-1"):
-    m = re.search(rf'"{re.escape(key)}"\s*:\s*\{{[\s\S]*?\}}', t)
-    if not m:
-        continue
-    block = m.group(0)
-    if "loadBalancer" in block and ("sinal-verde_acesso-sinalverde:3000" in block or ":3000/" in block and "172.17.0.1:30310" not in block):
-        if "172.17.0.1:30310" not in block:
+path, url = Path(sys.argv[1]), sys.argv[2]
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    t = path.read_text(encoding="utf-8")
+    if "172.17.0.1:30310" not in t:
+        sys.exit(0)
+    sys.exit(1)
+for k, v in data.items():
+    if isinstance(v, dict) and "loadBalancer" in v:
+        try:
+            u = v["loadBalancer"]["servers"][0]["url"]
+        except Exception:
+            sys.exit(0)
+        if u != url:
             sys.exit(0)
 sys.exit(1)
 PY
@@ -153,9 +179,14 @@ cmd_run() {
   mkdir -p "$(dirname "$LOG")"
   with_lock || return 0
   ensure_publish || true
+  strip_sv_from_main_if_present
+  if [[ ! -f "$SV_YAML" ]]; then
+    log "sinal-verde.yaml ausente — skip patch (rode split)"
+    return 0
+  fi
   if needs_fix || ! sv_ok; then
-    log "patch SV URLs only"
-    patch_sv_urls_only >>"$LOG" 2>&1 || true
+    log "patch só $SV_YAML"
+    patch_sv_yaml_only >>"$LOG" 2>&1 || true
     sleep 8
   fi
   log "sv=$(http_code --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/") local=$(http_code http://127.0.0.1:${HOST_PORT}/)"
@@ -176,7 +207,7 @@ cmd_watch() {
 install_units() {
   cat >"${UNIT_DIR}/${SERVICE}" <<EOF
 [Unit]
-Description=Sinal Verde guard ISOLADO (só URLs SV)
+Description=Sinal Verde guard v4 — só sinal-verde.yaml
 After=docker.service
 [Service]
 Type=oneshot
@@ -184,7 +215,7 @@ ExecStart=${SELF} run
 EOF
   cat >"${UNIT_DIR}/${TIMER}" <<EOF
 [Unit]
-Description=Sinal Verde guard ISOLADO timer
+Description=Sinal Verde guard v4 timer
 [Timer]
 OnBootSec=40s
 OnUnitActiveSec=${TIMER_SEC}s
@@ -195,7 +226,7 @@ WantedBy=timers.target
 EOF
   cat >"${UNIT_DIR}/${WATCH}" <<EOF
 [Unit]
-Description=Sinal Verde guard ISOLADO watch
+Description=Sinal Verde guard v4 watch
 After=docker.service
 [Service]
 Type=simple
@@ -213,6 +244,15 @@ cmd_install() {
   src=$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")
   [[ "$src" != "$SELF" ]] && cp -f "$src" "$SELF" || true
   sed -i 's/\r$//' "$SELF"; chmod +x "$SELF"
+  # Copiar scripts irmãos se existirem no mesmo dir do source
+  local_dir="$(dirname "$src")"
+  for f in traefik-split-sinal-verde-yaml-vps.sh fix-sinal-verde-traefik-safe-vps.sh; do
+    if [[ -f "${local_dir}/${f}" ]]; then
+      cp -f "${local_dir}/${f}" "${INSTALL_DIR}/${f}"
+      sed -i 's/\r$//' "${INSTALL_DIR}/${f}"
+      chmod +x "${INSTALL_DIR}/${f}"
+    fi
+  done
   install_units
   systemctl daemon-reload
   systemctl enable --now "$TIMER" "$WATCH"
@@ -230,7 +270,13 @@ cmd_uninstall() {
 cmd_status() {
   systemctl is-active "$TIMER" 2>/dev/null || echo inactive
   systemctl is-active "$WATCH" 2>/dev/null || echo inactive
+  echo "sv_yaml=$( [[ -f $SV_YAML ]] && echo present || echo MISSING )"
   echo -n "sv: "; http_code --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/"; echo
+  if [[ -f "$MAIN" ]] && grep -qiE 'sinal-verde|acesso-sinalverde' "$MAIN"; then
+    echo "WARN: main.yaml ainda tem chaves SV"
+  else
+    echo "main: limpo SV"
+  fi
 }
 
 case "${1:-}" in
