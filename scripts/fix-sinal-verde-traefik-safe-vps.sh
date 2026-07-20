@@ -17,10 +17,10 @@
 #
 # Doc: https://doc.traefik.io/traefik/getting-started/configuration-overview/
 #      https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/router/
-# Versão: fix-sinal-verde-safe-2026-07-20-v2
+# Versão: fix-sinal-verde-safe-2026-07-20-v3
 set -euo pipefail
 
-VERSION="fix-sinal-verde-safe-2026-07-20-v2"
+VERSION="fix-sinal-verde-safe-2026-07-20-v3"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 LOG="/var/log/fix-sinal-verde-safe.log"
 CRM="${SV_SWARM_SERVICE:-sinal-verde_acesso-sinalverde}"
@@ -300,4 +300,18 @@ EOF
 fi
 
 log "=== FIM ${VERSION} rc=${rc} ==="
+
+# Sempre instala/atualiza o guard permanente (timer+watch) — senão o próximo Redeploy derruba de novo
+log "=== instalando guard permanente (anti-queda pós-redeploy) ==="
+GUARD="/tmp/sinal-verde-overlay-guard-vps.sh"
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/sinal-verde-overlay-guard-vps.sh" \
+  -o "$GUARD" 2>>"$LOG" || true
+if [[ -f "$GUARD" ]]; then
+  sed -i 's/\r$//' "$GUARD"
+  chmod +x "$GUARD"
+  bash "$GUARD" install || log "AVISO: install guard falhou"
+else
+  log "AVISO: não baixou overlay-guard — rode install manual depois"
+fi
+
 exit "$rc"

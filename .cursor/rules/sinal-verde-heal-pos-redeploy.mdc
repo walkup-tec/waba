@@ -1,0 +1,52 @@
+# Sinal Verde — uptime permanente (obrigatório)
+
+## Problema recorrente
+
+Após **Redeploy Easypanel** de `sinal-verde_acesso-sinalverde`, `acesso-sinalverde.com` cai com JSON:
+
+`Cannot GET /api/errors/bad-gateway` (502) ou `not-found` (404).
+
+**Não é bug do CRM/login.** WABA (disparos/bet/login) deve continuar 200.
+
+## Causas comuns (este VPS)
+
+| Causa | Sintoma | Correção |
+|-------|---------|----------|
+| Traefik URL = overlay `sinal-verde_…:3000` | 502 | URL → `http://172.17.0.1:30310/` |
+| Host `:3000` no backend SV | HTML Easypanel | Nunca `:3000` (painel) |
+| Publish `:30310` sumiu | local 000 + 502 | `publish-add` no CRM |
+| entryPoints `web`/`websecure` | 404 | só `http`/`https` |
+| Inject no `main.yaml` perto do WABA | **todos** os sites 404 | **PROIBIDO** |
+
+## Solução permanente (obrigatória no VPS)
+
+Script: `scripts/sinal-verde-overlay-guard-vps.sh`
+
+- Timer ~20s + watch `docker events` (debounce ~50s)
+- Só patch seguro de chaves SV já existentes
+- Aborta se `wabadisparos` sumir do yaml
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/sinal-verde-overlay-guard-vps.sh" \
+  -o /tmp/sv-guard.sh
+sed -i 's/\r$//' /tmp/sv-guard.sh
+bash /tmp/sv-guard.sh install
+systemctl is-active sinal-verde-overlay-guard-watch.service
+```
+
+`fix-sinal-verde-traefik-safe-vps.sh` (v3+) **já chama install** do guard no final.
+
+## Após Redeploy do CRM
+
+Se 502 por ~30–60s: normal até o watch. Se persistir:
+
+```bash
+/root/waba-infra/sinal-verde-overlay-guard-vps.sh run
+```
+
+## Proibido
+
+- Inject de service/router após `waba_paginadevendas`
+- `docker service update --force easypanel-traefik`
+- Usar host `:3000` como backend do CRM
+- Deixar só script manual sem timer/watch
