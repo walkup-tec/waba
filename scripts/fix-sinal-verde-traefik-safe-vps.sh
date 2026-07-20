@@ -17,10 +17,10 @@
 #
 # Doc: https://doc.traefik.io/traefik/getting-started/configuration-overview/
 #      https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/router/
-# Versão: fix-sinal-verde-safe-2026-07-20-v1
+# Versão: fix-sinal-verde-safe-2026-07-20-v2
 set -euo pipefail
 
-VERSION="fix-sinal-verde-safe-2026-07-20-v1"
+VERSION="fix-sinal-verde-safe-2026-07-20-v2"
 CFG="${TRAEFIK_CFG:-/etc/easypanel/traefik/config/main.yaml}"
 LOG="/var/log/fix-sinal-verde-safe.log"
 CRM="${SV_SWARM_SERVICE:-sinal-verde_acesso-sinalverde}"
@@ -118,6 +118,64 @@ if "wabadisparos.com.br" not in text:
     print("ABORT missing wabadisparos")
     sys.exit(2)
 
+has_host = f"Host(`{domain}`)" in text or f"Host(`{domain_www}`)" in text
+print(f"Host({domain}) presente no yaml: {has_host}")
+
+# 1) Troca URL overlay → host gateway (regex família — confiável neste VPS)
+#    Causa do 502: http://sinal-verde_acesso-sinalverde:3000/ (Traefik não alcança overlay)
+nfix = 0
+for family in (
+    "sinal-verde_acesso-sinalverde",
+    "sinal-verde-acesso-sinalverde",
+    "acesso-sinalverde",
+):
+    pat = rf'("(?:[^"]*{re.escape(family)}[^"]*)"\s*:\s*\{{[\s\S]*?"url"\s*:\s*")[^"]+(")'
+    text2, n = re.subn(pat, rf"\g<1>{url}\2", text, flags=re.I)
+    if n:
+        print(f"url family {family}* -> {url} ({n}x)")
+        nfix += n
+        text = text2
+
+# Também força qualquer url overlay explícita do CRM
+text2, n = re.subn(
+    r'(http://sinal-verde_acesso-sinalverde(?::\d+)?/?)',
+    url,
+    text,
+)
+if n:
+    print(f"overlay literal -> {url} ({n}x)")
+    nfix += n
+    text = text2
+
+# Nunca host :3000 (painel Easypanel)
+text2, n = re.subn(rf'http://{re.escape(gw)}:3000/?', url, text)
+if n:
+    print(f"host :3000 (Easypanel) -> {url} ({n}x)")
+    nfix += n
+    text = text2
+
+# 2) Descobre loadBalancer real usado pelo Host(acesso-sinalverde.com)
+sv_lb = None
+# Preferir o service citado no router do domínio público
+for m in re.finditer(
+    rf'"https?-sinal-verde_acesso-sinalverde-\d+"\s*:\s*\{{[\s\S]*?"rule"\s*:\s*"[^"]*{re.escape(domain)}[^"]*"[\s\S]*?"service"\s*:\s*"([^"]+)"',
+    text,
+):
+    cand = m.group(1)
+    if not cand.startswith("http-") and not cand.startswith("https-"):
+        sv_lb = cand
+        break
+if sv_lb is None:
+    for key in (
+        "sinal-verde_acesso-sinalverde-1",
+        "sinal-verde_acesso-sinalverde-0",
+    ):
+        if f'"{key}"' in text and "loadBalancer" in text:
+            sv_lb = key
+            break
+print(f"sv_lb={sv_lb}")
+
+# 3) entryPoints web/websecure → http/https só nos routers SV
 def extract_block(text, start):
     brace = text.find("{", start)
     depth, end = 0, brace
@@ -131,18 +189,7 @@ def extract_block(text, start):
                 break
     return text[start:end], start, end
 
-def is_sv_key(key: str) -> bool:
-    kl = key.lower()
-    return ("sinal-verde" in kl) or ("acesso-sinalverde" in kl)
-
-has_host = f"Host(`{domain}`)" in text or f"Host(`{domain_www}`)" in text
-print(f"Host({domain}) presente no yaml: {has_host}")
-
 svc_pat = re.compile(r'"([^"]+)"\s*:\s*\{', re.M)
-nfix = 0
-sv_lb = None
-
-# 1) URLs de loadBalancer SV existentes
 pos = 0
 while True:
     m = svc_pat.search(text, pos)
@@ -150,77 +197,47 @@ while True:
         break
     key = m.group(1)
     kl = key.lower()
+    if "sinal-verde" not in kl and "acesso-sinalverde" not in kl:
+        pos = m.end()
+        continue
     block, bstart, bend = extract_block(text, m.start())
-    if "loadBalancer" in block and is_sv_key(key) and not kl.startswith("http-") and not kl.startswith("https-"):
-        if "easypanel" in kl:
-            pos = bend
-            continue
-        sv_lb = key if (key.endswith("-0") or sv_lb is None) else sv_lb
-        nb = re.sub(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
-        # nunca deixar :3000 do host (painel Easypanel)
-        if f"{gw}:3000" in nb:
-            nb = nb.replace(f"http://{gw}:3000/", url).replace(f"http://{gw}:3000", url.rstrip("/"))
-        if nb != block:
-            text = text[:bstart] + nb + text[bend:]
-            bend = bstart + len(nb)
-            nfix += 1
-            print(f"service {key} -> {url}")
-    pos = bend
-
-print(f"sv_lb={sv_lb}")
-
-# 2) routers que JÁ têm Host(acesso-sinalverde) → service correto + entryPoints
-if sv_lb and has_host:
-    pos = 0
-    while True:
-        m = svc_pat.search(text, pos)
-        if not m:
-            break
-        key = m.group(1)
-        block, bstart, bend = extract_block(text, m.start())
-        if "rule" not in block:
-            pos = bend
-            continue
-        rule_m = re.search(r'"rule"\s*:\s*"([^"]+)"', block)
-        if not rule_m:
-            pos = bend
-            continue
-        rule = rule_m.group(1)
-        if f"Host(`{domain}`)" not in rule and f"Host(`{domain_www}`)" not in rule:
-            pos = bend
-            continue
-        nb = block
-        if re.search(r'"websecure"|"web"', nb):
-            if key.startswith("https-") or "websecure" in nb:
-                nb = re.sub(r'"entryPoints"\s*:\s*\[[^\]]*\]', '"entryPoints": ["https"]', nb, count=1)
-            else:
-                nb = re.sub(r'"entryPoints"\s*:\s*\[[^\]]*\]', '"entryPoints": ["http"]', nb, count=1)
-            print(f"router {key} entryPoints fixed")
-        for d in (domain, domain_www):
-            nb = nb.replace(f"Host(`{d}/`)", f"Host(`{d}`)")
-        # NUNCA apontar service para chave http-/https- (router)
-        if not sv_lb.startswith("http-") and not sv_lb.startswith("https-"):
+    if "rule" not in block:
+        pos = bend
+        continue
+    nb = block
+    if re.search(r'"websecure"|"web"', nb):
+        if key.startswith("https-") or "websecure" in nb:
+            nb = re.sub(r'"entryPoints"\s*:\s*\[[^\]]*\]', '"entryPoints": ["https"]', nb, count=1)
+        else:
+            nb = re.sub(r'"entryPoints"\s*:\s*\[[^\]]*\]', '"entryPoints": ["http"]', nb, count=1)
+        print(f"router {key} entryPoints fixed")
+    if sv_lb:
+        rule_m = re.search(r'"rule"\s*:\s*"([^"]+)"', nb)
+        if rule_m and (f"Host(`{domain}`)" in rule_m.group(1) or f"Host(`{domain_www}`)" in rule_m.group(1)):
             nb2 = re.sub(r'("service"\s*:\s*")[^"]+(")', rf"\g<1>{sv_lb}\2", nb, count=1)
             if nb2 != nb:
                 print(f"router {key} -> service {sv_lb}")
                 nb = nb2
-        if nb != block:
-            text = text[:bstart] + nb + text[bend:]
-            bend = bstart + len(nb)
-            nfix += 1
+    if nb != block:
+        text = text[:bstart] + nb + text[bend:]
+        bend = bstart + len(nb)
+        nfix += 1
+        pos = bend
+    else:
         pos = bend
 
-# Guards finais — NUNCA gravar se WABA sumiu
 if text.count("{") != text.count("}"):
     print("ABORT: unbalanced after patch")
     sys.exit(2)
-for must in ("wabadisparos.com.br",):
-    if must not in text:
-        print(f"ABORT: missing {must}")
-        sys.exit(2)
+if "wabadisparos.com.br" not in text:
+    print("ABORT: missing wabadisparos")
+    sys.exit(2)
+if "bet.waba.info" not in text and "waba_bets_pv" not in text:
+    print("ABORT: missing bet")
+    sys.exit(2)
 
 if text == text0:
-    print("nenhuma alteração necessária no yaml (ou sem chaves SV)")
+    print("nenhuma alteração no yaml")
 else:
     path.write_text(text, encoding="utf-8")
     print(f"OK patched={nfix} (sem HUP — file watch)")
@@ -228,7 +245,8 @@ else:
 if not has_host:
     print("NEED_EASYPANEL_DOMAIN=1")
     sys.exit(3)
-if not sv_lb:
+# Services existem (grep mostrou -0/-1); se URL já estava certa, ok
+if "sinal-verde_acesso-sinalverde-0" not in text and "sinal-verde_acesso-sinalverde-1" not in text:
     print("NEED_EASYPANEL_SERVICE=1")
     sys.exit(4)
 sys.exit(0)
