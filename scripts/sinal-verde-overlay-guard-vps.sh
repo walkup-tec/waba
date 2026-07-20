@@ -246,8 +246,8 @@ cmd_install() {
   sed -i 's/\r$//' "$SELF"; chmod +x "$SELF"
   # Copiar scripts irmãos se existirem no mesmo dir do source
   local_dir="$(dirname "$src")"
-  for f in traefik-split-sinal-verde-yaml-vps.sh fix-sinal-verde-traefik-safe-vps.sh; do
-    if [[ -f "${local_dir}/${f}" ]]; then
+  for f in traefik-split-sinal-verde-yaml-vps.sh fix-sinal-verde-traefik-safe-vps.sh fix-sinal-verde-isolated-yaml-vps.sh; do
+    if [[ -f "${local_dir}/${f}" && "${local_dir}/${f}" != "${INSTALL_DIR}/${f}" ]]; then
       cp -f "${local_dir}/${f}" "${INSTALL_DIR}/${f}"
       sed -i 's/\r$//' "${INSTALL_DIR}/${f}"
       chmod +x "${INSTALL_DIR}/${f}"

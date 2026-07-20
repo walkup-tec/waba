@@ -52,8 +52,8 @@ Confirmado no Hostinger:
 - MODE=**directory** (não precisa mudar static)
 - Yamls: `main.yaml`, `custom.yaml`, `waba-landings-dynamic.yaml`
 
-Primeiro `split run` abortou: `health=502` transitório (disparos/bet 200). Script v2: retry + heal-login antes de abortar.
+Primeiro `split run` abortou: `health=502` transitório. Segundo run criou `sinal-verde.yaml` **flat inválido** (sem `http.routers`) → SV 404; WABA 200. v3 + `fix-sinal-verde-isolated-yaml-vps.sh` reescreve formato Traefik padrão.
 
 ## Keywords
 
-`traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `acesso-sinalverde`, `main.yaml-isolation`, `30310`
+`traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `acesso-sinalverde`, `main.yaml-isolation`, `30310`, `http.routers`

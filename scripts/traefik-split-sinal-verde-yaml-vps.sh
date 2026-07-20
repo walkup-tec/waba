@@ -16,10 +16,10 @@
 #   bash /tmp/traefik-split-sinal-verde-yaml-vps.sh inspect
 #   bash /tmp/traefik-split-sinal-verde-yaml-vps.sh run
 #
-# Versão: traefik-split-sinal-verde-2026-07-20-v2
+# Versão: traefik-split-sinal-verde-2026-07-20-v3
 set -euo pipefail
 
-VERSION="traefik-split-sinal-verde-2026-07-20-v2"
+VERSION="traefik-split-sinal-verde-2026-07-20-v3"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 MAIN="${CFG_DIR}/main.yaml"
 SV_YAML="${CFG_DIR}/sinal-verde.yaml"
@@ -184,6 +184,12 @@ enable_directory_provider() {
     return 0
   fi
 
+  # NUNCA force directory se já está directory — evita mover custom.yaml / restart inútil
+  if [[ "$mode" == "directory" && "$force" == "force" ]]; then
+    log "skip force: já é directory — problema é formato do sinal-verde.yaml, não o provider"
+    return 0
+  fi
+
   if [[ "$mode" == "directory-likely" && "$force" != "force" ]]; then
     log "MODE=directory-likely — assume Easypanel já carrega config/; sem restart agora"
     return 0
@@ -216,7 +222,7 @@ enable_directory_provider() {
   die "após directory provider, WABA não voltou 200 — abort (não remove SV do main)"
 }
 
-# Extrai blocos SV do main → sinal-verde.yaml; remove do main
+# Extrai blocos SV do main (qualquer profundidade) → sinal-verde.yaml no formato http.*; remove do main
 python_split() {
   python3 - "$MAIN" "$SV_YAML" "$URL" <<'PY'
 import re, sys, json
@@ -244,95 +250,129 @@ def extract_block(text, start):
                 return text[start:i+1], start, i+1
     raise RuntimeError("unbalanced")
 
-# Chaves cujo NOME indica Sinal Verde (nunca waba_*)
 def is_sv_key(key: str) -> bool:
     k = key.lower()
-    if k.startswith("waba_"):
+    if "waba_" in k:
         return False
     return ("sinal-verde" in k) or ("acesso-sinalverde" in k) or ("sinalverde" in k)
 
-# Encontrar todas as chaves top-level no objeto raiz: "key": {
-# Formato Easypanel: JSON-like com aspas nas chaves
+def write_canonical_sv(path, url, moved=None):
+    """Formato Traefik dinâmico real: http.routers / services / middlewares."""
+    domain = "acesso-sinalverde.com"
+    www = "www.acesso-sinalverde.com"
+    rule = f"Host(`{domain}`) || Host(`{www}`)"
+    data = {
+        "http": {
+            "middlewares": {
+                "sv-redirect-https": {
+                    "redirectScheme": {"scheme": "https", "permanent": True}
+                }
+            },
+            "routers": {
+                "http-sinal-verde_acesso-sinalverde-0": {
+                    "entryPoints": ["http"],
+                    "middlewares": ["sv-redirect-https"],
+                    "service": "sinal-verde_acesso-sinalverde-0",
+                    "rule": rule,
+                    "priority": 1000,
+                },
+                "https-sinal-verde_acesso-sinalverde-0": {
+                    "entryPoints": ["https"],
+                    "service": "sinal-verde_acesso-sinalverde-0",
+                    "rule": rule,
+                    "priority": 1000,
+                    "tls": {"domains": [{"main": domain, "sans": [www]}]},
+                },
+            },
+            "services": {
+                "sinal-verde_acesso-sinalverde-0": {
+                    "loadBalancer": {
+                        "servers": [{"url": url}],
+                        "passHostHeader": True,
+                    }
+                },
+                "sinal-verde_acesso-sinalverde-1": {
+                    "loadBalancer": {
+                        "servers": [{"url": url}],
+                        "passHostHeader": True,
+                    }
+                },
+            },
+        }
+    }
+    # Mesclar routers/services movidos do main se forem loadBalancer/router válidos
+    if moved:
+        for k, v in moved.items():
+            if not isinstance(v, dict):
+                continue
+            if "loadBalancer" in v:
+                try:
+                    v = dict(v)
+                    v.setdefault("loadBalancer", {})["servers"] = [{"url": url}]
+                except Exception:
+                    pass
+                data["http"]["services"][k] = v
+            elif "rule" in v or "entryPoints" in v:
+                # normalizar entryPoints
+                eps = v.get("entryPoints") or []
+                if isinstance(eps, list):
+                    v = dict(v)
+                    v["entryPoints"] = [
+                        "https" if x in ("websecure", "web-secure") else ("http" if x == "web" else x)
+                        for x in eps
+                    ]
+                data["http"]["routers"][k] = v
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
 key_re = re.compile(r'"([^"]+)"\s*:\s*\{')
-
 blocks = []  # (key, block_text, start, end)
-idx = 0
-# Skip até o primeiro { do root
-root = text.find("{")
-if root < 0:
-    print("ABORT: no root", file=sys.stderr)
-    sys.exit(2)
-
-# Percorrer só chaves de primeiro nível do root
-i = root + 1
-depth = 1
-while i < len(text) and depth > 0:
-    ch = text[i]
-    if ch == "{":
-        depth += 1
-        i += 1
-        continue
-    if ch == "}":
-        depth -= 1
-        i += 1
-        continue
-    if depth == 1 and ch == '"':
+i = 0
+while i < len(text):
+    if text[i] == '"':
         m = key_re.match(text, i)
         if m:
             key = m.group(1)
-            block, a, b = extract_block(text, i)
             if is_sv_key(key):
+                block, a, b = extract_block(text, i)
                 blocks.append((key, block, a, b))
-            i = b
-            continue
+                i = b
+                continue
     i += 1
 
 if not blocks:
-    # Se sinal-verde.yaml já existe, só garantir que main não tem SV
     print("no_sv_keys_in_main=1")
-    if sv_path.exists() and sv_path.stat().st_size > 10:
-        print(f"sv_yaml_exists={sv_path}")
-        sys.exit(0)
-    # Criar yaml mínimo canônico
-    content = {
-        "http-sinal-verde_acesso-sinalverde-0": {
-            "entryPoints": ["http"],
-            "service": "sinal-verde_acesso-sinalverde-0",
-            "rule": "Host(`acesso-sinalverde.com`) || Host(`www.acesso-sinalverde.com`)",
-            "middlewares": ["redirect-to-https"]
-        },
-        "https-sinal-verde_acesso-sinalverde-0": {
-            "entryPoints": ["https"],
-            "service": "sinal-verde_acesso-sinalverde-0",
-            "rule": "Host(`acesso-sinalverde.com`) || Host(`www.acesso-sinalverde.com`)",
-            "tls": {"certResolver": "letsencrypt"},
-            "middlewares": []
-        },
-        "sinal-verde_acesso-sinalverde-0": {
-            "loadBalancer": {
-                "servers": [{"url": url}],
-                "passHostHeader": True
-            }
-        }
-    }
-    # Easypanel usa JSON-like com aspas — escrever como JSON pretty (Traefik aceita YAML/JSON)
-    sv_path.write_text(json.dumps(content, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"created_minimal={sv_path}")
+    write_canonical_sv(sv_path, url)
+    print(f"created_canonical={sv_path}")
     sys.exit(0)
 
-# Remover blocos do main de trás pra frente
+# Parse moved blocks
+moved = {}
+for key, block, _, _ in blocks:
+    # block is `"key": { ... }` — wrap for json
+    try:
+        obj = json.loads("{" + block + "}")
+        moved.update(obj)
+    except Exception:
+        # força URL se loadBalancer
+        if "loadBalancer" in block:
+            block2 = re.sub(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
+            try:
+                moved.update(json.loads("{" + block2 + "}"))
+            except Exception as e:
+                print(f"skip_parse {key}: {e}")
+
+write_canonical_sv(sv_path, url, moved)
+
+# Remover do main de trás pra frente
 new_text = text
 for key, block, a, b in sorted(blocks, key=lambda x: x[2], reverse=True):
-    # Incluir vírgula anterior ou posterior
     start, end = a, b
-    # trim trailing comma/whitespace after block
     j = end
     while j < len(new_text) and new_text[j] in " \t\r\n":
         j += 1
     if j < len(new_text) and new_text[j] == ",":
         end = j + 1
     else:
-        # maybe comma before
         k = start - 1
         while k >= 0 and new_text[k] in " \t\r\n":
             k -= 1
@@ -344,69 +384,9 @@ for key, block, a, b in sorted(blocks, key=lambda x: x[2], reverse=True):
 if new_text.count("{") != new_text.count("}"):
     print("ABORT: braces after remove", file=sys.stderr)
     sys.exit(2)
-
-# Abort se WABA keys sumiram
-for must in ("waba_paginadevendas-0", "wabadisparos"):
-    if must not in new_text and "waba_paginadevendas" not in new_text:
-        # soft: só exige pelo menos um marker WABA conhecido
-        pass
 if "waba_" not in new_text and "wabadisparos" not in new_text:
     print("ABORT: main.yaml sem markers WABA após remoção", file=sys.stderr)
     sys.exit(3)
-
-# Montar sinal-verde.yaml a partir dos blocos (forçar URL canônica nos services)
-sv_parts = []
-for key, block, _, _ in blocks:
-    # Só services loadBalancer: forçar url
-    if "loadBalancer" in block and '"url"' in block:
-        block = re.sub(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
-    # entryPoints: nunca web/websecure
-    block = block.replace('"websecure"', '"https"').replace('"web"', '"http"')
-    block = re.sub(r"\bwebsecure\b", "https", block)
-    # cuidado: não substituir "web" dentro de palavras — já fizemos quoted
-    sv_parts.append(block)
-
-# Se já existir sv yaml, merge keys (substituir pelas do main)
-existing = {}
-if sv_path.exists():
-    raw = sv_path.read_text(encoding="utf-8").strip()
-    if raw:
-        # Tentar parse JSON-like
-        try:
-            existing = json.loads(raw)
-        except Exception:
-            existing = {}
-
-# Parse moved blocks into dict via wrapping
-wrapped = "{\n" + ",\n".join(sv_parts) + "\n}\n"
-try:
-    moved = json.loads(wrapped)
-except Exception as e:
-    # fallback: write raw object
-    main_path.write_text(new_text, encoding="utf-8")
-    sv_path.write_text(wrapped, encoding="utf-8")
-    print(f"wrote_raw_sv err={e}")
-    print(f"main_keys_removed={len(blocks)}")
-    sys.exit(0)
-
-# Force service URLs
-for k, v in list(moved.items()):
-    if isinstance(v, dict) and "loadBalancer" in v:
-        try:
-            v["loadBalancer"]["servers"] = [{"url": url}]
-        except Exception:
-            pass
-    # entryPoints fix
-    if isinstance(v, dict) and "entryPoints" in v:
-        eps = v["entryPoints"]
-        if isinstance(eps, list):
-            v["entryPoints"] = [
-                "https" if x in ("websecure", "web-secure") else ("http" if x == "web" else x)
-                for x in eps
-            ]
-
-existing.update(moved)
-sv_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 main_path.write_text(new_text, encoding="utf-8")
 print(f"main_keys_removed={len(blocks)}")
 print(f"sv_yaml={sv_path}")
@@ -483,21 +463,17 @@ cmd_run() {
   if validate_sv; then
     log "SV OK"
   else
-    log "SV ainda não OK — tentando forçar directory provider (sinal-verde.yaml pode não estar carregado)"
-    enable_directory_provider force
-    sleep 10
-    if ! validate_waba; then
-      log "WABA falhou após force directory — restaurando main"
-      cp -a "${MAIN}.bak-split-sv-${TS}" "$MAIN"
-      sleep 10
-      die "abort após force directory"
+    log "SV ainda não OK — reescrevendo sinal-verde.yaml no formato http.routers (sem force Traefik)"
+    if [[ -x /root/waba-infra/fix-sinal-verde-isolated-yaml-vps.sh ]]; then
+      bash /root/waba-infra/fix-sinal-verde-isolated-yaml-vps.sh >>"$LOG" 2>&1 || true
     fi
-    validate_sv && log "SV OK após directory force" || log "AVISO: SV ainda falha — rode guard; WABA isolado OK"
+    sleep 8
+    validate_sv && log "SV OK após rewrite formato" || log "AVISO: SV ainda falha — rode fix-sinal-verde-isolated-yaml; WABA isolado OK"
   fi
 
   # Garantir main sem chaves SV
   if grep -qiE 'sinal-verde|acesso-sinalverde' "$MAIN" 2>/dev/null; then
-    log "AVISO: ainda há menções SV no main.yaml — rode strip-sv-from-main"
+    log "AVISO: ainda há menções SV no main.yaml — rode strip-main / fix-isolated"
   else
     log "main.yaml limpo de Sinal Verde"
   fi

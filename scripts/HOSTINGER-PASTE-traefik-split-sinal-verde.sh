@@ -1,42 +1,36 @@
 #!/bin/bash
-# COLE NO HOSTINGER (root) — continua split (inspect já confirmou MODE=directory)
-# v2: retry health + heal login se 502 transitório; depois split + guard
+# COLE NO HOSTINGER — corrige formato sinal-verde.yaml (http.routers) + strip SV do main + guard
+# NÃO mexe em directory provider / NÃO force Traefik. WABA deve permanecer 200.
 set -euo pipefail
 mkdir -p /root/waba-infra
 cd /root/waba-infra
-for f in traefik-split-sinal-verde-yaml-vps.sh \
-         fix-sinal-verde-traefik-safe-vps.sh sinal-verde-overlay-guard-vps.sh; do
-  curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/${f}" -o "$f"
-  sed -i 's/\r$//' "$f"
-  chmod +x "$f"
+SHA="${WABA_SCRIPTS_SHA:-e6d3cf6}"
+# Prefer master; fallback SHA se CDN atrasar
+base="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+for f in fix-sinal-verde-isolated-yaml-vps.sh \
+         fix-sinal-verde-traefik-safe-vps.sh \
+         sinal-verde-overlay-guard-vps.sh \
+         traefik-split-sinal-verde-yaml-vps.sh; do
+  if ! curl -fsSL "${base}/${f}" -o "$f"; then
+    curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/${SHA}/scripts/${f}" -o "$f" || true
+  fi
+  sed -i 's/\r$//' "$f" 2>/dev/null || true
+  chmod +x "$f" 2>/dev/null || true
 done
 
-echo "===== PRECHECK WABA ====="
-echo -n "disparos:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://wabadisparos.com.br/
-echo -n "bet:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://bet.waba.info/
-echo -n "health:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://waba.draxsistemas.com.br/health
-echo -n "local30180:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 8 http://127.0.0.1:30180/health || echo 000
+echo "===== FIX FORMATO sinal-verde.yaml ====="
+bash ./fix-sinal-verde-isolated-yaml-vps.sh
 
-H=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 https://waba.draxsistemas.com.br/health || echo 000)
-if [[ "$H" != "200" ]]; then
-  echo "===== HEAL LOGIN (health=$H) ====="
-  curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/heal-waba-login-vps.sh" \
-    -o /tmp/heal-waba-login-vps.sh
-  sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
-  bash /tmp/heal-waba-login-vps.sh run || true
-  sleep 5
-fi
-
-echo "===== SPLIT RUN (v2) ====="
-bash ./traefik-split-sinal-verde-yaml-vps.sh run
 echo "===== GUARD INSTALL ====="
-bash ./sinal-verde-overlay-guard-vps.sh install
-echo "===== STATUS ====="
-bash ./traefik-split-sinal-verde-yaml-vps.sh status
-ls -la /etc/easypanel/traefik/config/sinal-verde.yaml || true
+bash ./sinal-verde-overlay-guard-vps.sh install || true
+bash ./sinal-verde-overlay-guard-vps.sh status || true
+
+echo "===== FINAL ====="
 echo -n "disparos:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://wabadisparos.com.br/
 echo -n "bet:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://bet.waba.info/
 echo -n "health:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://waba.draxsistemas.com.br/health
 echo -n "sv:"; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 12 https://acesso-sinalverde.com/
+ls -la /etc/easypanel/traefik/config/sinal-verde.yaml
+head -c 400 /etc/easypanel/traefik/config/sinal-verde.yaml; echo
 grep -qiE 'sinal-verde|acesso-sinalverde' /etc/easypanel/traefik/config/main.yaml \
   && echo "WARN: main ainda tem SV" || echo "main: limpo SV"
