@@ -1,0 +1,42 @@
+# Heal Soma CRM pós-redeploy (obrigatório) — arquivo isolado
+
+## Problema
+
+Redeploy Easypanel de `soma-promotora_gestao-interno` remove publish host **`:30300`** e/ou Traefik aponta overlay → **502** / **404** em `app.somaconecta.com.br`.
+
+REGISTRY: `SOMA-EASYPANEL-REWRITE` (`doc/traefik-causes/REGISTRY.md`).
+
+## Isolamento Traefik (desde 2026-07-20)
+
+| Arquivo | Conteúdo | Quem edita |
+|---------|----------|------------|
+| `main.yaml` | WABA (+ Easypanel) | Scripts WABA |
+| `sinal-verde.yaml` | Sinal Verde | Scripts SV |
+| `soma-crm.yaml` | Soma CRM `app.somaconecta.com.br` | Scripts Soma |
+| `custom.yaml` | accessLog/api | Sem routers |
+
+**PROIBIDO** script Soma editar `main.yaml` (exceto strip de chaves Soma recriadas pelo Easypanel).
+
+Backend canônico: `http://172.17.0.1:30300/` · entryPoints só **`http`/`https`** · Host **sem** barra no final.
+
+## Install (VPS, uma vez)
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/HOSTINGER-PASTE-traefik-split-soma-crm.sh" \
+  -o /tmp/soma-split.sh
+sed -i 's/\r$//' /tmp/soma-split.sh
+bash /tmp/soma-split.sh
+```
+
+## Após Redeploy do CRM
+
+```bash
+/root/waba-infra/soma-crm-overlay-guard-vps.sh run
+```
+
+## Proibido
+
+- Overlay `soma-promotora_gestao-interno:3000` como backend
+- `Host(\`app.somaconecta.com.br/\`)` com barra
+- `docker service update --force easypanel-traefik`
+- Routers Soma em `custom.yaml`

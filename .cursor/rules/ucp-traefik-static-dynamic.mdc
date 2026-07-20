@@ -27,6 +27,7 @@ Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Trae
 
 - Routing WABA vive em `/etc/easypanel/traefik/config/main.yaml` com chaves tipo `"https-waba_paginadevendas-0"` e `"rule": "Host(...) && PathPrefix(\`/\`)"`.
 - **Sinal Verde isolado** em `/etc/easypanel/traefik/config/sinal-verde.yaml` (file provider **directory** + watch). Scripts SV **nunca** editam `main.yaml` (exceto strip de chaves SV recriadas pelo Easypanel). Migração: `scripts/traefik-split-sinal-verde-yaml-vps.sh`.
+- **Soma CRM isolado** em `/etc/easypanel/traefik/config/soma-crm.yaml` → `app.somaconecta.com.br` / backend `172.17.0.1:30300`. Scripts: `fix-soma-crm-isolated-yaml-vps.sh` + `soma-crm-overlay-guard-vps.sh`. REGISTRY `SOMA-EASYPANEL-REWRITE`.
 - Domínio custom WABA: injetar `|| Host(\`dominio\`)` na rule existente; opcional `tls.domains.sans`.
 - Backend neste VPS: preferir `http://172.17.0.1:PORTA/` se a porta host já responde 200 (overlay `tasks.*` costuma falhar).
 - `custom.yaml` aqui = accessLog/api (estático-ish). **Não** colocar `http.routers` dinâmicos lá.

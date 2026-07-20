@@ -1,4 +1,11 @@
-﻿## 2026-07-20 20:15 — Traefik split WABA/SV CONCLUÍDO no VPS
+﻿## 2026-07-20 20:20 — Traefik split Soma CRM (`soma-crm.yaml`)
+- Isola `app.somaconecta.com.br` em `soma-crm.yaml` (backend `:30300`); strip do `main.yaml`
+- Scripts: `fix-soma-crm-isolated-yaml-vps.sh`, `soma-crm-overlay-guard-vps.sh`, paste Hostinger
+- Rule: `soma-crm-heal-pos-redeploy.mdc` + UCP Traefik
+- LOG: `doc/LOG-2026-07-20__202000__traefik-split-soma-crm.yaml.md`
+- Keywords: `soma-crm.yaml`, `30300`, `app.somaconecta.com.br`, `SOMA-EASYPANEL-REWRITE`
+
+## 2026-07-20 20:15 — Traefik split WABA/SV CONCLUÍDO no VPS
 - MODE=directory já existia (`/data/config` + watch)
 - `sinal-verde.yaml` isolado (http.routers); 6 chaves SV removidas do `main.yaml`
 - Validação: disparos/bet/health **200** | SV **307** | `main: limpo SV`
