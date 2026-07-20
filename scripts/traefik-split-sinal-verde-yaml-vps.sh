@@ -16,10 +16,10 @@
 #   bash /tmp/traefik-split-sinal-verde-yaml-vps.sh inspect
 #   bash /tmp/traefik-split-sinal-verde-yaml-vps.sh run
 #
-# Versão: traefik-split-sinal-verde-2026-07-20-v1
+# Versão: traefik-split-sinal-verde-2026-07-20-v2
 set -euo pipefail
 
-VERSION="traefik-split-sinal-verde-2026-07-20-v1"
+VERSION="traefik-split-sinal-verde-2026-07-20-v2"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 MAIN="${CFG_DIR}/main.yaml"
 SV_YAML="${CFG_DIR}/sinal-verde.yaml"
@@ -82,13 +82,42 @@ detect_mode() {
   fi
 }
 
-validate_waba() {
+validate_waba_once() {
   local d b h
   d="$(http_code "https://wabadisparos.com.br/")"
   b="$(http_code "https://bet.waba.info/")"
   h="$(http_code "https://waba.draxsistemas.com.br/health")"
   log "WABA check: disparos=${d} bet=${b} health=${h}"
   [[ "$d" == "200" && "$b" == "200" && "$h" == "200" ]]
+}
+
+# Login :30180 pode oscilar 502 pós-redeploy — retry + heal leve antes de abortar
+validate_waba() {
+  local i heal="${HEAL_WABA_LOGIN:-/root/waba-infra/heal-waba-login-vps.sh}"
+  for i in 1 2 3 4 5 6; do
+    validate_waba_once && return 0
+    if [[ "$i" -eq 2 ]]; then
+      local local_h
+      local_h="$(http_code "http://127.0.0.1:30180/health")"
+      log "local :30180/health=${local_h}"
+      if [[ "$local_h" == "200" ]] || [[ -x "$heal" ]] || [[ -f /root/heal-waba-login-vps.sh ]]; then
+        log "tentando heal login (health público falhou)"
+        if [[ -x "$heal" ]]; then
+          bash "$heal" run >>"$LOG" 2>&1 || true
+        elif [[ -f /root/heal-waba-login-vps.sh ]]; then
+          bash /root/heal-waba-login-vps.sh run >>"$LOG" 2>&1 || true
+        else
+          curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/heal-waba-login-vps.sh" \
+            -o /tmp/heal-waba-login-vps.sh 2>>"$LOG" || true
+          sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh 2>/dev/null || true
+          bash /tmp/heal-waba-login-vps.sh run >>"$LOG" 2>&1 || true
+        fi
+        sleep 8
+      fi
+    fi
+    sleep 5
+  done
+  return 1
 }
 
 validate_sv() {

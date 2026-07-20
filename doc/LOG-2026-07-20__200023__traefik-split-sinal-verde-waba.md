@@ -43,6 +43,17 @@ Ou Actions: **Traefik Split Sinal Verde** → mode `run`.
 - Abort/restore se WABA cair após split
 - Proibido regex atravessando `main.yaml` para SV
 
+## VPS — inspect (2026-07-20 23:04 UTC)
+
+Confirmado no Hostinger:
+
+- `TRAEFIK_PROVIDERS_FILE_DIRECTORY=/data/config`
+- `TRAEFIK_PROVIDERS_FILE_WATCH=true`
+- MODE=**directory** (não precisa mudar static)
+- Yamls: `main.yaml`, `custom.yaml`, `waba-landings-dynamic.yaml`
+
+Primeiro `split run` abortou: `health=502` transitório (disparos/bet 200). Script v2: retry + heal-login antes de abortar.
+
 ## Keywords
 
 `traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `acesso-sinalverde`, `main.yaml-isolation`, `30310`
