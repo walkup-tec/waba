@@ -36,6 +36,13 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://wabadisparos.com.br/          
 curl -sS -o /dev/null -w '%{http_code}\n' https://acesso-sinalverde.com/               # 307/200
 ```
 
+## VPS — sucesso (2026-07-20 23:21 UTC)
+
+- 6 chaves Soma stripped do `main.yaml`
+- `soma-crm.yaml` com routers + `172.17.0.1:30300`
+- Guard timer+watch ativos
+- Final: disparos/bet/health 200 | SV 307 | soma 307 | soma_health 200 | main limpo
+
 ## Keywords
 
 `soma-crm.yaml`, `app.somaconecta.com.br`, `30300`, `SOMA-EASYPANEL-REWRITE`, `gestao-interno`

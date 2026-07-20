@@ -1,4 +1,11 @@
-﻿## 2026-07-20 20:20 — Traefik split Soma CRM (`soma-crm.yaml`)
+﻿## 2026-07-20 20:21 — Soma CRM isolado CONCLUÍDO no VPS
+- `soma-crm.yaml` criado; 6 chaves Soma stripped do `main.yaml`
+- Validação: disparos/bet/health **200** | SV **307** | soma **307** / health **200** | main limpo
+- Guard `soma-crm-overlay-guard` timer+watch ativos
+- Hosts: `app.somaconecta.com.br` + easypanel.host + backend `:30300`
+- Keywords: `soma-crm.yaml`, `30300`, `app.somaconecta.com.br`
+
+## 2026-07-20 20:20 — Traefik split Soma CRM (`soma-crm.yaml`)
 - Isola `app.somaconecta.com.br` em `soma-crm.yaml` (backend `:30300`); strip do `main.yaml`
 - Scripts: `fix-soma-crm-isolated-yaml-vps.sh`, `soma-crm-overlay-guard-vps.sh`, paste Hostinger
 - Rule: `soma-crm-heal-pos-redeploy.mdc` + UCP Traefik
