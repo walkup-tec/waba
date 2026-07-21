@@ -12,7 +12,7 @@
 # Uso: install|run|burst|post-deploy|status|uninstall
 set -euo pipefail
 
-VERSION="heal-sinal-verde-pos-redeploy-2026-07-21-v1-isolated"
+VERSION="heal-sinal-verde-pos-redeploy-2026-07-21-v2-timer-fix"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 MAIN="${CFG_DIR}/main.yaml"
 SV_YAML="${CFG_DIR}/sinal-verde.yaml"
@@ -293,11 +293,14 @@ Type=oneshot
 ExecStart=${SELF} run
 EOF
 
+  # OnActiveSec: referência inicial ao (re)ativar o timer — sem ela, um daemon-reload
+  # com o service inativo deixa OnUnitActiveSec sem âncora e o timer para de disparar.
   cat >"${UNIT_DIR}/${TIMER}" <<EOF
 [Unit]
 Description=Heal Sinal Verde timer (~20s)
 [Timer]
 OnBootSec=45s
+OnActiveSec=20s
 OnUnitActiveSec=20s
 AccuracySec=3s
 Persistent=true
@@ -375,7 +378,9 @@ cmd_install() {
 
   install_units
   systemctl daemon-reload
-  systemctl enable --now "$TIMER" "$WATCH" "$PATH_UNIT"
+  systemctl enable "$TIMER" "$WATCH" "$PATH_UNIT" >/dev/null 2>&1 || true
+  # restart (não só enable --now): re-ancora OnActiveSec mesmo se o timer já estava ativo
+  systemctl restart "$TIMER" "$WATCH" "$PATH_UNIT"
   bash "$SELF" run || true
   systemctl is-active "$TIMER" "$WATCH" "$PATH_UNIT" || true
   cmd_status

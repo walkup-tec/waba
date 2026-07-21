@@ -219,11 +219,13 @@ After=docker.service
 Type=oneshot
 ExecStart=${SELF} run
 EOF
+  # OnActiveSec: âncora inicial — sem ela, daemon-reload com service inativo cala o timer
   cat >"${UNIT_DIR}/${TIMER}" <<EOF
 [Unit]
-Description=Sinal Verde guard v4 timer
+Description=Sinal Verde guard v5 timer
 [Timer]
 OnBootSec=40s
+OnActiveSec=${TIMER_SEC}s
 OnUnitActiveSec=${TIMER_SEC}s
 AccuracySec=3s
 Persistent=true
@@ -261,7 +263,8 @@ cmd_install() {
   done
   install_units
   systemctl daemon-reload
-  systemctl enable --now "$TIMER" "$WATCH"
+  systemctl enable "$TIMER" "$WATCH" >/dev/null 2>&1 || true
+  systemctl restart "$TIMER" "$WATCH"
   bash "$SELF" run || true
   systemctl is-active "$TIMER" "$WATCH"
   echo -n "sv: "; http_code --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/"; echo
