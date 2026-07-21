@@ -1,0 +1,29 @@
+---
+description: Guardião único e transacional para routing Traefik compartilhada
+alwaysApply: true
+---
+
+# Guardião de Sistemas — Traefik
+
+Em mudanças Traefik/Easypanel deste VPS:
+
+1. O único escritor automático de `/etc/easypanel/traefik/config/main.yaml` é
+   `guardiao-sistemas-traefik.service`.
+2. Configuração/allowlist: `scripts/guardiao-sistemas-traefik-registry.json`.
+3. Projetos isolados vivem em YAML próprio; se o Easypanel recriar suas chaves
+   no `main.yaml`, o Guardião faz strip somente quando o YAML isolado existe e
+   é válido.
+4. Corrigir `Host(\`dominio/\`)`, `web/websecure` e backends overlay apenas
+   conforme allowlist explícita. Nunca adivinhar porta, host ou dono.
+5. Toda alteração deve ser: lock global → backup → candidate válido → escrita
+   atômica → hot-reload → probes → rollback se houver regressão.
+6. Proibido HUP/force/restart Traefik com `1/1` e `:443` ativo.
+7. Proibido instalar vários guards/timers que escrevam routing em paralelo.
+8. Heals de aplicação cuidam só do publish/saúde e solicitam reparo ao Guardião;
+   não editam `main.yaml`.
+9. Primeiro `install-audit`; só ativar `repair` após revisar state/diff/probes.
+10. Mudanças no registry exigem identificar projetos afetados, impacto e rollback.
+
+Docs oficiais:
+- https://doc.traefik.io/traefik/getting-started/configuration-overview/
+- https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/

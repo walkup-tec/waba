@@ -19,7 +19,7 @@ Complementa `study-upstream-docs.mdc`. **Não depende** de o agente abrir `doc/F
 | Camada | Conteúdo | Ação permitida |
 |--------|----------|----------------|
 | **Static / install** | entryPoints, providers, env Traefik | mudar raro; restart só se Traefik `0/1` |
-| **Dynamic / routing** | routers, services, TLS/certs no `main.yaml` | patch + hot-reload (`HUP`); **nunca** `force` por hábito |
+| **Dynamic / routing** | routers, services, TLS/certs nos YAMLs | Guardião transacional + hot-reload do File provider; **sem HUP/force** |
 
 Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Traefik = sites inteiros em `000`.
 
@@ -28,6 +28,7 @@ Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Trae
 - Routing WABA vive em `/etc/easypanel/traefik/config/main.yaml` com chaves tipo `"https-waba_paginadevendas-0"` e `"rule": "Host(...) && PathPrefix(\`/\`)"`.
 - **Sinal Verde isolado** em `/etc/easypanel/traefik/config/sinal-verde.yaml` (file provider **directory** + watch). Scripts SV **nunca** editam `main.yaml` (exceto strip de chaves SV recriadas pelo Easypanel). Migração: `scripts/traefik-split-sinal-verde-yaml-vps.sh`.
 - **Soma CRM isolado** em `/etc/easypanel/traefik/config/soma-crm.yaml` → `app.somaconecta.com.br` / backend `172.17.0.1:30300`. Scripts: `fix-soma-crm-isolated-yaml-vps.sh` + `soma-crm-overlay-guard-vps.sh`. REGISTRY `SOMA-EASYPANEL-REWRITE`.
+- **Único writer automático:** `guardiao-sistemas-traefik.service`. Registry: `scripts/guardiao-sistemas-traefik-registry.json`. Ele faz strip de duplicatas, normaliza Host/entryPoints/backends por allowlist e rollback por probes.
 - Domínio custom WABA: injetar `|| Host(\`dominio\`)` na rule existente; opcional `tls.domains.sans`.
 - Backend neste VPS: preferir `http://172.17.0.1:PORTA/` se a porta host já responde 200 (overlay `tasks.*` costuma falhar).
 - `custom.yaml` aqui = accessLog/api (estático-ish). **Não** colocar `http.routers` dinâmicos lá.
@@ -39,6 +40,6 @@ Certificados HTTPS fazem parte da **routing config** (hot-reload). Derrubar Trae
 - Assumir schema `http:\n  routers:` da doc genérica sem `grep` no `main.yaml` real.
 - Usar `entryPoints: ["web"]` / `["websecure"]` em patches do `main.yaml` deste VPS.
 - `docker service update --force easypanel-traefik` / kill docker-proxy com Traefik `1/1` + `:443` up.
-- Ligar vários `traefik-permanent-*-fix.timer` (ex.: 20s) + config-guard + watches + bootstrap ao mesmo tempo → **thrash** Traefik `0/1` (Assigned/Shutdown loop). Recuperação canônica: só `traefik-easypanel-bootstrap.timer` + `waba-traefik-443-watchdog` + `waba-traefik-entrypoint-guard`. `permanent-all` v6+ desliga thrash no install.
+- Ligar vários `traefik-permanent-*-fix.timer`, guards e watches que escrevem routing → **thrash** Traefik `0/1`. Só o Guardião escreve YAML; heals de app cuidam apenas do publish/saúde.
 - `publish` em porta já usada (ex.: 30210 = v02) → task Pending forever.
 - Confiar só em `doc/FIX-TRAEFIK*.md` sem abrir a doc Traefik + inspeção no VPS.

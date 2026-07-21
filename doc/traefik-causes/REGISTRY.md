@@ -19,6 +19,16 @@ Formato de entrada:
 
 ---
 
+## ID: EASYPANEL-CROSS-PROJECT-REWRITE
+- **Sintoma:** Após deploy de um projeto (ex.: Sinal Verde), outros hosts no Traefik compartilhado retornam 404/502/000.
+- **Evidência:** Easypanel recria chaves de YAML isolado no `main.yaml`; Host com `/`, entryPoints `web/websecure`, backend overlay; vários guards/heals escrevendo e enviando HUP.
+- **Causa raiz:** `main.yaml` compartilhado regenerado + rotas duplicadas entre arquivos + múltiplos writers concorrentes.
+- **Fix definitivo:** um único `guardiao-sistemas-traefik.service`, registry allowlist, strip condicionado a YAML isolado válido, candidate/backup/escrita atômica/probes/rollback; sem HUP/force.
+- **Prevenção:** `.cursor/rules/guardiao-sistemas-traefik.mdc`; heals de app são publish-only; instalar primeiro em `audit`.
+- **Fontes:** https://doc.traefik.io/traefik/getting-started/configuration-overview/ · https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
+- **Primeiro visto:** 2026-07-20
+- **Reincidências:** 2026-07-21 (deploy SV → WABA 000/404)
+
 ## ID: SOMA-EASYPANEL-REWRITE
 - **Sintoma:** `app.somaconecta.com.br` 404 JSON `api/errors/not-found`; `soma-promotora-app*.easypanel.host` 502; WABA no mesmo Traefik OK
 - **Evidência:** `main.yaml` com `Host(\`app.somaconecta.com.br/\`)` (barra no Host); services `http://soma-promotora_gestao-interno:3000/` (overlay); local `:30300/api/health` 200 após publish; `Endpoint=null` pós-redeploy

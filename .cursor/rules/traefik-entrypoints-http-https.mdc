@@ -27,10 +27,12 @@ Espelhar `https-waba_paginadevendas-0` (já correto). **Nunca** copiar exemplos 
 
 ## Guardas
 
-- VPS: `scripts/infra/traefik-entrypoint-guard-vps.sh` v2 (`check|fix|fix-backend|run|install`)
+- Writer canônico: `guardiao-sistemas-traefik.service`.
   - entryPoints `web`/`websecure` → `http`/`https`
-  - bet **502** + `:30211` local 200 → força URL `http://172.17.0.1:30211/`
-- Autoheal chama o guard antes do heal
+  - backends por allowlist em `scripts/guardiao-sistemas-traefik-registry.json`
+  - backup + candidate + probes + rollback, sem HUP/force
+- `scripts/infra/traefik-entrypoint-guard-vps.sh` é legado: não instalar como writer concorrente.
+- Autoheals de app são publish-only e solicitam reparo ao Guardião.
 - Repo: `npm run check:traefik-entrypoints`
 - Rule irmã: `ucp-traefik-static-dynamic.mdc`
 

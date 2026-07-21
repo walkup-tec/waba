@@ -12,10 +12,10 @@
 # Uso (root):
 #   bash heal-waba-login-vps.sh run|burst|watch|install|status|check
 #
-# Versão: heal-waba-login-2026-07-13-v2
+# Versão: heal-waba-login-2026-07-21-v3-guardian
 set -euo pipefail
 
-VERSION="heal-waba-login-2026-07-13-v2"
+VERSION="heal-waba-login-2026-07-21-v3-guardian"
 LOG="${WABA_LOGIN_HEAL_LOG:-/var/log/waba-login-heal.log}"
 LOCK="${WABA_LOGIN_HEAL_LOCK:-/var/run/waba-login-heal.lock}"
 INSTALL_DIR="/root/waba-infra"
@@ -27,11 +27,9 @@ SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
 HOST_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
 DOMAIN="${WABA_PUBLIC_HOST:-waba.draxsistemas.com.br}"
 REPO_SCRIPTS="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
-RESTORE_BACKENDS="${RESTORE_BACKENDS_SCRIPT:-/root/restore-easypanel-traefik-backends-vps.sh}"
 TIMER_SEC="${WABA_LOGIN_HEAL_SEC:-20}"
 BURST_ROUNDS="${WABA_LOGIN_HEAL_BURST_ROUNDS:-24}"
 BURST_SLEEP="${WABA_LOGIN_HEAL_BURST_SLEEP:-5}"
-WABA_PERMANENT="${WABA_PERMANENT_SCRIPT:-/root/traefik-permanent-waba-vps.sh}"
 
 log() { printf '[%s] [%s] %s\n' "$(date -Is)" "$VERSION" "$*" | tee -a "$LOG"; }
 
@@ -95,30 +93,14 @@ ensure_host_publish() {
   return 1
 }
 
-ensure_restore_script() {
-  if [[ -x "$RESTORE_BACKENDS" ]]; then
-    return 0
-  fi
-  log "Baixando restore-easypanel-traefik-backends-vps.sh"
-  curl -fsSL "${REPO_SCRIPTS}/restore-easypanel-traefik-backends-vps.sh" -o "$RESTORE_BACKENDS" || return 1
-  sed -i 's/\r$//' "$RESTORE_BACKENDS" 2>/dev/null || true
-  chmod +x "$RESTORE_BACKENDS"
-}
-
-restore_backends() {
-  ensure_restore_script || { log "AVISO: script backends ausente"; return 1; }
-  log "Restaurando backends Traefik (host gateway; sem HUP)"
-  bash "$RESTORE_BACKENDS" >>"$LOG" 2>&1 || {
-    log "AVISO: restore backends retornou erro"
-    return 1
-  }
-  return 0
-}
-
-maybe_permanent_waba() {
-  if [[ -x "$WABA_PERMANENT" ]]; then
-    log "Último recurso: traefik-permanent-waba (router Host)"
-    bash "$WABA_PERMANENT" run >>"$LOG" 2>&1 || log "AVISO: permanent-waba falhou"
+# O heal da aplicação é publish-only. Toda escrita Traefik pertence ao Guardião.
+request_guardian_repair() {
+  local guardian="/root/waba-infra/guardiao-sistemas-traefik-vps.sh"
+  if [[ -x "$guardian" ]]; then
+    log "solicitando reparo transacional ao Guardião"
+    bash "$guardian" repair >>"$LOG" 2>&1 || true
+  else
+    log "AVISO: Guardião ausente — não editando main.yaml"
   fi
 }
 
@@ -159,7 +141,7 @@ cmd_run() {
   fi
 
   if local_health_ok; then
-    restore_backends || true
+    request_guardian_repair
     sleep 2
   else
     log "ERRO: app local ainda down — backends não corrigem HTTPS sozinho"
@@ -171,17 +153,10 @@ cmd_run() {
     return 0
   fi
 
-  restore_backends || true
+  request_guardian_repair
   sleep 3
   if https_health_ok; then
     log "recuperado na 2ª passagem backends"
-    return 0
-  fi
-
-  maybe_permanent_waba
-  sleep 3
-  if https_health_ok; then
-    log "recuperado via permanent-waba"
     return 0
   fi
 
@@ -205,10 +180,7 @@ cmd_burst() {
       ensure_host_publish || true
     fi
     if local_health_ok; then
-      restore_backends || true
-    fi
-    if [[ "$i" -ge 8 ]] && ! https_health_ok; then
-      maybe_permanent_waba
+      request_guardian_repair
     fi
     sleep "$BURST_SLEEP"
   done

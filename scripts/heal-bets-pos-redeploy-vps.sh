@@ -19,10 +19,10 @@
 # Depois: run|burst|watch|status|check
 #
 # NÃO: docker service update --force easypanel-traefik | kill docker-proxy
-# Versão: heal-bets-pos-redeploy-2026-07-20-v1
+# Versão: heal-bets-pos-redeploy-2026-07-21-v2-guardian
 set -euo pipefail
 
-VERSION="heal-bets-pos-redeploy-2026-07-20-v1"
+VERSION="heal-bets-pos-redeploy-2026-07-21-v2-guardian"
 LOG="${WABA_BETS_HEAL_LOG:-/var/log/heal-bets-pos-redeploy.log}"
 LOCK="${WABA_BETS_HEAL_LOCK:-/var/run/heal-bets-pos-redeploy.lock}"
 INSTALL_DIR="/root/waba-infra"
@@ -35,7 +35,6 @@ HOST_PORT="${WABA_BETS_PUBLISHED_PORT:-30211}"
 TARGET_PORT="${WABA_PORT:-3000}"
 DOMAIN="${WABA_PUBLIC_HOST:-bet.waba.info}"
 EP_HOST="${WABA_EASYPANEL_HOST:-waba-bets-pv.achpyp.easypanel.host}"
-CFG="${WABA_TRAEFIK_MAIN_YAML:-/etc/easypanel/traefik/config/main.yaml}"
 REPO_SCRIPTS="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
 TIMER_SEC="${WABA_BETS_HEAL_SEC:-20}"
 BURST_ROUNDS="${WABA_BETS_HEAL_BURST_ROUNDS:-30}"
@@ -120,77 +119,15 @@ ensure_host_publish() {
   return 1
 }
 
-# Patch cirúrgico só Bets → 172.17.0.1:30211.
-# O File provider observa main.yaml; HUP é proibido porque pode derrubar :443.
-patch_bets_backends() {
-  [[ -f "$CFG" ]] || { log "ERRO: $CFG ausente"; return 1; }
-  local bak
-  bak="${CFG}.bak-heal-bets-$(date +%s)"
-  cp -a "$CFG" "$bak"
-  python3 - "$CFG" "$HOST_PORT" <<'PY' || return 1
-import re, sys
-from pathlib import Path
-path, port = Path(sys.argv[1]), sys.argv[2]
-url = f"http://172.17.0.1:{port}/"
-text = path.read_text(encoding="utf-8")
-nfix = 0
-
-def extract_block(text, start):
-    brace = text.find("{", start)
-    depth, end = 0, brace
-    for i, ch in enumerate(text[brace:], brace):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    return text[start:end], start, end
-
-svc_pat = re.compile(r'"([^"]+)"\s*:\s*\{[\s\S]*?"loadBalancer"[\s\S]*?\n      \}', re.M)
-pos = 0
-while True:
-    m = svc_pat.search(text, pos)
-    if not m:
-        break
-    key = m.group(1)
-    block, bstart, bend = extract_block(text, m.start())
-    kl = key.lower()
-    if "bets_pv" not in kl and "bets-pv" not in kl and "bets_landing" not in kl:
-        pos = bend
-        continue
-    nb = re.sub(r'("url"\s*:\s*")[^"]+(")', rf"\g<1>{url}\2", block, count=1)
-    if "passHostHeader" not in nb:
-        nb = nb.replace('"loadBalancer": {', '"loadBalancer": {\n          "passHostHeader": true,', 1)
-    else:
-        nb = re.sub(r'"passHostHeader"\s*:\s*(?:true|false)', '"passHostHeader": true', nb, count=1)
-    if nb != block:
-        text = text[:bstart] + nb + text[bend:]
-        pos = bstart + len(nb)
-        nfix += 1
-        print(f"service {key} -> {url}")
-    else:
-        pos = bend
-
-path.write_text(text, encoding="utf-8")
-print(f"patched={nfix}")
-PY
-  log "main.yaml verificado — aguardando File provider (sem HUP/force)"
-  sleep 8
-  return 0
-}
-
-run_fix_bet_route() {
-  local fix="/tmp/fix-bet-route-heal-bets.sh"
-  curl -fsSL "${REPO_SCRIPTS}/fix-bet-route-30211-vps.sh" -o "$fix" >>"$LOG" 2>&1 || return 1
-  sed -i 's/\r$//' "$fix" 2>/dev/null || true
-  chmod +x "$fix"
-  timeout 90 bash "$fix" >>"$LOG" 2>&1 || {
-    log "AVISO: fix-bet-route exit=$?"
-    return 1
-  }
-  return 0
+# O heal da aplicação é publish-only. Toda escrita Traefik pertence ao Guardião.
+request_guardian_repair() {
+  local guardian="/root/waba-infra/guardiao-sistemas-traefik-vps.sh"
+  if [[ -x "$guardian" ]]; then
+    log "solicitando reparo transacional ao Guardião"
+    bash "$guardian" repair >>"$LOG" 2>&1 || true
+  else
+    log "AVISO: Guardião ausente — não editando main.yaml"
+  fi
 }
 
 cmd_check() {
@@ -210,13 +147,11 @@ heal_once() {
     log "ERRO: app local down — Traefik sozinho não resolve"
     return 1
   fi
-  patch_bets_backends || true
+  request_guardian_repair
   sleep 2
   if https_ok; then
     return 0
   fi
-  run_fix_bet_route || true
-  sleep 3
   https_ok
 }
 
@@ -258,10 +193,7 @@ cmd_burst() {
     fi
     if local_ok; then
       if [[ "$i" -le 4 ]] || [[ "$((i % 3))" -eq 0 ]]; then
-        patch_bets_backends || true
-      fi
-      if [[ "$i" -ge 6 ]] && ! https_ok; then
-        run_fix_bet_route || true
+        request_guardian_repair
       fi
     fi
     sleep "$BURST_SLEEP"

@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "config_dir": "/etc/easypanel/traefik/config",
+  "main_file": "main.yaml",
+  "file_watch_seconds": 8,
+  "poll_seconds": 2,
+  "stable_reads": 2,
+  "backup_keep": 30,
+  "entrypoint_map": {
+    "web": "http",
+    "websecure": "https",
+    "web-secure": "https"
+  },
+  "isolated_projects": [
+    {
+      "id": "sinal-verde",
+      "file": "sinal-verde.yaml",
+      "key_patterns": [
+        "(?i)sinal-verde",
+        "(?i)acesso-sinalverde",
+        "(?i)sinalverde"
+      ]
+    },
+    {
+      "id": "soma-crm",
+      "file": "soma-crm.yaml",
+      "key_patterns": [
+        "(?i)soma-promotora",
+        "(?i)gestao-interno",
+        "(?i)somaconecta"
+      ]
+    }
+  ],
+  "managed_services": [
+    {
+      "id": "waba-disparador",
+      "key_pattern": "(?i)^waba[_-](?:waba[_-])?disparador(?:-\\d+)?$",
+      "url": "http://172.17.0.1:30180/"
+    },
+    {
+      "id": "waba-paginadevendas",
+      "key_pattern": "(?i)^waba[_-]paginadevendas(?:-\\d+)?$",
+      "url": "http://172.17.0.1:30210/"
+    },
+    {
+      "id": "waba-bets",
+      "key_pattern": "(?i)^waba[_-]bets(?:[_-](?:pv|landing(?:_fix)?))?(?:-\\d+)?$",
+      "url": "http://172.17.0.1:30211/"
+    },
+    {
+      "id": "walkup-evolution",
+      "key_pattern": "(?i)^walkup[_-]evo[_-]walkup-api(?:-\\d+)?$",
+      "url": "http://172.17.0.1:30181/"
+    }
+  ],
+  "probes": [
+    {
+      "id": "waba-login",
+      "url": "https://waba.draxsistemas.com.br/health",
+      "host": "waba.draxsistemas.com.br",
+      "acceptable": [200]
+    },
+    {
+      "id": "waba-disparos",
+      "url": "https://wabadisparos.com.br/",
+      "host": "wabadisparos.com.br",
+      "acceptable": [200]
+    },
+    {
+      "id": "waba-bets",
+      "url": "https://bet.waba.info/",
+      "host": "bet.waba.info",
+      "acceptable": [200]
+    },
+    {
+      "id": "sinal-verde",
+      "url": "https://acesso-sinalverde.com/",
+      "host": "acesso-sinalverde.com",
+      "acceptable": [200, 301, 302, 303, 307, 308]
+    },
+    {
+      "id": "soma-crm",
+      "url": "https://app.somaconecta.com.br/api/health",
+      "host": "app.somaconecta.com.br",
+      "acceptable": [200]
+    }
+  ]
+}
