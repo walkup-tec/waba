@@ -1,13 +1,14 @@
 #!/bin/bash
-# Guard Sinal Verde — v4 ISOLADO: edita APENAS sinal-verde.yaml.
-# NUNCA patcha main.yaml (WABA). Se Easypanel recriar chaves SV no main → strip-only.
+# Guard Sinal Verde — v5 ISOLADO: edita APENAS sinal-verde.yaml.
+# NUNCA patcha backends WABA. Se Easypanel recriar chaves SV no main → strip-only seguro.
+# Preferir heal-sinal-verde-pos-redeploy-vps.sh (path unit + rollback WABA) no install pós-deploy.
 #
 # Doc: https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
 #
 # Uso: install|run|status|uninstall|watch
 set -euo pipefail
 
-VERSION="sinal-verde-overlay-guard-2026-07-20-v4-isolated-yaml"
+VERSION="sinal-verde-overlay-guard-2026-07-21-v5-isolated-yaml"
 CFG_DIR="${TRAEFIK_CFG_DIR:-/etc/easypanel/traefik/config}"
 MAIN="${CFG_DIR}/main.yaml"
 SV_YAML="${TRAEFIK_SV_YAML:-${CFG_DIR}/sinal-verde.yaml}"
@@ -138,6 +139,11 @@ strip_sv_from_main_if_present() {
   [[ -f "$MAIN" ]] || return 0
   grep -qiE 'sinal-verde|acesso-sinalverde' "$MAIN" 2>/dev/null || return 0
   log "Easypanel recriou SV no main.yaml — strip-only (não toca WABA)"
+  # Preferir heal isolado (strip atômico + rollback WABA)
+  if [[ -x "${INSTALL_DIR}/heal-sinal-verde-pos-redeploy-vps.sh" ]]; then
+    bash "${INSTALL_DIR}/heal-sinal-verde-pos-redeploy-vps.sh" strip-only >>"$LOG" 2>&1 || log "strip-safe falhou"
+    return 0
+  fi
   if [[ -x "$SPLIT" ]]; then
     bash "$SPLIT" strip-main >>"$LOG" 2>&1 || log "strip falhou"
   fi

@@ -29,6 +29,17 @@
 - LOG: `doc/LOG-2026-07-20__200023__traefik-split-sinal-verde-waba.md`
 - Keywords: `traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `30310`
 
+## 2026-07-21 12:45 — Auto-heal permanente ATIVO (bets + paginadevendas)
+- VPS: `waba-paginadevendas-heal-watch/.timer` + `waba-bets-heal-watch/.timer` = **active**
+- Script bets publicado (`2959bf3`) — antes 404 no raw; HUP removido do script
+- Redeploy agora se cura sozinho (~20–60s); os 3 sites 200
+- LOG: doc/LOG-2026-07-21__124500__install-heal-bets-paginadevendas-permanente.md
+
+## 2026-07-21 12:30 — Remover LOGO 1–6 wabadisparos
+- `pv-waba-disparador` `SocialProof`: removidos placeholders LOGO 1–6
+- Redeploy Easypanel `waba_paginadevendas` para publicar
+- LOG: doc/LOG-2026-07-21__123000__remove-logo-placeholders-wabadisparos.md
+
 ## 2026-07-20 19:51 — Landings restauradas (502→200)
 - bet + wabadisparos + health = **200** (validado de fora)
 - Restore Hostinger: publish :30210/:30211 + bak/backends (script emergency-restore-landings-502)
@@ -2565,3 +2576,5 @@ Palavras-chave para buscar:
 - Keywords: TRAEFIK-THRASH-443, anti-thrash, Soma heal 45s
 
 
+
+- 2026-07-21: Heal Sinal Verde isolado — NÃO chama restore-backends; strip atômico + path unit no main.yaml; rollback se WABA cair. Scripts: heal-sinal-verde-pos-redeploy-vps.sh. Buscar: sinal-verde isolado, strip seguro, anti 404 traefik.
