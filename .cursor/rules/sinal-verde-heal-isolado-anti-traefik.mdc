@@ -1,0 +1,26 @@
+# Heal Sinal Verde pós-redeploy — isolado do Traefik/WABA
+
+## Regra
+
+Após **qualquer** Redeploy/push do CRM Sinal Verde:
+
+1. O heal **só** pode tocar: publish `:30310`, `sinal-verde.yaml`, strip de chaves SV no `main.yaml`.
+2. **PROIBIDO** chamar `restore-easypanel-traefik-backends-vps.sh` (ou qualquer patch genérico de backends WABA).
+3. Strip no `main.yaml` deve ser **atômico** + validar braces + **rollback** se `wabadisparos` deixar de ser 200.
+4. Preferir `systemd` path unit em `main.yaml` (`sinal-verde-main-yaml.path`) para strip imediato quando o Easypanel recriar rotas SV.
+
+## Install (uma vez no VPS)
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/waba/master/scripts/HOSTINGER-PASTE-heal-sinal-verde-isolated.sh" \
+  -o /tmp/sv-iso.sh && sed -i 's/\r$//' /tmp/sv-iso.sh && bash /tmp/sv-iso.sh
+```
+
+## Workflow
+
+Repo `sinal-verde-pro` → `.github/workflows/heal-pos-deploy.yml` (v8+) chama apenas `heal-sinal-verde-pos-redeploy-vps.sh`.
+
+## Doc
+
+- https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
+- LOG: `doc/LOG-2026-07-21__143500__heal-sinal-verde-isolado-anti-traefik-404.md`
