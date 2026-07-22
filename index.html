@@ -52,6 +52,8 @@
         var baselineServerBootId = "";
         var serverDeployResilienceFromHealth = null;
         var serverContainerService = "";
+        var gatewayFailureStreak = 0;
+        var GATEWAY_STREAK_TO_DEPLOY = 2;
 
         function isProductionDeployHost() {
           var host = String(window.location.hostname || "").toLowerCase();
@@ -98,18 +100,21 @@
         }
 
         function shouldTriggerDeployRecoveryFromHttp(status, payload) {
-          if (status !== 503) return false;
-          return isDeployShutdownSignal(payload);
+          if (status === 503 && isDeployShutdownSignal(payload)) return true;
+          // Pós-redeploy: Traefik devolve 502/504 sem shuttingDown enquanto :30180 some.
+          if (status === 502 || status === 504) return true;
+          return false;
         }
 
         async function shouldTriggerDeployRecoveryFromResponse(response) {
           if (!response) return false;
+          if (response.status === 502 || response.status === 504) return true;
           if (response.status !== 503) return false;
           try {
             var payload = await response.clone().json();
             return isDeployShutdownSignal(payload);
           } catch (_) {
-            return false;
+            return response.status === 503;
           }
         }
 
@@ -339,24 +344,40 @@
             }
             applyDeployResilienceFromHealth(data);
             if (shouldTriggerDeployRecoveryFromHttp(response.status, data)) {
+              gatewayFailureStreak += 1;
               return {
                 stable: false,
-                deploySignal: true,
-                reason: "shutdown",
+                deploySignal:
+                  gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY ||
+                  isDeployShutdownSignal(data),
+                reason: isDeployShutdownSignal(data) ? "shutdown" : "gateway",
               };
             }
             if (isGatewayStatus(response.status)) {
-              return { stable: false, deploySignal: false, reason: "gateway_without_deploy_signal" };
+              gatewayFailureStreak += 1;
+              return {
+                stable: false,
+                deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
+                reason: "gateway_without_deploy_signal",
+              };
             }
             if (isDeployShutdownSignal(data)) {
+              gatewayFailureStreak = 0;
               return { stable: false, deploySignal: true, reason: "shutdown" };
             }
             if (data && data.maintenanceMode) {
+              gatewayFailureStreak = 0;
               return { stable: false, deploySignal: false, reason: "maintenance" };
             }
             if (!response.ok || !data || data.ok !== true) {
-              return { stable: false, deploySignal: false, reason: "unhealthy" };
+              gatewayFailureStreak += 1;
+              return {
+                stable: false,
+                deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
+                reason: "unhealthy",
+              };
             }
+            gatewayFailureStreak = 0;
             try {
               var readyRes = await fetch(resolveReadyUrl(), {
                 cache: "no-store",
@@ -372,7 +393,12 @@
                 return { stable: false, deploySignal: Boolean(readyData && readyData.shuttingDown), reason: "not_ready" };
               }
             } catch (_) {
-              return { stable: false, deploySignal: false, reason: "ready_unreachable" };
+              gatewayFailureStreak += 1;
+              return {
+                stable: false,
+                deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
+                reason: "ready_unreachable",
+              };
             }
             return {
               stable: true,
@@ -382,7 +408,12 @@
               serverBootId: String(data.serverBootId || ""),
             };
           } catch (_) {
-            return { stable: false, deploySignal: false, reason: "network" };
+            gatewayFailureStreak += 1;
+            return {
+              stable: false,
+              deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
+              reason: "network",
+            };
           }
         }
 

@@ -12,10 +12,10 @@
 # Uso (root):
 #   bash heal-waba-login-vps.sh run|burst|watch|install|status|check
 #
-# Versão: heal-waba-login-2026-07-21-v4-fast-hairpin
+# Versão: heal-waba-login-2026-07-22-v5-guardiao-install
 set -euo pipefail
 
-VERSION="heal-waba-login-2026-07-21-v4-fast-hairpin"
+VERSION="heal-waba-login-2026-07-22-v5-guardiao-install"
 LOG="${WABA_LOGIN_HEAL_LOG:-/var/log/waba-login-heal.log}"
 LOCK="${WABA_LOGIN_HEAL_LOCK:-/var/run/waba-login-heal.lock}"
 INSTALL_DIR="/root/waba-infra"
@@ -215,9 +215,9 @@ cmd_watch() {
         service)
           if [[ "$ename" == "$SWARM_SERVICE" ]] || [[ "$esvc" == "$SWARM_SERVICE" ]]; then
             case "$eaction" in
-              update|create|remove)
+              update|create|remove|scale)
                 log "evento service ${eaction} ${ename} — burst imediato"
-                ( sleep 1; bash "$0" burst ) >>"$LOG" 2>&1 &
+                ( sleep 0.3; bash "$0" burst ) >>"$LOG" 2>&1 &
                 ;;
             esac
           fi
@@ -225,9 +225,9 @@ cmd_watch() {
         container)
           if [[ "$esvc" == "$SWARM_SERVICE" ]]; then
             case "$eaction" in
-              start|die|kill)
+              start|die|kill|stop)
                 log "evento container ${eaction} svc=${esvc} — burst imediato"
-                ( sleep 1; bash "$0" burst ) >>"$LOG" 2>&1 &
+                ( sleep 0.3; bash "$0" burst ) >>"$LOG" 2>&1 &
                 ;;
             esac
           fi

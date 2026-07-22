@@ -1,4 +1,14 @@
-﻿## 2026-07-22 12:28 — Fix Preparando na integração
+﻿## 2026-07-22 12:45 — Contingência anti-502 (heal+modal)
+- Causa: Guardião baixava heals sem `install` → watch morto; overlay ignorava 502
+- Fix: Guardião install heals; heal v5; UI 502→modal+reload; Actions assert active
+- VPS: reinstall heal-waba-login AGORA
+- LOG: doc/LOG-2026-07-22__124500__contingencia-anti-502-heal-modal.md
+
+## 2026-07-22 12:39 — 502 pós-Redeploy (heal login)
+- waba.draxsistemas Bad Gateway após Redeploy; causa :30180; burst heal-waba-login
+- LOG: doc/LOG-2026-07-22__123900__502-pos-redeploy-heal-login.md
+
+## 2026-07-22 12:28 — Fix Preparando na integração
 - Create/QR força Preparando; sem createdAt não grandfather; reconcile active→preparing se EVO recente/recriada
 - Contagem Preparando e exclusão do ciclo aquecedor voltam a bater
 - LOG: doc/LOG-2026-07-22__122800__fix-preparando-integracao.md

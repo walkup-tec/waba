@@ -120,6 +120,8 @@ disable_legacy_writers() {
 
 refresh_publish_heals() {
   # Estes heals são publish-only nas versões compatíveis com o Guardião.
+  # OBRIGATÓRIO: após baixar, rodar install — senão watch/timer ficam mortos e o
+  # Redeploy Easypanel deixa waba.draxsistemas em Bad Gateway até heal manual.
   local name
   for name in \
     heal-paginadevendas-pos-redeploy-vps.sh \
@@ -134,11 +136,21 @@ refresh_publish_heals() {
       fi
       mv -f "/root/waba-infra/${name}.new" "/root/waba-infra/${name}"
       chmod 0755 "/root/waba-infra/${name}"
+      log "instalando unidades publish-only: ${name}"
+      bash "/root/waba-infra/${name}" install >>"$LOG" 2>&1 || {
+        log "AVISO: install ${name} falhou — ver log"
+      }
     else
       log "ERRO: download ${name}"
       return 1
     fi
   done
+  systemctl is-active waba-login-heal-watch.service >/dev/null 2>&1 \
+    && log "waba-login-heal-watch: active" \
+    || log "ERRO: waba-login-heal-watch NÃO active após install"
+  systemctl is-active waba-login-heal.timer >/dev/null 2>&1 \
+    && log "waba-login-heal.timer: active" \
+    || log "ERRO: waba-login-heal.timer NÃO active após install"
 }
 
 cmd_activate() {

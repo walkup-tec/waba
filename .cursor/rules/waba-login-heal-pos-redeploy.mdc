@@ -14,6 +14,8 @@ Após Redeploy Easypanel do `waba_disparador`, o Swarm perde publish host **`:30
 1. **Push `master` → Deploy FTP** é o caminho normal de código. **Não** Redeploy no Easypanel só por push de `src/`/`index.html`.
 2. Redeploy **só** quando mudar imagem/Dockerfile/env — e o heal **deve** estar `active` antes.
 3. **Nunca** `systemctl disable` em `waba-login-heal-watch` / `waba-login-heal.timer` (nem na limpeza do Guardião). Guardião escreve Traefik; login heal só republica `:30180`.
+4. **`guardiao-sistemas-traefik-vps.sh activate`** deve rodar `heal-waba-login-vps.sh install` (publish-only). Só baixar o `.sh` sem `install` = watch morto = 502 pós-redeploy.
+5. UI: modal «ATUALIZANDO O SISTEMA» em `shuttingDown` **e** em 502/504 sustentado; reload quando `/health`+`/ready` estáveis.
 
 ## Precauções obrigatórias (já no repo)
 

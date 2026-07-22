@@ -34,7 +34,7 @@ jobs:
           fi
 
       - name: Aguardar Easypanel iniciar o build/redeploy
-        run: sleep 25
+        run: sleep 8
 
       - name: SSH — install watch+timer e burst até health 200
         uses: appleboy/ssh-action@v1.2.0
@@ -51,13 +51,15 @@ jobs:
             sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
             chmod +x /tmp/heal-waba-login-vps.sh
             /tmp/heal-waba-login-vps.sh install
+            systemctl is-active waba-login-heal-watch.service
+            systemctl is-active waba-login-heal.timer
             /tmp/heal-waba-login-vps.sh burst || true
-            sleep 8
+            sleep 4
+            /tmp/heal-waba-login-vps.sh burst || true
+            sleep 4
             /tmp/heal-waba-login-vps.sh burst
             echo "--- status ---"
             /tmp/heal-waba-login-vps.sh status
-            systemctl is-active waba-login-heal-watch.service || true
-            systemctl is-active waba-login-heal.timer || true
             code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
               --resolve waba.draxsistemas.com.br:443:127.0.0.1 \
               https://waba.draxsistemas.com.br/health || echo 000)"
