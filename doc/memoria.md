@@ -1,4 +1,9 @@
-﻿## 2026-07-22 13:30 — 502 persiste pós-FTP (heal VPS)
+﻿## 2026-07-22 13:31 — Heal login v5 confirmado ACTIVE no VPS
+- install + burst OK rodada 1; watch+timer `active`; https:200
+- Watch reagiu a vários `service update waba_waba_disparador` (~16:27–16:28 UTC)
+- LOG anterior: doc/LOG-2026-07-22__133000__502-persiste-heal-inativo.md
+
+## 2026-07-22 13:30 — 502 persiste pós-FTP (heal VPS)
 - FTP não cura :30180; install+burst obrigatório; watch/timer devem ser active
 - LOG: doc/LOG-2026-07-22__133000__502-persiste-heal-inativo.md
 
