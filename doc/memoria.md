@@ -1,4 +1,8 @@
-﻿## 2026-07-22 13:31 — Heal login v5 confirmado ACTIVE no VPS
+﻿## 2026-07-22 13:45 — Aquecedor pares + validação 1261
+- Fix: replyDue prioridade absoluta (6011 só recebia); send validação sem sucesso falso; Preparando com since=now
+- LOG: doc/LOG-2026-07-22__134500__aquecedor-pares-validacao-1261.md
+
+## 2026-07-22 13:31 — Heal login v5 confirmado ACTIVE no VPS
 - install + burst OK rodada 1; watch+timer `active`; https:200
 - Watch reagiu a vários `service update waba_waba_disparador` (~16:27–16:28 UTC)
 - LOG anterior: doc/LOG-2026-07-22__133000__502-persiste-heal-inativo.md

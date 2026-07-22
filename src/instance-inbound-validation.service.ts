@@ -232,9 +232,29 @@ function buildTemplateUrl(template: string, instanceName: string): string {
 
 function resolveSendTarget(referenceJid: string | null, referenceNumber: string | null): string {
   const jid = String(referenceJid || "").trim();
-  if (jid.includes("@")) return jid;
-  const digits = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
-  return digits;
+  const fromNumber = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
+  const fromJidUser = jid.includes("@")
+    ? normalizeWhatsAppNumber(jid.split("@")[0] || "")
+    : normalizeWhatsAppNumber(jid);
+  // Preferir dígitos E.164: Evolution costuma falhar/silenciar sendText com @lid.
+  const digits =
+    fromNumber.length >= 12
+      ? fromNumber
+      : fromJidUser.length >= 12
+        ? fromJidUser
+        : fromNumber || fromJidUser;
+  if (digits.length >= 12) return digits;
+  if (/@s\.whatsapp\.net$/i.test(jid)) return jid;
+  if (jid.includes("@") && !/@lid$/i.test(jid)) return jid;
+  return digits || jid;
+}
+
+function isPhoneWhatsAppJid(jid: string): boolean {
+  return /@s\.whatsapp\.net$/i.test(String(jid || "").trim());
+}
+
+function isLidJid(jid: string): boolean {
+  return /@lid$/i.test(String(jid || "").trim());
 }
 
 function collectMessageTexts(node: unknown, out: string[], depth = 0): void {
@@ -602,9 +622,13 @@ function walkInboundHits(
     if (textMatchesKeyword(texts, keyword)) {
       const remoteJid = extractRemoteJid(obj) || findJidInSubtree(obj);
       if (remoteJid) {
+        const key = obj.key as Record<string, unknown> | undefined;
+        const altDigits = jidToNumber(
+          String(key?.remoteJidAlt || obj.remoteJidAlt || key?.remoteJid || ""),
+        );
         const hit: InboundHit = {
           remoteJid,
-          referenceNumber: jidToNumber(remoteJid),
+          referenceNumber: altDigits || jidToNumber(remoteJid),
           texts,
           messageTimestampMs: extractMessageTimestampMs(obj),
         };
@@ -640,19 +664,21 @@ function extractFromMe(node: Record<string, unknown>): boolean | null {
 function extractRemoteJid(node: Record<string, unknown>): string {
   const key = node.key as Record<string, unknown> | undefined;
   const candidates = [
-    key?.remoteJid,
     key?.remoteJidAlt,
-    node.remoteJid,
+    key?.remoteJid,
     node.remoteJidAlt,
+    node.remoteJid,
     node.chatId,
     key?.participant,
     node.participant,
-  ];
-  for (const c of candidates) {
-    const s = String(c || "").trim();
-    if (s && !s.includes("@g.us")) return s;
-  }
-  return "";
+  ]
+    .map((value) => String(value || "").trim())
+    .filter((s) => s && !s.includes("@g.us"));
+  const phoneJid = candidates.find((jid) => isPhoneWhatsAppJid(jid) && !isLidJid(jid));
+  if (phoneJid) return phoneJid;
+  const nonLid = candidates.find((jid) => !isLidJid(jid));
+  if (nonLid) return nonLid;
+  return candidates[0] || "";
 }
 
 function buildFindMessagesUrls(instanceName: string): string[] {
@@ -958,16 +984,22 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   if (convKey) {
     const lastSentAt = recentReplyByConversation.get(convKey);
     if (lastSentAt != null && Date.now() - lastSentAt < REPLY_DEDUPE_MS) {
-      record.phase = "reply_sent";
-      record.sendAttempted = true;
-      record.sendHttpOk = true;
-      record.sendDetail = "dedupe";
-      record.sendTest = {
-        success: true,
-        detail: "Resposta já enviada nesta conversa (validação única).",
-      };
-      tryFinalize(record);
-      return;
+      const found =
+        record.referenceJid &&
+        (await findReplyInChat(record.instanceName, record.referenceJid, record.replyMarker));
+      if (found) {
+        record.phase = "reply_sent";
+        record.sendAttempted = true;
+        record.sendHttpOk = true;
+        record.sendDetail = "dedupe";
+        record.sendTest = {
+          success: true,
+          detail: "Resposta já enviada nesta conversa (validação única).",
+        };
+        tryFinalize(record);
+        return;
+      }
+      // Dedupe sem prova no histórico — tentar enviar de novo (evita modal “ok” sem mensagem).
     }
     if (replyInFlight.has(convKey)) return;
     replyInFlight.add(convKey);
@@ -978,13 +1010,14 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   const text = `Validação WABA concluída. ${record.replyMarker}`;
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
   const numero = resolveSendTarget(record.referenceJid, record.referenceNumber);
-  if (!numero) {
+  if (!numero || isLidJid(numero)) {
     if (convKey) replyInFlight.delete(convKey);
     record.sendHttpOk = false;
     record.sendDetail = "Destino da resposta não identificado.";
     record.sendTest = {
       success: false,
-      detail: "Não foi possível identificar o chat do outro WhatsApp para responder.",
+      detail:
+        "Não foi possível identificar o número do outro WhatsApp para responder (JID @lid sem telefone).",
     };
     tryFinalize(record);
     return;
@@ -1003,23 +1036,13 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
         `HTTP ${result.status}`;
       record.sendDetail = String(detail);
       const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
-      const technical = isSendFailureTechnical(record.sendDetail, result.status);
-      if (!restricted && (technical || record.receiveTest.success === true)) {
-        record.sendTest = {
-          success: true,
-          detail: technical
-            ? "Recepção confirmada. Resposta automática indisponível (sistema WABA - Drax lento/timeout) — integração liberada."
-            : "Recepção confirmada. Resposta automática não enviada — integração liberada.",
-        };
-        tryFinalize(record);
-        return;
-      }
       record.sendTest = {
         success: false,
         detail: restricted
           ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
-          : `Falha técnica ao responder: ${record.sendDetail}`,
+          : `Falha ao enviar resposta automática: ${record.sendDetail}`,
       };
+      // Não marcar sucesso falso — UI não deve exibir “finalizado” sem mensagem enviada.
       tryFinalize(record);
       return;
     }

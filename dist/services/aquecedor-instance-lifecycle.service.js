@@ -321,10 +321,20 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince, 
     const integrationAt = explicitSince || evoCreatedAt || (forceNew ? new Date().toISOString() : null);
     const existing = await findAquecedorLifecycleRow(name);
     if (forceNew) {
-        const since = integrationAt || new Date().toISOString();
+        const since = new Date().toISOString();
+        const aliasesMap = await loadAliasesMap();
+        for (const aliasKey of collectInstanceNameKeys(name, aliasesMap)) {
+            if (aliasKey !== key && store.instances[aliasKey]) {
+                delete store.instances[aliasKey];
+            }
+        }
         if (existing) {
             refreshRestrictionPhase(existing.row);
             applyPreparingPhase(existing.row, since);
+            if (existing.key !== key) {
+                delete store.instances[existing.key];
+                store.instances[key] = existing.row;
+            }
             await saveStore(store);
             return;
         }

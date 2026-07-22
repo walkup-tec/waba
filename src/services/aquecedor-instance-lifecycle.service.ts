@@ -365,10 +365,23 @@ export async function registerAquecedorInstancePreparing(
   const existing = await findAquecedorLifecycleRow(name);
 
   if (forceNew) {
-    const since = integrationAt || new Date().toISOString();
+    // Sempre 6h a partir DESTA integração — não reutilizar createdAt EVO antigo
+    // (nome curto tipo "1261" pode ter createdAt de criação anterior → promove/some na hora).
+    const since = new Date().toISOString();
+    const aliasesMap = await loadAliasesMap();
+    for (const aliasKey of collectInstanceNameKeys(name, aliasesMap)) {
+      if (aliasKey !== key && store.instances[aliasKey]) {
+        delete store.instances[aliasKey];
+      }
+    }
     if (existing) {
       refreshRestrictionPhase(existing.row);
       applyPreparingPhase(existing.row, since);
+      // Regrava sob a chave canônica atual
+      if (existing.key !== key) {
+        delete store.instances[existing.key];
+        store.instances[key] = existing.row;
+      }
       await saveStore(store);
       return;
     }

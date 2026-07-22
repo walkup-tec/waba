@@ -1375,31 +1375,31 @@ async function loadAquecedorTurnManager(supabase, connected) {
         const directed = directedSendCounts.get(directedKey) ?? 0;
         const pairTotal = getUndirectedPairSendTotal(origem, destino);
         const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
+        const oRecv = instanceStats.get(origem.toLowerCase())?.receiveCount ?? 0;
         const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
+        const dSend = instanceStats.get(destino.toLowerCase())?.sendCount ?? 0;
+        const replyDue = owesPairReply(origemRaw, destinoRaw);
         let score = 0;
-        // Rodízio de conversas: o par que acabou de trocar mensagem cede a vez a outro par.
-        // Se só houver esse par elegível, todos recebem a mesma penalidade e ele ainda sai.
-        if (lastEventPairKey && buildAquecedorPairKey(origem, destino) === lastEventPairKey) {
+        if (lastEventPairKey &&
+            buildAquecedorPairKey(origem, destino) === lastEventPairKey &&
+            !replyDue) {
             score += 1e18;
         }
-        // Primário: rodízio LRU por par — quem trocou há MAIS tempo vai primeiro.
-        // Garante que todos os pares circulem continuamente (frequências iguais →
-        // enviados/recebidos convergem), sem pausar um par por horas para "compensar".
+        if (replyDue) {
+            score -= 2e18;
+        }
         const pairLastAtMs = pairLastEventAtMs.get(buildAquecedorPairKey(origem, destino)) ?? 0;
         const recencyMinutes = Math.max(0, (pairLastAtMs - equityWindowStartMs) / 60000);
         score += recencyMinutes * 1000000000000;
-        // Equidade por volume do par na janela — desempate.
         score += (pairTotal - equityBaseline.minPairTotal) * 1000000000;
         score += (directed - equityBaseline.minDirected) * 1000000;
         score += (oSend - equityBaseline.minOriginSend) * 1000;
         score += (dRecv - equityBaseline.minDestReceive) * 100;
+        score += (oSend - oRecv) * 50000000;
+        score += (dRecv - dSend) * 10000000;
         const recentIdx = recentDirectedEdges.indexOf(directedKey);
         if (recentIdx >= 0) {
             score += (recentIdx + 1) * 10;
-        }
-        // Resposta pendente só desempata — não monopoliza o ciclo (equidade primeiro).
-        if (owesPairReply(origemRaw, destinoRaw)) {
-            score -= 500;
         }
         const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
         score += rotation * 0.001;
@@ -1454,6 +1454,10 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
     }
     if (!eligible.length)
         return null;
+    const replyDue = eligible.filter(({ combo }) => manager.owesPairReply(combo.instancia_origem, combo.instancia_destino));
+    if (replyDue.length) {
+        eligible = replyDue;
+    }
     const instanceCount = Math.max(2, connected.length);
     const maxUndirectedPairShare = Math.max(0.5, 2 / instanceCount);
     const totalDirectedSends = manager.getTotalDirectedSendCount();
@@ -2592,7 +2596,7 @@ async function ensureAquecedorInstanceRegistered(instanceName, options) {
         const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
         const forceNew = options?.forceNewIntegration === true;
         if (forceNew) {
-            await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, preparingSince || new Date().toISOString(), {
+            await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, new Date().toISOString(), {
                 forceNewIntegration: true,
             });
             return;
