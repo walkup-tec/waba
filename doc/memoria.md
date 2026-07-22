@@ -1,4 +1,33 @@
-﻿## 2026-07-20 20:21 — Soma CRM isolado CONCLUÍDO no VPS
+﻿## 2026-07-21 20:52 — Lista «desconectado» com QR «já conectada» (1261)
+- EVO open de verdade; lista lia cache sem live enrich; background refresh sem re-render
+- Fix snapshot live + 409 como sucesso + re-render; número real WA: 5182001261 (não 51982001261)
+- LOG: doc/LOG-2026-07-21__205200__fix-lista-desconectado-ja-conectada-1261.md
+
+## 2026-07-21 20:45 — Restart EVO destravou QR (create/connect)
+- UI «Verifique EVO_API_URL» era falso positivo (502); create/connect travavam na Evolution
+- Fix: `docker service update --force walkup_evo-walkup-api` (aprovado)
+- Validação: create 201 ~5s com QR; não usar `127.0.0.1:30181` no host (hairpin) — preferir `172.17.0.1:30181`
+- LOG: doc/LOG-2026-07-21__204500__evo-restart-destravou-qr-create.md
+
+## 2026-07-21 16:18 — Guardião ATIVO (repair) no VPS; writers desligados
+- Corrupção recorrente do main.yaml: culpado final = `sinal-verde-main-yaml.path` (path unit strip a cada write)
+- Desligados: overlay-guards SV/Soma, heal-sinal-verde, soma-gestao-heal, traefik-permanent-*, waba-traefik-autoheal, waba-login-heal v2 antiga
+- Guardião repair: strip 12 chaves SV/Soma OK; probes 200/200/200/307/200; state `clean`
+- NÃO religar writers antigos; heals só nas versões guardian (publish-only)
+- LOG: doc/LOG-2026-07-21__161800__guardiao-ativo-repair-writers-desligados.md
+
+## 2026-07-21 13:54 — Guardião de Sistemas Traefik criado
+- Um único writer transacional do `main.yaml`; sem HUP/force/timers concorrentes
+- Strip condicionado a YAML isolado válido; Host/entryPoints/backends por allowlist
+- Backup + escrita atômica + probes + rollback automático
+- Registry: WABA 30180/30210/30211, Walkup 30181, SV e Soma isolados
+- Heals WABA agora são publish-only e solicitam reparo ao Guardião
+- Rules: projeto + global Cursor
+- Testes: 3 unitários OK; Python/Shell/JSON válidos
+- Ainda não instalado no VPS: publicar → `install-audit` → revisar → `activate`
+- LOG: `doc/LOG-2026-07-21__135400__create-guardiao-sistemas-traefik.md`
+
+## 2026-07-20 20:21 — Soma CRM isolado CONCLUÍDO no VPS
 - `soma-crm.yaml` criado; 6 chaves Soma stripped do `main.yaml`
 - Validação: disparos/bet/health **200** | SV **307** | soma **307** / health **200** | main limpo
 - Guard `soma-crm-overlay-guard` timer+watch ativos

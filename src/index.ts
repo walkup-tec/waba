@@ -6981,14 +6981,40 @@ async function buildInstancesSnapshotForAuth(
     };
   });
 
-  const ativas = items.filter((row) =>
+  const liveItems = await enrichInstanceItemsWithLiveConnection(
+    items as Array<Record<string, unknown>>,
+  );
+
+  const ativas = liveItems.filter((row) =>
     String(row?.connectionStatus || "").toLowerCase() === "open",
   ).length;
 
   const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
-    items as Array<Record<string, unknown>>,
+    liveItems,
     auth.email || "",
   );
+
+  // Atualiza só o connectionStatus das instâncias do dono (não apaga o restante do cache).
+  if (cache?.items?.length) {
+    const liveByName = new Map(
+      enrichedItems.map((row) => [
+        String(row?.name || "").trim().toLowerCase(),
+        String(row?.connectionStatus || "").trim().toLowerCase(),
+      ]),
+    );
+    let cacheDirty = false;
+    const nextCacheItems = cache.items.map((row) => {
+      const key = String(row?.name || "").trim().toLowerCase();
+      const liveStatus = liveByName.get(key);
+      if (!liveStatus || !key) return row;
+      if (String(row?.connectionStatus || "").trim().toLowerCase() === liveStatus) return row;
+      cacheDirty = true;
+      return { ...row, connectionStatus: liveStatus };
+    });
+    if (cacheDirty) {
+      void saveEvoInstancesCache(nextCacheItems);
+    }
+  }
 
   return {
     total: enrichedItems.length,
@@ -6996,7 +7022,7 @@ async function buildInstancesSnapshotForAuth(
     desconectadas: enrichedItems.length - ativas,
     items: enrichedItems,
     fromCache: true,
-    cacheUpdatedAt: String(cache?.updatedAt || ""),
+    cacheUpdatedAt: String(cache?.updatedAt || new Date().toISOString()),
   };
 }
 

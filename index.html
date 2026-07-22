@@ -21000,8 +21000,14 @@
                 )
               )
             : "";
-          applyInstancesPayload(payload, { render: false });
+          applyInstancesPayload(payload, {
+            render: activeTab === "instancias",
+          });
           await loadInstanceUsageConfig();
+          if (activeTab === "instancias") {
+            renderInstancesList();
+            updateInstancesIndicators();
+          }
         } catch (error) {
           if (!instancesData?.items?.length) {
             instancesLoadError =
@@ -45779,6 +45785,18 @@
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
+          const alreadyConnected =
+            response.status === 409 &&
+            /j[aá]\s+est[aá]\s+conectada/i.test(String(data?.error || data?.detail || ""));
+          if (alreadyConnected) {
+            return {
+              ok: true,
+              alreadyConnected: true,
+              message:
+                data?.error ||
+                "Esta instância já está conectada no sistema WABA - Drax.",
+            };
+          }
           const err = new Error(
             data?.error ||
               data?.detail ||
@@ -45881,6 +45899,16 @@
             token,
             number,
           });
+          if (data?.alreadyConnected) {
+            const okMsg =
+              "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
+            setRegisterConnectStatus("success", okMsg);
+            markRegisterWizardValidationComplete();
+            await loadInstancesForInstanciasTab({ fullRefresh: true });
+            setRegisterWizardStep(4);
+            return;
+          }
           if (!data?.qrCode && !resolveQrImageSrcFromPayload(data)) {
             const warnMsg =
               "QRCode solicitado, mas a O sistema WABA - Drax não retornou imagem nesta resposta.";
@@ -46041,6 +46069,17 @@
             token,
             number,
           });
+
+          if (data?.alreadyConnected) {
+            const okMsg =
+              "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
+            setRegisterConnectStatus("success", okMsg);
+            markRegisterWizardValidationComplete();
+            await loadInstancesForInstanciasTab({ fullRefresh: true });
+            setRegisterWizardStep(4);
+            return;
+          }
 
           const imgSrc = resolveQrImageSrcFromPayload(data);
           if (!imgSrc) {
