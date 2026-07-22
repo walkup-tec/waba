@@ -41,7 +41,6 @@
         var DEPLOY_WATCH_MS = 8000;
         var STABLE_PROBES_REQUIRED = 3;
         var STABLE_COMPLETE_MS = 500;
-        var FALSE_ALARM_MS = 45000;
         var FORCE_COMPLETE_MS = 90000;
         var pollTimer = null;
         var pollStartedAt = 0;
@@ -52,8 +51,6 @@
         var baselineServerBootId = "";
         var serverDeployResilienceFromHealth = null;
         var serverContainerService = "";
-        var gatewayFailureStreak = 0;
-        var GATEWAY_STREAK_TO_DEPLOY = 2;
 
         function isProductionDeployHost() {
           var host = String(window.location.hostname || "").toLowerCase();
@@ -95,27 +92,31 @@
           }
         }
 
+        /** Único sinal de processo: Redeploy/SIGTERM do waba_disparador. */
         function isDeployShutdownSignal(payload) {
           return Boolean(payload && payload.shuttingDown === true);
         }
 
+        /**
+         * CRÍTICO: modal SOMENTE para Deploy/Redeploy do waba_disparador.
+         * 502/504/rede/heal NÃO disparam o modal.
+         */
         function shouldTriggerDeployRecoveryFromHttp(status, payload) {
-          if (status === 503 && isDeployShutdownSignal(payload)) return true;
-          // Pós-redeploy: Traefik devolve 502/504 sem shuttingDown enquanto :30180 some.
-          if (status === 502 || status === 504) return true;
-          return false;
+          return status === 503 && isDeployShutdownSignal(payload);
         }
 
         async function shouldTriggerDeployRecoveryFromResponse(response) {
-          if (!response) return false;
-          if (response.status === 502 || response.status === 504) return true;
-          if (response.status !== 503) return false;
+          if (!response || response.status !== 503) return false;
           try {
             var payload = await response.clone().json();
             return isDeployShutdownSignal(payload);
           } catch (_) {
-            return response.status === 503;
+            return false;
           }
+        }
+
+        function isGatewayStatus(status) {
+          return status === 502 || status === 503 || status === 504;
         }
 
         function purgeDeployServiceWorkerCache() {
@@ -326,10 +327,6 @@
           baselineServerBootId = "";
         }
 
-        function isGatewayStatus(status) {
-          return status === 502 || status === 503 || status === 504;
-        }
-
         async function probeHealthDetailed() {
           try {
             var response = await fetch(resolveHealthUrl(), {
@@ -343,41 +340,23 @@
               data = null;
             }
             applyDeployResilienceFromHealth(data);
-            if (shouldTriggerDeployRecoveryFromHttp(response.status, data)) {
-              gatewayFailureStreak += 1;
-              return {
-                stable: false,
-                deploySignal:
-                  gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY ||
-                  isDeployShutdownSignal(data),
-                reason: isDeployShutdownSignal(data) ? "shutdown" : "gateway",
-              };
-            }
-            if (isGatewayStatus(response.status)) {
-              gatewayFailureStreak += 1;
-              return {
-                stable: false,
-                deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
-                reason: "gateway_without_deploy_signal",
-              };
-            }
-            if (isDeployShutdownSignal(data)) {
-              gatewayFailureStreak = 0;
+
+            // Deploy/Redeploy real: processo sinaliza shuttingDown.
+            if (isDeployShutdownSignal(data) || shouldTriggerDeployRecoveryFromHttp(response.status, data)) {
               return { stable: false, deploySignal: true, reason: "shutdown" };
             }
+
+            // 502/504/rede/heal: instável, mas NÃO abre modal de atualização.
+            if (isGatewayStatus(response.status)) {
+              return { stable: false, deploySignal: false, reason: "gateway" };
+            }
             if (data && data.maintenanceMode) {
-              gatewayFailureStreak = 0;
               return { stable: false, deploySignal: false, reason: "maintenance" };
             }
             if (!response.ok || !data || data.ok !== true) {
-              gatewayFailureStreak += 1;
-              return {
-                stable: false,
-                deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
-                reason: "unhealthy",
-              };
+              return { stable: false, deploySignal: false, reason: "unhealthy" };
             }
-            gatewayFailureStreak = 0;
+
             try {
               var readyRes = await fetch(resolveReadyUrl(), {
                 cache: "no-store",
@@ -389,17 +368,16 @@
               } catch (_) {
                 readyData = null;
               }
-              if (!readyRes.ok || !readyData || readyData.ready !== true || readyData.shuttingDown) {
-                return { stable: false, deploySignal: Boolean(readyData && readyData.shuttingDown), reason: "not_ready" };
+              if (readyData && readyData.shuttingDown === true) {
+                return { stable: false, deploySignal: true, reason: "shutdown" };
+              }
+              if (!readyRes.ok || !readyData || readyData.ready !== true) {
+                return { stable: false, deploySignal: false, reason: "not_ready" };
               }
             } catch (_) {
-              gatewayFailureStreak += 1;
-              return {
-                stable: false,
-                deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
-                reason: "ready_unreachable",
-              };
+              return { stable: false, deploySignal: false, reason: "ready_unreachable" };
             }
+
             return {
               stable: true,
               deploySignal: false,
@@ -408,12 +386,7 @@
               serverBootId: String(data.serverBootId || ""),
             };
           } catch (_) {
-            gatewayFailureStreak += 1;
-            return {
-              stable: false,
-              deploySignal: gatewayFailureStreak >= GATEWAY_STREAK_TO_DEPLOY,
-              reason: "network",
-            };
+            return { stable: false, deploySignal: false, reason: "network" };
           }
         }
 
@@ -465,8 +438,15 @@
           }, POLL_MS);
         }
 
-        function startDeployRecovery(force) {
+        function startDeployRecovery(force, reason) {
           if (!isDeployResilienceEnabled()) return;
+          // Só inicia por Deploy/Redeploy autenticado (shutdown ou drift de marker).
+          var allowed =
+            force === true ||
+            reason === "shutdown" ||
+            reason === "marker_drift" ||
+            sawDeploySignal === true;
+          if (!allowed) return;
           if (isRegisterWizardBlockingDeploy()) {
             try {
               sessionStorage.setItem("waba.deployReloadPending", "1");
@@ -485,11 +465,11 @@
           if (isRegisterWizardBlockingDeploy()) return;
           var probe = await probeHealthDetailed();
           if (probe.deploySignal) {
-            startDeployRecovery(false);
+            startDeployRecovery(false, "shutdown");
             return;
           }
           if (probe.stable && hasDeployMarkerDrift(probe)) {
-            startDeployRecovery(true);
+            startDeployRecovery(true, "marker_drift");
             return;
           }
           rememberDeployBaseline(probe);
@@ -544,7 +524,7 @@
             if (!isDeployResilienceEnabled()) return;
             rememberDeployBaseline(probe);
             if (probe.deploySignal) {
-              startDeployRecovery(false);
+              startDeployRecovery(false, "shutdown");
               return;
             }
             scheduleDeployBackgroundWatch();
@@ -22626,19 +22606,17 @@
               if (postDeployReload) {
                 document.body.classList.add("waba-auth-checking");
                 const resilience = window.wabaDeployResilience;
+                // Só retoma o modal se já viemos de um reload pós-deploy (flag explícita).
                 if (
                   resilience &&
                   typeof resilience.isEnabled === "function" &&
-                  resilience.isEnabled()
+                  resilience.isEnabled() &&
+                  typeof resilience.show === "function"
                 ) {
-                  if (typeof resilience.startDeployRecovery === "function") {
-                    resilience.startDeployRecovery(false);
-                  } else if (typeof resilience.show === "function") {
-                    resilience.show(
-                      "Finalizando a atualização. Sua sessão será restaurada em instantes.",
-                      "stabilizing"
-                    );
-                  }
+                  resilience.show(
+                    "Finalizando a atualização. Sua sessão será restaurada em instantes.",
+                    "stabilizing"
+                  );
                 }
               }
               await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
@@ -43023,27 +43001,10 @@
           }, timeoutMs);
 
           fetch(url, { credentials: "same-origin", ...options })
-            .then(async (res) => {
+            .then((res) => {
               clearTimeout(timer);
-              const path = String(url || "");
-              const resilience = window.wabaDeployResilience;
-              const skipDeployRecovery =
-                /\/admin\/push\//.test(path) ||
-                /\/push\/alerts/.test(path) ||
-                /\/instancias\//.test(path);
-              if (
-                !skipDeployRecovery &&
-                resilience &&
-                typeof resilience.isEnabled === "function" &&
-                resilience.isEnabled() &&
-                !/\/health(\?|$)/.test(path) &&
-                !/\/ready(\?|$)/.test(path) &&
-                typeof resilience.shouldTriggerDeployRecoveryFromResponse === "function" &&
-                typeof resilience.startDeployRecovery === "function"
-              ) {
-                const shouldStart = await resilience.shouldTriggerDeployRecoveryFromResponse(res);
-                if (shouldStart) resilience.startDeployRecovery(false);
-              }
+              // Modal de atualização NÃO é disparado por 502/API — só via /health
+              // (shuttingDown) ou drift de deployMarker no watcher de background.
               resolve(res);
             })
             .catch((err) => {
