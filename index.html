@@ -8819,6 +8819,13 @@
       .reg-wizard-stepper .reg-step.done .reg-step-num {
         background: rgba(22, 101, 52, 0.55);
         color: #dcfce7;
+        font-size: 0;
+      }
+
+      .reg-wizard-stepper .reg-step.done .reg-step-num::before {
+        content: "✓";
+        font-size: 0.85rem;
+        line-height: 1;
       }
 
       .reg-wizard-body {
@@ -44717,8 +44724,12 @@
         await startRegisterInboundValidation(instanceName, { optionalMode: true });
       }
 
-      function setRegisterWizardStep(step) {
+      function setRegisterWizardStep(step, options = {}) {
         const n = Math.max(1, Math.min(4, Number(step) || 1));
+        // Anti-flicker: depois do QR (passo 3+), nunca regredir para o passo 2.
+        if (!options.force && registerWizardStep >= 3 && n < 3 && registerWizardStep < 4) {
+          return;
+        }
         registerWizardStep = n;
         document.querySelectorAll("#register-wizard-stepper .reg-step").forEach((el) => {
           const s = Number(el.getAttribute("data-step") || 0);
@@ -44863,7 +44874,7 @@
           refreshQrBtn.hidden = true;
         }
         resetRegisterInboundPanel();
-        setRegisterWizardStep(startAtQr && instanceName ? 2 : 1);
+        setRegisterWizardStep(startAtQr && instanceName ? 2 : 1, { force: true });
         if (instanceName) beginRegisterWizardHide(instanceName);
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
@@ -44899,7 +44910,7 @@
         const revealOnClose = registerWizardValidationComplete;
         registerWizardHideInstanceName = "";
         registerWizardValidationComplete = false;
-        setRegisterWizardStep(1);
+        setRegisterWizardStep(1, { force: true });
         resetRegisterInboundPanel();
         if (hadHiddenInstance && revealOnClose) {
           void carregar();
@@ -45812,7 +45823,9 @@
           clearInterval(registerConnectPollTimer);
           registerConnectPollTimer = null;
         }
-        setRegisterWizardStep(2);
+        if (registerWizardStep < 3) {
+          setRegisterWizardStep(2);
+        }
         registerConnectPollStartedAt = Date.now();
         registerConnectConnectingNotified = false;
         setRegisterConnectStatus("loading", "Aguardando leitura do QR Code…");

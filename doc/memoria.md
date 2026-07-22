@@ -1,4 +1,10 @@
-﻿## 2026-07-22 14:08 — Validação 1261: prova no chat + Redeploy
+﻿## 2026-07-22 15:41 — Validação 1261 anti-histórico EVO (definitivo)
+- EVO 1261: 11 Confirmar + 2 replies antigas; falso ok por match genérico “Validação WABA”
+- Fix: watermark no start; prova só com WABA-VAL desta sessão; anti-flicker etapa 2
+- Teste offline PASS no dump real; marker DEPLOY-2026-07-22-validacao-anti-historico-evo
+- LOG: doc/LOG-2026-07-22__154100__validacao-1261-anti-historico-evo.md
+
+## 2026-07-22 14:08 — Validação 1261: prova no chat + Redeploy
 - Causa: FTP não reinicia Node (marker antigo no /health); success falso só com HTTP 201
 - Fix: sendText com variantes BR; sucesso só com mensagem no chat; marker novo
 - Obrigatório: Redeploy disparador + heal se 502; validar marker no /health

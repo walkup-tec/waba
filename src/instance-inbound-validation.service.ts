@@ -91,9 +91,12 @@ type ValidationRecord = InboundValidationStatus & {
   referenceJid: string | null;
   inboundReceivedAt: number | null;
   validationStartedAtMs: number;
+  /** Maior timestamp de CONFIRMAR já existente na EVO ao iniciar — ignora histórico. */
+  keywordHighWaterMarkMs: number;
   userConfirmedSentAt: number | null;
   sendAttempted: boolean;
   sendHttpOk: boolean;
+  sendAttemptedAtMs: number | null;
   sendDetail: string;
   cancelled: boolean;
   replyFollowUpScheduled: boolean;
@@ -458,12 +461,7 @@ async function finalizeExpiredAsync(record: ValidationRecord): Promise<void> {
 
   if (record.receiveTest.success === null) {
     try {
-      const hit = await resolveInboundHit(
-        record.instanceName,
-        record.keyword,
-        record.validationStartedAtMs,
-        { aggressive: true, deep: true },
-      );
+      const hit = await resolveInboundHit(record, { deep: true });
       if (hit) {
         markInboundReceived(record, hit, "expire-rescan");
         await runValidationFollowUp(record);
@@ -564,25 +562,27 @@ type InboundHitSearchOptions = {
   requireTimestamp?: boolean;
 };
 
-const INBOUND_KEYWORD_GRACE_MS = Math.max(
+/** Folga só para skew de relógio — NÃO reaproveitar CONFIRMAR de tentativas anteriores. */
+const INBOUND_CLOCK_SKEW_MS = Math.max(
   0,
-  Math.min(60_000, Number(process.env.INBOUND_VALIDATION_KEYWORD_GRACE_MS || 15_000) || 15_000),
+  Math.min(5_000, Number(process.env.INBOUND_VALIDATION_CLOCK_SKEW_MS || 2_000) || 2_000),
 );
 
-function inboundKeywordMinTimestampMs(
-  validationStartedAtMs: number,
-  aggressive = false,
-): number {
-  const grace = aggressive ? Math.max(INBOUND_KEYWORD_GRACE_MS, 60_000) : INBOUND_KEYWORD_GRACE_MS;
-  return validationStartedAtMs - grace;
+function inboundAcceptMinTimestampMs(record: {
+  validationStartedAtMs: number;
+  keywordHighWaterMarkMs: number;
+}): number {
+  const afterStart = record.validationStartedAtMs - INBOUND_CLOCK_SKEW_MS;
+  const afterHistory = (record.keywordHighWaterMarkMs || 0) + 1;
+  return Math.max(afterStart, afterHistory);
 }
 
-function inboundKeywordSearchOptions(
-  validationStartedAtMs: number,
-  aggressive = false,
-): InboundHitSearchOptions {
+function inboundKeywordSearchOptions(record: {
+  validationStartedAtMs: number;
+  keywordHighWaterMarkMs: number;
+}): InboundHitSearchOptions {
   return {
-    minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive),
+    minTimestampMs: inboundAcceptMinTimestampMs(record),
     requireTimestamp: true,
   };
 }
@@ -883,30 +883,80 @@ type ResolveInboundHitOptions = {
 };
 
 async function resolveInboundHit(
-  instanceName: string,
-  keyword: string,
-  validationStartedAtMs: number,
+  record: Pick<
+    ValidationRecord,
+    "instanceName" | "keyword" | "validationStartedAtMs" | "keywordHighWaterMarkMs"
+  >,
   options: ResolveInboundHitOptions | boolean = false,
 ): Promise<InboundHit | null> {
   const opts: ResolveInboundHitOptions =
     typeof options === "boolean" ? { aggressive: options, deep: options } : options;
-  const aggressive = opts.aggressive === true;
-  const deep = opts.deep === true || aggressive;
-  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
+  const deep = opts.deep === true || opts.aggressive === true;
+  const searchOpts = inboundKeywordSearchOptions(record);
 
   const [fastMsgHit, fastChatsHit] = await Promise.all([
-    findInboundViaApiFast(instanceName, keyword, searchOpts),
-    findInboundViaChatsLastMessage(instanceName, keyword, searchOpts),
+    findInboundViaApiFast(record.instanceName, record.keyword, searchOpts),
+    findInboundViaChatsLastMessage(record.instanceName, record.keyword, searchOpts),
   ]);
   if (fastMsgHit) return fastMsgHit;
   if (fastChatsHit) return fastChatsHit;
 
   if (!deep) return null;
 
-  const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
+  const viaChats = await findInboundViaRecentChats(
+    record.instanceName,
+    record.keyword,
+    searchOpts,
+  );
   if (viaChats) return viaChats;
 
-  return findInboundViaApiExtended(instanceName, keyword, searchOpts);
+  return findInboundViaApiExtended(record.instanceName, record.keyword, searchOpts);
+}
+
+/** Maior timestamp de CONFIRMAR já na EVO — usado como marca d'água anti-histórico. */
+async function captureKeywordHighWaterMark(
+  instanceName: string,
+  keyword: string,
+): Promise<number> {
+  let maxTs = 0;
+  const collectMax = (payload: unknown) => {
+    const hits: InboundHit[] = [];
+    walkInboundHits(payload, hits, keyword, { requireTimestamp: true }, 0);
+    for (const hit of hits) {
+      const ts = hit.messageTimestampMs;
+      if (ts != null && ts > maxTs) maxTs = ts;
+    }
+  };
+
+  try {
+    const [msgRes, chatsRes] = await Promise.all([
+      callEvo(
+        buildFindMessagesUrls(instanceName)[0],
+        "POST",
+        { limit: 100 },
+        { timeoutMs: FIND_MESSAGES_TIMEOUT_MS },
+      ),
+      callEvo(
+        buildFindChatsUrls(instanceName)[0],
+        "POST",
+        { limit: 40 },
+        { timeoutMs: FIND_MESSAGES_TIMEOUT_MS },
+      ),
+    ]);
+    if (msgRes.ok) {
+      const records = extractEvoMessageRecords(msgRes.json);
+      collectMax(records.length ? records : msgRes.json);
+    }
+    if (chatsRes.ok) {
+      const chats = extractFindChatsRecords(chatsRes.json);
+      for (const chat of chats) {
+        if (chat.lastMessage) collectMax(chat.lastMessage);
+      }
+    }
+  } catch {
+    /* watermark 0 = só filtro por validationStartedAt */
+  }
+  return maxTs;
 }
 
 function extractEvoMessageRecords(payload: unknown): unknown[] {
@@ -925,7 +975,11 @@ async function findReplyInChat(
   referenceJid: string,
   replyMarker: string,
   referenceNumber?: string | null,
+  minTimestampMs?: number,
 ): Promise<boolean> {
+  const marker = String(replyMarker || "").trim().toLowerCase();
+  if (!marker) return false;
+
   const remoteCandidates = new Set<string>();
   const jid = String(referenceJid || "").trim();
   if (jid.includes("@") && !isLidJid(jid)) {
@@ -933,7 +987,9 @@ async function findReplyInChat(
     remoteCandidates.add(jid.replace(/@s\.whatsapp\.net$/i, ""));
   }
   for (const candidate of buildSendNumberCandidates(referenceJid, referenceNumber || null)) {
-    const digits = normalizeWhatsAppNumber(candidate.includes("@") ? candidate.split("@")[0] : candidate);
+    const digits = normalizeWhatsAppNumber(
+      candidate.includes("@") ? candidate.split("@")[0] : candidate,
+    );
     if (!digits) continue;
     remoteCandidates.add(digits);
     remoteCandidates.add(`${digits}@s.whatsapp.net`);
@@ -946,9 +1002,7 @@ async function findReplyInChat(
   }
   bodies.push({ where: { key: { fromMe: true } }, limit: 80 });
   bodies.push({ limit: 100 });
-  bodies.push({});
 
-  const needle = replyMarker.toLowerCase();
   for (const url of buildFindMessagesUrls(instanceName)) {
     for (const body of bodies) {
       const result = await callEvo(url, "POST", body);
@@ -956,10 +1010,18 @@ async function findReplyInChat(
       const records = extractEvoMessageRecords(result.json);
       const nodes = records.length ? records : [result.json];
       for (const node of nodes) {
+        if (!node || typeof node !== "object") continue;
+        const obj = node as Record<string, unknown>;
+        const fromMe = extractFromMe(obj);
+        if (fromMe === false) continue;
+        const ts = extractMessageTimestampMs(obj);
+        if (minTimestampMs != null) {
+          if (ts == null || ts < minTimestampMs) continue;
+        }
         const texts: string[] = [];
         collectMessageTexts(node, texts);
-        if (texts.some((t) => t.toLowerCase().includes(needle))) return true;
-        if (texts.some((t) => t.toLowerCase().includes("validação waba concluída"))) return true;
+        // SOMENTE o marker desta validação — nunca “Validação WABA” genérica (histórico EVO).
+        if (texts.some((t) => t.toLowerCase().includes(marker))) return true;
       }
     }
   }
@@ -972,10 +1034,14 @@ function invalidateValidationPollCache(record: ValidationRecord): void {
 
 function markInboundReceived(record: ValidationRecord, hit: InboundHit, via: string): void {
   if (record.receiveTest.success === true) return;
+  const minTs = inboundAcceptMinTimestampMs(record);
+  if (hit.messageTimestampMs == null || hit.messageTimestampMs < minTs) {
+    return;
+  }
   invalidateValidationPollCache(record);
   record.referenceJid = hit.remoteJid;
   record.referenceNumber = hit.referenceNumber;
-  record.inboundReceivedAt = hit.messageTimestampMs ?? Date.now();
+  record.inboundReceivedAt = hit.messageTimestampMs;
   record.phase = "confirm_received";
   record.receiveTest = {
     success: true,
@@ -1008,6 +1074,7 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
       record.referenceJid,
       record.replyMarker,
       record.referenceNumber,
+      (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS,
     );
     if (found) {
       record.sendTest = {
@@ -1033,10 +1100,12 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
           record.referenceJid,
           record.replyMarker,
           record.referenceNumber,
+          record.validationStartedAtMs - INBOUND_CLOCK_SKEW_MS,
         ));
       if (found) {
         record.phase = "reply_sent";
         record.sendAttempted = true;
+        record.sendAttemptedAtMs = Date.now();
         record.sendHttpOk = true;
         record.sendDetail = "dedupe";
         record.sendTest = {
@@ -1054,6 +1123,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
 
   record.phase = "reply_sent";
   record.sendAttempted = true;
+  record.sendAttemptedAtMs = Date.now();
   const text = `Validação WABA concluída. ${record.replyMarker}`;
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
   const candidates = buildSendNumberCandidates(record.referenceJid, record.referenceNumber);
@@ -1072,6 +1142,8 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
 
   let lastDetail = "";
   let anyHttpOk = false;
+  const replyMinTs =
+    (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS;
   try {
     for (const numero of candidates) {
       if (record.cancelled || record.finished) return;
@@ -1105,6 +1177,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
           record.referenceJid || numero,
           record.replyMarker,
           record.referenceNumber || numero,
+          replyMinTs,
         );
         if (found) {
           if (convKey) recentReplyByConversation.set(convKey, Date.now());
@@ -1180,10 +1253,7 @@ async function pollReceiveIfDue(record: ValidationRecord): Promise<void> {
   record.pollTick += 1;
   const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
   const useMessages = record.pollTick % 2 === 1;
-  const searchOpts = inboundKeywordSearchOptions(
-    record.validationStartedAtMs,
-    false,
-  );
+  const searchOpts = inboundKeywordSearchOptions(record);
 
   try {
     let hit: InboundHit | null = null;
@@ -1241,6 +1311,7 @@ async function processValidationRecordInWorker(record: ValidationRecord): Promis
       record.referenceJid,
       record.replyMarker,
       record.referenceNumber,
+      (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS,
     );
     if (found) {
       record.sendTest = {
@@ -1315,15 +1386,9 @@ export async function refreshInboundValidation(
     try {
       await pollReceiveIfDue(record);
       if (!record.receiveTest.success && (opts.aggressive || opts.deep)) {
-        const hit = await resolveInboundHit(
-          record.instanceName,
-          record.keyword,
-          record.validationStartedAtMs,
-          {
-            aggressive: opts.aggressive === true,
-            deep: opts.deep === true || opts.aggressive === true,
-          },
-        );
+        const hit = await resolveInboundHit(record, {
+          deep: opts.deep === true || opts.aggressive === true,
+        });
         if (hit) {
           markInboundReceived(
             record,
@@ -1345,16 +1410,17 @@ export async function refreshInboundValidation(
 function findInboundInWebhookChunk(
   chunk: unknown,
   keyword: string,
-  validationStartedAtMs: number,
+  record: Pick<ValidationRecord, "validationStartedAtMs" | "keywordHighWaterMarkMs">,
 ): InboundHit | null {
-  const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false);
+  const strictOpts = inboundKeywordSearchOptions(record);
   const strictHit = findInboundInPayload(chunk, keyword, strictOpts);
   if (strictHit) return strictHit;
 
+  // Webhook ao vivo sem timestamp: só aceita se cair DEPOIS do start (não reusa histórico).
   const liveHit = findInboundInPayload(chunk, keyword, { requireTimestamp: false });
   if (!liveHit) return null;
   const ts = liveHit.messageTimestampMs ?? Date.now();
-  const minTs = validationStartedAtMs - INBOUND_KEYWORD_GRACE_MS;
+  const minTs = inboundAcceptMinTimestampMs(record);
   if (ts < minTs) return null;
   liveHit.messageTimestampMs = ts;
   return liveHit;
@@ -1377,7 +1443,7 @@ export function handleInboundValidationWebhook(body: unknown): void {
     if (instanceName && instanceName !== record.instanceName) continue;
     let matched = false;
     for (const chunk of chunks) {
-      const hit = findInboundInWebhookChunk(chunk, record.keyword, record.validationStartedAtMs);
+      const hit = findInboundInWebhookChunk(chunk, record.keyword, record);
       if (!hit) continue;
       invalidateValidationPollCache(record);
       markInboundReceived(record, hit, "webhook");
@@ -1466,6 +1532,11 @@ export async function startInboundValidation(input: {
   const validationId = crypto.randomUUID();
   const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
   const keyword = INBOUND_VALIDATION_KEYWORD;
+  // Marca d'água ANTES do start — qualquer Confirmar antigo na EVO é ignorado.
+  const keywordHighWaterMarkMs = await captureKeywordHighWaterMark(
+    connected.instancia,
+    keyword,
+  );
   const validationStartedAtMs = Date.now();
   const startedAt = new Date(validationStartedAtMs).toISOString();
   const phoneLabel = formatPhoneHint(connected.numero);
@@ -1496,10 +1567,12 @@ export async function startInboundValidation(input: {
     referenceJid: null,
     inboundReceivedAt: null,
     validationStartedAtMs,
+    keywordHighWaterMarkMs,
     userConfirmedSentAt: null,
     webhookConfigured,
     sendAttempted: false,
     sendHttpOk: false,
+    sendAttemptedAtMs: null,
     sendDetail: "",
     cancelled: false,
     replyFollowUpScheduled: false,
