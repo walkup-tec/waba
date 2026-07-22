@@ -6,16 +6,16 @@
 #
 # Camadas (install ativa as três):
 #   1) watch  — docker events: no update/start do serviço → heal imediato + burst
-#   2) timer  — a cada ~20s (rede de segurança)
-#   3) burst  — polling agressivo até HTTPS /health 200
+#   2) timer  — a cada ~10s (rede de segurança)
+#   3) burst  — polling agressivo (~2s) até HTTPS /health 200
 #
 # Uso (root):
 #   bash heal-waba-login-vps.sh run|burst|watch|install|status|check
 #
-# Versão: heal-waba-login-2026-07-21-v3-guardian
+# Versão: heal-waba-login-2026-07-21-v4-fast-hairpin
 set -euo pipefail
 
-VERSION="heal-waba-login-2026-07-21-v3-guardian"
+VERSION="heal-waba-login-2026-07-21-v4-fast-hairpin"
 LOG="${WABA_LOGIN_HEAL_LOG:-/var/log/waba-login-heal.log}"
 LOCK="${WABA_LOGIN_HEAL_LOCK:-/var/run/waba-login-heal.lock}"
 INSTALL_DIR="/root/waba-infra"
@@ -27,16 +27,24 @@ SWARM_SERVICE="${WABA_SWARM_SERVICE:-waba_waba_disparador}"
 HOST_PORT="${WABA_HOST_PUBLISHED_PORT:-30180}"
 DOMAIN="${WABA_PUBLIC_HOST:-waba.draxsistemas.com.br}"
 REPO_SCRIPTS="${WABA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/waba/master/scripts}"
-TIMER_SEC="${WABA_LOGIN_HEAL_SEC:-20}"
-BURST_ROUNDS="${WABA_LOGIN_HEAL_BURST_ROUNDS:-24}"
-BURST_SLEEP="${WABA_LOGIN_HEAL_BURST_SLEEP:-5}"
+TIMER_SEC="${WABA_LOGIN_HEAL_SEC:-10}"
+BURST_ROUNDS="${WABA_LOGIN_HEAL_BURST_ROUNDS:-40}"
+BURST_SLEEP="${WABA_LOGIN_HEAL_BURST_SLEEP:-2}"
 
 log() { printf '[%s] [%s] %s\n' "$(date -Is)" "$VERSION" "$*" | tee -a "$LOG"; }
 
+# Neste VPS, 127.0.0.1:publish às vezes falha (hairpin); 172.17.0.1 é o probe canônico.
 local_health_ok() {
   local code
-  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 6 "http://127.0.0.1:${HOST_PORT}/health" 2>/dev/null || true)"
-  [[ "$code" == "200" ]]
+  for url in \
+    "http://172.17.0.1:${HOST_PORT}/health" \
+    "http://127.0.0.1:${HOST_PORT}/health"; do
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || true)"
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 https_health_code() {
@@ -208,9 +216,8 @@ cmd_watch() {
           if [[ "$ename" == "$SWARM_SERVICE" ]] || [[ "$esvc" == "$SWARM_SERVICE" ]]; then
             case "$eaction" in
               update|create|remove)
-                log "evento service ${eaction} ${ename} — burst"
-                # Sem flock bloqueante longo: dispara em background serializado pelo lock do burst
-                ( sleep 2; bash "$0" burst ) >>"$LOG" 2>&1 &
+                log "evento service ${eaction} ${ename} — burst imediato"
+                ( sleep 1; bash "$0" burst ) >>"$LOG" 2>&1 &
                 ;;
             esac
           fi
@@ -219,8 +226,8 @@ cmd_watch() {
           if [[ "$esvc" == "$SWARM_SERVICE" ]]; then
             case "$eaction" in
               start|die|kill)
-                log "evento container ${eaction} svc=${esvc} — burst"
-                ( sleep 3; bash "$0" burst ) >>"$LOG" 2>&1 &
+                log "evento container ${eaction} svc=${esvc} — burst imediato"
+                ( sleep 1; bash "$0" burst ) >>"$LOG" 2>&1 &
                 ;;
             esac
           fi

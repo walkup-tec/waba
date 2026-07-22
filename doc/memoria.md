@@ -1,4 +1,9 @@
-﻿## 2026-07-21 20:52 — Lista «desconectado» com QR «já conectada» (1261)
+﻿## 2026-07-21 21:20 — Heal login v4 (anti-queda pós-redeploy)
+- Timer 10s, burst 2s, probe 172.17.0.1, watch 1s; nunca disable login-heal; redeploy só se necessário
+- VPS: reinstall obrigatório `heal-waba-login-vps.sh install`
+- LOG: doc/LOG-2026-07-21__212000__heal-login-v4-anti-queda.md
+
+## 2026-07-21 20:52 — Lista «desconectado» com QR «já conectada» (1261)
 - EVO open de verdade; lista lia cache sem live enrich; background refresh sem re-render
 - Fix snapshot live + 409 como sucesso + re-render; número real WA: 5182001261 (não 51982001261)
 - LOG: doc/LOG-2026-07-21__205200__fix-lista-desconectado-ja-conectada-1261.md

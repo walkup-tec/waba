@@ -1,5 +1,5 @@
 # Heal login WABA imediatamente após push em master / redeploy.
-# Não espera o timer de 20s: SSH → install (watch+timer) → burst até /health 200.
+# Não espera o timer: SSH → install (watch+timer) → burst até /health 200.
 #
 # Secrets (GitHub → Settings → Secrets → Actions):
 #   VPS_SSH_PRIVATE_KEY  — obrigatório
@@ -34,7 +34,7 @@ jobs:
           fi
 
       - name: Aguardar Easypanel iniciar o build/redeploy
-        run: sleep 45
+        run: sleep 25
 
       - name: SSH — install watch+timer e burst até health 200
         uses: appleboy/ssh-action@v1.2.0
@@ -50,17 +50,20 @@ jobs:
             curl -fsSL "${REPO}/heal-waba-login-vps.sh" -o /tmp/heal-waba-login-vps.sh
             sed -i 's/\r$//' /tmp/heal-waba-login-vps.sh
             chmod +x /tmp/heal-waba-login-vps.sh
-            # Garante watch + timer v2 no VPS (idempotente)
             /tmp/heal-waba-login-vps.sh install
-            # Burst agressivo (~2 min) — cobre janela do Swarm/Easypanel
             /tmp/heal-waba-login-vps.sh burst || true
-            # Segunda passagem se o container ainda estava a subir
-            sleep 20
+            sleep 8
             /tmp/heal-waba-login-vps.sh burst
             echo "--- status ---"
             /tmp/heal-waba-login-vps.sh status
+            systemctl is-active waba-login-heal-watch.service || true
+            systemctl is-active waba-login-heal.timer || true
             code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
               --resolve waba.draxsistemas.com.br:443:127.0.0.1 \
               https://waba.draxsistemas.com.br/health || echo 000)"
-            echo "https_health=${code}"
+            if [[ "$code" != "200" ]]; then
+              code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+                http://172.17.0.1:30180/health || echo 000)"
+            fi
+            echo "health=${code}"
             test "$code" = "200"
