@@ -1,4 +1,8 @@
-﻿## 2026-07-22 15:41 — Validação 1261 anti-histórico EVO (definitivo)
+﻿## 2026-07-22 15:50 — Modal atualização só em Deploy/Redeploy
+- Removido 502/rede/fetch como gatilho; só shuttingDown + drift deployMarker
+- LOG: doc/LOG-2026-07-22__155000__modal-atualizacao-somente-deploy.md
+
+## 2026-07-22 15:41 — Validação 1261 anti-histórico EVO (definitivo)
 - EVO 1261: 11 Confirmar + 2 replies antigas; falso ok por match genérico “Validação WABA”
 - Fix: watermark no start; prova só com WABA-VAL desta sessão; anti-flicker etapa 2
 - Teste offline PASS no dump real; marker DEPLOY-2026-07-22-validacao-anti-historico-evo
