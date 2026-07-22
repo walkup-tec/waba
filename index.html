@@ -1703,7 +1703,7 @@
         gap: 4px;
       }
 
-      .summary-card:nth-child(3) {
+      .summary-card:nth-child(1) {
         border-left: 2px solid rgba(110, 255, 200, 0.5);
       }
 
@@ -16315,6 +16315,13 @@
               </div>
 
               <div class="summary-grid">
+                <div class="summary-card">
+                  <div class="summary-label">Instâncias ativas</div>
+                  <div class="summary-value" id="instances-active-tab">
+                    —
+                  </div>
+                  <div class="summary-sub">Instâncias Conectadas</div>
+                </div>
                 <div class="summary-card summary-card-preparing">
                   <div class="summary-label">Instâncias Preparando</div>
                   <div class="summary-value" id="instances-preparing-tab">—</div>
@@ -16324,13 +16331,6 @@
                   <div class="summary-label">Restrição Temporária</div>
                   <div class="summary-value" id="instances-restriction-tab">—</div>
                   <div class="summary-sub">WhatsApp · até 3 horas</div>
-                </div>
-                <div class="summary-card">
-                  <div class="summary-label">Instâncias ativas</div>
-                  <div class="summary-value" id="instances-active-tab">
-                    —
-                  </div>
-                  <div class="summary-sub">Instâncias Conectadas</div>
                 </div>
                 <div class="summary-card">
                   <div class="summary-label">Instâncias desconectadas</div>
@@ -19820,7 +19820,7 @@
               <div class="reg-instruction-card">
                 <ol>
                   <li>No outro WhatsApp, abra o chat com <span class="reg-instruction-highlight" id="register-inbound-number">—</span></li>
-                  <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span></li>
+                  <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span> <span class="muted">(também aceita CONFIRMA)</span></li>
                   <li>O sistema detecta a mensagem automaticamente — não é preciso confirmar aqui</li>
                   <li>Aguarde a resposta automática: <em>Validação WABA concluída…</em></li>
                 </ol>

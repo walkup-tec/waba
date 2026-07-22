@@ -1143,11 +1143,14 @@ function resolveAquecedorInstanceByNumber(rawNumber, numberToInstance) {
     const direct = numberToInstance.get(normalized);
     if (direct)
         return direct;
-    const suffix = normalized.replace(/\D/g, "").slice(-10);
-    if (suffix.length < 10)
-        return "";
+    const canon = (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(normalized);
+    if (canon) {
+        const byCanon = numberToInstance.get(canon);
+        if (byCanon)
+            return byCanon;
+    }
     for (const [stored, inst] of numberToInstance.entries()) {
-        if (stored.replace(/\D/g, "").slice(-10) === suffix)
+        if ((0, evo_instance_phone_service_1.brazilWhatsAppNumbersMatch)(stored, normalized))
             return inst;
     }
     return "";
@@ -4547,20 +4550,10 @@ function buildTemplateUrl(template, instanceName) {
         .replace("{name}", encodeURIComponent(instanceName));
 }
 function normalizeWhatsAppNumber(num) {
-    const raw = String(num || "").trim();
-    const digits = raw.replace(/\D/g, "");
-    if (!digits)
-        return raw;
-    if (digits.length >= 12 && digits.startsWith("55"))
-        return digits;
-    if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
-        return "55" + digits;
-    }
-    return digits;
+    return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(num);
 }
 function normalizeCampaignPhone(input) {
-    const normalized = normalizeWhatsAppNumber(String(input || ""));
-    return String(normalized || "").replace(/\D/g, "");
+    return (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(String(input || ""));
 }
 /** Uma linha de contato → um destino: remove duplicatas pelo telefone normalizado (55…). */
 function deduplicateCampaignDestinationPhones(digitCandidates) {
@@ -5377,7 +5370,8 @@ async function resolveInstanceDeletionKeys(instanceName) {
             const keyDigits = String(registeredKey || "").replace(/\D/g, "");
             if (!keyDigits || keyDigits.length < 8)
                 continue;
-            const matched = keyDigits === queryDigits ||
+            const matched = (0, evo_instance_phone_service_1.brazilWhatsAppNumbersMatch)(keyDigits, queryDigits) ||
+                keyDigits === queryDigits ||
                 keyDigits.endsWith(queryDigits.slice(-8)) ||
                 queryDigits.endsWith(keyDigits.slice(-8));
             if (matched)
@@ -5391,12 +5385,9 @@ async function resolveInstanceNamesByPhone(phone) {
     if (query.length < 8)
         return [];
     const names = new Set();
-    if (query)
-        names.add(query);
-    if (query.startsWith("55") && query.length > 2)
-        names.add(query.slice(2));
-    if (!query.startsWith("55") && query.length >= 10)
-        names.add(`55${query}`);
+    for (const variant of (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(query)) {
+        names.add(variant);
+    }
     const evoList = await fetchEvoInstancesList();
     if (evoList.ok) {
         for (const inst of evoList.instances) {
@@ -5404,30 +5395,7 @@ async function resolveInstanceNamesByPhone(phone) {
             const number = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(inst)?.phone || extractInstanceNumber(inst);
             if (!instanceName || !number)
                 continue;
-            const instanceDigits = String(number).replace(/\D/g, "");
-            const queryVariants = new Set([query, query.slice(-11), query.slice(-10), query.slice(-8)]);
-            const instanceVariants = new Set([
-                instanceDigits,
-                instanceDigits.slice(-11),
-                instanceDigits.slice(-10),
-                instanceDigits.slice(-8),
-            ]);
-            let match = false;
-            for (const q of queryVariants) {
-                if (!q)
-                    continue;
-                for (const i of instanceVariants) {
-                    if (!i)
-                        continue;
-                    if (q === i || q.endsWith(i) || i.endsWith(q)) {
-                        match = true;
-                        break;
-                    }
-                }
-                if (match)
-                    break;
-            }
-            if (match)
+            if ((0, evo_instance_phone_service_1.brazilWhatsAppNumbersMatch)(number, query))
                 names.add(instanceName);
         }
     }
@@ -5435,14 +5403,10 @@ async function resolveInstanceNamesByPhone(phone) {
         const keyDigits = String(key || "").replace(/\D/g, "");
         if (!keyDigits || keyDigits.length < 8)
             continue;
-        const queryVariants = [query, query.slice(-11), query.slice(-10), query.slice(-8)];
-        const matched = queryVariants.some((q) => q &&
-            (keyDigits === q ||
-                keyDigits.endsWith(q.slice(-8)) ||
-                q.endsWith(keyDigits.slice(-8)) ||
-                key.toLowerCase().includes(q.slice(-8))));
-        if (matched)
+        if ((0, evo_instance_phone_service_1.brazilWhatsAppNumbersMatch)(keyDigits, query) ||
+            key.toLowerCase().includes(query.slice(-8))) {
             names.add(key);
+        }
     }
     return Array.from(names).filter(Boolean);
 }

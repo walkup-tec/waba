@@ -1,4 +1,12 @@
-﻿## 2026-07-22 12:45 — Contingência anti-502 (heal+modal)
+﻿## 2026-07-22 13:15 — Normalizar 9º dígito móvel BR
+- 5182001261 ≡ 51982001261; expand/canonicalize/match no backend
+- LOG: doc/LOG-2026-07-22__131500__normalize-9-digito-br.md
+
+## 2026-07-22 13:00 — Validação aceita CONFIRMA
+- Match estrito CONFIRMAR falhava com «Confirma»; aliases + UI; número real 5182001261
+- LOG: doc/LOG-2026-07-22__130000__validacao-aceita-confirma.md
+
+## 2026-07-22 12:45 — Contingência anti-502 (heal+modal)
 - Causa: Guardião baixava heals sem `install` → watch morto; overlay ignorava 502
 - Fix: Guardião install heals; heal v5; UI 502→modal+reload; Actions assert active
 - VPS: reinstall heal-waba-login AGORA

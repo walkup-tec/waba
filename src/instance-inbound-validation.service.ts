@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "./evo-http.client";
 import { waitForEvoInstanceLiveOpen } from "./instances/evo-connection-state.service";
 import {
+  canonicalizeBrazilWhatsAppNumber,
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
 } from "./instances/evo-instance-phone.service";
@@ -167,11 +168,17 @@ function normalizeWhatsAppNumber(num: string): string {
 }
 
 function formatPhoneHint(num: string): string {
-  const digits = normalizeWhatsAppNumber(num);
+  const digits = canonicalizeBrazilWhatsAppNumber(num) || normalizeWhatsAppNumber(num);
   if (!digits) return "";
   if (digits.length >= 12 && digits.startsWith("55")) {
     const ddd = digits.slice(2, 4);
     const rest = digits.slice(4);
+    // Preferir exibição com 9 móvel quando o nacional tem 8 dígitos (formato comum no BR).
+    const displayRest =
+      rest.length === 8 ? `9${rest.slice(0, 4)}-${rest.slice(4)}` : null;
+    if (displayRest) {
+      return `+55 ${ddd} ${displayRest}`;
+    }
     if (rest.length === 9) {
       return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
     }
@@ -270,14 +277,28 @@ function normalizeKeywordText(text: string): string {
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+/** Aceita CONFIRMAR e variantes comuns (CONFIRMA / confirmar / confirma). */
+function keywordMatchNeedles(keyword: string): string[] {
+  const primary = normalizeKeywordText(keyword);
+  if (!primary) return [];
+  const needles = new Set<string>([primary]);
+  if (primary === "confirmar" || primary.startsWith("confirma")) {
+    needles.add("confirmar");
+    needles.add("confirma");
+  }
+  return [...needles];
+}
+
 function textMatchesKeyword(texts: string[], keyword: string): boolean {
-  const needle = normalizeKeywordText(keyword);
-  if (!needle) return false;
+  const needles = keywordMatchNeedles(keyword);
+  if (!needles.length) return false;
   return texts.some((t) => {
     const normalized = normalizeKeywordText(t);
     if (!normalized) return false;
-    if (normalized === needle) return true;
-    if (normalized.includes(needle) && normalized.length <= needle.length + 12) return true;
+    for (const needle of needles) {
+      if (normalized === needle) return true;
+      if (normalized.includes(needle) && normalized.length <= needle.length + 12) return true;
+    }
     return false;
   });
 }

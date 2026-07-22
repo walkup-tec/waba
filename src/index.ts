@@ -62,6 +62,9 @@ import {
 import { wabaInstanceOwnershipService } from "./instances/waba-instance-ownership.service";
 import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
 import {
+  brazilWhatsAppNumbersMatch,
+  canonicalizeBrazilWhatsAppNumber,
+  expandBrazilWhatsAppNumberVariants,
   extractPhoneFromEvoListItem,
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
@@ -1395,10 +1398,13 @@ function resolveAquecedorInstanceByNumber(
   if (!normalized) return "";
   const direct = numberToInstance.get(normalized);
   if (direct) return direct;
-  const suffix = normalized.replace(/\D/g, "").slice(-10);
-  if (suffix.length < 10) return "";
+  const canon = canonicalizeBrazilWhatsAppNumber(normalized);
+  if (canon) {
+    const byCanon = numberToInstance.get(canon);
+    if (byCanon) return byCanon;
+  }
   for (const [stored, inst] of numberToInstance.entries()) {
-    if (stored.replace(/\D/g, "").slice(-10) === suffix) return inst;
+    if (brazilWhatsAppNumbersMatch(stored, normalized)) return inst;
   }
   return "";
 }
@@ -5814,19 +5820,11 @@ function buildTemplateUrl(template: string, instanceName: string) {
 }
 
 function normalizeWhatsAppNumber(num: string): string {
-  const raw = String(num || "").trim();
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return raw;
-  if (digits.length >= 12 && digits.startsWith("55")) return digits;
-  if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
-    return "55" + digits;
-  }
-  return digits;
+  return normalizeEvoWhatsAppNumber(num);
 }
 
 function normalizeCampaignPhone(input: string): string {
-  const normalized = normalizeWhatsAppNumber(String(input || ""));
-  return String(normalized || "").replace(/\D/g, "");
+  return canonicalizeBrazilWhatsAppNumber(String(input || ""));
 }
 
 /** Uma linha de contato → um destino: remove duplicatas pelo telefone normalizado (55…). */
@@ -6712,6 +6710,7 @@ async function resolveInstanceDeletionKeys(instanceName: string): Promise<string
       const keyDigits = String(registeredKey || "").replace(/\D/g, "");
       if (!keyDigits || keyDigits.length < 8) continue;
       const matched =
+        brazilWhatsAppNumbersMatch(keyDigits, queryDigits) ||
         keyDigits === queryDigits ||
         keyDigits.endsWith(queryDigits.slice(-8)) ||
         queryDigits.endsWith(keyDigits.slice(-8));
@@ -6726,9 +6725,9 @@ async function resolveInstanceNamesByPhone(phone: string): Promise<string[]> {
   const query = String(phone || "").replace(/\D/g, "");
   if (query.length < 8) return [];
   const names = new Set<string>();
-  if (query) names.add(query);
-  if (query.startsWith("55") && query.length > 2) names.add(query.slice(2));
-  if (!query.startsWith("55") && query.length >= 10) names.add(`55${query}`);
+  for (const variant of expandBrazilWhatsAppNumberVariants(query)) {
+    names.add(variant);
+  }
 
   const evoList = await fetchEvoInstancesList();
   if (evoList.ok) {
@@ -6737,43 +6736,16 @@ async function resolveInstanceNamesByPhone(phone: string): Promise<string[]> {
       const number =
         extractPhoneFromEvoListItem(inst)?.phone || extractInstanceNumber(inst);
       if (!instanceName || !number) continue;
-      const instanceDigits = String(number).replace(/\D/g, "");
-      const queryVariants = new Set([query, query.slice(-11), query.slice(-10), query.slice(-8)]);
-      const instanceVariants = new Set([
-        instanceDigits,
-        instanceDigits.slice(-11),
-        instanceDigits.slice(-10),
-        instanceDigits.slice(-8),
-      ]);
-      let match = false;
-      for (const q of queryVariants) {
-        if (!q) continue;
-        for (const i of instanceVariants) {
-          if (!i) continue;
-          if (q === i || q.endsWith(i) || i.endsWith(q)) {
-            match = true;
-            break;
-          }
-        }
-        if (match) break;
-      }
-      if (match) names.add(instanceName);
+      if (brazilWhatsAppNumbersMatch(number, query)) names.add(instanceName);
     }
   }
 
   for (const key of await wabaInstanceOwnershipService.listAllRegisteredInstanceNames()) {
     const keyDigits = String(key || "").replace(/\D/g, "");
     if (!keyDigits || keyDigits.length < 8) continue;
-    const queryVariants = [query, query.slice(-11), query.slice(-10), query.slice(-8)];
-    const matched = queryVariants.some(
-      (q) =>
-        q &&
-        (keyDigits === q ||
-          keyDigits.endsWith(q.slice(-8)) ||
-          q.endsWith(keyDigits.slice(-8)) ||
-          key.toLowerCase().includes(q.slice(-8))),
-    );
-    if (matched) names.add(key);
+    if (brazilWhatsAppNumbersMatch(keyDigits, query) || key.toLowerCase().includes(query.slice(-8))) {
+      names.add(key);
+    }
   }
 
   return Array.from(names).filter(Boolean);

@@ -3,6 +3,10 @@ import { evoHttpRequest } from "../evo-http.client";
 import { resolveDataFile } from "../data-path";
 import { BASE_PATH } from "../base-path";
 import { resolveEvoInstanceKey } from "../instances/evo-instance-key";
+import {
+  brazilWhatsAppNumbersMatch,
+  expandBrazilWhatsAppNumberVariants,
+} from "../instances/evo-instance-phone.service";
 import { resolveWabaPublicBaseUrl } from "../lib/waba-public-base-url";
 import { readPushMediaBase64 } from "./waba-push-media.service";
 import { WabaPushRepository } from "./waba-push.repository";
@@ -321,32 +325,11 @@ async function discoverPushCommunityInstanceWithGroups(
   return null;
 }
 
-const normalizePhoneHintDigits = (value: string): string => String(value || "").replace(/\D/g, "");
+const normalizePhoneHintDigits = (value: string): string =>
+  String(value || "").replace(/\D/g, "");
 
-const expandPhoneHintDigits = (phoneHint: string): string[] => {
-  const hint = normalizePhoneHintDigits(phoneHint);
-  if (!hint) return [];
-  const variants = new Set<string>([hint]);
-  const withCountry = (digits: string) => (digits.startsWith("55") ? digits : `55${digits}`);
-  const withoutCountry = (digits: string) =>
-    digits.startsWith("55") && digits.length > 2 ? digits.slice(2) : digits;
-
-  const base = withoutCountry(hint);
-  variants.add(base);
-  variants.add(withCountry(base));
-
-  if (base.length === 11 && base.charAt(2) === "9") {
-    const legacyTen = `${base.slice(0, 2)}${base.slice(3)}`;
-    variants.add(legacyTen);
-    variants.add(withCountry(legacyTen));
-  } else if (base.length === 10) {
-    const mobileEleven = `${base.slice(0, 2)}9${base.slice(2)}`;
-    variants.add(mobileEleven);
-    variants.add(withCountry(mobileEleven));
-  }
-
-  return [...variants].filter(Boolean);
-};
+const expandPhoneHintDigits = (phoneHint: string): string[] =>
+  expandBrazilWhatsAppNumberVariants(phoneHint);
 
 const phoneHintMatchesInstance = (row: EvoCatalogRow, phoneHint: string): boolean => {
   const hints = expandPhoneHintDigits(phoneHint);
@@ -357,6 +340,7 @@ const phoneHintMatchesInstance = (row: EvoCatalogRow, phoneHint: string): boolea
 
   for (const hint of hints) {
     for (const digits of instanceDigits) {
+      if (brazilWhatsAppNumbersMatch(digits, hint)) return true;
       if (digits === hint || digits.endsWith(hint) || hint.endsWith(digits)) return true;
       const digitsBr = digits.startsWith("55") ? digits.slice(2) : digits;
       const hintBr = hint.startsWith("55") ? hint.slice(2) : hint;

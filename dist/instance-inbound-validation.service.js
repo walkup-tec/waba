@@ -93,12 +93,16 @@ function normalizeWhatsAppNumber(num) {
     return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(num);
 }
 function formatPhoneHint(num) {
-    const digits = normalizeWhatsAppNumber(num);
+    const digits = (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(num) || normalizeWhatsAppNumber(num);
     if (!digits)
         return "";
     if (digits.length >= 12 && digits.startsWith("55")) {
         const ddd = digits.slice(2, 4);
         const rest = digits.slice(4);
+        const displayRest = rest.length === 8 ? `9${rest.slice(0, 4)}-${rest.slice(4)}` : null;
+        if (displayRest) {
+            return `+55 ${ddd} ${displayRest}`;
+        }
         if (rest.length === 9) {
             return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
         }
@@ -195,18 +199,32 @@ function normalizeKeywordText(text) {
         .replace(/\p{M}/gu, "")
         .replace(/[^\p{L}\p{N}]/gu, "");
 }
+/** Aceita CONFIRMAR e variantes comuns (CONFIRMA / confirmar / confirma). */
+function keywordMatchNeedles(keyword) {
+    const primary = normalizeKeywordText(keyword);
+    if (!primary)
+        return [];
+    const needles = new Set([primary]);
+    if (primary === "confirmar" || primary.startsWith("confirma")) {
+        needles.add("confirmar");
+        needles.add("confirma");
+    }
+    return [...needles];
+}
 function textMatchesKeyword(texts, keyword) {
-    const needle = normalizeKeywordText(keyword);
-    if (!needle)
+    const needles = keywordMatchNeedles(keyword);
+    if (!needles.length)
         return false;
     return texts.some((t) => {
         const normalized = normalizeKeywordText(t);
         if (!normalized)
             return false;
-        if (normalized === needle)
-            return true;
-        if (normalized.includes(needle) && normalized.length <= needle.length + 12)
-            return true;
+        for (const needle of needles) {
+            if (normalized === needle)
+                return true;
+            if (normalized.includes(needle) && normalized.length <= needle.length + 12)
+                return true;
+        }
         return false;
     });
 }
