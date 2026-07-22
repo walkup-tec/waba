@@ -1036,11 +1036,26 @@ function markInboundReceived(record: ValidationRecord, hit: InboundHit, via: str
   if (record.receiveTest.success === true) return;
   const minTs = inboundAcceptMinTimestampMs(record);
   if (hit.messageTimestampMs == null || hit.messageTimestampMs < minTs) {
+    console.info(
+      "[validacao-inbound] ignore stale CONFIRMAR",
+      record.instanceName,
+      `ts=${hit.messageTimestampMs}`,
+      `min=${minTs}`,
+      `via=${via}`,
+    );
     return;
   }
   invalidateValidationPollCache(record);
-  record.referenceJid = hit.remoteJid;
-  record.referenceNumber = hit.referenceNumber;
+  // Preferir telefone (remoteJidAlt) — @lid faz sendText falhar/silenciar no chat do usuário.
+  const phoneDigits = normalizeWhatsAppNumber(hit.referenceNumber || "");
+  const phoneJid =
+    phoneDigits.length >= 12 ? `${phoneDigits}@s.whatsapp.net` : "";
+  record.referenceNumber = phoneDigits || hit.referenceNumber;
+  record.referenceJid =
+    phoneJid ||
+    (isPhoneWhatsAppJid(hit.remoteJid) && !isLidJid(hit.remoteJid)
+      ? hit.remoteJid
+      : hit.remoteJid);
   record.inboundReceivedAt = hit.messageTimestampMs;
   record.phase = "confirm_received";
   record.receiveTest = {
@@ -1528,17 +1543,33 @@ export async function startInboundValidation(input: {
     }
   }
   stopValidationsForInstance(connected.instancia);
+  // Limpa dedupe de reply da instância — senão retry reaproveita sessão anterior.
+  const dedupePrefix = `${connected.instancia}:`;
+  for (const key of [...recentReplyByConversation.keys()]) {
+    if (key.startsWith(dedupePrefix)) recentReplyByConversation.delete(key);
+  }
+  replyInFlight.forEach((key) => {
+    if (String(key).startsWith(dedupePrefix)) replyInFlight.delete(key);
+  });
 
   const validationId = crypto.randomUUID();
   const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
   const keyword = INBOUND_VALIDATION_KEYWORD;
-  // Marca d'água ANTES do start — qualquer Confirmar antigo na EVO é ignorado.
-  const keywordHighWaterMarkMs = await captureKeywordHighWaterMark(
+  // Marca d'água: histórico EVO + instante do start → só CONFIRMAR NOVO após o início.
+  const capturedWaterMarkMs = await captureKeywordHighWaterMark(
     connected.instancia,
     keyword,
   );
   const validationStartedAtMs = Date.now();
+  const keywordHighWaterMarkMs = Math.max(capturedWaterMarkMs, validationStartedAtMs);
   const startedAt = new Date(validationStartedAtMs).toISOString();
+  console.info(
+    "[validacao-inbound] start",
+    connected.instancia,
+    `id=${validationId.slice(0, 8)}`,
+    `watermark=${new Date(keywordHighWaterMarkMs).toISOString()}`,
+    `captured=${capturedWaterMarkMs ? new Date(capturedWaterMarkMs).toISOString() : "0"}`,
+  );
   const phoneLabel = formatPhoneHint(connected.numero);
   const receiveWaitDetail = phoneLabel
     ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel}. O sistema detecta automaticamente.`

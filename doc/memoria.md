@@ -1,4 +1,9 @@
-﻿## 2026-07-22 15:58 — Heal login v6 supervisor (anti-502 permanente)
+﻿## 2026-07-22 16:03 — Validação 1261 v2 forceRestart + watermark=now
+- Retry reaproveitava sessão; watermark agora = max(histórico, start); UI forceRestart sempre; telefone com 9
+- Marker: DEPLOY-2026-07-22-validacao-1261-force-restart-v2 — exige Redeploy
+- LOG: doc/LOG-2026-07-22__160300__validacao-1261-force-restart-v2.md
+
+## 2026-07-22 15:58 — Heal login v6 supervisor (anti-502 permanente)
 - Bursts escalonados + flock wait + supervisor 20s revive unidades + cura HTTPS
 - Actions/Guardião assert supervisor; Rule atualizada
 - LOG: doc/LOG-2026-07-22__155800__heal-login-v6-supervisor-anti-502.md

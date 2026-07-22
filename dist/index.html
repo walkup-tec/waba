@@ -44913,14 +44913,25 @@
       function formatRegisterInboundPhone(raw) {
         const digits = String(raw || "").replace(/\D/g, "");
         if (!digits) return "";
-        if (digits.length >= 12 && digits.startsWith("55")) {
-          const ddd = digits.slice(2, 4);
-          const rest = digits.slice(4);
+        let national = digits;
+        while (national.startsWith("55") && national.length > 11) {
+          national = national.slice(2);
+        }
+        if (national.length >= 10 && national.length <= 11 && !digits.startsWith("55")) {
+          national = national;
+        } else if (digits.startsWith("55") && digits.length >= 12) {
+          national = digits.slice(2);
+        }
+        if (digits.startsWith("55") || (national.length >= 10 && national.length <= 11)) {
+          const full = digits.startsWith("55") ? digits : `55${national}`;
+          const ddd = full.slice(2, 4);
+          let rest = full.slice(4);
+          // Exibir sempre com 9º dígito móvel BR (555182001261 → +55 51 98200-1261).
+          if (rest.length === 8) {
+            rest = `9${rest}`;
+          }
           if (rest.length === 9) {
             return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
-          }
-          if (rest.length === 8) {
-            return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
           }
           if (rest.length > 4) {
             return `+55 ${ddd} ${rest.slice(0, rest.length - 4)}-${rest.slice(-4)}`;
@@ -45401,7 +45412,8 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 number: formNumber || registerConnectedInstanceNumber,
-                forceRestart: Boolean(registerInboundValidationId),
+                // Sempre sessão nova — senão retry reaproveita validação com CONFIRMAR antigo.
+                forceRestart: true,
               }),
             },
             60000

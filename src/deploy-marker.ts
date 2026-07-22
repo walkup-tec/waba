@@ -1,3 +1,3 @@
 // Gerado/atualizado no deploy. Não editar manualmente sem necessidade.
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-22-validacao-anti-historico-evo";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-22-validacao-1261-force-restart-v2";
 
