@@ -151,6 +151,15 @@ refresh_publish_heals() {
   systemctl is-active waba-login-heal.timer >/dev/null 2>&1 \
     && log "waba-login-heal.timer: active" \
     || log "ERRO: waba-login-heal.timer NÃO active após install"
+  systemctl is-active waba-login-heal-supervisor.timer >/dev/null 2>&1 \
+    && log "waba-login-heal-supervisor.timer: active" \
+    || log "ERRO: waba-login-heal-supervisor.timer NÃO active após install"
+  # Se alguma unidade caiu, força ensure (revive + burst).
+  if ! systemctl is-active waba-login-heal-watch.service >/dev/null 2>&1 \
+    || ! systemctl is-active waba-login-heal.timer >/dev/null 2>&1 \
+    || ! systemctl is-active waba-login-heal-supervisor.timer >/dev/null 2>&1; then
+    bash /root/waba-infra/heal-waba-login-vps.sh ensure >>"$LOG" 2>&1 || true
+  fi
 }
 
 cmd_activate() {

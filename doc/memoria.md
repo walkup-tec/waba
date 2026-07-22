@@ -1,4 +1,9 @@
-﻿## 2026-07-22 15:50 — Modal atualização só em Deploy/Redeploy
+﻿## 2026-07-22 15:58 — Heal login v6 supervisor (anti-502 permanente)
+- Bursts escalonados + flock wait + supervisor 20s revive unidades + cura HTTPS
+- Actions/Guardião assert supervisor; Rule atualizada
+- LOG: doc/LOG-2026-07-22__155800__heal-login-v6-supervisor-anti-502.md
+
+## 2026-07-22 15:50 — Modal atualização só em Deploy/Redeploy
 - Removido 502/rede/fetch como gatilho; só shuttingDown + drift deployMarker
 - LOG: doc/LOG-2026-07-22__155000__modal-atualizacao-somente-deploy.md
 
