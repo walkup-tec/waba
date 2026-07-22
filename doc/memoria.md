@@ -1,4 +1,8 @@
-﻿## 2026-07-22 13:15 — Normalizar 9º dígito móvel BR
+﻿## 2026-07-22 13:30 — 502 persiste pós-FTP (heal VPS)
+- FTP não cura :30180; install+burst obrigatório; watch/timer devem ser active
+- LOG: doc/LOG-2026-07-22__133000__502-persiste-heal-inativo.md
+
+## 2026-07-22 13:15 — Normalizar 9º dígito móvel BR
 - 5182001261 ≡ 51982001261; expand/canonicalize/match no backend
 - LOG: doc/LOG-2026-07-22__131500__normalize-9-digito-br.md
 
