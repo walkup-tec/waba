@@ -1,4 +1,10 @@
-﻿## 2026-07-22 13:45 — Aquecedor pares + validação 1261
+﻿## 2026-07-22 14:08 — Validação 1261: prova no chat + Redeploy
+- Causa: FTP não reinicia Node (marker antigo no /health); success falso só com HTTP 201
+- Fix: sendText com variantes BR; sucesso só com mensagem no chat; marker novo
+- Obrigatório: Redeploy disparador + heal se 502; validar marker no /health
+- LOG: doc/LOG-2026-07-22__140800__validacao-1261-prova-chat-redeploy.md
+
+## 2026-07-22 13:45 — Aquecedor pares + validação 1261
 - Fix: replyDue prioridade absoluta (6011 só recebia); send validação sem sucesso falso; Preparando com since=now
 - LOG: doc/LOG-2026-07-22__134500__aquecedor-pares-validacao-1261.md
 

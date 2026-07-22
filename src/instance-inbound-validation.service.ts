@@ -3,6 +3,7 @@ import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "./evo-http.client";
 import { waitForEvoInstanceLiveOpen } from "./instances/evo-connection-state.service";
 import {
   canonicalizeBrazilWhatsAppNumber,
+  expandBrazilWhatsAppNumberVariants,
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
 } from "./instances/evo-instance-phone.service";
@@ -231,22 +232,49 @@ function buildTemplateUrl(template: string, instanceName: string): string {
 }
 
 function resolveSendTarget(referenceJid: string | null, referenceNumber: string | null): string {
+  const candidates = buildSendNumberCandidates(referenceJid, referenceNumber);
+  return candidates[0] || "";
+}
+
+/** Destinos possíveis para sendText (nunca @lid; tenta 9º dígito BR e JID telefone). */
+function buildSendNumberCandidates(
+  referenceJid: string | null,
+  referenceNumber: string | null,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const value = String(raw || "").trim();
+    if (!value || isLidJid(value) || seen.has(value)) return;
+    seen.add(value);
+    out.push(value);
+  };
+
   const jid = String(referenceJid || "").trim();
   const fromNumber = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
   const fromJidUser = jid.includes("@")
     ? normalizeWhatsAppNumber(jid.split("@")[0] || "")
     : normalizeWhatsAppNumber(jid);
-  // Preferir dígitos E.164: Evolution costuma falhar/silenciar sendText com @lid.
-  const digits =
-    fromNumber.length >= 12
-      ? fromNumber
-      : fromJidUser.length >= 12
-        ? fromJidUser
-        : fromNumber || fromJidUser;
-  if (digits.length >= 12) return digits;
-  if (/@s\.whatsapp\.net$/i.test(jid)) return jid;
-  if (jid.includes("@") && !/@lid$/i.test(jid)) return jid;
-  return digits || jid;
+
+  const seedDigits = [fromNumber, fromJidUser].filter(Boolean);
+  for (const seed of seedDigits) {
+    for (const variant of expandBrazilWhatsAppNumberVariants(seed)) {
+      const normalized = normalizeWhatsAppNumber(variant);
+      if (normalized.length >= 12 && normalized.startsWith("55")) add(normalized);
+    }
+  }
+
+  if (isPhoneWhatsAppJid(jid) && !isLidJid(jid)) add(jid);
+
+  // Último recurso: dígitos curtos (Evolution às vezes aceita sem DDI).
+  for (const seed of seedDigits) {
+    for (const variant of expandBrazilWhatsAppNumberVariants(seed)) {
+      const digits = String(variant || "").replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) add(digits);
+    }
+  }
+
+  return out;
 }
 
 function isPhoneWhatsAppJid(jid: string): boolean {
@@ -895,18 +923,32 @@ function extractEvoMessageRecords(payload: unknown): unknown[] {
 async function findReplyInChat(
   instanceName: string,
   referenceJid: string,
-  replyMarker: string
+  replyMarker: string,
+  referenceNumber?: string | null,
 ): Promise<boolean> {
-  const remoteJid = referenceJid.includes("@") ? referenceJid : `${referenceJid}@s.whatsapp.net`;
-  const digits = normalizeWhatsAppNumber(referenceJid.split("@")[0] || referenceJid);
-  const bodies: Record<string, unknown>[] = [
-    { where: { key: { remoteJid } }, limit: 40 },
-    { where: { key: { remoteJid } }, take: 40 },
-    { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 40 },
-    { where: { key: { fromMe: false } }, limit: 60 },
-    { limit: 80 },
-    {},
-  ];
+  const remoteCandidates = new Set<string>();
+  const jid = String(referenceJid || "").trim();
+  if (jid.includes("@") && !isLidJid(jid)) {
+    remoteCandidates.add(jid);
+    remoteCandidates.add(jid.replace(/@s\.whatsapp\.net$/i, ""));
+  }
+  for (const candidate of buildSendNumberCandidates(referenceJid, referenceNumber || null)) {
+    const digits = normalizeWhatsAppNumber(candidate.includes("@") ? candidate.split("@")[0] : candidate);
+    if (!digits) continue;
+    remoteCandidates.add(digits);
+    remoteCandidates.add(`${digits}@s.whatsapp.net`);
+  }
+
+  const bodies: Record<string, unknown>[] = [];
+  for (const remoteJid of remoteCandidates) {
+    bodies.push({ where: { key: { remoteJid } }, limit: 40 });
+    bodies.push({ where: { key: { remoteJid } }, take: 40 });
+  }
+  bodies.push({ where: { key: { fromMe: true } }, limit: 80 });
+  bodies.push({ limit: 100 });
+  bodies.push({});
+
+  const needle = replyMarker.toLowerCase();
   for (const url of buildFindMessagesUrls(instanceName)) {
     for (const body of bodies) {
       const result = await callEvo(url, "POST", body);
@@ -916,9 +958,8 @@ async function findReplyInChat(
       for (const node of nodes) {
         const texts: string[] = [];
         collectMessageTexts(node, texts);
-        const needle = replyMarker.toLowerCase();
         if (texts.some((t) => t.toLowerCase().includes(needle))) return true;
-        if (digits && texts.some((t) => t.toLowerCase().includes("validação waba"))) return true;
+        if (texts.some((t) => t.toLowerCase().includes("validação waba concluída"))) return true;
       }
     }
   }
@@ -965,7 +1006,8 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
     const found = await findReplyInChat(
       record.instanceName,
       record.referenceJid,
-      record.replyMarker
+      record.replyMarker,
+      record.referenceNumber,
     );
     if (found) {
       record.sendTest = {
@@ -986,7 +1028,12 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
     if (lastSentAt != null && Date.now() - lastSentAt < REPLY_DEDUPE_MS) {
       const found =
         record.referenceJid &&
-        (await findReplyInChat(record.instanceName, record.referenceJid, record.replyMarker));
+        (await findReplyInChat(
+          record.instanceName,
+          record.referenceJid,
+          record.replyMarker,
+          record.referenceNumber,
+        ));
       if (found) {
         record.phase = "reply_sent";
         record.sendAttempted = true;
@@ -1009,8 +1056,8 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   record.sendAttempted = true;
   const text = `Validação WABA concluída. ${record.replyMarker}`;
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
-  const numero = resolveSendTarget(record.referenceJid, record.referenceNumber);
-  if (!numero || isLidJid(numero)) {
+  const candidates = buildSendNumberCandidates(record.referenceJid, record.referenceNumber);
+  if (!candidates.length || candidates.every((c) => isLidJid(c))) {
     if (convKey) replyInFlight.delete(convKey);
     record.sendHttpOk = false;
     record.sendDetail = "Destino da resposta não identificado.";
@@ -1022,35 +1069,77 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
     tryFinalize(record);
     return;
   }
-  const sendBody: Record<string, unknown> = EVO_SEND_TEXT_V1
-    ? { number: numero, textMessage: { text } }
-    : { number: numero, text, textMessage: { text } };
+
+  let lastDetail = "";
+  let anyHttpOk = false;
   try {
-    const result = await callEvo(sendUrl, "POST", sendBody);
-    record.sendHttpOk = result.ok;
-    if (!result.ok) {
-      const detail =
-        (result.json as Record<string, unknown> | null)?.message ||
-        (result.json as Record<string, unknown> | null)?.error ||
-        result.body.slice(0, 180) ||
-        `HTTP ${result.status}`;
-      record.sendDetail = String(detail);
-      const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
+    for (const numero of candidates) {
+      if (record.cancelled || record.finished) return;
+      const sendBody: Record<string, unknown> = EVO_SEND_TEXT_V1
+        ? { number: numero, textMessage: { text } }
+        : { number: numero, text, textMessage: { text } };
+      const result = await callEvo(sendUrl, "POST", sendBody);
+      if (!result.ok) {
+        const detail =
+          (result.json as Record<string, unknown> | null)?.message ||
+          (result.json as Record<string, unknown> | null)?.error ||
+          result.body.slice(0, 180) ||
+          `HTTP ${result.status}`;
+        lastDetail = String(detail);
+        // Tentar próximo formato (ex.: com/sem 9º dígito).
+        continue;
+      }
+      anyHttpOk = true;
+      record.sendHttpOk = true;
+      record.sendDetail = `sendText OK → ${numero}`;
+      // NÃO marcar success só com HTTP — Evolution pode aceitar e a mensagem não aparecer no chat.
       record.sendTest = {
-        success: false,
-        detail: restricted
-          ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
-          : `Falha ao enviar resposta automática: ${record.sendDetail}`,
+        success: null,
+        detail: "Resposta enviada; confirmando no histórico da conversa…",
       };
-      // Não marcar sucesso falso — UI não deve exibir “finalizado” sem mensagem enviada.
-      tryFinalize(record);
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1200));
+        const found = await findReplyInChat(
+          record.instanceName,
+          record.referenceJid || numero,
+          record.replyMarker,
+          record.referenceNumber || numero,
+        );
+        if (found) {
+          if (convKey) recentReplyByConversation.set(convKey, Date.now());
+          record.sendTest = {
+            success: true,
+            detail: "Resposta confirmada no histórico da conversa.",
+          };
+          tryFinalize(record);
+          return;
+        }
+      }
+      // HTTP OK sem prova — tenta próximo candidato de número.
+      lastDetail = `HTTP OK sem mensagem no chat (destino ${numero})`;
+    }
+
+    if (anyHttpOk) {
+      // Deixa success=null para o worker continuar buscando; não fecha o modal como “ok”.
+      record.sendHttpOk = true;
+      record.sendDetail = lastDetail || "sendText OK sem prova no chat";
+      record.sendTest = {
+        success: null,
+        detail:
+          "A API aceitou o envio, mas a mensagem ainda não apareceu no chat. Aguarde ou reenvie CONFIRMAR.",
+      };
       return;
     }
-    if (convKey) recentReplyByConversation.set(convKey, Date.now());
-    record.sendDetail = "sendText OK";
+
+    record.sendHttpOk = false;
+    record.sendDetail = lastDetail || "Falha em todos os destinos";
+    const restricted = isLikelyWhatsAppRestriction(record.sendDetail);
     record.sendTest = {
-      success: true,
-      detail: "Resposta enviada na mesma conversa (após mensagem recebida).",
+      success: false,
+      detail: restricted
+        ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
+        : `Falha ao enviar resposta automática: ${record.sendDetail}`,
     };
     tryFinalize(record);
   } finally {
@@ -1151,6 +1240,7 @@ async function processValidationRecordInWorker(record: ValidationRecord): Promis
       record.instanceName,
       record.referenceJid,
       record.replyMarker,
+      record.referenceNumber,
     );
     if (found) {
       record.sendTest = {
