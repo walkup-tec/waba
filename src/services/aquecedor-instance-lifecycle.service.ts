@@ -158,15 +158,40 @@ function isGrandfatherEligible(createdAt: string | null): boolean {
   return !Number.isFinite(createdMs) || createdMs < cutoffMs;
 }
 
-function shouldRevertGrandfatherToPreparing(
+function applyPreparingPhase(row: AquecedorInstanceLifecycleRow, preparingSince: string): void {
+  row.phase = "preparing";
+  row.preparingSince = preparingSince;
+  row.activatedAt = null;
+}
+
+/**
+ * Reverte active → Preparando quando a integração EVO é recente ou mais nova
+ * que a ativação anterior (recriação / grandfather indevido).
+ */
+function shouldResetActiveToPreparing(
   row: AquecedorInstanceLifecycleRow,
-  createdAt: string | null,
+  integrationAt: string | null,
 ): boolean {
-  if (row.phase !== "active" || row.preparingSince) return false;
-  if (isGrandfatherEligible(createdAt)) return false;
-  const createdMs = new Date(createdAt || 0).getTime();
-  if (!Number.isFinite(createdMs)) return false;
-  return Date.now() - createdMs < PREPARING_DURATION_MS;
+  if (row.phase !== "active") return false;
+  if (!integrationAt || isGrandfatherEligible(integrationAt)) return false;
+  const integMs = new Date(integrationAt).getTime();
+  if (!Number.isFinite(integMs)) return false;
+
+  const withinPreparingWindow = Date.now() - integMs < PREPARING_DURATION_MS;
+  const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
+  const reintegratedAfterActivation =
+    Number.isFinite(activatedMs) && integMs > activatedMs + 10_000;
+
+  return withinPreparingWindow || reintegratedAfterActivation;
+}
+
+function maybeResetActiveToPreparing(
+  row: AquecedorInstanceLifecycleRow,
+  integrationAt: string | null,
+): boolean {
+  if (!shouldResetActiveToPreparing(row, integrationAt)) return false;
+  applyPreparingPhase(row, String(integrationAt));
+  return true;
 }
 
 async function reconcileGrandfatheredActiveRow(
@@ -174,12 +199,13 @@ async function reconcileGrandfatheredActiveRow(
   row: AquecedorInstanceLifecycleRow,
 ): Promise<boolean> {
   const createdAt = await readEvoInstanceCreatedAt(instanceName);
-  if (!shouldRevertGrandfatherToPreparing(row, createdAt)) return false;
-  row.phase = "preparing";
-  row.preparingSince = createdAt;
-  row.activatedAt = null;
-  return true;
+  return maybeResetActiveToPreparing(row, createdAt);
 }
+
+export type RegisterAquecedorPreparingOptions = {
+  /** Create/QR de integração nova: força Preparando mesmo se já havia row active. */
+  forceNewIntegration?: boolean;
+};
 
 function defaultStore(): LifecycleStore {
   return {
@@ -324,35 +350,55 @@ export async function removeAquecedorInstanceLifecycle(instanceName: string): Pr
 export async function registerAquecedorInstancePreparing(
   instanceName: string,
   preparingSince?: string | null,
+  options?: RegisterAquecedorPreparingOptions,
 ): Promise<void> {
   const name = String(instanceName || "").trim();
   if (!name) return;
   const store = await loadStore();
   const key = normalizeKey(name);
+  const evoCreatedAt = await readEvoInstanceCreatedAt(name);
+  const explicitSince = String(preparingSince || "").trim() || null;
+  const forceNew = options?.forceNewIntegration === true;
+  const integrationAt =
+    explicitSince || evoCreatedAt || (forceNew ? new Date().toISOString() : null);
+
   const existing = await findAquecedorLifecycleRow(name);
+
+  if (forceNew) {
+    const since = integrationAt || new Date().toISOString();
+    if (existing) {
+      refreshRestrictionPhase(existing.row);
+      applyPreparingPhase(existing.row, since);
+      await saveStore(store);
+      return;
+    }
+    store.instances[key] = emptyRow("preparing", since);
+    await saveStore(store);
+    return;
+  }
+
   if (existing) {
     refreshRestrictionPhase(existing.row);
     if (existing.row.phase === "restricted_wait") return;
-    if (existing.row.phase === "active") {
-      if (await reconcileGrandfatheredActiveRow(name, existing.row)) {
+    if (existing.row.phase === "preparing") {
+      if (!existing.row.preparingSince && integrationAt) {
+        existing.row.preparingSince = integrationAt;
         await saveStore(store);
       }
       return;
     }
+    if (maybeResetActiveToPreparing(existing.row, integrationAt || evoCreatedAt)) {
+      await saveStore(store);
+    }
     return;
   }
-  const createdAt =
-    preparingSince ||
-    (await readEvoInstanceCreatedAt(name)) ||
-    null;
-  if (isGrandfatherEligible(createdAt)) {
+
+  // Sem row: sem data de integração → legado (grandfather). Com data pós-cutoff → Preparando.
+  if (!integrationAt || isGrandfatherEligible(integrationAt)) {
     await grandfatherAquecedorInstanceActive(name);
     return;
   }
-  store.instances[key] = emptyRow(
-    "preparing",
-    createdAt || new Date().toISOString(),
-  );
+  store.instances[key] = emptyRow("preparing", integrationAt);
   await saveStore(store);
 }
 

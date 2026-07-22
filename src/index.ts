@@ -75,6 +75,12 @@ import {
   pickEvoConnectionState,
   resolveEvoLiveConnectionSnapshots,
 } from "./instances/evo-connection-state.service";
+import {
+  getWhatsappConnectingRestrictionMap,
+  recheckWhatsappConnectingRestrictions,
+  syncWhatsappConnectingRestriction,
+  WA_CONNECTING_RECHECK_MS,
+} from "./instances/whatsapp-connecting-restriction.service";
 import { runEvoIntegrationProbe } from "./services/evo-integration-probe.service";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
@@ -139,6 +145,7 @@ import {
   filterAquecedorCycleConnected,
   canAquecedorInstanceSendToday,
   filterInstancesLifecycleReady,
+  findAquecedorLifecycleRow,
   getAquecedorLifecycleStatusMap,
   markAquecedorInstanceRestricted,
   recordAquecedorInstanceDailySend,
@@ -3224,7 +3231,10 @@ async function saveAquecedorConfigRecord(
   return "local";
 }
 
-async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<void> {
+async function ensureAquecedorInstanceRegistered(
+  instanceName: string,
+  options?: { forceNewIntegration?: boolean },
+): Promise<void> {
   try {
     const name = String(instanceName || "").trim();
     if (!name) return;
@@ -3243,6 +3253,21 @@ async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<
       (row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase(),
     );
     const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
+    const forceNew = options?.forceNewIntegration === true;
+    if (forceNew) {
+      await registerAquecedorInstancePreparing(name, preparingSince || new Date().toISOString(), {
+        forceNewIntegration: true,
+      });
+      return;
+    }
+    // Sem createdAt (create EVO ainda pendente): não grandfather como active.
+    if (!preparingSince) {
+      const existing = await findAquecedorLifecycleRow(name);
+      if (existing) {
+        await registerAquecedorInstancePreparing(name);
+      }
+      return;
+    }
     await registerAquecedorInstancePreparing(name, preparingSince);
   } catch (error) {
     console.warn("[Aquecedor] ensureAquecedorInstanceRegistered:", error);
@@ -3279,7 +3304,9 @@ async function syncAquecedorConnectedInstances(
     await persistInstanceUsage(toRegister);
     for (const row of toRegister) {
       if (row.useAquecedor) {
-        await registerAquecedorInstancePreparing(row.instanceName);
+        await registerAquecedorInstancePreparing(row.instanceName, new Date().toISOString(), {
+          forceNewIntegration: true,
+        });
       }
     }
   }
@@ -5259,6 +5286,7 @@ app.get("/instancias/uso-config", async (req, res) => {
       }
     }
     const lifecycleMap = await getAquecedorLifecycleStatusMap();
+    const waRestrictionMap = await getWhatsappConnectingRestrictionMap();
     const warmthMap = await getAquecedorWarmthMapForInstances(
       Array.from(usageMap.keys()),
       getSupabaseClient()
@@ -5278,6 +5306,7 @@ app.get("/instancias/uso-config", async (req, res) => {
           lifecycleMap[instanceName.toLowerCase()] ??
           (await getAquecedorLifecycleStatusForInstance(instanceName));
         const warmth = warmthMap[instanceName.toLowerCase()];
+        const waRestriction = waRestrictionMap[instanceName.toLowerCase()];
         return {
           instanceName,
           ...cfg,
@@ -5285,6 +5314,9 @@ app.get("/instancias/uso-config", async (req, res) => {
           aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
           aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
           aquecedorPromoteAt: lifecycle?.promoteAt ?? null,
+          waRestrictionUntil: waRestriction?.restrictedUntil ?? null,
+          waRestrictionDetectedAt: waRestriction?.detectedAt ?? null,
+          waRestrictionActive: waRestriction?.active === true,
           warmthLevel: warmth?.level ?? 0,
           warmthLabel: warmth?.label ?? "Não aquecido",
         };
@@ -5566,7 +5598,11 @@ app.post("/instancias/uso-config", async (req, res) => {
     for (const row of sanitized) {
       if (row.useAquecedor !== false) {
         const prev = getInstanceUsageFromMap(usageMapBefore, row.instanceName);
-        if (!prev || prev.useAquecedor === false) {
+        if (!prev) {
+          await registerAquecedorInstancePreparing(row.instanceName, new Date().toISOString(), {
+            forceNewIntegration: true,
+          });
+        } else if (prev.useAquecedor === false) {
           await registerAquecedorInstancePreparing(row.instanceName);
         }
       }
@@ -6923,10 +6959,13 @@ async function enrichInstanceItemsWithLiveConnection(
       if (!name) return row;
       const liveState = await fetchEvoInstanceLiveState(name, { fresh: true });
       if (!liveState) return row;
+      const restriction = await syncWhatsappConnectingRestriction(name, liveState);
       return {
         ...row,
         connectionStatus: liveState,
         liveConnectionStatus: liveState,
+        waRestrictionUntil: restriction?.restrictedUntil || null,
+        waRestrictionDetectedAt: restriction?.detectedAt || null,
       };
     }),
   );
@@ -8241,6 +8280,9 @@ async function runRegistrarQrcode(
   }
 
   if (qrFromCreate) {
+    if (instanceWasNew) {
+      await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+    }
     return {
       ok: true,
       message: createWarning
@@ -8258,6 +8300,9 @@ async function runRegistrarQrcode(
     prepareSession: shouldPrepareSession,
   });
   if (qrFetch.ok) {
+    if (instanceWasNew) {
+      await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+    }
     return {
       ok: true,
       message: createWarning
@@ -8290,6 +8335,7 @@ async function runRegistrarQrcode(
       }
     }
     if (retryQrFromCreate) {
+      await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
       return {
         ok: true,
         message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
@@ -8305,6 +8351,7 @@ async function runRegistrarQrcode(
         extended: true,
       });
       if (qrRetry.ok) {
+        await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
         return {
           ok: true,
           message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
@@ -12716,6 +12763,24 @@ const httpServer = app.listen(PORT, () => {
     void syncAquecedorPreparingPromotions();
     console.log(
       `[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`,
+    );
+
+    setInterval(() => {
+      recheckWhatsappConnectingRestrictions()
+        .then((result) => {
+          if (result.cleared.length) {
+            console.log(
+              `[WA-Restrição] liberada(s) após recheck 60min: ${result.cleared.join(", ")}`,
+            );
+          }
+        })
+        .catch((err) => console.error("[WA-Restrição] recheck 60min:", err));
+    }, WA_CONNECTING_RECHECK_MS);
+    void recheckWhatsappConnectingRestrictions().catch((err) =>
+      console.error("[WA-Restrição] recheck inicial:", err),
+    );
+    console.log(
+      `[WA-Restrição] recheck connectionState a cada ${Math.round(WA_CONNECTING_RECHECK_MS / 60000)}min`,
     );
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {

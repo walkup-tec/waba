@@ -151,24 +151,37 @@ function isGrandfatherEligible(createdAt) {
     const cutoffMs = new Date(exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO).getTime();
     return !Number.isFinite(createdMs) || createdMs < cutoffMs;
 }
-function shouldRevertGrandfatherToPreparing(row, createdAt) {
-    if (row.phase !== "active" || row.preparingSince)
+function applyPreparingPhase(row, preparingSince) {
+    row.phase = "preparing";
+    row.preparingSince = preparingSince;
+    row.activatedAt = null;
+}
+/**
+ * Reverte active → Preparando quando a integração EVO é recente ou mais nova
+ * que a ativação anterior (recriação / grandfather indevido).
+ */
+function shouldResetActiveToPreparing(row, integrationAt) {
+    if (row.phase !== "active")
         return false;
-    if (isGrandfatherEligible(createdAt))
+    if (!integrationAt || isGrandfatherEligible(integrationAt))
         return false;
-    const createdMs = new Date(createdAt || 0).getTime();
-    if (!Number.isFinite(createdMs))
+    const integMs = new Date(integrationAt).getTime();
+    if (!Number.isFinite(integMs))
         return false;
-    return Date.now() - createdMs < PREPARING_DURATION_MS;
+    const withinPreparingWindow = Date.now() - integMs < PREPARING_DURATION_MS;
+    const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
+    const reintegratedAfterActivation = Number.isFinite(activatedMs) && integMs > activatedMs + 10_000;
+    return withinPreparingWindow || reintegratedAfterActivation;
+}
+function maybeResetActiveToPreparing(row, integrationAt) {
+    if (!shouldResetActiveToPreparing(row, integrationAt))
+        return false;
+    applyPreparingPhase(row, String(integrationAt));
+    return true;
 }
 async function reconcileGrandfatheredActiveRow(instanceName, row) {
     const createdAt = await readEvoInstanceCreatedAt(instanceName);
-    if (!shouldRevertGrandfatherToPreparing(row, createdAt))
-        return false;
-    row.phase = "preparing";
-    row.preparingSince = createdAt;
-    row.activatedAt = null;
-    return true;
+    return maybeResetActiveToPreparing(row, createdAt);
 }
 function defaultStore() {
     return {
@@ -296,33 +309,50 @@ async function removeAquecedorInstanceLifecycle(instanceName) {
     if (changed)
         await saveStore(store);
 }
-async function registerAquecedorInstancePreparing(instanceName, preparingSince) {
+async function registerAquecedorInstancePreparing(instanceName, preparingSince, options) {
     const name = String(instanceName || "").trim();
     if (!name)
         return;
     const store = await loadStore();
     const key = normalizeKey(name);
+    const evoCreatedAt = await readEvoInstanceCreatedAt(name);
+    const explicitSince = String(preparingSince || "").trim() || null;
+    const forceNew = options?.forceNewIntegration === true;
+    const integrationAt = explicitSince || evoCreatedAt || (forceNew ? new Date().toISOString() : null);
     const existing = await findAquecedorLifecycleRow(name);
+    if (forceNew) {
+        const since = integrationAt || new Date().toISOString();
+        if (existing) {
+            refreshRestrictionPhase(existing.row);
+            applyPreparingPhase(existing.row, since);
+            await saveStore(store);
+            return;
+        }
+        store.instances[key] = emptyRow("preparing", since);
+        await saveStore(store);
+        return;
+    }
     if (existing) {
         refreshRestrictionPhase(existing.row);
         if (existing.row.phase === "restricted_wait")
             return;
-        if (existing.row.phase === "active") {
-            if (await reconcileGrandfatheredActiveRow(name, existing.row)) {
+        if (existing.row.phase === "preparing") {
+            if (!existing.row.preparingSince && integrationAt) {
+                existing.row.preparingSince = integrationAt;
                 await saveStore(store);
             }
             return;
         }
+        if (maybeResetActiveToPreparing(existing.row, integrationAt || evoCreatedAt)) {
+            await saveStore(store);
+        }
         return;
     }
-    const createdAt = preparingSince ||
-        (await readEvoInstanceCreatedAt(name)) ||
-        null;
-    if (isGrandfatherEligible(createdAt)) {
+    if (!integrationAt || isGrandfatherEligible(integrationAt)) {
         await grandfatherAquecedorInstanceActive(name);
         return;
     }
-    store.instances[key] = emptyRow("preparing", createdAt || new Date().toISOString());
+    store.instances[key] = emptyRow("preparing", integrationAt);
     await saveStore(store);
 }
 async function grandfatherAquecedorInstanceActive(instanceName) {

@@ -1,4 +1,18 @@
-﻿## 2026-07-21 21:20 — Heal login v4 (anti-queda pós-redeploy)
+﻿## 2026-07-22 12:28 — Fix Preparando na integração
+- Create/QR força Preparando; sem createdAt não grandfather; reconcile active→preparing se EVO recente/recriada
+- Contagem Preparando e exclusão do ciclo aquecedor voltam a bater
+- LOG: doc/LOG-2026-07-22__122800__fix-preparando-integracao.md
+
+## 2026-07-22 11:35 — Indicadores Preparando + Restrição Temporária
+- Aba Instâncias: 2 cards no topo (contagens); chip filtro Restrição; sync dist
+- LOG: doc/LOG-2026-07-22__113500__indicadores-preparando-restricao.md
+
+## 2026-07-22 11:30 — Tag UI Restrição (connecting + 3h)
+- Tag estilo Preparando: ícone WA + Restrição + countdown 3h; ações off; recheck 60min limpa se sair de connecting
+- Store: whatsapp-connecting-restriction.json; enrich live + uso-config
+- LOG: doc/LOG-2026-07-22__113000__tag-restricao-connecting-3h.md
+
+## 2026-07-21 21:20 — Heal login v4 (anti-queda pós-redeploy)
 - Timer 10s, burst 2s, probe 172.17.0.1, watch 1s; nunca disable login-heal; redeploy só se necessário
 - VPS: reinstall obrigatório `heal-waba-login-vps.sh install`
 - LOG: doc/LOG-2026-07-21__212000__heal-login-v4-anti-queda.md

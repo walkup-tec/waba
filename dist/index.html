@@ -1672,12 +1672,20 @@
         gap: 4px;
       }
 
-      .summary-card:nth-child(1) {
+      .summary-card:nth-child(3) {
         border-left: 2px solid rgba(110, 255, 200, 0.5);
       }
 
-      .summary-card:nth-child(2) {
+      .summary-card:nth-child(4) {
         border-left: 2px solid rgba(248, 113, 113, 0.55);
+      }
+
+      .summary-card.summary-card-preparing {
+        border-left: 2px solid rgba(251, 191, 36, 0.55);
+      }
+
+      .summary-card.summary-card-restriction {
+        border-left: 2px solid rgba(251, 191, 36, 0.55);
       }
 
       .summary-label {
@@ -1692,8 +1700,13 @@
         letter-spacing: -0.02em;
       }
 
-      .summary-card:nth-child(2) .summary-value {
+      .summary-card:nth-child(4) .summary-value {
         color: #fca5a5;
+      }
+
+      .summary-card.summary-card-preparing .summary-value,
+      .summary-card.summary-card-restriction .summary-value {
+        color: #fbbf24;
       }
 
       #tab-dashboard .summary-card-warmth {
@@ -7586,7 +7599,8 @@
         background: rgba(46, 228, 160, 0.12);
       }
 
-      .instances-chip.active[data-status="preparing"] {
+      .instances-chip.active[data-status="preparing"],
+      .instances-chip.active[data-status="restriction"] {
         border-color: rgba(251, 191, 36, 0.55);
         color: #fbbf24;
         background: rgba(251, 191, 36, 0.12);
@@ -8378,6 +8392,10 @@
         color: #fbbf24;
       }
 
+      .status-text.wa-restriction {
+        color: #fbbf24;
+      }
+
       .status-text.status-with-countdown {
         display: inline-flex;
         align-items: baseline;
@@ -8385,7 +8403,8 @@
         gap: 0.4em;
       }
 
-      .preparing-countdown {
+      .preparing-countdown,
+      .wa-restriction-countdown {
         display: inline-block;
         font-size: 0.9em;
         font-weight: 600;
@@ -8396,6 +8415,20 @@
         border-radius: 4px;
         background: rgba(251, 191, 36, 0.12);
         border: 1px solid rgba(251, 191, 36, 0.22);
+      }
+
+      .status-wa-icon {
+        display: inline-flex;
+        width: 0.95em;
+        height: 0.95em;
+        margin-right: 0.28em;
+        vertical-align: -0.12em;
+        color: #25d366;
+      }
+      .status-wa-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
 
       .status-text.restricted-wait {
@@ -16251,6 +16284,16 @@
               </div>
 
               <div class="summary-grid">
+                <div class="summary-card summary-card-preparing">
+                  <div class="summary-label">Instâncias Preparando</div>
+                  <div class="summary-value" id="instances-preparing-tab">—</div>
+                  <div class="summary-sub">Fase de 6 horas</div>
+                </div>
+                <div class="summary-card summary-card-restriction">
+                  <div class="summary-label">Restrição Temporária</div>
+                  <div class="summary-value" id="instances-restriction-tab">—</div>
+                  <div class="summary-sub">WhatsApp · até 3 horas</div>
+                </div>
                 <div class="summary-card">
                   <div class="summary-label">Instâncias ativas</div>
                   <div class="summary-value" id="instances-active-tab">
@@ -16319,6 +16362,9 @@
                   </button>
                   <button class="instances-chip" type="button" data-status="preparing">
                     Preparando
+                  </button>
+                  <button class="instances-chip" type="button" data-status="restriction">
+                    Restrição
                   </button>
                   <button class="instances-chip" type="button" data-status="closed">
                     Desconectados
@@ -37433,6 +37479,9 @@
       let aquecedorExpedienteBatches = [];
       let instanceUsageByName = {};
       let preparingCountdownTimer = null;
+      let waRestrictionCountdownTimer = null;
+      let waRestrictionRecheckTimer = null;
+      const WA_RESTRICTION_RECHECK_MS = 60 * 60 * 1000;
       let disparosConfigCache = null;
       let disparosAlternativaThrottleCache = null;
       let spreadsheetRowsCache = [];
@@ -43491,6 +43540,10 @@
             createdAt: String(inst?.createdAt || "").trim(),
             updatedAt: String(inst?.updatedAt || inst?.avatarVersion || "").trim(),
             isOpen,
+            connectionStatus: statusRaw,
+            liveConnectionStatus: String(inst?.liveConnectionStatus || statusRaw || ""),
+            waRestrictionUntil: inst?.waRestrictionUntil || null,
+            waRestrictionDetectedAt: inst?.waRestrictionDetectedAt || null,
             statusLabel: isOpen ? "conectado" : "desconectado",
           };
         });
@@ -43575,6 +43628,8 @@
         const base = buildOrderedInstancesBase();
         const ativas = base.filter((i) => i.isOpen).length;
         const desconectadas = base.filter((i) => !i.isOpen).length;
+        const preparando = base.filter((i) => isInstancePreparing(i)).length;
+        const restricao = base.filter((i) => isInstanceWaRestricted(i)).length;
         const total = base.length;
 
         const instAtivasEl = document.getElementById("instances-active");
@@ -43589,11 +43644,15 @@
         const instAtivasTabEl = document.getElementById("instances-active-tab");
         const instDescTabEl = document.getElementById("instances-disconnected-tab");
         const instTotalTabEl = document.getElementById("instances-total-tab");
+        const instPrepTabEl = document.getElementById("instances-preparing-tab");
+        const instRestTabEl = document.getElementById("instances-restriction-tab");
         if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
           instAtivasTabEl.textContent = String(ativas);
           instDescTabEl.textContent = String(desconectadas);
           instTotalTabEl.textContent = `Total: ${total}`;
         }
+        if (instPrepTabEl) instPrepTabEl.textContent = String(preparando);
+        if (instRestTabEl) instRestTabEl.textContent = String(restricao);
 
         updateDashboardWarmthIndicators(base);
 
@@ -43647,7 +43706,20 @@
         return `${m}m ${String(s).padStart(2, "0")}s`;
       }
 
+      const WA_STATUS_ICON_SVG =
+        '<svg class="status-wa-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"/></svg>';
+
       function buildInstanceStatusHtml(statusLabel, statusClass, promoteAt) {
+        if (statusLabel === "Restrição") {
+          if (promoteAt) {
+            const text = formatPreparingCountdown(promoteAt);
+            const countdownHtml = `<span class="wa-restriction-countdown" data-restrict-until="${escapeAdminHtml(
+              String(promoteAt),
+            )}" title="Contagem regressiva da restrição WhatsApp (3h)">${text}</span>`;
+            return `<span class="status-text ${statusClass} status-with-countdown"><span>${WA_STATUS_ICON_SVG}Restrição</span>${countdownHtml}</span>`;
+          }
+          return `<span class="status-text ${statusClass}"><span>${WA_STATUS_ICON_SVG}Restrição</span></span>`;
+        }
         let countdownHtml = "";
         if (statusLabel === "Preparando" && promoteAt) {
           const text = formatPreparingCountdown(promoteAt);
@@ -43676,9 +43748,42 @@
         }
       }
 
+      function tickWaRestrictionCountdowns() {
+        const nodes = document.querySelectorAll(".wa-restriction-countdown[data-restrict-until]");
+        if (!nodes.length) return;
+        nodes.forEach((node) => {
+          const iso = node.getAttribute("data-restrict-until");
+          node.textContent = formatPreparingCountdown(iso);
+        });
+      }
+
       function ensurePreparingCountdownTimer() {
         if (preparingCountdownTimer) return;
         preparingCountdownTimer = setInterval(tickPreparingCountdowns, 1000);
+      }
+
+      function ensureWaRestrictionCountdownTimer() {
+        if (waRestrictionCountdownTimer) return;
+        waRestrictionCountdownTimer = setInterval(tickWaRestrictionCountdowns, 1000);
+      }
+
+      async function recheckWaRestrictionsFromServer() {
+        try {
+          await loadInstancesForInstanciasTab({ fullRefresh: true });
+        } catch {
+          /* ignore */
+        }
+      }
+
+      function ensureWaRestrictionRecheckTimer() {
+        if (waRestrictionRecheckTimer) return;
+        waRestrictionRecheckTimer = setInterval(() => {
+          const hasRestriction = Object.values(instanceUsageByName || {}).some(
+            (row) => row && row.waRestrictionActive && row.waRestrictionUntil,
+          );
+          if (!hasRestriction) return;
+          void recheckWaRestrictionsFromServer();
+        }, WA_RESTRICTION_RECHECK_MS);
       }
 
       function getInstanceUsage(instanceName) {
@@ -43691,6 +43796,9 @@
           aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
           aquecedorPhase: current?.aquecedorPhase || null,
           aquecedorPromoteAt: current?.aquecedorPromoteAt || null,
+          waRestrictionUntil: current?.waRestrictionUntil || null,
+          waRestrictionDetectedAt: current?.waRestrictionDetectedAt || null,
+          waRestrictionActive: current?.waRestrictionActive === true,
           warmthLevel: Number.isFinite(Number(current?.warmthLevel))
             ? Math.max(0, Math.min(3, Number(current.warmthLevel)))
             : 0,
@@ -43710,6 +43818,14 @@
 
       function resolveInstanceAquecedorStatusLabel(inst) {
         const usage = getInstanceUsage(inst.instanceName);
+        if (usage.waRestrictionActive && usage.waRestrictionUntil) {
+          return "Restrição";
+        }
+        // Fallback: live connecting na própria lista (antes do uso-config atualizar)
+        const live = String(
+          inst?.liveConnectionStatus || inst?.connectionStatus || "",
+        ).toLowerCase();
+        if (live === "connecting") return "Restrição";
         if (usage.useAquecedor && usage.aquecedorStatusLabel) {
           return usage.aquecedorStatusLabel;
         }
@@ -43727,6 +43843,10 @@
         return resolveInstanceAquecedorStatusLabel(inst) === "Preparando";
       }
 
+      function isInstanceWaRestricted(inst) {
+        return resolveInstanceAquecedorStatusLabel(inst) === "Restrição";
+      }
+
       function isInstanceConnectedFilter(inst) {
         return resolveInstanceAquecedorStatusLabel(inst) === "conectado";
       }
@@ -43737,6 +43857,7 @@
 
       function resolveInstanceStatusClass(inst, statusLabel) {
         if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
+        if (statusLabel === "Restrição") return "processing preparing wa-restriction";
         if (statusLabel === "Preparando") return "processing preparing";
         return inst.isOpen ? "connected" : "disconnected";
       }
@@ -43759,6 +43880,9 @@
               aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
               aquecedorPhase: row?.aquecedorPhase || null,
               aquecedorPromoteAt: row?.aquecedorPromoteAt || null,
+              waRestrictionUntil: row?.waRestrictionUntil || null,
+              waRestrictionDetectedAt: row?.waRestrictionDetectedAt || null,
+              waRestrictionActive: row?.waRestrictionActive === true,
               warmthLevel: Number.isFinite(Number(row?.warmthLevel))
                 ? Math.max(0, Math.min(3, Number(row.warmthLevel)))
                 : 0,
@@ -43873,6 +43997,8 @@
           filtered = filtered.filter((i) => isInstanceDisconnectedFilter(i));
         } else if (instancesStatusFilter === "preparing") {
           filtered = filtered.filter((i) => isInstancePreparing(i));
+        } else if (instancesStatusFilter === "restriction") {
+          filtered = filtered.filter((i) => isInstanceWaRestricted(i));
         }
 
         if (instancesSearchTerm) {
@@ -43939,6 +44065,13 @@
         const tbody = table.querySelector("tbody");
         filtered.forEach((inst) => {
           const usage = getInstanceUsage(inst.instanceName);
+          if (inst.waRestrictionUntil && !usage.waRestrictionUntil) {
+            usage.waRestrictionUntil = String(inst.waRestrictionUntil);
+            usage.waRestrictionDetectedAt = inst.waRestrictionDetectedAt
+              ? String(inst.waRestrictionDetectedAt)
+              : null;
+            usage.waRestrictionActive = true;
+          }
           const isSafeNumber = !usage.useAquecedor && !usage.useDisparador;
           const tr = document.createElement("tr");
           const safeProfilePicUrl = sanitizeInstanceProfilePicUrl(inst.profilePicUrl);
@@ -43956,14 +44089,27 @@
             : buildInstanceAvatarFallbackMarkup();
 
           const isDisconnected = !inst.isOpen;
-          const refreshClass = isDisconnected
-            ? "instance-action-btn btn-refresh enabled"
-            : "instance-action-btn btn-refresh disabled";
-          const qrcodeClass = isDisconnected
-            ? "instance-action-btn btn-qrcode enabled"
-            : "instance-action-btn btn-qrcode disabled";
-          const deleteClass = "instance-action-btn btn-delete enabled";
-          const safeClass = `instance-action-btn btn-safe enabled${isSafeNumber ? " active" : ""}`;
+          const isDeleting = instancesDeleting.has(
+            String(inst.instanceName || "").trim().toLowerCase()
+          );
+          const isWaRestricted = !isDeleting && isInstanceWaRestricted(inst);
+          const actionsLocked = isDeleting || isWaRestricted;
+          const refreshClass = actionsLocked
+            ? "instance-action-btn btn-refresh disabled"
+            : isDisconnected
+              ? "instance-action-btn btn-refresh enabled"
+              : "instance-action-btn btn-refresh disabled";
+          const qrcodeClass = actionsLocked
+            ? "instance-action-btn btn-qrcode disabled"
+            : isDisconnected
+              ? "instance-action-btn btn-qrcode enabled"
+              : "instance-action-btn btn-qrcode disabled";
+          const deleteClass = actionsLocked
+            ? "instance-action-btn btn-delete disabled"
+            : "instance-action-btn btn-delete enabled";
+          const safeClass = `instance-action-btn btn-safe ${
+            actionsLocked ? "disabled" : "enabled"
+          }${isSafeNumber && !actionsLocked ? " active" : ""}`;
           const isInlineWhatsappNameEditing =
             inlineWhatsappNameEditingInstance === inst.instanceName;
           const whatsappNameCell = isInlineWhatsappNameEditing
@@ -43972,7 +44118,9 @@
                 <button type="button" class="instance-inline-icon save whatsapp-name-inline-save-btn" data-instance="${inst.instanceName}" title="Salvar Nome (WhatsApp)">✓</button>
               </div>`
             : `<div class="instance-inline-wrap">
-                <button type="button" class="instance-inline-icon whatsapp-name-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar Nome (WhatsApp)">✎</button>
+                <button type="button" class="instance-inline-icon whatsapp-name-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar Nome (WhatsApp)" ${
+                  actionsLocked ? "disabled" : ""
+                }>✎</button>
                 <span>${inst.displayName || "—"}</span>
               </div>`;
           const isInlineEditing = inlineRenameEditingInstance === inst.instanceName;
@@ -43982,18 +44130,22 @@
                 <button type="button" class="instance-inline-icon save instance-inline-save-btn" data-instance="${inst.instanceName}" title="Salvar">✓</button>
               </div>`
             : `<div class="instance-inline-wrap">
-                <button type="button" class="instance-inline-icon instance-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar nome">✎</button>
+                <button type="button" class="instance-inline-icon instance-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar nome" ${
+                  actionsLocked ? "disabled" : ""
+                }>✎</button>
                 <span>${inst.instanceLabel || inst.instanceName}</span>
               </div>`;
 
-          const isDeleting = instancesDeleting.has(
-            String(inst.instanceName || "").trim().toLowerCase()
-          );
           const statusLabel = isDeleting ? "Excluindo…" : resolveInstanceAquecedorStatusLabel(inst);
           const statusClass = isDeleting ? "disconnected" : resolveInstanceStatusClass(inst, statusLabel);
+          const statusCountdownAt =
+            statusLabel === "Restrição"
+              ? usage.waRestrictionUntil ||
+                (inst.waRestrictionUntil ? String(inst.waRestrictionUntil) : "")
+              : usage.aquecedorPromoteAt;
           const statusHtml = isDeleting
             ? `<span class="status-text ${statusClass}">${statusLabel}</span>`
-            : buildInstanceStatusHtml(statusLabel, statusClass, usage.aquecedorPromoteAt);
+            : buildInstanceStatusHtml(statusLabel, statusClass, statusCountdownAt);
           if (isDeleting) tr.classList.add("instance-row-deleting");
 
           const actionsHtml = isDeleting
@@ -44003,16 +44155,24 @@
               </div>`
             : `<div class="instance-actions">
                 <button class="${refreshClass}" type="button" data-action="refresh" data-instance="${inst.instanceName}" data-enabled="${
-                  isDisconnected ? "1" : "0"
-                }" data-number="${inst.originalNumber || ""}">
+                  !actionsLocked && isDisconnected ? "1" : "0"
+                }" data-number="${inst.originalNumber || ""}" ${
+                  actionsLocked ? "disabled" : ""
+                }>
                   Atualizar</button>
                 <button class="${qrcodeClass}" type="button" data-action="qrcode" data-instance="${inst.instanceName}" data-enabled="${
-                  isDisconnected ? "1" : "0"
-                }" data-number="${inst.originalNumber || ""}">QRCode</button>
-                <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="1">
+                  !actionsLocked && isDisconnected ? "1" : "0"
+                }" data-number="${inst.originalNumber || ""}" ${
+                  actionsLocked ? "disabled" : ""
+                }>QRCode</button>
+                <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="${
+                  actionsLocked ? "0" : "1"
+                }" ${actionsLocked ? "disabled" : ""}>
                   Número Seguro
                 </button>
-                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-instance-label="${String(inst.instanceLabel || inst.instanceName || "").replace(/"/g, "&quot;")}" data-enabled="1">Deletar</button>
+                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-instance-label="${String(inst.instanceLabel || inst.instanceName || "").replace(/"/g, "&quot;")}" data-enabled="${
+                  actionsLocked ? "0" : "1"
+                }" ${actionsLocked ? "disabled" : ""}>Deletar</button>
               </div>`;
 
           tr.innerHTML = `
@@ -44025,19 +44185,19 @@
             <td title="Enviadas: ${inst.aquecedorMessagesSent.toLocaleString("pt-BR")} · Recebidas: ${inst.aquecedorMessagesReceived.toLocaleString("pt-BR")} (aquecedor)">${inst.messages.toLocaleString("pt-BR")}</td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
-                <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+                <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${actionsLocked ? "disabled" : ""} />
               </label>
             </td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
-                <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+                <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} ${actionsLocked ? "disabled" : ""} />
               </label>
             </td>
             ${
               showFazendaColumn
                 ? `<td>
               <label class="aquecedor-toggle" style="margin:0;">
-                <input type="checkbox" class="instance-role-toggle" data-role="fazenda" data-instance="${inst.instanceName}" ${usage.useFazenda ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+                <input type="checkbox" class="instance-role-toggle" data-role="fazenda" data-instance="${inst.instanceName}" ${usage.useFazenda ? "checked" : ""} ${actionsLocked ? "disabled" : ""} />
               </label>
             </td>`
                 : ""
@@ -44117,6 +44277,10 @@
         container.appendChild(table);
         if (document.querySelector(".preparing-countdown[data-promote-at]")) {
           ensurePreparingCountdownTimer();
+        }
+        if (document.querySelector(".wa-restriction-countdown[data-restrict-until]")) {
+          ensureWaRestrictionCountdownTimer();
+          ensureWaRestrictionRecheckTimer();
         }
       }
 
@@ -45937,6 +46101,13 @@
       async function callInstanceAction(action, instanceName, number = "") {
         try {
           if (!instanceName) return;
+          if (isInstanceWaRestricted({ instanceName, isOpen: true })) {
+            showToast(
+              "Instância em restrição WhatsApp. Aguarde a liberação (recheck a cada 60 min).",
+              "warning",
+            );
+            return;
+          }
 
           if (action === "qrcode") {
             openRegisterModal(instanceName, number);
@@ -46069,6 +46240,17 @@
             token,
             number,
           });
+
+          if (data?.alreadyConnected) {
+            const okMsg =
+              "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
+            setRegisterConnectStatus("success", okMsg);
+            markRegisterWizardValidationComplete();
+            await loadInstancesForInstanciasTab({ fullRefresh: true });
+            setRegisterWizardStep(4);
+            return;
+          }
 
           const imgSrc = resolveQrImageSrcFromPayload(data);
           if (!imgSrc) {
