@@ -1696,7 +1696,7 @@
       }
 
       .summary-card.summary-card-restriction {
-        border-left: 2px solid rgba(251, 191, 36, 0.55);
+        border-left: 2px solid rgba(248, 113, 113, 0.55);
       }
 
       .summary-label {
@@ -1715,9 +1715,12 @@
         color: #fca5a5;
       }
 
-      .summary-card.summary-card-preparing .summary-value,
-      .summary-card.summary-card-restriction .summary-value {
+      .summary-card.summary-card-preparing .summary-value {
         color: #fbbf24;
+      }
+
+      .summary-card.summary-card-restriction .summary-value {
+        color: #fca5a5;
       }
 
       #tab-dashboard .summary-card-warmth {
@@ -8405,13 +8408,24 @@
 
       .status-text.wa-restriction {
         color: #fbbf24;
+        text-transform: none;
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        line-height: 1.2;
+      }
+
+      .status-text.wa-restriction > span:first-child {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35em;
       }
 
       .status-text.status-with-countdown {
         display: inline-flex;
-        align-items: baseline;
+        align-items: center;
         flex-wrap: wrap;
-        gap: 0.4em;
+        gap: 0.45em;
       }
 
       .preparing-countdown,
@@ -8435,7 +8449,16 @@
         margin-right: 0.28em;
         vertical-align: -0.12em;
         color: #25d366;
+        flex-shrink: 0;
       }
+
+      .status-text.wa-restriction .status-wa-icon {
+        width: 1.35em;
+        height: 1.35em;
+        margin-right: 0;
+        vertical-align: middle;
+      }
+
       .status-wa-icon svg {
         width: 100%;
         height: 100%;

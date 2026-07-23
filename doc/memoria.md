@@ -1,4 +1,13 @@
-﻿## 2026-07-22 16:03 — Validação 1261 v2 forceRestart + watermark=now
+﻿## 2026-07-23 07:33 — Card Restrição com cores de Desconectados
+- Borda/valor do summary-card-restriction: vermelho `#fca5a5` / `rgba(248,113,113)`
+- Preparando permanece amarelo
+- LOG: doc/LOG-2026-07-23__073300__ui-card-restricao-cores-desconectados.md
+
+## 2026-07-23 07:31 — UI Restrição: fonte/ícone + "Restrição"
+- `text-transform: none` no `.wa-restriction`; fonte 1.05rem; ícone 1.35em
+- LOG: doc/LOG-2026-07-23__073100__ui-restricao-fonte-icone-maiuscula.md
+
+## 2026-07-22 16:03 — Validação 1261 v2 forceRestart + watermark=now
 - Retry reaproveitava sessão; watermark agora = max(histórico, start); UI forceRestart sempre; telefone com 9
 - Marker: DEPLOY-2026-07-22-validacao-1261-force-restart-v2 — exige Redeploy
 - LOG: doc/LOG-2026-07-22__160300__validacao-1261-force-restart-v2.md
