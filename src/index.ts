@@ -6950,16 +6950,42 @@ async function enrichInstanceItemsWithLiveConnection(
     items.map(async (row) => {
       const name = String(row?.name || "").trim();
       if (!name) return row;
+
       const liveState = await fetchEvoInstanceLiveState(name, { fresh: true });
-      if (!liveState) return row;
-      const restriction = await syncWhatsappConnectingRestriction(name, liveState);
-      return {
-        ...row,
-        connectionStatus: liveState,
-        liveConnectionStatus: liveState,
-        waRestrictionUntil: restriction?.restrictedUntil || null,
-        waRestrictionDetectedAt: restriction?.detectedAt || null,
-      };
+      const next: Record<string, unknown> = { ...row };
+
+      if (liveState) {
+        next.connectionStatus = liveState;
+        next.liveConnectionStatus = liveState;
+        const restriction = await syncWhatsappConnectingRestriction(name, liveState);
+        next.waRestrictionUntil = restriction?.restrictedUntil || null;
+        next.waRestrictionDetectedAt = restriction?.detectedAt || null;
+      } else {
+        // Sem live: não manter "open" fantasma do cache (causa oscilação conectado/desconectado).
+        const cached = String(row.connectionStatus || "").trim().toLowerCase();
+        if (cached === "open" || cached.includes("open")) {
+          next.connectionStatus = "unknown";
+          next.liveConnectionStatus = "unknown";
+        }
+      }
+
+      // Número: EVO costuma ter number=null e ownerJid preenchido (ex.: 1261 pós device_removed).
+      const currentNumber = String(next.number || "").trim();
+      if (!currentNumber) {
+        const fromFields = extractInstanceNumber(next);
+        if (fromFields) {
+          next.number = fromFields.includes("@") ? fromFields.split("@")[0] : fromFields;
+        } else {
+          try {
+            const resolved = await resolveEvoInstancePhone(name);
+            if (resolved) next.number = resolved;
+          } catch {
+            /* opcional */
+          }
+        }
+      }
+
+      return next;
     }),
   );
 }
@@ -7026,22 +7052,37 @@ async function buildInstancesSnapshotForAuth(
     auth.email || "",
   );
 
-  // Atualiza só o connectionStatus das instâncias do dono (não apaga o restante do cache).
+  // Atualiza connectionStatus + number das instâncias do dono (não apaga o restante do cache).
   if (cache?.items?.length) {
     const liveByName = new Map(
       enrichedItems.map((row) => [
         String(row?.name || "").trim().toLowerCase(),
-        String(row?.connectionStatus || "").trim().toLowerCase(),
+        {
+          status: String(row?.connectionStatus || "").trim().toLowerCase(),
+          number: String(row?.number || "").trim(),
+        },
       ]),
     );
     let cacheDirty = false;
     const nextCacheItems = cache.items.map((row) => {
       const key = String(row?.name || "").trim().toLowerCase();
-      const liveStatus = liveByName.get(key);
-      if (!liveStatus || !key) return row;
-      if (String(row?.connectionStatus || "").trim().toLowerCase() === liveStatus) return row;
-      cacheDirty = true;
-      return { ...row, connectionStatus: liveStatus };
+      const live = liveByName.get(key);
+      if (!live || !key) return row;
+      let changed = false;
+      let next = row;
+      if (
+        live.status &&
+        String(row?.connectionStatus || "").trim().toLowerCase() !== live.status
+      ) {
+        next = { ...next, connectionStatus: live.status };
+        changed = true;
+      }
+      if (live.number && !String(row?.number || "").trim()) {
+        next = { ...next, number: live.number };
+        changed = true;
+      }
+      if (changed) cacheDirty = true;
+      return next;
     });
     if (cacheDirty) {
       void saveEvoInstancesCache(nextCacheItems);

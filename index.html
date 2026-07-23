@@ -43480,9 +43480,12 @@
           ? instancesData.items
           : [];
         const normalizedItems = items.map((inst, idx) => {
-          const statusRaw = String(inst?.connectionStatus ?? "");
+          const statusRaw = String(
+            inst?.liveConnectionStatus || inst?.connectionStatus || "",
+          );
           const statusLc = statusRaw.toLowerCase();
-          const isOpen = statusLc.includes("open");
+          // Só "open" conta como conectado — connecting/close oscilam na EVO após device_removed.
+          const isOpen = statusLc === "open";
 
           const candidateInstance =
             inst?.name ??
@@ -43497,7 +43500,12 @@
               : String(candidateInstance);
 
           const numberCandidate =
-            inst?.number ?? inst?.phone ?? inst?.owner ?? inst?.ownerNumber ?? "";
+            inst?.number ??
+            inst?.phone ??
+            inst?.owner ??
+            inst?.ownerNumber ??
+            inst?.ownerJid ??
+            "";
           const normalizedNumberRaw = String(numberCandidate || "").trim();
           const normalizedNumberKey = normalizePhoneKey(normalizedNumberRaw);
           const displayNumber = normalizedNumberKey || normalizedNumberRaw || "—";

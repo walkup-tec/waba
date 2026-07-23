@@ -5575,16 +5575,39 @@ async function enrichInstanceItemsWithLiveConnection(items) {
         if (!name)
             return row;
         const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(name, { fresh: true });
-        if (!liveState)
-            return row;
-        const restriction = await (0, whatsapp_connecting_restriction_service_1.syncWhatsappConnectingRestriction)(name, liveState);
-        return {
-            ...row,
-            connectionStatus: liveState,
-            liveConnectionStatus: liveState,
-            waRestrictionUntil: restriction?.restrictedUntil || null,
-            waRestrictionDetectedAt: restriction?.detectedAt || null,
-        };
+        const next = { ...row };
+        if (liveState) {
+            next.connectionStatus = liveState;
+            next.liveConnectionStatus = liveState;
+            const restriction = await (0, whatsapp_connecting_restriction_service_1.syncWhatsappConnectingRestriction)(name, liveState);
+            next.waRestrictionUntil = restriction?.restrictedUntil || null;
+            next.waRestrictionDetectedAt = restriction?.detectedAt || null;
+        }
+        else {
+            const cached = String(row.connectionStatus || "").trim().toLowerCase();
+            if (cached === "open" || cached.includes("open")) {
+                next.connectionStatus = "unknown";
+                next.liveConnectionStatus = "unknown";
+            }
+        }
+        const currentNumber = String(next.number || "").trim();
+        if (!currentNumber) {
+            const fromFields = extractInstanceNumber(next);
+            if (fromFields) {
+                next.number = fromFields.includes("@") ? fromFields.split("@")[0] : fromFields;
+            }
+            else {
+                try {
+                    const resolved = await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(name);
+                    if (resolved)
+                        next.number = resolved;
+                }
+                catch {
+                    /* opcional */
+                }
+            }
+        }
+        return next;
     }));
 }
 async function buildInstancesSnapshotForAuth(auth) {
@@ -5630,18 +5653,31 @@ async function buildInstancesSnapshotForAuth(auth) {
     if (cache?.items?.length) {
         const liveByName = new Map(enrichedItems.map((row) => [
             String(row?.name || "").trim().toLowerCase(),
-            String(row?.connectionStatus || "").trim().toLowerCase(),
+            {
+                status: String(row?.connectionStatus || "").trim().toLowerCase(),
+                number: String(row?.number || "").trim(),
+            },
         ]));
         let cacheDirty = false;
         const nextCacheItems = cache.items.map((row) => {
             const key = String(row?.name || "").trim().toLowerCase();
-            const liveStatus = liveByName.get(key);
-            if (!liveStatus || !key)
+            const live = liveByName.get(key);
+            if (!live || !key)
                 return row;
-            if (String(row?.connectionStatus || "").trim().toLowerCase() === liveStatus)
-                return row;
-            cacheDirty = true;
-            return { ...row, connectionStatus: liveStatus };
+            let changed = false;
+            let next = row;
+            if (live.status &&
+                String(row?.connectionStatus || "").trim().toLowerCase() !== live.status) {
+                next = { ...next, connectionStatus: live.status };
+                changed = true;
+            }
+            if (live.number && !String(row?.number || "").trim()) {
+                next = { ...next, number: live.number };
+                changed = true;
+            }
+            if (changed)
+                cacheDirty = true;
+            return next;
         });
         if (cacheDirty) {
             void saveEvoInstancesCache(nextCacheItems);

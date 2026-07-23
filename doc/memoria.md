@@ -1,4 +1,9 @@
-﻿## 2026-07-23 08:00 — Validação reply no mesmo chat do CONFIRMAR
+﻿## 2026-07-23 08:15 — 1261: oscilação + número via ownerJid
+- EVO: close vs connecting + device_removed; number null / ownerJid ok
+- Fix UI+enrich; marker DEPLOY-2026-07-23-1261-numero-status-estavel — Redeploy
+- LOG: doc/LOG-2026-07-23__081500__1261-oscilacao-numero-ownerjid.md
+
+## 2026-07-23 08:00 — Validação reply no mesmo chat do CONFIRMAR
 - sendText prioriza JID do CONFIRMAR; prova só nesse chat (sem fromMe global)
 - Marker: DEPLOY-2026-07-23-validacao-reply-mesmo-chat — Redeploy Node
 - LOG: doc/LOG-2026-07-23__080000__validacao-reply-mesmo-chat.md
