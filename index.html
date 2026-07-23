@@ -44115,15 +44115,17 @@
             String(inst.instanceName || "").trim().toLowerCase()
           );
           const isWaRestricted = !isDeleting && isInstanceWaRestricted(inst);
+          // Restrição WhatsApp (connecting) NÃO bloqueia Atualizar/QR — é justamente quando precisa reconectar.
           const actionsLocked = isDeleting || isWaRestricted;
-          const refreshClass = actionsLocked
+          const reconnectLocked = isDeleting;
+          const refreshClass = reconnectLocked
             ? "instance-action-btn btn-refresh disabled"
-            : isDisconnected
+            : isDisconnected || isWaRestricted
               ? "instance-action-btn btn-refresh enabled"
               : "instance-action-btn btn-refresh disabled";
-          const qrcodeClass = actionsLocked
+          const qrcodeClass = reconnectLocked
             ? "instance-action-btn btn-qrcode disabled"
-            : isDisconnected
+            : isDisconnected || isWaRestricted
               ? "instance-action-btn btn-qrcode enabled"
               : "instance-action-btn btn-qrcode disabled";
           const deleteClass = actionsLocked
@@ -44177,15 +44179,15 @@
               </div>`
             : `<div class="instance-actions">
                 <button class="${refreshClass}" type="button" data-action="refresh" data-instance="${inst.instanceName}" data-enabled="${
-                  !actionsLocked && isDisconnected ? "1" : "0"
+                  !reconnectLocked && (isDisconnected || isWaRestricted) ? "1" : "0"
                 }" data-number="${inst.originalNumber || ""}" ${
-                  actionsLocked ? "disabled" : ""
+                  reconnectLocked || !(isDisconnected || isWaRestricted) ? "disabled" : ""
                 }>
                   Atualizar</button>
                 <button class="${qrcodeClass}" type="button" data-action="qrcode" data-instance="${inst.instanceName}" data-enabled="${
-                  !actionsLocked && isDisconnected ? "1" : "0"
+                  !reconnectLocked && (isDisconnected || isWaRestricted) ? "1" : "0"
                 }" data-number="${inst.originalNumber || ""}" ${
-                  actionsLocked ? "disabled" : ""
+                  reconnectLocked || !(isDisconnected || isWaRestricted) ? "disabled" : ""
                 }>QRCode</button>
                 <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="${
                   actionsLocked ? "0" : "1"
@@ -46023,6 +46025,9 @@
         }
         const msg = String(error.message || "").trim();
         const detail = String(error.detail || "").trim();
+        if (/failed to fetch|networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(msg)) {
+          return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
+        }
         if (msg && msg !== "Falha ao gerar QRCode." && !/^\s*\{/.test(msg)) {
           return msg;
         }
@@ -46141,15 +46146,9 @@
       async function callInstanceAction(action, instanceName, number = "") {
         try {
           if (!instanceName) return;
-          if (isInstanceWaRestricted({ instanceName, isOpen: true })) {
-            showToast(
-              "Instância em restrição WhatsApp. Aguarde a liberação (recheck a cada 60 min).",
-              "warning",
-            );
-            return;
-          }
+          // QR/Atualizar: nunca bloquear por tag Restrição (connecting) — usuário precisa do QR.
 
-          if (action === "qrcode") {
+          if (action === "qrcode" || action === "refresh") {
             openRegisterModal(instanceName, number);
             await refreshQrCodeInRegisterModal();
             return;
@@ -46157,9 +46156,7 @@
 
           let url = "";
           let method = "POST";
-          if (action === "refresh") {
-            url = `/instancias/${encodeURIComponent(instanceName)}/atualizar`;
-          } else if (action === "delete") {
+          if (action === "delete") {
             url = `/instancias/${encodeURIComponent(instanceName)}`;
             method = "DELETE";
           } else {
@@ -46173,7 +46170,7 @@
           const response = await fetchWithTimeout(
             url,
             { method, headers: { "Content-Type": "application/json" } },
-            action === "delete" ? 60000 : 12000
+            60000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -46184,7 +46181,12 @@
           showToast(data?.message || "Ação executada com sucesso.", "success");
           await carregar();
         } catch (error) {
-          showToast("Erro ao executar ação da instância.", "error");
+          const raw = String(error?.message || error || "");
+          if (/failed to fetch|networkerror|load failed|timeout/i.test(raw)) {
+            showToast("Erro de conexão com o servidor. Tente novamente em alguns segundos.", "error");
+          } else {
+            showToast("Erro ao executar ação da instância.", "error");
+          }
         } finally {
           if (action === "delete") {
             markInstanceDeleting(instanceName, false);
@@ -48668,7 +48670,7 @@
         const instanceName = btn.getAttribute("data-instance") || "";
         const number = btn.getAttribute("data-number") || "";
         if (action === "refresh") {
-          openRegisterModal(instanceName, number);
+          void callInstanceAction("refresh", instanceName, number);
           return;
         }
         if (action === "safe-number") {

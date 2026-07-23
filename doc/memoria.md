@@ -1,4 +1,10 @@
-﻿## 2026-07-23 07:33 — Card Restrição com cores de Desconectados
+﻿## 2026-07-23 07:45 — QR/Atualizar: connect-first (sem logout prévio)
+- Causa: logout+restart antes do connect → timeout/Failed to fetch; EVO connect já devolve QR
+- UI: botões liberados em Restrição; Atualizar também gera QR
+- Marker: DEPLOY-2026-07-23-qrcode-connect-first-no-logout — exige Redeploy Node
+- LOG: doc/LOG-2026-07-23__074500__qrcode-connect-first-sem-logout.md
+
+## 2026-07-23 07:33 — Card Restrição com cores de Desconectados
 - Borda/valor do summary-card-restriction: vermelho `#fca5a5` / `rgba(248,113,113)`
 - Preparando permanece amarelo
 - LOG: doc/LOG-2026-07-23__073300__ui-card-restricao-cores-desconectados.md

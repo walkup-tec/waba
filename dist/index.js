@@ -6749,12 +6749,22 @@ async function runRegistrarQrcode(input) {
             qrCode: qrFromCreate,
         };
     }
-    const shouldPrepareSession = !instanceWasNew || !createOk;
-    const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
-        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
-        retries: 3,
-        prepareSession: shouldPrepareSession,
+    // Doc EVO: GET /instance/connect já devolve QR em close/connecting.
+    // logout+restart antes costuma travar/timeout e derruba sessão connecting válida.
+    // https://doc.evolution-api.com/v2/api-reference/instance-controller/instance-connect
+    let qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 45000),
+        retries: 2,
+        prepareSession: false,
     });
+    if (!qrFetch.ok && (!instanceWasNew || !createOk)) {
+        console.warn(`[QR] ${name}: connect direto falhou (HTTP ${qrFetch.lastQrStatus}); tentando logout+restart.`);
+        qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+            timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+            retries: 3,
+            prepareSession: true,
+        });
+    }
     if (qrFetch.ok) {
         if (instanceWasNew) {
             await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
@@ -6841,7 +6851,8 @@ async function runRegistrarQrcode(input) {
 async function fetchInstanceQrCodeFromEvo(instanceName, number = "", options = {}) {
     const timeoutMs = options.timeoutMs ?? (0, evo_http_client_1.defaultEvoHttpTimeoutMs)();
     const retries = options.retries ?? 3;
-    if (options.prepareSession !== false) {
+    // prepareSession só sob demanda explícita (após falha do connect direto).
+    if (options.prepareSession === true) {
         await prepareEvoInstanceForQrConnect(instanceName);
     }
     const connectCandidates = buildEvoConnectQrCandidates(instanceName, number);
@@ -6920,7 +6931,16 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
             });
         }
         const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
-        const qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number);
+        let qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
+            prepareSession: false,
+        });
+        if (!qrFetch.ok) {
+            qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
+                prepareSession: true,
+                timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+                retries: 3,
+            });
+        }
         if (!qrFetch.ok) {
             return res.status(502).json({
                 error: describeEvoQrFailure(0, qrFetch.lastQrStatus, "", qrFetch.lastQrDetail),
