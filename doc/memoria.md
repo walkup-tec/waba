@@ -1,4 +1,9 @@
-﻿## 2026-07-23 08:15 — 1261: oscilação + número via ownerJid
+﻿## 2026-07-23 10:20 — Purge 555182001261/1261 na EVO
+- EVO: zero hits; connectionState/delete 1261 → 404 (já removida)
+- Script VPS limpa data WABA: scripts/purge-wa-number-1261-vps.sh
+- LOG: doc/LOG-2026-07-23__102000__purge-evo-555182001261-1261.md
+
+## 2026-07-23 08:15 — 1261: oscilação + número via ownerJid
 - EVO: close vs connecting + device_removed; number null / ownerJid ok
 - Fix UI+enrich; marker DEPLOY-2026-07-23-1261-numero-status-estavel — Redeploy
 - LOG: doc/LOG-2026-07-23__081500__1261-oscilacao-numero-ownerjid.md
