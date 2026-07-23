@@ -43656,8 +43656,10 @@
 
       function updateInstancesIndicators() {
         const base = buildOrderedInstancesBase();
-        const ativas = base.filter((i) => i.isOpen).length;
-        const desconectadas = base.filter((i) => !i.isOpen).length;
+        // Mesma regra dos filtros da lista (não usar só isOpen — Preparando/Restrição
+        // podem estar "open" na EVO e não ser "conectado" na UI).
+        const ativas = base.filter((i) => isInstanceConnectedFilter(i)).length;
+        const desconectadas = base.filter((i) => isInstanceDisconnectedFilter(i)).length;
         const preparando = base.filter((i) => isInstancePreparing(i)).length;
         const restricao = base.filter((i) => isInstanceWaRestricted(i)).length;
         const total = base.length;

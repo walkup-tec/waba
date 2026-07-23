@@ -1,4 +1,9 @@
-﻿## 2026-07-23 10:20 — Purge 555182001261/1261 na EVO
+﻿## 2026-07-23 13:56 — Card ativas alinhado ao filtro Conectados
+- Causa: card usava `isOpen` (incluía Preparando/Restrição abertas); filtro usa label `conectado`
+- Fix: `updateInstancesIndicators` usa `isInstanceConnectedFilter` / `isInstanceDisconnectedFilter`
+- LOG: doc/LOG-2026-07-23__135600__fix-card-ativas-vs-filtro-conectados.md
+
+## 2026-07-23 10:20 — Purge 555182001261/1261 na EVO
 - EVO: zero hits; connectionState/delete 1261 → 404 (já removida)
 - Script VPS limpa data WABA: scripts/purge-wa-number-1261-vps.sh
 - LOG: doc/LOG-2026-07-23__102000__purge-evo-555182001261-1261.md
