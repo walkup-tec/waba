@@ -10890,6 +10890,13 @@ const httpServer = app.listen(PORT, () => {
         }, AQUECEDOR_PREPARE_PROMOTE_MS);
         void (0, aquecedor_instance_lifecycle_service_1.syncAquecedorPreparingPromotions)();
         console.log(`[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`);
+        void (0, whatsapp_connecting_restriction_service_1.purgeAutomaticWhatsappConnectingRestrictions)()
+            .then((cleared) => {
+            if (cleared.length) {
+                console.warn(`[WA-Restrição] purge automático (connecting≠restrição): ${cleared.join(", ")}`);
+            }
+        })
+            .catch((err) => console.error("[WA-Restrição] purge automático:", err));
         setInterval(() => {
             (0, whatsapp_connecting_restriction_service_1.recheckWhatsappConnectingRestrictions)()
                 .then((result) => {
@@ -10900,7 +10907,7 @@ const httpServer = app.listen(PORT, () => {
                 .catch((err) => console.error("[WA-Restrição] recheck 60min:", err));
         }, whatsapp_connecting_restriction_service_1.WA_CONNECTING_RECHECK_MS);
         void (0, whatsapp_connecting_restriction_service_1.recheckWhatsappConnectingRestrictions)().catch((err) => console.error("[WA-Restrição] recheck inicial:", err));
-        console.log(`[WA-Restrição] recheck connectionState a cada ${Math.round(whatsapp_connecting_restriction_service_1.WA_CONNECTING_RECHECK_MS / 60000)}min`);
+        console.log(`[WA-Restrição] só tags explícitas; connecting EVO não gera Restrição`);
         if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
             if (load_env_1.WABA_ENV === "v01") {
                 console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");

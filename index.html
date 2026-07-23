@@ -43840,14 +43840,10 @@
 
       function resolveInstanceAquecedorStatusLabel(inst) {
         const usage = getInstanceUsage(inst.instanceName);
+        // Só restrição explícita (store). connecting EVO ≠ ban/restrição WA.
         if (usage.waRestrictionActive && usage.waRestrictionUntil) {
           return "Restrição";
         }
-        // Fallback: live connecting na própria lista (antes do uso-config atualizar)
-        const live = String(
-          inst?.liveConnectionStatus || inst?.connectionStatus || "",
-        ).toLowerCase();
-        if (live === "connecting") return "Restrição";
         if (usage.useAquecedor && usage.aquecedorStatusLabel) {
           return usage.aquecedorStatusLabel;
         }

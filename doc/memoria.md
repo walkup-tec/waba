@@ -1,4 +1,9 @@
-﻿## 2026-07-23 07:45 — QR/Atualizar: connect-first (sem logout prévio)
+﻿## 2026-07-23 07:50 — Restrição: connecting ≠ ban (6973 falso positivo)
+- 5181076973/6973 em connecting EVO não é restrição WA; purge tags automáticas
+- Marker: DEPLOY-2026-07-23-restricao-nao-por-connecting — Redeploy Node
+- LOG: doc/LOG-2026-07-23__075000__restricao-nao-por-connecting-6973.md
+
+## 2026-07-23 07:45 — QR/Atualizar: connect-first (sem logout prévio)
 - Causa: logout+restart antes do connect → timeout/Failed to fetch; EVO connect já devolve QR
 - UI: botões liberados em Restrição; Atualizar também gera QR
 - Marker: DEPLOY-2026-07-23-qrcode-connect-first-no-logout — exige Redeploy Node

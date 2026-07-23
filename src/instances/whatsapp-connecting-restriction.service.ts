@@ -5,7 +5,7 @@ import { fetchEvoInstanceLiveState } from "./evo-connection-state.service";
 
 const STORE_FILE = resolveDataFile("whatsapp-connecting-restriction.json");
 
-/** Janela de UI: 3 horas a partir da detecção de `connecting`. */
+/** Janela de UI: 3 horas (mantida para restrições explícitas futuras). */
 export const WA_CONNECTING_RESTRICTION_MS = 3 * 60 * 60 * 1000;
 
 /** Rechecagem periódica do connectionState. */
@@ -16,6 +16,8 @@ export type WhatsappConnectingRestrictionRow = {
   restrictedUntil: string;
   lastCheckedAt: string | null;
   lastLiveState: string | null;
+  /** Origem: só `explicit` gera tag. `connecting` automático foi desativado (falso positivo). */
+  source?: "explicit" | "connecting-auto";
 };
 
 type Store = {
@@ -63,15 +65,15 @@ async function saveStore(store: Store): Promise<void> {
   await fs.rename(tmp, STORE_FILE);
 }
 
-function isConnectingState(liveState: string): boolean {
-  // Apenas `connecting` (restrição WA observada). Não inclui pairing/qrcode do fluxo de QR.
-  return String(liveState || "").trim().toLowerCase() === "connecting";
-}
-
 /**
- * Alinha o store ao live state:
- * - connecting → inicia/mantém restrição UI de 3h
- * - qualquer outro estado → remove a tag
+ * Alinha o store ao live state.
+ *
+ * Importante: `connecting` sozinho NÃO é restrição WhatsApp.
+ * Costuma ser QR, reconnect após device_removed, ou Baileys reiniciando —
+ * falso positivo observado em 6973 / 5181076973.
+ *
+ * Tags automáticas antigas (`connecting-auto` ou sem source) são removidas.
+ * Restrição explícita futura pode usar `markWhatsappRestrictionExplicit`.
  */
 export async function syncWhatsappConnectingRestriction(
   instanceName: string,
@@ -81,42 +83,87 @@ export async function syncWhatsappConnectingRestriction(
   if (!name) return null;
   const key = normalizeKey(name);
   const store = await loadStore();
-  const now = Date.now();
   const state = String(liveState || "").trim().toLowerCase();
+  const existing = store.instances[key];
 
-  if (!isConnectingState(state)) {
-    if (store.instances[key]) {
-      delete store.instances[key];
-      await saveStore(store);
-    }
+  if (!existing) return null;
+
+  const source = existing.source || "connecting-auto";
+  if (source !== "explicit") {
+    delete store.instances[key];
+    await saveStore(store);
+    console.warn(
+      `[WA-Restrição] removida tag automática de ${name} (live=${state || "—"}; connecting ≠ restrição).`,
+    );
     return null;
   }
 
-  const existing = store.instances[key];
-  const existingUntil = existing?.restrictedUntil
-    ? new Date(existing.restrictedUntil).getTime()
-    : 0;
-  if (existing && Number.isFinite(existingUntil) && existingUntil > now) {
-    existing.lastCheckedAt = new Date().toISOString();
-    existing.lastLiveState = state;
-    store.instances[key] = existing;
+  // Restrição explícita: limpa se saiu de connecting/open com sucesso ou expirou.
+  const untilMs = new Date(existing.restrictedUntil).getTime();
+  const now = Date.now();
+  if (!Number.isFinite(untilMs) || untilMs <= now || state === "open" || state === "close") {
+    delete store.instances[key];
     await saveStore(store);
-    return { ...existing };
+    return null;
   }
 
+  existing.lastCheckedAt = new Date().toISOString();
+  existing.lastLiveState = state || existing.lastLiveState;
+  store.instances[key] = existing;
+  await saveStore(store);
+  return { ...existing };
+}
+
+/** Marca restrição explícita (ex.: recusa EVO com indício de ban) — não usar para connecting genérico. */
+export async function markWhatsappRestrictionExplicit(
+  instanceName: string,
+  detail?: string,
+): Promise<WhatsappConnectingRestrictionRow | null> {
+  const name = String(instanceName || "").trim();
+  if (!name) return null;
+  const key = normalizeKey(name);
+  const store = await loadStore();
+  const now = Date.now();
   const detectedAt = new Date().toISOString();
   const row: WhatsappConnectingRestrictionRow = {
     detectedAt,
     restrictedUntil: new Date(now + WA_CONNECTING_RESTRICTION_MS).toISOString(),
     lastCheckedAt: detectedAt,
-    lastLiveState: state,
+    lastLiveState: null,
+    source: "explicit",
   };
   store.instances[key] = row;
   await saveStore(store);
   console.warn(
-    `[WA-Restrição] ${name} em connecting — tag UI por 3h (até ${row.restrictedUntil}).`,
+    `[WA-Restrição] explícita em ${name} até ${row.restrictedUntil}${detail ? ` (${String(detail).slice(0, 120)})` : ""}.`,
   );
   return { ...row };
+}
+
+export async function clearWhatsappConnectingRestriction(
+  instanceName: string,
+): Promise<boolean> {
+  const key = normalizeKey(instanceName);
+  if (!key) return false;
+  const store = await loadStore();
+  if (!store.instances[key]) return false;
+  delete store.instances[key];
+  await saveStore(store);
+  return true;
+}
+
+/** Remove todas as tags automáticas legadas (connecting → restrição). */
+export async function purgeAutomaticWhatsappConnectingRestrictions(): Promise<string[]> {
+  const store = await loadStore();
+  const cleared: string[] = [];
+  for (const [key, row] of Object.entries(store.instances)) {
+    if ((row.source || "connecting-auto") !== "explicit") {
+      delete store.instances[key];
+      cleared.push(key);
+    }
+  }
+  if (cleared.length) await saveStore(store);
+  return cleared;
 }
 
 export async function getWhatsappConnectingRestrictionMap(): Promise<
@@ -131,7 +178,6 @@ export async function getWhatsappConnectingRestrictionMap(): Promise<
   >
 > {
   const store = await loadStore();
-  const now = Date.now();
   const out: Record<
     string,
     {
@@ -142,31 +188,31 @@ export async function getWhatsappConnectingRestrictionMap(): Promise<
     }
   > = {};
   let dirty = false;
+  const now = Date.now();
   for (const [key, row] of Object.entries(store.instances)) {
-    const untilMs = new Date(row.restrictedUntil).getTime();
-    if (!Number.isFinite(untilMs)) {
+    if ((row.source || "connecting-auto") !== "explicit") {
       delete store.instances[key];
       dirty = true;
       continue;
     }
-    // Countdown expirado: mantém a linha até o recheck 60min limpar via live state,
-    // mas a UI trata active=false se quiser — pedimos tag enquanto connecting.
-    // Se o until passou e ainda não rechecamos, mantém active para a tag (countdown "em breve")
-    // até o tick de 60min confirmar que saiu de connecting.
+    const untilMs = new Date(row.restrictedUntil).getTime();
+    if (!Number.isFinite(untilMs) || untilMs <= now) {
+      delete store.instances[key];
+      dirty = true;
+      continue;
+    }
     out[key] = {
       restrictedUntil: row.restrictedUntil,
       detectedAt: row.detectedAt,
       statusLabel: "Restrição",
       active: true,
     };
-    void untilMs;
-    void now;
   }
   if (dirty) await saveStore(store);
   return out;
 }
 
-/** Rechecagem: consulta connectionState e remove quem não está mais connecting. */
+/** Rechecagem: consulta connectionState e remove quem não deve mais ter tag. */
 export async function recheckWhatsappConnectingRestrictions(): Promise<{
   cleared: string[];
   stillRestricted: string[];

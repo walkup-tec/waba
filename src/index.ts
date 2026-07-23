@@ -80,6 +80,7 @@ import {
 } from "./instances/evo-connection-state.service";
 import {
   getWhatsappConnectingRestrictionMap,
+  purgeAutomaticWhatsappConnectingRestrictions,
   recheckWhatsappConnectingRestrictions,
   syncWhatsappConnectingRestriction,
   WA_CONNECTING_RECHECK_MS,
@@ -12779,6 +12780,15 @@ const httpServer = app.listen(PORT, () => {
       `[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`,
     );
 
+    void purgeAutomaticWhatsappConnectingRestrictions()
+      .then((cleared) => {
+        if (cleared.length) {
+          console.warn(
+            `[WA-Restrição] purge automático (connecting≠restrição): ${cleared.join(", ")}`,
+          );
+        }
+      })
+      .catch((err) => console.error("[WA-Restrição] purge automático:", err));
     setInterval(() => {
       recheckWhatsappConnectingRestrictions()
         .then((result) => {
@@ -12794,7 +12804,7 @@ const httpServer = app.listen(PORT, () => {
       console.error("[WA-Restrição] recheck inicial:", err),
     );
     console.log(
-      `[WA-Restrição] recheck connectionState a cada ${Math.round(WA_CONNECTING_RECHECK_MS / 60000)}min`,
+      `[WA-Restrição] só tags explícitas; connecting EVO não gera Restrição`,
     );
 
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
