@@ -89,6 +89,8 @@ type ReceivePollCache = {
 type ValidationRecord = InboundValidationStatus & {
   replyMarker: string;
   referenceJid: string | null;
+  /** JID exato do chat onde chegou o CONFIRMAR (prova da resposta deve ser neste chat). */
+  inboundChatJid: string | null;
   inboundReceivedAt: number | null;
   validationStartedAtMs: number;
   /** Maior timestamp de CONFIRMAR já existente na EVO ao iniciar — ignora histórico. */
@@ -243,6 +245,7 @@ function resolveSendTarget(referenceJid: string | null, referenceNumber: string 
 function buildSendNumberCandidates(
   referenceJid: string | null,
   referenceNumber: string | null,
+  preferredExact?: string | null,
 ): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -252,6 +255,21 @@ function buildSendNumberCandidates(
     seen.add(value);
     out.push(value);
   };
+
+  // Prioridade: exatamente o chat/número do CONFIRMAR (evita enviar para variante com/sem 9).
+  const preferred = String(preferredExact || "").trim();
+  if (preferred) {
+    if (preferred.includes("@") && isPhoneWhatsAppJid(preferred) && !isLidJid(preferred)) {
+      add(preferred);
+      add(normalizeWhatsAppNumber(preferred.split("@")[0] || ""));
+    } else if (!preferred.includes("@")) {
+      const digits = normalizeWhatsAppNumber(preferred);
+      if (digits) {
+        add(digits);
+        add(`${digits}@s.whatsapp.net`);
+      }
+    }
+  }
 
   const jid = String(referenceJid || "").trim();
   const fromNumber = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
@@ -986,7 +1004,7 @@ async function findReplyInChat(
     remoteCandidates.add(jid);
     remoteCandidates.add(jid.replace(/@s\.whatsapp\.net$/i, ""));
   }
-  for (const candidate of buildSendNumberCandidates(referenceJid, referenceNumber || null)) {
+  for (const candidate of buildSendNumberCandidates(referenceJid, referenceNumber || null, jid)) {
     const digits = normalizeWhatsAppNumber(
       candidate.includes("@") ? candidate.split("@")[0] : candidate,
     );
@@ -995,13 +1013,15 @@ async function findReplyInChat(
     remoteCandidates.add(`${digits}@s.whatsapp.net`);
   }
 
+  if (!remoteCandidates.size) return false;
+
+  // SOMENTE o chat do CONFIRMAR — busca global fromMe gerava falso OK em outro JID (9º dígito).
   const bodies: Record<string, unknown>[] = [];
   for (const remoteJid of remoteCandidates) {
+    bodies.push({ where: { key: { remoteJid, fromMe: true } }, limit: 40 });
     bodies.push({ where: { key: { remoteJid } }, limit: 40 });
     bodies.push({ where: { key: { remoteJid } }, take: 40 });
   }
-  bodies.push({ where: { key: { fromMe: true } }, limit: 80 });
-  bodies.push({ limit: 100 });
 
   for (const url of buildFindMessagesUrls(instanceName)) {
     for (const body of bodies) {
@@ -1013,7 +1033,7 @@ async function findReplyInChat(
         if (!node || typeof node !== "object") continue;
         const obj = node as Record<string, unknown>;
         const fromMe = extractFromMe(obj);
-        if (fromMe === false) continue;
+        if (fromMe !== true) continue;
         const ts = extractMessageTimestampMs(obj);
         if (minTimestampMs != null) {
           if (ts == null || ts < minTimestampMs) continue;
@@ -1050,12 +1070,17 @@ function markInboundReceived(record: ValidationRecord, hit: InboundHit, via: str
   const phoneDigits = normalizeWhatsAppNumber(hit.referenceNumber || "");
   const phoneJid =
     phoneDigits.length >= 12 ? `${phoneDigits}@s.whatsapp.net` : "";
+  const inboundJid = String(hit.remoteJid || "").trim();
   record.referenceNumber = phoneDigits || hit.referenceNumber;
+  record.inboundChatJid =
+    phoneJid ||
+    (isPhoneWhatsAppJid(inboundJid) && !isLidJid(inboundJid) ? inboundJid : "") ||
+    inboundJid ||
+    null;
   record.referenceJid =
     phoneJid ||
-    (isPhoneWhatsAppJid(hit.remoteJid) && !isLidJid(hit.remoteJid)
-      ? hit.remoteJid
-      : hit.remoteJid);
+    (isPhoneWhatsAppJid(inboundJid) && !isLidJid(inboundJid) ? inboundJid : inboundJid) ||
+    null;
   record.inboundReceivedAt = hit.messageTimestampMs;
   record.phase = "confirm_received";
   record.receiveTest = {
@@ -1082,11 +1107,11 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
     record.sendAttempted &&
     record.sendHttpOk &&
     record.sendTest.success !== true &&
-    record.referenceJid
+    (record.inboundChatJid || record.referenceJid)
   ) {
     const found = await findReplyInChat(
       record.instanceName,
-      record.referenceJid,
+      record.inboundChatJid || record.referenceJid || "",
       record.replyMarker,
       record.referenceNumber,
       (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS,
@@ -1104,15 +1129,31 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
 async function sendContextualReply(record: ValidationRecord): Promise<void> {
   if (record.cancelled || record.finished || record.sendAttempted) return;
 
+  const open = await ensureValidationInstanceOpen(record);
+  if (!open) {
+    record.sendAttempted = true;
+    record.sendAttemptedAtMs = Date.now();
+    record.sendHttpOk = false;
+    record.sendDetail = "Instância não está open para enviar a resposta.";
+    record.sendTest = {
+      success: false,
+      detail:
+        "A instância não ficou conectada a tempo para enviar «Validação WABA concluída». Escaneie o QR de novo ou use Atualizar.",
+    };
+    tryFinalize(record);
+    return;
+  }
+
   const convKey = conversationReplyKey(record);
   if (convKey) {
     const lastSentAt = recentReplyByConversation.get(convKey);
     if (lastSentAt != null && Date.now() - lastSentAt < REPLY_DEDUPE_MS) {
+      const proofJid = record.inboundChatJid || record.referenceJid;
       const found =
-        record.referenceJid &&
+        proofJid &&
         (await findReplyInChat(
           record.instanceName,
-          record.referenceJid,
+          proofJid,
           record.replyMarker,
           record.referenceNumber,
           record.validationStartedAtMs - INBOUND_CLOCK_SKEW_MS,
@@ -1141,7 +1182,16 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   record.sendAttemptedAtMs = Date.now();
   const text = `Validação WABA concluída. ${record.replyMarker}`;
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
-  const candidates = buildSendNumberCandidates(record.referenceJid, record.referenceNumber);
+  const preferred =
+    record.inboundChatJid ||
+    record.referenceJid ||
+    record.referenceNumber ||
+    "";
+  const candidates = buildSendNumberCandidates(
+    record.referenceJid,
+    record.referenceNumber,
+    preferred,
+  );
   if (!candidates.length || candidates.every((c) => isLidJid(c))) {
     if (convKey) replyInFlight.delete(convKey);
     record.sendHttpOk = false;
@@ -1159,6 +1209,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   let anyHttpOk = false;
   const replyMinTs =
     (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS;
+  const proofChatJid = record.inboundChatJid || record.referenceJid || preferred;
   try {
     for (const numero of candidates) {
       if (record.cancelled || record.finished) return;
@@ -1185,11 +1236,11 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
         detail: "Resposta enviada; confirmando no histórico da conversa…",
       };
 
-      for (let attempt = 0; attempt < 4; attempt++) {
-        if (attempt > 0) await new Promise((r) => setTimeout(r, 1200));
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1400));
         const found = await findReplyInChat(
           record.instanceName,
-          record.referenceJid || numero,
+          proofChatJid || numero,
           record.replyMarker,
           record.referenceNumber || numero,
           replyMinTs,
@@ -1204,8 +1255,14 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
           return;
         }
       }
-      // HTTP OK sem prova — tenta próximo candidato de número.
-      lastDetail = `HTTP OK sem mensagem no chat (destino ${numero})`;
+      // HTTP OK sem prova neste chat — tenta próximo candidato (variante BR).
+      lastDetail = `HTTP OK sem mensagem no chat do CONFIRMAR (destino ${numero})`;
+      console.warn(
+        "[validacao-inbound] send sem prova no chat",
+        record.instanceName,
+        numero,
+        `proof=${proofChatJid}`,
+      );
     }
 
     if (anyHttpOk) {
@@ -1215,7 +1272,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
       record.sendTest = {
         success: null,
         detail:
-          "A API aceitou o envio, mas a mensagem ainda não apareceu no chat. Aguarde ou reenvie CONFIRMAR.",
+          "A API aceitou o envio, mas a mensagem ainda não apareceu no chat do CONFIRMAR. Aguarde ou reenvie CONFIRMAR.",
       };
       return;
     }
@@ -1319,11 +1376,11 @@ async function processValidationRecordInWorker(record: ValidationRecord): Promis
     record.sendAttempted &&
     record.sendHttpOk &&
     record.sendTest.success !== true &&
-    record.referenceJid
+    (record.inboundChatJid || record.referenceJid)
   ) {
     const found = await findReplyInChat(
       record.instanceName,
-      record.referenceJid,
+      record.inboundChatJid || record.referenceJid || "",
       record.replyMarker,
       record.referenceNumber,
       (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS,
@@ -1596,6 +1653,7 @@ export async function startInboundValidation(input: {
     restrictionSuspected: false,
     referenceNumber: null,
     referenceJid: null,
+    inboundChatJid: null,
     inboundReceivedAt: null,
     validationStartedAtMs,
     keywordHighWaterMarkMs,

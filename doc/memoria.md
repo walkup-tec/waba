@@ -1,4 +1,12 @@
-﻿## 2026-07-23 07:50 — Restrição: connecting ≠ ban (6973 falso positivo)
+﻿## 2026-07-23 08:00 — Validação reply no mesmo chat do CONFIRMAR
+- sendText prioriza JID do CONFIRMAR; prova só nesse chat (sem fromMe global)
+- Marker: DEPLOY-2026-07-23-validacao-reply-mesmo-chat — Redeploy Node
+- LOG: doc/LOG-2026-07-23__080000__validacao-reply-mesmo-chat.md
+
+## 2026-07-23 07:52 — UI Restrição: ícone −7% / fonte −5%
+- Ícone 1.35em→1.2555em; fonte 1.05rem→0.9975rem
+
+## 2026-07-23 07:50 — Restrição: connecting ≠ ban (6973 falso positivo)
 - 5181076973/6973 em connecting EVO não é restrição WA; purge tags automáticas
 - Marker: DEPLOY-2026-07-23-restricao-nao-por-connecting — Redeploy Node
 - LOG: doc/LOG-2026-07-23__075000__restricao-nao-por-connecting-6973.md
