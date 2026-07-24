@@ -1,6 +1,5 @@
 /**
- * Simula pickAquecedorCombinationAsync (src/index.ts) com dados reais do Supabase
- * para diagnosticar por que certos pares nunca são escolhidos no aquecedor.
+ * Simula RelationshipManager (saldo + volume entre pares + anti-repetição).
  *
  * Uso: node scripts/simulate-aquecedor-pick.cjs [caminho-do-.env]
  */
@@ -16,6 +15,7 @@ for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
 const SUPABASE_URL = env.SUPABASE_URL;
 const SUPABASE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 const LOOKBACK = 500;
+const MAX_BALANCE_ABS = 2;
 
 const connected = [
   { instancia: "walkup", numero: "555197462102" },
@@ -51,9 +51,6 @@ function resolveByNumber(rawNumber) {
 function pairKey(a, b) {
   return a.localeCompare(b) <= 0 ? `${a}|${b}` : `${b}|${a}`;
 }
-function directedKey(o, d) {
-  return `${o.trim().toLowerCase()}\u2192${d.trim().toLowerCase()}`;
-}
 
 async function supaGet(pathAndQuery) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
@@ -67,7 +64,6 @@ async function loadEvents() {
   const names = connected.map((c) => c.instancia);
   const events = [];
   const connectedCanonical = new Set(names.map((n) => n.toLowerCase()));
-
   const aq = await supaGet(
     `aquecedor?select=instancia,numero_destino,sent_at&status=eq.ENVIADO&instancia=in.(${names
       .map((n) => `"${n}"`)
@@ -78,321 +74,227 @@ async function loadEvents() {
     const toInst = resolveByNumber(row.numero_destino);
     const at = String(row.sent_at || "").trim();
     if (
-      fromInst && toInst && at &&
+      fromInst &&
+      toInst &&
+      at &&
       connectedCanonical.has(fromInst.toLowerCase()) &&
       connectedCanonical.has(toInst.toLowerCase())
     ) {
       events.push({ at, fromInst, toInst });
     }
   }
-
-  const logs = await supaGet(
-    `logs_envios?select=instancia_origem,instancia_destino,data_envio&instancia_origem=in.(${names
-      .map((n) => `"${n}"`)
-      .join(",")})&instancia_destino=in.(${names
-      .map((n) => `"${n}"`)
-      .join(",")})&order=data_envio.desc&limit=${LOOKBACK}`,
-  );
-  for (const row of logs) {
-    const fromInst = resolveCanonical(row.instancia_origem);
-    const toInst = resolveCanonical(row.instancia_destino);
-    const at = String(row.data_envio || "").trim();
-    if (
-      fromInst && toInst && at &&
-      connectedCanonical.has(fromInst.toLowerCase()) &&
-      connectedCanonical.has(toInst.toLowerCase())
-    ) {
-      events.push({ at, fromInst, toInst });
-    }
-  }
-
-  const dedup = new Map();
-  for (const ev of events) {
-    const atMs = new Date(ev.at).getTime();
-    const bucket = Number.isFinite(atMs) ? Math.floor(atMs / 1000) : ev.at;
-    const key = `${ev.fromInst.toLowerCase()}|${ev.toInst.toLowerCase()}|${bucket}`;
-    if (!dedup.has(key)) dedup.set(key, ev);
-  }
-  return Array.from(dedup.values()).sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
-  );
+  events.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return events;
 }
 
-const EQUITY_WINDOW_MS = 24 * 60 * 60 * 1000;
-const PAIR_TURN_STALE_MS = 6 * 60 * 60 * 1000;
-
-function buildTurnManager(events) {
-  const instanceStats = new Map();
-  const pairLastSender = new Map();
-  const pairStates = new Map();
-  const directedSendCounts = new Map();
-  const pairLastEventAtMs = new Map();
-  const equityWindowStartMs = Date.now() - EQUITY_WINDOW_MS;
-  const pairTurnStaleBeforeMs = Date.now() - PAIR_TURN_STALE_MS;
-
-  const ensureStats = (canonical) => {
-    const key = canonical.toLowerCase();
-    let stats = instanceStats.get(key);
-    if (!stats) {
-      stats = {
-        canonical,
-        lastSentAt: null,
-        lastReceivedAt: null,
-        lastReceivedFrom: null,
-        sendCount: 0,
-        receiveCount: 0,
-        outboundSinceInbound: 0,
-      };
-      instanceStats.set(key, stats);
-    }
-    return stats;
-  };
-  const ensurePairState = (key) => {
-    let st = pairStates.get(key);
-    if (!st) {
-      st = { pendingReplyFrom: null, exchangeCount: 0 };
-      pairStates.set(key, st);
-    }
-    return st;
-  };
-
-  for (const ev of events) {
-    const evAtMs = new Date(ev.at).getTime();
-    const withinEquityWindow = Number.isFinite(evAtMs) && evAtMs >= equityWindowStartMs;
-    const fromStats = ensureStats(ev.fromInst);
-    const toStats = ensureStats(ev.toInst);
-    if (withinEquityWindow) {
-      fromStats.sendCount += 1;
-      toStats.receiveCount += 1;
-      const dk = directedKey(ev.fromInst, ev.toInst);
-      directedSendCounts.set(dk, (directedSendCounts.get(dk) || 0) + 1);
-    }
-    fromStats.lastSentAt = ev.at;
-    toStats.lastReceivedAt = ev.at;
-    toStats.lastReceivedFrom = ev.fromInst;
-    fromStats.outboundSinceInbound += 1;
-    toStats.outboundSinceInbound = 0;
-    pairLastSender.set(pairKey(ev.fromInst, ev.toInst), ev.fromInst);
-
-    const pk = pairKey(ev.fromInst, ev.toInst);
-    if (Number.isFinite(evAtMs)) pairLastEventAtMs.set(pk, evAtMs);
-    const ps = ensurePairState(pk);
-    ps.exchangeCount += 1;
-    if (ps.pendingReplyFrom?.toLowerCase() === ev.fromInst.toLowerCase()) {
-      ps.pendingReplyFrom = null;
-    } else {
-      ps.pendingReplyFrom = ev.toInst;
-    }
-  }
-
-  for (const [pk, lastAtMs] of pairLastEventAtMs) {
-    if (lastAtMs >= pairTurnStaleBeforeMs) continue;
-    pairLastSender.delete(pk);
-    const ps = pairStates.get(pk);
-    if (ps) ps.pendingReplyFrom = null;
-  }
-  for (const stats of instanceStats.values()) {
-    const lastSentMs = stats.lastSentAt ? new Date(stats.lastSentAt).getTime() : NaN;
-    if (Number.isFinite(lastSentMs) && lastSentMs < pairTurnStaleBeforeMs) {
-      stats.outboundSinceInbound = 0;
-    }
-  }
-
-  const recentDirectedEdges = [];
-  for (let i = events.length - 1; i >= 0 && recentDirectedEdges.length < 32; i -= 1) {
-    recentDirectedEdges.push(directedKey(events[i].fromInst, events[i].toInst));
-  }
-
-  const owesPairReply = (origem, destino) => {
-    const ps = pairStates.get(pairKey(origem, destino));
-    return ps?.pendingReplyFrom?.toLowerCase() === origem.toLowerCase();
-  };
-  const canSendDirected = (origem, destino) => {
-    if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return false;
-    const lastSender = pairLastSender.get(pairKey(origem, destino));
-    if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) return false;
-    if (owesPairReply(origem, destino)) return true;
-    const stats = instanceStats.get(origem.toLowerCase());
-    if (!stats?.lastSentAt || stats.outboundSinceInbound === 0) return true;
-    return false;
-  };
-  const blockReason = (origem, destino) => {
-    const lastSender = pairLastSender.get(pairKey(origem, destino));
-    const stats = instanceStats.get(origem.toLowerCase());
-    if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
-      return `${origem} enviou por último no par; aguarda resposta de ${destino}`;
-    }
-    if (owesPairReply(origem, destino)) return "(deve responder — liberado)";
-    if (stats && stats.outboundSinceInbound > 0) {
-      return `${origem} tem ${stats.outboundSinceInbound} envio(s) sem inbound (último recebeu de ${stats.lastReceivedFrom || "?"})`;
-    }
-    return "livre";
-  };
-
-  const lastEvent = events.length ? events[events.length - 1] : null;
-  const lastEventPairKey = lastEvent ? pairKey(lastEvent.fromInst, lastEvent.toInst) : null;
-
+function emptyPair(a, b) {
   return {
-    instanceStats,
-    pairLastSender,
-    pairStates,
-    directedSendCounts,
-    recentDirectedEdges,
-    lastEventPairKey,
-    pairLastEventAtMs,
-    equityWindowStartMs,
-    owesPairReply,
-    canSendDirected,
-    blockReason,
-    getDirectedSendCount: (o, d) => directedSendCounts.get(directedKey(o, d)) || 0,
-    getOriginSendCount: (o) => instanceStats.get(o.toLowerCase())?.sendCount || 0,
-    getDestReceiveCount: (d) => instanceStats.get(d.toLowerCase())?.receiveCount || 0,
-    getUndirectedPairSendTotal: (a, b) =>
-      (directedSendCounts.get(directedKey(a, b)) || 0) +
-      (directedSendCounts.get(directedKey(b, a)) || 0),
-    getTotalDirectedSendCount: () =>
-      Array.from(directedSendCounts.values()).reduce((acc, v) => acc + v, 0),
+    a,
+    b,
+    sentAB: 0,
+    sentBA: 0,
+    balance: 0,
+    lastMessageAt: null,
+    lastDirection: null,
+    totalMessages: 0,
+    usageToday: 0,
   };
 }
 
-function pick(manager, combinations, startIndex) {
-  let eligible = [];
-  for (let index = 0; index < combinations.length; index += 1) {
-    const combo = combinations[index];
-    if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino)) continue;
-    eligible.push({ combo, index });
-  }
-  if (!eligible.length) return { chosen: null, eligible, scored: [] };
-
-  const instanceCount = Math.max(2, connected.length);
-  const maxShare = Math.max(0.5, 2 / instanceCount);
-  const total = manager.getTotalDirectedSendCount();
-  if (total >= instanceCount) {
-    const nonSaturated = eligible.filter(
-      ({ combo }) =>
-        manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino) /
-          total <=
-        maxShare,
-    );
-    if (nonSaturated.length) eligible = nonSaturated;
-  }
-
-  let minPairTotal = Infinity, minDirected = Infinity, minOrigin = Infinity, minDest = Infinity;
-  for (const { combo } of eligible) {
-    minPairTotal = Math.min(
-      minPairTotal,
-      manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino),
-    );
-    minDirected = Math.min(
-      minDirected,
-      manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino),
-    );
-    minOrigin = Math.min(minOrigin, manager.getOriginSendCount(combo.instancia_origem));
-    minDest = Math.min(minDest, manager.getDestReceiveCount(combo.instancia_destino));
-  }
-  if (!Number.isFinite(minPairTotal)) minPairTotal = 0;
-  if (!Number.isFinite(minDirected)) minDirected = 0;
-  if (!Number.isFinite(minOrigin)) minOrigin = 0;
-  if (!Number.isFinite(minDest)) minDest = 0;
-
-  const scored = eligible.map(({ combo, index }) => {
-    const directed = manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino);
-    const pairTotal = manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino);
-    const oSend = manager.getOriginSendCount(combo.instancia_origem);
-    const dRecv = manager.getDestReceiveCount(combo.instancia_destino);
-    let score = 0;
-    const pk = pairKey(combo.instancia_origem, combo.instancia_destino);
-    if (manager.lastEventPairKey && pk === manager.lastEventPairKey) {
-      score += 1e18;
+function buildGraph(events) {
+  const pairs = new Map();
+  const phones = new Map();
+  const ensurePhone = (name) => {
+    if (!phones.has(name)) phones.set(name, { sent: 0, received: 0 });
+    return phones.get(name);
+  };
+  for (const c of connected) {
+    ensurePhone(c.instancia);
+    for (const d of connected) {
+      if (c.instancia === d.instancia) continue;
+      const key = pairKey(c.instancia, d.instancia);
+      if (!pairs.has(key)) {
+        const [a, b] = key.split("|");
+        pairs.set(key, emptyPair(a, b));
+      }
     }
-    const pairLastAtMs = manager.pairLastEventAtMs.get(pk) ?? 0;
-    const recencyMinutes = Math.max(0, (pairLastAtMs - manager.equityWindowStartMs) / 60000);
-    score += recencyMinutes * 1e12;
-    score += (pairTotal - minPairTotal) * 1e9;
-    score += (directed - minDirected) * 1e6;
-    score += (oSend - minOrigin) * 1e3;
-    score += (dRecv - minDest) * 100;
-    const recentIdx = manager.recentDirectedEdges.indexOf(
-      directedKey(combo.instancia_origem, combo.instancia_destino),
-    );
-    if (recentIdx >= 0) score += (recentIdx + 1) * 10;
-    if (manager.owesPairReply(combo.instancia_origem, combo.instancia_destino)) score -= 500;
-    const rotation = (((index - startIndex) % 1000) + 1000) % 1000;
-    score += rotation * 0.001;
-    return { combo, index, score, pairTotal, directed, oSend, dRecv };
+  }
+  let lastSelectedPairKey = null;
+  for (const ev of events) {
+    const key = pairKey(ev.fromInst, ev.toInst);
+    let pair = pairs.get(key);
+    if (!pair) {
+      const [a, b] = key.split("|");
+      pair = emptyPair(a, b);
+      pairs.set(key, pair);
+    }
+    const direction =
+      ev.fromInst.localeCompare(pair.a) === 0 && ev.toInst.localeCompare(pair.b) === 0
+        ? "a_to_b"
+        : "b_to_a";
+    if (direction === "a_to_b") pair.sentAB += 1;
+    else pair.sentBA += 1;
+    pair.lastDirection = direction;
+    pair.lastMessageAt = ev.at;
+    pair.usageToday += 1;
+    pair.balance = pair.sentAB - pair.sentBA;
+    pair.totalMessages = pair.sentAB + pair.sentBA;
+    ensurePhone(ev.fromInst).sent += 1;
+    ensurePhone(ev.toInst).received += 1;
+    lastSelectedPairKey = key;
+  }
+  return { pairs, phones, lastSelectedPairKey };
+}
+
+function directionAllowed(pair, origem, destino) {
+  const direction =
+    origem.localeCompare(pair.a) === 0 && destino.localeCompare(pair.b) === 0
+      ? "a_to_b"
+      : "b_to_a";
+  if (pair.lastDirection === direction && pair.totalMessages > 0) {
+    return { ok: false, reason: "mesmo sentido consecutivo" };
+  }
+  const nextBalance = direction === "a_to_b" ? pair.balance + 1 : pair.balance - 1;
+  if (Math.abs(nextBalance) > MAX_BALANCE_ABS) {
+    return { ok: false, reason: `|saldo|>${MAX_BALANCE_ABS}` };
+  }
+  if (Math.abs(pair.balance) >= 1 && Math.abs(nextBalance) >= Math.abs(pair.balance)) {
+    return { ok: false, reason: "não reduz desequilíbrio" };
+  }
+  return { ok: true, direction, nextBalance };
+}
+
+function avgPairTotal(graph) {
+  const vals = [...graph.pairs.values()].map((p) => p.totalMessages);
+  if (!vals.length) return 0;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
+function pick(graph, startIndex) {
+  const names = connected.map((c) => c.instancia);
+  let raw = [];
+  for (let i = 0; i < names.length; i += 1) {
+    for (let j = i + 1; j < names.length; j += 1) {
+      const key = pairKey(names[i], names[j]);
+      const pair = graph.pairs.get(key);
+      if (!pair) continue;
+      for (const [origem, destino] of [
+        [pair.a, pair.b],
+        [pair.b, pair.a],
+      ]) {
+        const gate = directionAllowed(pair, origem, destino);
+        if (!gate.ok) continue;
+        raw.push({ origem, destino, pair, pairKey: key, nextBalance: gate.nextBalance });
+      }
+    }
+  }
+  const prefer = raw.filter((c) => Math.abs(c.nextBalance) <= 1);
+  let pool = prefer.length ? prefer : raw;
+  if (graph.lastSelectedPairKey && pool.length > 1) {
+    const without = pool.filter((c) => c.pairKey !== graph.lastSelectedPairKey);
+    if (without.length) pool = without;
+  }
+  if (!pool.length) return { chosen: null, scored: [] };
+
+  const avgSent =
+    names.reduce((s, n) => s + (graph.phones.get(n)?.sent || 0), 0) / names.length;
+  const avgRecv =
+    names.reduce((s, n) => s + (graph.phones.get(n)?.received || 0), 0) / names.length;
+  const avgTotal = avgPairTotal(graph);
+
+  const scored = pool.map((c) => {
+    const absBalance = Math.abs(c.pair.balance);
+    const total = c.pair.totalMessages || 0;
+    const volumeDeficit = Math.max(0, avgTotal - total);
+    let repetitionPenalty = 0;
+    if (graph.lastSelectedPairKey === c.pairKey) repetitionPenalty += 5e9;
+    repetitionPenalty += (c.pair.usageToday || 0) * 200000;
+    const coverageScore = total === 0 ? 2e6 : Math.max(0, 8 - total) * 80000;
+    const originSent = graph.phones.get(c.origem)?.sent || 0;
+    const destRecv = graph.phones.get(c.destino)?.received || 0;
+    const lastAt = c.pair.lastMessageAt ? Date.parse(c.pair.lastMessageAt) : 0;
+    const minutes = lastAt ? Math.max(0, (Date.now() - lastAt) / 60000) : 1e6;
+    const score =
+      absBalance * 1e6 +
+      volumeDeficit * 50000 +
+      coverageScore +
+      (avgSent - originSent) * 1000 +
+      (avgRecv - destRecv) * 100 +
+      Math.min(minutes, 10000) -
+      repetitionPenalty;
+    return { ...c, score, absBalance, volumeDeficit };
   });
-  scored.sort((a, b) => a.score - b.score);
+  scored.sort((a, b) => b.score - a.score || a.pairKey.localeCompare(b.pairKey));
   const best = scored[0].score;
   const ties = scored.filter((s) => s.score === best);
   const base = ((startIndex % ties.length) + ties.length) % ties.length;
-  return { chosen: ties[base], eligible, scored };
+  return { chosen: ties[base], scored };
+}
+
+function applySend(graph, origem, destino, at) {
+  const key = pairKey(origem, destino);
+  let pair = graph.pairs.get(key);
+  if (!pair) {
+    const [a, b] = key.split("|");
+    pair = emptyPair(a, b);
+    graph.pairs.set(key, pair);
+  }
+  const direction =
+    origem.localeCompare(pair.a) === 0 && destino.localeCompare(pair.b) === 0
+      ? "a_to_b"
+      : "b_to_a";
+  if (direction === "a_to_b") pair.sentAB += 1;
+  else pair.sentBA += 1;
+  pair.lastDirection = direction;
+  pair.lastMessageAt = at;
+  pair.usageToday += 1;
+  pair.balance = pair.sentAB - pair.sentBA;
+  pair.totalMessages = pair.sentAB + pair.sentBA;
+  if (!graph.phones.has(origem)) graph.phones.set(origem, { sent: 0, received: 0 });
+  if (!graph.phones.has(destino)) graph.phones.set(destino, { sent: 0, received: 0 });
+  graph.phones.get(origem).sent += 1;
+  graph.phones.get(destino).received += 1;
+  graph.lastSelectedPairKey = key;
 }
 
 (async () => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes no .env");
+  }
   const events = await loadEvents();
   console.log(`Eventos no lookback: ${events.length}`);
-  console.log(`Primeiro: ${events[0]?.at}  Último: ${events[events.length - 1]?.at}`);
+  const graph = buildGraph(events);
 
-  const manager = buildTurnManager(events);
-
-  console.log("\n--- Stats por instância ---");
-  for (const [, s] of manager.instanceStats) {
+  console.log("\n--- Pares (total / saldo) ---");
+  for (const [key, p] of graph.pairs) {
     console.log(
-      `${s.canonical.padEnd(10)} send=${String(s.sendCount).padStart(3)} recv=${String(s.receiveCount).padStart(3)} outboundSinceInbound=${s.outboundSinceInbound} lastReceivedFrom=${s.lastReceivedFrom}`,
+      `${key.padEnd(22)} total=${String(p.totalMessages).padStart(3)} saldo=${String(p.balance).padStart(3)} last=${p.lastDirection}`,
     );
   }
 
-  console.log("\n--- Pares (lastSender / pendingReplyFrom) ---");
-  for (const [key, st] of manager.pairStates) {
+  const result = pick(graph, 0);
+  console.log("\n--- Top scores ---");
+  for (const s of result.scored.slice(0, 10)) {
     console.log(
-      `${key.padEnd(20)} lastSender=${manager.pairLastSender.get(key)} pendingReplyFrom=${st.pendingReplyFrom} exchanges=${st.exchangeCount}`,
-    );
-  }
-
-  const combos = [];
-  for (const o of connected) {
-    for (const d of connected) {
-      if (o.instancia === d.instancia) continue;
-      combos.push({ instancia_origem: o.instancia, instancia_destino: d.instancia });
-    }
-  }
-
-  console.log("\n--- Elegibilidade por combinação ---");
-  for (const c of combos) {
-    const ok = manager.canSendDirected(c.instancia_origem, c.instancia_destino);
-    console.log(
-      `${(c.instancia_origem + " -> " + c.instancia_destino).padEnd(22)} elegível=${ok ? "SIM" : "NÃO"} directed=${manager.getDirectedSendCount(c.instancia_origem, c.instancia_destino)} | ${manager.blockReason(c.instancia_origem, c.instancia_destino)}`,
-    );
-  }
-
-  const result = pick(manager, combos, 0);
-  console.log("\n--- Scores (ordenados) ---");
-  console.log(`(último par que trocou: ${manager.lastEventPairKey})`);
-  for (const s of result.scored) {
-    console.log(
-      `${(s.combo.instancia_origem + " -> " + s.combo.instancia_destino).padEnd(22)} score=${s.score.toExponential(3)} pairTotal=${s.pairTotal} directed=${s.directed} originSend=${s.oSend} destRecv=${s.dRecv}`,
+      `${(s.origem + " -> " + s.destino).padEnd(22)} score=${s.score.toFixed(0)} total=${s.pair.totalMessages} deficit=${s.volumeDeficit.toFixed(1)}`,
     );
   }
   console.log(
     "\nESCOLHIDO:",
-    result.chosen
-      ? `${result.chosen.combo.instancia_origem} -> ${result.chosen.combo.instancia_destino}`
-      : "nenhum",
+    result.chosen ? `${result.chosen.origem} -> ${result.chosen.destino}` : "nenhum",
   );
 
-  // Projeção: simula os próximos 12 envios aplicando o mesmo algoritmo
-  console.log("\n--- Projeção dos próximos 12 envios ---");
-  const futureEvents = [...events];
+  console.log("\n--- Projeção 12 envios (rotatividade de pares) ---");
+  const future = buildGraph(events);
   for (let step = 0; step < 12; step += 1) {
-    const mgr = buildTurnManager(futureEvents);
-    const res = pick(mgr, combos, step);
+    const res = pick(future, step);
     if (!res.chosen) {
-      console.log(`${String(step + 1).padStart(2)}. nenhum par elegível`);
+      console.log(`${String(step + 1).padStart(2)}. nenhum`);
       break;
     }
-    const { instancia_origem: o, instancia_destino: d } = res.chosen.combo;
-    console.log(`${String(step + 1).padStart(2)}. ${o} -> ${d}`);
-    futureEvents.push({ at: new Date(Date.now() + step * 1000).toISOString(), fromInst: o, toInst: d });
+    const { origem: o, destino: d, pairKey: pk } = res.chosen;
+    console.log(`${String(step + 1).padStart(2)}. ${o} -> ${d}  [${pk}]`);
+    applySend(future, o, d, new Date(Date.now() + step * 1000).toISOString());
   }
 })().catch((e) => {
   console.error("ERRO:", e.message);

@@ -99,6 +99,8 @@ type ValidationRecord = InboundValidationStatus & {
   sendAttempted: boolean;
   sendHttpOk: boolean;
   sendAttemptedAtMs: number | null;
+  /** Quantas vezes já tentamos sendText (HTTP OK sem prova → retry com variantes). */
+  sendRetryCount: number;
   sendDetail: string;
   cancelled: boolean;
   replyFollowUpScheduled: boolean;
@@ -1180,6 +1182,7 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
   record.phase = "reply_sent";
   record.sendAttempted = true;
   record.sendAttemptedAtMs = Date.now();
+  record.sendRetryCount = Math.max(0, Number(record.sendRetryCount) || 0) + 1;
   const text = `Validação WABA concluída. ${record.replyMarker}`;
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
   const preferred =
@@ -1187,11 +1190,33 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
     record.referenceJid ||
     record.referenceNumber ||
     "";
-  const candidates = buildSendNumberCandidates(
-    record.referenceJid,
-    record.referenceNumber,
-    preferred,
-  );
+  // 1ª tentativa: só o chat do CONFIRMAR. Retry: variantes BR (com/sem 9º dígito).
+  const candidatesRaw =
+    record.sendRetryCount <= 1
+      ? buildSendNumberCandidates(null, null, preferred)
+      : buildSendNumberCandidates(
+          record.referenceJid,
+          record.referenceNumber,
+          preferred,
+        );
+  const selfDigits = normalizeWhatsAppNumber(record.instanceNumber || "");
+  const candidates = candidatesRaw.filter((numero) => {
+    const digits = normalizeWhatsAppNumber(
+      numero.includes("@") ? numero.split("@")[0] || "" : numero,
+    );
+    if (!digits || digits.length < 10) return false;
+    // Nunca enviar a resposta para o próprio número integrado.
+    if (selfDigits && digits === selfDigits) return false;
+    if (selfDigits) {
+      const selfVariants = new Set(
+        expandBrazilWhatsAppNumberVariants(selfDigits).map((v) =>
+          normalizeWhatsAppNumber(v),
+        ),
+      );
+      if (selfVariants.has(digits)) return false;
+    }
+    return true;
+  });
   if (!candidates.length || candidates.every((c) => isLidJid(c))) {
     if (convKey) replyInFlight.delete(convKey);
     record.sendHttpOk = false;
@@ -1230,6 +1255,13 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
       anyHttpOk = true;
       record.sendHttpOk = true;
       record.sendDetail = `sendText OK → ${numero}`;
+      console.info(
+        "[validacao-inbound] sendText OK",
+        record.instanceName,
+        `→ ${numero}`,
+        `proof=${proofChatJid}`,
+        `try=${record.sendRetryCount}`,
+      );
       // NÃO marcar success só com HTTP — Evolution pode aceitar e a mensagem não aparecer no chat.
       record.sendTest = {
         success: null,
@@ -1274,6 +1306,10 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
         detail:
           "A API aceitou o envio, mas a mensagem ainda não apareceu no chat do CONFIRMAR. Aguarde ou reenvie CONFIRMAR.",
       };
+      // Libera 1 retry com variantes BR se a 1ª tentativa foi só o JID preferido.
+      if (record.sendRetryCount < 2) {
+        record.sendAttempted = false;
+      }
       return;
     }
 
@@ -1662,6 +1698,7 @@ export async function startInboundValidation(input: {
     sendAttempted: false,
     sendHttpOk: false,
     sendAttemptedAtMs: null,
+    sendRetryCount: 0,
     sendDetail: "",
     cancelled: false,
     replyFollowUpScheduled: false,

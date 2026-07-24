@@ -10112,6 +10112,119 @@
         gap: 8px;
       }
 
+      .aquecedor-network-health {
+        margin-top: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.35);
+        padding: 8px 10px;
+      }
+
+      .aquecedor-network-health-summary {
+        cursor: pointer;
+        color: #e2e8f0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        list-style: none;
+      }
+
+      .aquecedor-network-health-summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .aquecedor-network-health-body {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .aquecedor-network-health-cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .aquecedor-network-health-card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 8px;
+        padding: 8px;
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .aquecedor-network-health-card .label {
+        color: #94a3b8;
+        font-size: 0.72rem;
+      }
+
+      .aquecedor-network-health-card .value {
+        color: #e2e8f0;
+        font-size: 1rem;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+
+      .aquecedor-network-health-table {
+        overflow: auto;
+        max-height: 220px;
+      }
+
+      .aquecedor-network-health-table table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+      }
+
+      .aquecedor-network-health-table th,
+      .aquecedor-network-health-table td {
+        text-align: left;
+        padding: 4px 6px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        color: #cbd5e1;
+      }
+
+      .aquecedor-network-health-table th {
+        color: #94a3b8;
+        font-weight: 600;
+      }
+
+      .aquecedor-network-health-matrix {
+        overflow: auto;
+        max-height: 280px;
+      }
+
+      .aquecedor-network-health-matrix table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: collapse;
+        font-size: 0.72rem;
+      }
+
+      .aquecedor-network-health-matrix th,
+      .aquecedor-network-health-matrix td {
+        padding: 3px 6px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        text-align: center;
+        color: #cbd5e1;
+      }
+
+      .aquecedor-network-health-matrix th {
+        color: #94a3b8;
+        background: rgba(15, 23, 42, 0.55);
+      }
+
+      .aquecedor-network-health-history {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        max-height: 160px;
+        overflow: auto;
+      }
+
+      .aquecedor-network-health-history .hist-item {
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
       .aquecedor-envio-item {
         border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 10px;
@@ -16629,6 +16742,17 @@
                   <div id="aquecedor-envios-list" class="aquecedor-envios-list">
                     <div class="muted">Carregando envios...</div>
                   </div>
+                  <details id="aquecedor-network-health" class="aquecedor-network-health" open>
+                    <summary class="aquecedor-network-health-summary">Saúde da rede</summary>
+                    <div class="aquecedor-network-health-body">
+                      <div id="aquecedor-network-health-cards" class="aquecedor-network-health-cards">
+                        <div class="muted">Carregue os envios para ver o equilíbrio dos pares.</div>
+                      </div>
+                      <div id="aquecedor-network-health-matrix" class="aquecedor-network-health-matrix"></div>
+                      <div id="aquecedor-network-health-table" class="aquecedor-network-health-table"></div>
+                      <div id="aquecedor-network-health-history" class="aquecedor-network-health-history"></div>
+                    </div>
+                  </details>
                 </div>
               </div>
             </section>
@@ -36492,7 +36616,8 @@
       let registerInboundUiPhase = "instructions";
       let registerInboundReceiveConfirmed = false;
       let registerInboundProgressTimers = [];
-      const REGISTER_INBOUND_POLL_MS = 300;
+      // 2s: evita thrash de scroll/animação e alinha ao worker de validação.
+      const REGISTER_INBOUND_POLL_MS = 2000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       const REGISTER_INBOUND_PROGRESS_LINES = [
         { atMs: 0, text: "Detectando CONFIRMAR automaticamente (webhook + consulta a cada 2s)" },
@@ -38765,6 +38890,129 @@
         });
       }
 
+      async function loadAquecedorNetworkHealth() {
+        const cards = document.getElementById("aquecedor-network-health-cards");
+        const table = document.getElementById("aquecedor-network-health-table");
+        const matrixEl = document.getElementById("aquecedor-network-health-matrix");
+        const historyEl = document.getElementById("aquecedor-network-health-history");
+        if (!cards || !table) return;
+        try {
+          const response = await fetchWithTimeout(
+            "/aquecedor/network-health?_=" + Date.now(),
+            {},
+            15000
+          );
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            cards.innerHTML = `<div class="muted">${escapeAdminHtml(
+              err?.error || "Falha ao carregar saúde da rede."
+            )}</div>`;
+            table.innerHTML = "";
+            if (matrixEl) matrixEl.innerHTML = "";
+            if (historyEl) historyEl.innerHTML = "";
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          const reciprocity = Number(data?.reciprocityPercent ?? 0);
+          const unbalanced = Number(data?.unbalancedPairCount ?? 0);
+          const coverage = Number(data?.networkCoveragePercent ?? 0);
+          const spread = Number(data?.pairUsageSpread ?? 0);
+          const std = Number(data?.pairUsageStdDev ?? 0);
+          const hub = Array.isArray(data?.mostActivePhones) ? data.mostActivePhones[0] : null;
+          cards.innerHTML = [
+            ["Reciprocidade", `${reciprocity.toFixed(1)}%`],
+            ["Cobertura rede", `${coverage.toFixed(1)}%`],
+            ["Pares desbalanceados", String(unbalanced)],
+            ["Spread uso pares", String(spread)],
+            ["Desvio padrão pares", String(std)],
+            [
+              "Mais ativo",
+              hub
+                ? `${hub.phone} (${hub.sentToday}/${hub.receivedToday})`
+                : "—",
+            ],
+          ]
+            .map(
+              ([label, value]) =>
+                `<div class="aquecedor-network-health-card"><div class="label">${escapeAdminHtml(
+                  label
+                )}</div><div class="value">${escapeAdminHtml(value)}</div></div>`
+            )
+            .join("");
+
+          if (matrixEl) {
+            const matrix = data?.relationshipMatrix;
+            const labels = Array.isArray(matrix?.labels) ? matrix.labels : [];
+            const cells = Array.isArray(matrix?.cells) ? matrix.cells : [];
+            if (labels.length >= 2) {
+              const head = `<tr><th></th>${labels
+                .map((l) => `<th>${escapeAdminHtml(String(l))}</th>`)
+                .join("")}</tr>`;
+              const body = labels
+                .map((rowLabel, i) => {
+                  const row = Array.isArray(cells[i]) ? cells[i] : [];
+                  return `<tr><th>${escapeAdminHtml(String(rowLabel))}</th>${labels
+                    .map((_, j) => {
+                      const v = row[j];
+                      return `<td>${v == null ? "—" : escapeAdminHtml(String(v))}</td>`;
+                    })
+                    .join("")}</tr>`;
+                })
+                .join("");
+              matrixEl.innerHTML = `<div class="label" style="margin-bottom:6px;color:#94a3b8;font-size:0.72rem">Matriz de relacionamento (total por par)</div><table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+            } else {
+              matrixEl.innerHTML = "";
+            }
+          }
+
+          const least = Array.isArray(data?.leastUsedPairs) ? data.leastUsedPairs.slice(0, 8) : [];
+          const most = Array.isArray(data?.mostUsedPairs) ? data.mostUsedPairs.slice(0, 8) : [];
+          const ranking = Array.isArray(data?.balanceRanking) ? data.balanceRanking.slice(0, 8) : [];
+          const renderPairRows = (rows, title) => {
+            if (!rows.length) return "";
+            return `<div style="margin-bottom:8px"><div class="label" style="color:#94a3b8;font-size:0.72rem;margin-bottom:4px">${escapeAdminHtml(
+              title
+            )}</div><table><thead><tr><th>Par</th><th>Total</th><th>Saldo</th></tr></thead><tbody>${rows
+              .map((row) => {
+                const pair = `${row.a} ↔ ${row.b}`;
+                const saldo = Number(row.balance) || 0;
+                const saldoTxt = saldo > 0 ? `+${saldo}` : String(saldo);
+                return `<tr><td>${escapeAdminHtml(pair)}</td><td>${escapeAdminHtml(
+                  String(row.totalMessages ?? 0)
+                )}</td><td>${escapeAdminHtml(saldoTxt)}</td></tr>`;
+              })
+              .join("")}</tbody></table></div>`;
+          };
+          table.innerHTML =
+            renderPairRows(least, "Pares menos utilizados") +
+            renderPairRows(most, "Pares mais utilizados") +
+            renderPairRows(ranking, "Ranking de saldo");
+
+          if (historyEl) {
+            const hist = Array.isArray(data?.selectionHistory) ? data.selectionHistory.slice(0, 12) : [];
+            if (!hist.length) {
+              historyEl.innerHTML = '<div class="muted">Sem histórico de seleções ainda.</div>';
+            } else {
+              historyEl.innerHTML = `<div class="label" style="margin-bottom:4px;color:#94a3b8">Últimas seleções do algoritmo</div>${hist
+                .map((h) => {
+                  const when = String(h.at || "").replace("T", " ").slice(0, 19);
+                  return `<div class="hist-item"><strong>${escapeAdminHtml(
+                    `${h.origem} → ${h.destino}`
+                  )}</strong> · score ${escapeAdminHtml(String(Math.round(h.score || 0)))}<br/><span>${escapeAdminHtml(
+                    h.reason || ""
+                  )}</span><br/><span style="opacity:0.7">${escapeAdminHtml(when)}</span></div>`;
+                })
+                .join("")}`;
+            }
+          }
+        } catch {
+          cards.innerHTML = '<div class="muted">Falha ao carregar saúde da rede.</div>';
+          table.innerHTML = "";
+          if (matrixEl) matrixEl.innerHTML = "";
+          if (historyEl) historyEl.innerHTML = "";
+        }
+      }
+
       async function loadAquecedorEnvios() {
         const container = document.getElementById("aquecedor-envios-list");
         if (!container) return;
@@ -38793,6 +39041,7 @@
           const data = await response.json().catch(() => ({}));
           const items = Array.isArray(data?.items) ? data.items : [];
           syncAquecedorChatVisualizer(items);
+          void loadAquecedorNetworkHealth();
           if (!items.length) {
             const hint = String(data?.hint || "").trim();
             aquecedorEnviosLastItems = [];
@@ -44807,6 +45056,8 @@
         ) {
           phase = "verify-receive";
         }
+        const prevPhase = registerInboundUiPhase;
+        const phaseChanged = prevPhase !== phase || options.force === true;
         registerInboundUiPhase = phase;
         const progress = document.getElementById("register-inbound-progress");
         if (progress) progress.setAttribute("data-phase", phase);
@@ -44832,6 +45083,8 @@
           setRegisterInboundActionButtons({ retry: false, skip: false });
         }
 
+        // Só rolar na troca de fase — poll a cada tick causava o card verde sumir/voltar.
+        if (!phaseChanged) return;
         if (phase === "instructions") {
           scrollRegisterWizardPaneToTop();
         } else {
@@ -45070,8 +45323,15 @@
       }
 
       function enterRegisterInboundVerifyReceive(detailText) {
+        // Foco na recepção: o check de “conectado” (QR) não deve competir com o card azul.
+        showRegisterInboundEvoConnectedBanner(false);
+        const receiveRow = document.getElementById("register-inbound-receive-row");
+        const wasHidden =
+          !receiveRow ||
+          receiveRow.hidden ||
+          receiveRow.classList.contains("is-hidden");
         setRegisterInboundPhase("verify-receive");
-        setInboundCheckVisible("register-inbound-receive-row", true, true);
+        setInboundCheckVisible("register-inbound-receive-row", true, wasHidden);
         const custom = String(detailText || "").trim();
         const isProgressDetail =
           !custom ||
@@ -45086,7 +45346,9 @@
             "register-inbound-receive-detail",
             REGISTER_INBOUND_PROGRESS_LINES[0].text
           );
-          startRegisterInboundProgressMessages();
+          if (wasHidden || registerInboundProgressTimers.length === 0) {
+            startRegisterInboundProgressMessages();
+          }
         } else {
           clearRegisterInboundProgressMessages();
           updateRegisterInboundRow(
@@ -45288,15 +45550,23 @@
 
         if (!receiveDone) {
           if (phase === "verify-receive") {
-            setInboundCheckVisible("register-inbound-receive-row", true, true);
-            updateRegisterInboundRow(
-              "register-inbound-receive-row",
-              "register-inbound-receive-result",
-              null,
-              "register-inbound-receive-detail",
-              REGISTER_INBOUND_PROGRESS_LINES[0].text
-            );
-            startRegisterInboundProgressMessages();
+            showRegisterInboundEvoConnectedBanner(false);
+            const receiveRow = document.getElementById("register-inbound-receive-row");
+            const wasHidden =
+              !receiveRow ||
+              receiveRow.hidden ||
+              receiveRow.classList.contains("is-hidden");
+            setInboundCheckVisible("register-inbound-receive-row", true, wasHidden);
+            if (wasHidden) {
+              updateRegisterInboundRow(
+                "register-inbound-receive-row",
+                "register-inbound-receive-result",
+                null,
+                "register-inbound-receive-detail",
+                REGISTER_INBOUND_PROGRESS_LINES[0].text
+              );
+              startRegisterInboundProgressMessages();
+            }
             setInboundCheckVisible("register-inbound-send-row", false, false);
           } else {
             setInboundCheckVisible("register-inbound-receive-row", false, false);
@@ -45507,11 +45777,24 @@
 
             if (!pollRes.ok) {
               registerInboundPollFailCount += 1;
-              if (pollRes.status === 404 && registerInboundPollFailCount >= 2) {
+              if (pollRes.status === 404 && registerInboundPollFailCount >= 3) {
+                // Não reiniciar em loop — isso escondia/reexibia o card verde a cada ciclo.
                 clearRegisterInboundTimers();
                 registerInboundValidationId = "";
                 registerInboundStartInFlight = false;
-                void startRegisterInboundValidation(instanceName);
+                const receiveDetail = document.getElementById("register-inbound-receive-detail");
+                if (receiveDetail) {
+                  receiveDetail.textContent =
+                    "Sessão de validação expirada no servidor. Clique em «Tentar validação novamente».";
+                }
+                updateRegisterInboundRow(
+                  "register-inbound-receive-row",
+                  "register-inbound-receive-result",
+                  false,
+                  "register-inbound-receive-detail",
+                  "Sessão de validação expirada no servidor. Clique em «Tentar validação novamente»."
+                );
+                setRegisterInboundActionButtons({ retry: true, skip: false });
                 return;
               }
               if (registerInboundPollFailCount >= REGISTER_INBOUND_MAX_POLL_FAILS) {
@@ -45535,9 +45818,7 @@
             }
           } catch {
             registerInboundPollFailCount += 1;
-            if (registerInboundUiPhase === "verify-receive") {
-              enterRegisterInboundVerifyReceive();
-            }
+            // Não reentrar na UI a cada falha transitória (causava animação em loop).
           }
         }, REGISTER_INBOUND_POLL_MS);
       }

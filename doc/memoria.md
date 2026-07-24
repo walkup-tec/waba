@@ -1,4 +1,22 @@
-﻿## 2026-07-23 13:56 — Card ativas alinhado ao filtro Conectados
+﻿## 2026-07-24 08:00 — Aquecedor: rotatividade inteligente de pares
+- RelationshipManager: volume entre pares + anti-repetição + cobertura
+- Dashboard: matriz NxN, spread/desvio, histórico com motivo do score
+- Marker: DEPLOY-2026-07-24-aquecedor-rotatividade-pares — Redeploy Node
+- LOG: doc/LOG-2026-07-24__080000__aquecedor-rotatividade-pares.md
+
+## 2026-07-24 07:50 — Motor aquecedor orientado a pares
+- Grafo persistente + orchestrator (saldo, anti-duplicata, distribuição)
+- GET /aquecedor/network-health + UI «Saúde da rede»
+- Marker: DEPLOY-2026-07-24-aquecedor-motor-pares-grafo — Redeploy Node
+- LOG: doc/LOG-2026-07-24__075000__aquecedor-motor-pares-grafo.md
+
+## 2026-07-24 07:32 — Modal validação: loop card verde + reply
+- UI: poll 2s, sem scroll/animação a cada tick; sem auto-restart 404; esconde banner verde na recepção
+- Backend: GET refresh; send preferido + retry; não enviar ao próprio número
+- Marker: DEPLOY-2026-07-24-validacao-ui-loop-reply-retry — Redeploy Node
+- LOG: doc/LOG-2026-07-24__073200__fix-validacao-ui-loop-reply.md
+
+## 2026-07-23 13:56 — Card ativas alinhado ao filtro Conectados
 - Causa: card usava `isOpen` (incluía Preparando/Restrição abertas); filtro usa label `conectado`
 - Fix: `updateInstancesIndicators` usa `isInstanceConnectedFilter` / `isInstanceDisconnectedFilter`
 - LOG: doc/LOG-2026-07-23__135600__fix-card-ativas-vs-filtro-conectados.md

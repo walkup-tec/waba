@@ -45,6 +45,18 @@ import {
   resolveShellCacheKey,
   type WabaUiProfile,
 } from "./base-path";
+import {
+  bootstrapOwnerGraphFromEvents,
+  ensureCompletePairGraph,
+  getOwnerConversationGraph,
+  recordDirectedSend,
+  recordPairSelection,
+} from "./aquecedor/conversation-graph.service";
+import {
+  buildSelectionRecord,
+  pickNextDirectedExchange,
+} from "./aquecedor/pair-orchestrator.service";
+import { buildNetworkHealthReport } from "./aquecedor/network-health.service";
 import { resolveWabaContainerServiceId } from "./waba-container-service";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
 import { resolveWabaRequestAuth } from "./auth/waba-request-auth";
@@ -1839,91 +1851,77 @@ async function canAquecedorOrigemSendDirected(
   return turn.canSendDirected(instanciaOrigem, instanciaDestino);
 }
 
+async function ensureAquecedorOwnerConversationGraph(
+  ownerEmail: string,
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+): Promise<Awaited<ReturnType<typeof getOwnerConversationGraph>>> {
+  const aliasesMap = await loadInstanceAliasesMap();
+  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+  const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+  const instanceNames = connected.map((item) =>
+    resolveAquecedorCanonicalInstance(item.instancia, canonicalMap),
+  );
+  const existing = await getOwnerConversationGraph(ownerEmail);
+  if (!existing.bootstrapped) {
+    const events = await loadAquecedorExchangeEvents(
+      supabase,
+      connected,
+      canonicalMap,
+      numberToInstance,
+    );
+    await bootstrapOwnerGraphFromEvents(ownerEmail, events, {
+      instanceNames,
+    });
+  } else {
+    await ensureCompletePairGraph(ownerEmail, instanceNames);
+  }
+  return getOwnerConversationGraph(ownerEmail);
+}
+
 async function pickAquecedorCombinationAsync<T extends { instancia_origem: string; instancia_destino: string }>(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
   connected: Array<{ instancia: string; numero: string }>,
   combinations: T[],
   startIndex: number,
-): Promise<{ chosen: T; index: number } | null> {
-  if (!combinations.length) return null;
-  const manager = await loadAquecedorTurnManager(supabase, connected);
-  let eligible: Array<{ combo: T; index: number }> = [];
+  ownerEmail?: string,
+): Promise<{
+  chosen: T;
+  index: number;
+  pickMeta: NonNullable<ReturnType<typeof pickNextDirectedExchange>>;
+} | null> {
+  if (!combinations.length || connected.length < 2) return null;
+  const owner = normalizeAquecedorOwnerEmail(ownerEmail || "") || "default";
+  const graph = await ensureAquecedorOwnerConversationGraph(owner, supabase, connected);
+  const aliasesMapForPick = await loadInstanceAliasesMap();
+  const canonicalMapForPick = buildAquecedorInstanceCanonicalMap(connected, aliasesMapForPick);
+  const eligibleNames = connected.map((item) =>
+    resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick),
+  );
+  const pick = pickNextDirectedExchange(graph, eligibleNames, { startIndex });
+  if (!pick) return null;
 
+  const origemLc = pick.origem.toLowerCase();
+  const destinoLc = pick.destino.toLowerCase();
   for (let index = 0; index < combinations.length; index += 1) {
     const combo = combinations[index];
-    if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino)) continue;
-    eligible.push({ combo, index });
-  }
-
-  if (!eligible.length) return null;
-
-  // Prioridade absoluta: completar o turno do par (A→B exige B→A) antes de abrir novos pares.
-  // Sem isso, a penalidade do "último par" (+1e18) impede a resposta e um número só recebe.
-  const replyDue = eligible.filter(({ combo }) =>
-    manager.owesPairReply(combo.instancia_origem, combo.instancia_destino),
-  );
-  if (replyDue.length) {
-    eligible = replyDue;
-  }
-
-  const instanceCount = Math.max(2, connected.length);
-  const maxUndirectedPairShare = Math.max(0.5, 2 / instanceCount);
-  const totalDirectedSends = manager.getTotalDirectedSendCount();
-  if (totalDirectedSends >= instanceCount) {
-    const nonSaturated = eligible.filter(({ combo }) => {
-      const pairTotal = manager.getUndirectedPairSendTotal(
-        combo.instancia_origem,
-        combo.instancia_destino,
-      );
-      return pairTotal / totalDirectedSends <= maxUndirectedPairShare;
-    });
-    if (nonSaturated.length) {
-      eligible = nonSaturated;
+    if (
+      String(combo.instancia_origem || "").trim().toLowerCase() === origemLc &&
+      String(combo.instancia_destino || "").trim().toLowerCase() === destinoLc
+    ) {
+      return { chosen: combo, index, pickMeta: pick };
     }
   }
 
-  let minPairTotal = Number.POSITIVE_INFINITY;
-  let minDirected = Number.POSITIVE_INFINITY;
-  let minOriginSend = Number.POSITIVE_INFINITY;
-  let minDestReceive = Number.POSITIVE_INFINITY;
-  for (const { combo } of eligible) {
-    minPairTotal = Math.min(
-      minPairTotal,
-      manager.getUndirectedPairSendTotal(combo.instancia_origem, combo.instancia_destino),
-    );
-    minDirected = Math.min(
-      minDirected,
-      manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino),
-    );
-    minOriginSend = Math.min(minOriginSend, manager.getOriginSendCount(combo.instancia_origem));
-    minDestReceive = Math.min(minDestReceive, manager.getDestReceiveCount(combo.instancia_destino));
+  for (let index = 0; index < combinations.length; index += 1) {
+    const combo = combinations[index];
+    const o = resolveAquecedorCanonicalInstance(combo.instancia_origem, canonicalMapForPick);
+    const d = resolveAquecedorCanonicalInstance(combo.instancia_destino, canonicalMapForPick);
+    if (o.toLowerCase() === origemLc && d.toLowerCase() === destinoLc) {
+      return { chosen: combo, index, pickMeta: pick };
+    }
   }
-  if (!Number.isFinite(minPairTotal)) minPairTotal = 0;
-  if (!Number.isFinite(minDirected)) minDirected = 0;
-  if (!Number.isFinite(minOriginSend)) minOriginSend = 0;
-  if (!Number.isFinite(minDestReceive)) minDestReceive = 0;
-
-  const equityBaseline = { minPairTotal, minDirected, minOriginSend, minDestReceive };
-  const scored: Array<{ combo: T; index: number; score: number }> = eligible.map(
-    ({ combo, index }) => ({
-      combo,
-      index,
-      score: manager.scoreEquityCombination(
-        combo.instancia_origem,
-        combo.instancia_destino,
-        index,
-        startIndex,
-        equityBaseline,
-      ),
-    }),
-  );
-
-  scored.sort((a, b) => a.score - b.score);
-  const bestScore = scored[0].score;
-  const ties = scored.filter((item) => item.score === bestScore);
-  const base = ((startIndex % ties.length) + ties.length) % ties.length;
-  const picked = ties[base];
-  return { chosen: picked.combo, index: picked.index };
+  return null;
 }
 
 async function loadRecentAquecedorPairLastSenders(
@@ -4030,7 +4028,8 @@ async function runAquecedorCycleTestBatch(
   connected: Array<{ instancia: string; numero: string }>,
   cicloGlobal: number,
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
-  _config: AquecedorConfig
+  _config: AquecedorConfig,
+  ownerEmail: string,
 ) {
   const combinations: Array<{
     instancia_origem: string;
@@ -4052,6 +4051,7 @@ async function runAquecedorCycleTestBatch(
     connected,
     combinations,
     cicloGlobal,
+    ownerEmail,
   );
   const chosen = picked?.chosen ?? combinations[0] ?? null;
   const proximo = picked ? picked.index + 1 : 1;
@@ -4115,6 +4115,11 @@ async function runAquecedorCycleTestBatch(
         instanciaDestino: chosen.instancia_destino,
         status: "Envio com Sucesso",
       });
+      await recordDirectedSend({
+        ownerEmail,
+        fromInst: chosen.instancia_origem,
+        toInst: chosen.instancia_destino,
+      });
       aquecedorCycleRuntime().lastEvoError = {
         status: sendResult.status,
         body: deliveryCheck.detail.slice(0, 500),
@@ -4132,6 +4137,11 @@ async function runAquecedorCycleTestBatch(
         instanciaOrigem: chosen.instancia_origem,
         instanciaDestino: chosen.instancia_destino,
         status: "Envio com Sucesso",
+      });
+      await recordDirectedSend({
+        ownerEmail,
+        fromInst: chosen.instancia_origem,
+        toInst: chosen.instancia_destino,
       });
       aquecedorCycleRuntime().lastEvoError = null;
       aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
@@ -4300,7 +4310,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
 
     const cicloGlobal = getAquecedorOwnerCicloGlobal(motor);
     if (forceTest) {
-      await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config);
+      await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config, ownerEmail);
       return;
     }
 
@@ -4309,13 +4319,14 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       connected,
       combinations,
       cicloGlobal,
+      ownerEmail,
     );
     if (!picked) {
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
         30,
-        "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.",
+        "Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).",
       );
       return;
     }
@@ -4534,12 +4545,25 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       ownerEmail,
     });
     await recordAquecedorInstanceDailySend(chosen.instancia_origem);
+    await recordDirectedSend({
+      ownerEmail,
+      fromInst: chosen.instancia_origem,
+      toInst: chosen.instancia_destino,
+      at: new Date().toISOString(),
+    });
+    if (picked.pickMeta) {
+      await recordPairSelection({
+        ownerEmail,
+        record: buildSelectionRecord(picked.pickMeta),
+      });
+    }
 
     const nextPick = await pickAquecedorCombinationAsync(
       supabase,
       connected,
       combinations,
       proximo,
+      ownerEmail,
     );
     await ensureAquecedorPendingMessage(
       nextPick ? buildAquecedorPairContext(nextPick.chosen, connected) : null,
@@ -4557,7 +4581,9 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     const waitSeconds =
       Math.floor(Math.random() * (waitMax - waitMin + 1)) + waitMin;
     aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
-    aquecedorCycleRuntime().lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.${
+    aquecedorCycleRuntime().lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado${
+      picked.pickMeta?.reason ? ` [${picked.pickMeta.reason}]` : ""
+    }. Próximo ciclo em ~${waitSeconds}s.${
       preparingCount > 0
         ? ` ${preparingCount} instância(s) em preparação (6h): ${motor.connectedSummary.preparingNames.join(", ")}.`
         : ""
@@ -5798,11 +5824,21 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
   if (!validationId) {
     return res.status(400).json({ error: "validationId é obrigatório." });
   }
-  const status = getInboundValidationStatus(validationId);
-  if (!status) {
-    return res.status(404).json({ error: "Validação não encontrada ou expirada." });
+  try {
+    // Poll da UI dispara busca CONFIRMAR + envio da resposta (não só leitura passiva).
+    const status = await refreshInboundValidation(validationId, { aggressive: false });
+    if (!status) {
+      return res.status(404).json({ error: "Validação não encontrada ou expirada." });
+    }
+    return res.json({ ok: true, ...status });
+  } catch (error: any) {
+    console.error("GET /instancias/validacao-inbound/:validationId", error);
+    const status = getInboundValidationStatus(validationId);
+    if (!status) {
+      return res.status(404).json({ error: "Validação não encontrada ou expirada." });
+    }
+    return res.json({ ok: true, ...status });
   }
-  return res.json({ ok: true, ...status });
 });
 
 app.post("/instancias/validacao-inbound/:validationId/confirmar-envio", async (req, res) => {
@@ -9072,6 +9108,40 @@ app.get("/aquecedor/status", async (req, res) => {
   }
 });
 
+app.get("/aquecedor/network-health", async (req, res) => {
+  if (rejectAquecedorWithoutEntitlement(req, res)) return;
+  try {
+    const auth = resolveWabaRequestAuth(req);
+    const ownerEmail = normalizeAquecedorOwnerEmail(auth.email);
+    if (!ownerEmail) {
+      return res.status(401).json({ error: "Sessão sem e-mail válido." });
+    }
+    const supabase = getSupabaseClient();
+    const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
+    const connectedActive = await filterAquecedorCycleConnected(resolved.connected);
+    const connected = connectedActive.length >= 2 ? connectedActive : resolved.connected;
+    if (supabase && connected.length >= 2) {
+      await ensureAquecedorOwnerConversationGraph(ownerEmail, supabase, connected);
+    } else if (connected.length >= 2) {
+      await ensureCompletePairGraph(
+        ownerEmail,
+        connected.map((item) => item.instancia),
+      );
+    }
+    const graph = await getOwnerConversationGraph(ownerEmail);
+    const report = buildNetworkHealthReport(ownerEmail, graph, {
+      instanceNames: connected.map((item) => item.instancia),
+    });
+    return res.json({ ok: true, ...report });
+  } catch (error) {
+    console.error("[Aquecedor] GET /aquecedor/network-health", error);
+    return res.status(500).json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Falha ao montar saúde da rede.",
+    });
+  }
+});
+
 app.get("/aquecedor/envios", async (req, res) => {
   if (rejectAquecedorWithoutEntitlement(req, res)) return;
   try {
@@ -9239,6 +9309,7 @@ app.get("/aquecedor/envios", async (req, res) => {
               connected,
               combinations,
               cicloGlobal,
+              ownerEmail || undefined,
             );
             if (picked) {
               origem = picked.chosen.instancia_origem;
@@ -9662,7 +9733,13 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
                 numero_whatsapp: combo.numero_whatsapp,
               }));
               const picked = await withAquecedorTimeout(
-                pickAquecedorCombinationAsync(supabase, connected, comboRows, cicloGlobal),
+                pickAquecedorCombinationAsync(
+                  supabase,
+                  connected,
+                  comboRows,
+                  cicloGlobal,
+                  ownerEmail,
+                ),
                 4000,
                 null,
               );
