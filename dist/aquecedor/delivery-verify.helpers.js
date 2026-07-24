@@ -12,6 +12,11 @@ exports.extractAquecedorMessageTimestampMs = extractAquecedorMessageTimestampMs;
 exports.extractAquecedorFromMe = extractAquecedorFromMe;
 exports.collectEvoChatMessageTexts = collectEvoChatMessageTexts;
 exports.evoPayloadIncludesNeedle = evoPayloadIncludesNeedle;
+exports.normalizeEvoMessageAckStatus = normalizeEvoMessageAckStatus;
+exports.isEvoAckFailure = isEvoAckFailure;
+exports.isEvoAckProgressed = isEvoAckProgressed;
+exports.extractEvoMessageAckStatus = extractEvoMessageAckStatus;
+exports.classifyEvoOutboundSample = classifyEvoOutboundSample;
 exports.decideAquecedorDeliveryConfirmation = decideAquecedorDeliveryConfirmation;
 exports.legacyWouldFalsePositive = legacyWouldFalsePositive;
 function extractAquecedorMessageMarker(text) {
@@ -152,16 +157,115 @@ function evoPayloadIncludesNeedle(node, needles, options, depth = 0) {
     }
     return false;
 }
+const EVO_ACK_FAILURE = new Set(["ERROR", "FAILED"]);
+const EVO_ACK_PROGRESS = new Set([
+    "SERVER_ACK",
+    "DELIVERY_ACK",
+    "READ",
+    "PLAYED",
+]);
+function normalizeEvoMessageAckStatus(raw) {
+    const value = String(raw || "")
+        .trim()
+        .toUpperCase();
+    if (!value)
+        return "NONE";
+    if (EVO_ACK_FAILURE.has(value))
+        return value;
+    if (EVO_ACK_PROGRESS.has(value))
+        return value;
+    if (value === "PENDING")
+        return "PENDING";
+    if (value === "NONE")
+        return "NONE";
+    return "UNKNOWN";
+}
+function isEvoAckFailure(status) {
+    return EVO_ACK_FAILURE.has(normalizeEvoMessageAckStatus(status));
+}
+function isEvoAckProgressed(status) {
+    return EVO_ACK_PROGRESS.has(normalizeEvoMessageAckStatus(status));
+}
+/** Extrai o último status de MessageUpdate / findStatusMessage / campo status. */
+function extractEvoMessageAckStatus(node, depth = 0) {
+    if (depth > 12 || node == null)
+        return "UNKNOWN";
+    if (Array.isArray(node)) {
+        let best = "UNKNOWN";
+        for (const item of node) {
+            const st = extractEvoMessageAckStatus(item, depth + 1);
+            if (isEvoAckFailure(st))
+                return st;
+            if (isEvoAckProgressed(st))
+                best = st;
+            else if (st === "PENDING" && best === "UNKNOWN")
+                best = "PENDING";
+            else if (st === "NONE" && (best === "UNKNOWN" || best === "PENDING"))
+                best = st;
+        }
+        return best;
+    }
+    if (typeof node !== "object")
+        return "UNKNOWN";
+    const obj = node;
+    const updates = obj.MessageUpdate ?? obj.messageUpdate;
+    if (Array.isArray(updates) && updates.length) {
+        const last = updates[updates.length - 1];
+        if (last && last.status != null) {
+            return normalizeEvoMessageAckStatus(last.status);
+        }
+    }
+    if (obj.status != null && (obj.keyId != null || obj.messageId != null || obj.key != null)) {
+        return normalizeEvoMessageAckStatus(obj.status);
+    }
+    if (typeof obj.status === "string" && depth === 0) {
+        return normalizeEvoMessageAckStatus(obj.status);
+    }
+    for (const value of Object.values(obj)) {
+        if (value && typeof value === "object") {
+            const nested = extractEvoMessageAckStatus(value, depth + 1);
+            if (nested !== "UNKNOWN")
+                return nested;
+        }
+    }
+    return "UNKNOWN";
+}
+/** Classifica amostra fromMe: 100% ERROR com N>=3 → broken; qualquer ACK progresso → healthy. */
+function classifyEvoOutboundSample(statuses, options) {
+    const minSamples = Math.max(1, options?.minSamples ?? 3);
+    const normalized = statuses.map((s) => normalizeEvoMessageAckStatus(s));
+    if (normalized.length < minSamples)
+        return "unknown";
+    const failures = normalized.filter((s) => isEvoAckFailure(s)).length;
+    const progressed = normalized.filter((s) => isEvoAckProgressed(s)).length;
+    if (progressed > 0)
+        return "healthy";
+    if (failures === normalized.length)
+        return "broken";
+    if (failures / normalized.length >= 0.8 && failures >= minSamples)
+        return "broken";
+    return "unknown";
+}
 /** Decisão final: sucesso prático = tag no DESTINO (mensagem chegou no WhatsApp).
  * Origem reforça diagnóstico, mas não bloqueia sucesso (tag única evita histórico falso).
+ * Se MessageUpdate=ERROR na origem, o problema é a sessão de envio — não o destino.
  */
 function decideAquecedorDeliveryConfirmation(input) {
     const origem = String(input.origem || "").trim() || "origem";
     const destino = String(input.destino || "").trim() || "destino";
     const sawOrigem = Boolean(input.sawOrigem);
     const sawDestino = Boolean(input.sawDestino);
+    const ack = normalizeEvoMessageAckStatus(input.ackStatus);
     if (sawDestino) {
         return { ok: true, detail: "", sawOrigem, sawDestino };
+    }
+    if (isEvoAckFailure(ack)) {
+        return {
+            ok: false,
+            detail: `Envio da origem (${origem}) falhou no WhatsApp (MessageUpdate=${ack}). A sessão EVO dessa instância está open, mas o outbound está quebrado — reconecte o QR da ${origem}. Destino (${destino}) não é o problema.`,
+            sawOrigem,
+            sawDestino,
+        };
     }
     if (sawOrigem && !sawDestino) {
         return {

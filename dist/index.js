@@ -53,6 +53,7 @@ const aquecedor_owner_runtime_registry_1 = require("./services/aquecedor-owner-r
 const base_path_1 = require("./base-path");
 const conversation_graph_service_1 = require("./aquecedor/conversation-graph.service");
 const delivery_verify_helpers_1 = require("./aquecedor/delivery-verify.helpers");
+const outbound_ack_health_service_1 = require("./aquecedor/outbound-ack-health.service");
 const delivery_cooldown_service_1 = require("./aquecedor/delivery-cooldown.service");
 const pair_orchestrator_service_1 = require("./aquecedor/pair-orchestrator.service");
 const network_health_service_1 = require("./aquecedor/network-health.service");
@@ -2919,6 +2920,7 @@ async function resolveAquecedorConnectedForOwner(ownerEmail) {
         connected = await enrichAquecedorConnectedNumbersFromControleInstancia(supabase, connected, allowed);
         connected = connected.filter((item) => String(item.numero || "").trim());
     }
+    connected = await filterAquecedorConnectedByOutboundHealth(connected);
     const usedCacheSupplement = mergedEvo.evoOk &&
         mergedEvo.usedCacheOnlyForNumbers &&
         connected.length > mergedEvo.liveCount &&
@@ -3569,6 +3571,8 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         let numeroUsado = numberCandidates[0];
         let sendStartedAtMs = Date.now();
         let sawOrigemOnly = false;
+        let outboundAckBroken = false;
+        let lastAckStatus = null;
         const MAX_FAILED_NUMBER_TRIES = 2;
         let failedNumberTries = 0;
         // Anti-ban / anti-spam WhatsApp (incidente 2026-07-24):
@@ -3605,13 +3609,34 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
                 mensagem: textoEnvio,
             })
                 .eq("id", pendingData.id);
+            const messageId = extractAquecedorSendMessageId(sendResult.json);
+            const ackProbe = messageId
+                ? await probeAquecedorSendAckStatus(chosen.instancia_origem, messageId, { maxAttempts: 4, intervalMs: 2000 })
+                : { status: "UNKNOWN" };
+            lastAckStatus = ackProbe.status;
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackProbe.status)) {
+                outboundAckBroken = true;
+                (0, outbound_ack_health_service_1.rememberAquecedorOutboundHealth)(chosen.instancia_origem, "broken", {
+                    sampleSize: 1,
+                    errorCount: 1,
+                });
+                deliveryDetail = (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+                    sawOrigem: true,
+                    sawDestino: false,
+                    origem: chosen.instancia_origem,
+                    destino: chosen.instancia_destino,
+                    ackStatus: ackProbe.status,
+                }).detail;
+                break;
+            }
             const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), textoEnvio, {
                 instanciaOrigem: chosen.instancia_origem,
                 numeroDestino: numero,
                 sendStartedAtMs,
-                maxAttempts: 12,
+                maxAttempts: outboundAckBroken ? 1 : 12,
                 attemptIntervalMs: 3000,
                 relaxTimestampOnLastAttempt: true,
+                ackStatusHint: lastAckStatus,
             });
             deliveryDetail = deliveryCheck.detail;
             if (deliveryCheck.ok) {
@@ -3640,9 +3665,10 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
                 keepInstancia: chosen.instancia_origem,
             });
-            const cooldownMs = 15 * 60 * 1000;
-            if (sawOrigemOnly) {
-                await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(chosen.instancia_origem, `Aquecedor: mensagem só na origem → ${chosen.instancia_destino} sem confirmação (anti-spam; sem reenvio).`);
+            // Outbound ERROR = sessão origem quebrada (não culpar o destino nem rajada).
+            const cooldownMs = outboundAckBroken ? 60 * 60 * 1000 : 15 * 60 * 1000;
+            if (outboundAckBroken) {
+                await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(chosen.instancia_origem, `Aquecedor: outbound MessageUpdate=${lastAckStatus || "ERROR"} — reconecte QR da ${chosen.instancia_origem}.`);
             }
             const cooldown = await (0, delivery_cooldown_service_1.recordDirectedDeliveryFailure)({
                 origem: chosen.instancia_origem,
@@ -3651,7 +3677,11 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
                 cooldownMs,
             });
             const untilBr = formatDateBr(new Date(cooldown.untilMs).toISOString());
-            deferAquecedorRetryOrWindow(config, nowSp, 30, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}${sawOrigemOnly ? " (só origem — sem reenvio de variantes)" : ""}; seguindo para outros pares.`);
+            deferAquecedorRetryOrWindow(config, nowSp, 30, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}${outboundAckBroken
+                ? " (outbound ERROR — reconecte QR da origem)"
+                : sawOrigemOnly
+                    ? " (só origem — sem reenvio de variantes)"
+                    : ""}; seguindo para outros pares.`);
             aquecedorCycleRuntime().lastEvoError = {
                 status: lastSendStatus,
                 body: deliveryDetail.slice(0, 500),
@@ -6222,7 +6252,7 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     }
     const timestampGraceMs = options?.timestampGraceMs ?? 5000;
     const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
-    const maxAttempts = Math.max(3, options?.maxAttempts ?? 12);
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 12);
     const attemptIntervalMs = Math.max(1000, options?.attemptIntervalMs ?? 3000);
     const skipInitialDelay = options?.skipInitialDelay === true;
     const relaxTimestampOnLastAttempt = options?.relaxTimestampOnLastAttempt === true;
@@ -6231,6 +6261,16 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
     const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
     const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
+    const ackHint = options?.ackStatusHint ?? null;
+    if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackHint)) {
+        return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+            sawOrigem: true,
+            sawDestino: false,
+            origem,
+            destino,
+            ackStatus: ackHint,
+        });
+    }
     if (!skipInitialDelay) {
         await sleepMs(3000);
     }
@@ -6243,6 +6283,7 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         if (!sawDestino) {
             sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, tsFilter, false);
             if (!sawDestino) {
+                // @lid / indexação EVO: marker em mensagens recentes + findChats.lastMessage.
                 sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids.length ? remoteJids : [""], needleList, tsFilter, null);
             }
             if (!sawDestino) {
@@ -6252,12 +6293,14 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         if (!sawOrigem && origemCandidates.length && destJids.length) {
             sawOrigem = await probeAquecedorDeliveryViaFindMessages(origemCandidates, destJids, needleList, tsFilter, true);
         }
+        // Sucesso prático: tag no destino (chegou no WhatsApp). Não espera origem.
         if (sawDestino) {
             return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
                 sawOrigem,
                 sawDestino,
                 origem,
                 destino,
+                ackStatus: ackHint,
             });
         }
     }
@@ -6266,7 +6309,86 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         sawDestino,
         origem,
         destino,
+        ackStatus: ackHint,
     });
+}
+function extractAquecedorSendMessageId(json) {
+    if (!json || typeof json !== "object")
+        return "";
+    const root = json;
+    const key = root.key;
+    const id = String(key?.id || root.id || "").trim();
+    return id;
+}
+async function probeAquecedorSendAckStatus(instanceName, messageId, options) {
+    const name = String(instanceName || "").trim();
+    const id = String(messageId || "").trim();
+    if (!name || !id)
+        return { status: "UNKNOWN" };
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 4);
+    const intervalMs = Math.max(500, options?.intervalMs ?? 2000);
+    let last = "UNKNOWN";
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (attempt > 1)
+            await sleepMs(intervalMs);
+        const statusUrl = `${EVO_API_BASE}/chat/findStatusMessage/${encodeURIComponent(name)}`;
+        const statusResult = await callEvoAction(statusUrl, "POST", { where: { id } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 15000), retries: 1 });
+        if (statusResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(statusResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last) || last === "SERVER_ACK" || last === "DELIVERY_ACK" || last === "READ") {
+                return { status: last };
+            }
+        }
+        const msgUrl = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(name)}`;
+        const msgResult = await callEvoAction(msgUrl, "POST", { where: { key: { id } } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000), retries: 1 });
+        if (msgResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(msgResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last) || last === "SERVER_ACK" || last === "DELIVERY_ACK" || last === "READ") {
+                return { status: last };
+            }
+        }
+    }
+    return { status: last };
+}
+async function probeAquecedorInstanceOutboundHealth(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return "unknown";
+    const cached = (0, outbound_ack_health_service_1.getCachedAquecedorOutboundHealth)(name);
+    if (cached)
+        return cached.class;
+    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(name)}`;
+    const result = await callEvoAction(url, "POST", { where: { key: { fromMe: true } }, page: 1, offset: 20 }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000), retries: 1 });
+    if (!result.ok) {
+        (0, outbound_ack_health_service_1.rememberAquecedorOutboundHealth)(name, "unknown");
+        return "unknown";
+    }
+    const evaluated = (0, outbound_ack_health_service_1.evaluateOutboundSamplePayload)(result.json);
+    (0, outbound_ack_health_service_1.rememberAquecedorOutboundHealth)(name, evaluated.class, {
+        sampleSize: evaluated.sampleSize,
+        errorCount: evaluated.errorCount,
+    });
+    return evaluated.class;
+}
+async function filterAquecedorConnectedByOutboundHealth(connected) {
+    if (!connected.length)
+        return connected;
+    const kept = [];
+    const dropped = [];
+    for (const row of connected) {
+        const health = await probeAquecedorInstanceOutboundHealth(row.instancia);
+        if (health === "broken") {
+            dropped.push(row.instancia);
+            continue;
+        }
+        kept.push(row);
+    }
+    if (dropped.length) {
+        console.warn(`[Aquecedor] excluídas do ciclo (outbound MessageUpdate=ERROR): ${dropped.join(", ")}. Reconecte o QR dessas instâncias na EVO.`);
+        aquecedorCycleRuntime().lastResult =
+            `Instâncias com outbound quebrado (open mas MessageUpdate=ERROR) fora do ciclo: ${dropped.join(", ")}. Reconecte o QR na Evolution.`;
+    }
+    return kept;
 }
 function buildAquecedorSendNumberCandidates(raw) {
     const seed = resolveAquecedorInstanceDigits(raw);

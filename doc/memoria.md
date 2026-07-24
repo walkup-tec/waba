@@ -1,4 +1,11 @@
-﻿## 2026-07-24 12:06 — Aquecedor: conversa pares + sucesso no destino
+﻿## 2026-07-24 13:15 — Aquecedor: Em Fila some = outbound MessageUpdate=ERROR
+- Teste 1× 1321→walkup: HTTP 201 + tag só na origem + MessageUpdate=ERROR (walkup OK)
+- Quebradas 100% ERROR: 1321, 1261, 6011, 6635 | saudáveis: walkup, 1321-01, soma…
+- Código: filtra outbound quebrado + poll findStatusMessage; não culpar destino
+- Marker: DEPLOY-2026-07-24-aquecedor-outbound-ack-error — precisa push + Redeploy Node
+- LOG: doc/LOG-2026-07-24__131500__aquecedor-outbound-messageupdate-error.md
+
+## 2026-07-24 12:06 — Aquecedor: conversa pares + sucesso no destino
 - Sucesso = tag no DESTINO; findChats fallback; B→A prioriza após A→B
 - Anti-spam 1 send/ciclo + cooldown 15min mantidos
 - Marker: DEPLOY-2026-07-24-aquecedor-conversa-pares-destino — Redeploy Node

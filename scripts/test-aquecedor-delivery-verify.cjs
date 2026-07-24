@@ -114,9 +114,40 @@ assert(
 assert(
   helpers.decideAquecedorDeliveryConfirmation({
     sawOrigem: true,
-    sawDestino: true,
-  }).ok === true,
-  "origem + destino → sucesso",
+    sawDestino: false,
+    origem: "1321",
+    destino: "walkup",
+    ackStatus: "ERROR",
+  }).detail.includes("outbound está quebrado"),
+  "MessageUpdate=ERROR deve culpar a origem, não o destino",
+);
+assert(
+  helpers.classifyEvoOutboundSample(["ERROR", "ERROR", "ERROR"]) === "broken",
+  "amostra 100% ERROR → broken",
+);
+assert(
+  helpers.classifyEvoOutboundSample(["ERROR", "SERVER_ACK", "ERROR"]) === "healthy",
+  "qualquer SERVER_ACK → healthy",
+);
+assert(
+  helpers.extractEvoMessageAckStatus({
+    MessageUpdate: [{ status: "PENDING" }, { status: "ERROR" }],
+  }) === "ERROR",
+  "extrai último MessageUpdate",
+);
+assert(
+  helpers.extractEvoMessageAckStatus({
+    keyId: "abc",
+    status: "DELIVERY_ACK",
+  }) === "DELIVERY_ACK",
+  "extrai findStatusMessage.status",
+);
+
+assert(
+  /probeAquecedorSendAckStatus|filterAquecedorConnectedByOutboundHealth|findStatusMessage/.test(
+    srcIndex,
+  ),
+  "src consulta ACK pós-envio e filtra outbound quebrado",
 );
 
 // 6) Bodies findMessages nunca vazios / sem remoteJid
