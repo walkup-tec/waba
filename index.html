@@ -16742,7 +16742,7 @@
                   <div id="aquecedor-envios-list" class="aquecedor-envios-list">
                     <div class="muted">Carregando envios...</div>
                   </div>
-                  <details id="aquecedor-network-health" class="aquecedor-network-health" open>
+                  <details id="aquecedor-network-health" class="aquecedor-network-health" hidden>
                     <summary class="aquecedor-network-health-summary">Saúde da rede</summary>
                     <div class="aquecedor-network-health-body">
                       <div id="aquecedor-network-health-cards" class="aquecedor-network-health-cards">
@@ -38891,11 +38891,29 @@
       }
 
       async function loadAquecedorNetworkHealth() {
+        const panel = document.getElementById("aquecedor-network-health");
         const cards = document.getElementById("aquecedor-network-health-cards");
         const table = document.getElementById("aquecedor-network-health-table");
         const matrixEl = document.getElementById("aquecedor-network-health-matrix");
         const historyEl = document.getElementById("aquecedor-network-health-history");
-        if (!cards || !table) return;
+        const allowedEmail = "mozart.pmo@gmail.com";
+        const sessionEmail = String(wabaSessionEmail || "").trim().toLowerCase();
+        const canView = sessionEmail === allowedEmail;
+        if (panel) {
+          if (canView) {
+            panel.hidden = false;
+            panel.open = true;
+          } else {
+            panel.hidden = true;
+            panel.open = false;
+            if (cards) cards.innerHTML = "";
+            if (table) table.innerHTML = "";
+            if (matrixEl) matrixEl.innerHTML = "";
+            if (historyEl) historyEl.innerHTML = "";
+            return;
+          }
+        }
+        if (!canView || !cards || !table) return;
         try {
           const response = await fetchWithTimeout(
             "/aquecedor/network-health?_=" + Date.now(),

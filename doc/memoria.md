@@ -1,4 +1,9 @@
-﻿## 2026-07-24 10:15 — Aquecedor: entrega variantes + cooldown + anti-duplicata
+﻿## 2026-07-24 10:25 — Saúde da rede só Mozart
+- UI + API `/aquecedor/network-health` exclusivos para `mozart.pmo@gmail.com` (403 para demais)
+- Marker: DEPLOY-2026-07-24-saude-rede-so-mozart — Redeploy Node
+- Keywords: `Saúde da rede`, `mozart.pmo`, `network-health`
+
+## 2026-07-24 10:15 — Aquecedor: entrega variantes + cooldown + anti-duplicata
 - Revert mantém instancia; órfãos reclamados; cooldown 45min; variantes BR no send/findMessages
 - Marker: DEPLOY-2026-07-24-aquecedor-entrega-variantes-cooldown — Redeploy Node
 - LOG: doc/LOG-2026-07-24__101500__aquecedor-entrega-variantes-cooldown.md

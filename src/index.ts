@@ -9154,6 +9154,13 @@ app.get("/aquecedor/network-health", async (req, res) => {
     if (!ownerEmail) {
       return res.status(401).json({ error: "Sessão sem e-mail válido." });
     }
+    // Exclusivo Mozart — nunca expor matriz/saldo da rede a outros usuários.
+    if (ownerEmail !== "mozart.pmo@gmail.com") {
+      return res.status(403).json({
+        ok: false,
+        error: "Saúde da rede disponível apenas para o administrador do sistema.",
+      });
+    }
     const supabase = getSupabaseClient();
     const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
     const connectedActive = await filterAquecedorCycleConnected(resolved.connected);
