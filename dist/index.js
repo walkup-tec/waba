@@ -54,6 +54,7 @@ const base_path_1 = require("./base-path");
 const conversation_graph_service_1 = require("./aquecedor/conversation-graph.service");
 const pair_orchestrator_service_1 = require("./aquecedor/pair-orchestrator.service");
 const network_health_service_1 = require("./aquecedor/network-health.service");
+const delivery_verify_helpers_1 = require("./aquecedor/delivery-verify.helpers");
 const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
@@ -3287,29 +3288,13 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
             relaxTimestampOnLastAttempt: true,
         });
         if (!deliveryCheck.ok) {
-            // EVO já aceitou (HTTP 2xx): conta como sucesso do teste; findMessages pode atrasar.
-            await supabase.from("logs_envios").insert({
-                instancia_origem: chosen.instancia_origem,
-                instancia_destino: chosen.instancia_destino,
-                data_envio: new Date().toISOString(),
-            });
-            await recordAquecedorEnvio({
-                instanciaOrigem: chosen.instancia_origem,
-                instanciaDestino: chosen.instancia_destino,
-                status: "Envio com Sucesso",
-            });
-            await (0, conversation_graph_service_1.recordDirectedSend)({
-                ownerEmail,
-                fromInst: chosen.instancia_origem,
-                toInst: chosen.instancia_destino,
-            });
             aquecedorCycleRuntime().lastEvoError = {
                 status: sendResult.status,
                 body: deliveryCheck.detail.slice(0, 500),
                 instance: chosen.instancia_destino,
                 numeroLen: numero.length,
             };
-            aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso (EVO aceitou; confirmação findMessages pendente: ${deliveryCheck.detail.slice(0, 120)}).`;
+            aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} NÃO confirmado no WhatsApp. ${deliveryCheck.detail.slice(0, 180)}`;
         }
         else {
             await supabase.from("logs_envios").insert({
@@ -6068,118 +6053,17 @@ function appendAquecedorDeliveryTag(text, tag) {
         return base;
     return `${base} ${token}`;
 }
-function extractAquecedorMessageMarker(text) {
-    const value = String(text || "").trim();
-    const suffix = value.match(/\b([a-z0-9]{5,8})\s*$/i);
-    if (suffix?.[1])
-        return suffix[1].toLowerCase();
-    return value.slice(-24).toLowerCase();
-}
-function extractAquecedorMessageTimestampMs(node) {
-    const key = node.key;
-    const raw = key?.messageTimestamp ?? node.messageTimestamp ?? node.timestamp;
-    if (typeof raw === "number" && Number.isFinite(raw)) {
-        return raw > 1000000000000 ? raw : raw * 1000;
-    }
-    if (typeof raw === "string" && raw.trim()) {
-        const parsed = Number(raw);
-        if (Number.isFinite(parsed))
-            return parsed > 1000000000000 ? parsed : parsed * 1000;
-    }
-    return null;
-}
-function extractAquecedorFromMe(node) {
-    const key = node.key;
-    if (typeof key?.fromMe === "boolean")
-        return key.fromMe;
-    if (typeof node.fromMe === "boolean")
-        return node.fromMe;
-    return null;
-}
-function collectEvoChatMessageTexts(node, out, depth = 0) {
-    if (depth > 10 || node == null)
-        return;
-    if (typeof node === "string")
-        return;
-    if (Array.isArray(node)) {
-        for (const item of node)
-            collectEvoChatMessageTexts(item, out, depth + 1);
-        return;
-    }
-    if (typeof node !== "object")
-        return;
-    const obj = node;
-    if (typeof obj.conversation === "string" && obj.conversation.trim()) {
-        out.push(obj.conversation.trim());
-    }
-    const ext = obj.extendedTextMessage;
-    if (typeof ext?.text === "string" && ext.text.trim())
-        out.push(ext.text.trim());
-    if (typeof obj.text === "string" && obj.text.trim())
-        out.push(obj.text.trim());
-    for (const value of Object.values(obj)) {
-        if (value && typeof value === "object")
-            collectEvoChatMessageTexts(value, out, depth + 1);
-    }
-}
-function evoPayloadIncludesNeedle(node, needles, options, depth = 0) {
-    if (depth > 14 || node == null)
-        return false;
-    if (Array.isArray(node)) {
-        return node.some((item) => evoPayloadIncludesNeedle(item, needles, options, depth + 1));
-    }
-    if (typeof node !== "object")
-        return false;
-    const obj = node;
-    const fromMe = extractAquecedorFromMe(obj);
-    const texts = [];
-    collectEvoChatMessageTexts(obj.message ?? obj, texts);
-    const normalizedNeedles = needles
-        .map((needle) => String(needle || "").trim().toLowerCase())
-        .filter(Boolean);
-    if (normalizedNeedles.length && texts.length) {
-        const minTs = options?.minTimestampMs;
-        const ts = extractAquecedorMessageTimestampMs(obj);
-        const tsOk = minTs == null || ts == null || ts >= minTs;
-        const fromMeOk = options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
-        if (tsOk && fromMeOk) {
-            const matched = texts.some((text) => {
-                const lowered = text.toLowerCase();
-                return normalizedNeedles.some((needle) => lowered.includes(needle));
-            });
-            if (matched)
-                return true;
-        }
-    }
-    for (const value of Object.values(obj)) {
-        if (value && typeof value === "object") {
-            if (evoPayloadIncludesNeedle(value, needles, options, depth + 1))
-                return true;
-        }
-    }
-    return false;
-}
 function evoChatTextsIncludeMarker(node, marker) {
-    return evoChatTextsIncludeNeedle(node, [marker]);
+    return (0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(node, [marker]);
 }
 function evoChatTextsIncludeNeedle(node, needles) {
-    return evoPayloadIncludesNeedle(node, needles);
+    return (0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(node, needles);
 }
 async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJids, needles, minTimestampMs, fromMe = null) {
     for (const instanceName of instanceCandidates) {
         const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
         for (const remoteJid of remoteJids) {
-            const whereKey = { remoteJid };
-            if (fromMe != null)
-                whereKey.fromMe = fromMe;
-            const bodies = [
-                { where: { key: whereKey }, limit: 50 },
-                { where: { key: { remoteJid } }, limit: 50 },
-                { where: { key: { remoteJid } }, take: 50 },
-                { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
-                { limit: 80 },
-                {},
-            ];
+            const bodies = (0, delivery_verify_helpers_1.buildAquecedorFindMessagesBodies)(remoteJid, fromMe);
             for (const body of bodies) {
                 const result = await callEvoAction(url, "POST", body, {
                     timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
@@ -6187,7 +6071,11 @@ async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJ
                 });
                 if (!result.ok)
                     continue;
-                if (evoPayloadIncludesNeedle(result.json, needles, { minTimestampMs, fromMe })) {
+                if ((0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(result.json, needles, {
+                    minTimestampMs,
+                    fromMe,
+                    requireTokenBoundary: true,
+                })) {
                     return true;
                 }
             }
@@ -6201,16 +6089,10 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     if (!destino || !remoteJids.length) {
         return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
     }
-    const marker = extractAquecedorMessageMarker(messageText);
-    const fullText = String(messageText || "").trim().toLowerCase();
-    const needles = new Set();
-    if (marker)
-        needles.add(marker);
-    if (fullText.length >= 6)
-        needles.add(fullText);
-    if (fullText.length >= 12)
-        needles.add(fullText.slice(0, 48));
-    const needleList = Array.from(needles);
+    const needleList = (0, delivery_verify_helpers_1.buildAquecedorDeliveryNeedles)(messageText);
+    if (!needleList.length) {
+        return { ok: false, detail: "Sem marcador único para conferir entrega no WhatsApp." };
+    }
     const timestampGraceMs = options?.timestampGraceMs ?? 5000;
     const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
     const maxAttempts = Math.max(3, options?.maxAttempts ?? 12);
@@ -6218,35 +6100,40 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     const skipInitialDelay = options?.skipInitialDelay === true;
     const relaxTimestampOnLastAttempt = options?.relaxTimestampOnLastAttempt === true;
     const destinoCandidates = await resolveEvoInstanceNameCandidates(destino);
+    const origem = String(options?.instanciaOrigem || "").trim();
+    const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
+    const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
+    const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
     if (!skipInitialDelay) {
         await sleepMs(3000);
     }
+    let sawDestino = false;
+    let sawOrigem = false;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         if (attempt > 1)
             await sleepMs(attemptIntervalMs);
         const tsFilter = relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
-        const foundOnDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, tsFilter, false);
-        if (foundOnDestino) {
-            return { ok: true, detail: "" };
+        if (!sawDestino) {
+            sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, tsFilter, false);
         }
-    }
-    const origem = String(options?.instanciaOrigem || "").trim();
-    const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
-    if (origem && numeroDestino) {
-        const origemCandidates = await resolveEvoInstanceNameCandidates(origem);
-        const destJids = buildAquecedorRemoteJidCandidates(numeroDestino);
-        const foundOnOrigem = await probeAquecedorDeliveryViaFindMessages(origemCandidates, destJids, needleList, minTimestampMs, true);
-        if (foundOnOrigem) {
-            return {
-                ok: false,
-                detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
-            };
+        if (!sawOrigem && origemCandidates.length && destJids.length) {
+            sawOrigem = await probeAquecedorDeliveryViaFindMessages(origemCandidates, destJids, needleList, tsFilter, true);
         }
+        const early = (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+            sawOrigem,
+            sawDestino,
+            origem,
+            destino,
+        });
+        if (early.ok)
+            return early;
     }
-    return {
-        ok: false,
-        detail: "EVO aceitou o envio, mas a mensagem não apareceu no WhatsApp do destinatário (conferência findMessages).",
-    };
+    return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+        sawOrigem,
+        sawDestino,
+        origem,
+        destino,
+    });
 }
 async function revertAquecedorPendingAfterFailedSend(supabase, pendingId) {
     await supabase.from("aquecedor")

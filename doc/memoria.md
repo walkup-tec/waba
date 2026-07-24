@@ -1,4 +1,10 @@
-﻿## 2026-07-24 08:00 — Aquecedor: rotatividade inteligente de pares
+﻿## 2026-07-24 08:55 — Aquecedor: falso Envio com Sucesso
+- Causa: findMessages global + match de prefixo de frases repetidas; teste gravava sucesso sem prova
+- Fix: só tag única; JID obrigatório; origem+destino; teste sem sucesso falso
+- Marker: DEPLOY-2026-07-24-aquecedor-falso-sucesso-entrega — Redeploy Node
+- LOG: doc/LOG-2026-07-24__085500__aquecedor-falso-sucesso-entrega.md
+
+## 2026-07-24 08:00 — Aquecedor: rotatividade inteligente de pares
 - RelationshipManager: volume entre pares + anti-repetição + cobertura
 - Dashboard: matriz NxN, spread/desvio, histórico com motivo do score
 - Marker: DEPLOY-2026-07-24-aquecedor-rotatividade-pares — Redeploy Node

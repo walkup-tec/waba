@@ -53,6 +53,12 @@ import {
   recordPairSelection,
 } from "./aquecedor/conversation-graph.service";
 import {
+  buildAquecedorDeliveryNeedles,
+  buildAquecedorFindMessagesBodies,
+  decideAquecedorDeliveryConfirmation,
+  evoPayloadIncludesNeedle,
+} from "./aquecedor/delivery-verify.helpers";
+import {
   buildSelectionRecord,
   pickNextDirectedExchange,
 } from "./aquecedor/pair-orchestrator.service";
@@ -4104,29 +4110,13 @@ async function runAquecedorCycleTestBatch(
       },
     );
     if (!deliveryCheck.ok) {
-      // EVO já aceitou (HTTP 2xx): conta como sucesso do teste; findMessages pode atrasar.
-      await (supabase.from("logs_envios" as any) as any).insert({
-        instancia_origem: chosen.instancia_origem,
-        instancia_destino: chosen.instancia_destino,
-        data_envio: new Date().toISOString(),
-      });
-      await recordAquecedorEnvio({
-        instanciaOrigem: chosen.instancia_origem,
-        instanciaDestino: chosen.instancia_destino,
-        status: "Envio com Sucesso",
-      });
-      await recordDirectedSend({
-        ownerEmail,
-        fromInst: chosen.instancia_origem,
-        toInst: chosen.instancia_destino,
-      });
       aquecedorCycleRuntime().lastEvoError = {
         status: sendResult.status,
         body: deliveryCheck.detail.slice(0, 500),
         instance: chosen.instancia_destino,
         numeroLen: numero.length,
       };
-      aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso (EVO aceitou; confirmação findMessages pendente: ${deliveryCheck.detail.slice(0, 120)}).`;
+      aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} NÃO confirmado no WhatsApp. ${deliveryCheck.detail.slice(0, 180)}`;
     } else {
       await (supabase.from("logs_envios" as any) as any).insert({
         instancia_origem: chosen.instancia_origem,
@@ -7344,95 +7334,8 @@ function appendAquecedorDeliveryTag(text: string, tag: string): string {
   return `${base} ${token}`;
 }
 
-function extractAquecedorMessageMarker(text: string): string {
-  const value = String(text || "").trim();
-  const suffix = value.match(/\b([a-z0-9]{5,8})\s*$/i);
-  if (suffix?.[1]) return suffix[1].toLowerCase();
-  return value.slice(-24).toLowerCase();
-}
-
-function extractAquecedorMessageTimestampMs(node: Record<string, unknown>): number | null {
-  const key = node.key as Record<string, unknown> | undefined;
-  const raw = key?.messageTimestamp ?? node.messageTimestamp ?? node.timestamp;
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw > 1_000_000_000_000 ? raw : raw * 1000;
-  }
-  if (typeof raw === "string" && raw.trim()) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) return parsed > 1_000_000_000_000 ? parsed : parsed * 1000;
-  }
-  return null;
-}
-
-function extractAquecedorFromMe(node: Record<string, unknown>): boolean | null {
-  const key = node.key as Record<string, unknown> | undefined;
-  if (typeof key?.fromMe === "boolean") return key.fromMe;
-  if (typeof node.fromMe === "boolean") return node.fromMe;
-  return null;
-}
-
-function collectEvoChatMessageTexts(node: unknown, out: string[], depth = 0): void {
-  if (depth > 10 || node == null) return;
-  if (typeof node === "string") return;
-  if (Array.isArray(node)) {
-    for (const item of node) collectEvoChatMessageTexts(item, out, depth + 1);
-    return;
-  }
-  if (typeof node !== "object") return;
-  const obj = node as Record<string, unknown>;
-  if (typeof obj.conversation === "string" && obj.conversation.trim()) {
-    out.push(obj.conversation.trim());
-  }
-  const ext = obj.extendedTextMessage as Record<string, unknown> | undefined;
-  if (typeof ext?.text === "string" && ext.text.trim()) out.push(ext.text.trim());
-  if (typeof obj.text === "string" && obj.text.trim()) out.push(obj.text.trim());
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") collectEvoChatMessageTexts(value, out, depth + 1);
-  }
-}
-
-function evoPayloadIncludesNeedle(
-  node: unknown,
-  needles: string[],
-  options?: { minTimestampMs?: number; fromMe?: boolean | null },
-  depth = 0,
-): boolean {
-  if (depth > 14 || node == null) return false;
-  if (Array.isArray(node)) {
-    return node.some((item) => evoPayloadIncludesNeedle(item, needles, options, depth + 1));
-  }
-  if (typeof node !== "object") return false;
-  const obj = node as Record<string, unknown>;
-  const fromMe = extractAquecedorFromMe(obj);
-  const texts: string[] = [];
-  collectEvoChatMessageTexts(obj.message ?? obj, texts);
-  const normalizedNeedles = needles
-    .map((needle) => String(needle || "").trim().toLowerCase())
-    .filter(Boolean);
-  if (normalizedNeedles.length && texts.length) {
-    const minTs = options?.minTimestampMs;
-    const ts = extractAquecedorMessageTimestampMs(obj);
-    const tsOk = minTs == null || ts == null || ts >= minTs;
-    const fromMeOk =
-      options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
-    if (tsOk && fromMeOk) {
-      const matched = texts.some((text) => {
-        const lowered = text.toLowerCase();
-        return normalizedNeedles.some((needle) => lowered.includes(needle));
-      });
-      if (matched) return true;
-    }
-  }
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      if (evoPayloadIncludesNeedle(value, needles, options, depth + 1)) return true;
-    }
-  }
-  return false;
-}
-
 function evoChatTextsIncludeMarker(node: unknown, marker: string): boolean {
-  return evoChatTextsIncludeNeedle(node, [marker]);
+  return evoPayloadIncludesNeedle(node, [marker]);
 }
 
 function evoChatTextsIncludeNeedle(node: unknown, needles: string[]): boolean {
@@ -7449,23 +7352,20 @@ async function probeAquecedorDeliveryViaFindMessages(
   for (const instanceName of instanceCandidates) {
     const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
     for (const remoteJid of remoteJids) {
-      const whereKey: Record<string, unknown> = { remoteJid };
-      if (fromMe != null) whereKey.fromMe = fromMe;
-      const bodies: Array<Record<string, unknown>> = [
-        { where: { key: whereKey }, limit: 50 },
-        { where: { key: { remoteJid } }, limit: 50 },
-        { where: { key: { remoteJid } }, take: 50 },
-        { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
-        { limit: 80 },
-        {},
-      ];
+      const bodies = buildAquecedorFindMessagesBodies(remoteJid, fromMe);
       for (const body of bodies) {
         const result = await callEvoAction(url, "POST", body, {
           timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 25000),
           retries: 1,
         });
         if (!result.ok) continue;
-        if (evoPayloadIncludesNeedle(result.json, needles, { minTimestampMs, fromMe })) {
+        if (
+          evoPayloadIncludesNeedle(result.json, needles, {
+            minTimestampMs,
+            fromMe,
+            requireTokenBoundary: true,
+          })
+        ) {
           return true;
         }
       }
@@ -7496,13 +7396,10 @@ async function verifyAquecedorMessageDelivered(
     return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
   }
 
-  const marker = extractAquecedorMessageMarker(messageText);
-  const fullText = String(messageText || "").trim().toLowerCase();
-  const needles = new Set<string>();
-  if (marker) needles.add(marker);
-  if (fullText.length >= 6) needles.add(fullText);
-  if (fullText.length >= 12) needles.add(fullText.slice(0, 48));
-  const needleList = Array.from(needles);
+  const needleList = buildAquecedorDeliveryNeedles(messageText);
+  if (!needleList.length) {
+    return { ok: false, detail: "Sem marcador único para conferir entrega no WhatsApp." };
+  }
   const timestampGraceMs = options?.timestampGraceMs ?? 5000;
   const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
   const maxAttempts = Math.max(3, options?.maxAttempts ?? 12);
@@ -7510,52 +7407,55 @@ async function verifyAquecedorMessageDelivered(
   const skipInitialDelay = options?.skipInitialDelay === true;
   const relaxTimestampOnLastAttempt = options?.relaxTimestampOnLastAttempt === true;
   const destinoCandidates = await resolveEvoInstanceNameCandidates(destino);
+  const origem = String(options?.instanciaOrigem || "").trim();
+  const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
+  const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
+  const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
 
   if (!skipInitialDelay) {
     await sleepMs(3000);
   }
 
+  let sawDestino = false;
+  let sawOrigem = false;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (attempt > 1) await sleepMs(attemptIntervalMs);
     const tsFilter =
       relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
-    const foundOnDestino = await probeAquecedorDeliveryViaFindMessages(
-      destinoCandidates,
-      remoteJids,
-      needleList,
-      tsFilter,
-      false,
-    );
-    if (foundOnDestino) {
-      return { ok: true, detail: "" };
+    if (!sawDestino) {
+      sawDestino = await probeAquecedorDeliveryViaFindMessages(
+        destinoCandidates,
+        remoteJids,
+        needleList,
+        tsFilter,
+        false,
+      );
     }
+    if (!sawOrigem && origemCandidates.length && destJids.length) {
+      sawOrigem = await probeAquecedorDeliveryViaFindMessages(
+        origemCandidates,
+        destJids,
+        needleList,
+        tsFilter,
+        true,
+      );
+    }
+    const early = decideAquecedorDeliveryConfirmation({
+      sawOrigem,
+      sawDestino,
+      origem,
+      destino,
+    });
+    if (early.ok) return early;
   }
 
-  const origem = String(options?.instanciaOrigem || "").trim();
-  const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
-  if (origem && numeroDestino) {
-    const origemCandidates = await resolveEvoInstanceNameCandidates(origem);
-    const destJids = buildAquecedorRemoteJidCandidates(numeroDestino);
-    const foundOnOrigem = await probeAquecedorDeliveryViaFindMessages(
-      origemCandidates,
-      destJids,
-      needleList,
-      minTimestampMs,
-      true,
-    );
-    if (foundOnOrigem) {
-      return {
-        ok: false,
-        detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
-      };
-    }
-  }
-
-  return {
-    ok: false,
-    detail:
-      "EVO aceitou o envio, mas a mensagem não apareceu no WhatsApp do destinatário (conferência findMessages).",
-  };
+  return decideAquecedorDeliveryConfirmation({
+    sawOrigem,
+    sawDestino,
+    origem,
+    destino,
+  });
 }
 
 async function revertAquecedorPendingAfterFailedSend(
