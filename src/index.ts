@@ -4590,7 +4590,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
         origem: chosen.instancia_origem,
         destino: chosen.instancia_destino,
         reason: deliveryDetail || "entrega não confirmada no destinatário",
-        cooldownMs: 45 * 60 * 1000,
+        cooldownMs: 15 * 60 * 1000,
       });
       const untilBr = formatDateBr(new Date(cooldown.untilMs).toISOString());
       deferAquecedorRetryOrWindow(

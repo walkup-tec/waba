@@ -7,7 +7,7 @@ import path from "path";
 import { resolveDataFile } from "../data-path";
 
 const STORE_FILE = resolveDataFile("aquecedor-delivery-cooldowns.json");
-const DEFAULT_COOLDOWN_MS = 45 * 60 * 1000;
+const DEFAULT_COOLDOWN_MS = 15 * 60 * 1000;
 
 type CooldownEntry = {
   untilMs: number;

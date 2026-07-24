@@ -17,7 +17,7 @@
 - Revert mantém `instancia` da origem; ensure **reclama órfãos** (`instancia null`)
 - Tentativas de envio com **variantes** do número BR até confirmar origem+destino
 - findMessages com fallback recente (sem depender só do JID telefone)
-- **Cooldown 45 min** no par direcionado após falha (`delivery-cooldown.service.ts`); pick exclui pares bloqueados
+- **Cooldown 15 min** no par direcionado após falha (`delivery-cooldown.service.ts`; era 45 min); pick exclui pares bloqueados
 - Marker: `DEPLOY-2026-07-24-aquecedor-entrega-variantes-cooldown`
 
 ## Arquivos
