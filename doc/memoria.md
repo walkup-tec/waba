@@ -1,4 +1,9 @@
-﻿## 2026-07-24 08:55 — Aquecedor: falso Envio com Sucesso
+﻿## 2026-07-24 10:15 — Aquecedor: entrega variantes + cooldown + anti-duplicata
+- Revert mantém instancia; órfãos reclamados; cooldown 45min; variantes BR no send/findMessages
+- Marker: DEPLOY-2026-07-24-aquecedor-entrega-variantes-cooldown — Redeploy Node
+- LOG: doc/LOG-2026-07-24__101500__aquecedor-entrega-variantes-cooldown.md
+
+## 2026-07-24 08:55 — Aquecedor: falso Envio com Sucesso
 - Causa: findMessages global + match de prefixo de frases repetidas; teste gravava sucesso sem prova
 - Fix: só tag única; JID obrigatório; origem+destino; teste sem sucesso falso
 - Marker: DEPLOY-2026-07-24-aquecedor-falso-sucesso-entrega — Redeploy Node

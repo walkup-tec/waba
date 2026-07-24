@@ -165,12 +165,19 @@ export type RelationshipPickResult = {
 export function pickNextRelationship(
   owner: OwnerConversationGraph,
   eligibleInstanceNames: string[],
-  options: { startIndex?: number } = {},
+  options: { startIndex?: number; blockedDirectedKeys?: Set<string> } = {},
 ): RelationshipPickResult | null {
   const names = eligibleInstanceNames.map((n) => String(n || "").trim()).filter(Boolean);
   if (names.length < 2) return null;
 
-  const raw = listDirectedCandidatesForInstances(owner, names);
+  const blocked = options.blockedDirectedKeys;
+  const rawAll = listDirectedCandidatesForInstances(owner, names);
+  const raw = blocked?.size
+    ? rawAll.filter(
+        ({ origem, destino }) =>
+          !blocked.has(`${origem.toLowerCase()}→${destino.toLowerCase()}`),
+      )
+    : rawAll;
   const reducesToOneOrLess = raw.filter(({ origem, destino, pair }) => {
     const direction =
       origem.localeCompare(pair.a) === 0 && destino.localeCompare(pair.b) === 0

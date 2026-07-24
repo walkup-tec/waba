@@ -26,24 +26,33 @@ export function buildAquecedorDeliveryNeedles(messageText: string): string[] {
   return needles;
 }
 
-/** Bodies de findMessages: sempre com remoteJid (sem probe global). */
+/** Bodies de findMessages: remoteJid + fallback recente (chats @lid sem JID telefone). */
 export function buildAquecedorFindMessagesBodies(
   remoteJid: string,
   fromMe: boolean | null = null,
 ): Array<Record<string, unknown>> {
   const jid = String(remoteJid || "").trim();
-  if (!jid) return [];
-  const whereKey: Record<string, unknown> = { remoteJid: jid };
-  if (fromMe != null) whereKey.fromMe = fromMe;
-  return [
-    { where: { key: whereKey }, limit: 50 },
-    { where: { key: { remoteJid: jid } }, limit: 50 },
-    { where: { key: { remoteJid: jid } }, take: 50 },
-    {
-      where: { key: { remoteJid: jid.replace("@s.whatsapp.net", "") } },
-      limit: 50,
-    },
-  ];
+  const bodies: Array<Record<string, unknown>> = [];
+  if (jid) {
+    const whereKey: Record<string, unknown> = { remoteJid: jid };
+    if (fromMe != null) whereKey.fromMe = fromMe;
+    bodies.push(
+      { where: { key: whereKey }, limit: 50 },
+      { where: { key: { remoteJid: jid } }, limit: 50 },
+      { where: { key: { remoteJid: jid } }, take: 50 },
+      {
+        where: { key: { remoteJid: jid.replace("@s.whatsapp.net", "") } },
+        limit: 50,
+      },
+    );
+  }
+  // Fallback: mensagens recentes (WhatsApp/@lid pode não indexar pelo JID telefone).
+  if (fromMe != null) {
+    bodies.push({ where: { key: { fromMe } }, limit: 40 });
+  } else {
+    bodies.push({ where: { key: {} }, limit: 40 });
+  }
+  return bodies;
 }
 
 export function aquecedorTextMatchesNeedle(
@@ -161,6 +170,8 @@ export function evoPayloadIncludesNeedle(
 export type AquecedorDeliveryDecision = {
   ok: boolean;
   detail: string;
+  sawOrigem: boolean;
+  sawDestino: boolean;
 };
 
 /** Decisão final: exige origem + destino. */
@@ -172,25 +183,33 @@ export function decideAquecedorDeliveryConfirmation(input: {
 }): AquecedorDeliveryDecision {
   const origem = String(input.origem || "").trim() || "origem";
   const destino = String(input.destino || "").trim() || "destino";
-  if (input.sawDestino && input.sawOrigem) {
-    return { ok: true, detail: "" };
+  const sawOrigem = Boolean(input.sawOrigem);
+  const sawDestino = Boolean(input.sawDestino);
+  if (sawDestino && sawOrigem) {
+    return { ok: true, detail: "", sawOrigem, sawDestino };
   }
-  if (input.sawOrigem && !input.sawDestino) {
+  if (sawOrigem && !sawDestino) {
     return {
       ok: false,
       detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
+      sawOrigem,
+      sawDestino,
     };
   }
-  if (input.sawDestino && !input.sawOrigem) {
+  if (sawDestino && !sawOrigem) {
     return {
       ok: false,
       detail: `Marcador apareceu no destino sem prova na origem (${origem}) — possível histórico EVO; não confirmo envio real.`,
+      sawOrigem,
+      sawDestino,
     };
   }
   return {
     ok: false,
     detail:
       "EVO aceitou o envio, mas a mensagem não apareceu no WhatsApp do destinatário (conferência findMessages).",
+    sawOrigem,
+    sawDestino,
   };
 }
 

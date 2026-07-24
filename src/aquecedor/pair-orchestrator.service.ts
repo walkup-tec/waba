@@ -14,7 +14,7 @@ export type OrchestratorPickResult = RelationshipPickResult;
 export function pickNextDirectedExchange(
   owner: OwnerConversationGraph,
   eligibleInstanceNames: string[],
-  options: { startIndex?: number } = {},
+  options: { startIndex?: number; blockedDirectedKeys?: Set<string> } = {},
 ): OrchestratorPickResult | null {
   return pickNextRelationship(owner, eligibleInstanceNames, options);
 }

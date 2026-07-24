@@ -59,6 +59,10 @@ import {
   evoPayloadIncludesNeedle,
 } from "./aquecedor/delivery-verify.helpers";
 import {
+  listBlockedDirectedKeys,
+  recordDirectedDeliveryFailure,
+} from "./aquecedor/delivery-cooldown.service";
+import {
   buildSelectionRecord,
   pickNextDirectedExchange,
 } from "./aquecedor/pair-orchestrator.service";
@@ -1904,7 +1908,10 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
   const eligibleNames = connected.map((item) =>
     resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick),
   );
-  const pick = pickNextDirectedExchange(graph, eligibleNames, { startIndex });
+  const pick = pickNextDirectedExchange(graph, eligibleNames, {
+    startIndex,
+    blockedDirectedKeys: await listBlockedDirectedKeys(),
+  });
   if (!pick) return null;
 
   const origemLc = pick.origem.toLowerCase();
@@ -2404,6 +2411,31 @@ async function ensureAquecedorPendingMessageOnce(
 
   const exclude = await buildAquecedorExcludeSet(supabase, pair);
   const mensagem = await pickAquecedorMessageText(supabase, exclude);
+
+  // Reaproveita órfãos (instancia null) de reverts antigos — evita 2º registro Em Fila.
+  const { data: orphan } = (await (supabase
+    .from("aquecedor" as any)
+    .select("id")
+    .eq("status", "PENDENTE")
+    .is("instancia", null)
+    .order("scheduled_at", { ascending: true, nullsFirst: true })
+    .limit(1)
+    .maybeSingle())) as any;
+  if (orphan?.id) {
+    const { error: claimError } = await (supabase.from("aquecedor" as any) as any)
+      .update({
+        mensagem,
+        scheduled_at: now,
+        instancia: origem,
+        numero_destino: null,
+        processing_at: null,
+        sent_at: null,
+      })
+      .eq("id", orphan.id)
+      .eq("status", "PENDENTE");
+    if (!claimError) return { ok: true, pendingId: orphan.id };
+  }
+
   const { data: inserted, error: insertError } = await (supabase.from("aquecedor" as any) as any)
     .insert({
       mensagem,
@@ -4442,74 +4474,136 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       .eq("id", pendingData.id);
 
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
-    const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
-    const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
-      ? { number: numero, textMessage: { text: textoEnvio } }
-      : { number: numero, text: textoEnvio };
-    const sendStartedAtMs = Date.now();
-    const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
-
-    if (!sendResult.ok) {
-      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
-      const evoDetail =
-        sendResult.json?.message ||
-        (Array.isArray(sendResult.json?.message) ? sendResult.json.message[0] : null) ||
-        sendResult.json?.error ||
-        (typeof sendResult.json?.detail === "string" ? sendResult.json.detail : null) ||
-        (sendResult.body && sendResult.body.length < 200 ? sendResult.body : null);
-      const detailStr = evoDetail ? String(evoDetail) : String(sendResult.body || "");
-      await detectAndMarkRestrictionFromSend(
-        chosen.instancia_origem,
-        sendResult.status,
-        detailStr,
-      );
-      const detail = evoDetail
-        ? ` (${String(evoDetail).slice(0, 120)})`
-        : sendResult.status === 0
-          ? ` (${String((sendResult as { error?: string }).error || sendResult.body || "timeout").slice(0, 120)})`
-          : "";
+    const numberCandidates = buildAquecedorSendNumberCandidates(chosen.numero_whatsapp);
+    if (!numberCandidates.length) {
+      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+        keepInstancia: chosen.instancia_origem,
+      });
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
-        sendResult.status === 0 ? 180 : 120,
-        `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`,
+        120,
+        `Destino ${chosen.instancia_destino} sem número WhatsApp válido para envio.`,
       );
-      aquecedorCycleRuntime().lastEvoError = {
-        status: sendResult.status,
-        body: String(sendResult.body || "").slice(0, 500),
-        instance: chosen.instancia_origem,
-        numeroLen: numero.length,
-      };
-      console.error("[Aquecedor] sendText falhou:", aquecedorCycleRuntime().lastEvoError);
       return;
     }
 
     const origemConnected = connected.find(
       (item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase(),
     );
-    const deliveryCheck = await verifyAquecedorMessageDelivered(
-      chosen.instancia_destino,
-      resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")),
-      textoEnvio,
-      {
-        instanciaOrigem: chosen.instancia_origem,
-        numeroDestino: numero,
-        sendStartedAtMs,
-      },
-    );
-    if (!deliveryCheck.ok) {
-      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
+    let sendAccepted = false;
+    let deliveryOk = false;
+    let deliveryDetail = "";
+    let lastSendStatus = 0;
+    let lastSendBody = "";
+    let numeroUsado = numberCandidates[0];
+    let sendStartedAtMs = Date.now();
+
+    for (let ni = 0; ni < numberCandidates.length; ni += 1) {
+      const numero = numberCandidates[ni];
+      numeroUsado = numero;
+      const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
+        ? { number: numero, textMessage: { text: textoEnvio } }
+        : { number: numero, text: textoEnvio };
+      sendStartedAtMs = Date.now();
+      const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
+      lastSendStatus = sendResult.status;
+      lastSendBody = String(sendResult.body || "");
+      if (!sendResult.ok) {
+        const detailStr = String(
+          sendResult.json?.message ||
+            sendResult.json?.error ||
+            sendResult.body ||
+            "",
+        );
+        await detectAndMarkRestrictionFromSend(
+          chosen.instancia_origem,
+          sendResult.status,
+          detailStr,
+        );
+        continue;
+      }
+      sendAccepted = true;
+      await (supabase.from("aquecedor" as any) as any)
+        .update({
+          numero_destino: numero,
+          mensagem: textoEnvio,
+        })
+        .eq("id", pendingData.id);
+
+      const deliveryCheck = await verifyAquecedorMessageDelivered(
+        chosen.instancia_destino,
+        resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")),
+        textoEnvio,
+        {
+          instanciaOrigem: chosen.instancia_origem,
+          numeroDestino: numero,
+          sendStartedAtMs,
+          maxAttempts: ni === 0 ? 12 : 8,
+          attemptIntervalMs: 3000,
+          relaxTimestampOnLastAttempt: true,
+        },
+      );
+      deliveryDetail = deliveryCheck.detail;
+      if (deliveryCheck.ok) {
+        deliveryOk = true;
+        break;
+      }
+      // Se já apareceu na origem, tentar variante do número (9º dígito / DDI).
+      if (!deliveryCheck.sawDestino && deliveryCheck.sawOrigem && ni + 1 < numberCandidates.length) {
+        console.warn(
+          `[Aquecedor] entrega só na origem com número ${numero}; tentando variante ${numberCandidates[ni + 1]}`,
+        );
+        continue;
+      }
+      if (!deliveryCheck.sawDestino && ni + 1 < numberCandidates.length) {
+        continue;
+      }
+      break;
+    }
+
+    if (!sendAccepted) {
+      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+        keepInstancia: chosen.instancia_origem,
+      });
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
-        120,
-        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryCheck.detail}`,
+        lastSendStatus === 0 ? 180 : 120,
+        `Falha no envio via EVO (HTTP ${lastSendStatus}). Mensagem voltou para pendente.`,
       );
       aquecedorCycleRuntime().lastEvoError = {
-        status: sendResult.status,
-        body: deliveryCheck.detail.slice(0, 500),
+        status: lastSendStatus,
+        body: lastSendBody.slice(0, 500),
+        instance: chosen.instancia_origem,
+        numeroLen: numeroUsado.length,
+      };
+      console.error("[Aquecedor] sendText falhou:", aquecedorCycleRuntime().lastEvoError);
+      return;
+    }
+
+    if (!deliveryOk) {
+      await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+        keepInstancia: chosen.instancia_origem,
+      });
+      const cooldown = await recordDirectedDeliveryFailure({
+        origem: chosen.instancia_origem,
+        destino: chosen.instancia_destino,
+        reason: deliveryDetail || "entrega não confirmada no destinatário",
+        cooldownMs: 45 * 60 * 1000,
+      });
+      const untilBr = formatDateBr(new Date(cooldown.untilMs).toISOString());
+      deferAquecedorRetryOrWindow(
+        config,
+        nowSp,
+        30,
+        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}; seguindo para outros pares.`,
+      );
+      aquecedorCycleRuntime().lastEvoError = {
+        status: lastSendStatus,
+        body: deliveryDetail.slice(0, 500),
         instance: chosen.instancia_destino,
-        numeroLen: numero.length,
+        numeroLen: numeroUsado.length,
       };
       console.warn("[Aquecedor] entrega não confirmada:", aquecedorCycleRuntime().lastEvoError);
       return;
@@ -4520,6 +4614,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       .update({
         status: "ENVIADO",
         sent_at: new Date().toISOString(),
+        numero_destino: numeroUsado,
       })
       .eq("id", pendingData.id);
 
@@ -7389,16 +7484,26 @@ async function verifyAquecedorMessageDelivered(
     attemptIntervalMs?: number;
     relaxTimestampOnLastAttempt?: boolean;
   },
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ ok: boolean; detail: string; sawOrigem: boolean; sawDestino: boolean }> {
   const destino = String(instanciaDestino || "").trim();
   const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
   if (!destino || !remoteJids.length) {
-    return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
+    return {
+      ok: false,
+      detail: "Parâmetros inválidos para conferir entrega no destinatário.",
+      sawOrigem: false,
+      sawDestino: false,
+    };
   }
 
   const needleList = buildAquecedorDeliveryNeedles(messageText);
   if (!needleList.length) {
-    return { ok: false, detail: "Sem marcador único para conferir entrega no WhatsApp." };
+    return {
+      ok: false,
+      detail: "Sem marcador único para conferir entrega no WhatsApp.",
+      sawOrigem: false,
+      sawDestino: false,
+    };
   }
   const timestampGraceMs = options?.timestampGraceMs ?? 5000;
   const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
@@ -7431,6 +7536,16 @@ async function verifyAquecedorMessageDelivered(
         tsFilter,
         false,
       );
+      if (!sawDestino) {
+        // @lid / indexação EVO: procurar marker em mensagens recentes inbound sem JID fixo.
+        sawDestino = await probeAquecedorDeliveryViaFindMessages(
+          destinoCandidates,
+          remoteJids.length ? remoteJids : [""],
+          needleList,
+          tsFilter,
+          null,
+        );
+      }
     }
     if (!sawOrigem && origemCandidates.length && destJids.length) {
       sawOrigem = await probeAquecedorDeliveryViaFindMessages(
@@ -7458,19 +7573,42 @@ async function verifyAquecedorMessageDelivered(
   });
 }
 
+function buildAquecedorSendNumberCandidates(raw: string): string[] {
+  const seed = resolveAquecedorInstanceDigits(raw);
+  if (!seed) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const variant of expandBrazilWhatsAppNumberVariants(seed)) {
+    const digits = resolveAquecedorInstanceDigits(variant);
+    if (digits.length < 10 || seen.has(digits)) continue;
+    seen.add(digits);
+    out.push(digits);
+  }
+  // Preferir DDI+9º dígito (mais longo) primeiro.
+  out.sort((a, b) => b.length - a.length || a.localeCompare(b));
+  return out;
+}
+
 async function revertAquecedorPendingAfterFailedSend(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
   pendingId: string | number,
+  options?: { keepInstancia?: string | null },
 ): Promise<void> {
-  await (supabase.from("aquecedor" as any) as any)
-    .update({
-      status: "PENDENTE",
-      instancia: null,
-      numero_destino: null,
-      processing_at: null,
-      sent_at: null,
-    })
-    .eq("id", pendingId);
+  // Mantém `instancia` quando informado — senão o ensure cria OUTRA linha PENDENTE
+  // (duplicata Em Fila) porque a consulta filtra por instancia=origem.
+  const keepInstancia = String(options?.keepInstancia || "").trim();
+  const payload: Record<string, unknown> = {
+    status: "PENDENTE",
+    numero_destino: null,
+    processing_at: null,
+    sent_at: null,
+  };
+  if (keepInstancia) {
+    payload.instancia = keepInstancia;
+  } else {
+    payload.instancia = null;
+  }
+  await (supabase.from("aquecedor" as any) as any).update(payload).eq("id", pendingId);
 }
 
 const META_GRAPH_BASE = String(process.env.META_GRAPH_BASE || "https://graph.facebook.com").replace(
