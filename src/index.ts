@@ -2265,7 +2265,7 @@ async function resolveAquecedorMessageForSend(
 
 async function releaseStuckAquecedorQueueRows(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
-  scopedInstanceNames?: string[],
+  _scopedInstanceNames?: string[],
 ): Promise<void> {
   const cutoff = new Date(Date.now() - AQUECEDOR_QUEUE_STUCK_MS).toISOString();
   const resetPayload = {
@@ -2274,24 +2274,19 @@ async function releaseStuckAquecedorQueueRows(
     sent_at: null,
   };
 
-  const scoped = (scopedInstanceNames || []).map((n) => String(n || "").trim()).filter(Boolean);
+  // Sempre libera PROCESSANDO travado em QUALQUER instancia.
+  // Se filtrar só pelo escopo atual, órfãos (ex.: 6973 fora do ciclo) ficam
+  // PROCESSANDO por dias e a UI mostra "há 1600+ min".
+  await (supabase.from("aquecedor" as any) as any)
+    .update(resetPayload)
+    .eq("status", "PROCESSANDO")
+    .lt("processing_at", cutoff);
 
-  const applyScope = (query: any) => (scoped.length ? query.in("instancia", scoped) : query);
-
-  await applyScope(
-    (supabase.from("aquecedor" as any) as any)
-      .update(resetPayload)
-      .eq("status", "PROCESSANDO")
-      .lt("processing_at", cutoff),
-  );
-
-  await applyScope(
-    (supabase.from("aquecedor" as any) as any)
-      .update(resetPayload)
-      .eq("status", "PROCESSANDO")
-      .is("processing_at", null)
-      .lt("scheduled_at", cutoff),
-  );
+  await (supabase.from("aquecedor" as any) as any)
+    .update(resetPayload)
+    .eq("status", "PROCESSANDO")
+    .is("processing_at", null)
+    .lt("scheduled_at", cutoff);
 }
 
 async function fetchProcessableAquecedorPending(
@@ -4498,18 +4493,28 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     let lastSendBody = "";
     let numeroUsado = numberCandidates[0];
     let sendStartedAtMs = Date.now();
+    let sawOrigemOnly = false;
+    const MAX_FAILED_NUMBER_TRIES = 2;
+    let failedNumberTries = 0;
 
+    // Anti-ban / anti-spam WhatsApp (incidente 2026-07-24):
+    // - No máximo 1 sendText ACEITO por ciclo.
+    // - Variantes só se o envio anterior FALHOU (exists:false), e no máx. 2 falhas.
+    // - Nunca reenviar porque findMessages não confirmou no destino.
     for (let ni = 0; ni < numberCandidates.length; ni += 1) {
+      if (sendAccepted) break;
+      if (failedNumberTries >= MAX_FAILED_NUMBER_TRIES) break;
       const numero = numberCandidates[ni];
       numeroUsado = numero;
       const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text: textoEnvio } }
         : { number: numero, text: textoEnvio };
       sendStartedAtMs = Date.now();
-      const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
+      const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
       lastSendStatus = sendResult.status;
       lastSendBody = String(sendResult.body || "");
       if (!sendResult.ok) {
+        failedNumberTries += 1;
         const detailStr = String(
           sendResult.json?.message ||
             sendResult.json?.error ||
@@ -4539,7 +4544,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
           instanciaOrigem: chosen.instancia_origem,
           numeroDestino: numero,
           sendStartedAtMs,
-          maxAttempts: ni === 0 ? 12 : 8,
+          maxAttempts: 12,
           attemptIntervalMs: 3000,
           relaxTimestampOnLastAttempt: true,
         },
@@ -4547,17 +4552,8 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       deliveryDetail = deliveryCheck.detail;
       if (deliveryCheck.ok) {
         deliveryOk = true;
-        break;
-      }
-      // Se já apareceu na origem, tentar variante do número (9º dígito / DDI).
-      if (!deliveryCheck.sawDestino && deliveryCheck.sawOrigem && ni + 1 < numberCandidates.length) {
-        console.warn(
-          `[Aquecedor] entrega só na origem com número ${numero}; tentando variante ${numberCandidates[ni + 1]}`,
-        );
-        continue;
-      }
-      if (!deliveryCheck.sawDestino && ni + 1 < numberCandidates.length) {
-        continue;
+      } else if (deliveryCheck.sawOrigem && !deliveryCheck.sawDestino) {
+        sawOrigemOnly = true;
       }
       break;
     }
@@ -4586,18 +4582,28 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
         keepInstancia: chosen.instancia_origem,
       });
+      // Entrega só na origem = risco alto de restrição se insistirmos no mesmo par.
+      const cooldownMs = 15 * 60 * 1000;
+      if (sawOrigemOnly) {
+        await markAquecedorInstanceRestricted(
+          chosen.instancia_origem,
+          `Aquecedor: mensagem só na origem → ${chosen.instancia_destino} sem confirmação (anti-spam; sem reenvio).`,
+        );
+      }
       const cooldown = await recordDirectedDeliveryFailure({
         origem: chosen.instancia_origem,
         destino: chosen.instancia_destino,
         reason: deliveryDetail || "entrega não confirmada no destinatário",
-        cooldownMs: 15 * 60 * 1000,
+        cooldownMs,
       });
       const untilBr = formatDateBr(new Date(cooldown.untilMs).toISOString());
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
         30,
-        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}; seguindo para outros pares.`,
+        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}${
+          sawOrigemOnly ? " (só origem — sem reenvio de variantes)" : ""
+        }; seguindo para outros pares.`,
       );
       aquecedorCycleRuntime().lastEvoError = {
         status: lastSendStatus,
@@ -7469,6 +7475,38 @@ async function probeAquecedorDeliveryViaFindMessages(
   return false;
 }
 
+async function probeAquecedorDeliveryViaFindChats(
+  instanceCandidates: string[],
+  needles: string[],
+  minTimestampMs?: number,
+): Promise<boolean> {
+  for (const instanceName of instanceCandidates) {
+    const urls = [
+      `${EVO_API_BASE}/chat/findChats/${encodeURIComponent(instanceName)}`,
+      `${EVO_API_BASE}/chat/findChats`,
+    ];
+    for (const url of urls) {
+      const bodies: Array<Record<string, unknown>> = [{}, { limit: 40 }, { take: 40 }];
+      for (const body of bodies) {
+        const result = await callEvoAction(url, "POST", body, {
+          timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 20000),
+          retries: 1,
+        });
+        if (!result.ok) continue;
+        if (
+          evoPayloadIncludesNeedle(result.json, needles, {
+            minTimestampMs,
+            requireTokenBoundary: true,
+          })
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 async function verifyAquecedorMessageDelivered(
   instanciaDestino: string,
   numeroOrigem: string,
@@ -7537,13 +7575,20 @@ async function verifyAquecedorMessageDelivered(
         false,
       );
       if (!sawDestino) {
-        // @lid / indexação EVO: procurar marker em mensagens recentes inbound sem JID fixo.
+        // @lid / indexação EVO: marker em mensagens recentes + findChats.lastMessage.
         sawDestino = await probeAquecedorDeliveryViaFindMessages(
           destinoCandidates,
           remoteJids.length ? remoteJids : [""],
           needleList,
           tsFilter,
           null,
+        );
+      }
+      if (!sawDestino) {
+        sawDestino = await probeAquecedorDeliveryViaFindChats(
+          destinoCandidates,
+          needleList,
+          tsFilter,
         );
       }
     }
@@ -7556,13 +7601,15 @@ async function verifyAquecedorMessageDelivered(
         true,
       );
     }
-    const early = decideAquecedorDeliveryConfirmation({
-      sawOrigem,
-      sawDestino,
-      origem,
-      destino,
-    });
-    if (early.ok) return early;
+    // Sucesso prático: tag no destino (chegou no WhatsApp). Não espera origem.
+    if (sawDestino) {
+      return decideAquecedorDeliveryConfirmation({
+        sawOrigem,
+        sawDestino,
+        origem,
+        destino,
+      });
+    }
   }
 
   return decideAquecedorDeliveryConfirmation({
@@ -9650,7 +9697,7 @@ app.get("/aquecedor/fila-localizar", async (req, res) => {
     if (!supabase) {
       return res.status(503).json({ error: "Supabase não configurado." });
     }
-    const now = new Date().toISOString();
+    await releaseStuckAquecedorQueueRows(supabase);
     const { data: pendentes } = await (supabase
       .from("aquecedor" as any)
       .select("id, status, scheduled_at, instancia, numero_destino")

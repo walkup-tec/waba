@@ -85,15 +85,15 @@ assert(
   "mensagem real com tag deve confirmar na origem (fromMe)",
 );
 
-// 5) Decisão: exige os dois lados
+// 5) Decisão: sucesso = tag no DESTINO (prática WhatsApp)
 assert(
   helpers.decideAquecedorDeliveryConfirmation({
     sawOrigem: false,
     sawDestino: true,
     origem: "1261",
     destino: "Final-2477",
-  }).ok === false,
-  "só destino → NÃO sucesso (anti histórico EVO)",
+  }).ok === true,
+  "só destino com tag única → sucesso (mensagem no WhatsApp)",
 );
 assert(
   helpers.decideAquecedorDeliveryConfirmation({

@@ -90,18 +90,25 @@ export function scoreRelationshipCandidate(
   const volumeDeficit = Math.max(0, ctx.avgPairTotal - total);
   const volumeScore = volumeDeficit * 50_000;
 
-  // 3) Penalização por repetição do mesmo relacionamento (mesmo alternando sentido).
+  // 3) Penalização por repetição do mesmo relacionamento — EXCETO resposta do turno.
+  // balance = sentAB - sentBA: se >0, falta B→A; se <0, falta A→B.
+  const isBalancingReply =
+    (pair.balance > 0 && origem === pair.b && destino === pair.a) ||
+    (pair.balance < 0 && origem === pair.a && destino === pair.b);
   let repetitionPenalty = 0;
-  if (ctx.lastSelectedPairKey && ctx.lastSelectedPairKey === pairKey) {
+  if (ctx.lastSelectedPairKey && ctx.lastSelectedPairKey === pairKey && !isBalancingReply) {
     repetitionPenalty = 5_000_000_000; // hard demote — quase nunca escolhe o mesmo par em seguida
   }
-  // Penalização crescente por uso recente no dia.
-  repetitionPenalty += usageToday * 200_000;
-  // Se acabou de interagir há poucos minutos, demove.
-  if (minutesIdle < 15) {
-    repetitionPenalty += (15 - minutesIdle) * 80_000;
+  // Penalização crescente por uso recente no dia (resposta do turno não conta como "spam").
+  if (!isBalancingReply) {
+    repetitionPenalty += usageToday * 200_000;
+    if (minutesIdle < 15) {
+      repetitionPenalty += (15 - minutesIdle) * 80_000;
+    }
+  } else {
+    // Resposta pendente: prioridade absoluta para completar A→B / B→A.
+    repetitionPenalty -= 8_000_000_000;
   }
-
   // 4) Cobertura: par sem histórico sobe fortemente.
   const coverageScore = total === 0 ? 2_000_000 : Math.max(0, 8 - total) * 80_000;
 
@@ -134,8 +141,9 @@ export function scoreRelationshipCandidate(
   if (absBalance >= 1) reasons.push(`saldo=${pair.balance > 0 ? "+" : ""}${pair.balance}`);
   if (volumeDeficit > 0.5) reasons.push(`volume atrasado (−${volumeDeficit.toFixed(0)} vs média)`);
   if (total === 0) reasons.push("cobertura (par novo)");
-  if (ctx.lastSelectedPairKey === pairKey) reasons.push("penalidade: mesmo par anterior");
-  if (usageToday > 0) reasons.push(`uso hoje=${usageToday}`);
+  if (isBalancingReply) reasons.push("resposta do turno (A→B / B→A)");
+  else if (ctx.lastSelectedPairKey === pairKey) reasons.push("penalidade: mesmo par anterior");
+  if (usageToday > 0 && !isBalancingReply) reasons.push(`uso hoje=${usageToday}`);
   if (!reasons.length) reasons.push("rede equilibrada — LRU/participação");
 
   return {
@@ -188,9 +196,24 @@ export function pickNextRelationship(
   });
   let pool = reducesToOneOrLess.length ? reducesToOneOrLess : raw;
 
-  // Preferir candidatos que NÃO são o último par — evita A↔B ping-pong.
+  // Completar conversa: se o último par está desequilibrado, a resposta do turno
+  // (B→A após A→B) tem prioridade — não excluir o par "para evitar ping-pong".
   const lastKey = owner.lastSelectedPairKey || null;
-  if (lastKey && pool.length > 1) {
+  const lastPair = lastKey ? owner.pairs[lastKey] : null;
+  if (lastPair && Math.abs(lastPair.balance) >= 1) {
+    const replyPool = raw.filter(({ origem, destino, pair, pairKey }) => {
+      if (pairKey !== lastKey) return false;
+      const direction =
+        origem.localeCompare(pair.a) === 0 && destino.localeCompare(pair.b) === 0
+          ? "a_to_b"
+          : "b_to_a";
+      const nextBalance = direction === "a_to_b" ? pair.balance + 1 : pair.balance - 1;
+      return Math.abs(nextBalance) < Math.abs(pair.balance);
+    });
+    if (replyPool.length) {
+      pool = replyPool;
+    }
+  } else if (lastKey && pool.length > 1) {
     const withoutLast = pool.filter((c) => c.pairKey !== lastKey);
     if (withoutLast.length) pool = withoutLast;
   }

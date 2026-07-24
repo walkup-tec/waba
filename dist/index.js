@@ -52,9 +52,10 @@ const data_path_1 = require("./data-path");
 const aquecedor_owner_runtime_registry_1 = require("./services/aquecedor-owner-runtime.registry");
 const base_path_1 = require("./base-path");
 const conversation_graph_service_1 = require("./aquecedor/conversation-graph.service");
+const delivery_verify_helpers_1 = require("./aquecedor/delivery-verify.helpers");
+const delivery_cooldown_service_1 = require("./aquecedor/delivery-cooldown.service");
 const pair_orchestrator_service_1 = require("./aquecedor/pair-orchestrator.service");
 const network_health_service_1 = require("./aquecedor/network-health.service");
-const delivery_verify_helpers_1 = require("./aquecedor/delivery-verify.helpers");
 const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
@@ -1479,7 +1480,10 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
     const aliasesMapForPick = await loadInstanceAliasesMap();
     const canonicalMapForPick = buildAquecedorInstanceCanonicalMap(connected, aliasesMapForPick);
     const eligibleNames = connected.map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick));
-    const pick = (0, pair_orchestrator_service_1.pickNextDirectedExchange)(graph, eligibleNames, { startIndex });
+    const pick = (0, pair_orchestrator_service_1.pickNextDirectedExchange)(graph, eligibleNames, {
+        startIndex,
+        blockedDirectedKeys: await (0, delivery_cooldown_service_1.listBlockedDirectedKeys)(),
+    });
     if (!pick)
         return null;
     const origemLc = pick.origem.toLowerCase();
@@ -1780,24 +1784,25 @@ async function resolveAquecedorMessageForSend(supabase, pendingId, pendingText, 
         .eq("id", pendingId);
     return mensagem;
 }
-async function releaseStuckAquecedorQueueRows(supabase, scopedInstanceNames) {
+async function releaseStuckAquecedorQueueRows(supabase, _scopedInstanceNames) {
     const cutoff = new Date(Date.now() - AQUECEDOR_QUEUE_STUCK_MS).toISOString();
     const resetPayload = {
         status: "PENDENTE",
         processing_at: null,
         sent_at: null,
     };
-    const scoped = (scopedInstanceNames || []).map((n) => String(n || "").trim()).filter(Boolean);
-    const applyScope = (query) => (scoped.length ? query.in("instancia", scoped) : query);
-    await applyScope(supabase.from("aquecedor")
+    // Sempre libera PROCESSANDO travado em QUALQUER instancia.
+    // Se filtrar só pelo escopo atual, órfãos (ex.: 6973 fora do ciclo) ficam
+    // PROCESSANDO por dias e a UI mostra "há 1600+ min".
+    await supabase.from("aquecedor")
         .update(resetPayload)
         .eq("status", "PROCESSANDO")
-        .lt("processing_at", cutoff));
-    await applyScope(supabase.from("aquecedor")
+        .lt("processing_at", cutoff);
+    await supabase.from("aquecedor")
         .update(resetPayload)
         .eq("status", "PROCESSANDO")
         .is("processing_at", null)
-        .lt("scheduled_at", cutoff));
+        .lt("scheduled_at", cutoff);
 }
 async function fetchProcessableAquecedorPending(supabase, scopedInstanceNames, preferredOrigem) {
     const scoped = scopedInstanceNames.map((n) => String(n || "").trim()).filter(Boolean);
@@ -1899,6 +1904,30 @@ async function ensureAquecedorPendingMessageOnce(pair) {
     }
     const exclude = await buildAquecedorExcludeSet(supabase, pair);
     const mensagem = await pickAquecedorMessageText(supabase, exclude);
+    // Reaproveita órfãos (instancia null) de reverts antigos — evita 2º registro Em Fila.
+    const { data: orphan } = (await (supabase
+        .from("aquecedor")
+        .select("id")
+        .eq("status", "PENDENTE")
+        .is("instancia", null)
+        .order("scheduled_at", { ascending: true, nullsFirst: true })
+        .limit(1)
+        .maybeSingle()));
+    if (orphan?.id) {
+        const { error: claimError } = await supabase.from("aquecedor")
+            .update({
+            mensagem,
+            scheduled_at: now,
+            instancia: origem,
+            numero_destino: null,
+            processing_at: null,
+            sent_at: null,
+        })
+            .eq("id", orphan.id)
+            .eq("status", "PENDENTE");
+        if (!claimError)
+            return { ok: true, pendingId: orphan.id };
+    }
     const { data: inserted, error: insertError } = await supabase.from("aquecedor")
         .insert({
         mensagem,
@@ -3523,50 +3552,111 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         })
             .eq("id", pendingData.id);
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
-        const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
-        const sendBody = EVO_SEND_TEXT_V1
-            ? { number: numero, textMessage: { text: textoEnvio } }
-            : { number: numero, text: textoEnvio };
-        const sendStartedAtMs = Date.now();
-        const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
-        if (!sendResult.ok) {
-            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
-            const evoDetail = sendResult.json?.message ||
-                (Array.isArray(sendResult.json?.message) ? sendResult.json.message[0] : null) ||
-                sendResult.json?.error ||
-                (typeof sendResult.json?.detail === "string" ? sendResult.json.detail : null) ||
-                (sendResult.body && sendResult.body.length < 200 ? sendResult.body : null);
-            const detailStr = evoDetail ? String(evoDetail) : String(sendResult.body || "");
-            await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
-            const detail = evoDetail
-                ? ` (${String(evoDetail).slice(0, 120)})`
-                : sendResult.status === 0
-                    ? ` (${String(sendResult.error || sendResult.body || "timeout").slice(0, 120)})`
-                    : "";
-            deferAquecedorRetryOrWindow(config, nowSp, sendResult.status === 0 ? 180 : 120, `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`);
+        const numberCandidates = buildAquecedorSendNumberCandidates(chosen.numero_whatsapp);
+        if (!numberCandidates.length) {
+            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+                keepInstancia: chosen.instancia_origem,
+            });
+            deferAquecedorRetryOrWindow(config, nowSp, 120, `Destino ${chosen.instancia_destino} sem número WhatsApp válido para envio.`);
+            return;
+        }
+        const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
+        let sendAccepted = false;
+        let deliveryOk = false;
+        let deliveryDetail = "";
+        let lastSendStatus = 0;
+        let lastSendBody = "";
+        let numeroUsado = numberCandidates[0];
+        let sendStartedAtMs = Date.now();
+        let sawOrigemOnly = false;
+        const MAX_FAILED_NUMBER_TRIES = 2;
+        let failedNumberTries = 0;
+        // Anti-ban / anti-spam WhatsApp (incidente 2026-07-24):
+        // - No máximo 1 sendText ACEITO por ciclo.
+        // - Variantes só se o envio anterior FALHOU (exists:false), e no máx. 2 falhas.
+        // - Nunca reenviar porque findMessages não confirmou no destino.
+        for (let ni = 0; ni < numberCandidates.length; ni += 1) {
+            if (sendAccepted)
+                break;
+            if (failedNumberTries >= MAX_FAILED_NUMBER_TRIES)
+                break;
+            const numero = numberCandidates[ni];
+            numeroUsado = numero;
+            const sendBody = EVO_SEND_TEXT_V1
+                ? { number: numero, textMessage: { text: textoEnvio } }
+                : { number: numero, text: textoEnvio };
+            sendStartedAtMs = Date.now();
+            const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
+            lastSendStatus = sendResult.status;
+            lastSendBody = String(sendResult.body || "");
+            if (!sendResult.ok) {
+                failedNumberTries += 1;
+                const detailStr = String(sendResult.json?.message ||
+                    sendResult.json?.error ||
+                    sendResult.body ||
+                    "");
+                await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
+                continue;
+            }
+            sendAccepted = true;
+            await supabase.from("aquecedor")
+                .update({
+                numero_destino: numero,
+                mensagem: textoEnvio,
+            })
+                .eq("id", pendingData.id);
+            const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), textoEnvio, {
+                instanciaOrigem: chosen.instancia_origem,
+                numeroDestino: numero,
+                sendStartedAtMs,
+                maxAttempts: 12,
+                attemptIntervalMs: 3000,
+                relaxTimestampOnLastAttempt: true,
+            });
+            deliveryDetail = deliveryCheck.detail;
+            if (deliveryCheck.ok) {
+                deliveryOk = true;
+            }
+            else if (deliveryCheck.sawOrigem && !deliveryCheck.sawDestino) {
+                sawOrigemOnly = true;
+            }
+            break;
+        }
+        if (!sendAccepted) {
+            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+                keepInstancia: chosen.instancia_origem,
+            });
+            deferAquecedorRetryOrWindow(config, nowSp, lastSendStatus === 0 ? 180 : 120, `Falha no envio via EVO (HTTP ${lastSendStatus}). Mensagem voltou para pendente.`);
             aquecedorCycleRuntime().lastEvoError = {
-                status: sendResult.status,
-                body: String(sendResult.body || "").slice(0, 500),
+                status: lastSendStatus,
+                body: lastSendBody.slice(0, 500),
                 instance: chosen.instancia_origem,
-                numeroLen: numero.length,
+                numeroLen: numeroUsado.length,
             };
             console.error("[Aquecedor] sendText falhou:", aquecedorCycleRuntime().lastEvoError);
             return;
         }
-        const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), textoEnvio, {
-            instanciaOrigem: chosen.instancia_origem,
-            numeroDestino: numero,
-            sendStartedAtMs,
-        });
-        if (!deliveryCheck.ok) {
-            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
-            deferAquecedorRetryOrWindow(config, nowSp, 120, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryCheck.detail}`);
+        if (!deliveryOk) {
+            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+                keepInstancia: chosen.instancia_origem,
+            });
+            const cooldownMs = 15 * 60 * 1000;
+            if (sawOrigemOnly) {
+                await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(chosen.instancia_origem, `Aquecedor: mensagem só na origem → ${chosen.instancia_destino} sem confirmação (anti-spam; sem reenvio).`);
+            }
+            const cooldown = await (0, delivery_cooldown_service_1.recordDirectedDeliveryFailure)({
+                origem: chosen.instancia_origem,
+                destino: chosen.instancia_destino,
+                reason: deliveryDetail || "entrega não confirmada no destinatário",
+                cooldownMs,
+            });
+            const untilBr = formatDateBr(new Date(cooldown.untilMs).toISOString());
+            deferAquecedorRetryOrWindow(config, nowSp, 30, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}${sawOrigemOnly ? " (só origem — sem reenvio de variantes)" : ""}; seguindo para outros pares.`);
             aquecedorCycleRuntime().lastEvoError = {
-                status: sendResult.status,
-                body: deliveryCheck.detail.slice(0, 500),
+                status: lastSendStatus,
+                body: deliveryDetail.slice(0, 500),
                 instance: chosen.instancia_destino,
-                numeroLen: numero.length,
+                numeroLen: numeroUsado.length,
             };
             console.warn("[Aquecedor] entrega não confirmada:", aquecedorCycleRuntime().lastEvoError);
             return;
@@ -3576,6 +3666,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             .update({
             status: "ENVIADO",
             sent_at: new Date().toISOString(),
+            numero_destino: numeroUsado,
         })
             .eq("id", pendingData.id);
         await supabase.from("logs_envios").insert({
@@ -6083,15 +6174,51 @@ async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJ
     }
     return false;
 }
+async function probeAquecedorDeliveryViaFindChats(instanceCandidates, needles, minTimestampMs) {
+    for (const instanceName of instanceCandidates) {
+        const urls = [
+            `${EVO_API_BASE}/chat/findChats/${encodeURIComponent(instanceName)}`,
+            `${EVO_API_BASE}/chat/findChats`,
+        ];
+        for (const url of urls) {
+            const bodies = [{}, { limit: 40 }, { take: 40 }];
+            for (const body of bodies) {
+                const result = await callEvoAction(url, "POST", body, {
+                    timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000),
+                    retries: 1,
+                });
+                if (!result.ok)
+                    continue;
+                if ((0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(result.json, needles, {
+                    minTimestampMs,
+                    requireTokenBoundary: true,
+                })) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, options) {
     const destino = String(instanciaDestino || "").trim();
     const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
     if (!destino || !remoteJids.length) {
-        return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
+        return {
+            ok: false,
+            detail: "Parâmetros inválidos para conferir entrega no destinatário.",
+            sawOrigem: false,
+            sawDestino: false,
+        };
     }
     const needleList = (0, delivery_verify_helpers_1.buildAquecedorDeliveryNeedles)(messageText);
     if (!needleList.length) {
-        return { ok: false, detail: "Sem marcador único para conferir entrega no WhatsApp." };
+        return {
+            ok: false,
+            detail: "Sem marcador único para conferir entrega no WhatsApp.",
+            sawOrigem: false,
+            sawDestino: false,
+        };
     }
     const timestampGraceMs = options?.timestampGraceMs ?? 5000;
     const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
@@ -6115,18 +6242,24 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         const tsFilter = relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
         if (!sawDestino) {
             sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, tsFilter, false);
+            if (!sawDestino) {
+                sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids.length ? remoteJids : [""], needleList, tsFilter, null);
+            }
+            if (!sawDestino) {
+                sawDestino = await probeAquecedorDeliveryViaFindChats(destinoCandidates, needleList, tsFilter);
+            }
         }
         if (!sawOrigem && origemCandidates.length && destJids.length) {
             sawOrigem = await probeAquecedorDeliveryViaFindMessages(origemCandidates, destJids, needleList, tsFilter, true);
         }
-        const early = (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
-            sawOrigem,
-            sawDestino,
-            origem,
-            destino,
-        });
-        if (early.ok)
-            return early;
+        if (sawDestino) {
+            return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+                sawOrigem,
+                sawDestino,
+                origem,
+                destino,
+            });
+        }
     }
     return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
         sawOrigem,
@@ -6135,16 +6268,40 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         destino,
     });
 }
-async function revertAquecedorPendingAfterFailedSend(supabase, pendingId) {
-    await supabase.from("aquecedor")
-        .update({
+function buildAquecedorSendNumberCandidates(raw) {
+    const seed = resolveAquecedorInstanceDigits(raw);
+    if (!seed)
+        return [];
+    const out = [];
+    const seen = new Set();
+    for (const variant of (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(seed)) {
+        const digits = resolveAquecedorInstanceDigits(variant);
+        if (digits.length < 10 || seen.has(digits))
+            continue;
+        seen.add(digits);
+        out.push(digits);
+    }
+    // Preferir DDI+9º dígito (mais longo) primeiro.
+    out.sort((a, b) => b.length - a.length || a.localeCompare(b));
+    return out;
+}
+async function revertAquecedorPendingAfterFailedSend(supabase, pendingId, options) {
+    // Mantém `instancia` quando informado — senão o ensure cria OUTRA linha PENDENTE
+    // (duplicata Em Fila) porque a consulta filtra por instancia=origem.
+    const keepInstancia = String(options?.keepInstancia || "").trim();
+    const payload = {
         status: "PENDENTE",
-        instancia: null,
         numero_destino: null,
         processing_at: null,
         sent_at: null,
-    })
-        .eq("id", pendingId);
+    };
+    if (keepInstancia) {
+        payload.instancia = keepInstancia;
+    }
+    else {
+        payload.instancia = null;
+    }
+    await supabase.from("aquecedor").update(payload).eq("id", pendingId);
 }
 const META_GRAPH_BASE = String(process.env.META_GRAPH_BASE || "https://graph.facebook.com").replace(/\/+$/, "");
 const META_GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v22.0").trim();
@@ -7537,6 +7694,13 @@ app.get("/aquecedor/network-health", async (req, res) => {
         if (!ownerEmail) {
             return res.status(401).json({ error: "Sessão sem e-mail válido." });
         }
+        // Exclusivo Mozart — nunca expor matriz/saldo da rede a outros usuários.
+        if (ownerEmail !== "mozart.pmo@gmail.com") {
+            return res.status(403).json({
+                ok: false,
+                error: "Saúde da rede disponível apenas para o administrador do sistema.",
+            });
+        }
         const supabase = getSupabaseClient();
         const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
         const connectedActive = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(resolved.connected);
@@ -7986,7 +8150,7 @@ app.get("/aquecedor/fila-localizar", async (req, res) => {
         if (!supabase) {
             return res.status(503).json({ error: "Supabase não configurado." });
         }
-        const now = new Date().toISOString();
+        await releaseStuckAquecedorQueueRows(supabase);
         const { data: pendentes } = await (supabase
             .from("aquecedor")
             .select("id, status, scheduled_at, instancia, numero_destino")

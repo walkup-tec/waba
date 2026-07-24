@@ -1,4 +1,28 @@
-﻿## 2026-07-24 10:41 — Aquecedor: cooldown de par 15 min
+﻿## 2026-07-24 12:06 — Aquecedor: conversa pares + sucesso no destino
+- Sucesso = tag no DESTINO; findChats fallback; B→A prioriza após A→B
+- Anti-spam 1 send/ciclo + cooldown 15min mantidos
+- Marker: DEPLOY-2026-07-24-aquecedor-conversa-pares-destino — Redeploy Node
+- LOG: doc/LOG-2026-07-24__120600__aquecedor-conversa-pares-destino.md
+
+## 2026-07-24 11:46 — Análise: por que o aquecedor quebrou esta semana
+- Números novos + verify mais rígido (24/07) + variantes; malha antiga na prática funcionava
+- Não enquadrar o modo antigo como “só mentia” — incidente jun/20 foi pontual
+- LOG: doc/LOG-2026-07-24__114600__analise-aquecedor-quebra-semana.md
+
+## 2026-07-24 11:18 — Anti-spam sendText (ban WhatsApp)
+- Incidente: rajada de probes (~5 sendText/6 min) → block
+- Aquecedor: 1 send aceito/ciclo; sem reenvio por variante; cooldown 15min se falha de entrega
+- Rule: .cursor/rules/anti-spam-whatsapp-sendtext.mdc
+- Marker: DEPLOY-2026-07-24-aquecedor-anti-spam-sendtext — Redeploy Node
+- LOG: doc/LOG-2026-07-24__111800__anti-spam-sendtext-ban.md
+
+## 2026-07-24 10:55 — Aquecedor: libera PROCESSANDO órfão global
+- Bug: stuck release só no escopo → 6973 ficava PROCESSANDO 1600+ min
+- Falha 6635→8918 = entrega real só na origem (não falso sucesso)
+- Marker: DEPLOY-2026-07-24-aquecedor-release-stuck-global — Redeploy Node
+- LOG: doc/LOG-2026-07-24__105500__aquecedor-release-stuck-global.md
+
+## 2026-07-24 10:41 — Aquecedor: cooldown de par 15 min
 - Era 45 min após falha de confirmação de entrega; agora 15 min
 - Marker: DEPLOY-2026-07-24-aquecedor-cooldown-15min — Redeploy Node
 - LOG: doc/LOG-2026-07-24__104100__aquecedor-cooldown-15min.md

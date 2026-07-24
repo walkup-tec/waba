@@ -174,7 +174,9 @@ export type AquecedorDeliveryDecision = {
   sawDestino: boolean;
 };
 
-/** Decisão final: exige origem + destino. */
+/** Decisão final: sucesso prático = tag no DESTINO (mensagem chegou no WhatsApp).
+ * Origem reforça diagnóstico, mas não bloqueia sucesso (tag única evita histórico falso).
+ */
 export function decideAquecedorDeliveryConfirmation(input: {
   sawOrigem: boolean;
   sawDestino: boolean;
@@ -185,21 +187,13 @@ export function decideAquecedorDeliveryConfirmation(input: {
   const destino = String(input.destino || "").trim() || "destino";
   const sawOrigem = Boolean(input.sawOrigem);
   const sawDestino = Boolean(input.sawDestino);
-  if (sawDestino && sawOrigem) {
+  if (sawDestino) {
     return { ok: true, detail: "", sawOrigem, sawDestino };
   }
   if (sawOrigem && !sawDestino) {
     return {
       ok: false,
       detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
-      sawOrigem,
-      sawDestino,
-    };
-  }
-  if (sawDestino && !sawOrigem) {
-    return {
-      ok: false,
-      detail: `Marcador apareceu no destino sem prova na origem (${origem}) — possível histórico EVO; não confirmo envio real.`,
       sawOrigem,
       sawDestino,
     };
