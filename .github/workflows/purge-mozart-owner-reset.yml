@@ -1,0 +1,56 @@
+# Purge total das instâncias do owner mozart.pmo@gmail.com (WABA data + EVO)
+# Protege walkup e soma-crm por padrão (WhatsApp empresa / risco SOMA).
+#
+# workflow_dispatch inputs:
+#   mode: dry-run | run
+#   force_protect: se true, também apaga walkup/soma-crm (PERIGOSO)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run ou run
+        required: true
+        default: run
+        type: choice
+        options:
+          - dry-run
+          - run
+      force_protect:
+        description: Apagar também walkup/soma-crm (default false)
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  purge-mozart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validar secret SSH
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY ausente"
+            exit 1
+          fi
+
+      - name: SSH — purge mozart owner reset
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+            curl -fsSL "${REPO}/purge-mozart-owner-reset-vps.sh" -o /tmp/purge-mozart-owner-reset-vps.sh
+            sed -i 's/\r$//' /tmp/purge-mozart-owner-reset-vps.sh
+            chmod +x /tmp/purge-mozart-owner-reset-vps.sh
+            export FORCE_PROTECT="${{ inputs.force_protect }}"
+            if [ "$FORCE_PROTECT" = "true" ]; then export FORCE_PROTECT=1; else export FORCE_PROTECT=0; fi
+            /tmp/purge-mozart-owner-reset-vps.sh "${{ inputs.mode }}"
