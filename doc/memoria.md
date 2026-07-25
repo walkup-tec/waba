@@ -1,4 +1,10 @@
-﻿## 2026-07-25 10:25 — QR ainda falha (marker OK): smoke + detail UI
+﻿## 2026-07-25 10:50 — QR «EVO_API_URL» é falso positivo
+- Smoke create+extract OK no container; URL já é 172.17.0.1:30181
+- UI descartava detail; agora trace em /service/evo-qr-recent-failures
+- Marker: DEPLOY-2026-07-25-qrcode-failure-trace
+- LOG: doc/LOG-2026-07-25__105000__qrcode-evo-url-falso-positivo.md
+
+## 2026-07-25 10:25 — QR ainda falha (marker OK): smoke + detail UI
 - EVO create OK fora; WABA marker tombstone no ar; texto genérico = catch do job
 - Fix: UI/detail + GET /service/evo-qr-create-smoke + marker smoke-detail
 - LOG: doc/LOG-2026-07-25__102500__qrcode-smoke-detail.md
