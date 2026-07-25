@@ -1,4 +1,12 @@
-﻿## 2026-07-25 10:50 — QR «EVO_API_URL» é falso positivo
+﻿## 2026-07-25 11:15 — QR: EACCES instance-owners (não é EVO)
+- recent-failures: EACCES open /app/data/instance-owners.json (purge docker cp root)
+- Doc EVO create/connect OK; smoke create+QR OK; falha antes da EVO
+- Fix writeJsonFileResilient + chown no purge + heal-waba-data-permissions
+- Teste local OK (EPERM → unlink+replace)
+- Marker: DEPLOY-2026-07-25-owners-eacces-resilient-write
+- LOG: doc/LOG-2026-07-25__111500__owners-eacces-resilient-write.md
+
+## 2026-07-25 10:50 — QR «EVO_API_URL» é falso positivo
 - Smoke create+extract OK no container; URL já é 172.17.0.1:30181
 - UI descartava detail; agora trace em /service/evo-qr-recent-failures
 - Marker: DEPLOY-2026-07-25-qrcode-failure-trace
