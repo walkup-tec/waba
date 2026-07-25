@@ -270,6 +270,11 @@ PY
   if [[ "$kind" == "container" ]]; then
     log "Copiando data limpa de volta para ${cid}:${data_dir}"
     docker cp "$work/." "${cid}:${data_dir}/"
+    # docker cp cria ficheiros como root → EACCES no UID nodejs (1001) do app
+    log "Corrigindo owner de ${data_dir} para UID 1001 (nodejs)"
+    docker exec -u 0 "$cid" sh -c \
+      "chown -R 1001:1001 '${data_dir}' 2>/dev/null || chown -R nodejs:nodejs '${data_dir}' 2>/dev/null || true"
+    docker exec "$cid" sh -c "ls -la '${data_dir}/instance-owners.json' 2>/dev/null || true"
   fi
 
   # 4) Restart WABA para soltar estado em memória

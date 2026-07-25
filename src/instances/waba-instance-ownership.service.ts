@@ -1,8 +1,8 @@
 import { promises as fs, statSync } from "fs";
-import path from "path";
 import { isWabaAuthConfigured, isWabaMasterEmail } from "../auth/waba-auth.service";
 import type { WabaRequestAuth } from "../auth/waba-request-auth";
 import { resolveDataFile } from "../data-path";
+import { writeJsonFileResilient } from "../utils/write-json-file-resilient";
 
 export type InstanceOwnerRecord = {
   ownerEmail: string;
@@ -72,8 +72,7 @@ export class WabaInstanceOwnershipService {
 
   private async saveStore(store: InstanceOwnersStore): Promise<void> {
     this.cache = store;
-    await fs.mkdir(path.dirname(OWNERS_FILE), { recursive: true });
-    await fs.writeFile(OWNERS_FILE, JSON.stringify(store, null, 2), "utf-8");
+    await writeJsonFileResilient(OWNERS_FILE, store);
     try {
       this.cacheLoadedAtMs = statSync(OWNERS_FILE).mtimeMs;
     } catch {
