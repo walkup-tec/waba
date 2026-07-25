@@ -241,6 +241,8 @@ class WabaInstanceOwnershipService {
             return { ok: false, error: "Sessão inválida para registrar instância." };
         return this.runLocked(async () => {
             const store = await this.loadStore();
+            // Reuso após purge: limpar tombstone para o nome poder ser registrado de novo.
+            this.clearDeletedMark(store, name);
             const existingKey = this.findStoreKey(store, name);
             if (existingKey) {
                 const currentOwner = normalizeEmail(store.instances[existingKey]?.ownerEmail || "");
