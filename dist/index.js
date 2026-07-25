@@ -4846,7 +4846,7 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     }
     try {
         // Poll da UI dispara busca CONFIRMAR + envio da resposta (não só leitura passiva).
-        const status = await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, { aggressive: false });
+        const status = await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, { deep: true });
         if (!status) {
             return res.status(404).json({ error: "Validação não encontrada ou expirada." });
         }

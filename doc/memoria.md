@@ -1,4 +1,11 @@
-﻿## 2026-07-25 11:15 — QR: EACCES instance-owners (não é EVO)
+﻿## 2026-07-25 11:45 — CONFIRMAR Passo 3: watermark stale
+- Bug: max(captured, now) + minTs staleava CONFIRMAR já enviado
+- Fix: graça 180s pré-start; poll paralelo findMessages∥findChats; GET deep
+- Teste: scripts/test-inbound-confirm-watermark.mjs OK
+- Marker: DEPLOY-2026-07-25-confirmar-prestart-grace
+- LOG: doc/LOG-2026-07-25__114500__confirmar-prestart-grace.md
+
+## 2026-07-25 11:15 — QR: EACCES instance-owners (não é EVO)
 - recent-failures: EACCES open /app/data/instance-owners.json (purge docker cp root)
 - Doc EVO create/connect OK; smoke create+QR OK; falha antes da EVO
 - Fix writeJsonFileResilient + chown no purge + heal-waba-data-permissions

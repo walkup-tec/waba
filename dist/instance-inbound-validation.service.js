@@ -474,13 +474,21 @@ async function ensureInstanceWebhook(instanceName) {
     const after = await readInstanceWebhook(instanceName);
     return after.enabled && after.url === webhookUrl;
 }
-/** Folga só para skew de relógio — NÃO reaproveitar CONFIRMAR de tentativas anteriores. */
+/** Folga de relógio entre EVO e WABA. */
 const INBOUND_CLOCK_SKEW_MS = Math.max(0, Math.min(5000, Number(process.env.INBOUND_VALIDATION_CLOCK_SKEW_MS || 2000) || 2000));
+/**
+ * Aceita CONFIRMAR enviado até N ms ANTES do start da validação.
+ */
+const INBOUND_PRESTART_GRACE_MS = Math.max(30000, Math.min(600000, Number(process.env.INBOUND_VALIDATION_PRESTART_GRACE_MS || 180000) || 180000));
 function inboundAcceptMinTimestampMs(record) {
-    const afterStart = record.validationStartedAtMs - INBOUND_CLOCK_SKEW_MS;
-    const afterHistory = (record.keywordHighWaterMarkMs || 0) + 1;
-    return Math.max(afterStart, afterHistory);
+    const graceFloor = record.validationStartedAtMs - INBOUND_PRESTART_GRACE_MS;
+    const captured = record.keywordHighWaterMarkMs || 0;
+    if (captured > 0 && captured < graceFloor) {
+        return graceFloor;
+    }
+    return graceFloor;
 }
+exports.inboundAcceptMinTimestampMs = inboundAcceptMinTimestampMs;
 function inboundKeywordSearchOptions(record) {
     return {
         minTimestampMs: inboundAcceptMinTimestampMs(record),
@@ -1126,36 +1134,21 @@ async function pollReceiveIfDue(record) {
     }
     record.pollTick += 1;
     const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
-    const useMessages = record.pollTick % 2 === 1;
-    const searchOpts = inboundKeywordSearchOptions(record);
     try {
-        let hit = null;
-        let via = useMessages ? "findMessages" : "findChats";
-        if (useMessages) {
-            hit = await findInboundViaApiFast(record.instanceName, record.keyword, searchOpts);
-            if (!hit && deep) {
-                hit = await findInboundViaApiExtended(record.instanceName, record.keyword, searchOpts);
-                if (hit)
-                    via = "findMessages-deep";
-            }
-        }
-        else {
-            hit = await findInboundViaChatsLastMessage(record.instanceName, record.keyword, searchOpts);
-            if (!hit && deep) {
-                hit = await findInboundViaRecentChats(record.instanceName, record.keyword, searchOpts);
-                if (hit)
-                    via = "findChats-deep";
-            }
-        }
-        record.receivePollCache = { atMs: now, hit, via };
+        const hit = await resolveInboundHit(record, { deep });
+        record.receivePollCache = {
+            atMs: now,
+            hit,
+            via: deep ? "resolve-deep" : "resolve-fast",
+        };
         if (hit)
-            markInboundReceived(record, hit, via);
+            markInboundReceived(record, hit, deep ? "resolve-deep" : "resolve-fast");
     }
     catch {
         record.receivePollCache = {
             atMs: now,
             hit: null,
-            via: useMessages ? "findMessages" : "findChats",
+            via: "resolve-error",
         };
     }
 }
@@ -1387,12 +1380,12 @@ async function startInboundValidation(input) {
     const validationId = crypto_1.default.randomUUID();
     const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
     const keyword = exports.INBOUND_VALIDATION_KEYWORD;
-    // Marca d'água: histórico EVO + instante do start → só CONFIRMAR NOVO após o início.
+    // Watermark = pico histórico capturado. NÃO elevar para Date.now().
     const capturedWaterMarkMs = await captureKeywordHighWaterMark(connected.instancia, keyword);
     const validationStartedAtMs = Date.now();
-    const keywordHighWaterMarkMs = Math.max(capturedWaterMarkMs, validationStartedAtMs);
+    const keywordHighWaterMarkMs = capturedWaterMarkMs;
     const startedAt = new Date(validationStartedAtMs).toISOString();
-    console.info("[validacao-inbound] start", connected.instancia, `id=${validationId.slice(0, 8)}`, `watermark=${new Date(keywordHighWaterMarkMs).toISOString()}`, `captured=${capturedWaterMarkMs ? new Date(capturedWaterMarkMs).toISOString() : "0"}`);
+    console.info("[validacao-inbound] start", connected.instancia, `id=${validationId.slice(0, 8)}`, `minTs=${new Date(inboundAcceptMinTimestampMs({ validationStartedAtMs, keywordHighWaterMarkMs })).toISOString()}`, `captured=${capturedWaterMarkMs ? new Date(capturedWaterMarkMs).toISOString() : "0"}`, `graceMs=${INBOUND_PRESTART_GRACE_MS}`);
     const phoneLabel = formatPhoneHint(connected.numero);
     const receiveWaitDetail = phoneLabel
         ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel}. O sistema detecta automaticamente.`

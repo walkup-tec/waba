@@ -6023,8 +6023,8 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
     return res.status(400).json({ error: "validationId é obrigatório." });
   }
   try {
-    // Poll da UI dispara busca CONFIRMAR + envio da resposta (não só leitura passiva).
-    const status = await refreshInboundValidation(validationId, { aggressive: false });
+    // Poll da UI dispara busca CONFIRMAR (fast+deep) + envio da resposta.
+    const status = await refreshInboundValidation(validationId, { deep: true });
     if (!status) {
       return res.status(404).json({ error: "Validação não encontrada ou expirada." });
     }
