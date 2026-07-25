@@ -1,4 +1,9 @@
-﻿## 2026-07-25 09:50 — Aquecedor: deadlock saldo/anti-duplicata (print)
+﻿## 2026-07-25 10:00 — Purge Mozart + deploy deadlock unlock
+- Push `767ec28` marker pair-deadlock-unlock
+- Script/workflow: purge-mozart-owner-reset (protege walkup + soma-crm)
+- LOG: doc/LOG-2026-07-25__100000__purge-mozart-owner-reset.md
+
+## 2026-07-25 09:50 — Aquecedor: deadlock saldo/anti-duplicata (print)
 - Motor ativo + “nenhum envio elegível” = pick null por |saldo|=1 + lastDirection curativo
 - Fix getPairDirectionAllowed: repetir sentido só se reduzir desequilíbrio
 - Marker: DEPLOY-2026-07-25-aquecedor-pair-deadlock-unlock
