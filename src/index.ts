@@ -510,6 +510,7 @@ function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
     p === "/ready" ||
     p === "/service/maintenance" ||
     p === "/service/evo-integration-probe" ||
+    p === "/service/evo-qr-create-smoke" ||
     p === "/maintenance"
   );
 }
@@ -607,6 +608,56 @@ app.get("/service/evo-integration-probe", async (_req, res) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ ok: false, error: msg.slice(0, 300) });
+  }
+});
+
+/** Smoke create→extract QR→delete (sem sendText). Diagnóstico do wizard QR. */
+app.get("/service/evo-qr-create-smoke", async (_req, res) => {
+  const name = `qrsmoke-${Date.now().toString(36).slice(-6)}`;
+  const started = Date.now();
+  try {
+    const createPayload = {
+      instanceName: name,
+      name,
+      qrcode: true,
+      integration: "WHATSAPP-BAILEYS",
+    };
+    const createResult = await callEvoAction(
+      `${EVO_API_BASE}/instance/create`,
+      "POST",
+      createPayload,
+      { timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000), retries: 1 },
+    );
+    const qrCode =
+      tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+    const deleteResult = await callEvoAction(
+      `${EVO_API_BASE}/instance/delete/${encodeURIComponent(name)}`,
+      "DELETE",
+      undefined,
+      { timeoutMs: 15000, retries: 1 },
+    );
+    const ok = Boolean(createResult.ok && qrCode);
+    res.status(ok ? 200 : 503).json({
+      ok,
+      name,
+      evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),
+      createStatus: createResult.status,
+      createOk: createResult.ok,
+      extractOk: Boolean(qrCode),
+      qrLen: qrCode ? String(qrCode).length : 0,
+      deleteStatus: deleteResult.status,
+      durationMs: Date.now() - started,
+      createDetail: String(createResult.body || createResult.error || "").slice(0, 240),
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    res.status(500).json({
+      ok: false,
+      name,
+      evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),
+      durationMs: Date.now() - started,
+      error: msg.slice(0, 400),
+    });
   }
 });
 
@@ -8980,12 +9031,23 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
           evoQrStatus: result.evoQrStatus,
         });
       } catch (error) {
+        const raw =
+          error instanceof Error
+            ? error.stack || error.message
+            : String(error);
+        const summarized = summarizeEvolutionErrorDetail(
+          error instanceof Error ? error.message : String(error),
+          0,
+        );
         qrRegisterJobs.set(jobId, {
           status: "error",
           createdAt: now,
           updatedAt: Date.now(),
-          error: "Erro ao gerar QRCode da instância.",
-          detail: error instanceof Error ? error.message : String(error),
+          error:
+            summarized && summarized.trim()
+              ? summarized.trim().slice(0, 280)
+              : "Erro ao gerar QRCode da instância.",
+          detail: String(raw || "").slice(0, 800),
         });
         console.error("[QR] registrar-qrcode job falhou:", name, error);
       }

@@ -46330,34 +46330,49 @@
         }
         const msg = String(error.message || "").trim();
         const detail = String(error.detail || "").trim();
+        const opaque =
+          !msg ||
+          msg === "Erro ao gerar QRCode da instância." ||
+          msg === "Falha ao gerar QRCode.";
         if (/failed to fetch|networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(msg)) {
           return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
         }
-        if (/integrationSession|prisma/i.test(detail)) {
+        if (/integrationSession|prisma/i.test(`${msg}\n${detail}`)) {
           return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL da EVO.";
         }
         if (/"count"\s*:\s*0/.test(detail)) {
           return "O sistema WABA - Drax não retornou QRCode (count:0). Aguarde alguns segundos e use «Atualizar QR». Se persistir, reinicie o serviço no Easypanel.";
         }
+        const flattenNested = (nested) => {
+          if (typeof nested === "string" && nested.trim()) return nested.trim();
+          if (Array.isArray(nested)) {
+            return nested
+              .map((item) => (typeof item === "string" ? item.trim() : ""))
+              .filter(Boolean)
+              .join(" | ");
+          }
+          return "";
+        };
         if (detail.startsWith("{")) {
           try {
             const parsed = JSON.parse(detail);
-            const nested = parsed?.response?.message ?? parsed?.message ?? parsed?.error;
-            if (typeof nested === "string" && /integrationSession|prisma/i.test(nested)) {
+            const nested = flattenNested(
+              parsed?.response?.message ?? parsed?.message ?? parsed?.error,
+            );
+            if (nested && /integrationSession|prisma/i.test(nested)) {
               return "Sistema WABA - Drax com erro interno no banco (Prisma). Reinicie o serviço no Easypanel.";
             }
-            if (typeof nested === "string" && nested.trim()) {
-              return nested.trim().slice(0, 280);
-            }
+            if (nested) return nested.slice(0, 280);
           } catch {
             /* mantém fallback */
           }
         }
-        if (msg && msg !== "Erro ao gerar QRCode da instância." && msg !== "Falha ao gerar QRCode." && !/^\s*\{/.test(msg)) {
-          return msg;
+        if (!opaque && !/^\s*\{/.test(msg)) return msg;
+        if (detail && !/^\s*\{/.test(detail)) {
+          const firstLine = detail.split("\n").map((l) => l.trim()).find(Boolean) || detail;
+          return firstLine.slice(0, 400);
         }
-        if (detail && !/^\s*\{/.test(detail)) return detail.slice(0, 400);
-        if (msg) return msg;
+        if (!opaque && msg) return msg;
         return "Erro ao gerar QRCode da instância. Confira EVO_API_URL no Easypanel (ex.: http://172.17.0.1:30181) e tente «Atualizar QR».";
       }
 

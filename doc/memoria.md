@@ -1,4 +1,9 @@
-﻿## 2026-07-25 10:02 — QRCode falha pós-purge (extract + tombstone)
+﻿## 2026-07-25 10:25 — QR ainda falha (marker OK): smoke + detail UI
+- EVO create OK fora; WABA marker tombstone no ar; texto genérico = catch do job
+- Fix: UI/detail + GET /service/evo-qr-create-smoke + marker smoke-detail
+- LOG: doc/LOG-2026-07-25__102500__qrcode-smoke-detail.md
+
+## 2026-07-25 10:02 — QRCode falha pós-purge (extract + tombstone)
 - EVO create OK; painel falhava: `code` Baileys vs base64 + tombstone deletedInstances
 - Fix tryExtractQrCode + clearDeletedMark no claimOnRegister + UI detalhe
 - Marker: DEPLOY-2026-07-25-qrcode-extract-tombstone — Redeploy Node
