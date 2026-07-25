@@ -1,4 +1,11 @@
-﻿## 2026-07-25 11:45 — CONFIRMAR Passo 3: watermark stale
+﻿## 2026-07-25 19:05 — Aquecedor: pausa humana 3h (imune 6h pós-Preparando)
+- Pausa 6h→3h; rótulo «3 horas pausa humana»
+- Não aplica nas primeiras 6h após sair de Preparando (activatedAt)
+- Teste: scripts/test-aquecedor-human-pause-window.mjs
+- Marker: DEPLOY-2026-07-25-pausa-humana-3h
+- LOG: doc/LOG-2026-07-25__190500__aquecedor-pausa-humana-3h.md
+
+## 2026-07-25 11:45 — CONFIRMAR Passo 3: watermark stale
 - Bug: max(captured, now) + minTs staleava CONFIRMAR já enviado
 - Fix: graça 180s pré-start; poll paralelo findMessages∥findChats; GET deep
 - Teste: scripts/test-inbound-confirm-watermark.mjs OK

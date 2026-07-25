@@ -44151,7 +44151,9 @@
       }
 
       function resolveInstanceStatusClass(inst, statusLabel) {
-        if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
+        if (statusLabel === "3 horas pausa humana" || statusLabel === "6 horas de espera") {
+          return "disconnected restricted-wait";
+        }
         if (statusLabel === "Restrição") return "processing preparing wa-restriction";
         if (statusLabel === "Preparando") return "processing preparing";
         return inst.isOpen ? "connected" : "disconnected";

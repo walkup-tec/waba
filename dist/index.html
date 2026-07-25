@@ -44151,7 +44151,9 @@
       }
 
       function resolveInstanceStatusClass(inst, statusLabel) {
-        if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
+        if (statusLabel === "3 horas pausa humana" || statusLabel === "6 horas de espera") {
+          return "disconnected restricted-wait";
+        }
         if (statusLabel === "Restrição") return "processing preparing wa-restriction";
         if (statusLabel === "Preparando") return "processing preparing";
         return inst.isOpen ? "connected" : "disconnected";
@@ -45199,6 +45201,7 @@
 
       const REGISTER_INBOUND_WAIT_STEP1 =
         "Aguardando envio de CONFIRMAR pelo outro WhatsApp (não o que está integrando)…";
+        // (grace 3 min: mensagem enviada pouco antes do Passo 3 também conta)
       const REGISTER_INBOUND_WAIT_STEP2 =
         "Aguardando resposta automática do número integrado…";
 

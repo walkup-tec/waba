@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = void 0;
+exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = void 0;
 exports.collectInstanceNameKeys = collectInstanceNameKeys;
 exports.findAquecedorLifecycleRow = findAquecedorLifecycleRow;
 exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForInstance;
@@ -13,6 +13,8 @@ exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
 exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
 exports.registerAquecedorInstancePreparing = registerAquecedorInstancePreparing;
 exports.grandfatherAquecedorInstanceActive = grandfatherAquecedorInstanceActive;
+exports.isWithinPostPreparingSendWindow = isWithinPostPreparingSendWindow;
+exports.canApplyAquecedorHumanPause = canApplyAquecedorHumanPause;
 exports.markAquecedorInstanceRestricted = markAquecedorInstanceRestricted;
 exports.syncAquecedorPreparingPromotions = syncAquecedorPreparingPromotions;
 exports.tickAquecedorStaggerPromotions = tickAquecedorStaggerPromotions;
@@ -31,13 +33,19 @@ const data_path_1 = require("../data-path");
 const LIFECYCLE_FILE = (0, data_path_1.resolveDataFile)("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = (0, data_path_1.resolveDataFile)("evo-instances-cache.json");
 const INSTANCE_ALIASES_FILE = (0, data_path_1.resolveDataFile)("instance-aliases.json");
-const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
+/** Pausa humana após indício de restrição (antes era 6h). */
+exports.AQUECEDOR_HUMAN_PAUSE_MS = 3 * 60 * 60 * 1000;
+const HUMAN_PAUSE_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS;
+/** Após sair de Preparando, 6h de envio sem poder entrar em pausa humana. */
+exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+const POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS;
 exports.AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
 exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS;
 const PREPARING_DURATION_MS = exports.AQUECEDOR_PREPARING_DURATION_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
+exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = "3 horas pausa humana";
 let cache = null;
 let aliasesCache = null;
 function normalizeKey(instanceName) {
@@ -170,7 +178,7 @@ function shouldResetActiveToPreparing(row, integrationAt) {
         return false;
     const withinPreparingWindow = Date.now() - integMs < PREPARING_DURATION_MS;
     const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
-    const reintegratedAfterActivation = Number.isFinite(activatedMs) && integMs > activatedMs + 10_000;
+    const reintegratedAfterActivation = Number.isFinite(activatedMs) && integMs > activatedMs + 10000;
     return withinPreparingWindow || reintegratedAfterActivation;
 }
 function maybeResetActiveToPreparing(row, integrationAt) {
@@ -321,6 +329,8 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince, 
     const integrationAt = explicitSince || evoCreatedAt || (forceNew ? new Date().toISOString() : null);
     const existing = await findAquecedorLifecycleRow(name);
     if (forceNew) {
+        // Sempre 6h a partir DESTA integração — não reutilizar createdAt EVO antigo
+        // (nome curto tipo "1261" pode ter createdAt de criação anterior → promove/some na hora).
         const since = new Date().toISOString();
         const aliasesMap = await loadAliasesMap();
         for (const aliasKey of collectInstanceNameKeys(name, aliasesMap)) {
@@ -331,6 +341,7 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince, 
         if (existing) {
             refreshRestrictionPhase(existing.row);
             applyPreparingPhase(existing.row, since);
+            // Regrava sob a chave canônica atual
             if (existing.key !== key) {
                 delete store.instances[existing.key];
                 store.instances[key] = existing.row;
@@ -358,6 +369,7 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince, 
         }
         return;
     }
+    // Sem row: sem data de integração → legado (grandfather). Com data pós-cutoff → Preparando.
     if (!integrationAt || isGrandfatherEligible(integrationAt)) {
         await grandfatherAquecedorInstanceActive(name);
         return;
@@ -379,20 +391,45 @@ async function grandfatherAquecedorInstanceActive(instanceName) {
     store.instances[key] = row;
     await saveStore(store);
 }
+function isWithinPostPreparingSendWindow(row, nowMs = Date.now()) {
+    if (!row)
+        return false;
+    if (row.phase === "preparing")
+        return true;
+    const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
+    if (!Number.isFinite(activatedMs) || activatedMs <= 0)
+        return false;
+    return nowMs < activatedMs + POST_PREPARING_SEND_WINDOW_MS;
+}
+function canApplyAquecedorHumanPause(row, nowMs = Date.now()) {
+    if (!row)
+        return true;
+    if (row.phase === "preparing")
+        return false;
+    return !isWithinPostPreparingSendWindow(row, nowMs);
+}
 async function markAquecedorInstanceRestricted(instanceName, detail) {
     const name = String(instanceName || "").trim();
     if (!name)
-        return;
+        return false;
     const store = await loadStore();
-    const key = normalizeKey(name);
-    const row = store.instances[key] || emptyRow("active");
-    const until = new Date(Date.now() + RESTRICTION_WAIT_MS).toISOString();
+    const found = await findAquecedorLifecycleRow(name);
+    const key = found?.key ?? normalizeKey(name);
+    const row = found?.row || store.instances[key] || emptyRow("active");
+    refreshRestrictionPhase(row);
+    if (!canApplyAquecedorHumanPause(row)) {
+        const activatedLabel = row.activatedAt || "—";
+        console.info(`[Aquecedor] pausa humana ignorada em ${name}: ainda na janela de 6h de envio pós-Preparando (activatedAt=${activatedLabel}).`);
+        return false;
+    }
+    const until = new Date(Date.now() + HUMAN_PAUSE_MS).toISOString();
     row.phase = "restricted_wait";
     row.restrictedUntil = until;
-    row.restrictedReason = String(detail || "Restrição temporária WhatsApp.").slice(0, 240);
+    row.restrictedReason = String(detail || "Pausa humana (suspeita de restrição WhatsApp).").slice(0, 240);
     store.instances[key] = row;
     await saveStore(store);
-    console.warn(`[Aquecedor] instância ${name} em espera de 6h por restrição: ${row.restrictedReason}`);
+    console.warn(`[Aquecedor] ${name} em «${exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL}»: ${row.restrictedReason}`);
+    return true;
 }
 async function syncAquecedorPreparingPromotions() {
     const store = await loadStore();
@@ -459,7 +496,7 @@ function formatAquecedorLifecycleStatusLabel(row) {
     if (row.phase === "restricted_wait" && row.restrictedUntil) {
         const remainingMs = new Date(row.restrictedUntil).getTime() - Date.now();
         if (remainingMs > 0)
-            return "6 horas de espera";
+            return exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL;
         return null;
     }
     return null;
@@ -590,6 +627,5 @@ async function recordAquecedorInstanceDailySend(instanceName) {
 async function detectAndMarkRestrictionFromSend(instanceName, status, body) {
     if (!isLikelyWhatsAppRestriction(body, status))
         return false;
-    await markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
-    return true;
+    return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
 }

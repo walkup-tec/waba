@@ -5,13 +5,23 @@ import { resolveDataFile } from "../data-path";
 const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = resolveDataFile("evo-instances-cache.json");
 const INSTANCE_ALIASES_FILE = resolveDataFile("instance-aliases.json");
-const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
+/** Pausa humana após indício de restrição (antes era 6h). */
+export const AQUECEDOR_HUMAN_PAUSE_MS = 3 * 60 * 60 * 1000;
+const HUMAN_PAUSE_MS = AQUECEDOR_HUMAN_PAUSE_MS;
+/**
+ * Após sair de Preparando, o número tem 6h de envio sem poder entrar em pausa humana.
+ * Só depois dessa janela a pausa de 3h pode ser aplicada.
+ */
+export const AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+const POST_PREPARING_SEND_WINDOW_MS = AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS;
 export const AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
 export const AQUECEDOR_PREPARING_DURATION_MS = AQUECEDOR_STAGGER_PROMOTE_MS;
 const PREPARING_DURATION_MS = AQUECEDOR_PREPARING_DURATION_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 export const AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
+
+export const AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = "3 horas pausa humana";
 
 export type AquecedorInstancePhase = "preparing" | "active" | "restricted_wait";
 
@@ -428,24 +438,60 @@ export async function grandfatherAquecedorInstanceActive(instanceName: string): 
   await saveStore(store);
 }
 
+export function isWithinPostPreparingSendWindow(
+  row: Pick<AquecedorInstanceLifecycleRow, "phase" | "activatedAt"> | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!row) return false;
+  if (row.phase === "preparing") return true;
+  const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
+  if (!Number.isFinite(activatedMs) || activatedMs <= 0) return false;
+  return nowMs < activatedMs + POST_PREPARING_SEND_WINDOW_MS;
+}
+
+/** true = pode aplicar pausa humana de 3h. */
+export function canApplyAquecedorHumanPause(
+  row: Pick<AquecedorInstanceLifecycleRow, "phase" | "activatedAt"> | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!row) return true;
+  if (row.phase === "preparing") return false;
+  return !isWithinPostPreparingSendWindow(row, nowMs);
+}
+
 export async function markAquecedorInstanceRestricted(
   instanceName: string,
   detail: string,
-): Promise<void> {
+): Promise<boolean> {
   const name = String(instanceName || "").trim();
-  if (!name) return;
+  if (!name) return false;
   const store = await loadStore();
-  const key = normalizeKey(name);
-  const row = store.instances[key] || emptyRow("active");
-  const until = new Date(Date.now() + RESTRICTION_WAIT_MS).toISOString();
+  const found = await findAquecedorLifecycleRow(name);
+  const key = found?.key ?? normalizeKey(name);
+  const row = found?.row || store.instances[key] || emptyRow("active");
+  refreshRestrictionPhase(row);
+
+  if (!canApplyAquecedorHumanPause(row)) {
+    const activatedLabel = row.activatedAt || "—";
+    console.info(
+      `[Aquecedor] pausa humana ignorada em ${name}: ainda na janela de 6h de envio pós-Preparando (activatedAt=${activatedLabel}).`,
+    );
+    return false;
+  }
+
+  const until = new Date(Date.now() + HUMAN_PAUSE_MS).toISOString();
   row.phase = "restricted_wait";
   row.restrictedUntil = until;
-  row.restrictedReason = String(detail || "Restrição temporária WhatsApp.").slice(0, 240);
+  row.restrictedReason = String(detail || "Pausa humana (suspeita de restrição WhatsApp).").slice(
+    0,
+    240,
+  );
   store.instances[key] = row;
   await saveStore(store);
   console.warn(
-    `[Aquecedor] instância ${name} em espera de 6h por restrição: ${row.restrictedReason}`,
+    `[Aquecedor] ${name} em «${AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL}»: ${row.restrictedReason}`,
   );
+  return true;
 }
 
 export async function syncAquecedorPreparingPromotions(): Promise<string[]> {
@@ -511,7 +557,7 @@ export function formatAquecedorLifecycleStatusLabel(
   if (row.phase === "preparing") return "Preparando";
   if (row.phase === "restricted_wait" && row.restrictedUntil) {
     const remainingMs = new Date(row.restrictedUntil).getTime() - Date.now();
-    if (remainingMs > 0) return "6 horas de espera";
+    if (remainingMs > 0) return AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL;
     return null;
   }
   return null;
@@ -668,6 +714,5 @@ export async function detectAndMarkRestrictionFromSend(
   body: string,
 ): Promise<boolean> {
   if (!isLikelyWhatsAppRestriction(body, status)) return false;
-  await markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
-  return true;
+  return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
 }
