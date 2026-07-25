@@ -46315,6 +46315,9 @@
                 ? "Sistema WABA - Drax indisponível. Verifique EVO_API_URL no servidor."
                 : "Falha ao solicitar QRCode."),
           );
+          if (data?.detail) err.detail = data.detail;
+          if (data?.evoCreateStatus != null) err.evoCreateStatus = data.evoCreateStatus;
+          if (data?.evoQrStatus != null) err.evoQrStatus = data.evoQrStatus;
           throw err;
         }
         if (response.status === 202 && data.jobId) {
@@ -46333,7 +46336,8 @@
         const opaque =
           !msg ||
           msg === "Erro ao gerar QRCode da instância." ||
-          msg === "Falha ao gerar QRCode.";
+          msg === "Falha ao gerar QRCode." ||
+          msg === "Falha ao solicitar QRCode.";
         if (/failed to fetch|networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(msg)) {
           return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
         }
@@ -46373,7 +46377,7 @@
           return firstLine.slice(0, 400);
         }
         if (!opaque && msg) return msg;
-        return "Erro ao gerar QRCode da instância. Confira EVO_API_URL no Easypanel (ex.: http://172.17.0.1:30181) e tente «Atualizar QR».";
+        return "Falha ao gerar QRCode. Tente um nome novo e «Atualizar QR». Se repetir, a Evolution pode estar com sessão presa — avise para reiniciar o serviço EVO.";
       }
 
       async function refreshQrCodeInRegisterModal() {

@@ -375,6 +375,7 @@ function isMaintenanceBypassPath(method, reqPath) {
         p === "/service/maintenance" ||
         p === "/service/evo-integration-probe" ||
         p === "/service/evo-qr-create-smoke" ||
+        p === "/service/evo-qr-recent-failures" ||
         p === "/maintenance");
 }
 function isDistStaticAssetPath(reqPath) {
@@ -499,6 +500,14 @@ app.get("/service/evo-qr-create-smoke", async (_req, res) => {
             error: msg.slice(0, 400),
         });
     }
+});
+app.get("/service/evo-qr-recent-failures", (_req, res) => {
+    res.status(200).json({
+        ok: true,
+        evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
+        count: qrRegisterRecentFailures.length,
+        items: qrRegisterRecentFailures,
+    });
 });
 app.get("/maintenance", (_req, res) => {
     if (!MAINTENANCE_MODE) {
@@ -7106,6 +7115,15 @@ async function resetEvoInstanceForQr(instanceName) {
     await sleepMs(2500);
 }
 const qrRegisterJobs = new Map();
+const qrRegisterRecentFailures = [];
+function rememberQrRegisterFailure(entry) {
+    qrRegisterRecentFailures.unshift({
+        ...entry,
+        at: new Date().toISOString(),
+    });
+    if (qrRegisterRecentFailures.length > 20)
+        qrRegisterRecentFailures.length = 20;
+}
 function pruneQrRegisterJobs() {
     const cutoff = Date.now() - 15 * 60 * 1000;
     for (const [id, job] of qrRegisterJobs) {
@@ -7419,7 +7437,25 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             if (!ownerEmail.includes("@")) {
                 return res.status(401).json({ error: "Faça login para registrar uma instância." });
             }
-            const reserve = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, ownerEmail);
+            let reserve;
+            try {
+                reserve = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, ownerEmail);
+            }
+            catch (claimError) {
+                const detail = claimError instanceof Error
+                    ? claimError.stack || claimError.message
+                    : String(claimError);
+                rememberQrRegisterFailure({
+                    name,
+                    source: "http",
+                    error: "Falha ao reservar nome da instância no armazenamento local.",
+                    detail: detail.slice(0, 800),
+                });
+                return res.status(500).json({
+                    error: "Falha ao reservar nome da instância no armazenamento local.",
+                    detail: detail.slice(0, 800),
+                });
+            }
             if (!reserve.ok) {
                 return res.status(409).json({ error: reserve.error });
             }
@@ -7508,17 +7544,32 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                     evoCreateStatus: result.evoCreateStatus,
                     evoQrStatus: result.evoQrStatus,
                 });
+                rememberQrRegisterFailure({
+                    name,
+                    source: "job",
+                    error: String(result.error || "Erro ao gerar QRCode da instância."),
+                    detail: result.detail,
+                    evoCreateStatus: result.evoCreateStatus,
+                    evoQrStatus: result.evoQrStatus,
+                });
             }
             catch (error) {
                 const raw = error instanceof Error ? error.stack || error.message : String(error);
                 const summarized = summarizeEvolutionErrorDetail(error instanceof Error ? error.message : String(error), 0);
+                const errorMsg = summarized && summarized.trim()
+                    ? summarized.trim().slice(0, 280)
+                    : "Erro ao gerar QRCode da instância.";
                 qrRegisterJobs.set(jobId, {
                     status: "error",
                     createdAt: now,
                     updatedAt: Date.now(),
-                    error: summarized && summarized.trim()
-                        ? summarized.trim().slice(0, 280)
-                        : "Erro ao gerar QRCode da instância.",
+                    error: errorMsg,
+                    detail: String(raw || "").slice(0, 800),
+                });
+                rememberQrRegisterFailure({
+                    name,
+                    source: "job",
+                    error: errorMsg,
                     detail: String(raw || "").slice(0, 800),
                 });
                 console.error("[QR] registrar-qrcode job falhou:", name, error);
@@ -7528,10 +7579,16 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
     }
     catch (error) {
         console.error("Erro ao registrar instância e gerar QRCode:", error);
-        const detail = error instanceof Error ? error.message : String(error);
+        const detail = error instanceof Error ? error.stack || error.message : String(error);
+        rememberQrRegisterFailure({
+            name: String(req.body?.name || "").trim() || "(sem-nome)",
+            source: "http",
+            error: "Erro ao gerar QRCode da instância.",
+            detail: detail.slice(0, 800),
+        });
         return res.status(500).json({
             error: "Erro ao gerar QRCode da instância.",
-            detail,
+            detail: detail.slice(0, 800),
         });
     }
 });
