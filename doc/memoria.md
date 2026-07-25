@@ -1,4 +1,10 @@
-﻿## 2026-07-25 10:00 — Purge Mozart + deploy deadlock unlock
+﻿## 2026-07-25 10:02 — QRCode falha pós-purge (extract + tombstone)
+- EVO create OK; painel falhava: `code` Baileys vs base64 + tombstone deletedInstances
+- Fix tryExtractQrCode + clearDeletedMark no claimOnRegister + UI detalhe
+- Marker: DEPLOY-2026-07-25-qrcode-extract-tombstone — Redeploy Node
+- LOG: doc/LOG-2026-07-25__100200__qrcode-extract-tombstone-fix.md
+
+## 2026-07-25 10:00 — Purge Mozart + deploy deadlock unlock
 - Push `767ec28` marker pair-deadlock-unlock
 - Script/workflow: purge-mozart-owner-reset (protege walkup + soma-crm)
 - LOG: doc/LOG-2026-07-25__100000__purge-mozart-owner-reset.md

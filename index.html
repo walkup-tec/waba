@@ -46333,9 +46333,6 @@
         if (/failed to fetch|networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(msg)) {
           return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
         }
-        if (msg && msg !== "Falha ao gerar QRCode." && !/^\s*\{/.test(msg)) {
-          return msg;
-        }
         if (/integrationSession|prisma/i.test(detail)) {
           return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL da EVO.";
         }
@@ -46349,13 +46346,19 @@
             if (typeof nested === "string" && /integrationSession|prisma/i.test(nested)) {
               return "Sistema WABA - Drax com erro interno no banco (Prisma). Reinicie o serviço no Easypanel.";
             }
+            if (typeof nested === "string" && nested.trim()) {
+              return nested.trim().slice(0, 280);
+            }
           } catch {
             /* mantém fallback */
           }
         }
-        if (msg) return msg;
+        if (msg && msg !== "Erro ao gerar QRCode da instância." && msg !== "Falha ao gerar QRCode." && !/^\s*\{/.test(msg)) {
+          return msg;
+        }
         if (detail && !/^\s*\{/.test(detail)) return detail.slice(0, 400);
-        return "Erro ao gerar QRCode da instância.";
+        if (msg) return msg;
+        return "Erro ao gerar QRCode da instância. Confira EVO_API_URL no Easypanel (ex.: http://172.17.0.1:30181) e tente «Atualizar QR».";
       }
 
       async function refreshQrCodeInRegisterModal() {

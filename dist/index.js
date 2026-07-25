@@ -6869,7 +6869,7 @@ function appendAntiRepeatParam(rawUrl, attempt) {
     }
 }
 function tryExtractQrCode(payload) {
-    const normalizeCandidate = (value) => {
+    const normalizeCandidate = (value, keyHint = "") => {
         if (typeof value !== "string")
             return null;
         const raw = value.trim();
@@ -6879,19 +6879,25 @@ function tryExtractQrCode(payload) {
             return raw;
         if (raw.startsWith("http://") || raw.startsWith("https://"))
             return raw;
+        // Preferir base64 puro; NÃO tratar o campo `code` (ex.: "2@…") como imagem.
+        const key = String(keyHint || "").toLowerCase();
+        if (key === "code" || key === "pairingcode" || key === "pairing_code")
+            return null;
+        if (raw.includes("@") || raw.includes(","))
+            return null;
         if (/^[A-Za-z0-9+/=\r\n]+$/.test(raw) && raw.length >= 100)
             return raw;
         return null;
     };
-    const visit = (node, depth = 0) => {
+    const visit = (node, depth = 0, keyHint = "") => {
         if (depth > 6 || node == null)
             return null;
-        const normalizedDirect = normalizeCandidate(node);
+        const normalizedDirect = normalizeCandidate(node, keyHint);
         if (normalizedDirect)
             return normalizedDirect;
         if (Array.isArray(node)) {
             for (const item of node) {
-                const found = visit(item, depth + 1);
+                const found = visit(item, depth + 1, keyHint);
                 if (found)
                     return found;
             }
@@ -6899,20 +6905,21 @@ function tryExtractQrCode(payload) {
         }
         if (typeof node !== "object")
             return null;
+        // base64 antes de code — evita capturar o payload Baileys "2@…" como QR imagem.
         const priorityKeys = [
             "response",
             "qrcode",
             "qrCode",
             "qr",
             "base64",
+            "data",
             "code",
             "pairingCode",
             "pairingcode",
-            "data",
         ];
         for (const key of priorityKeys) {
             if (Object.prototype.hasOwnProperty.call(node, key)) {
-                const found = visit(node[key], depth + 1);
+                const found = visit(node[key], depth + 1, key);
                 if (found)
                     return found;
             }
@@ -6920,7 +6927,7 @@ function tryExtractQrCode(payload) {
         for (const [key, value] of Object.entries(node)) {
             if (!/(qr|qrcode|base64|code|pairing)/i.test(key))
                 continue;
-            const found = visit(value, depth + 1);
+            const found = visit(value, depth + 1, key);
             if (found)
                 return found;
         }
