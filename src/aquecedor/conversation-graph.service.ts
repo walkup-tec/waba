@@ -356,13 +356,18 @@ export function getPairDirectionAllowed(
   const direction: PairDirection =
     from.localeCompare(pair.a) === 0 && to.localeCompare(pair.b) === 0 ? "a_to_b" : "b_to_a";
 
-  // Regra 3: nunca A→B seguido sem resposta B→A.
-  if (pair.lastDirection === direction && pair.totalMessages > 0) {
-    return { ok: false, reason: "mesmo sentido consecutivo sem resposta" };
-  }
-
   const nextBalance =
     direction === "a_to_b" ? pair.balance + 1 : pair.balance - 1;
+  const wouldReduceImbalance =
+    Math.abs(pair.balance) >= 1 && Math.abs(nextBalance) < Math.abs(pair.balance);
+
+  // Regra 3: nunca A→B seguido sem resposta B→A.
+  // Exceção: se o grafo ficou com |saldo|>=1 e lastDirection JÁ é o sentido curativo
+  // (legado/bootstrap), bloquear a repetição cria deadlock permanente — permitir
+  // repetir só enquanto reduz o desequilíbrio.
+  if (pair.lastDirection === direction && pair.totalMessages > 0 && !wouldReduceImbalance) {
+    return { ok: false, reason: "mesmo sentido consecutivo sem resposta" };
+  }
 
   // Regra 2: |saldo| <= 2.
   if (Math.abs(nextBalance) > MAX_BALANCE_ABS) {

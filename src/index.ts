@@ -4349,11 +4349,15 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       ownerEmail,
     );
     if (!picked) {
+      const blocked = await listBlockedDirectedKeys();
+      const blockedHint = blocked.size
+        ? ` ${blocked.size} direção(ões) em cooldown de entrega.`
+        : "";
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
-        30,
-        "Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).",
+        blocked.size ? 45 : 30,
+        `Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).${blockedHint}`,
       );
       return;
     }

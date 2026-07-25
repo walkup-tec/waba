@@ -198,6 +198,8 @@ export function pickNextRelationship(
 
   // Completar conversa: se o último par está desequilibrado, a resposta do turno
   // (B→A após A→B) tem prioridade — não excluir o par "para evitar ping-pong".
+  // Se a resposta exige instância fora do ciclo (ex.: 8927 close), não forçar o par:
+  // seguir com o pool geral para não travar o motor.
   const lastKey = owner.lastSelectedPairKey || null;
   const lastPair = lastKey ? owner.pairs[lastKey] : null;
   if (lastPair && Math.abs(lastPair.balance) >= 1) {

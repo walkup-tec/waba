@@ -3490,7 +3490,11 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         }
         const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal, ownerEmail);
         if (!picked) {
-            deferAquecedorRetryOrWindow(config, nowSp, 30, "Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).");
+            const blocked = await (0, delivery_cooldown_service_1.listBlockedDirectedKeys)();
+            const blockedHint = blocked.size
+                ? ` ${blocked.size} direção(ões) em cooldown de entrega.`
+                : "";
+            deferAquecedorRetryOrWindow(config, nowSp, blocked.size ? 45 : 30, `Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).${blockedHint}`);
             return;
         }
         const chosen = picked.chosen;

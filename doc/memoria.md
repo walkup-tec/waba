@@ -1,4 +1,16 @@
-﻿## 2026-07-24 13:15 — Aquecedor: Em Fila some = outbound MessageUpdate=ERROR
+﻿## 2026-07-25 09:50 — Aquecedor: deadlock saldo/anti-duplicata (print)
+- Motor ativo + “nenhum envio elegível” = pick null por |saldo|=1 + lastDirection curativo
+- Fix getPairDirectionAllowed: repetir sentido só se reduzir desequilíbrio
+- Marker: DEPLOY-2026-07-25-aquecedor-pair-deadlock-unlock
+- LOG: doc/LOG-2026-07-25__095000__aquecedor-pair-deadlock-unlock.md
+
+## 2026-07-25 09:45 — Aquecedor ~10× abaixo do esperado (pós 16:51)
+- Só 3 ENVIADO desde 24/07 16:51; 0 após 16:55 (ainda expediente) e 0 no sáb de manhã
+- Esperado ~21–63 no trecho aberto; pool: 5 healthy open vs 5 broken ERROR + 8927 close
+- Causas: outbound quebrado + silêncio do motor (desired/lifecycle/defer) — não só wait 5–15min
+- LOG: doc/LOG-2026-07-25__094500__aquecedor-volume-10x-abaixo.md
+
+## 2026-07-24 13:15 — Aquecedor: Em Fila some = outbound MessageUpdate=ERROR
 - Teste 1× 1321→walkup: HTTP 201 + tag só na origem + MessageUpdate=ERROR (walkup OK)
 - Quebradas 100% ERROR: 1321, 1261, 6011, 6635 | saudáveis: walkup, 1321-01, soma…
 - Código: filtra outbound quebrado + poll findStatusMessage; não culpar destino
