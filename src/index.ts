@@ -67,6 +67,7 @@ import {
   rememberAquecedorOutboundHealth,
 } from "./aquecedor/outbound-ack-health.service";
 import {
+  buildDirectedCooldownKey,
   listBlockedDirectedKeys,
   recordDirectedDeliveryFailure,
 } from "./aquecedor/delivery-cooldown.service";
@@ -1417,9 +1418,12 @@ const AQUECEDOR_PAIR_SENDER_LOOKBACK = 500;
 const AQUECEDOR_TURN_EQUITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
  * Par sem troca há mais que isso: o turno do par reinicia (qualquer lado pode iniciar).
- * Evita par congelado quando o "devedor" da resposta nunca vence a equidade.
+ * 90 min (antes 6h): com intervalo 2–4 min, 6h congelava o motor quando o "devedor" saía do ciclo.
  */
-const AQUECEDOR_PAIR_TURN_STALE_MS = 6 * 60 * 60 * 1000;
+const AQUECEDOR_PAIR_TURN_STALE_MS = 90 * 60 * 1000;
+/** Cooldown curto ao falhar open/turno/cota — libera outros pares sem rajada de sendText. */
+const AQUECEDOR_SOFT_DIRECTED_COOLDOWN_MS = 3 * 60 * 1000;
+const AQUECEDOR_PICK_ATTEMPTS_MAX = 12;
 
 function buildAquecedorInstanceCanonicalMap(
   connected: Array<{ instancia: string }>,
@@ -1612,6 +1616,8 @@ type AquecedorInstanceTurnStats = {
   lastSentAt: string | null;
   lastReceivedAt: string | null;
   lastReceivedFrom: string | null;
+  /** Último destino outbound — se sair do ciclo, libera origem para outros pares. */
+  lastOutboundTo: string | null;
   sendCount: number;
   receiveCount: number;
   /** Envios desde o último inbound (0 = liberado para novo envio). */
@@ -1684,6 +1690,7 @@ async function loadAquecedorTurnManager(
         lastSentAt: null,
         lastReceivedAt: null,
         lastReceivedFrom: null,
+        lastOutboundTo: null,
         sendCount: 0,
         receiveCount: 0,
         outboundSinceInbound: 0,
@@ -1715,6 +1722,7 @@ async function loadAquecedorTurnManager(
       directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
     }
     fromStats.lastSentAt = ev.at;
+    fromStats.lastOutboundTo = ev.toInst;
     toStats.lastReceivedAt = ev.at;
     toStats.lastReceivedFrom = ev.fromInst;
     fromStats.outboundSinceInbound += 1;
@@ -1755,6 +1763,12 @@ async function loadAquecedorTurnManager(
     recentDirectedEdges.push(buildAquecedorDirectedKey(ev.fromInst, ev.toInst));
   }
 
+  const connectedCanonical = new Set(
+    connected
+      .map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase())
+      .filter(Boolean),
+  );
+
   const owesPairReply = (origemRaw: string, destinoRaw: string): boolean => {
     const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
@@ -1769,6 +1783,9 @@ async function loadAquecedorTurnManager(
     const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
     if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase()) return false;
+    if (!connectedCanonical.has(origem.toLowerCase()) || !connectedCanonical.has(destino.toLowerCase())) {
+      return false;
+    }
 
     const pairKey = buildAquecedorPairKey(origem, destino);
     const lastSender = pairLastSender.get(pairKey);
@@ -1782,6 +1799,11 @@ async function loadAquecedorTurnManager(
 
     const stats = instanceStats.get(origem.toLowerCase());
     if (!stats?.lastSentAt || stats.outboundSinceInbound === 0) return true;
+    // Peer do último outbound saiu do ciclo → não congelar a origem para outros pares.
+    const lastTo = stats.lastOutboundTo;
+    if (lastTo && !connectedCanonical.has(lastTo.toLowerCase())) {
+      return true;
+    }
     return false;
   };
 
@@ -1964,6 +1986,7 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
   combinations: T[],
   startIndex: number,
   ownerEmail?: string,
+  extraBlockedDirectedKeys?: Set<string>,
 ): Promise<{
   chosen: T;
   index: number;
@@ -1977,9 +2000,19 @@ async function pickAquecedorCombinationAsync<T extends { instancia_origem: strin
   const eligibleNames = connected.map((item) =>
     resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick),
   );
+  const turn = await loadAquecedorTurnManager(supabase, connected);
+  const blocked = await listBlockedDirectedKeys();
+  if (extraBlockedDirectedKeys?.size) {
+    for (const key of extraBlockedDirectedKeys) blocked.add(key);
+  }
+  for (const combo of combinations) {
+    if (!turn.canSendDirected(combo.instancia_origem, combo.instancia_destino)) {
+      blocked.add(buildDirectedCooldownKey(combo.instancia_origem, combo.instancia_destino));
+    }
+  }
   const pick = pickNextDirectedExchange(graph, eligibleNames, {
     startIndex,
-    blockedDirectedKeys: await listBlockedDirectedKeys(),
+    blockedDirectedKeys: blocked,
   });
   if (!pick) return null;
 
@@ -4402,136 +4435,153 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       return;
     }
 
-    const picked = await pickAquecedorCombinationAsync(
-      supabase,
-      connected,
-      combinations,
-      cicloGlobal,
-      ownerEmail,
+    const scopedKeys = new Set(
+      (await listAquecedorScopedInstanceNames(ownerEmail)).map((name) => name.toLowerCase()),
     );
-    if (!picked) {
+    const softSkipDirected = new Set<string>();
+    const maxPickAttempts = Math.min(
+      AQUECEDOR_PICK_ATTEMPTS_MAX,
+      Math.max(1, combinations.length),
+    );
+
+    let picked: Awaited<ReturnType<typeof pickAquecedorCombinationAsync<(typeof combinations)[number]>>> =
+      null;
+    let chosen: (typeof combinations)[number] | null = null;
+    let proximo = cicloGlobal + 1;
+    let pairContext: ReturnType<typeof buildAquecedorPairContext> | null = null;
+    let pendingData: Awaited<ReturnType<typeof fetchProcessableAquecedorPending>> = null;
+    let texto = "";
+    let lastSoftReason = "";
+
+    for (let attempt = 0; attempt < maxPickAttempts; attempt += 1) {
+      const candidate = await pickAquecedorCombinationAsync(
+        supabase,
+        connected,
+        combinations,
+        cicloGlobal + attempt,
+        ownerEmail,
+        softSkipDirected,
+      );
+      if (!candidate) break;
+
+      const dirKey = buildDirectedCooldownKey(
+        candidate.chosen.instancia_origem,
+        candidate.chosen.instancia_destino,
+      );
+      if (softSkipDirected.has(dirKey)) continue;
+
+      if (
+        !scopedKeys.has(candidate.chosen.instancia_origem.toLowerCase()) ||
+        !scopedKeys.has(candidate.chosen.instancia_destino.toLowerCase())
+      ) {
+        softSkipDirected.add(dirKey);
+        lastSoftReason = `Par ${candidate.chosen.instancia_origem} → ${candidate.chosen.instancia_destino} fora do escopo.`;
+        continue;
+      }
+
+      const dailyQuota = await canAquecedorInstanceSendToday(candidate.chosen.instancia_origem);
+      if (!dailyQuota.ok) {
+        softSkipDirected.add(dirKey);
+        lastSoftReason = `${candidate.chosen.instancia_origem}: ${dailyQuota.reason}`;
+        continue;
+      }
+
+      const turnCheck = await verifyAquecedorConversationTurn(
+        supabase,
+        connected,
+        candidate.chosen.instancia_origem,
+        candidate.chosen.instancia_destino,
+      );
+      if (!turnCheck.ok) {
+        softSkipDirected.add(dirKey);
+        lastSoftReason = turnCheck.reason;
+        continue;
+      }
+
+      if (
+        await hasRecentAquecedorSendBetween(
+          supabase,
+          connected,
+          candidate.chosen.instancia_origem,
+          candidate.chosen.instancia_destino,
+          90,
+        )
+      ) {
+        softSkipDirected.add(dirKey);
+        lastSoftReason = `Envio ${candidate.chosen.instancia_origem} → ${candidate.chosen.instancia_destino} ignorado: duplicata recente.`;
+        continue;
+      }
+
+      const openCheck = await assertAquecedorInstancesOpenForSend(
+        candidate.chosen.instancia_origem,
+        candidate.chosen.instancia_destino,
+      );
+      if (!openCheck.ok) {
+        softSkipDirected.add(dirKey);
+        lastSoftReason = openCheck.reason;
+        await recordDirectedDeliveryFailure({
+          origem: candidate.chosen.instancia_origem,
+          destino: candidate.chosen.instancia_destino,
+          reason: openCheck.reason,
+          cooldownMs: AQUECEDOR_SOFT_DIRECTED_COOLDOWN_MS,
+        });
+        continue;
+      }
+
+      const candidateContext = buildAquecedorPairContext(candidate.chosen, connected);
+      const ensured = await ensureAquecedorPendingMessage(candidateContext);
+      const pending = await fetchProcessableAquecedorPending(
+        supabase,
+        scopedInstanceNames,
+        candidate.chosen.instancia_origem,
+      );
+      if (!pending?.id) {
+        softSkipDirected.add(dirKey);
+        lastSoftReason =
+          ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
+        if (!ensured.ok && isSupabaseTransientError({ message: lastSoftReason })) {
+          aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + 60_000).toISOString();
+          aquecedorCycleRuntime().lastResult = await describeSupabaseConnectivityFailure();
+          return;
+        }
+        continue;
+      }
+
+      picked = candidate;
+      chosen = candidate.chosen;
+      proximo = candidate.index + 1;
+      pairContext = candidateContext;
+      pendingData = pending;
+      texto = await resolveAquecedorMessageForSend(
+        supabase,
+        pending.id,
+        String(pending.mensagem || ""),
+        candidateContext,
+      );
+      break;
+    }
+
+    if (!picked || !chosen || !pairContext || !pendingData?.id) {
       const blocked = await listBlockedDirectedKeys();
       const blockedHint = blocked.size
         ? ` ${blocked.size} direção(ões) em cooldown de entrega.`
         : "";
+      const skipHint = softSkipDirected.size
+        ? ` ${softSkipDirected.size} direção(ões) ignorada(s) neste ciclo.`
+        : "";
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
-        blocked.size ? 45 : 30,
-        `Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).${blockedHint}`,
+        blocked.size || softSkipDirected.size ? 45 : 30,
+        lastSoftReason
+          ? `${lastSoftReason}${skipHint}${blockedHint}`
+          : `Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).${skipHint}${blockedHint}`,
       );
-      return;
-    }
-
-    const chosen = picked.chosen;
-    const scopedKeys = new Set(
-      (await listAquecedorScopedInstanceNames(ownerEmail)).map((name) => name.toLowerCase()),
-    );
-    if (
-      !scopedKeys.has(chosen.instancia_origem.toLowerCase()) ||
-      !scopedKeys.has(chosen.instancia_destino.toLowerCase())
-    ) {
-      deferAquecedorRetryOrWindow(
-        config,
-        nowSp,
-        60,
-        `Par ${chosen.instancia_origem} → ${chosen.instancia_destino} fora do escopo do assinante; envio bloqueado.`,
-      );
-      return;
-    }
-
-    const dailyQuota = await canAquecedorInstanceSendToday(chosen.instancia_origem);
-    if (!dailyQuota.ok) {
-      deferAquecedorRetryOrWindow(
-        config,
-        nowSp,
-        300,
-        `${chosen.instancia_origem}: ${dailyQuota.reason}`,
-      );
-      return;
-    }
-
-    const proximo = picked.index + 1;
-    const pairContext = buildAquecedorPairContext(chosen, connected);
-
-    const ensured = await ensureAquecedorPendingMessage(pairContext);
-    const pendingData = await fetchProcessableAquecedorPending(
-      supabase,
-      scopedInstanceNames,
-      chosen.instancia_origem,
-    );
-    if (!pendingData?.id) {
-      const reason =
-        ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
-      if (!ensured.ok && isSupabaseTransientError({ message: reason })) {
-        aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + 60_000).toISOString();
-        aquecedorCycleRuntime().lastResult = await describeSupabaseConnectivityFailure();
-      } else {
-        aquecedorCycleRuntime().lastResult = ensured.ok
-          ? "Sem mensagem pendente para envio (fila vazia após preparação)."
-          : reason;
-      }
-      return;
-    }
-
-    const texto = await resolveAquecedorMessageForSend(
-      supabase,
-      pendingData.id,
-      String(pendingData.mensagem || ""),
-      pairContext,
-    );
-
-    const turnCheck = await verifyAquecedorConversationTurn(
-      supabase,
-      connected,
-      chosen.instancia_origem,
-      chosen.instancia_destino,
-    );
-    if (!turnCheck.ok) {
-      deferAquecedorRetryOrWindow(config, nowSp, 90, turnCheck.reason);
-      return;
-    }
-
-    if (
-      await hasRecentAquecedorSendBetween(
-        supabase,
-        connected,
-        chosen.instancia_origem,
-        chosen.instancia_destino,
-        90,
-      )
-    ) {
-      deferAquecedorRetryOrWindow(
-        config,
-        nowSp,
-        90,
-        `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`,
-      );
-      return;
-    }
-
-    const turnRecheck = await verifyAquecedorConversationTurn(
-      supabase,
-      connected,
-      chosen.instancia_origem,
-      chosen.instancia_destino,
-    );
-    if (!turnRecheck.ok) {
-      deferAquecedorRetryOrWindow(config, nowSp, 90, turnRecheck.reason);
       return;
     }
 
     const deliveryTag = buildAquecedorDeliveryTag();
     const textoEnvio = appendAquecedorDeliveryTag(texto, deliveryTag);
-
-    const openCheck = await assertAquecedorInstancesOpenForSend(
-      chosen.instancia_origem,
-      chosen.instancia_destino,
-    );
-    if (!openCheck.ok) {
-      deferAquecedorRetryOrWindow(config, nowSp, 180, openCheck.reason);
-      return;
-    }
 
     await (supabase.from("aquecedor" as any) as any)
       .update({
@@ -4548,6 +4598,12 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     if (!numberCandidates.length) {
       await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
         keepInstancia: chosen.instancia_origem,
+      });
+      await recordDirectedDeliveryFailure({
+        origem: chosen.instancia_origem,
+        destino: chosen.instancia_destino,
+        reason: "destino sem número WhatsApp válido",
+        cooldownMs: AQUECEDOR_SOFT_DIRECTED_COOLDOWN_MS,
       });
       deferAquecedorRetryOrWindow(
         config,

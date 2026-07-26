@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = void 0;
+exports.AQUECEDOR_DAILY_CAP_CEILING = exports.AQUECEDOR_DAILY_CAP_WEEKLY_GROWTH = exports.AQUECEDOR_DAILY_CAP_BASE = exports.AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = exports.AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = exports.AQUECEDOR_PREPARING_DURATION_MS = exports.AQUECEDOR_STAGGER_PROMOTE_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS = void 0;
 exports.collectInstanceNameKeys = collectInstanceNameKeys;
 exports.findAquecedorLifecycleRow = findAquecedorLifecycleRow;
 exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForInstance;
@@ -36,7 +36,10 @@ const INSTANCE_ALIASES_FILE = (0, data_path_1.resolveDataFile)("instance-aliases
 /** Pausa humana após indício de restrição (antes era 6h). */
 exports.AQUECEDOR_HUMAN_PAUSE_MS = 3 * 60 * 60 * 1000;
 const HUMAN_PAUSE_MS = exports.AQUECEDOR_HUMAN_PAUSE_MS;
-/** Após sair de Preparando, 6h de envio sem poder entrar em pausa humana. */
+/**
+ * Após sair de Preparando, o número tem 6h de envio sem poder entrar em pausa humana.
+ * Só depois dessa janela a pausa de 3h pode ser aplicada.
+ */
 exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
 const POST_PREPARING_SEND_WINDOW_MS = exports.AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS;
 exports.AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
@@ -401,6 +404,7 @@ function isWithinPostPreparingSendWindow(row, nowMs = Date.now()) {
         return false;
     return nowMs < activatedMs + POST_PREPARING_SEND_WINDOW_MS;
 }
+/** true = pode aplicar pausa humana de 3h. */
 function canApplyAquecedorHumanPause(row, nowMs = Date.now()) {
     if (!row)
         return true;
@@ -589,7 +593,7 @@ async function canAquecedorInstanceSendToday(instanceName) {
             ok: false,
             reason: row.phase === "preparing"
                 ? "Instância em preparação."
-                : "Instância em espera por restrição (6h).",
+                : "Instância em 3 horas pausa humana.",
             dailyCap: 0,
             dailyCount: 0,
         };

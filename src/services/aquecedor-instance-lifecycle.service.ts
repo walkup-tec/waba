@@ -672,7 +672,7 @@ export async function canAquecedorInstanceSendToday(instanceName: string): Promi
       reason:
         row.phase === "preparing"
           ? "Instância em preparação."
-          : "Instância em espera por restrição (6h).",
+          : "Instância em 3 horas pausa humana.",
       dailyCap: 0,
       dailyCount: 0,
     };

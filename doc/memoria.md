@@ -1,4 +1,10 @@
-﻿## 2026-07-25 19:05 — Aquecedor: pausa humana 3h (imune 6h pós-Preparando)
+﻿## 2026-07-26 10:18 — Aquecedor motor unlock (volume vs intervalo)
+- Soft-skip de direções mortas no ciclo; stale par 90min; peer offline libera origem
+- Testes: scripts/test-aquecedor-motor-unlock.mjs (+ deadlock + pausa humana)
+- Marker: DEPLOY-2026-07-26-aquecedor-motor-unlock
+- LOG: doc/LOG-2026-07-26__101800__aquecedor-motor-unlock.md
+
+## 2026-07-25 19:05 — Aquecedor: pausa humana 3h (imune 6h pós-Preparando)
 - Pausa 6h→3h; rótulo «3 horas pausa humana»
 - Não aplica nas primeiras 6h após sair de Preparando (activatedAt)
 - Teste: scripts/test-aquecedor-human-pause-window.mjs

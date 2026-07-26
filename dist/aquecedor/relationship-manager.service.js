@@ -158,6 +158,8 @@ function pickNextRelationship(owner, eligibleInstanceNames, options = {}) {
     // (B→A após A→B) tem prioridade — não excluir o par "para evitar ping-pong".
     // Se a resposta exige instância fora do ciclo (ex.: 8927 close), não forçar o par:
     // seguir com o pool geral para não travar o motor.
+    // Se a direção curativa está em cooldown/soft-skip (blocked), também NÃO forçar —
+    // senão o motor fica em loop eterno no mesmo A→B morto.
     const lastKey = owner.lastSelectedPairKey || null;
     const lastPair = lastKey ? owner.pairs[lastKey] : null;
     if (lastPair && Math.abs(lastPair.balance) >= 1) {
