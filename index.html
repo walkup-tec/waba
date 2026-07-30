@@ -8219,10 +8219,6 @@
         cursor: not-allowed;
       }
 
-      #admin-subscriber-resend-overlay .admin-subscriber-resend-password {
-        margin-top: 12px;
-      }
-
       .admin-subscribers-table tbody tr.admin-subscribers-row-clickable:hover td {
         background: rgba(59, 130, 246, 0.1);
       }
@@ -20322,18 +20318,8 @@
       >
         <div class="confirm-title" id="admin-subscriber-resend-title">Reenviar boas-vindas</div>
         <div class="confirm-text">
-          Informe a senha de acesso para reenviar e-mail e WhatsApp para
-          <strong id="admin-subscriber-resend-email-display" class="admin-subscriber-delete-email"></strong>.
-        </div>
-        <div class="aquecedor-field admin-subscriber-resend-password">
-          <label for="admin-subscriber-resend-password">Senha de acesso</label>
-          <input
-            id="admin-subscriber-resend-password"
-            type="password"
-            minlength="6"
-            autocomplete="new-password"
-            placeholder="Mínimo 6 caracteres"
-          />
+          Reenviar e-mail e WhatsApp de boas-vindas para
+          <strong id="admin-subscriber-resend-email-display" class="admin-subscriber-delete-email"></strong>?
         </div>
         <div class="confirm-actions">
           <button id="admin-subscriber-resend-cancel-btn" class="instance-action-btn" type="button">
@@ -24945,11 +24931,8 @@
         if (!hasMasterAccess() || !subscriberId) return;
         adminSubscriberResendId = String(subscriberId);
         const emailEl = document.getElementById("admin-subscriber-resend-email-display");
-        const passwordInput = document.getElementById("admin-subscriber-resend-password");
         if (emailEl) emailEl.textContent = String(email || "").trim() || "—";
-        if (passwordInput) passwordInput.value = "";
         openDisparosOverlay("admin-subscriber-resend-overlay");
-        window.setTimeout(() => passwordInput?.focus(), 0);
       }
 
       function closeAdminSubscriberResendModal() {
@@ -25165,20 +25148,9 @@
         bindAdminSubscriberDetailMaskedInputs();
       }
 
-      async function resendAdminSubscriberWelcome(subscriberId, password) {
+      async function resendAdminSubscriberWelcome(subscriberId) {
         const targetId = String(subscriberId || adminSubscriberResendId || "").trim();
         if (!hasMasterAccess() || !targetId) return;
-        const pwd = String(
-          password ?? document.getElementById("admin-subscriber-resend-password")?.value ?? ""
-        ).trim();
-        if (pwd.length < 6) {
-          showToast(
-            "Informe a senha (mín. 6 caracteres) para reenviar e-mail e WhatsApp de boas-vindas.",
-            "warning",
-            6000
-          );
-          return;
-        }
         const btn = document.getElementById("admin-subscriber-resend-confirm-btn");
         if (btn) {
           btn.disabled = true;
@@ -25191,7 +25163,7 @@
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password: pwd }),
+              body: "{}",
             },
             120000
           );
@@ -31187,12 +31159,6 @@
         document.getElementById("admin-subscriber-resend-overlay")?.addEventListener("click", (event) => {
           if (event.target?.id === "admin-subscriber-resend-overlay") {
             closeAdminSubscriberResendModal();
-          }
-        });
-        document.getElementById("admin-subscriber-resend-password")?.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void confirmResendAdminSubscriberWelcome();
           }
         });
         document.getElementById("admin-subscriber-delete-cancel-btn")?.addEventListener("click", () => {

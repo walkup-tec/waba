@@ -329,7 +329,7 @@ export class WabaAdminSubscribersService {
     const subscriber = this.subscriberRepository.getById(id);
     if (!subscriber) throw new Error("Assinante não encontrado.");
 
-    // Senha em plaintext não é armazenada — reenvio sem exigir nova senha do master.
+    // Senha em plaintext não é armazenada — reenvio sem exigir senha do master.
     const payload = {
       email: subscriber.email,
       fullName: subscriber.fullName,

@@ -1,2 +1,3 @@
-// Gerado/atualizado no deploy. Nùo editar manualmente sem necessidade.
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-26-aquecedor-motor-unlock";
+/** Validar em GET /health apÛs redeploy do serviÁo waba_disparador (Easypanel). */
+
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-07-30-resend-welcome-sem-senha";
