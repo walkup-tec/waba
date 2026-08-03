@@ -50,7 +50,7 @@ export type WabaCampaignAssignmentHistoryEntry = {
   at: string;
   supplierId: string;
   operacionalEmail: string;
-  reason: "initial" | "bm_inoperante" | "timeout_30h";
+  reason: "initial" | "bm_inoperante" | "timeout_30h" | "manual_master";
 };
 
 export type WabaCampaignIntake = {

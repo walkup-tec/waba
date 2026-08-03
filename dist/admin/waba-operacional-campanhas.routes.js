@@ -148,6 +148,30 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             return res.status(status).json({ error: message });
         }
     });
+    app.post("/admin/operacional/campanhas/:id/atribuir", async (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = (req.body ?? {});
+            const campaign = await operacionalCampanhasService.assignCampaignToOperacional(req.params.id, String(body.operacionalEmail ?? body.email ?? ""), { email: auth.email, role: auth.role });
+            return res.status(200).json({
+                ok: true,
+                campaign,
+                message: `Campanha atribuída a ${String(body.operacionalEmail ?? body.email ?? "").trim()}.`,
+            });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível atribuir a campanha.";
+            const status = /não encontrada|não disponível|Somente|Informe|Operacional|segmento|API/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/atribuir] erro:", error);
+            }
+            return res.status(status).json({ error: message });
+        }
+    });
     app.post("/admin/operacional/campanhas/:id/reenviar-email-operacional", async (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)

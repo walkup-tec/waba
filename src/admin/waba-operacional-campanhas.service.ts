@@ -670,4 +670,20 @@ export class WabaOperacionalCampanhasService {
     }
     return result;
   }
+
+  async assignCampaignToOperacional(
+    campaignId: string,
+    operacionalEmail: string,
+    staff: OperacionalCampanhasStaffContext,
+  ): Promise<OperacionalCampaignDetail> {
+    if (staff.role !== "master" && !isWabaMasterEmail(staff.email)) {
+      throw new Error("Somente master pode atribuir campanha a um operacional.");
+    }
+    await this.assignmentService.forceAssignToOperacionalEmail(campaignId, operacionalEmail);
+    const detail = this.getCampaignDetail(campaignId, staff);
+    if (!detail) {
+      throw new Error("Campanha atribuída, mas não foi possível carregar os detalhes.");
+    }
+    return detail;
+  }
 }
