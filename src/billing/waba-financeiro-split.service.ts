@@ -27,6 +27,11 @@ import {
   resolveFinanceiroCetCentsForPaidOrder,
   resolveFinanceiroCetCentsPerOperation,
 } from "./waba-financeiro-cet";
+import {
+  filterOutMetricsExcludedOwners,
+  isWabaMetricsExcludedOwnerEmail,
+  WABA_METRICS_EXCLUDED_OWNER_EMAILS,
+} from "./waba-metrics-excluded-owners";
 
 const PERCENT_SUM_TOLERANCE = 0.01;
 
@@ -157,7 +162,12 @@ export class WabaFinanceiroSplitService {
   }
 
   listSettlements(limit = 100) {
-    return this.settlementRepository.list(limit);
+    return filterOutMetricsExcludedOwners(this.settlementRepository.list(limit));
+  }
+
+  /** Remove settlements já gravados de owners excluídos das métricas/split. */
+  purgeExcludedOwnerSettlements(): { removed: number; ids: string[] } {
+    return this.settlementRepository.deleteByOwnerEmails([...WABA_METRICS_EXCLUDED_OWNER_EMAILS]);
   }
 
   async syncSettlementTransferStatuses(limit = 100): Promise<number> {
@@ -284,9 +294,11 @@ export class WabaFinanceiroSplitService {
 
   resolveOrderEconomics(order: WabaBillingOrder) {
     if (order.product !== "waba-disparos" || order.status !== "paid") return null;
+    if (isWabaMetricsExcludedOwnerEmail(order.ownerEmail)) return null;
 
     const settlement = this.settlementRepository.getByOrderId(order.id);
     if (settlement) {
+      if (isWabaMetricsExcludedOwnerEmail(settlement.ownerEmail)) return null;
       const breakdown = resolveSettlementCostBreakdown(settlement);
       return {
         apiKind: settlement.apiKind,
@@ -338,8 +350,16 @@ export class WabaFinanceiroSplitService {
   settlePaidOrder(order: WabaBillingOrder) {
     if (order.product !== "waba-disparos" || order.status !== "paid") return null;
 
+    if (isWabaMetricsExcludedOwnerEmail(order.ownerEmail)) {
+      this.logSettlementSkip(order, "owner excluído de métricas/split");
+      return null;
+    }
+
     const existing = this.settlementRepository.getByOrderId(order.id);
-    if (existing) return existing;
+    if (existing) {
+      if (isWabaMetricsExcludedOwnerEmail(existing.ownerEmail)) return null;
+      return existing;
+    }
 
     const config = this.configRepository.get();
     const apiKind = resolveOrderApiKind(order);
@@ -527,6 +547,7 @@ export class WabaFinanceiroSplitService {
 
   async payoutSupplierForCompletedCampaign(intake: WabaCampaignIntake): Promise<FinanceiroSplitSettlement | null> {
     if (intake.status !== "completed") return null;
+    if (isWabaMetricsExcludedOwnerEmail(intake.ownerEmail)) return null;
     const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
     if (sent <= 0) return null;
 
@@ -537,7 +558,10 @@ export class WabaFinanceiroSplitService {
 
     const orderId = this.buildCampaignSupplierOrderId(intake.id);
     const existing = this.settlementRepository.getByOrderId(orderId);
-    if (existing) return existing;
+    if (existing) {
+      if (isWabaMetricsExcludedOwnerEmail(existing.ownerEmail)) return null;
+      return existing;
+    }
 
     const apiKind = resolveIntakeApiKindFromIntake(intake);
     const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));

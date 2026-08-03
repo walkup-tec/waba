@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.filterIntakesBySubscriberEmails = exports.buildMasterSubscribersDisparosDashboardOverview = exports.buildDisparosDashboardOverview = exports.buildCompareSubscribersFromIntakes = exports.buildCampaignComparisonFromIntakes = void 0;
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
+const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
 const roundMetric = (value) => {
     const parsed = Math.round(Number(value));
@@ -177,12 +178,15 @@ const buildDisparosDashboardOverview = (ownerEmail, intakes) => {
 };
 exports.buildDisparosDashboardOverview = buildDisparosDashboardOverview;
 const buildMasterSubscribersDisparosDashboardOverview = (masterEmail, intakes, subscribers) => {
-    const subscriberEmailSet = new Set(subscribers.map((subscriber) => subscriber.email.trim().toLowerCase()).filter(Boolean));
-    const subscriberIntakes = intakes.filter((item) => subscriberEmailSet.has(item.ownerEmail.trim().toLowerCase()));
+    const eligibleSubscribers = subscribers.filter((subscriber) => !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(subscriber.email));
+    const subscriberEmailSet = new Set(eligibleSubscribers
+        .map((subscriber) => subscriber.email.trim().toLowerCase())
+        .filter(Boolean));
+    const subscriberIntakes = (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(intakes.filter((item) => subscriberEmailSet.has(item.ownerEmail.trim().toLowerCase())));
     const aggregated = aggregateDisparosDashboardFromIntakes(subscriberIntakes, {
         includeOwnerEmail: true,
     });
-    const compareSubscribers = (0, exports.buildCompareSubscribersFromIntakes)(subscriberIntakes, subscribers);
+    const compareSubscribers = (0, exports.buildCompareSubscribersFromIntakes)(subscriberIntakes, eligibleSubscribers);
     return {
         scope: "master_subscribers",
         ownerEmail: masterEmail.trim().toLowerCase(),

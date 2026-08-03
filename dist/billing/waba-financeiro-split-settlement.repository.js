@@ -175,5 +175,28 @@ class WabaFinanceiroSplitSettlementRepository {
         this.writeStore(store);
         return record;
     }
+    /** Remove settlements cujo ownerEmail está na lista (normalizado). */
+    deleteByOwnerEmails(ownerEmails) {
+        const excluded = new Set(ownerEmails.map((email) => String(email || "").trim().toLowerCase()).filter(Boolean));
+        if (!excluded.size)
+            return { removed: 0, ids: [] };
+        const store = this.readStore();
+        const ids = [];
+        const kept = [];
+        for (const settlement of store.settlements) {
+            const owner = String(settlement.ownerEmail || "")
+                .trim()
+                .toLowerCase();
+            if (owner && excluded.has(owner)) {
+                ids.push(settlement.id);
+                continue;
+            }
+            kept.push(settlement);
+        }
+        if (ids.length === 0)
+            return { removed: 0, ids: [] };
+        this.writeStore({ version: 1, settlements: kept });
+        return { removed: ids.length, ids };
+    }
 }
 exports.WabaFinanceiroSplitSettlementRepository = WabaFinanceiroSplitSettlementRepository;

@@ -11,6 +11,7 @@ const waba_financeiro_split_repository_1 = require("./waba-financeiro-split.repo
 const waba_financeiro_split_settlement_repository_1 = require("./waba-financeiro-split-settlement.repository");
 const waba_financeiro_split_payout_service_1 = require("./waba-financeiro-split-payout.service");
 const waba_financeiro_cet_1 = require("./waba-financeiro-cet");
+const waba_metrics_excluded_owners_1 = require("./waba-metrics-excluded-owners");
 const PERCENT_SUM_TOLERANCE = 0.01;
 const roundPercent = (value) => Math.round(value * 100) / 100;
 const buildSplitCostBreakdown = (paidValueCents, purchasedShipmentCount, costPerShipmentCents) => {
@@ -110,7 +111,11 @@ class WabaFinanceiroSplitService {
         return this.payoutService.isPayoutEnabled();
     }
     listSettlements(limit = 100) {
-        return this.settlementRepository.list(limit);
+        return (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(this.settlementRepository.list(limit));
+    }
+    /** Remove settlements já gravados de owners excluídos das métricas/split. */
+    purgeExcludedOwnerSettlements() {
+        return this.settlementRepository.deleteByOwnerEmails([...waba_metrics_excluded_owners_1.WABA_METRICS_EXCLUDED_OWNER_EMAILS]);
     }
     async syncSettlementTransferStatuses(limit = 100) {
         return this.payoutService.syncProcessingTransfers(limit);
@@ -209,8 +214,12 @@ class WabaFinanceiroSplitService {
     resolveOrderEconomics(order) {
         if (order.product !== "waba-disparos" || order.status !== "paid")
             return null;
+        if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
+            return null;
         const settlement = this.settlementRepository.getByOrderId(order.id);
         if (settlement) {
+            if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(settlement.ownerEmail))
+                return null;
             const breakdown = resolveSettlementCostBreakdown(settlement);
             return {
                 apiKind: settlement.apiKind,
@@ -251,9 +260,16 @@ class WabaFinanceiroSplitService {
     settlePaidOrder(order) {
         if (order.product !== "waba-disparos" || order.status !== "paid")
             return null;
+        if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail)) {
+            this.logSettlementSkip(order, "owner excluído de métricas/split");
+            return null;
+        }
         const existing = this.settlementRepository.getByOrderId(order.id);
-        if (existing)
+        if (existing) {
+            if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(existing.ownerEmail))
+                return null;
             return existing;
+        }
         const config = this.configRepository.get();
         const apiKind = (0, waba_dispatches_api_kind_1.resolveOrderApiKind)(order);
         const masterPolicy = this.masterPolicyService.resolveForEmail(order.ownerEmail);
@@ -412,6 +428,8 @@ class WabaFinanceiroSplitService {
     async payoutSupplierForCompletedCampaign(intake) {
         if (intake.status !== "completed")
             return null;
+        if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(intake.ownerEmail))
+            return null;
         const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
         if (sent <= 0)
             return null;
@@ -423,8 +441,11 @@ class WabaFinanceiroSplitService {
             return null;
         const orderId = this.buildCampaignSupplierOrderId(intake.id);
         const existing = this.settlementRepository.getByOrderId(orderId);
-        if (existing)
+        if (existing) {
+            if ((0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(existing.ownerEmail))
+                return null;
             return existing;
+        }
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
         const supplierCostCents = Math.max(0, Math.round(sent * costPerShipmentCents));

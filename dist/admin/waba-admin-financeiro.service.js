@@ -9,6 +9,7 @@ const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-spli
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_billing_service_1 = require("../billing/waba-billing.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
 const maskApiBaseUrl = (raw) => {
     const value = String(raw || "").trim().replace(/\/$/, "");
     if (!value)
@@ -171,7 +172,9 @@ class WabaAdminFinanceiroService {
     listDisparosOrdersSorted() {
         return this.orderRepository
             .list()
-            .filter((order) => order.product === "waba-disparos" && order.grantSource !== "admin-bonus-envios")
+            .filter((order) => order.product === "waba-disparos" &&
+            order.grantSource !== "admin-bonus-envios" &&
+            !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     }
     listOrders(params) {
@@ -197,6 +200,10 @@ class WabaAdminFinanceiroService {
         const asaasApiBaseUrl = String(process.env.ASAAS_API_BASE_URL ?? "").trim();
         const webhookTokenConfigured = Boolean(String(process.env.ASAAS_WEBHOOK_ACCESS_TOKEN ?? "").trim());
         const transferProbe = await (0, asaas_client_1.probeAsaasTransferPermission)();
+        const purge = this.splitService.purgeExcludedOwnerSettlements();
+        if (purge.removed > 0) {
+            console.warn(`[Financeiro] removidos ${purge.removed} settlement(s) de owners excluídos das métricas/split`);
+        }
         const orders = this.listDisparosOrdersSorted();
         await this.splitService.syncSettlementTransferStatuses(100);
         let pendingCount = 0;

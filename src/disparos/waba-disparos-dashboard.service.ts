@@ -8,6 +8,10 @@ import type {
   WabaCampaignIntakeStatus,
 } from "./waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
+import {
+  filterOutMetricsExcludedOwners,
+  isWabaMetricsExcludedOwnerEmail,
+} from "../billing/waba-metrics-excluded-owners";
 
 export type DisparosDashboardIndicators = {
   totalLeads: number;
@@ -285,16 +289,24 @@ export const buildMasterSubscribersDisparosDashboardOverview = (
   intakes: WabaCampaignIntake[],
   subscribers: DisparosDashboardSubscriberProfile[],
 ): DisparosDashboardOverview => {
-  const subscriberEmailSet = new Set(
-    subscribers.map((subscriber) => subscriber.email.trim().toLowerCase()).filter(Boolean),
+  const eligibleSubscribers = subscribers.filter(
+    (subscriber) => !isWabaMetricsExcludedOwnerEmail(subscriber.email),
   );
-  const subscriberIntakes = intakes.filter((item) =>
-    subscriberEmailSet.has(item.ownerEmail.trim().toLowerCase()),
+  const subscriberEmailSet = new Set(
+    eligibleSubscribers
+      .map((subscriber) => subscriber.email.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const subscriberIntakes = filterOutMetricsExcludedOwners(
+    intakes.filter((item) => subscriberEmailSet.has(item.ownerEmail.trim().toLowerCase())),
   );
   const aggregated = aggregateDisparosDashboardFromIntakes(subscriberIntakes, {
     includeOwnerEmail: true,
   });
-  const compareSubscribers = buildCompareSubscribersFromIntakes(subscriberIntakes, subscribers);
+  const compareSubscribers = buildCompareSubscribersFromIntakes(
+    subscriberIntakes,
+    eligibleSubscribers,
+  );
 
   return {
     scope: "master_subscribers",

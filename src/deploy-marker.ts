@@ -1,3 +1,3 @@
-/** Validar em GET /health após redeploy do serviço waba_disparador (Easypanel). */
+/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-02-atribuir-campanha-operacional";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-03-excluir-owners-metricas-split";
