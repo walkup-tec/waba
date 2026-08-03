@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-03-excluir-owners-metricas-split";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-03-aquecedor-delivery-ack-lid";

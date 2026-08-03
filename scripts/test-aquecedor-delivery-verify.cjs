@@ -106,6 +106,24 @@ assert(
 );
 assert(
   helpers.decideAquecedorDeliveryConfirmation({
+    sawOrigem: true,
+    sawDestino: false,
+    origem: "1261",
+    destino: "Final-2477",
+    ackStatus: "DELIVERY_ACK",
+  }).ok === true,
+  "só origem + DELIVERY_ACK → sucesso (@lid / falso negativo findMessages)",
+);
+assert(
+  helpers.decideAquecedorDeliveryConfirmation({
+    sawOrigem: false,
+    sawDestino: false,
+    ackStatus: "SERVER_ACK",
+  }).ok === false,
+  "SERVER_ACK sozinho NÃO confirma entrega no aparelho",
+);
+assert(
+  helpers.decideAquecedorDeliveryConfirmation({
     sawOrigem: false,
     sawDestino: false,
   }).ok === false,

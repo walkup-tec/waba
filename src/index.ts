@@ -58,6 +58,7 @@ import {
   decideAquecedorDeliveryConfirmation,
   evoPayloadIncludesNeedle,
   extractEvoMessageAckStatus,
+  isEvoAckDeviceDelivered,
   isEvoAckFailure,
   type EvoMessageAckStatus,
 } from "./aquecedor/delivery-verify.helpers";
@@ -4226,18 +4227,38 @@ async function runAquecedorCycleTestBatch(
     (item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase(),
   );
   if (sendResult.ok) {
+    let numeroOrigem = resolveAquecedorInstanceDigits(String(origemConnected?.numero || ""));
+    if (!numeroOrigem) {
+      try {
+        numeroOrigem = resolveAquecedorInstanceDigits(
+          (await resolveEvoInstancePhone(chosen.instancia_origem)) || "",
+        );
+      } catch {
+        /* opcional */
+      }
+    }
+    const messageId = extractAquecedorSendMessageId(sendResult.json);
+    const ackProbe = messageId
+      ? await probeAquecedorSendAckStatus(chosen.instancia_origem, messageId, {
+          maxAttempts: 5,
+          intervalMs: 2000,
+        })
+      : { status: "UNKNOWN" as EvoMessageAckStatus };
     const deliveryCheck = await verifyAquecedorMessageDelivered(
       chosen.instancia_destino,
-      resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")),
+      numeroOrigem,
       texto,
       {
         instanciaOrigem: chosen.instancia_origem,
         numeroDestino: numero,
         sendStartedAtMs,
-        maxAttempts: 6,
-        attemptIntervalMs: 2000,
+        // Janela maior: 2477/@lid costuma indexar findMessages depois do app WhatsApp.
+        maxAttempts: 12,
+        attemptIntervalMs: 2500,
         skipInitialDelay: false,
         relaxTimestampOnLastAttempt: true,
+        ackStatusHint: ackProbe.status,
+        messageId,
       },
     );
     if (!deliveryCheck.ok) {
@@ -4706,6 +4727,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
           attemptIntervalMs: 3000,
           relaxTimestampOnLastAttempt: true,
           ackStatusHint: lastAckStatus,
+          messageId,
         },
       );
       deliveryDetail = deliveryCheck.detail;
@@ -7548,28 +7570,18 @@ function buildAquecedorRemoteJidCandidates(num: string): string[] {
     const d = String(digits || "").replace(/\D/g, "");
     if (d) out.add(`${d}@s.whatsapp.net`);
   };
-  add(rawDigits);
+  // Inclui variantes BR com/sem 9º dígito e com/sem DDI 55.
+  for (const variant of expandBrazilWhatsAppNumberVariants(rawDigits)) {
+    add(variant);
+  }
   if (rawDigits.length === 10) {
     add(`1${rawDigits}`);
-    add(`55${rawDigits}`);
-  }
-  if (rawDigits.length === 11 && !rawDigits.startsWith("1")) {
-    add(`55${rawDigits}`);
-  }
-  if (rawDigits.startsWith("55") && rawDigits.length > 11) {
-    add(rawDigits.slice(2));
   }
   if (rawDigits.startsWith("1") && rawDigits.length >= 11) {
     add(rawDigits.slice(1));
   }
-  const suffix10 = rawDigits.slice(-10);
-  if (suffix10.length === 10) {
-    add(suffix10);
-    add(`1${suffix10}`);
-    add(`55${suffix10}`);
-  }
   const legacyBr = normalizeWhatsAppNumber(num);
-  if (legacyBr && legacyBr !== rawDigits) add(legacyBr);
+  if (legacyBr) add(legacyBr);
   return Array.from(out);
 }
 
@@ -7685,11 +7697,12 @@ async function verifyAquecedorMessageDelivered(
     attemptIntervalMs?: number;
     relaxTimestampOnLastAttempt?: boolean;
     ackStatusHint?: EvoMessageAckStatus | string | null;
+    messageId?: string;
   },
 ): Promise<{ ok: boolean; detail: string; sawOrigem: boolean; sawDestino: boolean }> {
   const destino = String(instanciaDestino || "").trim();
   const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
-  if (!destino || !remoteJids.length) {
+  if (!destino) {
     return {
       ok: false,
       detail: "Parâmetros inválidos para conferir entrega no destinatário.",
@@ -7718,15 +7731,27 @@ async function verifyAquecedorMessageDelivered(
   const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
   const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
   const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
-  const ackHint = options?.ackStatusHint ?? null;
+  let liveAck = options?.ackStatusHint ?? null;
+  const messageId = String(options?.messageId || "").trim();
 
-  if (isEvoAckFailure(ackHint)) {
+  if (isEvoAckFailure(liveAck)) {
     return decideAquecedorDeliveryConfirmation({
       sawOrigem: true,
       sawDestino: false,
       origem,
       destino,
-      ackStatus: ackHint,
+      ackStatus: liveAck,
+    });
+  }
+
+  // DELIVERY_ACK/READ já prova aparelho — evita falso negativo @lid no findMessages.
+  if (isEvoAckDeviceDelivered(liveAck)) {
+    return decideAquecedorDeliveryConfirmation({
+      sawOrigem: true,
+      sawDestino: false,
+      origem,
+      destino,
+      ackStatus: liveAck,
     });
   }
 
@@ -7741,6 +7766,24 @@ async function verifyAquecedorMessageDelivered(
     if (attempt > 1) await sleepMs(attemptIntervalMs);
     const tsFilter =
       relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
+
+    if (messageId && origem && !isEvoAckDeviceDelivered(liveAck) && !isEvoAckFailure(liveAck)) {
+      const refreshed = await probeAquecedorSendAckStatus(origem, messageId, {
+        maxAttempts: 1,
+        intervalMs: 500,
+      });
+      liveAck = refreshed.status;
+      if (isEvoAckFailure(liveAck) || isEvoAckDeviceDelivered(liveAck)) {
+        return decideAquecedorDeliveryConfirmation({
+          sawOrigem: sawOrigem || isEvoAckDeviceDelivered(liveAck),
+          sawDestino,
+          origem,
+          destino,
+          ackStatus: liveAck,
+        });
+      }
+    }
+
     if (!sawDestino) {
       sawDestino = await probeAquecedorDeliveryViaFindMessages(
         destinoCandidates,
@@ -7783,7 +7826,7 @@ async function verifyAquecedorMessageDelivered(
         sawDestino,
         origem,
         destino,
-        ackStatus: ackHint,
+        ackStatus: liveAck,
       });
     }
   }
@@ -7793,7 +7836,7 @@ async function verifyAquecedorMessageDelivered(
     sawDestino,
     origem,
     destino,
-    ackStatus: ackHint,
+    ackStatus: liveAck,
   });
 }
 

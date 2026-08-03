@@ -3385,14 +3385,33 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
     const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
     if (sendResult.ok) {
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), texto, {
+        let numeroOrigem = resolveAquecedorInstanceDigits(String(origemConnected?.numero || ""));
+        if (!numeroOrigem) {
+            try {
+                numeroOrigem = resolveAquecedorInstanceDigits((await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(chosen.instancia_origem)) || "");
+            }
+            catch {
+                /* opcional */
+            }
+        }
+        const messageId = extractAquecedorSendMessageId(sendResult.json);
+        const ackProbe = messageId
+            ? await probeAquecedorSendAckStatus(chosen.instancia_origem, messageId, {
+                maxAttempts: 5,
+                intervalMs: 2000,
+            })
+            : { status: "UNKNOWN" };
+        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, numeroOrigem, texto, {
             instanciaOrigem: chosen.instancia_origem,
             numeroDestino: numero,
             sendStartedAtMs,
-            maxAttempts: 6,
-            attemptIntervalMs: 2000,
+            // Janela maior: 2477/@lid costuma indexar findMessages depois do app WhatsApp.
+            maxAttempts: 12,
+            attemptIntervalMs: 2500,
             skipInitialDelay: false,
             relaxTimestampOnLastAttempt: true,
+            ackStatusHint: ackProbe.status,
+            messageId,
         });
         if (!deliveryCheck.ok) {
             aquecedorCycleRuntime().lastEvoError = {
@@ -3752,6 +3771,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
                 attemptIntervalMs: 3000,
                 relaxTimestampOnLastAttempt: true,
                 ackStatusHint: lastAckStatus,
+                messageId,
             });
             deliveryDetail = deliveryCheck.detail;
             if (deliveryCheck.ok) {
@@ -6237,28 +6257,18 @@ function buildAquecedorRemoteJidCandidates(num) {
         if (d)
             out.add(`${d}@s.whatsapp.net`);
     };
-    add(rawDigits);
+    // Inclui variantes BR com/sem 9º dígito e com/sem DDI 55.
+    for (const variant of (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(rawDigits)) {
+        add(variant);
+    }
     if (rawDigits.length === 10) {
         add(`1${rawDigits}`);
-        add(`55${rawDigits}`);
-    }
-    if (rawDigits.length === 11 && !rawDigits.startsWith("1")) {
-        add(`55${rawDigits}`);
-    }
-    if (rawDigits.startsWith("55") && rawDigits.length > 11) {
-        add(rawDigits.slice(2));
     }
     if (rawDigits.startsWith("1") && rawDigits.length >= 11) {
         add(rawDigits.slice(1));
     }
-    const suffix10 = rawDigits.slice(-10);
-    if (suffix10.length === 10) {
-        add(suffix10);
-        add(`1${suffix10}`);
-        add(`55${suffix10}`);
-    }
     const legacyBr = normalizeWhatsAppNumber(num);
-    if (legacyBr && legacyBr !== rawDigits)
+    if (legacyBr)
         add(legacyBr);
     return Array.from(out);
 }
@@ -6348,7 +6358,7 @@ async function probeAquecedorDeliveryViaFindChats(instanceCandidates, needles, m
 async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, options) {
     const destino = String(instanciaDestino || "").trim();
     const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
-    if (!destino || !remoteJids.length) {
+    if (!destino) {
         return {
             ok: false,
             detail: "Parâmetros inválidos para conferir entrega no destinatário.",
@@ -6376,14 +6386,25 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
     const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
     const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
-    const ackHint = options?.ackStatusHint ?? null;
-    if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackHint)) {
+    let liveAck = options?.ackStatusHint ?? null;
+    const messageId = String(options?.messageId || "").trim();
+    if ((0, delivery_verify_helpers_1.isEvoAckFailure)(liveAck)) {
         return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
             sawOrigem: true,
             sawDestino: false,
             origem,
             destino,
-            ackStatus: ackHint,
+            ackStatus: liveAck,
+        });
+    }
+    // DELIVERY_ACK/READ já prova aparelho — evita falso negativo @lid no findMessages.
+    if ((0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck)) {
+        return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+            sawOrigem: true,
+            sawDestino: false,
+            origem,
+            destino,
+            ackStatus: liveAck,
         });
     }
     if (!skipInitialDelay) {
@@ -6395,6 +6416,22 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         if (attempt > 1)
             await sleepMs(attemptIntervalMs);
         const tsFilter = relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
+        if (messageId && origem && !(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck) && !(0, delivery_verify_helpers_1.isEvoAckFailure)(liveAck)) {
+            const refreshed = await probeAquecedorSendAckStatus(origem, messageId, {
+                maxAttempts: 1,
+                intervalMs: 500,
+            });
+            liveAck = refreshed.status;
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(liveAck) || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck)) {
+                return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+                    sawOrigem: sawOrigem || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck),
+                    sawDestino,
+                    origem,
+                    destino,
+                    ackStatus: liveAck,
+                });
+            }
+        }
         if (!sawDestino) {
             sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, tsFilter, false);
             if (!sawDestino) {
@@ -6415,7 +6452,7 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
                 sawDestino,
                 origem,
                 destino,
-                ackStatus: ackHint,
+                ackStatus: liveAck,
             });
         }
     }
@@ -6424,7 +6461,7 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         sawDestino,
         origem,
         destino,
-        ackStatus: ackHint,
+        ackStatus: liveAck,
     });
 }
 function extractAquecedorSendMessageId(json) {

@@ -15,6 +15,7 @@ exports.evoPayloadIncludesNeedle = evoPayloadIncludesNeedle;
 exports.normalizeEvoMessageAckStatus = normalizeEvoMessageAckStatus;
 exports.isEvoAckFailure = isEvoAckFailure;
 exports.isEvoAckProgressed = isEvoAckProgressed;
+exports.isEvoAckDeviceDelivered = isEvoAckDeviceDelivered;
 exports.extractEvoMessageAckStatus = extractEvoMessageAckStatus;
 exports.classifyEvoOutboundSample = classifyEvoOutboundSample;
 exports.decideAquecedorDeliveryConfirmation = decideAquecedorDeliveryConfirmation;
@@ -186,6 +187,11 @@ function isEvoAckFailure(status) {
 function isEvoAckProgressed(status) {
     return EVO_ACK_PROGRESS.has(normalizeEvoMessageAckStatus(status));
 }
+/** ACK que prova entrega no aparelho (não apenas no servidor WhatsApp). */
+function isEvoAckDeviceDelivered(status) {
+    const ack = normalizeEvoMessageAckStatus(status);
+    return ack === "DELIVERY_ACK" || ack === "READ" || ack === "PLAYED";
+}
 /** Extrai o último status de MessageUpdate / findStatusMessage / campo status. */
 function extractEvoMessageAckStatus(node, depth = 0) {
     if (depth > 12 || node == null)
@@ -246,9 +252,12 @@ function classifyEvoOutboundSample(statuses, options) {
         return "broken";
     return "unknown";
 }
-/** Decisão final: sucesso prático = tag no DESTINO (mensagem chegou no WhatsApp).
- * Origem reforça diagnóstico, mas não bloqueia sucesso (tag única evita histórico falso).
- * Se MessageUpdate=ERROR na origem, o problema é a sessão de envio — não o destino.
+/** Decisão final de entrega.
+ * 1) Tag no DESTINO → sucesso (prova direta no WhatsApp do destinatário).
+ * 2) ACK no aparelho (DELIVERY_ACK/READ/PLAYED) → sucesso mesmo se findMessages no destino
+ *    falhar (@lid / indexação EVO atrasada) — falso negativo clássico em 2477 etc.
+ * 3) MessageUpdate=ERROR na origem → falha de sessão de envio (não culpar destino).
+ * SERVER_ACK sozinho NÃO confirma (só servidor; ainda pode não chegar no aparelho).
  */
 function decideAquecedorDeliveryConfirmation(input) {
     const origem = String(input.origem || "").trim() || "origem";
@@ -266,6 +275,9 @@ function decideAquecedorDeliveryConfirmation(input) {
             sawOrigem,
             sawDestino,
         };
+    }
+    if (isEvoAckDeviceDelivered(ack)) {
+        return { ok: true, detail: "", sawOrigem, sawDestino };
     }
     if (sawOrigem && !sawDestino) {
         return {
