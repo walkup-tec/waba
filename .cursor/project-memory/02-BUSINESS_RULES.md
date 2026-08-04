@@ -41,8 +41,9 @@ Campanhas geradas com crédito de **Bônus de envio** (admin) **não** entram no
 ### Operacional com múltiplos tipos de disparo
 
 - No cadastro de usuários, o operacional pode atender **um ou mais** planos (API Oficial e/ou API Alternativa) via seleção múltipla.
-- No Financeiro · Split, o mesmo operacional pode ser cadastrado **uma vez por tipo de disparo**, com custo/PIX distintos (necessário para o split).
-- Unicidade do fornecedor: `e-mail + apiKind` (não mais só e-mail).
+- No Financeiro · Split, o mesmo operacional pode ser cadastrado **uma vez por combinação** de tipo de disparo + segmento, com custo/PIX distintos (necessário para o split).
+- Unicidade do fornecedor: `e-mail + apiKind + segment`.
+- Segmento do fornecedor no split é escolhido no formulário (Bets/Outros), não apenas herdado do cadastro de usuário.
 
 ### Ambientes
 

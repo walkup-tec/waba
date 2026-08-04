@@ -25383,7 +25383,10 @@
           : apiKinds[0] === "alternativa"
             ? "alternativa"
             : "oficial";
-        supplier.segment = user.segment === "bets" ? "bets" : "outros";
+        const currentSegment = String(supplier.segment || "").trim().toLowerCase();
+        if (currentSegment !== "bets" && currentSegment !== "outros") {
+          supplier.segment = user.segment === "bets" ? "bets" : "outros";
+        }
       }
 
       function formatSupplierSegmentLabel(segment) {
@@ -25392,6 +25395,31 @@
 
       function formatSupplierPlanLabel(apiKind) {
         return apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+      }
+
+      function buildSupplierSegmentSelectOptions(selectedSegment) {
+        const selected = selectedSegment === "bets" ? "bets" : "outros";
+        return [
+          `<option value="outros" ${selected === "outros" ? "selected" : ""}>Outros</option>`,
+          `<option value="bets" ${selected === "bets" ? "selected" : ""}>Bets</option>`,
+        ].join("");
+      }
+
+      function buildSupplierPlanSelectOptions(selectedApiKind, allowedApiKinds) {
+        const allowed =
+          Array.isArray(allowedApiKinds) && allowedApiKinds.length
+            ? allowedApiKinds.filter((item) => item === "oficial" || item === "alternativa")
+            : ["oficial", "alternativa"];
+        const selected = selectedApiKind === "alternativa" ? "alternativa" : "oficial";
+        const options = allowed.includes(selected) ? allowed : [selected, ...allowed];
+        return [...new Set(options)]
+          .map(
+            (apiKind) =>
+              `<option value="${escapeAdminHtml(apiKind)}" ${
+                apiKind === selected ? "selected" : ""
+              }>${escapeAdminHtml(formatSupplierPlanLabel(apiKind))}</option>`
+          )
+          .join("");
       }
 
       function buildSupplierPrioritySelectOptions(selectedPriority) {
@@ -25580,7 +25608,7 @@
       function clearAdminFinanceiroSplitSupplierForm() {
         const operacional = document.getElementById("admin-split-supplier-draft-operacional");
         const planSelect = document.getElementById("admin-split-supplier-draft-plan");
-        const segment = document.getElementById("admin-split-supplier-draft-segment-label");
+        const segmentSelect = document.getElementById("admin-split-supplier-draft-segment");
         const priority = document.getElementById("admin-split-supplier-draft-priority");
         const cost = document.getElementById("admin-split-supplier-draft-cost");
         const pix = document.getElementById("admin-split-supplier-draft-pix");
@@ -25590,7 +25618,7 @@
           planSelect.value = "";
           planSelect.disabled = true;
         }
-        if (segment) segment.textContent = "—";
+        if (segmentSelect) segmentSelect.value = "outros";
         if (priority) priority.value = "1";
         if (cost) cost.value = formatReaisMaskFromCents(0);
         if (pix) pix.value = "";
@@ -25600,7 +25628,7 @@
         const operacional = document.getElementById("admin-split-supplier-draft-operacional");
         const planSelect = document.getElementById("admin-split-supplier-draft-plan");
         const planLabel = document.getElementById("admin-split-supplier-draft-plan-label");
-        const segment = document.getElementById("admin-split-supplier-draft-segment-label");
+        const segmentSelect = document.getElementById("admin-split-supplier-draft-segment");
         const user = resolveOperacionalSupplierUser(operacional?.value);
         const apiKinds = Array.isArray(user?.apiKinds)
           ? user.apiKinds
@@ -25622,13 +25650,18 @@
             : '<option value="">—</option>';
           planSelect.value =
             previous && apiKinds.includes(previous) ? previous : apiKinds[0] || "";
-          planSelect.disabled = apiKinds.length <= 1;
+          planSelect.disabled = apiKinds.length === 0;
           planSelect.hidden = false;
         }
         if (planLabel) {
           planLabel.hidden = true;
         }
-        if (segment) segment.textContent = user ? formatSupplierSegmentLabel(user.segment) : "—";
+        if (segmentSelect && user) {
+          const previousSegment = String(segmentSelect.value || "").trim();
+          if (previousSegment !== "bets" && previousSegment !== "outros") {
+            segmentSelect.value = user.segment === "bets" ? "bets" : "outros";
+          }
+        }
       }
 
       function upsertAdminFinanceiroSplitSupplier(input) {
@@ -25650,7 +25683,7 @@
             : allowedApiKinds[0] === "oficial"
               ? "oficial"
               : null;
-        const segment = user?.segment === "bets" ? "bets" : "outros";
+        const segment = String(input?.segment || "").trim() === "bets" ? "bets" : "outros";
         const priority = Math.max(1, Math.min(5, Math.round(Number(input?.priority ?? 1))));
         const costPerShipmentCents = Math.max(0, Math.round(Number(input?.costPerShipmentCents ?? 0)));
         const pixKey = String(input?.pixKey || "").trim();
@@ -25676,8 +25709,8 @@
           );
           return false;
         }
-        if (!pixKey) {
-          showToast("Informe a chave PIX do fornecedor.", "warning", 4200);
+        if (!pixKey || pixKey.length < 5) {
+          showToast("Informe a chave PIX do fornecedor (mínimo 5 caracteres).", "warning", 4500);
           input?.pixEl?.focus?.();
           return false;
         }
@@ -25686,7 +25719,8 @@
           (item) =>
             item.active !== false &&
             String(item.systemUserEmail || "").trim().toLowerCase() === systemUserEmail &&
-            String(item.apiKind || "oficial") === apiKind
+            String(item.apiKind || "oficial") === apiKind &&
+            String(item.segment || "outros") === segment
         );
         if (existing) {
           existing.name = supplierName;
@@ -25696,7 +25730,7 @@
           existing.costPerShipmentCents = costPerShipmentCents;
           existing.pixKey = pixKey;
           existing.systemUserEmail = systemUserEmail;
-          showToast("Fornecedor atualizado.", "success", 3200);
+          showToast("Fornecedor atualizado (mesmo operacional + plano + segmento).", "success", 3600);
         } else {
           adminFinanceiroSplitDraft.suppliers.push({
             ...createEmptySplitSupplier(),
@@ -25723,6 +25757,7 @@
         const ok = upsertAdminFinanceiroSplitSupplier({
           systemUserEmail: operacional?.value,
           apiKind: document.getElementById("admin-split-supplier-draft-plan")?.value,
+          segment: document.getElementById("admin-split-supplier-draft-segment")?.value,
           priority: priority?.value,
           costPerShipmentCents: parseReaisMaskToCents(cost?.value),
           pixKey: pix?.value,
@@ -25736,7 +25771,7 @@
           .getElementById("admin-financeiro-split-suppliers-list")
           ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         void persistAdminFinanceiroSplitConfig({
-          successMessage: "Fornecedor incluído e salvo.",
+          successMessage: "Fornecedor salvo no split.",
         });
       }
 
@@ -25746,8 +25781,14 @@
         const suppliers = adminFinanceiroSplitDraft.suppliers || [];
         const listHtml = suppliers.length
           ? suppliers
-              .map(
-                (supplier, index) => `
+              .map((supplier, index) => {
+                const user = resolveOperacionalSupplierUser(supplier.systemUserEmail || "");
+                const allowedApiKinds = Array.isArray(user?.apiKinds)
+                  ? user.apiKinds
+                  : user?.apiKind
+                    ? [user.apiKind]
+                    : ["oficial", "alternativa"];
+                return `
                   <div class="admin-financeiro-split-supplier-row" data-supplier-index="${index}">
                     <div class="admin-financeiro-split-field">
                       <label class="admin-financeiro-split-mobile-label">Operacional</label>
@@ -25757,11 +25798,15 @@
                     </div>
                     <div class="admin-financeiro-split-field">
                       <label class="admin-financeiro-split-mobile-label">Plano</label>
-                      <span class="admin-financeiro-split-readonly">${escapeAdminHtml(formatSupplierPlanLabel(supplier.apiKind))}</span>
+                      <select data-supplier-field="apiKind" aria-label="Plano do fornecedor">
+                        ${buildSupplierPlanSelectOptions(supplier.apiKind, allowedApiKinds)}
+                      </select>
                     </div>
                     <div class="admin-financeiro-split-field">
                       <label class="admin-financeiro-split-mobile-label">Segmento</label>
-                      <span class="admin-financeiro-split-readonly">${escapeAdminHtml(formatSupplierSegmentLabel(supplier.segment))}</span>
+                      <select data-supplier-field="segment" aria-label="Segmento do fornecedor">
+                        ${buildSupplierSegmentSelectOptions(supplier.segment)}
+                      </select>
                     </div>
                     <div class="admin-financeiro-split-field">
                       <label class="admin-financeiro-split-mobile-label">Prioridade</label>
@@ -25803,8 +25848,8 @@
                       </button>
                     </div>
                   </div>
-                `
-              )
+                `;
+              })
               .join("")
           : `<div class="admin-financeiro-split-list-empty muted">Nenhum fornecedor incluído.</div>`;
 
@@ -25816,7 +25861,7 @@
           <div class="admin-financeiro-split-add-panel">
             <div class="admin-financeiro-split-list-title" style="margin-top: 16px">Adicionar ou atualizar fornecedor</div>
             <p class="admin-financeiro-split-card-desc" style="margin: 0 0 10px">
-              Selecione o operacional e o plano atendido. O mesmo operacional pode ser cadastrado duas vezes (Oficial e Alternativa) com custos/PIX diferentes. Segmento vem do cadastro de usuário.
+              Informe operacional, plano, segmento, custo e PIX. O mesmo operacional pode aparecer várias vezes (ex.: Oficial/Bets e Oficial/Outros) com custos diferentes. Incluir exige chave PIX preenchida.
             </p>
             <div class="admin-financeiro-split-supplier-head" aria-hidden="true">
               <span>Operacional</span>
@@ -25842,8 +25887,10 @@
                 <span id="admin-split-supplier-draft-plan-label" class="admin-financeiro-split-readonly" hidden>—</span>
               </div>
               <div class="admin-financeiro-split-field">
-                <label class="admin-financeiro-split-mobile-label">Segmento</label>
-                <span id="admin-split-supplier-draft-segment-label" class="admin-financeiro-split-readonly">—</span>
+                <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-segment">Segmento</label>
+                <select id="admin-split-supplier-draft-segment" aria-label="Segmento do fornecedor">
+                  ${buildSupplierSegmentSelectOptions("outros")}
+                </select>
               </div>
               <div class="admin-financeiro-split-field">
                 <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-priority">Prioridade</label>
@@ -26273,6 +26320,10 @@
             }
             if (field === "apiKind") {
               target.apiKind = input.value === "alternativa" ? "alternativa" : "oficial";
+              return;
+            }
+            if (field === "segment") {
+              target.segment = input.value === "bets" ? "bets" : "outros";
               return;
             }
             if (field === "pixKey") {
