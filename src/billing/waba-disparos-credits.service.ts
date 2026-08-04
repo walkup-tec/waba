@@ -216,15 +216,18 @@ export class WabaDisparosCreditsService {
     };
   }
 
-  recordShipmentConsumed(
+  /**
+   * Consome créditos (pago primeiro, depois bônus) e devolve o breakdown.
+   * Usado na geração de campanha para gravar `creditFunding` e excluir bônus do split.
+   */
+  consumeShipments(
     email: string,
     delta = 1,
     apiKind: WabaDispatchesApiKind = "oficial",
-  ): DisparosCreditsSummary {
+  ): { fromPaid: number; fromBonus: number } {
     const normalized = normalizeEmail(email);
-    if (!normalized) return this.getCreditsSummary("");
     const amount = Math.max(0, Math.round(Number(delta)));
-    if (amount <= 0) return this.getCreditsSummary(normalized);
+    if (!normalized || amount <= 0) return { fromPaid: 0, fromBonus: 0 };
 
     const paidRemaining = this.getPaidRemainingForApi(normalized, apiKind);
     const fromPaid = Math.min(amount, paidRemaining);
@@ -237,6 +240,17 @@ export class WabaDisparosCreditsService {
       this.usageRepository.incrementConsumedShipments(normalized, fromBonus, apiKind);
       this.usageRepository.incrementBonusConsumedShipments(normalized, fromBonus, apiKind);
     }
+    return { fromPaid, fromBonus };
+  }
+
+  recordShipmentConsumed(
+    email: string,
+    delta = 1,
+    apiKind: WabaDispatchesApiKind = "oficial",
+  ): DisparosCreditsSummary {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return this.getCreditsSummary("");
+    this.consumeShipments(normalized, delta, apiKind);
     return this.getCreditsSummary(normalized);
   }
 

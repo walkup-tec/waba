@@ -3,6 +3,7 @@ import { WabaMasterDisparosPolicyService } from "../users/waba-master-disparos-p
 import { resolveOrderApiKind, resolveIntakeApiKindFromIntake } from "../disparos/waba-dispatches-api-kind";
 import type { WabaDispatchesApiKind } from "../disparos/waba-dispatches-api-kind";
 import type { WabaCampaignIntake } from "../disparos/waba-campaign-intake.repository";
+import { WabaCampaignIntakeRepository } from "../disparos/waba-campaign-intake.repository";
 import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.repository";
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import type { WabaBillingOrder } from "./waba-billing-order.repository";
@@ -32,7 +33,10 @@ import {
   isWabaMetricsExcludedOwnerEmail,
   WABA_METRICS_EXCLUDED_OWNER_EMAILS,
 } from "./waba-metrics-excluded-owners";
-
+import {
+  isBonusOnlyCampaignFunding,
+  resolveBillableSentForSupplierSplit,
+} from "./waba-campaign-credit-funding";
 const PERCENT_SUM_TOLERANCE = 0.01;
 
 type SplitCostBreakdown = {
@@ -168,6 +172,32 @@ export class WabaFinanceiroSplitService {
   /** Remove settlements já gravados de owners excluídos das métricas/split. */
   purgeExcludedOwnerSettlements(): { removed: number; ids: string[] } {
     return this.settlementRepository.deleteByOwnerEmails([...WABA_METRICS_EXCLUDED_OWNER_EMAILS]);
+  }
+
+  /**
+   * Remove settlements de campanhas 100% bônus e de pedidos grant admin-bonus-envios.
+   */
+  purgeBonusOnlyCampaignSettlements(): { removed: number; ids: string[] } {
+    const intakeRepository = new WabaCampaignIntakeRepository();
+    const backfill = intakeRepository.backfillBonusFundingForOpenCampaigns();
+    if (backfill.updated > 0) {
+      console.info(
+        `[FinanceiroSplit] backfill creditFunding bônus em ${backfill.updated} campanha(s) em fila`,
+      );
+    }
+
+    const intakes = intakeRepository.listAll();
+    const orderIds: string[] = [];
+    for (const intake of intakes) {
+      if (!isBonusOnlyCampaignFunding(intake.creditFunding)) continue;
+      orderIds.push(this.buildCampaignSupplierOrderId(intake.id));
+    }
+    for (const order of this.orderRepository.list()) {
+      if (order.grantSource === "admin-bonus-envios") {
+        orderIds.push(order.id);
+      }
+    }
+    return this.settlementRepository.deleteByOrderIds(orderIds);
   }
 
   async syncSettlementTransferStatuses(limit = 100): Promise<number> {
@@ -349,6 +379,11 @@ export class WabaFinanceiroSplitService {
 
   settlePaidOrder(order: WabaBillingOrder) {
     if (order.product !== "waba-disparos" || order.status !== "paid") return null;
+
+    if (order.grantSource === "admin-bonus-envios") {
+      this.logSettlementSkip(order, "bônus de envio (sem receita do cliente)");
+      return null;
+    }
 
     if (isWabaMetricsExcludedOwnerEmail(order.ownerEmail)) {
       this.logSettlementSkip(order, "owner excluído de métricas/split");
@@ -548,8 +583,16 @@ export class WabaFinanceiroSplitService {
   async payoutSupplierForCompletedCampaign(intake: WabaCampaignIntake): Promise<FinanceiroSplitSettlement | null> {
     if (intake.status !== "completed") return null;
     if (isWabaMetricsExcludedOwnerEmail(intake.ownerEmail)) return null;
-    const sent = Math.max(0, Math.round(Number(intake.performanceReport?.sent ?? 0)));
-    if (sent <= 0) return null;
+
+    if (isBonusOnlyCampaignFunding(intake.creditFunding)) {
+      console.info(
+        `[FinanceiroSplit] campanha ${intake.id} ignorada no split: 100% bônus de envio`,
+      );
+      return null;
+    }
+
+    const billableSent = resolveBillableSentForSupplierSplit(intake);
+    if (billableSent <= 0) return null;
 
     const supplierId = String(intake.assignedSupplierId || "").trim();
     if (!supplierId) return null;
@@ -565,7 +608,7 @@ export class WabaFinanceiroSplitService {
 
     const apiKind = resolveIntakeApiKindFromIntake(intake);
     const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
-    const supplierCostCents = Math.max(0, Math.round(sent * costPerShipmentCents));
+    const supplierCostCents = Math.max(0, Math.round(billableSent * costPerShipmentCents));
     if (supplierCostCents <= 0) return null;
 
     const lines: SplitSettlementLine[] = [
@@ -577,7 +620,7 @@ export class WabaFinanceiroSplitService {
         pixKey: supplier.pixKey,
         sharePercent: 0,
         amountCents: supplierCostCents,
-        shipmentCount: sent,
+        shipmentCount: billableSent,
         costPerShipmentCents,
         payoutStatus: "pending",
       },
@@ -590,7 +633,7 @@ export class WabaFinanceiroSplitService {
       ownerEmail: intake.ownerEmail,
       customerName: intake.campaignName,
       paidValueCents: 0,
-      purchasedShipmentCount: sent,
+      purchasedShipmentCount: billableSent,
       costPerShipmentCents,
       supplierCostCents,
       totalCostCents: supplierCostCents,

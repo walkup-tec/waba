@@ -234,6 +234,7 @@ class WabaAdminDashboardService {
         const staff = { email: auth.email, role: auth.role };
         if (capabilities.finance) {
             this.splitService.purgeExcludedOwnerSettlements();
+            this.splitService.purgeBonusOnlyCampaignSettlements();
         }
         const disparosOrders = this.orderRepository
             .list()

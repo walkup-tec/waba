@@ -224,6 +224,12 @@ export class WabaAdminFinanceiroService {
         `[Financeiro] removidos ${purge.removed} settlement(s) de owners excluídos das métricas/split`,
       );
     }
+    const purgeBonus = this.splitService.purgeBonusOnlyCampaignSettlements();
+    if (purgeBonus.removed > 0) {
+      console.warn(
+        `[Financeiro] removidos ${purgeBonus.removed} settlement(s) de campanhas 100% bônus de envio`,
+      );
+    }
 
     const orders = this.listDisparosOrdersSorted();
 

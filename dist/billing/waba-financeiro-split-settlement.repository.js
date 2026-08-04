@@ -198,5 +198,26 @@ class WabaFinanceiroSplitSettlementRepository {
         this.writeStore({ version: 1, settlements: kept });
         return { removed: ids.length, ids };
     }
+    /** Remove settlements cujo orderId está na lista. */
+    deleteByOrderIds(orderIds) {
+        const targets = new Set(orderIds.map((id) => String(id || "").trim()).filter(Boolean));
+        if (!targets.size)
+            return { removed: 0, ids: [] };
+        const store = this.readStore();
+        const ids = [];
+        const kept = [];
+        for (const settlement of store.settlements) {
+            const orderId = String(settlement.orderId || "").trim();
+            if (orderId && targets.has(orderId)) {
+                ids.push(settlement.id);
+                continue;
+            }
+            kept.push(settlement);
+        }
+        if (ids.length === 0)
+            return { removed: 0, ids: [] };
+        this.writeStore({ version: 1, settlements: kept });
+        return { removed: ids.length, ids };
+    }
 }
 exports.WabaFinanceiroSplitSettlementRepository = WabaFinanceiroSplitSettlementRepository;

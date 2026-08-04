@@ -279,6 +279,7 @@ export class WabaAdminDashboardService {
 
     if (capabilities.finance) {
       this.splitService.purgeExcludedOwnerSettlements();
+      this.splitService.purgeBonusOnlyCampaignSettlements();
     }
 
     const disparosOrders = this.orderRepository

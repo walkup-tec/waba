@@ -4,6 +4,7 @@ exports.WabaCampaignIntakeRepository = exports.resolveCampaignIntakeStorageDir =
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 const data_path_1 = require("../data-path");
+const waba_campaign_credit_funding_1 = require("../billing/waba-campaign-credit-funding");
 const STORE_FILE = (0, data_path_1.resolveDataFile)("waba-campaign-intakes.json");
 const resolveCampaignIntakeStorageDir = (intakeId) => {
     const base = (0, data_path_1.resolveDataDir)();
@@ -100,6 +101,31 @@ class WabaCampaignIntakeRepository {
         store.intakes[index] = { ...store.intakes[index], ...patch };
         writeStore(store);
         return store.intakes[index];
+    }
+    /**
+     * Fila legada (generated/in_progress) sem creditFunding → 100% bônus.
+     * Garante que campanhas bonificadas já abertas não gerem split ao finalizar.
+     */
+    backfillBonusFundingForOpenCampaigns() {
+        const store = readStore();
+        const ids = [];
+        const now = new Date().toISOString();
+        for (let index = 0; index < store.intakes.length; index += 1) {
+            const intake = store.intakes[index];
+            if ((0, waba_campaign_credit_funding_1.normalizeCampaignCreditFunding)(intake.creditFunding))
+                continue;
+            if (!(0, waba_campaign_credit_funding_1.isOpenCampaignStatusForBonusBackfill)(intake.status))
+                continue;
+            store.intakes[index] = {
+                ...intake,
+                creditFunding: (0, waba_campaign_credit_funding_1.buildLegacyBonusOnlyCreditFunding)(intake.plannedSendCount),
+                updatedAt: now,
+            };
+            ids.push(intake.id);
+        }
+        if (ids.length > 0)
+            writeStore(store);
+        return { updated: ids.length, ids };
     }
 }
 exports.WabaCampaignIntakeRepository = WabaCampaignIntakeRepository;

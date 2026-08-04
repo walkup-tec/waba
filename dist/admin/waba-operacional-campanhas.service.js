@@ -8,6 +8,7 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_disparos_bonus_service_1 = require("../billing/waba-disparos-bonus.service");
+const waba_campaign_credit_funding_1 = require("../billing/waba-campaign-credit-funding");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spreadsheet.util");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
@@ -194,6 +195,7 @@ class WabaOperacionalCampanhasService {
         };
     }
     listCampaigns(staff) {
+        this.intakeRepository.backfillBonusFundingForOpenCampaigns();
         return this.intakeRepository
             .listAll()
             .map((intake) => {
@@ -305,9 +307,12 @@ class WabaOperacionalCampanhasService {
             filledByEmail: normalizeEmail(staff.email),
         };
         const bonusShipments = Math.max(0, totalLeads - parsed.sent);
+        const creditFunding = (0, waba_campaign_credit_funding_1.normalizeCampaignCreditFunding)(intake.creditFunding) ??
+            (0, waba_campaign_credit_funding_1.buildLegacyBonusOnlyCreditFunding)(totalLeads);
         const updated = this.intakeRepository.updateById(campaignId, {
             performanceReport,
             status: "completed",
+            creditFunding,
             updatedAt: now,
         });
         if (!updated)

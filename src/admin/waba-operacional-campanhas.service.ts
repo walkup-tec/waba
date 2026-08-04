@@ -3,6 +3,10 @@ import path from "node:path";
 import { WabaBillingOrderRepository } from "../billing/waba-billing-order.repository";
 import { WabaDisparosBonusService } from "../billing/waba-disparos-bonus.service";
 import {
+  buildLegacyBonusOnlyCreditFunding,
+  normalizeCampaignCreditFunding,
+} from "../billing/waba-campaign-credit-funding";
+import {
   resolveIntakeApiKindFromIntake,
   resolveSubscriberDispatchesApiKindFromOrdersAt,
   WABA_DISPATCHES_API_LABELS,
@@ -318,6 +322,7 @@ export class WabaOperacionalCampanhasService {
   }
 
   listCampaigns(staff: OperacionalCampanhasStaffContext): OperacionalCampaignListItem[] {
+    this.intakeRepository.backfillBonusFundingForOpenCampaigns();
     return this.intakeRepository
       .listAll()
       .map((intake) => {
@@ -465,9 +470,13 @@ export class WabaOperacionalCampanhasService {
     };
 
     const bonusShipments = Math.max(0, totalLeads - parsed.sent);
+    const creditFunding =
+      normalizeCampaignCreditFunding(intake.creditFunding) ??
+      buildLegacyBonusOnlyCreditFunding(totalLeads);
     const updated = this.intakeRepository.updateById(campaignId, {
       performanceReport,
       status: "completed",
+      creditFunding,
       updatedAt: now,
     });
     if (!updated) throw new Error("Não foi possível salvar o relatório.");

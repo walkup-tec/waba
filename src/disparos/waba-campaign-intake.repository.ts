@@ -1,7 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { resolveDataDir, resolveDataFile } from "../data-path";
+import {
+  buildLegacyBonusOnlyCreditFunding,
+  isOpenCampaignStatusForBonusBackfill,
+  normalizeCampaignCreditFunding,
+  type WabaCampaignCreditFunding,
+} from "../billing/waba-campaign-credit-funding";
 import type { WabaDispatchesApiKind } from "./waba-dispatches-api-kind";
+
+export type { WabaCampaignCreditFunding };
 
 export type WabaCampaignIntakeStatus =
   | "generated"
@@ -72,6 +80,11 @@ export type WabaCampaignIntake = {
   importedLineCount: number;
   /** Envios efetivos da campanha (nunca acima do saldo contratado). */
   plannedSendCount: number;
+  /**
+   * Quanto do `plannedSendCount` veio de crédito pago vs bônus de envio.
+   * Campanhas 100% bônus não entram no split de pagamento ao fornecedor.
+   */
+  creditFunding?: WabaCampaignCreditFunding;
   /** Plano de disparos contratado (roteamento operacional). */
   apiKind?: WabaDispatchesApiKind;
   status: WabaCampaignIntakeStatus;
@@ -213,5 +226,31 @@ export class WabaCampaignIntakeRepository {
     store.intakes[index] = { ...store.intakes[index], ...patch };
     writeStore(store);
     return store.intakes[index];
+  }
+
+  /**
+   * Fila legada (generated/in_progress) sem creditFunding → 100% bônus.
+   * Garante que campanhas bonificadas já abertas não gerem split ao finalizar.
+   */
+  backfillBonusFundingForOpenCampaigns(): { updated: number; ids: string[] } {
+    const store = readStore();
+    const ids: string[] = [];
+    const now = new Date().toISOString();
+
+    for (let index = 0; index < store.intakes.length; index += 1) {
+      const intake = store.intakes[index];
+      if (normalizeCampaignCreditFunding(intake.creditFunding)) continue;
+      if (!isOpenCampaignStatusForBonusBackfill(intake.status)) continue;
+
+      store.intakes[index] = {
+        ...intake,
+        creditFunding: buildLegacyBonusOnlyCreditFunding(intake.plannedSendCount),
+        updatedAt: now,
+      };
+      ids.push(intake.id);
+    }
+
+    if (ids.length > 0) writeStore(store);
+    return { updated: ids.length, ids };
   }
 }

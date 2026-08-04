@@ -480,11 +480,21 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
           updatedAt: now,
         });
 
+        let persisted = intake;
         if (!isMaster && plannedSendCount > 0) {
-          disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+          const creditFunding = disparosCreditsService.consumeShipments(
+            auth.email,
+            plannedSendCount,
+            apiKind,
+          );
+          persisted =
+            intakeRepository.updateById(intake.id, {
+              creditFunding,
+              updatedAt: new Date().toISOString(),
+            }) ?? intake;
         }
 
-        const finalized = finalizeIntakeAfterCreate(intake);
+        const finalized = finalizeIntakeAfterCreate(persisted);
         return { deduplicated: false as const, intake: finalized };
       });
 
