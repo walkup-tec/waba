@@ -259,8 +259,8 @@ export class WabaCampaignSupplierAssignmentService {
   ): Promise<WabaCampaignIntake> {
     const intake = this.intakeRepository.getById(intakeId);
     if (!intake) throw new Error("Campanha não encontrada.");
-    if (intake.status !== "generated") {
-      throw new Error("Somente campanhas aguardando configuração podem ser atribuídas.");
+    if (intake.status !== "generated" && intake.status !== "in_progress") {
+      throw new Error("Somente campanhas em aberto podem ser transferidas de operacional.");
     }
 
     const operacionalEmail = normalizeEmail(operacionalEmailRaw);
@@ -285,21 +285,29 @@ export class WabaCampaignSupplierAssignmentService {
       throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
     }
 
+    const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";
     const config = this.splitService.getConfig();
     const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
     let supplier =
       suppliers.find(
         (row) =>
+          normalizeEmail(row.systemUserEmail) === operacionalEmail &&
+          row.apiKind === apiKind &&
+          (row.segment || "outros") === supplierSegment,
+      ) ??
+      suppliers.find(
+        (row) =>
           normalizeEmail(row.systemUserEmail) === operacionalEmail && row.apiKind === apiKind,
-      ) ?? null;
+      ) ??
+      null;
 
     if (!supplier) {
       supplier = {
-        id: `manual-${operacionalEmail.replace(/[^a-z0-9]+/gi, "-")}`,
+        id: `manual-${operacionalEmail.replace(/[^a-z0-9]+/gi, "-")}-${apiKind}-${supplierSegment}`,
         name: String(operacional.fullName || operacionalEmail).trim(),
         apiKind,
         systemUserEmail: operacionalEmail,
-        segment: operacional.operacionalSegment ?? "outros",
+        segment: supplierSegment,
         priority: 1,
         costPerShipmentCents: 0,
         pixKey: "",

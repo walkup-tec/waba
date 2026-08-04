@@ -30,6 +30,23 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
         }
         return res.status(200).json({ campaign: detail });
     });
+    app.get("/admin/operacional/campanhas/:id/operacionais-transferencia", (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const items = operacionalCampanhasService.listTransferOperacionais(req.params.id, {
+                email: auth.email,
+                role: auth.role,
+            });
+            return res.status(200).json({ items });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível listar operacionais.";
+            const status = /Somente|não encontrada|não disponível|abertas/i.test(message) ? 400 : 500;
+            return res.status(status).json({ error: message });
+        }
+    });
     app.get("/admin/operacional/campanhas/:id/imagem", (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)

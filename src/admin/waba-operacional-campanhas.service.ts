@@ -72,6 +72,9 @@ export type OperacionalCampaignListItem = {
   bmInoperanteRegistered: boolean;
   isStartOverdue: boolean;
   startDeadlineAt: string;
+  assignedOperacionalEmail: string;
+  assignedOperacionalName: string;
+  canTransferOperacional: boolean;
   createdAt: string;
   createdAtLabel: string;
 };
@@ -285,7 +288,10 @@ export class WabaOperacionalCampanhasService {
     return intake;
   }
 
-  private toListItem(intake: WabaCampaignIntake): OperacionalCampaignListItem {
+  private toListItem(
+    intake: WabaCampaignIntake,
+    staff?: OperacionalCampanhasStaffContext,
+  ): OperacionalCampaignListItem {
     const email = normalizeEmail(intake.ownerEmail);
     const subscriber = this.subscriberRepository.getByEmail(email);
     const status = normalizeStoredStatus(intake.status);
@@ -293,6 +299,18 @@ export class WabaOperacionalCampanhasService {
     const plannedSendCount = resolvePlannedSendCount(intake);
     const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+    const assignedOperacionalEmail = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+    const assignedUser = assignedOperacionalEmail
+      ? this.systemUserService.getByEmail(assignedOperacionalEmail)
+      : null;
+    const assignedOperacionalName = String(
+      assignedUser?.fullName || assignedOperacionalEmail || "",
+    ).trim();
+    const isMaster =
+      Boolean(staff) &&
+      (staff!.role === "master" || isWabaMasterEmail(staff!.email));
+    const canTransferOperacional =
+      isMaster && (status === "generated" || status === "in_progress");
 
     return {
       id: intake.id,
@@ -316,6 +334,9 @@ export class WabaOperacionalCampanhasService {
       bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
       isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
       startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
+      assignedOperacionalEmail,
+      assignedOperacionalName: assignedOperacionalName || "—",
+      canTransferOperacional,
       createdAt: intake.createdAt,
       createdAtLabel: formatDateLabel(intake.createdAt),
     };
@@ -330,7 +351,7 @@ export class WabaOperacionalCampanhasService {
         return this.assignmentService.ensureInitialAssignment(intake);
       })
       .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
-      .map((intake) => this.toListItem(intake))
+      .map((intake) => this.toListItem(intake, staff))
       .sort((a, b) => {
         if (a.needsConfiguration !== b.needsConfiguration) {
           return a.needsConfiguration ? -1 : 1;
@@ -346,7 +367,7 @@ export class WabaOperacionalCampanhasService {
     const intake = this.intakeRepository.getById(campaignId);
     if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
 
-    const base = this.toListItem(intake);
+    const base = this.toListItem(intake, staff);
     const plannedSendCount = base.plannedSendCount;
     const trimmedName =
       intake.spreadsheetTrimmedFileName ||
@@ -392,7 +413,7 @@ export class WabaOperacionalCampanhasService {
     });
     if (!updated) throw new Error("Não foi possível atualizar a campanha.");
 
-    return this.toListItem(updated);
+    return this.toListItem(updated, staff);
   }
 
   getCampaignReport(
@@ -694,5 +715,35 @@ export class WabaOperacionalCampanhasService {
       throw new Error("Campanha atribuída, mas não foi possível carregar os detalhes.");
     }
     return detail;
+  }
+
+  listTransferOperacionais(
+    campaignId: string,
+    staff: OperacionalCampanhasStaffContext,
+  ): Array<{ email: string; fullName: string; segment: string; segmentLabel: string }> {
+    if (staff.role !== "master" && !isWabaMasterEmail(staff.email)) {
+      throw new Error("Somente master pode listar operacionais para transferência.");
+    }
+    const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+    const status = normalizeStoredStatus(intake.status);
+    if (status !== "generated" && status !== "in_progress") {
+      throw new Error("Somente campanhas em aberto podem ser transferidas.");
+    }
+    const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
+    const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+    const current = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+    return this.systemUserService
+      .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
+      .filter((user) => normalizeEmail(user.email) !== current)
+      .map((user) => {
+        const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+        return {
+          email: normalizeEmail(user.email),
+          fullName: String(user.fullName || user.email).trim() || user.email,
+          segment,
+          segmentLabel: segment === "bets" ? "Bets" : "Outros",
+        };
+      })
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
   }
 }

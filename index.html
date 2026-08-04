@@ -7353,6 +7353,111 @@
         cursor: pointer;
       }
 
+      .admin-user-api-toggle-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .admin-user-api-field-label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+
+      .admin-user-api-toggle {
+        display: block;
+        margin: 0;
+        cursor: pointer;
+      }
+
+      .admin-user-api-toggle input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .admin-user-api-toggle-card {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-height: 58px;
+        padding: 10px 12px 10px 36px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.45);
+        color: #cbd5e1;
+        position: relative;
+        transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+      }
+
+      .admin-user-api-toggle-card::before {
+        content: "";
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        margin-top: -8px;
+        border-radius: 4px;
+        border: 1.5px solid rgba(148, 163, 184, 0.55);
+        background: rgba(2, 6, 23, 0.55);
+        box-sizing: border-box;
+      }
+
+      .admin-user-api-toggle-title {
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        line-height: 1.25;
+      }
+
+      .admin-user-api-toggle-hint {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        line-height: 1.3;
+      }
+
+      .admin-user-api-toggle:hover .admin-user-api-toggle-card {
+        border-color: rgba(34, 211, 238, 0.45);
+        color: #f8fafc;
+      }
+
+      .admin-user-api-toggle input:focus-visible + .admin-user-api-toggle-card {
+        outline: 2px solid rgba(34, 211, 238, 0.55);
+        outline-offset: 2px;
+      }
+
+      .admin-user-api-toggle input:checked + .admin-user-api-toggle-card {
+        border-color: rgba(34, 211, 238, 0.75);
+        background: rgba(34, 211, 238, 0.12);
+      }
+
+      .admin-user-api-toggle input:checked + .admin-user-api-toggle-card::before {
+        border-color: #22d3ee;
+        background: #0891b2;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ecfeff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
+        background-size: 12px 12px;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
+      .admin-user-api-toggle input:checked + .admin-user-api-toggle-card .admin-user-api-toggle-title {
+        color: #ecfeff;
+      }
+
+      .admin-user-api-toggle input:checked + .admin-user-api-toggle-card .admin-user-api-toggle-hint {
+        color: #a5f3fc;
+      }
+
+      @media (max-width: 640px) {
+        .admin-user-api-toggle-group {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .admin-user-split-fieldset {
         margin: 0;
         padding: 8px 10px 10px;
@@ -19403,6 +19508,7 @@
                         <th scope="col">ID Assinante</th>
                         <th scope="col">Plano</th>
                         <th scope="col">Segmento</th>
+                        <th scope="col">Operador</th>
                         <th scope="col">Campanha</th>
                         <th scope="col" class="admin-subscribers-num">Envios</th>
                         <th scope="col">Status</th>
@@ -19463,13 +19569,30 @@
                       </select>
                     </div>
                     <div id="admin-user-operacional-api-block" class="aquecedor-field" hidden>
-                      <label for="admin-user-operacional-api">Disparos atendidos</label>
-                      <select id="admin-user-operacional-api" multiple size="2" required>
-                        <option value="oficial">API Oficial</option>
-                        <option value="alternativa">API Alternativa</option>
-                      </select>
+                      <span class="admin-user-api-field-label" id="admin-user-operacional-api-label">Disparos atendidos</span>
+                      <div
+                        id="admin-user-operacional-api"
+                        class="admin-user-api-toggle-group"
+                        role="group"
+                        aria-labelledby="admin-user-operacional-api-label"
+                      >
+                        <label class="admin-user-api-toggle">
+                          <input type="checkbox" name="admin-user-operacional-api" value="oficial" />
+                          <span class="admin-user-api-toggle-card">
+                            <span class="admin-user-api-toggle-title">API Oficial</span>
+                            <span class="admin-user-api-toggle-hint">WhatsApp Cloud API</span>
+                          </span>
+                        </label>
+                        <label class="admin-user-api-toggle">
+                          <input type="checkbox" name="admin-user-operacional-api" value="alternativa" />
+                          <span class="admin-user-api-toggle-card">
+                            <span class="admin-user-api-toggle-title">API Alternativa</span>
+                            <span class="admin-user-api-toggle-hint">Envio via provedor alternativo</span>
+                          </span>
+                        </label>
+                      </div>
                       <p class="admin-users-menus-hint" style="margin-top: 6px">
-                        Selecione um ou mais planos (Ctrl/Cmd + clique). Campanhas desses planos aparecem no painel deste operacional. No Financeiro, o mesmo usuário pode ser cadastrado uma vez por plano com custos diferentes.
+                        Toque para marcar um ou ambos os planos. Campanhas desses planos aparecem no painel deste operacional. No Financeiro, o mesmo usuário pode ser cadastrado uma vez por plano com custos diferentes.
                       </p>
                     </div>
                     <div id="admin-user-operacional-segment-block" class="aquecedor-field" hidden>
@@ -20150,6 +20273,33 @@
       </div>
     </div>
 
+    <div id="admin-campanhas-transfer-overlay" class="confirm-overlay" aria-hidden="true">
+      <div
+        class="confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-campanhas-transfer-title"
+      >
+        <div class="confirm-title" id="admin-campanhas-transfer-title">Transferir Operador</div>
+        <p class="confirm-text" id="admin-campanhas-transfer-subtitle"></p>
+        <div class="aquecedor-field" style="margin: 12px 0 8px; text-align: left">
+          <label for="admin-campanhas-transfer-operacional">Novo operacional</label>
+          <select id="admin-campanhas-transfer-operacional" aria-label="Operacional de destino">
+            <option value="">Carregando…</option>
+          </select>
+        </div>
+        <p id="admin-campanhas-transfer-error" class="admin-campanhas-detail-action-error" hidden role="alert"></p>
+        <div class="confirm-actions" style="margin-top: 14px">
+          <button id="admin-campanhas-transfer-cancel" class="instance-action-btn btn-refresh enabled" type="button">
+            Cancelar
+          </button>
+          <button id="admin-campanhas-transfer-confirm" class="instance-action-btn btn-qrcode enabled" type="button">
+            Transferir
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="admin-campanhas-detail-overlay" class="confirm-overlay" aria-hidden="true">
       <div
         class="confirm-modal admin-campanhas-detail-modal"
@@ -20418,13 +20568,30 @@
               <input id="admin-user-edit-role" type="text" readonly disabled />
             </div>
             <div id="admin-user-edit-operacional-api-block" class="aquecedor-field" hidden>
-              <label for="admin-user-edit-operacional-api">Disparos atendidos</label>
-              <select id="admin-user-edit-operacional-api" multiple size="2" required>
-                <option value="oficial">API Oficial</option>
-                <option value="alternativa">API Alternativa</option>
-              </select>
+              <span class="admin-user-api-field-label" id="admin-user-edit-operacional-api-label">Disparos atendidos</span>
+              <div
+                id="admin-user-edit-operacional-api"
+                class="admin-user-api-toggle-group"
+                role="group"
+                aria-labelledby="admin-user-edit-operacional-api-label"
+              >
+                <label class="admin-user-api-toggle">
+                  <input type="checkbox" name="admin-user-edit-operacional-api" value="oficial" />
+                  <span class="admin-user-api-toggle-card">
+                    <span class="admin-user-api-toggle-title">API Oficial</span>
+                    <span class="admin-user-api-toggle-hint">WhatsApp Cloud API</span>
+                  </span>
+                </label>
+                <label class="admin-user-api-toggle">
+                  <input type="checkbox" name="admin-user-edit-operacional-api" value="alternativa" />
+                  <span class="admin-user-api-toggle-card">
+                    <span class="admin-user-api-toggle-title">API Alternativa</span>
+                    <span class="admin-user-api-toggle-hint">Envio via provedor alternativo</span>
+                  </span>
+                </label>
+              </div>
               <p class="admin-users-menus-hint" style="margin-top: 6px">
-                Selecione um ou mais planos (Ctrl/Cmd + clique). No Financeiro, cadastre o mesmo operacional uma vez por plano quando os custos forem diferentes.
+                Toque para marcar um ou ambos os planos. No Financeiro, cadastre o mesmo operacional uma vez por plano quando os custos forem diferentes.
               </p>
             </div>
             <div id="admin-user-edit-operacional-segment-block" class="aquecedor-field" hidden>
@@ -30523,24 +30690,19 @@
       function syncAdminUserOperacionalApiField(role, options = {}) {
         const isOperacional = String(role || "").toLowerCase() === "operacional";
         const createBlock = document.getElementById("admin-user-operacional-api-block");
-        const createSelect = document.getElementById("admin-user-operacional-api");
+        const createGroup = document.getElementById("admin-user-operacional-api");
         const createSegmentBlock = document.getElementById("admin-user-operacional-segment-block");
         const createSegmentSelect = document.getElementById("admin-user-operacional-segment");
         const editBlock = document.getElementById("admin-user-edit-operacional-api-block");
-        const editSelect = document.getElementById("admin-user-edit-operacional-api");
+        const editGroup = document.getElementById("admin-user-edit-operacional-api");
         const editSegmentBlock = document.getElementById("admin-user-edit-operacional-segment-block");
         const editSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
         const mode = String(options.mode || "create");
 
         if (mode === "create") {
           if (createBlock) createBlock.hidden = !isOperacional;
-          if (createSelect) {
-            createSelect.required = isOperacional;
-            if (!isOperacional) {
-              Array.from(createSelect.options).forEach((option) => {
-                option.selected = false;
-              });
-            }
+          if (createGroup && !isOperacional) {
+            setAdminUserOperacionalApiValues(createGroup, []);
           }
           if (createSegmentBlock) createSegmentBlock.hidden = !isOperacional;
           if (createSegmentSelect) {
@@ -30550,13 +30712,8 @@
         }
         if (mode === "edit" || mode === "both") {
           if (editBlock) editBlock.hidden = !isOperacional;
-          if (editSelect) {
-            editSelect.required = isOperacional;
-            if (!isOperacional) {
-              Array.from(editSelect.options).forEach((option) => {
-                option.selected = false;
-              });
-            }
+          if (editGroup && !isOperacional) {
+            setAdminUserOperacionalApiValues(editGroup, []);
           }
           if (editSegmentBlock) editSegmentBlock.hidden = !isOperacional;
           if (editSegmentSelect) {
@@ -30614,22 +30771,22 @@
 
       function readAdminUserOperacionalApiValues(mode = "create") {
         const id = mode === "edit" ? "admin-user-edit-operacional-api" : "admin-user-operacional-api";
-        const select = document.getElementById(id);
-        if (!select) return [];
-        return Array.from(select.selectedOptions || [])
-          .map((option) => String(option.value || "").trim())
+        const group = document.getElementById(id);
+        if (!group) return [];
+        return Array.from(group.querySelectorAll('input[type="checkbox"]:checked'))
+          .map((input) => String(input.value || "").trim())
           .filter((value) => value === "oficial" || value === "alternativa");
       }
 
-      function setAdminUserOperacionalApiValues(selectEl, values) {
-        if (!selectEl) return;
+      function setAdminUserOperacionalApiValues(groupEl, values) {
+        if (!groupEl) return;
         const selected = new Set(
           (Array.isArray(values) ? values : [values])
             .map((value) => String(value || "").trim())
             .filter((value) => value === "oficial" || value === "alternativa")
         );
-        Array.from(selectEl.options).forEach((option) => {
-          option.selected = selected.has(String(option.value || "").trim());
+        groupEl.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+          input.checked = selected.has(String(input.value || "").trim());
         });
       }
 
@@ -31514,8 +31671,8 @@
       let adminCampanhasReportReadOnly = false;
       let adminCampanhasActiveBucket = "open";
       let adminCampanhasPlanFilter = "all";
-      const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 9;
-      const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 8;
+      const ADMIN_CAMPANHAS_TABLE_COLS_MASTER = 10;
+      const ADMIN_CAMPANHAS_TABLE_COLS_DEFAULT = 9;
       const ADMIN_CAMPANHAS_START_BTN_LABEL = "Confirmar início";
       const ADMIN_CAMPANHAS_STARTING_BTN_LABEL = "Iniciando…";
       const ADMIN_CAMPANHAS_BM_INOPERANTE_BTN_LABEL = "BM inoperante";
@@ -31646,6 +31803,135 @@
           btn.setAttribute("aria-selected", active ? "true" : "false");
         });
         renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+      }
+
+      let adminCampanhasTransferCampaignId = "";
+
+      function closeAdminCampanhasTransferModal() {
+        closeDisparosOverlay("admin-campanhas-transfer-overlay");
+        adminCampanhasTransferCampaignId = "";
+        const errorEl = document.getElementById("admin-campanhas-transfer-error");
+        if (errorEl) {
+          errorEl.hidden = true;
+          errorEl.textContent = "";
+        }
+      }
+
+      async function openAdminCampanhasTransferModal(campaignId, campaignName, currentOperacional) {
+        if (!hasMasterAccess()) {
+          showToast("Somente master pode transferir campanhas.", "warning", 4200);
+          return;
+        }
+        const id = String(campaignId || "").trim();
+        if (!id) return;
+        adminCampanhasTransferCampaignId = id;
+        const subtitle = document.getElementById("admin-campanhas-transfer-subtitle");
+        const select = document.getElementById("admin-campanhas-transfer-operacional");
+        const errorEl = document.getElementById("admin-campanhas-transfer-error");
+        const confirmBtn = document.getElementById("admin-campanhas-transfer-confirm");
+        if (!select) return;
+        if (subtitle) {
+          const current = String(currentOperacional || "").trim();
+          subtitle.textContent = current
+            ? `${String(campaignName || "Campanha").trim()} · atual: ${current}`
+            : String(campaignName || "Campanha").trim();
+        }
+        if (errorEl) {
+          errorEl.hidden = true;
+          errorEl.textContent = "";
+        }
+        select.innerHTML = '<option value="">Carregando…</option>';
+        select.disabled = true;
+        if (confirmBtn) confirmBtn.disabled = true;
+        openDisparosOverlay("admin-campanhas-transfer-overlay");
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/operacional/campanhas/${encodeURIComponent(id)}/operacionais-transferencia`,
+            {},
+            12000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível listar operacionais.");
+          }
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!items.length) {
+            select.innerHTML =
+              '<option value="">Nenhum operacional elegível para esta campanha</option>';
+            return;
+          }
+          select.innerHTML = [
+            '<option value="">Selecione o operacional…</option>',
+            ...items.map((item) => {
+              const email = String(item?.email || "").trim().toLowerCase();
+              const name = String(item?.fullName || email).trim() || email;
+              const segment = String(item?.segmentLabel || "").trim();
+              const label = segment ? `${name} (${segment})` : name;
+              return `<option value="${escapeAdminHtml(email)}">${escapeAdminHtml(label)}</option>`;
+            }),
+          ].join("");
+          select.disabled = false;
+          if (confirmBtn) confirmBtn.disabled = false;
+        } catch (error) {
+          select.innerHTML = '<option value="">Falha ao carregar</option>';
+          if (errorEl) {
+            errorEl.hidden = false;
+            errorEl.textContent = error?.message || "Falha ao carregar operacionais.";
+          }
+        }
+      }
+
+      async function confirmAdminCampanhasTransfer() {
+        const campaignId = String(adminCampanhasTransferCampaignId || "").trim();
+        const select = document.getElementById("admin-campanhas-transfer-operacional");
+        const errorEl = document.getElementById("admin-campanhas-transfer-error");
+        const confirmBtn = document.getElementById("admin-campanhas-transfer-confirm");
+        const operacionalEmail = String(select?.value || "").trim().toLowerCase();
+        if (!campaignId) return;
+        if (!operacionalEmail) {
+          if (errorEl) {
+            errorEl.hidden = false;
+            errorEl.textContent = "Selecione o operacional de destino.";
+          }
+          return;
+        }
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = "Transferindo…";
+        }
+        try {
+          const response = await fetchWithTimeout(
+            `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/atribuir`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ operacionalEmail }),
+            },
+            15000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Não foi possível transferir a campanha.");
+          }
+          const campaign = payload.campaign || {};
+          const idx = adminCampanhasCache.findIndex((row) => String(row?.id || "") === campaignId);
+          if (idx >= 0) {
+            adminCampanhasCache[idx] = { ...adminCampanhasCache[idx], ...campaign };
+          }
+          closeAdminCampanhasTransferModal();
+          renderAdminCampanhasTable(getFilteredAdminCampanhasItems());
+          showToast(payload.message || "Campanha transferida.", "success", 4200);
+        } catch (error) {
+          if (errorEl) {
+            errorEl.hidden = false;
+            errorEl.textContent = error?.message || "Falha ao transferir.";
+          }
+        } finally {
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Transferir";
+          }
+        }
       }
 
       function renderAdminCampanhasStatusBadge(status, displayStatus) {
@@ -31784,6 +32070,9 @@
             const planTypeKind = resolveAdminCampanhaApiKind(item);
             const planType = renderWabaApiKindLabelHtml(planTypeKind);
             const segmentLabel = escapeAdminHtml(item?.subscriberSegmentLabel || "Outros");
+            const operadorLabel = escapeAdminHtml(
+              item?.assignedOperacionalName || item?.assignedOperacionalEmail || "—"
+            );
             const campaignName = escapeAdminHtml(item?.campaignName || "—");
             const envios = Number(item?.plannedSendCount || 0);
             const statusBadge = renderAdminCampanhasStatusBadge(item?.status, item?.displayStatus);
@@ -31803,6 +32092,19 @@
                   data-campaign-id="${campaignId}"
                 >
                   Ver detalhes
+                </button>
+              `);
+            }
+            if (hasMasterAccess() && Boolean(item?.canTransferOperacional)) {
+              actions.push(`
+                <button
+                  class="instance-action-btn btn-refresh enabled admin-campanhas-transfer-btn"
+                  type="button"
+                  data-campaign-id="${campaignId}"
+                  data-campaign-name="${campaignName}"
+                  data-current-operacional="${escapeAdminHtml(item?.assignedOperacionalEmail || "")}"
+                >
+                  Transferir Operador
                 </button>
               `);
             }
@@ -31837,6 +32139,7 @@
                 <td><code>${subscriberId}</code>${newMarker}</td>
                 <td>${planType}</td>
                 <td>${segmentLabel}</td>
+                <td>${operadorLabel}</td>
                 <td>${campaignName}</td>
                 <td class="admin-subscribers-num">${envios}</td>
                 <td>${statusBadge}</td>
@@ -31955,6 +32258,12 @@
             [
               renderAdminCampanhasDetailField("Nome da campanha", escapeAdminHtml(campaignName)),
               renderAdminCampanhasDetailField("DDD da região", escapeAdminHtml(campaign.regionDdd || "—")),
+              renderAdminCampanhasDetailField(
+                "Operador atribuído",
+                escapeAdminHtml(
+                  campaign.assignedOperacionalName || campaign.assignedOperacionalEmail || "—"
+                )
+              ),
               renderAdminCampanhasDetailField(
                 "Envios registrados",
                 escapeAdminHtml(String(campaign.plannedSendCount ?? 0))
@@ -33024,6 +33333,15 @@
             void openAdminCampanhasDetail(openBtn.getAttribute("data-campaign-id"));
             return;
           }
+          const transferBtn = target.closest(".admin-campanhas-transfer-btn");
+          if (transferBtn) {
+            void openAdminCampanhasTransferModal(
+              transferBtn.getAttribute("data-campaign-id"),
+              transferBtn.getAttribute("data-campaign-name"),
+              transferBtn.getAttribute("data-current-operacional")
+            );
+            return;
+          }
           const reportBtn = target.closest(".admin-campanhas-report-btn");
           if (reportBtn) {
             void openAdminCampanhasReport(
@@ -33088,6 +33406,18 @@
         document.getElementById("admin-campanhas-report-overlay")?.addEventListener("click", (event) => {
           if (event.target?.id === "admin-campanhas-report-overlay") {
             closeAdminCampanhasReportModal();
+          }
+        });
+
+        document.getElementById("admin-campanhas-transfer-cancel")?.addEventListener("click", () => {
+          closeAdminCampanhasTransferModal();
+        });
+        document.getElementById("admin-campanhas-transfer-confirm")?.addEventListener("click", () => {
+          void confirmAdminCampanhasTransfer();
+        });
+        document.getElementById("admin-campanhas-transfer-overlay")?.addEventListener("click", (event) => {
+          if (event.target?.id === "admin-campanhas-transfer-overlay") {
+            closeAdminCampanhasTransferModal();
           }
         });
 
