@@ -211,12 +211,12 @@ export class WabaOperacionalCampanhasService {
 
   private resolveStaffApiFilter(
     staff: OperacionalCampanhasStaffContext,
-  ): WabaDispatchesApiKind | null | "unassigned" {
+  ): WabaDispatchesApiKind[] | null | "unassigned" {
     if (staff.role === "master" || isWabaMasterEmail(staff.email)) return null;
     if (staff.role === "suporte") return null;
     if (staff.role !== "operacional") return null;
-    const apiKind = this.systemUserService.getOperacionalDispatchesApiForEmail(staff.email);
-    return apiKind ?? "unassigned";
+    const apis = this.systemUserService.getOperacionalDispatchesApisForEmail(staff.email);
+    return apis.length ? apis : "unassigned";
   }
 
   private resolveStaffSegmentFilter(
@@ -242,7 +242,7 @@ export class WabaOperacionalCampanhasService {
     const filter = this.resolveStaffApiFilter(staff);
     if (filter === null) return true;
     if (filter === "unassigned") return false;
-    return resolveIntakeApiKind(intake, this.orderRepository) === filter;
+    return filter.includes(resolveIntakeApiKind(intake, this.orderRepository));
   }
 
   private matchesStaffSegmentFilter(

@@ -4,6 +4,7 @@ exports.registerWabaAuthRoutes = exports.wabaRequireAuthMiddleware = void 0;
 const base_path_1 = require("../base-path");
 const waba_subscriber_service_1 = require("../subscribers/waba-subscriber.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_operacional_dispatches_apis_1 = require("../users/waba-operacional-dispatches-apis");
 const waba_auth_service_1 = require("./waba-auth.service");
 const subscriberService = new waba_subscriber_service_1.WabaSubscriberService();
 const systemUserService = new waba_system_user_service_1.WabaSystemUserService();
@@ -63,6 +64,9 @@ const sendSession = (req, res) => {
         ? systemUserService.getSessionMenuAccess(session.email)
         : null;
     const canOpenSupportTickets = Boolean(session.email);
+    const operacionalDispatchesApis = systemUser
+        ? (0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(systemUser)
+        : [];
     return res.status(200).json({
         authenticated: true,
         authConfigured: true,
@@ -76,11 +80,13 @@ const sendSession = (req, res) => {
                 fullName: systemUser.fullName,
                 email: systemUser.email,
                 role: systemUser.role,
-                operacionalDispatchesApi: systemUser.operacionalDispatchesApi ?? null,
+                operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+                operacionalDispatchesApis,
                 operacionalSegment: systemUser.operacionalSegment ?? null,
             }
             : null,
-        operacionalDispatchesApi: systemUser?.operacionalDispatchesApi ?? null,
+        operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+        operacionalDispatchesApis,
         operacionalSegment: systemUser?.operacionalSegment ?? null,
         allowedMenuIds: menuAccess?.allowedMenuIds ?? [],
         menuPermissions: menuAccess?.menuPermissions ?? null,
@@ -122,9 +128,10 @@ const isAuthBypassPath = (method, reqPath) => {
         p.startsWith("/media/") ||
         p.startsWith("/push/public-media/") ||
         p === "/instancias/avatar" ||
-        p === "/integrations/soma/aquecedor-instances") {
-            return true;
-        }
+        p === "/integrations/soma/aquecedor-instances" ||
+        p === "/integrations/soma/alternativa-campaigns") {
+        return true;
+    }
     return /\.(js|mjs|css|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|map)$/i.test(p);
 };
 const wabaRequireAuthMiddleware = (req, res, next) => {
@@ -173,6 +180,7 @@ const registerWabaAuthRoutes = (app) => {
                 const token = (0, waba_auth_service_1.createWabaSessionToken)(user.email, user.role);
                 writeSessionCookie(res, token);
                 const menuAccess = systemUserService.getSessionMenuAccess(user.email);
+                const operacionalDispatchesApis = (0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(user);
                 return res.status(200).json({
                     ok: true,
                     email: user.email,
@@ -182,10 +190,12 @@ const registerWabaAuthRoutes = (app) => {
                         fullName: user.fullName,
                         email: user.email,
                         role: user.role,
-                        operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+                        operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+                        operacionalDispatchesApis,
                         operacionalSegment: user.operacionalSegment ?? null,
                     },
-                    operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+                    operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+                    operacionalDispatchesApis,
                     operacionalSegment: user.operacionalSegment ?? null,
                     allowedMenuIds: menuAccess.allowedMenuIds,
                     menuPermissions: menuAccess.menuPermissions,

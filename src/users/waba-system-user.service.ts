@@ -14,8 +14,6 @@ import {
 } from "../menus/waba-menu-permissions.service";
 import { listWabaMenuDefinitions } from "../menus/waba-menu-registry";
 import {
-  normalizeDispatchesApiKind,
-  WABA_DISPATCHES_API_LABELS,
   type WabaDispatchesApiKind,
 } from "../disparos/waba-dispatches-api-kind";
 import { operacionalCanServeSubscriberCampaign } from "../services/waba-campaign-operacional-segment-rules";
@@ -25,6 +23,12 @@ import {
   type WabaSystemUser,
   type WabaSystemUserRole,
 } from "./waba-system-user.repository";
+import {
+  formatOperacionalDispatchesApisLabel,
+  operacionalServesDispatchesApi,
+  parseOperacionalDispatchesApisInput,
+  resolveOperacionalDispatchesApis,
+} from "./waba-operacional-dispatches-apis";
 import {
   parseMasterDisparosPolicyInput,
   resolveMasterDisparosPolicyFromUser,
@@ -73,19 +77,13 @@ const parseRole = (value: string): WabaSystemUserRole | null => {
   return null;
 };
 
-const parseOperacionalDispatchesApiForRole = (
+const parseOperacionalDispatchesApisForRole = (
   role: WabaSystemUserRole,
   value: unknown,
   options: { required?: boolean } = {},
-): WabaDispatchesApiKind | null => {
-  if (role !== "operacional") return null;
-  const parsed = normalizeDispatchesApiKind(value);
-  if (!parsed && options.required) {
-    throw new Error(
-      "Selecione o tipo de disparos que este operacional atende (API Oficial ou API Alternativa).",
-    );
-  }
-  return parsed;
+): WabaDispatchesApiKind[] => {
+  if (role !== "operacional") return [];
+  return parseOperacionalDispatchesApisInput(value, options);
 };
 
 const parseOptionalWhatsapp = (value: unknown): string => {
@@ -119,6 +117,7 @@ export type CreateSystemUserInput = {
   role: string;
   menuPermissions?: unknown;
   operacionalDispatchesApi?: unknown;
+  operacionalDispatchesApis?: unknown;
   operacionalSegment?: unknown;
   masterUnlimitedCredits?: unknown;
   masterSplitSuppliers?: unknown;
@@ -132,6 +131,7 @@ export type UpdateSystemUserInput = {
   whatsapp?: unknown;
   menuPermissions?: unknown;
   operacionalDispatchesApi?: unknown;
+  operacionalDispatchesApis?: unknown;
   operacionalSegment?: unknown;
   masterUnlimitedCredits?: unknown;
   masterSplitSuppliers?: unknown;
@@ -151,6 +151,7 @@ export type PublicSystemUser = {
   enabledMenuCount: number;
   allowedMenuIds: string[];
   operacionalDispatchesApi: WabaDispatchesApiKind | null;
+  operacionalDispatchesApis: WabaDispatchesApiKind[];
   operacionalDispatchesApiLabel: string;
   operacionalSegment: WabaSystemUserOperacionalSegment | null;
   operacionalSegmentLabel: string;
@@ -188,7 +189,12 @@ export class WabaSystemUserService {
   constructor(private readonly repository = new WabaSystemUserRepository()) {}
 
   private ensureUserMigrated(user: WabaSystemUser): WabaSystemUser {
-    const patch: Partial<Pick<WabaSystemUser, "menuPermissions" | "operacionalSegment">> = {};
+    const patch: Partial<
+      Pick<
+        WabaSystemUser,
+        "menuPermissions" | "operacionalSegment" | "operacionalDispatchesApi" | "operacionalDispatchesApis"
+      >
+    > = {};
     if (user.menuPermissions == null) {
       patch.menuPermissions = buildLegacyMigrationPermissions();
     }
@@ -197,6 +203,14 @@ export class WabaSystemUserService {
         patch.operacionalSegment = "outros";
       } else if (String(user.operacionalSegment) === "todos") {
         patch.operacionalSegment = "outros";
+      }
+      const apis = resolveOperacionalDispatchesApis(user);
+      const storedApis = Array.isArray(user.operacionalDispatchesApis)
+        ? user.operacionalDispatchesApis
+        : null;
+      if (apis.length > 0 && (!storedApis || storedApis.length === 0)) {
+        patch.operacionalDispatchesApis = apis;
+        patch.operacionalDispatchesApi = apis[0] ?? null;
       }
     }
     if (!Object.keys(patch).length) return user;
@@ -215,6 +229,7 @@ export class WabaSystemUserService {
     const effective = resolveEffectiveMenuPermissions(user);
     const masterPolicy =
       user.role === "master" ? resolveMasterDisparosPolicyFromUser(user) : null;
+    const operacionalDispatchesApis = resolveOperacionalDispatchesApis(user);
     return {
       id: user.id,
       fullName: user.fullName,
@@ -227,10 +242,9 @@ export class WabaSystemUserService {
       menuPermissions: effective,
       enabledMenuCount: countEnabledMenus(effective),
       allowedMenuIds: listAllowedMenuIds(user),
-      operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
-      operacionalDispatchesApiLabel: user.operacionalDispatchesApi
-        ? WABA_DISPATCHES_API_LABELS[user.operacionalDispatchesApi]
-        : "—",
+      operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+      operacionalDispatchesApis,
+      operacionalDispatchesApiLabel: formatOperacionalDispatchesApisLabel(operacionalDispatchesApis),
       operacionalSegment:
         String(user.operacionalSegment) === "todos"
           ? "outros"
@@ -263,9 +277,14 @@ export class WabaSystemUserService {
   }
 
   getOperacionalDispatchesApiForEmail(email: string): WabaDispatchesApiKind | null {
+    const apis = this.getOperacionalDispatchesApisForEmail(email);
+    return apis[0] ?? null;
+  }
+
+  getOperacionalDispatchesApisForEmail(email: string): WabaDispatchesApiKind[] {
     const user = this.getUserWithMigration(email);
-    if (!user || user.role !== "operacional") return null;
-    return user.operacionalDispatchesApi ?? null;
+    if (!user || user.role !== "operacional") return [];
+    return resolveOperacionalDispatchesApis(user);
   }
 
   getOperacionalSegmentForEmail(email: string): WabaSystemUserOperacionalSegment | null {
@@ -304,7 +323,7 @@ export class WabaSystemUserService {
       .filter(
         (user) =>
           user.role === "operacional" &&
-          user.operacionalDispatchesApi === apiKind &&
+          operacionalServesDispatchesApi(user, apiKind) &&
           operacionalCanServeSubscriberCampaign(subscriberSegment, user.operacionalSegment),
       )
       .map((user) => ({
@@ -352,11 +371,12 @@ export class WabaSystemUserService {
     if (role !== "master" && countEnabledMenus(menuPermissions) === 0) {
       throw new Error("Selecione pelo menos um menu para o usuário.");
     }
-    const operacionalDispatchesApi = parseOperacionalDispatchesApiForRole(
+    const operacionalDispatchesApis = parseOperacionalDispatchesApisForRole(
       role,
-      input.operacionalDispatchesApi,
+      input.operacionalDispatchesApis ?? input.operacionalDispatchesApi,
       { required: true },
     );
+    const operacionalDispatchesApi = operacionalDispatchesApis[0] ?? null;
     const operacionalSegment = parseOperacionalSegmentForRole(role, input.operacionalSegment, {
       defaultValue: "outros",
     });
@@ -374,6 +394,7 @@ export class WabaSystemUserService {
       whatsapp,
       role,
       operacionalDispatchesApi,
+      operacionalDispatchesApis: operacionalDispatchesApis.length ? operacionalDispatchesApis : null,
       operacionalSegment,
       masterUnlimitedCredits: masterPolicy?.unlimitedCredits,
       masterSplitSuppliers: masterPolicy?.splitSuppliers,
@@ -391,8 +412,8 @@ export class WabaSystemUserService {
         whatsapp,
         roleLabel: ROLE_LABELS[role],
         loginUrl: resolveWabaAppLoginUrl(),
-        operacionalDispatchesApiLabel: operacionalDispatchesApi
-          ? WABA_DISPATCHES_API_LABELS[operacionalDispatchesApi]
+        operacionalDispatchesApiLabel: operacionalDispatchesApis.length
+          ? formatOperacionalDispatchesApisLabel(operacionalDispatchesApis)
           : undefined,
         operacionalSegmentLabel: operacionalSegment
           ? OPERACIONAL_SEGMENT_LABELS[operacionalSegment]
@@ -435,6 +456,7 @@ export class WabaSystemUserService {
         | "whatsapp"
         | "menuPermissions"
         | "operacionalDispatchesApi"
+        | "operacionalDispatchesApis"
         | "operacionalSegment"
         | "masterUnlimitedCredits"
         | "masterSplitSuppliers"
@@ -453,12 +475,14 @@ export class WabaSystemUserService {
       patch.menuPermissions = parseMenuPermissionsForUpdate(user.role, input.menuPermissions);
     }
 
-    if (input.operacionalDispatchesApi !== undefined) {
-      patch.operacionalDispatchesApi = parseOperacionalDispatchesApiForRole(
+    if (input.operacionalDispatchesApis !== undefined || input.operacionalDispatchesApi !== undefined) {
+      const apis = parseOperacionalDispatchesApisForRole(
         user.role,
-        input.operacionalDispatchesApi,
+        input.operacionalDispatchesApis ?? input.operacionalDispatchesApi,
         { required: user.role === "operacional" },
       );
+      patch.operacionalDispatchesApis = apis.length ? apis : null;
+      patch.operacionalDispatchesApi = apis[0] ?? null;
     }
 
     if (input.operacionalSegment !== undefined) {

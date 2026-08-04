@@ -104,8 +104,8 @@ class WabaOperacionalCampanhasService {
             return null;
         if (staff.role !== "operacional")
             return null;
-        const apiKind = this.systemUserService.getOperacionalDispatchesApiForEmail(staff.email);
-        return apiKind ?? "unassigned";
+        const apis = this.systemUserService.getOperacionalDispatchesApisForEmail(staff.email);
+        return apis.length ? apis : "unassigned";
     }
     resolveStaffSegmentFilter(staff) {
         if (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email))
@@ -128,7 +128,7 @@ class WabaOperacionalCampanhasService {
             return true;
         if (filter === "unassigned")
             return false;
-        return resolveIntakeApiKind(intake, this.orderRepository) === filter;
+        return filter.includes(resolveIntakeApiKind(intake, this.orderRepository));
     }
     matchesStaffSegmentFilter(intake, staff) {
         const filter = this.resolveStaffSegmentFilter(staff);

@@ -104,6 +104,7 @@ export class WabaAdminFinanceiroService {
       fullName: string;
       email: string;
       apiKind: WabaDispatchesApiKind | null;
+      apiKinds: WabaDispatchesApiKind[];
       segment: "bets" | "outros";
       segmentLabel: string;
       apiKindLabel: string;
@@ -114,16 +115,22 @@ export class WabaAdminFinanceiroService {
       const email = String(user.email || "").trim().toLowerCase();
       if (!email || seen.has(email)) continue;
       seen.add(email);
-      const apiKind = user.operacionalDispatchesApi ?? null;
+      const apiKinds = Array.isArray(user.operacionalDispatchesApis)
+        ? user.operacionalDispatchesApis
+        : user.operacionalDispatchesApi
+          ? [user.operacionalDispatchesApi]
+          : [];
+      const apiKind = apiKinds[0] ?? null;
       const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
       items.push({
         id: user.id,
         fullName: String(user.fullName || email).trim() || email,
         email,
         apiKind,
+        apiKinds,
         segment,
         segmentLabel: segment === "bets" ? "Bets" : "Outros",
-        apiKindLabel: apiKind === "alternativa" ? "API Alternativa" : apiKind === "oficial" ? "API Oficial" : "—",
+        apiKindLabel: String(user.operacionalDispatchesApiLabel || "—"),
       });
     }
 

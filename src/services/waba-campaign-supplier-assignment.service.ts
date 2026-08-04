@@ -14,6 +14,11 @@ import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.reposit
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import {
+  formatOperacionalDispatchesApisLabel,
+  operacionalServesDispatchesApi,
+  resolveOperacionalDispatchesApis,
+} from "../users/waba-operacional-dispatches-apis";
+import {
   operacionalCanServeSubscriberCampaign,
 } from "./waba-campaign-operacional-segment-rules";
 import { scheduleOperacionalStaffNotifyOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
@@ -77,7 +82,7 @@ export class WabaCampaignSupplierAssignmentService {
       if (!operacional || operacional.role !== "operacional") continue;
       const apiKind = this.resolveIntakeApiKind(intake);
       const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-      if (operacional.operacionalDispatchesApi !== apiKind) continue;
+      if (!operacionalServesDispatchesApi(operacional, apiKind)) continue;
       if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
         continue;
       }
@@ -269,9 +274,9 @@ export class WabaCampaignSupplierAssignmentService {
     }
 
     const apiKind = this.resolveIntakeApiKind(intake);
-    if (operacional.operacionalDispatchesApi !== apiKind) {
+    if (!operacionalServesDispatchesApi(operacional, apiKind)) {
       throw new Error(
-        `Operacional não atende API ${apiKind} (configurado: ${operacional.operacionalDispatchesApi || "—"}).`,
+        `Operacional não atende API ${apiKind} (configurado: ${formatOperacionalDispatchesApisLabel(resolveOperacionalDispatchesApis(operacional))}).`,
       );
     }
 
@@ -283,7 +288,10 @@ export class WabaCampaignSupplierAssignmentService {
     const config = this.splitService.getConfig();
     const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
     let supplier =
-      suppliers.find((row) => normalizeEmail(row.systemUserEmail) === operacionalEmail) ?? null;
+      suppliers.find(
+        (row) =>
+          normalizeEmail(row.systemUserEmail) === operacionalEmail && row.apiKind === apiKind,
+      ) ?? null;
 
     if (!supplier) {
       supplier = {

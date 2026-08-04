@@ -38,6 +38,12 @@ Campanhas geradas com crédito de **Bônus de envio** (admin) **não** entram no
 - Settlements indevidos de campanhas 100% bônus (com funding gravado) são removidos no load do Financeiro/Admin.
 - **Fila legada (2026-08-04):** campanhas `generated`/`in_progress` sem `creditFunding` são marcadas como 100% bônus (backfill no operacional/financeiro e na finalização).
 
+### Operacional com múltiplos tipos de disparo
+
+- No cadastro de usuários, o operacional pode atender **um ou mais** planos (API Oficial e/ou API Alternativa) via seleção múltipla.
+- No Financeiro · Split, o mesmo operacional pode ser cadastrado **uma vez por tipo de disparo**, com custo/PIX distintos (necessário para o split).
+- Unicidade do fornecedor: `e-mail + apiKind` (não mais só e-mail).
+
 ### Ambientes
 
 - Publicação permitida apenas em **Produção** (`master`).

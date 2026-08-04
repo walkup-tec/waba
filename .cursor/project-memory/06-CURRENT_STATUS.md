@@ -13,6 +13,7 @@ Não usar como histórico de desenvolvimento.
 - Exclusão de owners internos das métricas Admin / Financeiro / Disparos (`2ca2404`)
 - Verificação de entrega do aquecedor com ACK de aparelho anti-`@lid` (`2556946`)
 - Campanhas de bônus de envio excluídas do split de pagamento (creditFunding + settle skip + backfill da fila)
+- Operacional com múltiplos tipos de disparo + fornecedor duplicável por plano no Financeiro
 
 ## Funcionalidades em andamento
 
@@ -21,4 +22,4 @@ Não usar como histórico de desenvolvimento.
 ## Pendências relevantes
 
 - Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
-- Validar em produção (após redeploy) marker `DEPLOY-2026-08-04-bonus-campanhas-sem-split` e campanha bônus finalizada sem PIX ao fornecedor
+- Validar em produção (após redeploy) marker `DEPLOY-2026-08-04-operacional-multi-api`: operacional com 2 APIs e dois cadastros de fornecedor

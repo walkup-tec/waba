@@ -189,10 +189,11 @@ class WabaFinanceiroSplitService {
                 throw new Error(`Já existe fornecedor ativo com prioridade ${supplier.priority} para ${supplier.apiKind === "oficial" ? "API Oficial" : "API Alternativa"} / ${supplier.segment === "bets" ? "Bets" : "Outros"}.`);
             }
             priorityKeys.add(priorityKey);
-            if (operacionalEmails.has(supplier.systemUserEmail)) {
-                throw new Error("Cada usuário operacional só pode ser fornecedor uma vez.");
+            const operacionalKey = `${supplier.systemUserEmail}:${supplier.apiKind}`;
+            if (operacionalEmails.has(operacionalKey)) {
+                throw new Error("Cada usuário operacional só pode ser fornecedor uma vez por tipo de disparo (API Oficial / Alternativa).");
             }
-            operacionalEmails.add(supplier.systemUserEmail);
+            operacionalEmails.add(operacionalKey);
         }
         const activeParticipants = participants.filter((item) => item.active);
         for (const participant of activeParticipants) {

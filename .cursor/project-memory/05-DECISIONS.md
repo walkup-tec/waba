@@ -45,3 +45,9 @@ Registrar apenas decisões permanentes.
 - **Decisão:** Campanhas geradas com crédito de Bônus de envio não geram (ou não pagam integralmente) split ao fornecedor; pedidos `admin-bonus-envios` também não settlam.
 - **Motivo:** Bonificação não gera receita do cliente; não há o que dividir/repassar.
 - **Impacto:** Campo `creditFunding` no intake; `payoutSupplierForCompletedCampaign` usa envios billable; purge no Financeiro/Admin.
+
+### 2026-08-04 — Operacional com múltiplos tipos de disparo
+
+- **Decisão:** Operacional pode atender Oficial e/ou Alternativa; no Financeiro o mesmo e-mail pode ser fornecedor uma vez por `apiKind`.
+- **Motivo:** Mesmo operador cobra valores diferentes por tipo de envio no split.
+- **Impacto:** `operacionalDispatchesApis`; UI multi-select; unicidade split `email+apiKind`.

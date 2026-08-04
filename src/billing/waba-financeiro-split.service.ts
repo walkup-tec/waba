@@ -270,10 +270,13 @@ export class WabaFinanceiroSplitService {
         );
       }
       priorityKeys.add(priorityKey);
-      if (operacionalEmails.has(supplier.systemUserEmail)) {
-        throw new Error("Cada usuário operacional só pode ser fornecedor uma vez.");
+      const operacionalKey = `${supplier.systemUserEmail}:${supplier.apiKind}`;
+      if (operacionalEmails.has(operacionalKey)) {
+        throw new Error(
+          "Cada usuário operacional só pode ser fornecedor uma vez por tipo de disparo (API Oficial / Alternativa).",
+        );
       }
-      operacionalEmails.add(supplier.systemUserEmail);
+      operacionalEmails.add(operacionalKey);
     }
 
     const activeParticipants = participants.filter((item) => item.active);
