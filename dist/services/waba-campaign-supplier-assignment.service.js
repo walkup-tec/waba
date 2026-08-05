@@ -65,7 +65,7 @@ class WabaCampaignSupplierAssignmentService {
             const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
             if (!(0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(operacional, apiKind))
                 continue;
-            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional.operacionalSegment)) {
+            if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
                 continue;
             }
             return supplier;
@@ -90,7 +90,7 @@ class WabaCampaignSupplierAssignmentService {
             throw new Error("Fornecedor sem usuário operacional válido.");
         }
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional.operacionalSegment)) {
+        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
             throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
         }
         const name = String(operacional?.fullName || supplier.name || operacionalEmail).trim();
@@ -244,7 +244,7 @@ class WabaCampaignSupplierAssignmentService {
             throw new Error(`Operacional não atende API ${apiKind} (configurado: ${(0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)((0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(operacional))}).`);
         }
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional.operacionalSegment)) {
+        if (!(0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, operacional)) {
             throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
         }
         const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";

@@ -83,7 +83,7 @@ export class WabaCampaignSupplierAssignmentService {
       const apiKind = this.resolveIntakeApiKind(intake);
       const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
       if (!operacionalServesDispatchesApi(operacional, apiKind)) continue;
-      if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+      if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
         continue;
       }
       return supplier;
@@ -117,7 +117,7 @@ export class WabaCampaignSupplierAssignmentService {
       throw new Error("Fornecedor sem usuário operacional válido.");
     }
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
       throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
     }
     const name = String(operacional?.fullName || supplier.name || operacionalEmail).trim();
@@ -281,7 +281,7 @@ export class WabaCampaignSupplierAssignmentService {
     }
 
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
       throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
     }
 

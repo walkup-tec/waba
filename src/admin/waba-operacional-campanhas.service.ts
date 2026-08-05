@@ -19,6 +19,10 @@ import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import type { WabaSystemUserOperacionalSegment } from "../users/waba-system-user.repository";
 import {
+  formatOperacionalSegmentsLabel,
+  resolveOperacionalSegments,
+} from "../users/waba-operacional-segments";
+import {
   WabaCampaignIntakeRepository,
   type WabaCampaignIntake,
   type WabaCampaignIntakeStatus,
@@ -224,12 +228,12 @@ export class WabaOperacionalCampanhasService {
 
   private resolveStaffSegmentFilter(
     staff: OperacionalCampanhasStaffContext,
-  ): WabaSubscriberSegment | null | "unassigned" {
+  ): WabaSystemUserOperacionalSegment[] | null | "unassigned" {
     if (staff.role === "master" || isWabaMasterEmail(staff.email)) return null;
     if (staff.role === "suporte") return null;
     if (staff.role !== "operacional") return null;
-    const segment = this.systemUserService.getOperacionalSegmentForEmail(staff.email);
-    return segment ?? "unassigned";
+    const segments = this.systemUserService.getOperacionalSegmentsForEmail(staff.email);
+    return segments.length ? segments : "unassigned";
   }
 
   private resolveSubscriberSegmentForIntake(intake: WabaCampaignIntake): WabaSubscriberSegment {
@@ -736,12 +740,12 @@ export class WabaOperacionalCampanhasService {
       .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
       .filter((user) => normalizeEmail(user.email) !== current)
       .map((user) => {
-        const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+        const segments = resolveOperacionalSegments(user);
         return {
           email: normalizeEmail(user.email),
           fullName: String(user.fullName || user.email).trim() || user.email,
-          segment,
-          segmentLabel: segment === "bets" ? "Bets" : "Outros",
+          segment: segments[0] ?? "outros",
+          segmentLabel: formatOperacionalSegmentsLabel(segments),
         };
       })
       .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));

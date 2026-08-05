@@ -13,6 +13,7 @@ const waba_menu_registry_1 = require("../menus/waba-menu-registry");
 const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
 const waba_system_user_repository_1 = require("./waba-system-user.repository");
 const waba_operacional_dispatches_apis_1 = require("./waba-operacional-dispatches-apis");
+const waba_operacional_segments_1 = require("./waba-operacional-segments");
 const waba_master_disparos_policy_service_1 = require("./waba-master-disparos-policy.service");
 const waba_mail_delivery_1 = require("../mail/waba-mail-delivery");
 const waba_app_url_1 = require("../mail/waba-app-url");
@@ -42,10 +43,6 @@ const ROLE_LABELS = {
     operacional: "Operacional",
     suporte: "Suporte",
 };
-const OPERACIONAL_SEGMENT_LABELS = {
-    bets: "Bets",
-    outros: "Outros",
-};
 const parseRole = (value) => {
     const raw = String(value ?? "")
         .trim()
@@ -65,19 +62,10 @@ const parseOptionalWhatsapp = (value) => {
         return "";
     return (0, phone_1.formatBrazilPhoneDigits)(raw);
 };
-const parseOperacionalSegmentForRole = (role, value, options = {}) => {
+const parseOperacionalSegmentsForRole = (role, value, options = {}) => {
     if (role !== "operacional")
-        return null;
-    const raw = String(value ?? "")
-        .trim()
-        .toLowerCase();
-    if (!raw)
-        return options.defaultValue ?? "outros";
-    if (raw === "todos")
-        return "outros";
-    if (raw === "bets" || raw === "outros")
-        return raw;
-    throw new Error("Selecione um segmento válido para o operacional (Bets ou Outros).");
+        return [];
+    return (0, waba_operacional_segments_1.parseOperacionalSegmentsInput)(value, options);
 };
 const formatMasterDisparosPolicyLabel = (policy) => {
     const creditsLabel = policy.unlimitedCredits ? "Ilimitado" : "Créditos";
@@ -115,11 +103,20 @@ class WabaSystemUserService {
             patch.menuPermissions = (0, waba_menu_permissions_service_1.buildLegacyMigrationPermissions)();
         }
         if (user.role === "operacional") {
-            if (user.operacionalSegment == null) {
-                patch.operacionalSegment = "outros";
+            const segments = (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
+            const storedSegments = Array.isArray(user.operacionalSegments) ? user.operacionalSegments : null;
+            if (segments.length > 0 && (!storedSegments || storedSegments.length === 0)) {
+                patch.operacionalSegments = segments;
+                patch.operacionalSegment = segments[0] ?? "outros";
+            }
+            else if (user.operacionalSegment == null) {
+                patch.operacionalSegment = segments[0] ?? "outros";
             }
             else if (String(user.operacionalSegment) === "todos") {
                 patch.operacionalSegment = "outros";
+                if (!storedSegments || storedSegments.length === 0) {
+                    patch.operacionalSegments = ["outros"];
+                }
             }
             const apis = (0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(user);
             const storedApis = Array.isArray(user.operacionalDispatchesApis)
@@ -145,6 +142,7 @@ class WabaSystemUserService {
         const effective = (0, waba_menu_permissions_service_1.resolveEffectiveMenuPermissions)(user);
         const masterPolicy = user.role === "master" ? (0, waba_master_disparos_policy_service_1.resolveMasterDisparosPolicyFromUser)(user) : null;
         const operacionalDispatchesApis = (0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(user);
+        const operacionalSegments = (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
         return {
             id: user.id,
             fullName: user.fullName,
@@ -160,13 +158,9 @@ class WabaSystemUserService {
             operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
             operacionalDispatchesApis,
             operacionalDispatchesApiLabel: (0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)(operacionalDispatchesApis),
-            operacionalSegment: String(user.operacionalSegment) === "todos"
-                ? "outros"
-                : (user.operacionalSegment ?? null),
-            operacionalSegmentLabel: (() => {
-                const seg = String(user.operacionalSegment) === "todos" ? "outros" : user.operacionalSegment;
-                return seg ? OPERACIONAL_SEGMENT_LABELS[seg] : "—";
-            })(),
+            operacionalSegment: operacionalSegments[0] ?? null,
+            operacionalSegments,
+            operacionalSegmentLabel: (0, waba_operacional_segments_1.formatOperacionalSegmentsLabel)(operacionalSegments),
             masterUnlimitedCredits: masterPolicy?.unlimitedCredits ?? false,
             masterSplitSuppliers: masterPolicy?.splitSuppliers ?? false,
             masterSplitProfits: masterPolicy?.splitProfits ?? false,
@@ -196,10 +190,14 @@ class WabaSystemUserService {
         return (0, waba_operacional_dispatches_apis_1.resolveOperacionalDispatchesApis)(user);
     }
     getOperacionalSegmentForEmail(email) {
+        const segments = this.getOperacionalSegmentsForEmail(email);
+        return segments[0] ?? null;
+    }
+    getOperacionalSegmentsForEmail(email) {
         const user = this.getUserWithMigration(email);
         if (!user || user.role !== "operacional")
-            return null;
-        return user.operacionalSegment ?? "outros";
+            return [];
+        return (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
     }
     /** Masters com WhatsApp para alertas de campanha (role master ou e-mail master legado). */
     listMasterUsers() {
@@ -228,7 +226,7 @@ class WabaSystemUserService {
             .map((user) => this.ensureUserMigrated(user))
             .filter((user) => user.role === "operacional" &&
             (0, waba_operacional_dispatches_apis_1.operacionalServesDispatchesApi)(user, apiKind) &&
-            (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, user.operacionalSegment))
+            (0, waba_campaign_operacional_segment_rules_1.operacionalCanServeSubscriberCampaign)(subscriberSegment, user))
             .map((user) => ({
             ...user,
             email: user.email.trim().toLowerCase(),
@@ -275,9 +273,8 @@ class WabaSystemUserService {
         }
         const operacionalDispatchesApis = parseOperacionalDispatchesApisForRole(role, input.operacionalDispatchesApis ?? input.operacionalDispatchesApi, { required: true });
         const operacionalDispatchesApi = operacionalDispatchesApis[0] ?? null;
-        const operacionalSegment = parseOperacionalSegmentForRole(role, input.operacionalSegment, {
-            defaultValue: "outros",
-        });
+        const operacionalSegments = parseOperacionalSegmentsForRole(role, input.operacionalSegments ?? input.operacionalSegment, { required: true });
+        const operacionalSegment = operacionalSegments[0] ?? null;
         const masterPolicy = role === "master"
             ? (0, waba_master_disparos_policy_service_1.parseMasterDisparosPolicyInput)(input, { applyDefaults: true })
             : null;
@@ -292,6 +289,7 @@ class WabaSystemUserService {
             operacionalDispatchesApi,
             operacionalDispatchesApis: operacionalDispatchesApis.length ? operacionalDispatchesApis : null,
             operacionalSegment,
+            operacionalSegments: operacionalSegments.length ? operacionalSegments : null,
             masterUnlimitedCredits: masterPolicy?.unlimitedCredits,
             masterSplitSuppliers: masterPolicy?.splitSuppliers,
             masterSplitProfits: masterPolicy?.splitProfits,
@@ -310,8 +308,8 @@ class WabaSystemUserService {
                 operacionalDispatchesApiLabel: operacionalDispatchesApis.length
                     ? (0, waba_operacional_dispatches_apis_1.formatOperacionalDispatchesApisLabel)(operacionalDispatchesApis)
                     : undefined,
-                operacionalSegmentLabel: operacionalSegment
-                    ? OPERACIONAL_SEGMENT_LABELS[operacionalSegment]
+                operacionalSegmentLabel: operacionalSegments.length
+                    ? (0, waba_operacional_segments_1.formatOperacionalSegmentsLabel)(operacionalSegments)
                     : undefined,
             });
         }
@@ -350,8 +348,10 @@ class WabaSystemUserService {
             patch.operacionalDispatchesApis = apis.length ? apis : null;
             patch.operacionalDispatchesApi = apis[0] ?? null;
         }
-        if (input.operacionalSegment !== undefined) {
-            patch.operacionalSegment = parseOperacionalSegmentForRole(user.role, input.operacionalSegment, { defaultValue: user.operacionalSegment ?? "outros" });
+        if (input.operacionalSegments !== undefined || input.operacionalSegment !== undefined) {
+            const segments = parseOperacionalSegmentsForRole(user.role, input.operacionalSegments ?? input.operacionalSegment, { required: user.role === "operacional" });
+            patch.operacionalSegments = segments.length ? segments : null;
+            patch.operacionalSegment = segments[0] ?? null;
         }
         if (user.role === "master") {
             const hasMasterPolicyInput = input.masterUnlimitedCredits !== undefined ||

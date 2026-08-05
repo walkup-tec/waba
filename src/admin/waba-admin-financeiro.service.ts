@@ -106,6 +106,7 @@ export class WabaAdminFinanceiroService {
       apiKind: WabaDispatchesApiKind | null;
       apiKinds: WabaDispatchesApiKind[];
       segment: "bets" | "outros";
+      segments: Array<"bets" | "outros">;
       segmentLabel: string;
       apiKindLabel: string;
     }> = [];
@@ -121,7 +122,15 @@ export class WabaAdminFinanceiroService {
           ? [user.operacionalDispatchesApi]
           : [];
       const apiKind = apiKinds[0] ?? null;
-      const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+      const segmentsRaw = Array.isArray(user.operacionalSegments)
+        ? user.operacionalSegments
+        : user.operacionalSegment
+          ? [user.operacionalSegment]
+          : (["outros"] as const);
+      const segments = segmentsRaw
+        .map((item) => (item === "bets" ? "bets" : "outros"))
+        .filter((item, index, arr) => arr.indexOf(item) === index) as Array<"bets" | "outros">;
+      const segment = segments[0] === "bets" ? "bets" : "outros";
       items.push({
         id: user.id,
         fullName: String(user.fullName || email).trim() || email,
@@ -129,7 +138,8 @@ export class WabaAdminFinanceiroService {
         apiKind,
         apiKinds,
         segment,
-        segmentLabel: segment === "bets" ? "Bets" : "Outros",
+        segments,
+        segmentLabel: String(user.operacionalSegmentLabel || (segment === "bets" ? "Bets" : "Outros")),
         apiKindLabel: String(user.operacionalDispatchesApiLabel || "—"),
       });
     }

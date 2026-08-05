@@ -7486,6 +7486,42 @@
 
       .admin-users-edit-form-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      .aquecedor-field--spacer {
+        display: none;
+      }
+
+      @media (min-width: 641px) {
+        .aquecedor-field--spacer {
+          display: block;
+          visibility: hidden;
+          pointer-events: none;
+        }
+      }
+
+      .admin-user-api-field-label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #cbd5e1;
+      }
+
+      .admin-user-operacional-hint {
+        margin: 8px 0 0;
+        font-size: 0.72rem;
+        line-height: 1.35;
+        color: #94a3b8;
+      }
+
+      #admin-user-edit-overlay .confirm-modal {
+        max-width: min(820px, 96vw);
+      }
+
+      #admin-user-edit-overlay .admin-users-edit-form {
+        max-height: min(68vh, 640px);
       }
 
       @media (max-width: 640px) {
@@ -19568,7 +19604,7 @@
                         <option value="suporte" selected>Suporte</option>
                       </select>
                     </div>
-                    <div id="admin-user-operacional-api-block" class="aquecedor-field" hidden>
+                    <div id="admin-user-operacional-api-block" class="aquecedor-field aquecedor-field--full" hidden>
                       <span class="admin-user-api-field-label" id="admin-user-operacional-api-label">Disparos atendidos</span>
                       <div
                         id="admin-user-operacional-api"
@@ -19591,18 +19627,35 @@
                           </span>
                         </label>
                       </div>
-                      <p class="admin-users-menus-hint" style="margin-top: 6px">
-                        Toque para marcar um ou ambos os planos. Campanhas desses planos aparecem no painel deste operacional. No Financeiro, o mesmo usuário pode ser cadastrado uma vez por plano com custos diferentes.
+                      <p class="admin-user-operacional-hint">
+                        Marque um ou ambos. Campanhas desses planos aparecem no painel. No Financeiro, o mesmo usuário pode ser cadastrado uma vez por plano com custos diferentes.
                       </p>
                     </div>
-                    <div id="admin-user-operacional-segment-block" class="aquecedor-field" hidden>
-                      <label for="admin-user-operacional-segment">Segmento</label>
-                      <select id="admin-user-operacional-segment" required>
-                        <option value="bets">Bets</option>
-                        <option value="outros" selected>Outros</option>
-                      </select>
-                      <p class="admin-users-menus-hint" style="margin-top: 6px">
-                        Somente campanhas de assinantes deste segmento aparecem para este operacional.
+                    <div id="admin-user-operacional-segment-block" class="aquecedor-field aquecedor-field--full" hidden>
+                      <span class="admin-user-api-field-label" id="admin-user-operacional-segment-label">Segmento</span>
+                      <div
+                        id="admin-user-operacional-segment"
+                        class="admin-user-api-toggle-group"
+                        role="group"
+                        aria-labelledby="admin-user-operacional-segment-label"
+                      >
+                        <label class="admin-user-api-toggle">
+                          <input type="checkbox" name="admin-user-operacional-segment" value="bets" />
+                          <span class="admin-user-api-toggle-card">
+                            <span class="admin-user-api-toggle-title">Bets</span>
+                            <span class="admin-user-api-toggle-hint">Campanhas de assinantes Bets</span>
+                          </span>
+                        </label>
+                        <label class="admin-user-api-toggle">
+                          <input type="checkbox" name="admin-user-operacional-segment" value="outros" checked />
+                          <span class="admin-user-api-toggle-card">
+                            <span class="admin-user-api-toggle-title">Outros</span>
+                            <span class="admin-user-api-toggle-hint">Campanhas de assinantes Outros</span>
+                          </span>
+                        </label>
+                      </div>
+                      <p class="admin-user-operacional-hint">
+                        Marque um ou ambos. Só campanhas desses segmentos entram no painel deste operacional.
                       </p>
                     </div>
                     <div id="admin-user-master-policy-block" class="admin-user-master-policy-block" hidden>
@@ -20567,7 +20620,8 @@
               <label for="admin-user-edit-role">Tipo de usuário</label>
               <input id="admin-user-edit-role" type="text" readonly disabled />
             </div>
-            <div id="admin-user-edit-operacional-api-block" class="aquecedor-field" hidden>
+            <div class="aquecedor-field aquecedor-field--spacer" aria-hidden="true"></div>
+            <div id="admin-user-edit-operacional-api-block" class="aquecedor-field aquecedor-field--full" hidden>
               <span class="admin-user-api-field-label" id="admin-user-edit-operacional-api-label">Disparos atendidos</span>
               <div
                 id="admin-user-edit-operacional-api"
@@ -20590,21 +20644,38 @@
                   </span>
                 </label>
               </div>
-              <p class="admin-users-menus-hint" style="margin-top: 6px">
-                Toque para marcar um ou ambos os planos. No Financeiro, cadastre o mesmo operacional uma vez por plano quando os custos forem diferentes.
+              <p class="admin-user-operacional-hint">
+                Marque um ou ambos. No Financeiro, cadastre o mesmo operacional uma vez por plano quando os custos forem diferentes.
               </p>
             </div>
-            <div id="admin-user-edit-operacional-segment-block" class="aquecedor-field" hidden>
-              <label for="admin-user-edit-operacional-segment">Segmento</label>
-              <select id="admin-user-edit-operacional-segment" required>
-                <option value="bets">Bets</option>
-                <option value="outros" selected>Outros</option>
-              </select>
-              <p class="admin-users-menus-hint" style="margin-top: 6px">
-                Somente campanhas de assinantes deste segmento aparecem para este operacional.
+            <div id="admin-user-edit-operacional-segment-block" class="aquecedor-field aquecedor-field--full" hidden>
+              <span class="admin-user-api-field-label" id="admin-user-edit-operacional-segment-label">Segmento</span>
+              <div
+                id="admin-user-edit-operacional-segment"
+                class="admin-user-api-toggle-group"
+                role="group"
+                aria-labelledby="admin-user-edit-operacional-segment-label"
+              >
+                <label class="admin-user-api-toggle">
+                  <input type="checkbox" name="admin-user-edit-operacional-segment" value="bets" />
+                  <span class="admin-user-api-toggle-card">
+                    <span class="admin-user-api-toggle-title">Bets</span>
+                    <span class="admin-user-api-toggle-hint">Campanhas de assinantes Bets</span>
+                  </span>
+                </label>
+                <label class="admin-user-api-toggle">
+                  <input type="checkbox" name="admin-user-edit-operacional-segment" value="outros" />
+                  <span class="admin-user-api-toggle-card">
+                    <span class="admin-user-api-toggle-title">Outros</span>
+                    <span class="admin-user-api-toggle-hint">Campanhas de assinantes Outros</span>
+                  </span>
+                </label>
+              </div>
+              <p class="admin-user-operacional-hint">
+                Marque um ou ambos. Só campanhas desses segmentos entram no painel deste operacional.
               </p>
             </div>
-            <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block" hidden>
+            <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block aquecedor-field--full" hidden>
               <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
               <label class="admin-user-policy-check">
                 <input id="admin-user-edit-master-unlimited" type="checkbox" />
@@ -25889,6 +25960,22 @@
             String(item.apiKind || "oficial") === apiKind &&
             String(item.segment || "outros") === segment
         );
+        const priorityClash = (adminFinanceiroSplitDraft.suppliers || []).some(
+          (item) =>
+            item !== existing &&
+            item.active !== false &&
+            String(item.apiKind || "oficial") === apiKind &&
+            String(item.segment || "outros") === segment &&
+            Math.max(1, Math.min(5, Math.round(Number(item.priority ?? 1)))) === priority
+        );
+        if (priorityClash) {
+          showToast(
+            `Já existe fornecedor com prioridade ${priority} para este plano/segmento. Escolha outra prioridade (2–5).`,
+            "warning",
+            5600
+          );
+          return false;
+        }
         if (existing) {
           existing.name = supplierName;
           existing.apiKind = apiKind;
@@ -26028,7 +26115,7 @@
           <div class="admin-financeiro-split-add-panel">
             <div class="admin-financeiro-split-list-title" style="margin-top: 16px">Adicionar ou atualizar fornecedor</div>
             <p class="admin-financeiro-split-card-desc" style="margin: 0 0 10px">
-              Informe operacional, plano, segmento, custo e PIX. O mesmo operacional pode aparecer várias vezes (ex.: Oficial/Bets e Oficial/Outros) com custos diferentes. Incluir exige chave PIX preenchida.
+              Informe operacional, plano, segmento, custo e PIX. O mesmo operacional pode aparecer várias vezes (ex.: Oficial/Bets e Oficial/Outros) com custos diferentes. Incluir exige chave PIX preenchida. No mesmo plano + segmento, cada prioridade (1–5) só pode ser usada uma vez.
             </p>
             <div class="admin-financeiro-split-supplier-head" aria-hidden="true">
               <span>Operacional</span>
@@ -26157,11 +26244,17 @@
       }
 
       let adminFinanceiroSplitPersistTimer = null;
+      let adminFinanceiroSplitPersistChain = Promise.resolve();
 
-      function scheduleAdminFinanceiroSplitPersist(delayMs = 900) {
+      function cancelAdminFinanceiroSplitPersistTimer() {
         if (adminFinanceiroSplitPersistTimer) {
           clearTimeout(adminFinanceiroSplitPersistTimer);
+          adminFinanceiroSplitPersistTimer = null;
         }
+      }
+
+      function scheduleAdminFinanceiroSplitPersist(delayMs = 900) {
+        cancelAdminFinanceiroSplitPersistTimer();
         adminFinanceiroSplitPersistTimer = window.setTimeout(() => {
           adminFinanceiroSplitPersistTimer = null;
           void persistAdminFinanceiroSplitConfig({ silent: true });
@@ -26215,46 +26308,64 @@
       }
 
       async function persistAdminFinanceiroSplitConfig(options = {}) {
-        const silent = Boolean(options.silent);
-        const successMessage = String(options.successMessage || "").trim();
-        if (absorbPendingSupplierDraftForSave()) return false;
-        if (absorbPendingParticipantDraftForSave()) return false;
-        const payload = collectAdminFinanceiroSplitDraftFromDom();
-        if (!payload) return false;
-        if (!validateAdminFinanceiroSplitDraftForSave(payload)) return false;
-        const saveBtn = document.getElementById("admin-financeiro-split-save-btn");
-        if (saveBtn && !silent) {
-          saveBtn.textContent = "Salvando…";
-          saveBtn.setAttribute("disabled", "true");
-        }
-        try {
-          const response = await fetchWithTimeout(
-            "/admin/financeiro/split-config",
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            },
-            15000
-          );
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            throw new Error(data.error || "Não foi possível salvar o split.");
-          }
-          renderAdminFinanceiroSplitConfig(data.config || payload);
-          if (!silent) {
-            showToast(successMessage || "Configuração de split salva.", "success");
-          }
-          return true;
-        } catch (error) {
-          showToast(error?.message || "Falha ao salvar split.", "error");
-          return false;
-        } finally {
+        cancelAdminFinanceiroSplitPersistTimer();
+        const run = async () => {
+          const silent = Boolean(options.silent);
+          const successMessage = String(options.successMessage || "").trim();
+          if (absorbPendingSupplierDraftForSave()) return false;
+          if (absorbPendingParticipantDraftForSave()) return false;
+          const payload = collectAdminFinanceiroSplitDraftFromDom();
+          if (!payload) return false;
+          if (!validateAdminFinanceiroSplitDraftForSave(payload)) return false;
+          const saveBtn = document.getElementById("admin-financeiro-split-save-btn");
           if (saveBtn && !silent) {
-            saveBtn.textContent = "Salvar split";
-            saveBtn.removeAttribute("disabled");
+            saveBtn.textContent = "Salvando…";
+            saveBtn.setAttribute("disabled", "true");
           }
-        }
+          try {
+            const response = await fetchWithTimeout(
+              "/admin/financeiro/split-config",
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              },
+              15000
+            );
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(data.error || "Não foi possível salvar o split.");
+            }
+            renderAdminFinanceiroSplitConfig(data.config || payload);
+            if (!silent) {
+              showToast(successMessage || "Configuração de split salva.", "success");
+            }
+            return true;
+          } catch (error) {
+            showToast(error?.message || "Falha ao salvar split.", "error");
+            try {
+              const reload = await fetchWithTimeout("/admin/financeiro/split-config", {}, 12000);
+              const reloadData = await reload.json().catch(() => ({}));
+              if (reload.ok && reloadData?.config) {
+                renderAdminFinanceiroSplitConfig(reloadData.config);
+              }
+            } catch {
+              // mantém rascunho local se o reload falhar
+            }
+            return false;
+          } finally {
+            if (saveBtn && !silent) {
+              saveBtn.textContent = "Salvar split";
+              saveBtn.removeAttribute("disabled");
+            }
+          }
+        };
+        const resultPromise = adminFinanceiroSplitPersistChain.then(run, run);
+        adminFinanceiroSplitPersistChain = resultPromise.then(
+          () => undefined,
+          () => undefined
+        );
+        return resultPromise;
       }
 
       function updateAdminFinanceiroSplitSumLabel() {
@@ -26384,41 +26495,35 @@
 
       function absorbPendingSupplierDraftForSave() {
         if (!adminFinanceiroSplitDraft) return false;
-        const name = document.getElementById("admin-split-supplier-draft-name");
+        const operacional = document.getElementById("admin-split-supplier-draft-operacional");
         const plan = document.getElementById("admin-split-supplier-draft-plan");
+        const segment = document.getElementById("admin-split-supplier-draft-segment");
+        const priority = document.getElementById("admin-split-supplier-draft-priority");
         const cost = document.getElementById("admin-split-supplier-draft-cost");
         const pix = document.getElementById("admin-split-supplier-draft-pix");
-        const supplierName = String(name?.value || "").trim();
-        const apiKind = plan?.value === "alternativa" ? "alternativa" : "oficial";
-        const costPerShipmentCents = parseReaisMaskToCents(cost?.value);
+        const email = String(operacional?.value || "").trim().toLowerCase();
         const pixKey = String(pix?.value || "").trim();
-
-        const hasAnyDraftValue = Boolean(supplierName || pixKey || costPerShipmentCents > 0);
+        const costPerShipmentCents = parseReaisMaskToCents(cost?.value);
+        const hasAnyDraftValue = Boolean(email || pixKey || costPerShipmentCents > 0);
         if (!hasAnyDraftValue) return false;
 
-        if (!supplierName) {
-          showToast("Informe o nome do fornecedor antes de salvar.", "warning", 4200);
-          name?.focus?.();
-          return true;
-        }
-        if (!pixKey) {
-          showToast("Informe a chave PIX do fornecedor antes de salvar.", "warning", 4200);
-          pix?.focus?.();
-          return true;
+        // Rascunho incompleto no formulário de incluir: não bloqueia o save da lista.
+        // O usuário ainda pode concluir pelo botão Incluir.
+        if (!email || !String(plan?.value || "").trim() || !pixKey || pixKey.length < 5) {
+          return false;
         }
 
-        const existing = (adminFinanceiroSplitDraft.suppliers || []).find(
-          (item) => item.active !== false && item.apiKind === apiKind
-        );
         const ok = upsertAdminFinanceiroSplitSupplier({
-          name: supplierName,
-          apiKind,
+          systemUserEmail: email,
+          apiKind: plan?.value,
+          segment: segment?.value,
+          priority: priority?.value,
           costPerShipmentCents,
           pixKey,
-          nameEl: name,
+          operacionalEl: operacional,
           pixEl: pix,
         });
-        if (!ok) return true;
+        if (!ok) return false;
         clearAdminFinanceiroSplitSupplierForm();
         renderAdminFinanceiroSplitSuppliers();
         return false;
@@ -30692,11 +30797,11 @@
         const createBlock = document.getElementById("admin-user-operacional-api-block");
         const createGroup = document.getElementById("admin-user-operacional-api");
         const createSegmentBlock = document.getElementById("admin-user-operacional-segment-block");
-        const createSegmentSelect = document.getElementById("admin-user-operacional-segment");
+        const createSegmentGroup = document.getElementById("admin-user-operacional-segment");
         const editBlock = document.getElementById("admin-user-edit-operacional-api-block");
         const editGroup = document.getElementById("admin-user-edit-operacional-api");
         const editSegmentBlock = document.getElementById("admin-user-edit-operacional-segment-block");
-        const editSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
+        const editSegmentGroup = document.getElementById("admin-user-edit-operacional-segment");
         const mode = String(options.mode || "create");
 
         if (mode === "create") {
@@ -30705,9 +30810,11 @@
             setAdminUserOperacionalApiValues(createGroup, []);
           }
           if (createSegmentBlock) createSegmentBlock.hidden = !isOperacional;
-          if (createSegmentSelect) {
-            createSegmentSelect.required = isOperacional;
-            if (!isOperacional) createSegmentSelect.value = "outros";
+          if (createSegmentGroup && !isOperacional) {
+            setAdminUserOperacionalSegmentValues(createSegmentGroup, []);
+          } else if (createSegmentGroup && isOperacional && !options.preserveValues) {
+            const current = readAdminUserOperacionalSegmentValues("create");
+            if (!current.length) setAdminUserOperacionalSegmentValues(createSegmentGroup, ["outros"]);
           }
         }
         if (mode === "edit" || mode === "both") {
@@ -30716,9 +30823,8 @@
             setAdminUserOperacionalApiValues(editGroup, []);
           }
           if (editSegmentBlock) editSegmentBlock.hidden = !isOperacional;
-          if (editSegmentSelect) {
-            editSegmentSelect.required = isOperacional;
-            if (!isOperacional) editSegmentSelect.value = "outros";
+          if (editSegmentGroup && !isOperacional) {
+            setAdminUserOperacionalSegmentValues(editSegmentGroup, []);
           }
         }
         syncAdminUserMasterPolicyField(role, options);
@@ -30790,10 +30896,30 @@
         });
       }
 
-      function readAdminUserOperacionalSegmentValue(mode = "create") {
+      function readAdminUserOperacionalSegmentValues(mode = "create") {
         const id =
           mode === "edit" ? "admin-user-edit-operacional-segment" : "admin-user-operacional-segment";
-        return String(document.getElementById(id)?.value || "outros").trim() || "outros";
+        const group = document.getElementById(id);
+        if (!group) return [];
+        return Array.from(group.querySelectorAll('input[type="checkbox"]:checked'))
+          .map((input) => String(input.value || "").trim())
+          .filter((value) => value === "bets" || value === "outros");
+      }
+
+      function setAdminUserOperacionalSegmentValues(groupEl, values) {
+        if (!groupEl) return;
+        const selected = new Set(
+          (Array.isArray(values) ? values : [values])
+            .map((value) => String(value || "").trim())
+            .filter((value) => value === "bets" || value === "outros")
+        );
+        groupEl.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+          input.checked = selected.has(String(input.value || "").trim());
+        });
+      }
+
+      function readAdminUserOperacionalSegmentValue(mode = "create") {
+        return readAdminUserOperacionalSegmentValues(mode)[0] || "outros";
       }
 
       function syncAdminCampanhasScopeHint() {
@@ -30996,10 +31122,17 @@
               : [];
           setAdminUserOperacionalApiValues(operacionalApiSelect, apis);
         }
-        const operacionalSegmentSelect = document.getElementById("admin-user-edit-operacional-segment");
-        if (operacionalSegmentSelect) {
-          operacionalSegmentSelect.value = String(user.operacionalSegment || user.segment || "outros");
-          if (operacionalSegmentSelect.value === "todos") operacionalSegmentSelect.value = "outros";
+        const operacionalSegmentGroup = document.getElementById("admin-user-edit-operacional-segment");
+        if (operacionalSegmentGroup) {
+          const segments = Array.isArray(user.operacionalSegments)
+            ? user.operacionalSegments
+            : user.operacionalSegment
+              ? [user.operacionalSegment]
+              : ["outros"];
+          setAdminUserOperacionalSegmentValues(
+            operacionalSegmentGroup,
+            segments.filter((item) => item === "bets" || item === "outros")
+          );
         }
         if (menusBlock) {
           menusBlock.hidden = user.role === "master";
@@ -31128,7 +31261,15 @@
           }
           body.operacionalDispatchesApis = operacionalDispatchesApis;
           body.operacionalDispatchesApi = operacionalDispatchesApis[0];
-          body.operacionalSegment = readAdminUserOperacionalSegmentValue("edit");
+          const operacionalSegments = readAdminUserOperacionalSegmentValues("edit");
+          if (!operacionalSegments.length) {
+            const msg = "Selecione ao menos um segmento (Bets e/ou Outros).";
+            setAdminUserEditError(msg);
+            showToast(msg, "warning");
+            return;
+          }
+          body.operacionalSegments = operacionalSegments;
+          body.operacionalSegment = operacionalSegments[0];
         }
         if (user?.role === "master") {
           Object.assign(body, readAdminUserMasterPolicyValues("edit"));
@@ -31226,8 +31367,13 @@
           return;
         }
         const operacionalDispatchesApis = readAdminUserOperacionalApiValues("create");
+        const operacionalSegments = readAdminUserOperacionalSegmentValues("create");
         if (role === "operacional" && !operacionalDispatchesApis.length) {
           showToast("Selecione ao menos um tipo de disparos que este operacional atende.", "warning");
+          return;
+        }
+        if (role === "operacional" && !operacionalSegments.length) {
+          showToast("Selecione ao menos um segmento (Bets e/ou Outros).", "warning");
           return;
         }
 
@@ -31253,8 +31399,8 @@
                   role === "operacional" ? operacionalDispatchesApis : undefined,
                 operacionalDispatchesApi:
                   role === "operacional" ? operacionalDispatchesApis[0] : undefined,
-                operacionalSegment:
-                  role === "operacional" ? readAdminUserOperacionalSegmentValue("create") : undefined,
+                operacionalSegments: role === "operacional" ? operacionalSegments : undefined,
+                operacionalSegment: role === "operacional" ? operacionalSegments[0] : undefined,
                 ...(role === "master" ? readAdminUserMasterPolicyValues("create") : {}),
               }),
             },
@@ -31272,8 +31418,10 @@
           document.getElementById("admin-user-role").value = "suporte";
           const operacionalApiSelect = document.getElementById("admin-user-operacional-api");
           if (operacionalApiSelect) setAdminUserOperacionalApiValues(operacionalApiSelect, []);
-          const operacionalSegmentSelect = document.getElementById("admin-user-operacional-segment");
-          if (operacionalSegmentSelect) operacionalSegmentSelect.value = "outros";
+          const operacionalSegmentGroup = document.getElementById("admin-user-operacional-segment");
+          if (operacionalSegmentGroup) {
+            setAdminUserOperacionalSegmentValues(operacionalSegmentGroup, ["outros"]);
+          }
           syncAdminUserCreateMenuChecklist();
           await loadAdminUsers();
         } catch (error) {

@@ -18,8 +18,10 @@ export type WabaSystemUser = {
   operacionalDispatchesApi?: WabaDispatchesApiKind | null;
   /** Operacional: um ou mais planos atendidos (preferencial). */
   operacionalDispatchesApis?: WabaDispatchesApiKind[] | null;
-  /** Operacional: segmento atendido no painel. */
+  /** Operacional: segmento atendido no painel. Legado / primário. */
   operacionalSegment?: WabaSystemUserOperacionalSegment | null;
+  /** Operacional: um ou mais segmentos atendidos (preferencial). */
+  operacionalSegments?: WabaSystemUserOperacionalSegment[] | null;
   /** Master: créditos ilimitados para disparos (padrão true). */
   masterUnlimitedCredits?: boolean;
   /** Master: repasse PIX ao fornecedor no split (padrão true). */
@@ -104,6 +106,7 @@ export class WabaSystemUserRepository {
         | "operacionalDispatchesApi"
         | "operacionalDispatchesApis"
         | "operacionalSegment"
+        | "operacionalSegments"
         | "masterUnlimitedCredits"
         | "masterSplitSuppliers"
         | "masterSplitProfits"

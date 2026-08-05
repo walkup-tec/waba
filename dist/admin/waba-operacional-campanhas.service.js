@@ -13,6 +13,7 @@ const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind
 const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spreadsheet.util");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
@@ -114,8 +115,8 @@ class WabaOperacionalCampanhasService {
             return null;
         if (staff.role !== "operacional")
             return null;
-        const segment = this.systemUserService.getOperacionalSegmentForEmail(staff.email);
-        return segment ?? "unassigned";
+        const segments = this.systemUserService.getOperacionalSegmentsForEmail(staff.email);
+        return segments.length ? segments : "unassigned";
     }
     resolveSubscriberSegmentForIntake(intake) {
         const email = normalizeEmail(intake.ownerEmail);
@@ -510,12 +511,12 @@ class WabaOperacionalCampanhasService {
             .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
             .filter((user) => normalizeEmail(user.email) !== current)
             .map((user) => {
-            const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+            const segments = (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
             return {
                 email: normalizeEmail(user.email),
                 fullName: String(user.fullName || user.email).trim() || user.email,
-                segment,
-                segmentLabel: segment === "bets" ? "Bets" : "Outros",
+                segment: segments[0] ?? "outros",
+                segmentLabel: (0, waba_operacional_segments_1.formatOperacionalSegmentsLabel)(segments),
             };
         })
             .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));

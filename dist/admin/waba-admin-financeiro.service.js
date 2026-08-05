@@ -114,7 +114,15 @@ class WabaAdminFinanceiroService {
                     ? [user.operacionalDispatchesApi]
                     : [];
             const apiKind = apiKinds[0] ?? null;
-            const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+            const segmentsRaw = Array.isArray(user.operacionalSegments)
+                ? user.operacionalSegments
+                : user.operacionalSegment
+                    ? [user.operacionalSegment]
+                    : ["outros"];
+            const segments = segmentsRaw
+                .map((item) => (item === "bets" ? "bets" : "outros"))
+                .filter((item, index, arr) => arr.indexOf(item) === index);
+            const segment = segments[0] === "bets" ? "bets" : "outros";
             items.push({
                 id: user.id,
                 fullName: String(user.fullName || email).trim() || email,
@@ -122,7 +130,8 @@ class WabaAdminFinanceiroService {
                 apiKind,
                 apiKinds,
                 segment,
-                segmentLabel: segment === "bets" ? "Bets" : "Outros",
+                segments,
+                segmentLabel: String(user.operacionalSegmentLabel || (segment === "bets" ? "Bets" : "Outros")),
                 apiKindLabel: String(user.operacionalDispatchesApiLabel || "—"),
             });
         }
