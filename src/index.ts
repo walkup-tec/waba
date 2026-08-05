@@ -9746,71 +9746,9 @@ app.get("/aquecedor/envios", async (req, res) => {
       const { count: pendingTotal } = (await pendingCountQuery) as { count: number | null };
       pendingCount = typeof pendingTotal === "number" ? pendingTotal : 0;
 
-      const pendingDataQuery = filterQueueByOwner
-        ? supabase
-            .from("aquecedor" as any)
-            .select("scheduled_at, instancia, numero_destino")
-            .eq("status", "PENDENTE")
-            .in("instancia", scopedTechnicalNames)
-            .order("scheduled_at", { ascending: true })
-            .limit(1)
-            .maybeSingle()
-        : supabase
-            .from("aquecedor" as any)
-            .select("scheduled_at, instancia, numero_destino")
-            .eq("status", "PENDENTE")
-            .order("scheduled_at", { ascending: true })
-            .limit(1)
-            .maybeSingle();
-      const { data: pendingData } = (await pendingDataQuery) as any;
-
-      if (pendingData) {
-        let origem = String(pendingData?.instancia || "").trim();
-        let destino = "—";
-        const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
-        const numDest = normalizeWhatsAppNumber(String(pendingData?.numero_destino || "").trim());
-        if (numDest) {
-          destino = numToInst.get(numDest) || "—";
-        }
-        if (!origem || destino === "—") {
-          const resolvedConnected = await resolveAquecedorConnectedForOwner(ownerEmail);
-          const connected = await filterAquecedorCycleConnected(resolvedConnected.connected);
-          if (connected.length >= 2) {
-            const combinations = connected.flatMap((origemItem) =>
-              connected
-                .filter((destinoItem) => destinoItem.instancia !== origemItem.instancia)
-                .map((destinoItem) => ({
-                  instancia_origem: origemItem.instancia,
-                  instancia_destino: destinoItem.instancia,
-                  numero_whatsapp: destinoItem.numero,
-                })),
-            );
-            const { data: cicloData } = await (supabase
-              .from("controle_ciclo" as any)
-              .select("ciclo_global")
-              .order("id", { ascending: true })
-              .limit(1)
-              .maybeSingle()) as any;
-            const cicloGlobal =
-              typeof cicloData?.ciclo_global === "number"
-                ? Math.floor(cicloData.ciclo_global)
-                : 0;
-            const picked = await pickAquecedorCombinationAsync(
-              supabase,
-              connected,
-              combinations,
-              cicloGlobal,
-              ownerEmail || undefined,
-            );
-            if (picked) {
-              origem = picked.chosen.instancia_origem;
-              destino = picked.chosen.instancia_destino;
-            }
-          }
-        }
-        pushItem(origem || "—", destino, dataEnvio, "Em Fila");
-      }
-
+      // Histórico primeiro: listagem não pode depender de EVO/pick (ver LOG-2026-06-19).
+      // PENDENTE legado com numero_destino null entrava em resolveAquecedorConnectedForOwner
+      // + outbound-health + pick e derrubava o endpoint inteiro com 500.
       const logsQuery = filterQueueByOwner
         ? supabase
             .from("logs_envios_br" as any)
@@ -9836,6 +9774,47 @@ app.get("/aquecedor/envios", async (req, res) => {
             "Envio com Sucesso"
           );
         }
+      }
+
+      try {
+        const pendingDataQuery = filterQueueByOwner
+          ? supabase
+              .from("aquecedor" as any)
+              .select("scheduled_at, instancia, numero_destino")
+              .eq("status", "PENDENTE")
+              .in("instancia", scopedTechnicalNames)
+              .not("instancia", "is", null)
+              .order("scheduled_at", { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : supabase
+              .from("aquecedor" as any)
+              .select("scheduled_at, instancia, numero_destino")
+              .eq("status", "PENDENTE")
+              .not("instancia", "is", null)
+              .order("scheduled_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+        const { data: pendingData } = (await pendingDataQuery) as any;
+
+        if (pendingData) {
+          const origem = String(pendingData?.instancia || "").trim();
+          let destino = "—";
+          const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
+          const numDest = normalizeWhatsAppNumber(
+            String(pendingData?.numero_destino || "").trim(),
+          );
+          if (numDest) {
+            destino = numToInst.get(numDest) || numDest;
+          }
+          // Sem EVO/pick na listagem: destino fica "—" até o motor gravar numero_destino.
+          pushItem(origem || "—", destino, dataEnvio, "Em Fila");
+        }
+      } catch (pendingErr) {
+        console.warn(
+          "[aquecedor/envios] falha ao montar preview PENDENTE (histórico já retornado):",
+          pendingErr instanceof Error ? pendingErr.message : pendingErr,
+        );
       }
     }
 
