@@ -5690,7 +5690,14 @@
 
       .admin-financeiro-split-supplier-head {
         display: grid;
-        grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 0.9fr) 120px minmax(180px, 1.4fr) 88px;
+        grid-template-columns:
+          minmax(140px, 1.2fr)
+          minmax(100px, 0.8fr)
+          minmax(80px, 0.6fr)
+          72px
+          120px
+          minmax(160px, 1.2fr)
+          88px;
         gap: 10px;
         padding: 0 12px 4px;
         font-size: 10px;
@@ -5860,6 +5867,37 @@
 
       .admin-financeiro-split-field {
         min-width: 0;
+      }
+
+      .admin-financeiro-split-add-form {
+        align-items: end;
+      }
+
+      .admin-financeiro-split-add-form .admin-financeiro-split-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .admin-financeiro-split-add-form .admin-financeiro-split-mobile-label {
+        display: block;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+
+      .admin-financeiro-split-add-form .admin-financeiro-split-controls {
+        display: flex;
+        align-items: flex-end;
+        justify-content: stretch;
+        min-height: 38px;
+      }
+
+      .admin-financeiro-split-add-form .admin-financeiro-split-include-btn {
+        width: 100%;
+        min-height: 38px;
       }
 
       .admin-financeiro-split-mobile-label {
@@ -7357,19 +7395,22 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+        align-items: stretch;
       }
 
       .admin-user-api-field-label {
         display: block;
-        margin-bottom: 6px;
-        font-size: 0.84rem;
+        margin-bottom: 8px;
+        font-size: 0.78rem;
         font-weight: 600;
-        color: #e2e8f0;
+        color: #cbd5e1;
       }
 
       .admin-user-api-toggle {
-        display: block;
+        display: flex;
         margin: 0;
+        min-height: 0;
+        height: 100%;
         cursor: pointer;
       }
 
@@ -7382,8 +7423,13 @@
       .admin-user-api-toggle-card {
         display: flex;
         flex-direction: column;
+        justify-content: center;
         gap: 2px;
-        min-height: 58px;
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 64px;
+        height: 100%;
+        box-sizing: border-box;
         padding: 10px 12px 10px 36px;
         border: 1px solid rgba(148, 163, 184, 0.28);
         border-radius: 10px;
@@ -7486,7 +7532,7 @@
 
       .admin-users-edit-form-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-items: start;
+        align-items: stretch;
       }
 
       .aquecedor-field--spacer {
@@ -7501,19 +7547,41 @@
         }
       }
 
+      .admin-users-form-grid .aquecedor-field--full,
+      .admin-users-edit-form-grid .aquecedor-field--full {
+        grid-column: 1 / -1;
+      }
+
+      .admin-users-form-grid #admin-user-operacional-api-block,
+      .admin-users-form-grid #admin-user-operacional-segment-block {
+        grid-column: span 2;
+      }
+
+      @media (max-width: 640px) {
+        .admin-users-form-grid #admin-user-operacional-api-block,
+        .admin-users-form-grid #admin-user-operacional-segment-block {
+          grid-column: 1 / -1;
+        }
+      }
+
+      .admin-users-edit-form-grid #admin-user-edit-operacional-api-block,
+      .admin-users-edit-form-grid #admin-user-edit-operacional-segment-block {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      .admin-users-edit-form-grid #admin-user-edit-operacional-api-block .admin-user-api-toggle-group,
+      .admin-users-edit-form-grid #admin-user-edit-operacional-segment-block .admin-user-api-toggle-group {
+        flex: 1 1 auto;
+      }
+
       .admin-user-api-field-label {
         display: block;
         margin-bottom: 8px;
         font-size: 0.78rem;
         font-weight: 600;
         color: #cbd5e1;
-      }
-
-      .admin-user-operacional-hint {
-        margin: 8px 0 0;
-        font-size: 0.72rem;
-        line-height: 1.35;
-        color: #94a3b8;
       }
 
       #admin-user-edit-overlay .confirm-modal {
@@ -19604,7 +19672,7 @@
                         <option value="suporte" selected>Suporte</option>
                       </select>
                     </div>
-                    <div id="admin-user-operacional-api-block" class="aquecedor-field aquecedor-field--full" hidden>
+                    <div id="admin-user-operacional-api-block" class="aquecedor-field" hidden>
                       <span class="admin-user-api-field-label" id="admin-user-operacional-api-label">Disparos atendidos</span>
                       <div
                         id="admin-user-operacional-api"
@@ -19623,15 +19691,12 @@
                           <input type="checkbox" name="admin-user-operacional-api" value="alternativa" />
                           <span class="admin-user-api-toggle-card">
                             <span class="admin-user-api-toggle-title">API Alternativa</span>
-                            <span class="admin-user-api-toggle-hint">Envio via provedor alternativo</span>
+                            <span class="admin-user-api-toggle-hint">Provedor alternativo</span>
                           </span>
                         </label>
                       </div>
-                      <p class="admin-user-operacional-hint">
-                        Marque um ou ambos. Campanhas desses planos aparecem no painel. No Financeiro, o mesmo usuário pode ser cadastrado uma vez por plano com custos diferentes.
-                      </p>
                     </div>
-                    <div id="admin-user-operacional-segment-block" class="aquecedor-field aquecedor-field--full" hidden>
+                    <div id="admin-user-operacional-segment-block" class="aquecedor-field" hidden>
                       <span class="admin-user-api-field-label" id="admin-user-operacional-segment-label">Segmento</span>
                       <div
                         id="admin-user-operacional-segment"
@@ -19643,20 +19708,17 @@
                           <input type="checkbox" name="admin-user-operacional-segment" value="bets" />
                           <span class="admin-user-api-toggle-card">
                             <span class="admin-user-api-toggle-title">Bets</span>
-                            <span class="admin-user-api-toggle-hint">Campanhas de assinantes Bets</span>
+                            <span class="admin-user-api-toggle-hint">Assinantes Bets</span>
                           </span>
                         </label>
                         <label class="admin-user-api-toggle">
                           <input type="checkbox" name="admin-user-operacional-segment" value="outros" checked />
                           <span class="admin-user-api-toggle-card">
                             <span class="admin-user-api-toggle-title">Outros</span>
-                            <span class="admin-user-api-toggle-hint">Campanhas de assinantes Outros</span>
+                            <span class="admin-user-api-toggle-hint">Assinantes Outros</span>
                           </span>
                         </label>
                       </div>
-                      <p class="admin-user-operacional-hint">
-                        Marque um ou ambos. Só campanhas desses segmentos entram no painel deste operacional.
-                      </p>
                     </div>
                     <div id="admin-user-master-policy-block" class="admin-user-master-policy-block" hidden>
                       <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -20621,7 +20683,7 @@
               <input id="admin-user-edit-role" type="text" readonly disabled />
             </div>
             <div class="aquecedor-field aquecedor-field--spacer" aria-hidden="true"></div>
-            <div id="admin-user-edit-operacional-api-block" class="aquecedor-field aquecedor-field--full" hidden>
+            <div id="admin-user-edit-operacional-api-block" class="aquecedor-field" hidden>
               <span class="admin-user-api-field-label" id="admin-user-edit-operacional-api-label">Disparos atendidos</span>
               <div
                 id="admin-user-edit-operacional-api"
@@ -20640,15 +20702,12 @@
                   <input type="checkbox" name="admin-user-edit-operacional-api" value="alternativa" />
                   <span class="admin-user-api-toggle-card">
                     <span class="admin-user-api-toggle-title">API Alternativa</span>
-                    <span class="admin-user-api-toggle-hint">Envio via provedor alternativo</span>
+                    <span class="admin-user-api-toggle-hint">Provedor alternativo</span>
                   </span>
                 </label>
               </div>
-              <p class="admin-user-operacional-hint">
-                Marque um ou ambos. No Financeiro, cadastre o mesmo operacional uma vez por plano quando os custos forem diferentes.
-              </p>
             </div>
-            <div id="admin-user-edit-operacional-segment-block" class="aquecedor-field aquecedor-field--full" hidden>
+            <div id="admin-user-edit-operacional-segment-block" class="aquecedor-field" hidden>
               <span class="admin-user-api-field-label" id="admin-user-edit-operacional-segment-label">Segmento</span>
               <div
                 id="admin-user-edit-operacional-segment"
@@ -20660,20 +20719,17 @@
                   <input type="checkbox" name="admin-user-edit-operacional-segment" value="bets" />
                   <span class="admin-user-api-toggle-card">
                     <span class="admin-user-api-toggle-title">Bets</span>
-                    <span class="admin-user-api-toggle-hint">Campanhas de assinantes Bets</span>
+                    <span class="admin-user-api-toggle-hint">Assinantes Bets</span>
                   </span>
                 </label>
                 <label class="admin-user-api-toggle">
                   <input type="checkbox" name="admin-user-edit-operacional-segment" value="outros" />
                   <span class="admin-user-api-toggle-card">
                     <span class="admin-user-api-toggle-title">Outros</span>
-                    <span class="admin-user-api-toggle-hint">Campanhas de assinantes Outros</span>
+                    <span class="admin-user-api-toggle-hint">Assinantes Outros</span>
                   </span>
                 </label>
               </div>
-              <p class="admin-user-operacional-hint">
-                Marque um ou ambos. Só campanhas desses segmentos entram no painel deste operacional.
-              </p>
             </div>
             <div id="admin-user-edit-master-policy-block" class="admin-user-master-policy-block aquecedor-field--full" hidden>
               <div class="admin-users-menus-title" style="margin-bottom: 8px">Disparos (master)</div>
@@ -25960,44 +26016,70 @@
             String(item.apiKind || "oficial") === apiKind &&
             String(item.segment || "outros") === segment
         );
-        const priorityClash = (adminFinanceiroSplitDraft.suppliers || []).some(
-          (item) =>
-            item !== existing &&
-            item.active !== false &&
-            String(item.apiKind || "oficial") === apiKind &&
-            String(item.segment || "outros") === segment &&
-            Math.max(1, Math.min(5, Math.round(Number(item.priority ?? 1)))) === priority
+        const usedPriorities = new Set(
+          (adminFinanceiroSplitDraft.suppliers || [])
+            .filter(
+              (item) =>
+                item !== existing &&
+                item.active !== false &&
+                String(item.apiKind || "oficial") === apiKind &&
+                String(item.segment || "outros") === segment
+            )
+            .map((item) => Math.max(1, Math.min(5, Math.round(Number(item.priority ?? 1)))))
         );
-        if (priorityClash) {
-          showToast(
-            `Já existe fornecedor com prioridade ${priority} para este plano/segmento. Escolha outra prioridade (2–5).`,
-            "warning",
-            5600
-          );
-          return false;
+        let effectivePriority = priority;
+        if (usedPriorities.has(effectivePriority)) {
+          let next = 0;
+          for (let candidate = 1; candidate <= 5; candidate += 1) {
+            if (!usedPriorities.has(candidate)) {
+              next = candidate;
+              break;
+            }
+          }
+          if (!next) {
+            showToast(
+              "Não há prioridade livre (1–5) para este plano/segmento. Remova ou altere um fornecedor existente.",
+              "warning",
+              6200
+            );
+            return false;
+          }
+          effectivePriority = next;
         }
         if (existing) {
           existing.name = supplierName;
           existing.apiKind = apiKind;
           existing.segment = segment;
-          existing.priority = priority;
+          existing.priority = effectivePriority;
           existing.costPerShipmentCents = costPerShipmentCents;
           existing.pixKey = pixKey;
           existing.systemUserEmail = systemUserEmail;
-          showToast("Fornecedor atualizado (mesmo operacional + plano + segmento).", "success", 3600);
+          showToast(
+            effectivePriority !== priority
+              ? `Fornecedor atualizado com prioridade ${effectivePriority} (${priority} já estava em uso).`
+              : "Fornecedor atualizado (mesmo operacional + plano + segmento).",
+            "success",
+            4200
+          );
         } else {
           adminFinanceiroSplitDraft.suppliers.push({
             ...createEmptySplitSupplier(),
             name: supplierName,
             apiKind,
             segment,
-            priority,
+            priority: effectivePriority,
             systemUserEmail,
             costPerShipmentCents,
             pixKey,
             active: true,
           });
-          showToast("Fornecedor incluído.", "success", 3200);
+          showToast(
+            effectivePriority !== priority
+              ? `Fornecedor incluído com prioridade ${effectivePriority} (${priority} já estava em uso).`
+              : "Fornecedor incluído.",
+            "success",
+            4200
+          );
         }
         return true;
       }
@@ -26114,18 +26196,6 @@
           </div>
           <div class="admin-financeiro-split-add-panel">
             <div class="admin-financeiro-split-list-title" style="margin-top: 16px">Adicionar ou atualizar fornecedor</div>
-            <p class="admin-financeiro-split-card-desc" style="margin: 0 0 10px">
-              Informe operacional, plano, segmento, custo e PIX. O mesmo operacional pode aparecer várias vezes (ex.: Oficial/Bets e Oficial/Outros) com custos diferentes. Incluir exige chave PIX preenchida. No mesmo plano + segmento, cada prioridade (1–5) só pode ser usada uma vez.
-            </p>
-            <div class="admin-financeiro-split-supplier-head" aria-hidden="true">
-              <span>Operacional</span>
-              <span>Plano</span>
-              <span>Segmento</span>
-              <span>Prioridade</span>
-              <span>Custo/envio</span>
-              <span>Chave PIX</span>
-              <span></span>
-            </div>
             <div class="admin-financeiro-split-supplier-row admin-financeiro-split-add-form">
               <div class="admin-financeiro-split-field">
                 <label class="admin-financeiro-split-mobile-label" for="admin-split-supplier-draft-operacional">Operacional</label>
