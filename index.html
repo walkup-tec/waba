@@ -8626,25 +8626,60 @@
         gap: 0.35em;
       }
 
+      /* Label + countdown empilhados (Preparando, Pausa Humana, Restrição) */
       .status-text.status-with-countdown {
         display: inline-flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.45em;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 0.22em;
+        flex-wrap: nowrap;
+        line-height: 1.15;
+        max-width: 100%;
+      }
+
+      .status-text.status-with-countdown > .status-countdown-label,
+      .status-text.status-with-countdown > span:first-child:not([class*="countdown"]) {
+        display: block;
+        white-space: nowrap;
+        line-height: 1.2;
+      }
+
+      .status-text.restricted-wait.status-with-countdown {
+        text-transform: none;
+      }
+
+      .status-text.restricted-wait.status-with-countdown > .status-countdown-label {
+        font-weight: 700;
+        font-size: 0.92em;
+        letter-spacing: 0.01em;
+      }
+
+      .preparing-countdown,
+      .wa-restriction-countdown,
+      .human-pause-countdown {
+        display: inline-block;
+        font-size: 0.82em;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+        padding: 0.08em 0.4em;
+        border-radius: 4px;
+        line-height: 1.25;
+        white-space: nowrap;
       }
 
       .preparing-countdown,
       .wa-restriction-countdown {
-        display: inline-block;
-        font-size: 0.9em;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
         color: #fcd34d;
-        letter-spacing: 0.04em;
-        padding: 0.1em 0.45em;
-        border-radius: 4px;
         background: rgba(251, 191, 36, 0.12);
         border: 1px solid rgba(251, 191, 36, 0.22);
+      }
+
+      .human-pause-countdown {
+        color: #fca5a5;
+        background: rgba(248, 113, 113, 0.12);
+        border: 1px solid rgba(248, 113, 113, 0.22);
       }
 
       .status-wa-icon {
@@ -38322,6 +38357,9 @@
       let instanceUsageByName = {};
       let preparingCountdownTimer = null;
       let waRestrictionCountdownTimer = null;
+      let humanPauseCountdownTimer = null;
+      const AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = "3 horas pausa humana";
+      const AQUECEDOR_HUMAN_PAUSE_DISPLAY_LABEL = "Pausa Humana";
       let waRestrictionRecheckTimer = null;
       const WA_RESTRICTION_RECHECK_MS = 60 * 60 * 1000;
       let disparosConfigCache = null;
@@ -39722,6 +39760,7 @@
           if (loadSeq !== aquecedorEnviosLoadSeq) return;
           if (!response.ok) {
             const err = await response.json().catch(() => ({}));
+            void loadAquecedorNetworkHealth();
             if (aquecedorEnviosLastItems.length) {
               renderAquecedorEnviosList(
                 aquecedorEnviosLastItems,
@@ -39752,6 +39791,7 @@
           renderAquecedorEnviosList(items);
         } catch {
           if (loadSeq !== aquecedorEnviosLoadSeq) return;
+          void loadAquecedorNetworkHealth();
           if (aquecedorEnviosLastItems.length) {
             renderAquecedorEnviosList(
               aquecedorEnviosLastItems,
@@ -39911,6 +39951,8 @@
         if (aquecedorRuntimeVizTimer) clearInterval(aquecedorRuntimeVizTimer);
         void loadAquecedorCommandLogHistory();
         loadAquecedorEnvios();
+        // Independente dos Envios: se /envios falhar, o painel não pode ficar forever hidden.
+        void loadAquecedorNetworkHealth();
         void resumeAquecedorRuntimeFromPersistedIntent();
         aquecedorEnviosPollTimer = setInterval(loadAquecedorEnvios, 8000);
         aquecedorRuntimePollTimer = setInterval(loadAquecedorRuntimeStatus, 3000);
@@ -44686,26 +44728,45 @@
       const WA_STATUS_ICON_SVG =
         '<svg class="status-wa-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"/></svg>';
 
-      function buildInstanceStatusHtml(statusLabel, statusClass, promoteAt) {
+      function buildInstanceStatusHtml(statusLabel, statusClass, countdownAt) {
         if (statusLabel === "Restrição") {
-          if (promoteAt) {
-            const text = formatPreparingCountdown(promoteAt);
+          if (countdownAt) {
+            const text = formatPreparingCountdown(countdownAt);
             const countdownHtml = `<span class="wa-restriction-countdown" data-restrict-until="${escapeAdminHtml(
-              String(promoteAt),
+              String(countdownAt),
             )}" title="Contagem regressiva da restrição WhatsApp (3h)">${text}</span>`;
             return `<span class="status-text ${statusClass} status-with-countdown"><span>${WA_STATUS_ICON_SVG}Restrição</span>${countdownHtml}</span>`;
           }
           return `<span class="status-text ${statusClass}"><span>${WA_STATUS_ICON_SVG}Restrição</span></span>`;
         }
+        if (
+          (statusLabel === AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL ||
+            statusLabel === "6 horas de espera") &&
+          countdownAt
+        ) {
+          const text = formatPreparingCountdown(countdownAt);
+          const countdownHtml = `<span class="human-pause-countdown" data-restrict-until="${escapeAdminHtml(
+            String(countdownAt),
+          )}" title="Tempo restante da pausa humana (3 horas)">${text}</span>`;
+          return `<span class="status-text ${statusClass} status-with-countdown"><span class="status-countdown-label">${AQUECEDOR_HUMAN_PAUSE_DISPLAY_LABEL}</span>${countdownHtml}</span>`;
+        }
         let countdownHtml = "";
-        if (statusLabel === "Preparando" && promoteAt) {
-          const text = formatPreparingCountdown(promoteAt);
-          countdownHtml = `<span class="preparing-countdown" data-promote-at="${promoteAt}" title="Tempo restante das 6 horas de preparação desde a integração">${text}</span>`;
+        if (statusLabel === "Preparando" && countdownAt) {
+          const text = formatPreparingCountdown(countdownAt);
+          countdownHtml = `<span class="preparing-countdown" data-promote-at="${escapeAdminHtml(
+            String(countdownAt),
+          )}" title="Tempo restante das 6 horas de preparação desde a integração">${text}</span>`;
         }
         if (!countdownHtml) {
+          if (
+            statusLabel === AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL ||
+            statusLabel === "6 horas de espera"
+          ) {
+            return `<span class="status-text ${statusClass}">${AQUECEDOR_HUMAN_PAUSE_DISPLAY_LABEL}</span>`;
+          }
           return `<span class="status-text ${statusClass}">${statusLabel}</span>`;
         }
-        return `<span class="status-text ${statusClass} status-with-countdown"><span>${statusLabel}</span>${countdownHtml}</span>`;
+        return `<span class="status-text ${statusClass} status-with-countdown"><span class="status-countdown-label">${statusLabel}</span>${countdownHtml}</span>`;
       }
 
       function tickPreparingCountdowns() {
@@ -44744,6 +44805,28 @@
         waRestrictionCountdownTimer = setInterval(tickWaRestrictionCountdowns, 1000);
       }
 
+      function tickHumanPauseCountdowns() {
+        const nodes = document.querySelectorAll(".human-pause-countdown[data-restrict-until]");
+        if (!nodes.length) return;
+        let anyExpired = false;
+        nodes.forEach((node) => {
+          const iso = node.getAttribute("data-restrict-until");
+          const text = formatPreparingCountdown(iso);
+          if (text === "em breve") anyExpired = true;
+          node.textContent = text;
+        });
+        if (anyExpired) {
+          void loadInstanceUsageConfig().then(() => {
+            if (activeTab === "instancias") renderInstancesList();
+          });
+        }
+      }
+
+      function ensureHumanPauseCountdownTimer() {
+        if (humanPauseCountdownTimer) return;
+        humanPauseCountdownTimer = setInterval(tickHumanPauseCountdowns, 1000);
+      }
+
       async function recheckWaRestrictionsFromServer() {
         try {
           await loadInstancesForInstanciasTab({ fullRefresh: true });
@@ -44773,6 +44856,7 @@
           aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
           aquecedorPhase: current?.aquecedorPhase || null,
           aquecedorPromoteAt: current?.aquecedorPromoteAt || null,
+          aquecedorRestrictedUntil: current?.aquecedorRestrictedUntil || null,
           waRestrictionUntil: current?.waRestrictionUntil || null,
           waRestrictionDetectedAt: current?.waRestrictionDetectedAt || null,
           waRestrictionActive: current?.waRestrictionActive === true,
@@ -44829,7 +44913,10 @@
       }
 
       function resolveInstanceStatusClass(inst, statusLabel) {
-        if (statusLabel === "3 horas pausa humana" || statusLabel === "6 horas de espera") {
+        if (
+          statusLabel === AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL ||
+          statusLabel === "6 horas de espera"
+        ) {
           return "disconnected restricted-wait";
         }
         if (statusLabel === "Restrição") return "processing preparing wa-restriction";
@@ -44855,6 +44942,7 @@
               aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
               aquecedorPhase: row?.aquecedorPhase || null,
               aquecedorPromoteAt: row?.aquecedorPromoteAt || null,
+              aquecedorRestrictedUntil: row?.aquecedorRestrictedUntil || null,
               waRestrictionUntil: row?.waRestrictionUntil || null,
               waRestrictionDetectedAt: row?.waRestrictionDetectedAt || null,
               waRestrictionActive: row?.waRestrictionActive === true,
@@ -45119,7 +45207,10 @@
             statusLabel === "Restrição"
               ? usage.waRestrictionUntil ||
                 (inst.waRestrictionUntil ? String(inst.waRestrictionUntil) : "")
-              : usage.aquecedorPromoteAt;
+              : statusLabel === AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL ||
+                  statusLabel === "6 horas de espera"
+                ? usage.aquecedorRestrictedUntil
+                : usage.aquecedorPromoteAt;
           const statusHtml = isDeleting
             ? `<span class="status-text ${statusClass}">${statusLabel}</span>`
             : buildInstanceStatusHtml(statusLabel, statusClass, statusCountdownAt);
@@ -45258,6 +45349,9 @@
         if (document.querySelector(".wa-restriction-countdown[data-restrict-until]")) {
           ensureWaRestrictionCountdownTimer();
           ensureWaRestrictionRecheckTimer();
+        }
+        if (document.querySelector(".human-pause-countdown[data-restrict-until]")) {
+          ensureHumanPauseCountdownTimer();
         }
       }
 
