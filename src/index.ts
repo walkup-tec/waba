@@ -87,9 +87,11 @@ import { WabaAlternativaNumbersService } from "./billing/waba-alternativa-number
 import {
   assertAlternativaMinActivated,
   computeAlternativaThrottle,
+  computeAlternativaTypingDelayMs,
   DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
   estimateAlternativaCampaignDuration,
   getAlternativaDispatchRulesMeta,
+  isAlternativaBurstWindowOpen,
 } from "./disparos/alternativa-dispatch-rules";
 import { wabaInstanceOwnershipService } from "./instances/waba-instance-ownership.service";
 import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
@@ -11736,7 +11738,8 @@ async function syncDisparosCampaignsFromDbOnStartup(): Promise<void> {
 }
 
 async function pickDisparadorInstanceForConfig(
-  config: DisparosConfig
+  config: DisparosConfig,
+  opts?: { skipHumanPaused?: boolean },
 ): Promise<{ instancia: string; numero: string } | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -11762,11 +11765,20 @@ async function pickDisparadorInstanceForConfig(
         : [];
     if (!selectedList.length) return null;
     const selectedSet = new Set(selectedList);
-    const eligible = connected.filter((item) => {
+    let eligible = connected.filter((item) => {
       const usage = usageMap.get(item.instancia);
       const byUsage = usage ? usage.useDisparador !== false : true;
       return byUsage && selectedSet.has(item.instancia);
     });
+    if (opts?.skipHumanPaused && eligible.length) {
+      const filtered: typeof eligible = [];
+      for (const item of eligible) {
+        const life = await getAquecedorLifecycleStatusForInstance(item.instancia);
+        if (life?.phase === "restricted_wait") continue;
+        filtered.push(item);
+      }
+      eligible = filtered;
+    }
     if (!eligible.length) return null;
     const maxPerDay = Math.max(
       1,
@@ -11788,6 +11800,47 @@ async function pickDisparadorInstanceForConfig(
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function sendEvoComposingPresenceBeforeText(
+  instanceName: string,
+  number: string,
+  typingDelayMs: number,
+): Promise<void> {
+  const delay = Math.max(1200, Math.min(12000, Math.floor(typingDelayMs)));
+  const body = {
+    number,
+    options: {
+      delay: Math.min(delay, 8000),
+      presence: "composing",
+      number,
+    },
+  };
+  const urls = [
+    `${EVO_API_BASE}/chat/sendPresence/${encodeURIComponent(instanceName)}`,
+    `${EVO_API_BASE}/message/sendPresence/${encodeURIComponent(instanceName)}`,
+  ];
+  let sent = false;
+  for (const url of urls) {
+    try {
+      const result = await callEvoAction(url, "POST", body, {
+        timeoutMs: 12_000,
+        retries: 1,
+      });
+      if (result.ok) {
+        sent = true;
+        break;
+      }
+    } catch {
+      /* tenta próximo path */
+    }
+  }
+  if (!sent) {
+    console.warn(
+      `[Campanha Alternativa] sendPresence falhou em ${instanceName}; aplicando só delay humano (${delay}ms).`,
+    );
+  }
+  await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 async function composeOutboundMessageForConfig(
@@ -11935,6 +11988,10 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   const nextAt = campaignNextAllowedSendAt.get(campaignId) || 0;
   if (Date.now() < nextAt) return;
 
+  const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
+  const isAlternativaMotor =
+    Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
+
   const lead = disparosCampaignLeadsMemory.find(
     (l) => l.campaignId === campaignId && l.status === "pending"
   );
@@ -11962,10 +12019,14 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     return;
   }
 
-  const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot);
+  const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
+    skipHumanPaused: isAlternativaMotor,
+  });
   if (!instancePick) {
     console.error(
-      "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
+      isAlternativaMotor
+        ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
+        : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
     );
     return;
   }
@@ -11989,6 +12050,12 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
     return;
   }
+
+  if (isAlternativaMotor) {
+    const typingMs = computeAlternativaTypingDelayMs(outbound.text);
+    await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
+  }
+
   const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
     ? { number: numero, textMessage: { text: outbound.text } }
     : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
@@ -11999,6 +12066,14 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       sendResult.status,
       String(sendResult.body || "").slice(0, 200)
     );
+    if (isAlternativaMotor) {
+      await detectAndMarkRestrictionFromSend(
+        instancePick.instancia,
+        sendResult.status,
+        String(sendResult.body || ""),
+        { force: true },
+      );
+    }
     const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
     await persistLeadFailed(lead, failKind);
     scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
@@ -12012,7 +12087,6 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   lead.shortUrl = outbound.shortUrl || undefined;
   campaign.sentCount += 1;
   recordInstanceDailySend(instancePick.instancia);
-  const ownerEmail = String(campaign.ownerEmail || "").trim();
   if (ownerEmail) {
     const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
     if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
@@ -12074,6 +12148,12 @@ async function runCampaignDispatchTick(): Promise<void> {
     const janela = isDisparosWindowOpen(snap, nowSp);
     if (!janela.aberta) {
       continue;
+    }
+    const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
+    if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+      if (!isAlternativaBurstWindowOpen(nowSp)) {
+        continue;
+      }
     }
     await processOneCampaignDispatch(c.id);
   }

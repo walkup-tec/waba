@@ -6,6 +6,10 @@ export const ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 export const DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 4;
 export const ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
 
+/** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
+export const ALTERNATIVA_BURST_ON_MINUTES = 60;
+export const ALTERNATIVA_BURST_OFF_MINUTES = 14;
+
 const DEFAULT_WORKING_DAY_KEYS = ["seg", "ter", "qua", "qui", "sex"];
 
 const WEEKDAY_KEY_TO_JS: Record<string, number> = {
@@ -50,7 +54,25 @@ export function getAlternativaDispatchRulesMeta() {
     minPurchaseQuantity: ALTERNATIVA_MIN_PURCHASE_QUANTITY,
     minConnectedForCampaign: DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
     maxSendsPerDayPerNumber: ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
+    burstOnMinutes: ALTERNATIVA_BURST_ON_MINUTES,
+    burstOffMinutes: ALTERNATIVA_BURST_OFF_MINUTES,
   };
+}
+
+/** Janela liga/pausa humanizada (minutos do dia em SP), independente do expediente. */
+export function isAlternativaBurstWindowOpen(now: Date): boolean {
+  const minutesOfDay = now.getHours() * 60 + now.getMinutes();
+  const cycle = ALTERNATIVA_BURST_ON_MINUTES + ALTERNATIVA_BURST_OFF_MINUTES;
+  if (cycle <= 0) return true;
+  return minutesOfDay % cycle < ALTERNATIVA_BURST_ON_MINUTES;
+}
+
+/** Delay de “digitando…” proporcional ao tamanho da mensagem (1,8s–8s + jitter). */
+export function computeAlternativaTypingDelayMs(messageText: string): number {
+  const len = String(messageText || "").length;
+  const base = Math.min(8000, Math.max(1800, Math.round(len * 45 + 800)));
+  const jitter = Math.floor(Math.random() * 900);
+  return base + jitter;
 }
 
 /** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente. */

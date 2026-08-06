@@ -1,3 +1,3 @@
 /** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-06-fix-warmth-preserve-reconnect";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-06-alternativa-humanize-campaign-motor";

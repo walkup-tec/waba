@@ -10054,7 +10054,7 @@ async function syncDisparosCampaignsFromDbOnStartup() {
         console.error("[Campanhas] startup sync:", e);
     }
 }
-async function pickDisparadorInstanceForConfig(config) {
+async function pickDisparadorInstanceForConfig(config, opts) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
@@ -10080,11 +10080,21 @@ async function pickDisparadorInstanceForConfig(config) {
         if (!selectedList.length)
             return null;
         const selectedSet = new Set(selectedList);
-        const eligible = connected.filter((item) => {
+        let eligible = connected.filter((item) => {
             const usage = usageMap.get(item.instancia);
             const byUsage = usage ? usage.useDisparador !== false : true;
             return byUsage && selectedSet.has(item.instancia);
         });
+        if (opts?.skipHumanPaused && eligible.length) {
+            const filtered = [];
+            for (const item of eligible) {
+                const life = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(item.instancia);
+                if (life?.phase === "restricted_wait")
+                    continue;
+                filtered.push(item);
+            }
+            eligible = filtered;
+        }
         if (!eligible.length)
             return null;
         const maxPerDay = Math.max(1, Number(config.maxPerDayPerInstance) || DISPAROS_DEFAULTS.maxPerDayPerInstance);
@@ -10105,6 +10115,41 @@ async function pickDisparadorInstanceForConfig(config) {
     finally {
         clearTimeout(timeoutId);
     }
+}
+async function sendEvoComposingPresenceBeforeText(instanceName, number, typingDelayMs) {
+    const delay = Math.max(1200, Math.min(12000, Math.floor(typingDelayMs)));
+    const body = {
+        number,
+        options: {
+            delay: Math.min(delay, 8000),
+            presence: "composing",
+            number,
+        },
+    };
+    const urls = [
+        `${EVO_API_BASE}/chat/sendPresence/${encodeURIComponent(instanceName)}`,
+        `${EVO_API_BASE}/message/sendPresence/${encodeURIComponent(instanceName)}`,
+    ];
+    let sent = false;
+    for (const url of urls) {
+        try {
+            const result = await callEvoAction(url, "POST", body, {
+                timeoutMs: 12000,
+                retries: 1,
+            });
+            if (result.ok) {
+                sent = true;
+                break;
+            }
+        }
+        catch {
+            /* tenta próximo path */
+        }
+    }
+    if (!sent) {
+        console.warn(`[Campanha Alternativa] sendPresence falhou em ${instanceName}; aplicando só delay humano (${delay}ms).`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay));
 }
 async function composeOutboundMessageForConfig(config) {
     if (config.messageMode === "database") {
@@ -10238,6 +10283,8 @@ async function processOneCampaignDispatch(campaignId) {
     const nextAt = campaignNextAllowedSendAt.get(campaignId) || 0;
     if (Date.now() < nextAt)
         return;
+    const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
+    const isAlternativaMotor = Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
     const lead = disparosCampaignLeadsMemory.find((l) => l.campaignId === campaignId && l.status === "pending");
     if (!lead) {
         campaign.status = "finished";
@@ -10263,9 +10310,13 @@ async function processOneCampaignDispatch(campaignId) {
         console.error("[Campanha] Falha ao montar mensagem:", err);
         return;
     }
-    const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot);
+    const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
+        skipHumanPaused: isAlternativaMotor,
+    });
     if (!instancePick) {
-        console.error("[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo).");
+        console.error(isAlternativaMotor
+            ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
+            : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo).");
         return;
     }
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
@@ -10283,12 +10334,19 @@ async function processOneCampaignDispatch(campaignId) {
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
     }
+    if (isAlternativaMotor) {
+        const typingMs = (0, alternativa_dispatch_rules_1.computeAlternativaTypingDelayMs)(outbound.text);
+        await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
+    }
     const sendBody = EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text: outbound.text } }
         : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
     const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
     if (!sendResult.ok) {
         console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
+        if (isAlternativaMotor) {
+            await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(instancePick.instancia, sendResult.status, String(sendResult.body || ""), { force: true });
+        }
         const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
         await persistLeadFailed(lead, failKind);
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
@@ -10301,7 +10359,6 @@ async function processOneCampaignDispatch(campaignId) {
     lead.shortUrl = outbound.shortUrl || undefined;
     campaign.sentCount += 1;
     recordInstanceDailySend(instancePick.instancia);
-    const ownerEmail = String(campaign.ownerEmail || "").trim();
     if (ownerEmail) {
         const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
         if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
@@ -10362,6 +10419,12 @@ async function runCampaignDispatchTick() {
         const janela = isDisparosWindowOpen(snap, nowSp);
         if (!janela.aberta) {
             continue;
+        }
+        const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
+        if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+            if (!(0, alternativa_dispatch_rules_1.isAlternativaBurstWindowOpen)(nowSp)) {
+                continue;
+            }
         }
         await processOneCampaignDispatch(c.id);
     }

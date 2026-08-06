@@ -472,6 +472,7 @@ export function canApplyAquecedorHumanPause(
 export async function markAquecedorInstanceRestricted(
   instanceName: string,
   detail: string,
+  opts?: { force?: boolean },
 ): Promise<boolean> {
   const name = String(instanceName || "").trim();
   if (!name) return false;
@@ -481,7 +482,7 @@ export async function markAquecedorInstanceRestricted(
   const row = found?.row || store.instances[key] || emptyRow("active");
   refreshRestrictionPhase(row);
 
-  if (!canApplyAquecedorHumanPause(row)) {
+  if (!opts?.force && !canApplyAquecedorHumanPause(row)) {
     const activatedLabel = row.activatedAt || "—";
     console.info(
       `[Aquecedor] pausa humana ignorada em ${name}: ainda na janela de 6h de envio pós-Preparando (activatedAt=${activatedLabel}).`,
@@ -722,7 +723,8 @@ export async function detectAndMarkRestrictionFromSend(
   instanceName: string,
   status: number,
   body: string,
+  opts?: { force?: boolean },
 ): Promise<boolean> {
   if (!isLikelyWhatsAppRestriction(body, status)) return false;
-  return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
+  return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200), opts);
 }

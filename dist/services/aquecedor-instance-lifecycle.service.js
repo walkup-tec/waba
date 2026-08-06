@@ -425,7 +425,7 @@ function canApplyAquecedorHumanPause(row, nowMs = Date.now()) {
         return false;
     return !isWithinPostPreparingSendWindow(row, nowMs);
 }
-async function markAquecedorInstanceRestricted(instanceName, detail) {
+async function markAquecedorInstanceRestricted(instanceName, detail, opts) {
     const name = String(instanceName || "").trim();
     if (!name)
         return false;
@@ -434,7 +434,7 @@ async function markAquecedorInstanceRestricted(instanceName, detail) {
     const key = found?.key ?? normalizeKey(name);
     const row = found?.row || store.instances[key] || emptyRow("active");
     refreshRestrictionPhase(row);
-    if (!canApplyAquecedorHumanPause(row)) {
+    if (!opts?.force && !canApplyAquecedorHumanPause(row)) {
         const activatedLabel = row.activatedAt || "—";
         console.info(`[Aquecedor] pausa humana ignorada em ${name}: ainda na janela de 6h de envio pós-Preparando (activatedAt=${activatedLabel}).`);
         return false;
@@ -641,8 +641,8 @@ async function recordAquecedorInstanceDailySend(instanceName) {
     store.instances[key] = row;
     await saveStore(store);
 }
-async function detectAndMarkRestrictionFromSend(instanceName, status, body) {
+async function detectAndMarkRestrictionFromSend(instanceName, status, body, opts) {
     if (!isLikelyWhatsAppRestriction(body, status))
         return false;
-    return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
+    return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200), opts);
 }

@@ -1,8 +1,10 @@
 "use strict";
 /** Regras do motor de envio API Alternativa (números da fazenda). */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
+exports.ALTERNATIVA_BURST_OFF_MINUTES = exports.ALTERNATIVA_BURST_ON_MINUTES = exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
 exports.getAlternativaDispatchRulesMeta = getAlternativaDispatchRulesMeta;
+exports.isAlternativaBurstWindowOpen = isAlternativaBurstWindowOpen;
+exports.computeAlternativaTypingDelayMs = computeAlternativaTypingDelayMs;
 exports.computeAlternativaThrottle = computeAlternativaThrottle;
 exports.estimateAlternativaCampaignCompletionAt = estimateAlternativaCampaignCompletionAt;
 exports.buildAlternativaCapacityLabel = buildAlternativaCapacityLabel;
@@ -13,6 +15,9 @@ exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
 exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 4;
 exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
+/** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
+exports.ALTERNATIVA_BURST_ON_MINUTES = 60;
+exports.ALTERNATIVA_BURST_OFF_MINUTES = 14;
 const DEFAULT_WORKING_DAY_KEYS = ["seg", "ter", "qua", "qui", "sex"];
 const WEEKDAY_KEY_TO_JS = {
     dom: 0,
@@ -30,7 +35,24 @@ function getAlternativaDispatchRulesMeta() {
         minPurchaseQuantity: exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY,
         minConnectedForCampaign: exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
         maxSendsPerDayPerNumber: exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
+        burstOnMinutes: exports.ALTERNATIVA_BURST_ON_MINUTES,
+        burstOffMinutes: exports.ALTERNATIVA_BURST_OFF_MINUTES,
     };
+}
+/** Janela liga/pausa humanizada (minutos do dia em SP), independente do expediente. */
+function isAlternativaBurstWindowOpen(now) {
+    const minutesOfDay = now.getHours() * 60 + now.getMinutes();
+    const cycle = exports.ALTERNATIVA_BURST_ON_MINUTES + exports.ALTERNATIVA_BURST_OFF_MINUTES;
+    if (cycle <= 0)
+        return true;
+    return minutesOfDay % cycle < exports.ALTERNATIVA_BURST_ON_MINUTES;
+}
+/** Delay de “digitando…” proporcional ao tamanho da mensagem (1,8s–8s + jitter). */
+function computeAlternativaTypingDelayMs(messageText) {
+    const len = String(messageText || "").length;
+    const base = Math.min(8000, Math.max(1800, Math.round(len * 45 + 800)));
+    const jitter = Math.floor(Math.random() * 900);
+    return base + jitter;
 }
 /** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente. */
 function computeAlternativaThrottle(input) {
