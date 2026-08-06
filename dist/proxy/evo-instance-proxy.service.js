@@ -89,6 +89,10 @@ async function applyProxyBrasilToEvoInstance(instanceName, callEvoAction, evoApi
         reason: `EVO proxy/set falhou (HTTP ${lastStatus})`,
     };
 }
+/**
+ * @deprecated Não usar no Aquecedor/QR. Proxy só via queueApplyProxyBrasilToInstances
+ * (seleção de instâncias na campanha Alternativa). Mantido atrás de APPLY_ON_CREATE=1 legado.
+ */
 async function maybeApplyProxyBrasilOnInstanceCreate(instanceName, callEvoAction, evoApiBase) {
     const cfg = (0, proxy_brasil_config_1.loadProxyBrasilConfig)();
     if (!cfg?.enabled || !cfg.applyOnCreate)

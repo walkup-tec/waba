@@ -53,7 +53,8 @@ function loadProxyBrasilConfig() {
     const protocol = parseProtocol(process.env.PROXY_BRASIL_PROTOCOL);
     const apiKey = String(process.env.PROXY_BRASIL_API_KEY || "").trim() || null;
     const enabled = envFlag(process.env.PROXY_BRASIL_ENABLED, Boolean(host && port && username && password));
-    const applyOnCreate = envFlag(process.env.PROXY_BRASIL_APPLY_ON_CREATE, true);
+    // Padrão OFF: proxy só na seleção de campanha Alternativa, nunca no QR/Aquecedor.
+    const applyOnCreate = envFlag(process.env.PROXY_BRASIL_APPLY_ON_CREATE, false);
     if (!host || !port || !username || !password)
         return null;
     return {

@@ -119,6 +119,10 @@ export async function applyProxyBrasilToEvoInstance(
   };
 }
 
+/**
+ * @deprecated Não usar no Aquecedor/QR. Proxy só via queueApplyProxyBrasilToInstances
+ * (seleção de instâncias na campanha Alternativa). Mantido atrás de APPLY_ON_CREATE=1 legado.
+ */
 export async function maybeApplyProxyBrasilOnInstanceCreate(
   instanceName: string,
   callEvoAction: CallEvoAction,

@@ -201,7 +201,6 @@ import {
 } from "./proxy/proxy-brasil.config";
 import {
   applyProxyBrasilToEvoInstance,
-  maybeApplyProxyBrasilOnInstanceCreate,
   queueApplyProxyBrasilToInstances,
 } from "./proxy/evo-instance-proxy.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
@@ -8970,21 +8969,10 @@ async function runRegistrarQrcode(
     }
   }
 
+  // Proxy Brasil NÃO aplica no Aquecedor/QR — só na seleção de instâncias da campanha Alternativa.
   let createWarning: string | null = null;
   if (!createOk) {
     createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
-  } else {
-    const proxyResult = await maybeApplyProxyBrasilOnInstanceCreate(
-      name,
-      callEvoAction,
-      EVO_API_BASE,
-    );
-    if (proxyResult && !proxyResult.ok && !proxyResult.skipped) {
-      const hint = proxyResult.reason || proxyResult.body || "falha proxy";
-      createWarning = createWarning
-        ? `${createWarning} Proxy Brasil: ${hint}`
-        : `Instância ok, mas Proxy Brasil não aplicado: ${hint}`;
-    }
   }
 
   if (qrFromCreate) {
