@@ -2896,7 +2896,7 @@ type DisparosCampaignLead = {
   id: string;
   campaignId: string;
   phone: string;
-  status: "pending" | "sent" | "failed";
+  status: "pending" | "sending" | "sent" | "failed";
   messageText?: string;
   shortUrl?: string;
   /** Preenchido quando status === "failed" (envio na mesma execução); leads antigos sem valor caem em send_error no relatório. */
@@ -3131,6 +3131,9 @@ async function loadDisparosLocalState(): Promise<void> {
 }
 
 const campaignNextAllowedSendAt = new Map<string, number>();
+/** Evita dois processamentos paralelos da mesma campanha (tick a cada 7s vs typing/IA). */
+const campaignDispatchBusy = new Set<string>();
+let campaignDispatchTickRunning = false;
 const campaignDisparadorRoundRobin = new Map<string, number>();
 let disparosRoundRobinCounter = 0;
 const alternativaNumbersService = new WabaAlternativaNumbersService();
@@ -6174,7 +6177,9 @@ function normalizeCampaignPhone(input: string): string {
   return canonicalizeBrazilWhatsAppNumber(String(input || ""));
 }
 
-/** Uma linha de contato → um destino: remove duplicatas pelo telefone normalizado (55…). */
+/** Uma linha de contato → um destino *dentro da mesma campanha*.
+ * Telefone repetido em campanhas diferentes continua sendo enviado normalmente
+ * (cada campanha tem sua própria fila de leads). */
 function deduplicateCampaignDestinationPhones(
   digitCandidates: string[]
 ): { phones: string[]; removedDuplicates: number } {
@@ -8090,15 +8095,17 @@ function buildDisparosAiPrompt(input: {
         "Regras:",
         "- Retorne apenas uma mensagem final pronta para envio.",
         "- Mensagem curta (maximo 400 caracteres).",
-        "- Nao use markdown, aspas ou explicacoes extras.",
+        "- Nao use aspas nem explicacoes extras.",
         "- Nao inclua links, URLs, wa.me nem 'http' na mensagem.",
+        "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase (ex.: *Vem Card*). Nunca deixe a abertura/saudacao em negrito.",
         `- O destinatario vera um botao com o texto: "${cta.slice(0, 20)}". Nao mencione 'clique no link'; incentive a acao do botao de forma natural.`,
       ]
     : [
         "Regras:",
         "- Retorne apenas uma mensagem final pronta para envio.",
         "- Mensagem curta (maximo 400 caracteres).",
-        "- Nao use markdown, aspas ou explicacoes extras.",
+        "- Nao use aspas nem explicacoes extras.",
+        "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase. Nunca deixe a abertura/saudacao em negrito.",
         accessLink
           ? `- Inclua obrigatoriamente este link na mensagem: ${accessLink}`
           : "- Quando houver link de acesso, inclua-o na mensagem.",
@@ -8169,8 +8176,35 @@ function stripUrlsFromMessageText(message: string): string {
     .trim();
 }
 
+/**
+ * WhatsApp formatação: negrito = *texto* (um par).
+ * GPT/Markdown costuma emitir **texto** — converter antes do envio.
+ * @see https://faq.whatsapp.com/539178204879377
+ */
+function normalizeWhatsAppFormatting(message: string): string {
+  let text = String(message || "");
+  // Colapsa **...** (e ****...****) em *...* sem atravessar quebras de linha.
+  for (let i = 0; i < 6; i++) {
+    const next = text.replace(/\*{2,}([^*\n]+?)\*{2,}/g, "*$1*");
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+function prepareOutboundWhatsAppText(
+  message: string,
+  opts?: { stripUrls?: boolean },
+): string {
+  let text = String(message || "");
+  if (opts?.stripUrls) {
+    text = stripUrlsFromMessageText(text) || text;
+  }
+  return normalizeWhatsAppFormatting(text).trim();
+}
+
 function ensureMessageContainsLink(message: string, link: string, cta: string) {
-  const text = String(message || "").trim();
+  const text = prepareOutboundWhatsAppText(String(message || "").trim());
   const safeLink = String(link || "").trim();
   if (!safeLink) return text;
   // Se a IA incluir o link longo do WhatsApp (wa.me), substituímos por shortUrl
@@ -8191,28 +8225,15 @@ function isGhostButtonsPayload(raw: unknown): boolean {
   }
 }
 
+/**
+ * No WhatsApp, o campo `title` do sendButtons aparece em negrito.
+ * Por isso a mensagem completa vai só em `description`; o title fica neutro.
+ */
 function splitMessageForUrlButton(fullText: string): { title: string; description: string } {
   const text = String(fullText || "").trim() || "Olá!";
-  const blocks = text.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
-  if (blocks.length >= 2) {
-    return {
-      title: blocks[0].slice(0, 60),
-      description: blocks.slice(1).join("\n\n").slice(0, 1024) || blocks[0],
-    };
-  }
-  const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length >= 2 && lines[0].length <= 60) {
-    return {
-      title: lines[0],
-      description: lines.slice(1).join("\n").slice(0, 1024) || lines[0],
-    };
-  }
-  if (text.length <= 60) {
-    return { title: text, description: text };
-  }
   return {
-    title: text.slice(0, 60).trim(),
-    description: text.slice(60).trim() || text,
+    title: "\u200b",
+    description: text.slice(0, 1024),
   };
 }
 
@@ -8225,12 +8246,15 @@ async function sendEvoAlternativaUrlButtonMessage(input: {
 }): Promise<{ ok: boolean; status: number; body: string; json?: any }> {
   const instanceName = String(input.instanceName || "").trim();
   const number = String(input.number || "").replace(/\D/g, "");
-  const fullText = String(input.messageText || "").trim() || "Olá!";
+  const fullText =
+    prepareOutboundWhatsAppText(String(input.messageText || "").trim()) || "Olá!";
   const buttonLabel = normalizeButtonDisplayText(input.buttonLabel);
   const buttonUrl = String(input.buttonUrl || "").trim();
   if (!instanceName || !number || !buttonUrl) {
     return { ok: false, status: 0, body: "Dados insuficientes para sendButtons." };
   }
+  // Evolution sendButtons: `title` rende em negrito no WhatsApp — mensagem vai só em description.
+  // @see Evolution API POST /message/sendButtons/{instance}
   const { title, description } = splitMessageForUrlButton(fullText);
   const payload = {
     number,
@@ -11427,7 +11451,7 @@ app.get("/disparos/diagnostico", async (req, res) => {
     for (const c of disparosCampaignsMemory) {
       if (c.status !== "running") continue;
       const leads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === c.id);
-      const pending = leads.filter((l) => l.status === "pending").length;
+      const pending = leads.filter((l) => l.status === "pending" || l.status === "sending").length;
       const failed = leads.filter((l) => l.status === "failed").length;
       const nextMs = campaignNextAllowedSendAt.get(c.id) || 0;
       const nowMs = Date.now();
@@ -11617,8 +11641,7 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
       maxOutputTokens: Number(req.body?.maxOutputTokens || 220),
     });
     const finalMessage = buttonMode
-      ? stripUrlsFromMessageText(generated.text) ||
-        String(generated.text || "").trim() ||
+      ? prepareOutboundWhatsAppText(generated.text, { stripUrls: true }) ||
         "Olá! Temos uma novidade para você."
       : ensureMessageContainsLink(generated.text, shortUrl, cta);
     return res.json({
@@ -12180,12 +12203,13 @@ async function composeOutboundMessageForConfig(
     const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
     let text = pick.text.trim();
     if (buttonMode) {
-      text = stripUrlsFromMessageText(text) || text;
+      text =
+        prepareOutboundWhatsAppText(text, { stripUrls: true }) || text;
       return { text, shortUrl, buttonLabel };
     }
     const httpRegex = /https?:\/\/[^\s)]+/gi;
     if (httpRegex.test(text)) {
-      text = text.replace(httpRegex, shortUrl);
+      text = prepareOutboundWhatsAppText(text.replace(httpRegex, shortUrl));
     } else {
       text = ensureMessageContainsLink(
         text,
@@ -12214,8 +12238,7 @@ async function composeOutboundMessageForConfig(
   });
   if (buttonMode) {
     const text =
-      stripUrlsFromMessageText(generated.text) ||
-      String(generated.text || "").trim() ||
+      prepareOutboundWhatsAppText(generated.text, { stripUrls: true }) ||
       "Olá! Temos uma novidade para você.";
     return { text, shortUrl, buttonLabel };
   }
@@ -12296,190 +12319,215 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
   const nextAt = campaignNextAllowedSendAt.get(campaignId) || 0;
   if (Date.now() < nextAt) return;
 
-  const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
-  const isAlternativaMotor =
-    Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
+  if (campaignDispatchBusy.has(campaignId)) return;
+  campaignDispatchBusy.add(campaignId);
 
-  const lead = disparosCampaignLeadsMemory.find(
-    (l) => l.campaignId === campaignId && l.status === "pending"
-  );
-  if (!lead) {
-    campaign.status = "finished";
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      try {
-        await (supabase.from("disparos_campaigns" as any) as any)
-          .update({ status: "finished" })
-          .eq("id", campaignId);
-      } catch {
-        /* */
-      }
-    }
-    queuePersistDisparosLocalState();
-    return;
-  }
-
-  let outbound: { text: string; shortUrl: string | null; buttonLabel?: string };
   try {
-    outbound = await composeOutboundMessageForConfig(campaign.configSnapshot, {
-      buttonMode: isAlternativaMotor,
-    });
-  } catch (err) {
-    console.error("[Campanha] Falha ao montar mensagem:", err);
-    return;
-  }
+    const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
+    const isAlternativaMotor =
+      Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
 
-  const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
-    skipHumanPaused: isAlternativaMotor,
-  });
-  if (!instancePick) {
-    console.error(
-      isAlternativaMotor
-        ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
-        : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
+    const lead = disparosCampaignLeadsMemory.find(
+      (l) => l.campaignId === campaignId && l.status === "pending"
     );
-    return;
-  }
-
-  const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
-  const numero = normalizeWhatsAppNumber(lead.phone);
-  const digitsCheck = String(numero || "").replace(/\D/g, "");
-  if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
-    await persistLeadFailed(lead, "invalid_phone");
-    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-    return;
-  }
-  const instanceLiveState = await fetchEvoInstanceLiveState(instancePick.instancia);
-  if (!isEvoLiveStateOpen(instanceLiveState)) {
-    console.error(
-      "[Campanha] Instância não open no sistema WABA - Drax (connectionState):",
-      instancePick.instancia,
-      instanceLiveState || "desconhecido",
-    );
-    await persistLeadFailed(lead, "send_error");
-    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-    return;
-  }
-
-  const buttonLabel =
-    outbound.buttonLabel ||
-    normalizeButtonDisplayText(String(campaign.configSnapshot.aiCta || "Quero saber mais"));
-  const buttonUrl = String(outbound.shortUrl || "").trim();
-  let deliveredText = outbound.text;
-  let usedUrlButton = false;
-
-  if (isAlternativaMotor) {
-    const typingMs = computeAlternativaTypingDelayMs(outbound.text);
-    await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
-  }
-
-  if (isAlternativaMotor && buttonUrl) {
-    const buttonResult = await sendEvoAlternativaUrlButtonMessage({
-      instanceName: instancePick.instancia,
-      number: numero,
-      messageText: outbound.text,
-      buttonLabel,
-      buttonUrl,
-    });
-    if (buttonResult.ok) {
-      usedUrlButton = true;
-      deliveredText = outbound.text;
-    } else {
-      console.warn(
-        "[Campanha Alternativa] sendButtons falhou; fallback texto+link:",
-        buttonResult.status,
-        String(buttonResult.body || "").slice(0, 180),
+    if (!lead) {
+      const stillSending = disparosCampaignLeadsMemory.some(
+        (l) => l.campaignId === campaignId && l.status === "sending",
       );
-      deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-      const sendBodyFallback: Record<string, any> = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text: deliveredText } }
-        : { number: numero, text: deliveredText, textMessage: { text: deliveredText } };
-      const sendResultFallback = await callEvoAction(sendUrl, "POST", sendBodyFallback);
-      if (!sendResultFallback.ok) {
+      if (stillSending) return;
+      campaign.status = "finished";
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        try {
+          await (supabase.from("disparos_campaigns" as any) as any)
+            .update({ status: "finished" })
+            .eq("id", campaignId);
+        } catch {
+          /* */
+        }
+      }
+      queuePersistDisparosLocalState();
+      return;
+    }
+
+    // Reserva imediata: evita tick paralelo reenviar o mesmo lead (IA/typing > 7s).
+    lead.status = "sending";
+
+    let outbound: { text: string; shortUrl: string | null; buttonLabel?: string };
+    try {
+      outbound = await composeOutboundMessageForConfig(campaign.configSnapshot, {
+        buttonMode: isAlternativaMotor,
+      });
+    } catch (err) {
+      console.error("[Campanha] Falha ao montar mensagem:", err);
+      lead.status = "pending";
+      return;
+    }
+
+    const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
+      skipHumanPaused: isAlternativaMotor,
+    });
+    if (!instancePick) {
+      console.error(
+        isAlternativaMotor
+          ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
+          : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo)."
+      );
+      lead.status = "pending";
+      return;
+    }
+
+    const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
+    const numero = normalizeWhatsAppNumber(lead.phone);
+    const digitsCheck = String(numero || "").replace(/\D/g, "");
+    if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
+      await persistLeadFailed(lead, "invalid_phone");
+      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+      return;
+    }
+    const instanceLiveState = await fetchEvoInstanceLiveState(instancePick.instancia);
+    if (!isEvoLiveStateOpen(instanceLiveState)) {
+      console.error(
+        "[Campanha] Instância não open no sistema WABA - Drax (connectionState):",
+        instancePick.instancia,
+        instanceLiveState || "desconhecido",
+      );
+      await persistLeadFailed(lead, "send_error");
+      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+      return;
+    }
+
+    const buttonLabel =
+      outbound.buttonLabel ||
+      normalizeButtonDisplayText(String(campaign.configSnapshot.aiCta || "Quero saber mais"));
+    const buttonUrl = String(outbound.shortUrl || "").trim();
+    let deliveredText = outbound.text;
+    let usedUrlButton = false;
+
+    if (isAlternativaMotor) {
+      const typingMs = computeAlternativaTypingDelayMs(outbound.text);
+      await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
+    }
+
+    if (isAlternativaMotor && buttonUrl) {
+      const buttonResult = await sendEvoAlternativaUrlButtonMessage({
+        instanceName: instancePick.instancia,
+        number: numero,
+        messageText: outbound.text,
+        buttonLabel,
+        buttonUrl,
+      });
+      if (buttonResult.ok) {
+        usedUrlButton = true;
+        deliveredText = outbound.text;
+      } else if (isGhostButtonsPayload(buttonResult.json ?? buttonResult.body)) {
+        // Ghost pode ter entregue o corpo: não enviar texto de novo (duplicata).
+        console.warn(
+          "[Campanha Alternativa] sendButtons fantasma; sem fallback texto para evitar duplicata:",
+          String(buttonResult.body || "").slice(0, 160),
+        );
+        lead.status = "pending";
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+        return;
+      } else {
+        console.warn(
+          "[Campanha Alternativa] sendButtons falhou; fallback texto+link:",
+          buttonResult.status,
+          String(buttonResult.body || "").slice(0, 180),
+        );
+        deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
+        const sendBodyFallback: Record<string, any> = EVO_SEND_TEXT_V1
+          ? { number: numero, textMessage: { text: deliveredText } }
+          : { number: numero, text: deliveredText, textMessage: { text: deliveredText } };
+        const sendResultFallback = await callEvoAction(sendUrl, "POST", sendBodyFallback);
+        if (!sendResultFallback.ok) {
+          console.error(
+            "[Campanha] EVO send falhou:",
+            sendResultFallback.status,
+            String(sendResultFallback.body || "").slice(0, 200),
+          );
+          await detectAndMarkRestrictionFromSend(
+            instancePick.instancia,
+            sendResultFallback.status,
+            String(sendResultFallback.body || ""),
+            { force: true },
+          );
+          const failKind = classifyEvoSendFailure(
+            sendResultFallback.status,
+            sendResultFallback.body,
+          );
+          await persistLeadFailed(lead, failKind);
+          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+          return;
+        }
+      }
+    } else {
+      const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
+        ? { number: numero, textMessage: { text: outbound.text } }
+        : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
+      const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+      if (!sendResult.ok) {
         console.error(
           "[Campanha] EVO send falhou:",
-          sendResultFallback.status,
-          String(sendResultFallback.body || "").slice(0, 200),
+          sendResult.status,
+          String(sendResult.body || "").slice(0, 200),
         );
-        await detectAndMarkRestrictionFromSend(
-          instancePick.instancia,
-          sendResultFallback.status,
-          String(sendResultFallback.body || ""),
-          { force: true },
-        );
-        const failKind = classifyEvoSendFailure(
-          sendResultFallback.status,
-          sendResultFallback.body,
-        );
+        if (isAlternativaMotor) {
+          await detectAndMarkRestrictionFromSend(
+            instancePick.instancia,
+            sendResult.status,
+            String(sendResult.body || ""),
+            { force: true },
+          );
+        }
+        const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
         await persistLeadFailed(lead, failKind);
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
       }
     }
-  } else {
-    const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
-      ? { number: numero, textMessage: { text: outbound.text } }
-      : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
-    const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
-    if (!sendResult.ok) {
-      console.error(
-        "[Campanha] EVO send falhou:",
-        sendResult.status,
-        String(sendResult.body || "").slice(0, 200),
-      );
-      if (isAlternativaMotor) {
-        await detectAndMarkRestrictionFromSend(
-          instancePick.instancia,
-          sendResult.status,
-          String(sendResult.body || ""),
-          { force: true },
-        );
-      }
-      const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
-      await persistLeadFailed(lead, failKind);
-      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-      return;
-    }
-  }
 
-  const sentIso = new Date().toISOString();
-  lead.status = "sent";
-  lead.messageText = usedUrlButton
-    ? `${deliveredText}\n[Botão: ${buttonLabel}]`
-    : deliveredText;
-  lead.sentAt = sentIso;
-  lead.shortUrl = outbound.shortUrl || undefined;
-  campaign.sentCount += 1;
-  recordInstanceDailySend(instancePick.instancia);
-  if (ownerEmail) {
-    const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
-    if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
-      disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
-      if (
-        !disparosCreditsService.isMasterUnlimited(ownerEmail) &&
-        disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0
-      ) {
-        campaign.status = "paused";
-        const supabase = getSupabaseClient();
-        if (supabase) {
-          try {
-            await (supabase.from("disparos_campaigns" as any) as any)
-              .update({ status: "paused" })
-              .eq("id", campaign.id);
-          } catch {
-            /* */
+    const sentIso = new Date().toISOString();
+    lead.status = "sent";
+    lead.messageText = usedUrlButton
+      ? `${deliveredText}\n[Botão: ${buttonLabel}]`
+      : deliveredText;
+    lead.sentAt = sentIso;
+    lead.shortUrl = outbound.shortUrl || undefined;
+    campaign.sentCount += 1;
+    recordInstanceDailySend(instancePick.instancia);
+    if (ownerEmail) {
+      const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+      if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
+        disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
+        if (
+          !disparosCreditsService.isMasterUnlimited(ownerEmail) &&
+          disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0
+        ) {
+          campaign.status = "paused";
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            try {
+              await (supabase.from("disparos_campaigns" as any) as any)
+                .update({ status: "paused" })
+                .eq("id", campaign.id);
+            } catch {
+              /* */
+            }
           }
+          queuePersistDisparosLocalState();
         }
-        queuePersistDisparosLocalState();
       }
     }
-  }
-  await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
-    shortUrl: lead.shortUrl || null,
-    messageText: lead.messageText || null,
-  });
+    await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
+      shortUrl: lead.shortUrl || null,
+      messageText: lead.messageText || null,
+    });
 
-  scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+  } finally {
+    campaignDispatchBusy.delete(campaignId);
+  }
 }
 
 async function runCampaignDispatchTick(): Promise<void> {
@@ -12568,7 +12616,7 @@ async function stopAllDispatchActivityOnServer(
 function countCampaignLeadsProcessed(campaignId: string, sentFallback: number, totalNumbers: number): number {
   const memLeads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId);
   if (memLeads.length > 0) {
-    return memLeads.filter((l) => l.status !== "pending").length;
+    return memLeads.filter((l) => l.status === "sent" || l.status === "failed").length;
   }
   const sent = Number(sentFallback || 0);
   const cap = Number(totalNumbers || 0);
@@ -13847,7 +13895,13 @@ const httpServer = app.listen(PORT, () => {
         console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");
       }
       setInterval(() => {
-        runCampaignDispatchTick().catch((err) => console.error("[Campanhas] tick:", err));
+        if (campaignDispatchTickRunning) return;
+        campaignDispatchTickRunning = true;
+        runCampaignDispatchTick()
+          .catch((err) => console.error("[Campanhas] tick:", err))
+          .finally(() => {
+            campaignDispatchTickRunning = false;
+          });
       }, 7000);
     } else if (!ENABLE_BACKGROUND_PROCESSING) {
       console.log(
