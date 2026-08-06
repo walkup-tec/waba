@@ -2246,7 +2246,7 @@ const DISPAROS_DEFAULTS = {
     messageMode: "ai",
     aiBriefing: "",
     aiTone: "consultivo",
-    aiCta: "Responda no link abaixo",
+    aiCta: "Quero saber mais",
     aiAudience: "CORBAN",
     shortenerProvider: "waba",
     shortenerDomain: "",
@@ -6646,22 +6646,84 @@ function buildDisparosAiPrompt(input) {
     const briefing = String(input.briefing || "").trim();
     const tone = String(input.tone || "consultivo").trim();
     const audience = String(input.audience || "CORBAN").trim();
-    const cta = String(input.cta || "Responda no link abaixo").trim();
+    const cta = String(input.cta || "Quero saber mais").trim();
     const objective = String(input.objective || "gerar mensagem de prospeccao via WhatsApp").trim();
     const accessLink = String(input.accessLink || "").trim();
+    const buttonMode = input.ctaMode === "button";
+    const rules = buttonMode
+        ? [
+            "Regras:",
+            "- Retorne apenas uma mensagem final pronta para envio.",
+            "- Mensagem curta (maximo 400 caracteres).",
+            "- Nao use markdown, aspas ou explicacoes extras.",
+            "- Nao inclua links, URLs, wa.me nem 'http' na mensagem.",
+            `- O destinatario vera um botao com o texto: "${cta.slice(0, 20)}". Nao mencione 'clique no link'; incentive a acao do botao de forma natural.`,
+        ]
+        : [
+            "Regras:",
+            "- Retorne apenas uma mensagem final pronta para envio.",
+            "- Mensagem curta (maximo 400 caracteres).",
+            "- Nao use markdown, aspas ou explicacoes extras.",
+            accessLink
+                ? `- Inclua obrigatoriamente este link na mensagem: ${accessLink}`
+                : "- Quando houver link de acesso, inclua-o na mensagem.",
+            `CTA obrigatoria: ${cta}.`,
+        ];
     return [
         "Voce e um copywriter especialista em vendas consultivas via WhatsApp.",
         `Objetivo: ${objective}.`,
         `Publico alvo: ${audience}.`,
         `Tom: ${tone}.`,
-        `CTA obrigatoria: ${cta}.`,
-        "Regras:",
-        "- Retorne apenas uma mensagem final pronta para envio.",
-        "- Mensagem curta (maximo 400 caracteres).",
-        "- Nao use markdown, aspas ou explicacoes extras.",
-        accessLink ? `- Inclua obrigatoriamente este link na mensagem: ${accessLink}` : "- Quando houver link de acesso, inclua-o na mensagem.",
+        ...(buttonMode ? [] : [`CTA obrigatoria: ${cta}.`]),
+        ...rules,
         briefing ? `Contexto adicional:\n${briefing}` : "Contexto adicional: sem observacoes.",
     ].join("\n");
+}
+/** Rótulos permitidos no botão URL das campanhas Alternativa. */
+const ALTERNATIVA_URL_BUTTON_LABELS = [
+    "Quero saber mais",
+    "Mais informações",
+    "Solicitar agora",
+    "Me inscrever",
+    "Comprar agora",
+];
+function normalizeAlternativaUrlButtonLabel(raw, fallback = ALTERNATIVA_URL_BUTTON_LABELS[0]) {
+    const text = String(raw || "").trim();
+    const fold = (s) => s
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    const aliases = {
+        "me increver": "Me inscrever",
+        "me inscrever": "Me inscrever",
+        "mais informacoes": "Mais informações",
+        "mais informações": "Mais informações",
+    };
+    const folded = fold(text);
+    if (aliases[folded])
+        return aliases[folded];
+    const exact = ALTERNATIVA_URL_BUTTON_LABELS.find((opt) => opt === text);
+    if (exact)
+        return exact;
+    const loose = ALTERNATIVA_URL_BUTTON_LABELS.find((opt) => fold(opt) === folded);
+    return loose || fallback;
+}
+/** Rótulo do botão WhatsApp (limite prático ~20 caracteres). */
+function normalizeButtonDisplayText(raw, fallback = ALTERNATIVA_URL_BUTTON_LABELS[0]) {
+    const fromAllowlist = normalizeAlternativaUrlButtonLabel(raw, "");
+    if (fromAllowlist)
+        return fromAllowlist.slice(0, 20);
+    const text = String(raw || "").trim() || fallback;
+    return text.slice(0, 20);
+}
+function stripUrlsFromMessageText(message) {
+    return String(message || "")
+        .replace(/https?:\/\/[^\s)]+/gi, "")
+        .replace(/\bwa\.me\/[^\s)]+/gi, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
 }
 function ensureMessageContainsLink(message, link, cta) {
     const text = String(message || "").trim();
@@ -6677,6 +6739,81 @@ function ensureMessageContainsLink(message, link, cta) {
     const safeCta = String(cta || "Acesse aqui").trim();
     const joiner = text ? "\n\n" : "";
     return `${replaced}${joiner}${safeCta}: ${safeLink}`.trim();
+}
+function isGhostButtonsPayload(raw) {
+    try {
+        return JSON.stringify(raw ?? "").includes("viewOnceMessage");
+    }
+    catch {
+        return false;
+    }
+}
+function splitMessageForUrlButton(fullText) {
+    const text = String(fullText || "").trim() || "Olá!";
+    const blocks = text.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+    if (blocks.length >= 2) {
+        return {
+            title: blocks[0].slice(0, 60),
+            description: blocks.slice(1).join("\n\n").slice(0, 1024) || blocks[0],
+        };
+    }
+    const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length >= 2 && lines[0].length <= 60) {
+        return {
+            title: lines[0],
+            description: lines.slice(1).join("\n").slice(0, 1024) || lines[0],
+        };
+    }
+    if (text.length <= 60) {
+        return { title: text, description: text };
+    }
+    return {
+        title: text.slice(0, 60).trim(),
+        description: text.slice(60).trim() || text,
+    };
+}
+async function sendEvoAlternativaUrlButtonMessage(input) {
+    const instanceName = String(input.instanceName || "").trim();
+    const number = String(input.number || "").replace(/\D/g, "");
+    const fullText = String(input.messageText || "").trim() || "Olá!";
+    const buttonLabel = normalizeButtonDisplayText(input.buttonLabel);
+    const buttonUrl = String(input.buttonUrl || "").trim();
+    if (!instanceName || !number || !buttonUrl) {
+        return { ok: false, status: 0, body: "Dados insuficientes para sendButtons." };
+    }
+    const { title, description } = splitMessageForUrlButton(fullText);
+    const payload = {
+        number,
+        title,
+        description,
+        footer: "",
+        buttons: [
+            {
+                type: "url",
+                displayText: buttonLabel,
+                url: buttonUrl,
+            },
+        ],
+    };
+    const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
+    const result = await callEvoAction(url, "POST", payload, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
+        retries: 1,
+    });
+    if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
+        return {
+            ok: false,
+            status: result.status,
+            body: "Evolution retornou botões fantasma (viewOnce).",
+            json: result.json,
+        };
+    }
+    return {
+        ok: result.ok,
+        status: result.status,
+        body: String(result.body || result.error || ""),
+        json: result.json,
+    };
 }
 async function generateShortUrlForDisparos(longUrl, publicBaseHints) {
     const baseUrl = String(longUrl || "").trim();
@@ -9696,7 +9833,10 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
         const briefing = customBriefing || String(config.aiBriefing || "").trim();
         const tone = String(req.body?.tone || config.aiTone || "consultivo").trim();
         const audience = String(req.body?.audience || config.aiAudience || "CORBAN").trim();
-        const cta = String(req.body?.cta || config.aiCta || "Responda no link abaixo").trim();
+        const buttonMode = String(req.body?.ctaMode || "").toLowerCase() === "button" ||
+            req.body?.buttonMode === true;
+        const cta = String(req.body?.cta || config.aiCta || (buttonMode ? "Quero saber mais" : "Responda no link abaixo")).trim();
+        const buttonLabel = normalizeButtonDisplayText(cta);
         const objective = String(req.body?.objective || "gerar mensagem de prospeccao").trim();
         const linkMode = String(req.body?.linkDestinationMode || config.linkDestinationMode || "whatsapp").toLowerCase() ===
             "url"
@@ -9742,16 +9882,21 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
             briefing,
             tone,
             audience,
-            cta,
+            cta: buttonMode ? buttonLabel : cta,
             objective,
-            accessLink: shortUrl,
+            accessLink: buttonMode ? undefined : shortUrl,
+            ctaMode: buttonMode ? "button" : "link",
         });
         const generated = await callOpenAiGenerateMessage({
             prompt,
             model: String(req.body?.model || OPENAI_MODEL),
             maxOutputTokens: Number(req.body?.maxOutputTokens || 220),
         });
-        const finalMessage = ensureMessageContainsLink(generated.text, shortUrl, cta);
+        const finalMessage = buttonMode
+            ? stripUrlsFromMessageText(generated.text) ||
+                String(generated.text || "").trim() ||
+                "Olá! Temos uma novidade para você."
+            : ensureMessageContainsLink(generated.text, shortUrl, cta);
         return res.json({
             ok: true,
             message: finalMessage,
@@ -9759,6 +9904,9 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
             latencyMs: generated.latencyMs,
             shortUrl,
             shortenerProvider,
+            ctaMode: buttonMode ? "button" : "link",
+            buttonLabel: buttonMode ? buttonLabel : undefined,
+            buttonUrl: buttonMode ? shortUrl : undefined,
             ...(shortenerWarning ? { shortenerWarning } : {}),
         });
     }
@@ -10243,7 +10391,9 @@ async function sendEvoComposingPresenceBeforeText(instanceName, number, typingDe
     }
     await new Promise((resolve) => setTimeout(resolve, delay));
 }
-async function composeOutboundMessageForConfig(config) {
+async function composeOutboundMessageForConfig(config, opts) {
+    const buttonMode = opts?.buttonMode === true;
+    const buttonLabel = normalizeButtonDisplayText(String(config.aiCta || "Quero saber mais"));
     if (config.messageMode === "database") {
         let templates = [];
         const supabase = getSupabaseClient();
@@ -10279,18 +10429,23 @@ async function composeOutboundMessageForConfig(config) {
             return {
                 text: "Olá! Temos uma informação importante para você. Responda quando puder.",
                 shortUrl: null,
+                buttonLabel,
             };
         }
         const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
-        const httpRegex = /https?:\/\/[^\s)]+/gi;
         let text = pick.text.trim();
+        if (buttonMode) {
+            text = stripUrlsFromMessageText(text) || text;
+            return { text, shortUrl, buttonLabel };
+        }
+        const httpRegex = /https?:\/\/[^\s)]+/gi;
         if (httpRegex.test(text)) {
             text = text.replace(httpRegex, shortUrl);
         }
         else {
             text = ensureMessageContainsLink(text, shortUrl, String(config.aiCta || "Acesse aqui"));
         }
-        return { text, shortUrl };
+        return { text, shortUrl, buttonLabel };
     }
     const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
     const briefing = String(config.aiBriefing || "");
@@ -10298,18 +10453,26 @@ async function composeOutboundMessageForConfig(config) {
         briefing,
         tone: String(config.aiTone || "consultivo"),
         audience: String(config.aiAudience || "CORBAN"),
-        cta: String(config.aiCta || "Responda no link abaixo"),
+        cta: String(config.aiCta || "Quero saber mais"),
         objective: "gerar mensagem de prospeccao via WhatsApp",
-        accessLink: shortUrl,
+        accessLink: buttonMode ? undefined : shortUrl,
+        ctaMode: buttonMode ? "button" : "link",
     });
     const generated = await callOpenAiGenerateMessage({
         prompt,
         model: OPENAI_MODEL,
         maxOutputTokens: 220,
     });
+    if (buttonMode) {
+        const text = stripUrlsFromMessageText(generated.text) ||
+            String(generated.text || "").trim() ||
+            "Olá! Temos uma novidade para você.";
+        return { text, shortUrl, buttonLabel };
+    }
     return {
-        text: ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Responda no link abaixo")),
+        text: ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Quero saber mais")),
         shortUrl,
+        buttonLabel,
     };
 }
 async function persistLeadSentAndCampaignCount(campaignId, leadId, nextSentCount, payload) {
@@ -10396,7 +10559,9 @@ async function processOneCampaignDispatch(campaignId) {
     }
     let outbound;
     try {
-        outbound = await composeOutboundMessageForConfig(campaign.configSnapshot);
+        outbound = await composeOutboundMessageForConfig(campaign.configSnapshot, {
+            buttonMode: isAlternativaMotor,
+        });
     }
     catch (err) {
         console.error("[Campanha] Falha ao montar mensagem:", err);
@@ -10426,27 +10591,65 @@ async function processOneCampaignDispatch(campaignId) {
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
     }
+    const buttonLabel = outbound.buttonLabel ||
+        normalizeButtonDisplayText(String(campaign.configSnapshot.aiCta || "Quero saber mais"));
+    const buttonUrl = String(outbound.shortUrl || "").trim();
+    let deliveredText = outbound.text;
+    let usedUrlButton = false;
     if (isAlternativaMotor) {
         const typingMs = (0, alternativa_dispatch_rules_1.computeAlternativaTypingDelayMs)(outbound.text);
         await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
     }
-    const sendBody = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text: outbound.text } }
-        : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
-    const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
-    if (!sendResult.ok) {
-        console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
-        if (isAlternativaMotor) {
-            await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(instancePick.instancia, sendResult.status, String(sendResult.body || ""), { force: true });
+    if (isAlternativaMotor && buttonUrl) {
+        const buttonResult = await sendEvoAlternativaUrlButtonMessage({
+            instanceName: instancePick.instancia,
+            number: numero,
+            messageText: outbound.text,
+            buttonLabel,
+            buttonUrl,
+        });
+        if (buttonResult.ok) {
+            usedUrlButton = true;
+            deliveredText = outbound.text;
         }
-        const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
-        await persistLeadFailed(lead, failKind);
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
+        else {
+            console.warn("[Campanha Alternativa] sendButtons falhou; fallback texto+link:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
+            deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
+            const sendBodyFallback = EVO_SEND_TEXT_V1
+                ? { number: numero, textMessage: { text: deliveredText } }
+                : { number: numero, text: deliveredText, textMessage: { text: deliveredText } };
+            const sendResultFallback = await callEvoAction(sendUrl, "POST", sendBodyFallback);
+            if (!sendResultFallback.ok) {
+                console.error("[Campanha] EVO send falhou:", sendResultFallback.status, String(sendResultFallback.body || "").slice(0, 200));
+                await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(instancePick.instancia, sendResultFallback.status, String(sendResultFallback.body || ""), { force: true });
+                const failKind = classifyEvoSendFailure(sendResultFallback.status, sendResultFallback.body);
+                await persistLeadFailed(lead, failKind);
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+        }
+    }
+    else {
+        const sendBody = EVO_SEND_TEXT_V1
+            ? { number: numero, textMessage: { text: outbound.text } }
+            : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
+        const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+        if (!sendResult.ok) {
+            console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
+            if (isAlternativaMotor) {
+                await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(instancePick.instancia, sendResult.status, String(sendResult.body || ""), { force: true });
+            }
+            const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
+            await persistLeadFailed(lead, failKind);
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            return;
+        }
     }
     const sentIso = new Date().toISOString();
     lead.status = "sent";
-    lead.messageText = outbound.text;
+    lead.messageText = usedUrlButton
+        ? `${deliveredText}\n[Botão: ${buttonLabel}]`
+        : deliveredText;
     lead.sentAt = sentIso;
     lead.shortUrl = outbound.shortUrl || undefined;
     campaign.sentCount += 1;

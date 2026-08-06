@@ -14060,6 +14060,74 @@
         padding: 10px;
         background: rgba(2, 6, 23, 0.2);
       }
+      .dis-ai-wa-preview {
+        margin-top: 10px;
+      }
+      .dis-ai-wa-preview.hidden {
+        display: none !important;
+      }
+      .dis-ai-wa-preview-phone {
+        max-width: 360px;
+        padding: 16px 14px;
+        border-radius: 16px;
+        background:
+          linear-gradient(180deg, rgba(7, 94, 84, 0.35), rgba(15, 23, 42, 0.2)),
+          repeating-linear-gradient(
+            -12deg,
+            rgba(148, 163, 184, 0.05) 0 8px,
+            rgba(148, 163, 184, 0.02) 8px 16px
+          );
+        border: 1px solid rgba(110, 255, 200, 0.18);
+      }
+      .dis-ai-wa-bubble {
+        background: #dcf8c6;
+        color: #111b21;
+        border-radius: 8px 8px 8px 2px;
+        padding: 8px 10px 10px;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        font-size: 14px;
+        line-height: 1.35;
+      }
+      .dis-ai-wa-bubble-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin-bottom: 8px;
+      }
+      .dis-ai-wa-cta-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        margin-top: 2px;
+        padding: 9px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 168, 132, 0.35);
+        background: #fff;
+        color: #027a5c;
+        font-weight: 600;
+        font-size: 13.5px;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .dis-ai-wa-cta-btn::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1.5px solid currentColor;
+        background:
+          linear-gradient(currentColor, currentColor) center / 8px 1.5px no-repeat,
+          linear-gradient(currentColor, currentColor) center / 1.5px 8px no-repeat;
+        opacity: 0.85;
+        flex: 0 0 auto;
+      }
+      .dis-ai-wa-preview-meta {
+        margin-top: 8px;
+        font-size: 12px;
+        word-break: break-all;
+      }
       .dis-shortener-result {
         display: flex;
         flex-wrap: wrap;
@@ -18235,8 +18303,18 @@
                             <input id="dis-ai-audience" type="text" placeholder="CORBAN" />
                           </div>
                           <div class="aquecedor-field">
-                            <label for="dis-ai-cta">CTA padrão</label>
-                            <input id="dis-ai-cta" type="text" placeholder="Responda no link abaixo 👇" />
+                            <label for="dis-ai-cta" id="dis-ai-cta-label">CTA padrão</label>
+                            <input id="dis-ai-cta" type="text" placeholder="Responda no link abaixo 👇" maxlength="240" />
+                            <select id="dis-ai-cta-select" class="register-input hidden" style="display: none;" aria-hidden="true">
+                              <option value="Quero saber mais">Quero saber mais</option>
+                              <option value="Mais informações">Mais informações</option>
+                              <option value="Solicitar agora">Solicitar agora</option>
+                              <option value="Me inscrever">Me inscrever</option>
+                              <option value="Comprar agora">Comprar agora</option>
+                            </select>
+                            <span id="dis-ai-cta-hint" class="aquecedor-hint hidden" style="display: none; margin-top: 4px;">
+                              Texto exibido no botão do WhatsApp. O destino é a URL única do encurtador a cada mensagem.
+                            </span>
                           </div>
                         </div>
                         <div class="disparos-grid disparos-grid-2" style="margin-top: 10px;">
@@ -18273,7 +18351,7 @@
                           <span id="dis-ai-test-status" class="muted">Aguardando geração de mensagem.</span>
                         </div>
                         <div class="aquecedor-field" style="margin-top: 10px;">
-                          <label for="dis-ai-test-output">Mensagem gerada</label>
+                          <label for="dis-ai-test-output" id="dis-ai-test-output-label">Mensagem gerada</label>
                           <textarea
                             id="dis-ai-test-output"
                             class="register-input"
@@ -18281,6 +18359,23 @@
                             placeholder="A mensagem gerada pela IA aparecerá aqui."
                             readonly
                           ></textarea>
+                          <div id="dis-ai-wa-preview" class="dis-ai-wa-preview hidden" aria-live="polite">
+                            <div class="dis-ai-wa-preview-phone">
+                              <div class="dis-ai-wa-bubble">
+                                <div class="dis-ai-wa-bubble-text" id="dis-ai-wa-preview-text"></div>
+                                <a
+                                  class="dis-ai-wa-cta-btn"
+                                  id="dis-ai-wa-preview-btn"
+                                  href="#"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <span id="dis-ai-wa-preview-btn-label">Quero saber mais</span>
+                                </a>
+                              </div>
+                              <div class="dis-ai-wa-preview-meta muted" id="dis-ai-wa-preview-meta"></div>
+                            </div>
+                          </div>
                         </div>
                         <div class="disparos-inline-actions" style="margin-top: 12px; flex-wrap: wrap; gap: 8px;">
                           <button
@@ -23310,6 +23405,7 @@
         }
         initDisparosCampanhasLayoutSync();
         syncDisparosCampanhasListLayout();
+        syncDisparoEvoMessengerCtaUi();
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
           setWabaApiKindLabelElement(panelTitle, "alternativa");
@@ -23320,6 +23416,157 @@
             panelTitle.textContent = "Disparos";
           }
         }
+      }
+
+      const DIS_AI_BUTTON_LABEL_OPTIONS = [
+        "Quero saber mais",
+        "Mais informações",
+        "Solicitar agora",
+        "Me inscrever",
+        "Comprar agora",
+      ];
+
+      function getDisAiCtaDefault() {
+        return isDisparoEvoUi() ? DIS_AI_BUTTON_LABEL_OPTIONS[0] : "Responda no link abaixo";
+      }
+
+      function normalizeDisAiButtonLabel(raw) {
+        const text = String(raw || "").trim();
+        const aliases = {
+          "me increver": "Me inscrever",
+          "me inscrever": "Me inscrever",
+          "mais informacoes": "Mais informações",
+          "mais informações": "Mais informações",
+        };
+        const folded = text
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+        const fromAlias = aliases[folded] || aliases[text.toLowerCase()];
+        if (fromAlias) return fromAlias;
+        const exact = DIS_AI_BUTTON_LABEL_OPTIONS.find((opt) => opt === text);
+        if (exact) return exact;
+        const loose = DIS_AI_BUTTON_LABEL_OPTIONS.find(
+          (opt) =>
+            opt
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .toLowerCase() === folded,
+        );
+        return loose || DIS_AI_BUTTON_LABEL_OPTIONS[0];
+      }
+
+      function getDisAiCtaValue() {
+        if (isDisparoEvoUi()) {
+          const select = document.getElementById("dis-ai-cta-select");
+          return normalizeDisAiButtonLabel(select?.value || getDisAiCtaDefault());
+        }
+        return String(document.getElementById("dis-ai-cta")?.value || getDisAiCtaDefault()).trim();
+      }
+
+      function setDisAiCtaValue(value) {
+        const input = document.getElementById("dis-ai-cta");
+        const select = document.getElementById("dis-ai-cta-select");
+        if (isDisparoEvoUi()) {
+          const label = normalizeDisAiButtonLabel(value);
+          if (select) select.value = label;
+          if (input) input.value = label;
+          return;
+        }
+        const text = String(value ?? getDisAiCtaDefault());
+        if (input) input.value = text;
+        if (select) select.value = normalizeDisAiButtonLabel(text);
+      }
+
+      function syncDisparoEvoMessengerCtaUi() {
+        const on = isDisparoEvoUi();
+        const label = document.getElementById("dis-ai-cta-label");
+        const input = document.getElementById("dis-ai-cta");
+        const select = document.getElementById("dis-ai-cta-select");
+        const hint = document.getElementById("dis-ai-cta-hint");
+        const outLabel = document.getElementById("dis-ai-test-output-label");
+        const textarea = document.getElementById("dis-ai-test-output");
+        const preview = document.getElementById("dis-ai-wa-preview");
+        if (label) {
+          label.textContent = on ? "Nome Botão de resposta" : "CTA padrão";
+          label.setAttribute("for", on ? "dis-ai-cta-select" : "dis-ai-cta");
+        }
+        if (input) {
+          input.classList.toggle("hidden", on);
+          input.style.display = on ? "none" : "";
+          input.setAttribute("aria-hidden", on ? "true" : "false");
+        }
+        if (select) {
+          select.classList.toggle("hidden", !on);
+          select.style.display = on ? "" : "none";
+          select.setAttribute("aria-hidden", on ? "false" : "true");
+          if (on) {
+            const current = String(select.value || input?.value || "").trim();
+            select.value = normalizeDisAiButtonLabel(current);
+            if (input) input.value = select.value;
+          }
+        }
+        if (hint) {
+          hint.classList.toggle("hidden", !on);
+          hint.style.display = on ? "block" : "none";
+        }
+        if (outLabel) {
+          outLabel.textContent = on ? "Exemplo no WhatsApp" : "Mensagem gerada";
+        }
+        if (textarea) {
+          textarea.classList.toggle("hidden", on);
+          textarea.style.display = on ? "none" : "";
+        }
+        if (preview && !on) {
+          preview.classList.add("hidden");
+        }
+      }
+
+      function renderDisAiWhatsAppPreview(messageText, buttonLabel, buttonUrl) {
+        const preview = document.getElementById("dis-ai-wa-preview");
+        const textEl = document.getElementById("dis-ai-wa-preview-text");
+        const btn = document.getElementById("dis-ai-wa-preview-btn");
+        const btnLabel = document.getElementById("dis-ai-wa-preview-btn-label");
+        const meta = document.getElementById("dis-ai-wa-preview-meta");
+        const textarea = document.getElementById("dis-ai-test-output");
+        const text = String(messageText || "").trim();
+        const label = normalizeDisAiButtonLabel(buttonLabel || getDisAiCtaValue());
+        const url = String(buttonUrl || "").trim();
+        if (textarea) textarea.value = text;
+        if (!isDisparoEvoUi()) {
+          if (preview) preview.classList.add("hidden");
+          return;
+        }
+        if (textEl) textEl.textContent = text || "—";
+        if (btnLabel) btnLabel.textContent = label;
+        if (btn) {
+          if (url) {
+            btn.href = url;
+            btn.removeAttribute("aria-disabled");
+          } else {
+            btn.href = "#";
+            btn.setAttribute("aria-disabled", "true");
+          }
+        }
+        if (meta) {
+          meta.textContent = url
+            ? `Botão abre URL única desta mensagem: ${url}`
+            : "URL do encurtador indisponível neste preview.";
+        }
+        if (preview) preview.classList.remove("hidden");
+      }
+
+      function clearDisAiWhatsAppPreview() {
+        const preview = document.getElementById("dis-ai-wa-preview");
+        const textEl = document.getElementById("dis-ai-wa-preview-text");
+        const btnLabel = document.getElementById("dis-ai-wa-preview-btn-label");
+        const meta = document.getElementById("dis-ai-wa-preview-meta");
+        const btn = document.getElementById("dis-ai-wa-preview-btn");
+        if (textEl) textEl.textContent = "";
+        if (btnLabel) btnLabel.textContent = DIS_AI_BUTTON_LABEL_OPTIONS[0];
+        if (meta) meta.textContent = "";
+        if (btn) btn.href = "#";
+        if (preview) preview.classList.add("hidden");
       }
 
       function initDisparoEvoPanelLayout() {
@@ -40216,7 +40463,7 @@
           if (el) el.value = String(v ?? "");
         };
         setVal("dis-ai-tone", f.aiTone ?? "consultivo");
-        setVal("dis-ai-cta", f.aiCta ?? "Responda no link abaixo");
+        setDisAiCtaValue(f.aiCta ?? getDisAiCtaDefault());
         setVal("dis-ai-audience", f.aiAudience ?? "CORBAN");
         setVal("dis-ai-product", f.aiProduct ?? "");
         setVal("dis-ai-objective", f.aiObjective ?? "");
@@ -40245,7 +40492,7 @@
       function clearMessengerFormForNovoProduto() {
         applyMessengerStructuredFieldsToForm({
           aiTone: "consultivo",
-          aiCta: "Responda no link abaixo",
+          aiCta: getDisAiCtaDefault(),
           aiAudience: "CORBAN",
           aiProduct: "",
           aiObjective: "",
@@ -40315,7 +40562,7 @@
           messageMode: "ai",
           aiBriefing: "",
           aiTone: "consultivo",
-          aiCta: "Responda no link abaixo",
+          aiCta: "Quero saber mais",
           aiAudience: "CORBAN",
           whatsappTargetNumber: "",
           selectedDisparadorInstances: [],
@@ -40335,6 +40582,8 @@
         clearMessengerFormForNovoProduto();
         const testOut = document.getElementById("dis-ai-test-output");
         if (testOut) testOut.value = "";
+        clearDisAiWhatsAppPreview();
+        syncDisparoEvoMessengerCtaUi();
         const shortStatus = document.getElementById("dis-shortener-test-status");
         if (shortStatus) {
           shortStatus.textContent = "Aguardando teste do encurtador.";
@@ -40400,7 +40649,7 @@
           `Objetivo da mensagem: ${read("dis-ai-objective") || "não informado"}`,
           `Público alvo: ${read("dis-ai-audience") || "não informado"}`,
           `Tom: ${read("dis-ai-tone") || "consultivo"}`,
-          `CTA padrão: ${read("dis-ai-cta") || "não informado"}`,
+          `${isDisparoEvoUi() ? "Nome Botão de resposta" : "CTA padrão"}: ${getDisAiCtaValue() || "não informado"}`,
           `Dores do público:\n${read("dis-ai-pains") || "-"}`,
           `Diferenciais:\n${read("dis-ai-differentials") || "-"}`,
           `Regras/proibições:\n${read("dis-ai-prohibitions") || "-"}`,
@@ -40538,7 +40787,7 @@
           messageMode: document.getElementById("dis-mode-db")?.checked ? "database" : "ai",
           aiBriefing,
           aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
-          aiCta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
+          aiCta: getDisAiCtaValue(),
           aiAudience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
           linkDestinationMode: getDisLinkDestinationMode(),
           whatsappTargetNumber: getWhatsappTargetDigits(), // backend adiciona +55
@@ -40556,7 +40805,6 @@
           "dis-start-hour": config?.startHour ?? 8,
           "dis-end-hour": config?.endHour ?? 22,
           "dis-ai-tone": config?.aiTone ?? "consultivo",
-          "dis-ai-cta": config?.aiCta ?? "Responda no link abaixo",
           "dis-ai-audience": config?.aiAudience ?? "CORBAN",
           "dis-shortener-provider": config?.shortenerProvider ?? "isgd",
           "dis-whatsapp-target": (() => {
@@ -40569,6 +40817,7 @@
           const el = document.getElementById(id);
           if (el) el.value = String(value);
         });
+        setDisAiCtaValue(config?.aiCta ?? getDisAiCtaDefault());
         setDisLinkDestinationMode(config?.linkDestinationMode === "url" ? "url" : "whatsapp");
         const hiddenBriefing = document.getElementById("dis-ai-briefing");
         if (hiddenBriefing) hiddenBriefing.value = String(config?.aiBriefing || "");
@@ -40586,6 +40835,7 @@
           modeDb.checked = isDb;
         }
         toggleDisparosModeBoxes();
+        syncDisparoEvoMessengerCtaUi();
       }
 
       function getSelectOptionValues(selectEl) {
@@ -41333,7 +41583,7 @@
               ? [
                   { id: "dis-ai-tone", label: "Tom da mensagem (IA)" },
                   { id: "dis-ai-audience", label: "Público alvo (IA)" },
-                  { id: "dis-ai-cta", label: "CTA padrão (IA)" },
+                  { id: isDisparoEvoUi() ? "dis-ai-cta-select" : "dis-ai-cta", label: isDisparoEvoUi() ? "Nome Botão de resposta (IA)" : "CTA padrão (IA)" },
                   { id: "dis-ai-product", label: "Produto/serviço (IA)" },
                   { id: "dis-ai-objective", label: "Objetivo da mensagem (IA)" },
                   { id: "dis-ai-pains", label: "Dores do público (IA)" },
@@ -41618,11 +41868,12 @@
                 briefing,
                 tone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
                 audience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
-                cta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
+                cta: getDisAiCtaValue(),
                 objective: String(document.getElementById("dis-ai-objective")?.value || "gerar mensagem de prospeccao"),
                 linkDestinationMode: getDisLinkDestinationMode(),
                 whatsappTargetNumber: getWhatsappTargetDigits(),
                 responseUrl: getResponseUrlValue(),
+                ctaMode: isDisparoEvoUi() ? "button" : "link",
               }),
             },
             90000
@@ -41639,9 +41890,22 @@
           }
           const generatedMessage = String(data?.message || "").trim();
           if (outputEl) outputEl.value = generatedMessage || "";
+          if (isDisparoEvoUi()) {
+            renderDisAiWhatsAppPreview(
+              generatedMessage,
+              String(data?.buttonLabel || getDisAiCtaValue()),
+              String(data?.buttonUrl || data?.shortUrl || ""),
+            );
+          } else {
+            clearDisAiWhatsAppPreview();
+          }
           const shortenerWarning = String(data?.shortenerWarning || "").trim();
           if (statusEl) {
-            statusEl.textContent = shortenerWarning || "Mensagem gerada com sucesso";
+            statusEl.textContent = shortenerWarning
+              ? shortenerWarning
+              : isDisparoEvoUi()
+                ? "Preview do WhatsApp gerado (mensagem + botão)."
+                : "Mensagem gerada com sucesso";
             statusEl.style.color = shortenerWarning ? "#fcd34d" : "#86efac";
           }
           showToast(
@@ -50385,7 +50649,7 @@
           const payload = {
             displayName,
             aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
-            aiCta: String(document.getElementById("dis-ai-cta")?.value || "Responda no link abaixo"),
+            aiCta: getDisAiCtaValue(),
             aiAudience: String(document.getElementById("dis-ai-audience")?.value || "CORBAN"),
             aiProduct: String(document.getElementById("dis-ai-product")?.value || ""),
             aiObjective: String(document.getElementById("dis-ai-objective")?.value || ""),
@@ -50473,6 +50737,20 @@
       const disTestAiGenerateBtn = document.getElementById("dis-test-ai-generate-btn");
       if (disTestAiGenerateBtn) {
         disTestAiGenerateBtn.addEventListener("click", () => testDisparosAiGeneration());
+        const disAiCtaSelect = document.getElementById("dis-ai-cta-select");
+        if (disAiCtaSelect) {
+          disAiCtaSelect.addEventListener("change", () => {
+            const input = document.getElementById("dis-ai-cta");
+            const label = normalizeDisAiButtonLabel(disAiCtaSelect.value);
+            disAiCtaSelect.value = label;
+            if (input) input.value = label;
+            const preview = document.getElementById("dis-ai-wa-preview");
+            const btnLabel = document.getElementById("dis-ai-wa-preview-btn-label");
+            if (preview && !preview.classList.contains("hidden") && btnLabel) {
+              btnLabel.textContent = label;
+            }
+          });
+        }
       }
 
       const disOpenMappingBtn = document.getElementById("dis-open-mapping-btn");
