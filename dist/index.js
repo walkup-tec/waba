@@ -103,6 +103,8 @@ const aquecedor_instance_lifecycle_service_1 = require("./services/aquecedor-ins
 const aquecedor_instance_warmth_service_1 = require("./services/aquecedor-instance-warmth.service");
 const aquecedor_instance_message_stats_service_1 = require("./services/aquecedor-instance-message-stats.service");
 const production_data_persistence_service_1 = require("./services/production-data-persistence.service");
+const proxy_brasil_config_1 = require("./proxy/proxy-brasil.config");
+const evo_instance_proxy_service_1 = require("./proxy/evo-instance-proxy.service");
 const deploy_marker_1 = require("./deploy-marker");
 const waba_campaign_intake_constants_1 = require("./disparos/waba-campaign-intake.constants");
 const waba_mail_service_1 = require("./mail/waba-mail.service");
@@ -437,6 +439,7 @@ app.get("/health", (_req, res) => {
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
         aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
         aquecedorDesiredOwners: (0, aquecedor_owner_runtime_registry_1.listAquecedorOwnersWithDesiredRunning)().length,
+        proxyBrasil: (0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()),
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
         evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
@@ -7292,6 +7295,15 @@ async function runRegistrarQrcode(input) {
     if (!createOk) {
         createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
     }
+    else {
+        const proxyResult = await (0, evo_instance_proxy_service_1.maybeApplyProxyBrasilOnInstanceCreate)(name, callEvoAction, EVO_API_BASE);
+        if (proxyResult && !proxyResult.ok && !proxyResult.skipped) {
+            const hint = proxyResult.reason || proxyResult.body || "falha proxy";
+            createWarning = createWarning
+                ? `${createWarning} Proxy Brasil: ${hint}`
+                : `Instância ok, mas Proxy Brasil não aplicado: ${hint}`;
+        }
+    }
     if (qrFromCreate) {
         if (instanceWasNew) {
             await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
@@ -7778,6 +7790,86 @@ app.delete("/admin/instances/:name", async (req, res) => {
     catch (error) {
         console.error("Erro ao deletar instância (admin):", error);
         return res.status(500).json({ error: "Erro ao deletar instância." });
+    }
+});
+/** Status público (sem senha) da config Proxy Brasil no processo. */
+app.get("/proxy-brasil/status", (_req, res) => {
+    return res.json((0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()));
+});
+/**
+ * Aplica Proxy Brasil na instância Evolution (teste / número já existente).
+ * Master: qualquer instância. Assinante: só a própria.
+ */
+app.post("/instancias/:name/proxy-brasil", async (req, res) => {
+    try {
+        const instanceName = String(req.params.name || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "Nome da instância é obrigatório." });
+        }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
+        const force = req.body?.force === true || req.body?.force === "1";
+        const result = await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(instanceName, callEvoAction, EVO_API_BASE, { force });
+        if (result.skipped) {
+            return res.status(400).json({
+                ok: false,
+                error: result.reason || "Proxy Brasil não configurado.",
+                proxy: (0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()),
+            });
+        }
+        if (!result.ok) {
+            return res.status(502).json({
+                ok: false,
+                error: result.reason || "Falha ao aplicar proxy na Evolution.",
+                evoStatus: result.status,
+                evoDetail: result.body,
+                host: result.host,
+                port: result.port,
+            });
+        }
+        return res.json({
+            ok: true,
+            message: `Proxy Brasil aplicado em ${instanceName}. Reconecte o QR se a sessão cair.`,
+            host: result.host,
+            port: result.port,
+            evoStatus: result.status,
+        });
+    }
+    catch (error) {
+        console.error("[ProxyBrasil] apply:", error);
+        return res.status(500).json({ error: "Erro ao aplicar Proxy Brasil." });
+    }
+});
+app.post("/admin/instances/:name/proxy-brasil", async (req, res) => {
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (auth.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(auth.email)) {
+            return res.status(403).json({ error: "Somente master pode aplicar proxy pelo admin." });
+        }
+        const instanceName = String(req.params.name || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "Nome da instância é obrigatório." });
+        }
+        const result = await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(instanceName, callEvoAction, EVO_API_BASE, { force: true });
+        if (!result.ok) {
+            return res.status(result.skipped ? 400 : 502).json({
+                ok: false,
+                error: result.reason || "Falha ao aplicar proxy.",
+                evoStatus: result.status,
+                evoDetail: result.body,
+            });
+        }
+        return res.json({
+            ok: true,
+            message: `Proxy Brasil aplicado em ${instanceName}.`,
+            host: result.host,
+            port: result.port,
+            appliedBy: auth.email,
+        });
+    }
+    catch (error) {
+        console.error("[ProxyBrasil] admin apply:", error);
+        return res.status(500).json({ error: "Erro ao aplicar Proxy Brasil." });
     }
 });
 app.post("/admin/instances/delete-by-phone", async (req, res) => {
