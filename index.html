@@ -18046,7 +18046,7 @@
                             <div>
                               <p class="alt-meta-official-text" id="alt-numbers-purchase-alert-text">
                                 <strong>Alerta de segurança:</strong>
-                                Use pelo menos <strong id="alt-numbers-min-purchase-label">4</strong> números integrados na sua operação. Assim, os envios são distribuídos entre contas — o que reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis.
+                                Distribuir os envios entre vários números reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis. Não há quantidade mínima obrigatória para gerar a campanha.
                               </p>
                               <p id="alt-numbers-purchase-alert-status" class="alt-meta-official-status" hidden></p>
                             </div>
@@ -18121,7 +18121,7 @@
                               <div>
                                 <p class="alt-meta-official-text" id="alt-numbers-picker-locked-text">
                                   <strong>Alerta de segurança:</strong>
-                                  Use pelo menos <strong id="alt-numbers-min-purchase-label-2">4</strong> números integrados na sua operação. Assim, os envios são distribuídos entre contas — o que reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis.
+                                  Distribuir os envios entre vários números reduz o risco de bloqueio no WhatsApp e deixa seus disparos mais estáveis. Não há quantidade mínima obrigatória para gerar a campanha.
                                 </p>
                                 <p id="alt-numbers-picker-locked-status" class="alt-meta-official-status" hidden></p>
                               </div>
@@ -24195,9 +24195,10 @@
       const ALTERNATIVA_NUMBER_UNIT_CENTS = 2000;
       const ALTERNATIVA_NUMBER_MAX_QTY = 20;
       const ALTERNATIVA_DISPATCH_RULES_FALLBACK = {
-        minActivatedForSend: 3,
+        minActivatedForSend: 1,
         minPurchasedForPicker: 4,
         minPurchaseQuantity: 4,
+        minConnectedForCampaign: 1,
         maxSendsPerDayPerNumber: 300,
       };
       let alternativaNumbersSummary = null;
@@ -24266,8 +24267,8 @@
             workingDaysNeeded: 0,
           };
         }
-        if (activated < rules.minActivatedForSend) {
-          const missing = `Ative ao menos ${rules.minActivatedForSend} números para calcular a projeção.`;
+        if (!activated) {
+          const missing = "Selecione ao menos 1 número para calcular a projeção.";
           return {
             capacityLabel: missing,
             estimatedCompletionBr: "",
@@ -24468,7 +24469,7 @@
           return;
         }
         el.hidden = false;
-        if (activated < rules.minActivatedForSend) {
+        if (!activated) {
           el.classList.add("is-warning");
           el.innerHTML = buildAlternativaProjectionHtml(projection);
           return;
@@ -24574,20 +24575,10 @@
       }
 
       function assertAlternativaReadyForDispatch() {
-        if (!isAlternativaNumbersPurchaseEnabled()) {
-          const selected = getActiveDisSelectedInstanceValues();
-          if (!selected.length) {
-            throw new Error(
-              "Selecione ao menos uma instância do Aquecedor com Disparador ativo antes de enviar."
-            );
-          }
-          return;
-        }
-        const rules = resolveAlternativaDispatchRules();
-        const activated = Number(alternativaNumbersSummary?.activatedCount ?? 0);
-        if (activated < rules.minActivatedForSend) {
+        const selected = getActiveDisSelectedInstanceValues();
+        if (!selected.length) {
           throw new Error(
-            `Para disparos pela API Alternativa são necessários ao menos ${rules.minActivatedForSend} números ativados. Você possui ${activated}. Ative mais números em «Comprar números».`
+            "Selecione ao menos uma instância com Disparador ativo antes de enviar."
           );
         }
       }
@@ -24822,15 +24813,11 @@
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-active");
           hint = `Você tem ${available} slot(s) para ativar. Clique em Ativar em cada número desejado abaixo.`;
-        } else if (activated >= rules.minActivatedForSend) {
+        } else if (activated >= 1) {
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-done");
           stepUse?.classList.add("is-active");
           hint = `${activated} número(s) ativo(s). Importe sua planilha na etapa Campanha e informe a quantidade de envios.`;
-        } else if (activated > 0) {
-          stepBuy?.classList.add("is-done");
-          stepPick?.classList.add("is-active");
-          hint = `Ative mais números: o motor exige no mínimo ${rules.minActivatedForSend} ativados para disparar (você tem ${activated}).`;
         } else {
           stepBuy?.classList.add("is-done");
           stepPick?.classList.add("is-active");
@@ -42431,7 +42418,7 @@
                     needsMoreInstancesForMinimum || shouldPauseByDisconnectedRatio;
                   const minConnectedRequired = Math.max(
                     1,
-                    Math.floor(Number(health?.minConnectedRequired) || 4)
+                    Math.floor(Number(health?.minConnectedRequired) || 1)
                   );
                   const connectedCount = Math.max(0, Math.floor(Number(health?.connectedCount) || 0));
                   const selectedCount = Math.max(0, Math.floor(Number(health?.selectedCount) || 0));

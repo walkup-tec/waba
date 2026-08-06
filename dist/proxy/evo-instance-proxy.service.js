@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.applyProxyBrasilToEvoInstance = applyProxyBrasilToEvoInstance;
 exports.maybeApplyProxyBrasilOnInstanceCreate = maybeApplyProxyBrasilOnInstanceCreate;
+exports.queueApplyProxyBrasilToInstances = queueApplyProxyBrasilToInstances;
 const proxy_brasil_config_1 = require("./proxy-brasil.config");
 function buildProxyPayload(cfg) {
     return {
@@ -93,4 +94,28 @@ async function maybeApplyProxyBrasilOnInstanceCreate(instanceName, callEvoAction
     if (!cfg?.enabled || !cfg.applyOnCreate)
         return null;
     return applyProxyBrasilToEvoInstance(instanceName, callEvoAction, evoApiBase, { config: cfg });
+}
+/**
+ * Aplica Proxy Brasil nas instâncias selecionadas para campanha, em background.
+ * Não bloqueia a UI — o usuário continua nas próximas etapas do wizard.
+ */
+function queueApplyProxyBrasilToInstances(instanceNames, callEvoAction, evoApiBase) {
+    const names = Array.from(new Set((Array.isArray(instanceNames) ? instanceNames : [])
+        .map((n) => String(n || "").trim())
+        .filter(Boolean)));
+    if (!names.length)
+        return;
+    const cfg = (0, proxy_brasil_config_1.loadProxyBrasilConfig)();
+    if (!cfg?.enabled)
+        return;
+    void (async () => {
+        for (const name of names) {
+            try {
+                await applyProxyBrasilToEvoInstance(name, callEvoAction, evoApiBase, { config: cfg });
+            }
+            catch (err) {
+                console.warn(`[ProxyBrasil] falha em background para ${name}:`, err?.message || err);
+            }
+        }
+    })();
 }

@@ -202,6 +202,7 @@ import {
 import {
   applyProxyBrasilToEvoInstance,
   maybeApplyProxyBrasilOnInstanceCreate,
+  queueApplyProxyBrasilToInstances,
 } from "./proxy/evo-instance-proxy.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -5811,6 +5812,8 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
       });
     }
 
+    queueApplyProxyBrasilToInstances(campaignInstances, callEvoAction, EVO_API_BASE);
+
     if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
       numbers = numbers.slice(0, plannedSendCount);
     }
@@ -11207,6 +11210,12 @@ app.post("/disparos/config", async (req, res) => {
       ),
     };
     await saveDisparosConfigToDb(config);
+    // Proxy em background nos números selecionados — usuário segue as próximas etapas.
+    queueApplyProxyBrasilToInstances(
+      config.selectedDisparadorInstances,
+      callEvoAction,
+      EVO_API_BASE,
+    );
     return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
   } catch (error: any) {
     console.error("[disparos/config] save error:", error);
@@ -12712,6 +12721,8 @@ app.post(
       });
     }
 
+    queueApplyProxyBrasilToInstances(campaignInstances, callEvoAction, EVO_API_BASE);
+
     const now = new Date().toISOString();
     const campaignId = crypto.randomUUID();
     const campaign: DisparosCampaign = {
@@ -13542,6 +13553,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
 
     const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
     const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
+    queueApplyProxyBrasilToInstances(mergedSelected, callEvoAction, EVO_API_BASE);
 
     return res.json({
       ok: true,

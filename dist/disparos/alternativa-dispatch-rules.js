@@ -10,10 +10,13 @@ exports.estimateAlternativaCampaignCompletionAt = estimateAlternativaCampaignCom
 exports.buildAlternativaCapacityLabel = buildAlternativaCapacityLabel;
 exports.estimateAlternativaCampaignDuration = estimateAlternativaCampaignDuration;
 exports.assertAlternativaMinActivated = assertAlternativaMinActivated;
-exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 3;
+/** Sem mínimo operacional de ativados — campanha exige ≥1 instância selecionada. */
+exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 1;
+/** Compra/picker de números (loja): mínimo comercial por pedido. */
 exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
 exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
-exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 4;
+/** Mínimo de números conectados para ativar campanha (era 4; agora 1). */
+exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 1;
 exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
 /** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
 exports.ALTERNATIVA_BURST_ON_MINUTES = 60;
@@ -177,7 +180,7 @@ function estimateAlternativaCampaignDuration(params) {
         };
     }
     if (!activatedInstanceCount) {
-        const missing = `Ative ao menos ${exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND} números para calcular a projeção.`;
+        const missing = "Selecione ao menos 1 número para calcular a projeção.";
         return {
             plannedSendCount,
             activatedInstanceCount,
@@ -215,8 +218,7 @@ function estimateAlternativaCampaignDuration(params) {
         estimatedCompletionBr,
     };
 }
-function assertAlternativaMinActivated(activatedCount) {
-    if (activatedCount < exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND) {
-        throw new Error(`Para disparos pela API Alternativa são necessários ao menos ${exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND} números ativados. Você possui ${activatedCount}. Ative mais números em «Comprar números».`);
-    }
+function assertAlternativaMinActivated(_activatedCount) {
+    // Restrição de mínimo de números ativados removida.
+    // Campanhas exigem apenas ≥1 instância selecionada (validado no create/start).
 }

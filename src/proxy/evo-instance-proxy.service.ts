@@ -128,3 +128,37 @@ export async function maybeApplyProxyBrasilOnInstanceCreate(
   if (!cfg?.enabled || !cfg.applyOnCreate) return null;
   return applyProxyBrasilToEvoInstance(instanceName, callEvoAction, evoApiBase, { config: cfg });
 }
+
+/**
+ * Aplica Proxy Brasil nas instâncias selecionadas para campanha, em background.
+ * Não bloqueia a UI — o usuário continua nas próximas etapas do wizard.
+ */
+export function queueApplyProxyBrasilToInstances(
+  instanceNames: string[],
+  callEvoAction: CallEvoAction,
+  evoApiBase: string,
+): void {
+  const names = Array.from(
+    new Set(
+      (Array.isArray(instanceNames) ? instanceNames : [])
+        .map((n) => String(n || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!names.length) return;
+  const cfg = loadProxyBrasilConfig();
+  if (!cfg?.enabled) return;
+
+  void (async () => {
+    for (const name of names) {
+      try {
+        await applyProxyBrasilToEvoInstance(name, callEvoAction, evoApiBase, { config: cfg });
+      } catch (err: any) {
+        console.warn(
+          `[ProxyBrasil] falha em background para ${name}:`,
+          err?.message || err,
+        );
+      }
+    }
+  })();
+}
