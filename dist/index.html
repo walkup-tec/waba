@@ -1658,7 +1658,7 @@
       }
 
       #tab-dashboard .summary-grid {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
       }
 
       @media (max-width: 1100px) {
@@ -1683,12 +1683,20 @@
         gap: 4px;
       }
 
-      .summary-card:nth-child(1) {
-        border-left: 2px solid rgba(110, 255, 200, 0.5);
+      .summary-card.summary-card-active {
+        border-left: 2px solid rgba(52, 211, 153, 0.65);
       }
 
-      .summary-card:nth-child(4) {
-        border-left: 2px solid rgba(248, 113, 113, 0.55);
+      .summary-card.summary-card-active .summary-value {
+        color: #34d399;
+      }
+
+      .summary-card.summary-card-disconnected {
+        border-left: 2px solid rgba(248, 113, 113, 0.65);
+      }
+
+      .summary-card.summary-card-disconnected .summary-value {
+        color: #f87171;
       }
 
       .summary-card.summary-card-preparing {
@@ -1709,10 +1717,6 @@
         font-weight: 700;
         color: var(--accent-bright);
         letter-spacing: -0.02em;
-      }
-
-      .summary-card:nth-child(4) .summary-value {
-        color: #fca5a5;
       }
 
       .summary-card.summary-card-preparing .summary-value {
@@ -16556,12 +16560,12 @@
           </div>
 
           <div class="summary-grid">
-            <div class="summary-card">
+            <div class="summary-card summary-card-active">
               <div class="summary-label">Instâncias ativas</div>
               <div class="summary-value" id="instances-active">—</div>
               <div class="summary-sub">Instâncias Conectadas</div>
             </div>
-            <div class="summary-card">
+            <div class="summary-card summary-card-disconnected">
               <div class="summary-label">Instâncias desconectadas</div>
               <div class="summary-value" id="instances-disconnected">—</div>
               <div class="summary-sub" id="instances-total">Total: —</div>
@@ -16609,11 +16613,6 @@
                   <span class="summary-warmth-qty" id="instances-warmed-level-3">—</span>
                 </div>
               </div>
-            </div>
-            <div class="summary-card">
-              <div class="summary-label">Total de eventos</div>
-              <div class="summary-value" id="total-events">—</div>
-              <div class="summary-sub">Último carregamento</div>
             </div>
             <div class="summary-card">
               <div class="summary-label">Contatos únicos</div>
@@ -16678,7 +16677,7 @@
               </div>
 
               <div class="summary-grid">
-                <div class="summary-card">
+                <div class="summary-card summary-card-active">
                   <div class="summary-label">Instâncias ativas</div>
                   <div class="summary-value" id="instances-active-tab">
                     —
@@ -16695,7 +16694,7 @@
                   <div class="summary-value" id="instances-restriction-tab">—</div>
                   <div class="summary-sub">WhatsApp · até 3 horas</div>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card summary-card-disconnected">
                   <div class="summary-label">Instâncias desconectadas</div>
                   <div class="summary-value" id="instances-disconnected-tab">
                     —
@@ -39760,6 +39759,7 @@
           if (loadSeq !== aquecedorEnviosLoadSeq) return;
           if (!response.ok) {
             const err = await response.json().catch(() => ({}));
+            void loadAquecedorNetworkHealth();
             if (aquecedorEnviosLastItems.length) {
               renderAquecedorEnviosList(
                 aquecedorEnviosLastItems,
@@ -39790,6 +39790,7 @@
           renderAquecedorEnviosList(items);
         } catch {
           if (loadSeq !== aquecedorEnviosLoadSeq) return;
+          void loadAquecedorNetworkHealth();
           if (aquecedorEnviosLastItems.length) {
             renderAquecedorEnviosList(
               aquecedorEnviosLastItems,
@@ -44069,7 +44070,6 @@
           }
         });
 
-        document.getElementById("total-events").textContent = total || "0";
         document.getElementById("unique-contacts").textContent =
           contatos.size || "0";
         document.getElementById("top-sender").textContent = topSender;

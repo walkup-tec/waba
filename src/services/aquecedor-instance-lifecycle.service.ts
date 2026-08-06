@@ -175,24 +175,20 @@ function applyPreparingPhase(row: AquecedorInstanceLifecycleRow, preparingSince:
 }
 
 /**
- * Reverte active → Preparando quando a integração EVO é recente ou mais nova
- * que a ativação anterior (recriação / grandfather indevido).
+ * Reverte active → Preparando só quando o número ainda NÃO tinha ativação real.
+ * Reconexão QR / recreate na EVO atualiza createdAt e NÃO pode zerar aquecimento.
  */
 function shouldResetActiveToPreparing(
   row: AquecedorInstanceLifecycleRow,
   integrationAt: string | null,
 ): boolean {
   if (row.phase !== "active") return false;
+  // Já ativado: reconectar preserva idade e nível de aquecimento.
+  if (row.activatedAt) return false;
   if (!integrationAt || isGrandfatherEligible(integrationAt)) return false;
   const integMs = new Date(integrationAt).getTime();
   if (!Number.isFinite(integMs)) return false;
-
-  const withinPreparingWindow = Date.now() - integMs < PREPARING_DURATION_MS;
-  const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
-  const reintegratedAfterActivation =
-    Number.isFinite(activatedMs) && integMs > activatedMs + 10_000;
-
-  return withinPreparingWindow || reintegratedAfterActivation;
+  return Date.now() - integMs < PREPARING_DURATION_MS;
 }
 
 function maybeResetActiveToPreparing(
@@ -386,6 +382,20 @@ export async function registerAquecedorInstancePreparing(
     }
     if (existing) {
       refreshRestrictionPhase(existing.row);
+      // Reconexão / re-QR de número já aquecido: NÃO zerar activatedAt nem voltar a Preparando.
+      // Isso preserva idade, foguinhos e a contagem histórica usada no aquecimento.
+      const alreadyActivated =
+        Boolean(existing.row.activatedAt) ||
+        existing.row.phase === "active" ||
+        existing.row.phase === "restricted_wait";
+      if (alreadyActivated) {
+        if (existing.key !== key) {
+          delete store.instances[existing.key];
+          store.instances[key] = existing.row;
+          await saveStore(store);
+        }
+        return;
+      }
       applyPreparingPhase(existing.row, since);
       // Regrava sob a chave canônica atual
       if (existing.key !== key) {
