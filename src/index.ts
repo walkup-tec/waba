@@ -12716,67 +12716,12 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     const buttonUrl = String(outbound.shortUrl || "").trim();
     let deliveredText = outbound.text;
     let usedUrlButton = false;
+    let lastSendJson: unknown = null;
 
-    if (isAlternativaMotor) {
-      const typingMs = computeAlternativaTypingDelayMs(outbound.text);
-      await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
-    }
-
-    if (isAlternativaMotor && buttonUrl) {
-      const buttonResult = await sendEvoAlternativaUrlButtonMessage({
-        instanceName: instancePick.instancia,
-        number: numero,
-        messageText: outbound.text,
-        buttonLabel,
-        buttonUrl,
-      });
-      if (buttonResult.ok) {
-        usedUrlButton = true;
-        deliveredText = outbound.text;
-      } else if (isGhostButtonsPayload(buttonResult.json ?? buttonResult.body)) {
-        // Ghost = Evolution pode ter entregue o corpo. Conta como enviado — NUNCA pending (duplicata).
-        console.warn(
-          "[Campanha Alternativa] sendButtons fantasma; marcando lead como enviado (sem fallback texto):",
-          String(buttonResult.body || "").slice(0, 160),
-        );
-        usedUrlButton = true;
-        deliveredText = outbound.text;
-      } else {
-        console.warn(
-          "[Campanha Alternativa] sendButtons falhou; fallback texto+link:",
-          buttonResult.status,
-          String(buttonResult.body || "").slice(0, 180),
-        );
-        deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-        const sendBodyFallback: Record<string, any> = EVO_SEND_TEXT_V1
-          ? { number: numero, textMessage: { text: deliveredText } }
-          : { number: numero, text: deliveredText, textMessage: { text: deliveredText } };
-        const sendResultFallback = await callEvoAction(sendUrl, "POST", sendBodyFallback);
-        if (!sendResultFallback.ok) {
-          console.error(
-            "[Campanha] EVO send falhou:",
-            sendResultFallback.status,
-            String(sendResultFallback.body || "").slice(0, 200),
-          );
-          await detectAndMarkRestrictionFromSend(
-            instancePick.instancia,
-            sendResultFallback.status,
-            String(sendResultFallback.body || ""),
-            { force: true },
-          );
-          const failKind = classifyEvoSendFailure(
-            sendResultFallback.status,
-            sendResultFallback.body,
-          );
-          await persistLeadFailed(lead, failKind);
-          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-          return;
-        }
-      }
-    } else {
+    const sendCampaignTextMessage = async (text: string): Promise<boolean> => {
       const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text: outbound.text } }
-        : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
+        ? { number: numero, textMessage: { text } }
+        : { number: numero, text, textMessage: { text } };
       const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
       if (!sendResult.ok) {
         console.error(
@@ -12794,9 +12739,105 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         }
         const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
         await persistLeadFailed(lead, failKind);
+        return false;
+      }
+      lastSendJson = sendResult.json;
+      return true;
+    };
+
+    /** HTTP 201 da Evolution ≠ entrega. ERROR no MessageUpdate → não marcar sent. */
+    const confirmCampaignSendAck = async (): Promise<EvoMessageAckStatus> => {
+      const messageId = extractAquecedorSendMessageId(lastSendJson);
+      if (!messageId) {
+        console.warn(
+          "[Campanha] Sem messageId no retorno EVO — não foi possível checar ACK:",
+          lead.phone,
+        );
+        return "UNKNOWN";
+      }
+      const ackProbe = await probeAquecedorSendAckStatus(instancePick.instancia, messageId, {
+        maxAttempts: 5,
+        intervalMs: 2000,
+      });
+      console.info(
+        `[Campanha] ACK ${instancePick.instancia} → ${lead.phone} msg=${messageId} status=${ackProbe.status}`,
+      );
+      return ackProbe.status;
+    };
+
+    if (isAlternativaMotor) {
+      const typingMs = computeAlternativaTypingDelayMs(outbound.text);
+      await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
+    }
+
+    if (isAlternativaMotor && buttonUrl) {
+      const buttonResult = await sendEvoAlternativaUrlButtonMessage({
+        instanceName: instancePick.instancia,
+        number: numero,
+        messageText: outbound.text,
+        buttonLabel,
+        buttonUrl,
+      });
+      if (buttonResult.ok) {
+        usedUrlButton = true;
+        deliveredText = outbound.text;
+        lastSendJson = buttonResult.json;
+      } else if (isGhostButtonsPayload(buttonResult.json ?? buttonResult.body)) {
+        // Fantasma: não marcar sent. Tenta texto+link e confere ACK.
+        console.warn(
+          "[Campanha Alternativa] sendButtons fantasma; fallback texto+link:",
+          String(buttonResult.body || "").slice(0, 160),
+        );
+        deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
+        usedUrlButton = false;
+        if (!(await sendCampaignTextMessage(deliveredText))) {
+          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+          return;
+        }
+      } else {
+        console.warn(
+          "[Campanha Alternativa] sendButtons falhou; fallback texto+link:",
+          buttonResult.status,
+          String(buttonResult.body || "").slice(0, 180),
+        );
+        deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
+        usedUrlButton = false;
+        if (!(await sendCampaignTextMessage(deliveredText))) {
+          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+          return;
+        }
+      }
+    } else {
+      if (!(await sendCampaignTextMessage(outbound.text))) {
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
       }
+    }
+
+    let ackStatus = await confirmCampaignSendAck();
+    if (isEvoAckFailure(ackStatus) && usedUrlButton && buttonUrl) {
+      // Botão aceito pela API mas WhatsApp devolveu ERROR — tenta texto+link uma vez.
+      console.warn(
+        `[Campanha] ACK=${ackStatus} no botão; tentando fallback texto+link:`,
+        lead.phone,
+      );
+      deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
+      usedUrlButton = false;
+      if (!(await sendCampaignTextMessage(deliveredText))) {
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+        return;
+      }
+      ackStatus = await confirmCampaignSendAck();
+    }
+    if (isEvoAckFailure(ackStatus)) {
+      console.error(
+        `[Campanha] ACK=${ackStatus} — não marcar sent (EVO HTTP ok, WhatsApp rejeitou):`,
+        instancePick.instancia,
+        lead.phone,
+      );
+      await persistLeadFailed(lead, "send_error");
+      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+      return;
     }
 
     const sentIso = new Date().toISOString();

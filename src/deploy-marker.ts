@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-br-phone-9th-report";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-campaign-ack-check";
 
