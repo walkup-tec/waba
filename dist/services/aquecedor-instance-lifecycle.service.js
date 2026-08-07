@@ -12,6 +12,7 @@ exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
 exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
 exports.restoreAquecedorLifecycleFromHistory = restoreAquecedorLifecycleFromHistory;
+exports.restoreAquecedorLifecyclesFromHistoryBatch = restoreAquecedorLifecyclesFromHistoryBatch;
 exports.registerAquecedorInstancePreparing = registerAquecedorInstancePreparing;
 exports.grandfatherAquecedorInstanceActive = grandfatherAquecedorInstanceActive;
 exports.isWithinPostPreparingSendWindow = isWithinPostPreparingSendWindow;
@@ -326,43 +327,62 @@ async function removeAquecedorInstanceLifecycle(instanceName) {
  * (ex.: após exclusão/recriação que zera o lifecycle). Não sobrescreve número já ativo.
  */
 async function restoreAquecedorLifecycleFromHistory(instanceName, earliestActivityAt) {
-    const name = String(instanceName || "").trim();
-    const activityAt = String(earliestActivityAt || "").trim();
-    if (!name || !activityAt)
-        return false;
-    const activityMs = new Date(activityAt).getTime();
-    if (!Number.isFinite(activityMs) || activityMs <= 0)
-        return false;
-    const store = await loadStore();
-    const key = normalizeKey(name);
-    const existing = await findAquecedorLifecycleRow(name);
-    if (existing) {
-        refreshRestrictionPhase(existing.row);
-        const alreadyWarm = Boolean(existing.row.activatedAt) &&
-            (existing.row.phase === "active" || existing.row.phase === "restricted_wait");
-        if (alreadyWarm)
+    const restored = await restoreAquecedorLifecyclesFromHistoryBatch([
+        { instanceName, earliestActivityAt },
+    ]);
+    return restored > 0;
+}
+/**
+ * Restaura várias instâncias numa única leitura/gravação do lifecycle
+ * (evita race de Promise.all sobrescrevendo o JSON).
+ */
+async function restoreAquecedorLifecyclesFromHistoryBatch(entries) {
+    const normalized = (Array.isArray(entries) ? entries : [])
+        .map((e) => ({
+        name: String(e?.instanceName || "").trim(),
+        activityAt: String(e?.earliestActivityAt || "").trim(),
+    }))
+        .filter((e) => {
+        if (!e.name || !e.activityAt)
             return false;
-        existing.row.phase = "active";
-        existing.row.preparingSince = null;
-        existing.row.activatedAt = new Date(activityMs).toISOString();
-        existing.row.dailyCap = computeDailyCapForInstance(name, existing.row.activatedAt);
-        if (existing.key !== key) {
-            delete store.instances[existing.key];
+        const ms = new Date(e.activityAt).getTime();
+        return Number.isFinite(ms) && ms > 0;
+    });
+    if (!normalized.length)
+        return 0;
+    const store = await loadStore();
+    let changed = 0;
+    for (const { name, activityAt } of normalized) {
+        const activityMs = new Date(activityAt).getTime();
+        const key = normalizeKey(name);
+        const existing = await findAquecedorLifecycleRow(name);
+        if (existing) {
+            refreshRestrictionPhase(existing.row);
+            const alreadyWarm = Boolean(existing.row.activatedAt) &&
+                (existing.row.phase === "active" || existing.row.phase === "restricted_wait");
+            if (alreadyWarm)
+                continue;
+            existing.row.phase = "active";
+            existing.row.preparingSince = null;
+            existing.row.activatedAt = new Date(activityMs).toISOString();
+            existing.row.dailyCap = computeDailyCapForInstance(name, existing.row.activatedAt);
+            if (existing.key !== key) {
+                delete store.instances[existing.key];
+            }
             store.instances[key] = existing.row;
+            changed += 1;
+            continue;
         }
-        else {
-            store.instances[key] = existing.row;
-        }
-        await saveStore(store);
-        return true;
+        const row = emptyRow("active");
+        row.preparingSince = null;
+        row.activatedAt = new Date(activityMs).toISOString();
+        row.dailyCap = computeDailyCapForInstance(name, row.activatedAt);
+        store.instances[key] = row;
+        changed += 1;
     }
-    const row = emptyRow("active");
-    row.preparingSince = null;
-    row.activatedAt = new Date(activityMs).toISOString();
-    row.dailyCap = computeDailyCapForInstance(name, row.activatedAt);
-    store.instances[key] = row;
-    await saveStore(store);
-    return true;
+    if (changed)
+        await saveStore(store);
+    return changed;
 }
 async function registerAquecedorInstancePreparing(instanceName, preparingSince, options) {
     const name = String(instanceName || "").trim();

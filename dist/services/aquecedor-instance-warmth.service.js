@@ -234,7 +234,7 @@ function foldEarliestToCanonical(aliasMap, raw) {
     return out;
 }
 async function loadExchangeStatsMap(supabase, instanceNames) {
-    const keys = instanceNames.map(normalizeKey).filter(Boolean);
+    const keys = Array.from(new Set(instanceNames.map(normalizeKey).filter(Boolean)));
     const now = Date.now();
     const cacheHit = now - statsCacheAt < STATS_CACHE_MS &&
         statsCache.size > 0 &&
@@ -251,68 +251,62 @@ async function loadExchangeStatsMap(supabase, instanceNames) {
     if (!keys.length)
         return out;
     const since = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const allowed = new Set(keys);
-    try {
-        const { data, error } = await supabase
-            .from("logs_envios")
-            .select("instancia_origem, instancia_destino, data_envio")
-            .gte("data_envio", since)
-            .limit(8000);
-        if (!error && Array.isArray(data)) {
-            for (const row of data) {
-                const from = normalizeKey(String(row?.instancia_origem || ""));
-                const to = normalizeKey(String(row?.instancia_destino || ""));
-                if (allowed.has(from)) {
-                    const stats = out.get(from);
-                    stats.sends7d += 1;
-                }
-                if (allowed.has(to)) {
-                    const stats = out.get(to);
-                    stats.receives7d += 1;
+    // Contagem por instância (evita perder nomes no limite global de 8000 rows).
+    const concurrency = 6;
+    for (let i = 0; i < keys.length; i += concurrency) {
+        const chunk = keys.slice(i, i + concurrency);
+        await Promise.all(chunk.map(async (name) => {
+            try {
+                const { data, error } = await supabase
+                    .from("logs_envios")
+                    .select("instancia_origem, instancia_destino")
+                    .or(`instancia_origem.eq.${name},instancia_destino.eq.${name}`)
+                    .gte("data_envio", since)
+                    .limit(5000);
+                if (error || !Array.isArray(data))
+                    return;
+                const stats = out.get(name);
+                for (const row of data) {
+                    if (normalizeKey(String(row?.instancia_origem || "")) === name)
+                        stats.sends7d += 1;
+                    if (normalizeKey(String(row?.instancia_destino || "")) === name)
+                        stats.receives7d += 1;
                 }
             }
-        }
-    }
-    catch {
-        /* Supabase opcional */
+            catch {
+                /* opcional */
+            }
+        }));
     }
     statsCacheAt = now;
-    for (const [k, v] of out)
-        statsCache.set(k, v);
+    statsCache = new Map(out);
     return out;
 }
 /** Primeira data_envio por instância (origem ou destino) — restaura aquecimento após recreate. */
 async function loadEarliestActivityMap(supabase, instanceNames) {
     const out = new Map();
-    const allowed = new Set(instanceNames.map(normalizeKey).filter(Boolean));
-    if (!allowed.size)
+    const keys = Array.from(new Set(instanceNames.map(normalizeKey).filter(Boolean)));
+    if (!keys.length)
         return out;
-    try {
-        const since = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
-        const { data, error } = await supabase
-            .from("logs_envios")
-            .select("instancia_origem, instancia_destino, data_envio")
-            .gte("data_envio", since)
-            .order("data_envio", { ascending: true })
-            .limit(12000);
-        if (error || !Array.isArray(data))
-            return out;
-        for (const row of data) {
-            const at = String(row?.data_envio || "").trim();
-            if (!at)
-                continue;
-            for (const raw of [row?.instancia_origem, row?.instancia_destino]) {
-                const key = normalizeKey(String(raw || ""));
-                if (!allowed.has(key) || out.has(key))
-                    continue;
-                out.set(key, at);
+    const concurrency = 6;
+    for (let i = 0; i < keys.length; i += concurrency) {
+        const chunk = keys.slice(i, i + concurrency);
+        await Promise.all(chunk.map(async (name) => {
+            try {
+                const { data, error } = await supabase
+                    .from("logs_envios")
+                    .select("data_envio")
+                    .or(`instancia_origem.eq.${name},instancia_destino.eq.${name}`)
+                    .order("data_envio", { ascending: true })
+                    .limit(1);
+                if (error || !Array.isArray(data) || !data[0]?.data_envio)
+                    return;
+                out.set(name, String(data[0].data_envio));
             }
-            if (out.size >= allowed.size)
-                break;
-        }
-    }
-    catch {
-        /* opcional */
+            catch {
+                /* opcional */
+            }
+        }));
     }
     return out;
 }
@@ -341,12 +335,10 @@ async function getAquecedorWarmthMapForInstances(instanceNames, supabase) {
         ]);
         exchangeMap = foldStatsToCanonical(aliasMap, rawExchange);
         earliestMap = foldEarliestToCanonical(aliasMap, rawEarliest);
-        await Promise.all(requested.map(async (name) => {
-            const key = normalizeKey(name);
-            const at = earliestMap.get(key);
-            if (at)
-                await (0, aquecedor_instance_lifecycle_service_1.restoreAquecedorLifecycleFromHistory)(name, at);
-        }));
+        await (0, aquecedor_instance_lifecycle_service_1.restoreAquecedorLifecyclesFromHistoryBatch)(requested.map((name) => ({
+            instanceName: name,
+            earliestActivityAt: earliestMap.get(normalizeKey(name)) || null,
+        })));
     }
     await Promise.all(requested.map(async (name) => {
         const key = normalizeKey(name);
