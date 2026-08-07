@@ -7412,6 +7412,13 @@ async function runRegistrarQrcode(input) {
         }
         void ensureAquecedorInstanceRegistered(name);
     }
+    // Proxy ligado impede pareamento WhatsApp. Sempre desligar antes de gerar QR (sem excluir a instância).
+    try {
+        await (0, evo_instance_proxy_service_1.disableProxyBrasilOnEvoInstance)(name, callEvoAction, EVO_API_BASE);
+    }
+    catch (err) {
+        console.warn(`[QR] ${name}: falha ao desligar proxy antes do QR:`, err);
+    }
     const createPayload = {
         instanceName: name,
         name,
@@ -7455,7 +7462,7 @@ async function runRegistrarQrcode(input) {
             break;
         }
     }
-    // Proxy Brasil NÃO aplica no Aquecedor/QR — só na seleção de instâncias da campanha Alternativa.
+    // Proxy Brasil NÃO aplica no Aquecedor/QR — só no «Gerar Campanha».
     let createWarning = null;
     if (!createOk) {
         createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
@@ -7655,6 +7662,13 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
             });
         }
         const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
+        // Reconexão sem excluir: proxy de campanha deve estar off durante o pareamento.
+        try {
+            await (0, evo_instance_proxy_service_1.disableProxyBrasilOnEvoInstance)(instanceName, callEvoAction, EVO_API_BASE);
+        }
+        catch (err) {
+            console.warn(`[QR] ${instanceName}: falha ao desligar proxy antes do QR:`, err);
+        }
         let qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
             prepareSession: false,
         });

@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-proxy-only-on-gerar-campanha";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-qr-disable-proxy-before-pair";
 
