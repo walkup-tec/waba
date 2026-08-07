@@ -13690,25 +13690,9 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             .filter(Boolean)
         : [];
       if (selectedForProxy.length && loadProxyBrasilConfig()?.enabled) {
-        const prepareResults = await prepareProxyBrasilForCampaignInstancesNow(selectedForProxy);
-        const notReady = prepareResults.filter((r) => !r.ok);
-        if (notReady.length) {
-          const detail = notReady
-            .map((r) => `${r.instanceName}: ${r.reason || "não pronta"}`)
-            .join(" | ");
-          return res.status(409).json({
-            error:
-              "Campanha não iniciada: as instâncias precisam estar conectadas COM Proxy Brasil (pareamento via QR com campaignProxy=1). Gerar campanha não aplica mais proxy a quente (isso derrubava a sessão).",
-            detail,
-            code: "campaign_proxy_pairing_required",
-            prepareResults: notReady.map((r) => ({
-              instanceName: r.instanceName,
-              reason: r.reason,
-              needsProxyPairing: r.needsProxyPairing === true,
-              rolledBack: r.rolledBack === true,
-            })),
-          });
-        }
+        // Prepara em silêncio: se open, libera envio; se proxy morto, faz rollback.
+        // Não bloqueia o clique do usuário com 409 — a campanha deve ativar e disparar.
+        await prepareProxyBrasilForCampaignInstancesNow(selectedForProxy);
       }
     }
     campaign.status = nextStatus;

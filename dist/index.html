@@ -42711,11 +42711,13 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ativa }),
           },
-          15000
+          60000
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          showToast(String(data?.error || "Não foi possível alterar o estado da campanha."), "error");
+          const detail = String(data?.detail || "").trim();
+          const baseErr = String(data?.error || "Não foi possível alterar o estado da campanha.");
+          showToast(detail ? `${baseErr} ${detail}` : baseErr, "error", 7200);
           return false;
         }
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");

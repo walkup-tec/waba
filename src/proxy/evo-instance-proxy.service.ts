@@ -475,27 +475,32 @@ export async function prepareProxyBrasilSessionForCampaignSend(
         );
       }
 
-      // Proxy Brasil a quente em sessão já pareada SEM proxy derruba o Baileys
-      // (Connection Closed) e restart leve NÃO recupera. Não aplicar a quente.
+      // Proxy a quente em sessão já pareada derruba o Baileys.
+      // Se já está open: libera envio SEM aplicar proxy (preserva conexão e dispara a campanha).
       if (proxyEnabled !== true && wasOpen) {
+        const stable = await assertStableOpen(deps, name, { rounds: 2, gapMs: 800 });
+        if (!stable.ok) {
+          return failAndRollback(
+            `Sessão sem proxy instável (state=${stable.state || liveBefore}).`,
+            { state: stable.state || liveBefore },
+          );
+        }
         const entry = setPrepareStatus(name, {
-          status: "failed",
-          state: liveBefore,
-          reason:
-            "Número conectado sem Proxy Brasil. Não aplicamos proxy a quente (derruba a sessão). Reconecte no Aquecedor com campaignProxy=1 (QR já com proxy) e depois ative a campanha.",
+          status: "ready",
+          state: stable.state,
+          reason: "sessão open — envio liberado sem hot-apply de proxy (preserva pareamento)",
           proxyApplied: false,
           restarted: false,
-          rolledBack: false,
-          needsProxyPairing: true,
         });
-        console.warn(`[ProxyBrasil] ${name}: ${entry.reason}`);
+        console.info(`[ProxyBrasil] ${name}: ${entry.reason}`);
         return {
-          ok: false,
+          ok: true,
           instanceName: name,
           status: entry.status,
-          state: liveBefore,
+          state: stable.state,
           reason: entry.reason,
-          needsProxyPairing: true,
+          proxyApplied: false,
+          restarted: false,
         };
       }
 
