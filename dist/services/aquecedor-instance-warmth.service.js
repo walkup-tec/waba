@@ -137,26 +137,127 @@ function computeWarmthFromLifecycleRow(row, exchangeStats) {
         receives7d,
     });
 }
+function phoneTail(raw) {
+    const d = String(raw || "").replace(/\D/g, "");
+    if (d.length >= 12)
+        return d.slice(-11);
+    if (d.length >= 10)
+        return d.slice(-11);
+    return d;
+}
+/**
+ * Agrupa nomes técnicos que compartilham o mesmo WhatsApp (controle_instancia).
+ * Ex.: 6635 ← 6035, 51981076635.
+ */
+async function loadCanonicalAliasMap(supabase, instanceNames) {
+    const requested = Array.from(new Set(instanceNames.map(normalizeKey).filter(Boolean)));
+    const result = new Map();
+    for (const key of requested)
+        result.set(key, [key]);
+    if (!requested.length)
+        return result;
+    try {
+        const { data, error } = await supabase
+            .from("controle_instancia")
+            .select("instancia, numero_whatsapp")
+            .limit(5000);
+        if (error || !Array.isArray(data))
+            return result;
+        const phoneToNames = new Map();
+        const nameToPhone = new Map();
+        for (const row of data) {
+            const name = normalizeKey(String(row?.instancia || ""));
+            const phone = phoneTail(String(row?.numero_whatsapp || ""));
+            if (!name || phone.length < 8)
+                continue;
+            nameToPhone.set(name, phone);
+            let set = phoneToNames.get(phone);
+            if (!set) {
+                set = new Set();
+                phoneToNames.set(phone, set);
+            }
+            set.add(name);
+        }
+        for (const key of requested) {
+            const phone = nameToPhone.get(key);
+            if (!phone)
+                continue;
+            const group = phoneToNames.get(phone);
+            if (!group?.size)
+                continue;
+            result.set(key, Array.from(group));
+        }
+    }
+    catch {
+        /* opcional */
+    }
+    return result;
+}
+function expandAliasNames(aliasMap) {
+    const all = new Set();
+    for (const names of aliasMap.values()) {
+        for (const n of names)
+            all.add(normalizeKey(n));
+    }
+    return Array.from(all);
+}
+function foldStatsToCanonical(aliasMap, raw) {
+    const out = new Map();
+    for (const [canonical, aliases] of aliasMap) {
+        let sends7d = 0;
+        let receives7d = 0;
+        for (const alias of aliases) {
+            const row = raw.get(normalizeKey(alias));
+            if (!row)
+                continue;
+            sends7d += row.sends7d;
+            receives7d += row.receives7d;
+        }
+        out.set(canonical, { sends7d, receives7d });
+    }
+    return out;
+}
+function foldEarliestToCanonical(aliasMap, raw) {
+    const out = new Map();
+    for (const [canonical, aliases] of aliasMap) {
+        let best = null;
+        for (const alias of aliases) {
+            const at = raw.get(normalizeKey(alias));
+            if (!at)
+                continue;
+            if (!best || at < best)
+                best = at;
+        }
+        if (best)
+            out.set(canonical, best);
+    }
+    return out;
+}
 async function loadExchangeStatsMap(supabase, instanceNames) {
+    const keys = instanceNames.map(normalizeKey).filter(Boolean);
     const now = Date.now();
-    if (now - statsCacheAt < STATS_CACHE_MS && statsCache.size > 0) {
-        return statsCache;
+    const cacheHit = now - statsCacheAt < STATS_CACHE_MS &&
+        statsCache.size > 0 &&
+        keys.every((k) => statsCache.has(k));
+    if (cacheHit) {
+        const hit = new Map();
+        for (const k of keys)
+            hit.set(k, statsCache.get(k));
+        return hit;
     }
     const out = new Map();
-    for (const name of instanceNames) {
-        const key = normalizeKey(name);
+    for (const key of keys)
         out.set(key, { sends7d: 0, receives7d: 0 });
-    }
-    if (!instanceNames.length)
+    if (!keys.length)
         return out;
     const since = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const allowed = new Set(instanceNames.map(normalizeKey));
+    const allowed = new Set(keys);
     try {
         const { data, error } = await supabase
             .from("logs_envios")
             .select("instancia_origem, instancia_destino, data_envio")
             .gte("data_envio", since)
-            .limit(5000);
+            .limit(8000);
         if (!error && Array.isArray(data)) {
             for (const row of data) {
                 const from = normalizeKey(String(row?.instancia_origem || ""));
@@ -176,28 +277,78 @@ async function loadExchangeStatsMap(supabase, instanceNames) {
         /* Supabase opcional */
     }
     statsCacheAt = now;
-    statsCache = out;
+    for (const [k, v] of out)
+        statsCache.set(k, v);
+    return out;
+}
+/** Primeira data_envio por instância (origem ou destino) — restaura aquecimento após recreate. */
+async function loadEarliestActivityMap(supabase, instanceNames) {
+    const out = new Map();
+    const allowed = new Set(instanceNames.map(normalizeKey).filter(Boolean));
+    if (!allowed.size)
+        return out;
+    try {
+        const since = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase
+            .from("logs_envios")
+            .select("instancia_origem, instancia_destino, data_envio")
+            .gte("data_envio", since)
+            .order("data_envio", { ascending: true })
+            .limit(12000);
+        if (error || !Array.isArray(data))
+            return out;
+        for (const row of data) {
+            const at = String(row?.data_envio || "").trim();
+            if (!at)
+                continue;
+            for (const raw of [row?.instancia_origem, row?.instancia_destino]) {
+                const key = normalizeKey(String(raw || ""));
+                if (!allowed.has(key) || out.has(key))
+                    continue;
+                out.set(key, at);
+            }
+            if (out.size >= allowed.size)
+                break;
+        }
+    }
+    catch {
+        /* opcional */
+    }
     return out;
 }
 async function getInstanceWarmthInfo(instanceName, supabase) {
-    const overrides = await loadWarmthOverrides();
-    const row = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleRow)(instanceName);
-    let exchangeStats;
-    if (supabase) {
-        const map = await loadExchangeStatsMap(supabase, [instanceName]);
-        exchangeStats = map.get(normalizeKey(instanceName));
-    }
-    const computed = computeWarmthFromLifecycleRow(row, exchangeStats);
-    return applyWarmthOverride(computed, overrides, instanceName);
+    const map = await getAquecedorWarmthMapForInstances([instanceName], supabase);
+    return (map[normalizeKey(instanceName)] || {
+        level: 0,
+        label: WARMTH_LABELS[0],
+        ageDays: 0,
+        avgDailySends: 0,
+        replyRate: 0,
+    });
 }
 async function getAquecedorWarmthMapForInstances(instanceNames, supabase) {
     const overrides = await loadWarmthOverrides();
     const out = {};
+    const requested = Array.from(new Set(instanceNames.map((n) => String(n || "").trim()).filter(Boolean)));
     let exchangeMap = new Map();
-    if (supabase && instanceNames.length) {
-        exchangeMap = await loadExchangeStatsMap(supabase, instanceNames);
+    let earliestMap = new Map();
+    if (supabase && requested.length) {
+        const aliasMap = await loadCanonicalAliasMap(supabase, requested);
+        const expanded = expandAliasNames(aliasMap);
+        const [rawExchange, rawEarliest] = await Promise.all([
+            loadExchangeStatsMap(supabase, expanded),
+            loadEarliestActivityMap(supabase, expanded),
+        ]);
+        exchangeMap = foldStatsToCanonical(aliasMap, rawExchange);
+        earliestMap = foldEarliestToCanonical(aliasMap, rawEarliest);
+        await Promise.all(requested.map(async (name) => {
+            const key = normalizeKey(name);
+            const at = earliestMap.get(key);
+            if (at)
+                await (0, aquecedor_instance_lifecycle_service_1.restoreAquecedorLifecycleFromHistory)(name, at);
+        }));
     }
-    await Promise.all(instanceNames.map(async (name) => {
+    await Promise.all(requested.map(async (name) => {
         const key = normalizeKey(name);
         const row = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleRow)(name);
         const computed = computeWarmthFromLifecycleRow(row, exchangeMap.get(key));

@@ -11,6 +11,7 @@ exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
 exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
+exports.restoreAquecedorLifecycleFromHistory = restoreAquecedorLifecycleFromHistory;
 exports.registerAquecedorInstancePreparing = registerAquecedorInstancePreparing;
 exports.grandfatherAquecedorInstanceActive = grandfatherAquecedorInstanceActive;
 exports.isWithinPostPreparingSendWindow = isWithinPostPreparingSendWindow;
@@ -320,6 +321,49 @@ async function removeAquecedorInstanceLifecycle(instanceName) {
     if (changed)
         await saveStore(store);
 }
+/**
+ * Restaura fase active + activatedAt a partir da primeira atividade histórica
+ * (ex.: após exclusão/recriação que zera o lifecycle). Não sobrescreve número já ativo.
+ */
+async function restoreAquecedorLifecycleFromHistory(instanceName, earliestActivityAt) {
+    const name = String(instanceName || "").trim();
+    const activityAt = String(earliestActivityAt || "").trim();
+    if (!name || !activityAt)
+        return false;
+    const activityMs = new Date(activityAt).getTime();
+    if (!Number.isFinite(activityMs) || activityMs <= 0)
+        return false;
+    const store = await loadStore();
+    const key = normalizeKey(name);
+    const existing = await findAquecedorLifecycleRow(name);
+    if (existing) {
+        refreshRestrictionPhase(existing.row);
+        const alreadyWarm = Boolean(existing.row.activatedAt) &&
+            (existing.row.phase === "active" || existing.row.phase === "restricted_wait");
+        if (alreadyWarm)
+            return false;
+        existing.row.phase = "active";
+        existing.row.preparingSince = null;
+        existing.row.activatedAt = new Date(activityMs).toISOString();
+        existing.row.dailyCap = computeDailyCapForInstance(name, existing.row.activatedAt);
+        if (existing.key !== key) {
+            delete store.instances[existing.key];
+            store.instances[key] = existing.row;
+        }
+        else {
+            store.instances[key] = existing.row;
+        }
+        await saveStore(store);
+        return true;
+    }
+    const row = emptyRow("active");
+    row.preparingSince = null;
+    row.activatedAt = new Date(activityMs).toISOString();
+    row.dailyCap = computeDailyCapForInstance(name, row.activatedAt);
+    store.instances[key] = row;
+    await saveStore(store);
+    return true;
+}
 async function registerAquecedorInstancePreparing(instanceName, preparingSince, options) {
     const name = String(instanceName || "").trim();
     if (!name)
@@ -356,6 +400,8 @@ async function registerAquecedorInstancePreparing(instanceName, preparingSince, 
                 }
                 return;
             }
+            // Já tinha row mas sem ativação (ex.: recreate após purge antigo): mantém preparing só se
+            // não houver histórico — restore via warmth/history cuida do restante.
             applyPreparingPhase(existing.row, since);
             // Regrava sob a chave canônica atual
             if (existing.key !== key) {

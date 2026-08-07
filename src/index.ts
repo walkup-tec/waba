@@ -188,7 +188,6 @@ import {
   markAquecedorInstanceRestricted,
   recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
-  removeAquecedorInstanceLifecycle,
   syncAquecedorPreparingPromotions,
   getAquecedorLifecycleStatusForInstance,
 } from "./services/aquecedor-instance-lifecycle.service";
@@ -7191,7 +7190,8 @@ async function purgeInstanceLocalState(instanceName: string): Promise<void> {
 
   for (const key of purgeKeys) {
     await removeInstanceUsageConfig(key);
-    await removeAquecedorInstanceLifecycle(key);
+    // NÃO apagar aquecedor-instance-lifecycle: exclusão/recriação da EVO deve
+    // preservar activatedAt e nível de aquecimento (foguinhos) do mesmo nome.
     await wabaInstanceOwnershipService.removeOwner(key);
   }
   await wabaInstanceOwnershipService.markInstancesDeleted(purgeKeys);

@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-06-proxy-only-on-campaign-select";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-warmth-restore-all-by-phone";
 

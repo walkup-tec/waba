@@ -5937,7 +5937,8 @@ async function purgeInstanceLocalState(instanceName) {
         await persistWhatsappProfileNamesMap(whatsappMap);
     for (const key of purgeKeys) {
         await removeInstanceUsageConfig(key);
-        await (0, aquecedor_instance_lifecycle_service_1.removeAquecedorInstanceLifecycle)(key);
+        // NÃO apagar aquecedor-instance-lifecycle: exclusão/recriação da EVO deve
+        // preservar activatedAt e nível de aquecimento (foguinhos) do mesmo nome.
         await waba_instance_ownership_service_1.wabaInstanceOwnershipService.removeOwner(key);
     }
     await waba_instance_ownership_service_1.wabaInstanceOwnershipService.markInstancesDeleted(purgeKeys);
