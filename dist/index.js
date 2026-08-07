@@ -10339,20 +10339,49 @@ async function hydrateCampaignFromDbIfNeeded(campaignId, options = {}) {
             existing.sentCount = Number(row.sent_count ?? existing.sentCount);
             existing.configSnapshot = configSnapshot;
             if (leadRows.length > 0) {
+                const memTerminal = new Map();
+                for (const ml of disparosCampaignLeadsMemory) {
+                    if (ml.campaignId !== campaignId)
+                        continue;
+                    if (ml.status === "sent" || ml.status === "failed") {
+                        memTerminal.set(ml.id, {
+                            status: ml.status,
+                            sentAt: ml.sentAt,
+                            shortUrl: ml.shortUrl,
+                            messageText: ml.messageText,
+                        });
+                    }
+                }
                 removeLeadsForCampaignFromMemory(campaignId);
                 for (const lr of leadRows) {
+                    const idLead = String(lr?.id || crypto_1.default.randomUUID());
                     const st = String(lr?.status || "pending").toLowerCase();
+                    let leadStatus = st === "sent" ? "sent" : st === "failed" ? "failed" : "pending";
+                    let sentAt = lr?.sent_at ? String(lr.sent_at) : null;
+                    let shortUrl = typeof lr?.short_url === "string" ? String(lr.short_url) : undefined;
+                    let messageText = typeof lr?.message_text === "string" ? String(lr.message_text) : undefined;
+                    // Nunca rebaixar sent/failed da memória para pending do DB (persist falho → reenvio).
+                    const terminal = memTerminal.get(idLead);
+                    if (terminal && leadStatus === "pending") {
+                        leadStatus = terminal.status;
+                        sentAt = terminal.sentAt;
+                        shortUrl = terminal.shortUrl ?? shortUrl;
+                        messageText = terminal.messageText ?? messageText;
+                    }
                     disparosCampaignLeadsMemory.push({
-                        id: String(lr?.id || crypto_1.default.randomUUID()),
+                        id: idLead,
                         campaignId: String(lr?.campaign_id || campaignId),
                         phone: String(lr?.phone || ""),
-                        status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
-                        shortUrl: typeof lr?.short_url === "string" ? String(lr.short_url) : undefined,
-                        messageText: typeof lr?.message_text === "string" ? String(lr.message_text) : undefined,
+                        status: leadStatus,
+                        shortUrl,
+                        messageText,
                         createdAt: String(lr?.created_at || new Date().toISOString()),
-                        sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+                        sentAt,
                     });
                 }
+                const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId && l.status === "sent").length;
+                if (sentN > existing.sentCount)
+                    existing.sentCount = sentN;
             }
             if (!options.skipQueueLocalPersist)
                 queuePersistDisparosLocalState();
@@ -10607,35 +10636,63 @@ async function composeOutboundMessageForConfig(config, opts) {
 }
 async function persistLeadSentAndCampaignCount(campaignId, leadId, nextSentCount, payload) {
     const supabase = getSupabaseClient();
-    if (!supabase)
-        return;
+    if (!supabase) {
+        queuePersistDisparosLocalState();
+        return true;
+    }
     try {
         const sentAt = new Date().toISOString();
         const shortUrl = String(payload?.shortUrl || "").trim();
         const messageText = String(payload?.messageText || "").trim();
+        let leadPersisted = false;
         try {
-            await supabase.from("disparos_campaign_leads")
+            const full = await supabase.from("disparos_campaign_leads")
                 .update({
                 status: "sent",
                 sent_at: sentAt,
                 short_url: shortUrl || null,
                 message_text: messageText || null,
             })
-                .eq("id", leadId);
+                .eq("id", leadId)
+                .select("id");
+            if (!full?.error)
+                leadPersisted = true;
+            else {
+                console.warn("[Campanha] persist lead sent (full) falhou:", leadId, full.error?.message || full.error);
+            }
         }
-        catch {
-            await supabase.from("disparos_campaign_leads")
+        catch (err) {
+            console.warn("[Campanha] persist lead sent (full) exceção:", leadId, err?.message || err);
+        }
+        if (!leadPersisted) {
+            const legacy = await supabase.from("disparos_campaign_leads")
                 .update({ status: "sent", sent_at: sentAt })
-                .eq("id", leadId);
+                .eq("id", leadId)
+                .select("id");
+            if (!legacy?.error)
+                leadPersisted = true;
+            else {
+                console.error("[Campanha] persist lead sent (legacy) falhou — risco de reenvio:", leadId, legacy.error?.message || legacy.error);
+            }
         }
-        await supabase.from("disparos_campaigns")
+        if (!leadPersisted) {
+            queuePersistDisparosLocalState();
+            return false;
+        }
+        const campUp = await supabase.from("disparos_campaigns")
             .update({ sent_count: nextSentCount })
             .eq("id", campaignId);
+        if (campUp?.error) {
+            console.warn("[Campanha] persist sent_count falhou:", campaignId, campUp.error?.message || campUp.error);
+        }
+        queuePersistDisparosLocalState();
+        return true;
     }
-    catch {
-        /* */
+    catch (err) {
+        console.error("[Campanha] persistLeadSentAndCampaignCount:", err?.message || err);
+        queuePersistDisparosLocalState();
+        return false;
     }
-    queuePersistDisparosLocalState();
 }
 async function persistLeadFailed(lead, kind) {
     lead.status = "failed";
@@ -10715,17 +10772,36 @@ async function processOneCampaignDispatch(campaignId) {
     try {
         const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
         const isAlternativaMotor = Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
-        const lead = disparosCampaignLeadsMemory.find((l) => l.campaignId === campaignId && l.status === "pending");
+        const sentPhoneDigits = new Set(disparosCampaignLeadsMemory
+            .filter((l) => l.campaignId === campaignId && l.status === "sent")
+            .map((l) => String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, ""))
+            .filter((d) => d.length >= 10));
+        const lead = disparosCampaignLeadsMemory.find((l) => {
+            if (l.campaignId !== campaignId || l.status !== "pending")
+                return false;
+            const digits = String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, "");
+            if (digits.length >= 10 && sentPhoneDigits.has(digits)) {
+                // Destino já recebeu nesta campanha — nunca reenviar (corrige persist/hydrate).
+                l.status = "sent";
+                if (!l.sentAt)
+                    l.sentAt = new Date().toISOString();
+                return false;
+            }
+            return true;
+        });
         if (!lead) {
             const stillSending = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId && l.status === "sending");
             if (stillSending)
                 return;
+            const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId && l.status === "sent").length;
+            if (sentN > campaign.sentCount)
+                campaign.sentCount = sentN;
             campaign.status = "finished";
             const supabase = getSupabaseClient();
             if (supabase) {
                 try {
                     await supabase.from("disparos_campaigns")
-                        .update({ status: "finished" })
+                        .update({ status: "finished", sent_count: campaign.sentCount })
                         .eq("id", campaignId);
                 }
                 catch {
@@ -10836,11 +10912,10 @@ async function processOneCampaignDispatch(campaignId) {
                 deliveredText = outbound.text;
             }
             else if (isGhostButtonsPayload(buttonResult.json ?? buttonResult.body)) {
-                // Ghost pode ter entregue o corpo: não enviar texto de novo (duplicata).
-                console.warn("[Campanha Alternativa] sendButtons fantasma; sem fallback texto para evitar duplicata:", String(buttonResult.body || "").slice(0, 160));
-                lead.status = "pending";
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-                return;
+                // Ghost = Evolution pode ter entregue o corpo. Conta como enviado — NUNCA pending (duplicata).
+                console.warn("[Campanha Alternativa] sendButtons fantasma; marcando lead como enviado (sem fallback texto):", String(buttonResult.body || "").slice(0, 160));
+                usedUrlButton = true;
+                deliveredText = outbound.text;
             }
             else {
                 console.warn("[Campanha Alternativa] sendButtons falhou; fallback texto+link:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
@@ -10882,7 +10957,8 @@ async function processOneCampaignDispatch(campaignId) {
             : deliveredText;
         lead.sentAt = sentIso;
         lead.shortUrl = outbound.shortUrl || undefined;
-        campaign.sentCount += 1;
+        const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaign.id && l.status === "sent").length;
+        campaign.sentCount = Math.max(campaign.sentCount, sentN);
         recordInstanceDailySend(instancePick.instancia);
         if (ownerEmail) {
             const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
@@ -10906,10 +10982,13 @@ async function processOneCampaignDispatch(campaignId) {
                 }
             }
         }
-        await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
+        const persisted = await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
             shortUrl: lead.shortUrl || null,
             messageText: lead.messageText || null,
         });
+        if (!persisted) {
+            console.error("[Campanha] Lead marcado sent em memória mas falhou no Supabase — bloqueando reenvio pelo status local:", lead.id, lead.phone);
+        }
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
     }
     finally {

@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-ativar-campanha-sem-bloquear";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-one-message-per-destination";
 
