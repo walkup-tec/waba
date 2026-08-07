@@ -78,16 +78,20 @@ export function computeAlternativaTypingDelayMs(messageText: string): number {
   return base + jitter;
 }
 
-/** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente. */
+/** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente.
+ * Intervalo entre envios = metade do pacing “cheio” (ex.: 8–22h → ~72–96s em vez de ~144–192s).
+ */
 export function computeAlternativaThrottle(input: AlternativaThrottleInput): AlternativaThrottle {
   const startHour = Math.max(0, Math.min(23, Math.floor(Number(input.startHour) || 8)));
   const endHour = Math.max(startHour + 1, Math.min(24, Math.floor(Number(input.endHour) || 22)));
   const hoursPerWindow = endHour - startHour;
   const maxPerDay = ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER;
   const maxPerHour = Math.max(1, Math.ceil(maxPerDay / hoursPerWindow));
-  const avgIntervalSec = Math.max(60, Math.floor((hoursPerWindow * 3600) / maxPerDay));
-  const delayMin = Math.max(10, avgIntervalSec - 24);
-  const delayMax = Math.min(3600, avgIntervalSec + 24);
+  const fullAvgIntervalSec = Math.max(60, Math.floor((hoursPerWindow * 3600) / maxPerDay));
+  const avgIntervalSec = Math.max(30, Math.floor(fullAvgIntervalSec / 2));
+  const jitter = Math.max(6, Math.floor(24 / 2));
+  const delayMin = Math.max(10, avgIntervalSec - jitter);
+  const delayMax = Math.min(3600, avgIntervalSec + jitter);
   return {
     delayMinSeconds: delayMin,
     delayMaxSeconds: Math.max(delayMin, delayMax),
