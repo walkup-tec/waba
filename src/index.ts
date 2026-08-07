@@ -8838,6 +8838,23 @@ async function resetEvoInstanceForQr(instanceName: string): Promise<void> {
   await sleepMs(2500);
 }
 
+/** Soft-reset só na Evolution (mesmo nome). Não apaga lifecycle/ownership no WABA. */
+async function softResetDisconnectedEvoInstanceForQr(instanceName: string): Promise<void> {
+  const name = String(instanceName || "").trim();
+  if (!name) return;
+  try {
+    await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
+  } catch {
+    /* best-effort */
+  }
+  const live = await fetchEvoInstanceConnectionState(name, { fresh: true });
+  if (live.open) return;
+  console.warn(
+    `[QR] ${name}: soft-reset EVO (logout+delete+recreate) — sessão desconectada/corrompida; WABA preservado.`,
+  );
+  await resetEvoInstanceForQr(name);
+}
+
 type EvoQrFetchOptions = {
   timeoutMs?: number;
   retries?: number;
@@ -8933,11 +8950,20 @@ async function runRegistrarQrcode(
     void ensureAquecedorInstanceRegistered(name);
   }
 
-  // Proxy ligado impede pareamento WhatsApp. Sempre desligar antes de gerar QR (sem excluir a instância).
+  // Proxy ligado impede pareamento WhatsApp. Sempre desligar antes de gerar QR (sem excluir no WABA).
   try {
     await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
   } catch (err) {
     console.warn(`[QR] ${name}: falha ao desligar proxy antes do QR:`, err);
+  }
+
+  const liveBefore = await fetchEvoInstanceConnectionState(name, { fresh: true });
+  if (liveBefore.open) {
+    return {
+      ok: false,
+      httpStatus: 409,
+      error: "Esta instância já está conectada no sistema WABA - Drax.",
+    };
   }
 
   const createPayload: Record<string, unknown> = {
@@ -8960,28 +8986,45 @@ async function runRegistrarQrcode(
   let qrFromCreate: string | null = null;
   let instanceWasNew = false;
 
-  for (const createUrl of createUrls) {
-    const createResult = await callEvoAction(createUrl, "POST", createPayload, {
-      timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000),
-      retries: 2,
-    });
-    lastCreateStatus = createResult.status;
-    lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
-    if (createResult.ok) {
-      createOk = true;
-      instanceWasNew = true;
-      qrFromCreate =
-        tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
-      if (qrFromCreate) break;
-      break;
+  async function tryCreateOnce(): Promise<void> {
+    for (const createUrl of createUrls) {
+      const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+        timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000),
+        retries: 2,
+      });
+      lastCreateStatus = createResult.status;
+      lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
+      if (createResult.ok) {
+        createOk = true;
+        instanceWasNew = true;
+        qrFromCreate =
+          tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+        return;
+      }
+      if (createResult.status === 409) {
+        createOk = true;
+        qrFromCreate =
+          tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+        return;
+      }
     }
-    if (createResult.status === 409) {
-      createOk = true;
-      qrFromCreate =
-        tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
-      if (qrFromCreate) break;
-      break;
-    }
+  }
+
+  await tryCreateOnce();
+
+  // Instância já existia (409) e está desconectada: limpa sessão Baileys na EVO e recria o mesmo nome.
+  // Não remove ownership/lifecycle/aquecimento no WABA.
+  if (createOk && !instanceWasNew && !qrFromCreate) {
+    await softResetDisconnectedEvoInstanceForQr(name);
+    createOk = false;
+    lastCreateStatus = 0;
+    lastCreateDetail = "";
+    qrFromCreate = null;
+    instanceWasNew = false;
+    await tryCreateOnce();
+  } else if (!createOk && liveBefore.ok) {
+    await softResetDisconnectedEvoInstanceForQr(name);
+    await tryCreateOnce();
   }
 
   // Proxy Brasil NÃO aplica no Aquecedor/QR — só no «Gerar Campanha».
@@ -9217,12 +9260,21 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
 
     const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
 
-    // Reconexão sem excluir: proxy de campanha deve estar off durante o pareamento.
-    try {
-      await disableProxyBrasilOnEvoInstance(instanceName, callEvoAction, EVO_API_BASE);
-    } catch (err) {
-      console.warn(`[QR] ${instanceName}: falha ao desligar proxy antes do QR:`, err);
-    }
+    // Reconexão sem excluir no WABA: tira proxy e limpa sessão Baileys corrompida na EVO.
+    await softResetDisconnectedEvoInstanceForQr(instanceName);
+    // Recria o mesmo nome se o soft-reset apagou na EVO.
+    await callEvoAction(
+      `${EVO_API_BASE}/instance/create`,
+      "POST",
+      {
+        instanceName,
+        name: instanceName,
+        qrcode: true,
+        integration: "WHATSAPP-BAILEYS",
+        ...(number ? { number } : {}),
+      },
+      { timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000), retries: 2 },
+    );
 
     let qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
       prepareSession: false,

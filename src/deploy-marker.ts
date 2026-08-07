@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-qr-disable-proxy-before-pair";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-qr-soft-reset-reconnect";
 
