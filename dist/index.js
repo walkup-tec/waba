@@ -4649,7 +4649,13 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
                 error: "Selecione ao menos uma instância conectada para o disparo.",
             });
         }
-        (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(campaignInstances, callEvoAction, EVO_API_BASE);
+        const previousSelected = (await loadDisparosConfigFromDb()).selectedDisparadorInstances || [];
+        (0, evo_instance_proxy_service_1.queueSyncProxyBrasilForCampaignSelection)({
+            selectedInstanceNames: campaignInstances,
+            previouslySelectedInstanceNames: previousSelected,
+            callEvoAction,
+            evoApiBase: EVO_API_BASE,
+        });
         if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
             numbers = numbers.slice(0, plannedSendCount);
         }
@@ -9539,8 +9545,8 @@ app.post("/disparos/config", async (req, res) => {
             selectedDisparadorInstances: await filterDisparadorInstancesReadyForAuth(auth, config.selectedDisparadorInstances),
         };
         await saveDisparosConfigToDb(config);
-        // Proxy em background nos números selecionados — usuário segue as próximas etapas.
-        (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(config.selectedDisparadorInstances, callEvoAction, EVO_API_BASE);
+        // Proxy Brasil NÃO aplica aqui (troca de seleção no wizard).
+        // Só no «Gerar Campanha» / add instances — ver queueSyncProxyBrasilForCampaignSelection.
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
     }
     catch (error) {
@@ -10938,7 +10944,13 @@ app.post("/disparos/campanhas", (req, res, next) => {
                 error: "Selecione ao menos uma instância na lista «Números utilizados no disparador» (Seção 1) antes de criar a campanha. Só essas instâncias poderão enviar as mensagens.",
             });
         }
-        (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(campaignInstances, callEvoAction, EVO_API_BASE);
+        const previousSelectedForProxy = (await loadDisparosConfigFromDb()).selectedDisparadorInstances || [];
+        (0, evo_instance_proxy_service_1.queueSyncProxyBrasilForCampaignSelection)({
+            selectedInstanceNames: campaignInstances,
+            previouslySelectedInstanceNames: previousSelectedForProxy,
+            callEvoAction,
+            evoApiBase: EVO_API_BASE,
+        });
         const now = new Date().toISOString();
         const campaignId = crypto_1.default.randomUUID();
         const campaign = {
@@ -11684,7 +11696,8 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         queuePersistDisparosLocalState();
         const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
         const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
-        (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(mergedSelected, callEvoAction, EVO_API_BASE);
+        // Só liga proxy nos números recém-adicionados (não no meio do wizard de config).
+        (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(incoming, callEvoAction, EVO_API_BASE);
         return res.json({
             ok: true,
             id,

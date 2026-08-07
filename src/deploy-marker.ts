@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-warmth-restore-racefix";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-proxy-only-on-gerar-campanha";
 
