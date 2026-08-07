@@ -205,12 +205,11 @@ import {
   disableProxyBrasilOnEvoInstance,
   getProxyBrasilSessionPrepareStatus,
   isProxyBrasilSessionReadyForSend,
-  prepareProxyBrasilSessionForCampaignSend,
+  markProxyBrasilSessionReadyForSend,
   prepareProxyBrasilSessionsForCampaign,
   queueApplyProxyBrasilToInstances,
   queueDisableProxyBrasilOnInstances,
   queueSyncProxyBrasilForCampaignSelection,
-  rollbackProxyBrasilSessionToDirect,
 } from "./proxy/evo-instance-proxy.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -12646,35 +12645,25 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const proxyCfg = loadProxyBrasilConfig();
     if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
-      const prep = getProxyBrasilSessionPrepareStatus(instancePick.instancia);
-      if (prep?.status === "failed" || prep?.needsProxyPairing) {
+      const liveForReady = await fetchEvoInstanceLiveState(instancePick.instancia, { fresh: true });
+      if (isEvoLiveStateOpen(liveForReady)) {
+        // Após redeploy o mapa ready zera; se está open, libera envio SEM restart.
+        markProxyBrasilSessionReadyForSend(instancePick.instancia, {
+          state: liveForReady,
+          reason: "ready no disparo (open) — sem restart",
+        });
+      } else {
+        const prep = getProxyBrasilSessionPrepareStatus(instancePick.instancia);
+        console.warn(
+          `[Campanha] Instância ${instancePick.instancia} não open (${liveForReady || "?"} / prep=${prep?.status || "idle"}). Pausando sem restart.`,
+        );
         await pauseCampaignDueToProxyPrepareFailure(
           campaignId,
-          prep.reason || "Proxy/sessão não prontos para envio.",
+          `Instância ${instancePick.instancia} desconectada no EVO. Reconecte no Aquecedor (QR) e ative a campanha — o disparo não reinicia a sessão automaticamente.`,
         );
         lead.status = "pending";
         return;
       }
-      if (prep?.status !== "preparing") {
-        void prepareProxyBrasilSessionForCampaignSend(instancePick.instancia, {
-          callEvoAction,
-          evoApiBase: EVO_API_BASE,
-          ...getProxyBrasilCampaignPrepareDeps(),
-        }).then(async (result) => {
-          if (!result.ok) {
-            await pauseCampaignDueToProxyPrepareFailure(
-              campaignId,
-              result.reason || "Proxy/sessão não prontos para envio.",
-            );
-          }
-        });
-      }
-      console.warn(
-        `[Campanha] Aguardando proxy+sessão pronta em ${instancePick.instancia} (status=${prep?.status || "idle"}).`,
-      );
-      lead.status = "pending";
-      scheduleCampaignProxyPrepareRetry(campaignId, 15_000);
-      return;
     }
 
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
@@ -12692,28 +12681,12 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         instancePick.instancia,
         instanceLiveState || "desconhecido",
       );
-      if (proxyCfg?.enabled) {
-        const rb = await rollbackProxyBrasilSessionToDirect(instancePick.instancia, {
-          callEvoAction,
-          evoApiBase: EVO_API_BASE,
-          ...getProxyBrasilCampaignPrepareDeps(),
-        });
-        await pauseCampaignDueToProxyPrepareFailure(
-          campaignId,
-          rb.restored
-            ? "Sessão caiu com proxy; conexão restaurada sem proxy. Reconecte com Proxy Campanha e ative de novo."
-            : "Sessão caiu com proxy; reconecte no Aquecedor (Proxy Campanha) e ative de novo.",
-        );
-        lead.status = "pending";
-        return;
-      }
-      if (isEvoConnectionInProgress(instanceLiveState)) {
-        lead.status = "pending";
-        scheduleCampaignProxyPrepareRetry(campaignId, 20_000);
-        return;
-      }
-      await persistLeadFailed(lead, "send_error");
-      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+      // Nunca rollback/restart no meio do disparo — gera conflict/device_removed e perde o número.
+      await pauseCampaignDueToProxyPrepareFailure(
+        campaignId,
+        `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
+      );
+      lead.status = "pending";
       return;
     }
 

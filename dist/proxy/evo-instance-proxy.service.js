@@ -6,6 +6,7 @@ exports.maybeApplyProxyBrasilOnInstanceCreate = maybeApplyProxyBrasilOnInstanceC
 exports.getProxyBrasilSessionPrepareStatus = getProxyBrasilSessionPrepareStatus;
 exports.clearProxyBrasilSessionPrepareStatus = clearProxyBrasilSessionPrepareStatus;
 exports.isProxyBrasilSessionReadyForSend = isProxyBrasilSessionReadyForSend;
+exports.markProxyBrasilSessionReadyForSend = markProxyBrasilSessionReadyForSend;
 exports.rollbackProxyBrasilSessionToDirect = rollbackProxyBrasilSessionToDirect;
 exports.prepareProxyBrasilSessionForCampaignSend = prepareProxyBrasilSessionForCampaignSend;
 exports.prepareProxyBrasilSessionsForCampaign = prepareProxyBrasilSessionsForCampaign;
@@ -204,6 +205,19 @@ function isProxyBrasilSessionReadyForSend(instanceName) {
     const entry = getProxyBrasilSessionPrepareStatus(instanceName);
     return entry?.status === "ready";
 }
+/** Marca pronta sem restart (sessão já open no EVO). Usado no disparo para não derrubar Baileys. */
+function markProxyBrasilSessionReadyForSend(instanceName, opts) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return null;
+    return setPrepareStatus(name, {
+        status: "ready",
+        state: opts?.state,
+        reason: opts?.reason || "marcada ready sem restart (sessão open)",
+        proxyApplied: false,
+        restarted: false,
+    });
+}
 /** open estável (evita falso positivo / flash open). */
 async function assertStableOpen(deps, instanceName, opts) {
     const rounds = Math.max(2, Math.min(6, opts?.rounds ?? 3));
@@ -342,28 +356,62 @@ async function prepareProxyBrasilSessionForCampaignSend(instanceName, deps, opts
                 return failAndRollback(`Proxy ligado com sessão morta (state=${liveBefore || "desconhecido"}).`, { state: liveBefore });
             }
             // Proxy a quente em sessão já pareada derruba o Baileys.
-            // Se já está open: libera envio SEM aplicar proxy (preserva conexão e dispara a campanha).
+            // Se já está open: libera envio SEM aplicar proxy e SEM restart/rollback.
             if (proxyEnabled !== true && wasOpen) {
                 const stable = await assertStableOpen(deps, name, { rounds: 2, gapMs: 800 });
-                if (!stable.ok) {
-                    return failAndRollback(`Sessão sem proxy instável (state=${stable.state || liveBefore}).`, { state: stable.state || liveBefore });
+                if (stable.ok) {
+                    const entry = setPrepareStatus(name, {
+                        status: "ready",
+                        state: stable.state,
+                        reason: "sessão open — envio liberado sem hot-apply de proxy (preserva pareamento)",
+                        proxyApplied: false,
+                        restarted: false,
+                    });
+                    console.info(`[ProxyBrasil] ${name}: ${entry.reason}`);
+                    return {
+                        ok: true,
+                        instanceName: name,
+                        status: entry.status,
+                        state: stable.state,
+                        reason: entry.reason,
+                        proxyApplied: false,
+                        restarted: false,
+                    };
+                }
+                // Flicker transitório: NÃO dar restart (pode gerar device_removed no meio do disparo).
+                const waited = await deps.waitForOpenLenient(name, { maxWaitMs: 20000, pollMs: 1000 });
+                if (waited.open) {
+                    const entry = setPrepareStatus(name, {
+                        status: "ready",
+                        state: waited.state,
+                        reason: "sessão open após wait — sem restart",
+                        proxyApplied: false,
+                        restarted: false,
+                    });
+                    return {
+                        ok: true,
+                        instanceName: name,
+                        status: entry.status,
+                        state: waited.state,
+                        reason: entry.reason,
+                    };
                 }
                 const entry = setPrepareStatus(name, {
-                    status: "ready",
-                    state: stable.state,
-                    reason: "sessão open — envio liberado sem hot-apply de proxy (preserva pareamento)",
+                    status: "failed",
+                    state: waited.state || stable.state || liveBefore,
+                    reason: "Sessão não está open de forma estável. Campanha deve pausar — sem restart automático (protege o número).",
                     proxyApplied: false,
                     restarted: false,
+                    rolledBack: false,
+                    needsProxyPairing: false,
                 });
-                console.info(`[ProxyBrasil] ${name}: ${entry.reason}`);
+                console.warn(`[ProxyBrasil] ${name}: ${entry.reason}`);
                 return {
-                    ok: true,
+                    ok: false,
                     instanceName: name,
                     status: entry.status,
-                    state: stable.state,
+                    state: entry.state,
                     reason: entry.reason,
-                    proxyApplied: false,
-                    restarted: false,
                 };
             }
             // Sem sessão open: arma proxy e exige pareamento via QR com proxy.

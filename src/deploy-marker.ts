@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-one-message-per-destination";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-no-restart-mid-campaign";
 

@@ -10836,27 +10836,21 @@ async function processOneCampaignDispatch(campaignId) {
         }
         const proxyCfg = (0, proxy_brasil_config_1.loadProxyBrasilConfig)();
         if (proxyCfg?.enabled && !(0, evo_instance_proxy_service_1.isProxyBrasilSessionReadyForSend)(instancePick.instancia)) {
-            const prep = (0, evo_instance_proxy_service_1.getProxyBrasilSessionPrepareStatus)(instancePick.instancia);
-            if (prep?.status === "failed" || prep?.needsProxyPairing) {
-                await pauseCampaignDueToProxyPrepareFailure(campaignId, prep.reason || "Proxy/sessão não prontos para envio.");
+            const liveForReady = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia, { fresh: true });
+            if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveForReady)) {
+                // Após redeploy o mapa ready zera; se está open, libera envio SEM restart.
+                (0, evo_instance_proxy_service_1.markProxyBrasilSessionReadyForSend)(instancePick.instancia, {
+                    state: liveForReady,
+                    reason: "ready no disparo (open) — sem restart",
+                });
+            }
+            else {
+                const prep = (0, evo_instance_proxy_service_1.getProxyBrasilSessionPrepareStatus)(instancePick.instancia);
+                console.warn(`[Campanha] Instância ${instancePick.instancia} não open (${liveForReady || "?"} / prep=${prep?.status || "idle"}). Pausando sem restart.`);
+                await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} desconectada no EVO. Reconecte no Aquecedor (QR) e ative a campanha — o disparo não reinicia a sessão automaticamente.`);
                 lead.status = "pending";
                 return;
             }
-            if (prep?.status !== "preparing") {
-                void (0, evo_instance_proxy_service_1.prepareProxyBrasilSessionForCampaignSend)(instancePick.instancia, {
-                    callEvoAction,
-                    evoApiBase: EVO_API_BASE,
-                    ...getProxyBrasilCampaignPrepareDeps(),
-                }).then(async (result) => {
-                    if (!result.ok) {
-                        await pauseCampaignDueToProxyPrepareFailure(campaignId, result.reason || "Proxy/sessão não prontos para envio.");
-                    }
-                });
-            }
-            console.warn(`[Campanha] Aguardando proxy+sessão pronta em ${instancePick.instancia} (status=${prep?.status || "idle"}).`);
-            lead.status = "pending";
-            scheduleCampaignProxyPrepareRetry(campaignId, 15000);
-            return;
         }
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
         const numero = normalizeWhatsAppNumber(lead.phone);
@@ -10869,25 +10863,9 @@ async function processOneCampaignDispatch(campaignId) {
         const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
         if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(instanceLiveState)) {
             console.error("[Campanha] Instância não open no sistema WABA - Drax (connectionState):", instancePick.instancia, instanceLiveState || "desconhecido");
-            if (proxyCfg?.enabled) {
-                const rb = await (0, evo_instance_proxy_service_1.rollbackProxyBrasilSessionToDirect)(instancePick.instancia, {
-                    callEvoAction,
-                    evoApiBase: EVO_API_BASE,
-                    ...getProxyBrasilCampaignPrepareDeps(),
-                });
-                await pauseCampaignDueToProxyPrepareFailure(campaignId, rb.restored
-                    ? "Sessão caiu com proxy; conexão restaurada sem proxy. Reconecte com Proxy Campanha e ative de novo."
-                    : "Sessão caiu com proxy; reconecte no Aquecedor (Proxy Campanha) e ative de novo.");
-                lead.status = "pending";
-                return;
-            }
-            if ((0, evo_connection_state_service_1.isEvoConnectionInProgress)(instanceLiveState)) {
-                lead.status = "pending";
-                scheduleCampaignProxyPrepareRetry(campaignId, 20000);
-                return;
-            }
-            await persistLeadFailed(lead, "send_error");
-            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            // Nunca rollback/restart no meio do disparo — gera conflict/device_removed e perde o número.
+            await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`);
+            lead.status = "pending";
             return;
         }
         const buttonLabel = outbound.buttonLabel ||
