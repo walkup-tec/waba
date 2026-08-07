@@ -55,6 +55,33 @@ export async function waitForEvoInstanceLiveOpen(
   return { open: isEvoLiveStateOpen(lastState), state: lastState };
 }
 
+/**
+ * Após proxy/set + restart a sessão pode piscar close/connecting antes de voltar open.
+ * Não aborta no primeiro close — espera até open ou timeout.
+ */
+export async function waitForEvoInstanceLiveOpenLenient(
+  instanceName: string,
+  options?: { maxWaitMs?: number; pollMs?: number },
+): Promise<{ open: boolean; state: string }> {
+  const maxWaitMs = Math.max(10_000, Math.min(180_000, options?.maxWaitMs ?? 90_000));
+  const pollMs = Math.max(500, Math.min(5_000, options?.pollMs ?? 1_500));
+  const deadline = Date.now() + maxWaitMs;
+  let lastState = "";
+
+  while (Date.now() < deadline) {
+    invalidateEvoLiveStateCache(instanceName);
+    lastState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+    if (isEvoLiveStateOpen(lastState)) {
+      return { open: true, state: lastState };
+    }
+    await sleep(pollMs);
+  }
+
+  invalidateEvoLiveStateCache(instanceName);
+  lastState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+  return { open: isEvoLiveStateOpen(lastState), state: lastState };
+}
+
 export function pickEvoConnectionState(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const root = payload as Record<string, unknown>;

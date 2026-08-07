@@ -4655,6 +4655,7 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
             previouslySelectedInstanceNames: previousSelected,
             callEvoAction,
             evoApiBase: EVO_API_BASE,
+            prepareDeps: getProxyBrasilCampaignPrepareDeps(),
         });
         if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
             numbers = numbers.slice(0, plannedSendCount);
@@ -10601,6 +10602,21 @@ async function persistLeadFailed(lead, kind) {
     }
     queuePersistDisparosLocalState();
 }
+function getProxyBrasilCampaignPrepareDeps() {
+    return {
+        apiKey: EVO_API_KEY,
+        restartInstanceLight: evo_send_recovery_service_1.restartEvoInstanceLight,
+        waitForOpenLenient: evo_connection_state_service_1.waitForEvoInstanceLiveOpenLenient,
+        fetchLiveState: evo_connection_state_service_1.fetchEvoInstanceLiveState,
+        isLiveStateOpen: evo_connection_state_service_1.isEvoLiveStateOpen,
+    };
+}
+function queueProxyBrasilPrepareForCampaignInstances(instanceNames) {
+    (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(instanceNames, callEvoAction, EVO_API_BASE, getProxyBrasilCampaignPrepareDeps());
+}
+function scheduleCampaignProxyPrepareRetry(campaignId, waitMs = 15000) {
+    campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.max(5000, waitMs));
+}
 function scheduleNextCampaignDispatchDelay(campaignId, config) {
     const minS = Math.max(10, Number(config.delayMinSeconds) || DISPAROS_DEFAULTS.delayMinSeconds);
     const maxS = Math.max(minS, Number(config.delayMaxSeconds) || DISPAROS_DEFAULTS.delayMaxSeconds);
@@ -10663,6 +10679,21 @@ async function processOneCampaignDispatch(campaignId) {
             lead.status = "pending";
             return;
         }
+        const proxyCfg = (0, proxy_brasil_config_1.loadProxyBrasilConfig)();
+        if (proxyCfg?.enabled && !(0, evo_instance_proxy_service_1.isProxyBrasilSessionReadyForSend)(instancePick.instancia)) {
+            const prep = (0, evo_instance_proxy_service_1.getProxyBrasilSessionPrepareStatus)(instancePick.instancia);
+            if (prep?.status !== "preparing") {
+                void (0, evo_instance_proxy_service_1.prepareProxyBrasilSessionForCampaignSend)(instancePick.instancia, {
+                    callEvoAction,
+                    evoApiBase: EVO_API_BASE,
+                    ...getProxyBrasilCampaignPrepareDeps(),
+                });
+            }
+            console.warn(`[Campanha] Aguardando proxy+sessão pronta em ${instancePick.instancia} (status=${prep?.status || "idle"}).`);
+            lead.status = "pending";
+            scheduleCampaignProxyPrepareRetry(campaignId, prep?.status === "failed" ? 30000 : 15000);
+            return;
+        }
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
         const numero = normalizeWhatsAppNumber(lead.phone);
         const digitsCheck = String(numero || "").replace(/\D/g, "");
@@ -10674,6 +10705,17 @@ async function processOneCampaignDispatch(campaignId) {
         const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
         if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(instanceLiveState)) {
             console.error("[Campanha] Instância não open no sistema WABA - Drax (connectionState):", instancePick.instancia, instanceLiveState || "desconhecido");
+            // Não queima lead: proxy/restart pode estar restabelecendo a sessão.
+            if (proxyCfg?.enabled || (0, evo_connection_state_service_1.isEvoConnectionInProgress)(instanceLiveState)) {
+                void (0, evo_instance_proxy_service_1.prepareProxyBrasilSessionForCampaignSend)(instancePick.instancia, {
+                    callEvoAction,
+                    evoApiBase: EVO_API_BASE,
+                    ...getProxyBrasilCampaignPrepareDeps(),
+                }, { forceRestart: true });
+                lead.status = "pending";
+                scheduleCampaignProxyPrepareRetry(campaignId, 20000);
+                return;
+            }
             await persistLeadFailed(lead, "send_error");
             scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
             return;
@@ -11006,6 +11048,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
             previouslySelectedInstanceNames: previousSelectedForProxy,
             callEvoAction,
             evoApiBase: EVO_API_BASE,
+            prepareDeps: getProxyBrasilCampaignPrepareDeps(),
         });
         const now = new Date().toISOString();
         const campaignId = crypto_1.default.randomUUID();
@@ -11606,6 +11649,14 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
         campaign.status = nextStatus;
         if (ativa) {
             campaignNextAllowedSendAt.set(id, 0);
+            const selected = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
+                ? campaign.configSnapshot.selectedDisparadorInstances
+                    .map((n) => String(n || "").trim())
+                    .filter(Boolean)
+                : [];
+            if (selected.length) {
+                queueProxyBrasilPrepareForCampaignInstances(selected);
+            }
         }
         const supabase = getSupabaseClient();
         if (supabase) {
@@ -11752,8 +11803,8 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         queuePersistDisparosLocalState();
         const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
         const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
-        // Só liga proxy nos números recém-adicionados (não no meio do wizard de config).
-        (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(incoming, callEvoAction, EVO_API_BASE);
+        // Só liga proxy + restabelece sessão nos números recém-adicionados (não no wizard de config).
+        queueProxyBrasilPrepareForCampaignInstances(incoming);
         return res.json({
             ok: true,
             id,

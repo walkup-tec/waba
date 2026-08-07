@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-qr-soft-reset-reconnect";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-proxy-prepare-before-send";
 

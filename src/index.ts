@@ -111,6 +111,7 @@ import {
   isEvoConnectionInProgress,
   pickEvoConnectionState,
   resolveEvoLiveConnectionSnapshots,
+  waitForEvoInstanceLiveOpenLenient,
 } from "./instances/evo-connection-state.service";
 import {
   getWhatsappConnectingRestrictionMap,
@@ -134,6 +135,7 @@ import { defaultEvoHttpTimeoutMs, describeEvoApiBaseForOps, defaultEvoSendTextTi
 import {
   isEvoSendTransientError,
   recoverEvoSendTextAfterFailure,
+  restartEvoInstanceLight,
 } from "./services/evo-send-recovery.service";
 import {
   createWabaShortUrl,
@@ -201,6 +203,9 @@ import {
 import {
   applyProxyBrasilToEvoInstance,
   disableProxyBrasilOnEvoInstance,
+  getProxyBrasilSessionPrepareStatus,
+  isProxyBrasilSessionReadyForSend,
+  prepareProxyBrasilSessionForCampaignSend,
   queueApplyProxyBrasilToInstances,
   queueSyncProxyBrasilForCampaignSelection,
 } from "./proxy/evo-instance-proxy.service";
@@ -5821,6 +5826,7 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
       previouslySelectedInstanceNames: previousSelected,
       callEvoAction,
       evoApiBase: EVO_API_BASE,
+      prepareDeps: getProxyBrasilCampaignPrepareDeps(),
     });
 
     if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
@@ -12363,6 +12369,29 @@ async function persistLeadFailed(lead: DisparosCampaignLead, kind: LeadFailureKi
   queuePersistDisparosLocalState();
 }
 
+function getProxyBrasilCampaignPrepareDeps() {
+  return {
+    apiKey: EVO_API_KEY,
+    restartInstanceLight: restartEvoInstanceLight,
+    waitForOpenLenient: waitForEvoInstanceLiveOpenLenient,
+    fetchLiveState: fetchEvoInstanceLiveState,
+    isLiveStateOpen: isEvoLiveStateOpen,
+  };
+}
+
+function queueProxyBrasilPrepareForCampaignInstances(instanceNames: string[]) {
+  queueApplyProxyBrasilToInstances(
+    instanceNames,
+    callEvoAction,
+    EVO_API_BASE,
+    getProxyBrasilCampaignPrepareDeps(),
+  );
+}
+
+function scheduleCampaignProxyPrepareRetry(campaignId: string, waitMs = 15_000) {
+  campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.max(5_000, waitMs));
+}
+
 function scheduleNextCampaignDispatchDelay(campaignId: string, config: DisparosConfig) {
   const minS = Math.max(10, Number(config.delayMinSeconds) || DISPAROS_DEFAULTS.delayMinSeconds);
   const maxS = Math.max(minS, Number(config.delayMaxSeconds) || DISPAROS_DEFAULTS.delayMaxSeconds);
@@ -12435,6 +12464,24 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       return;
     }
 
+    const proxyCfg = loadProxyBrasilConfig();
+    if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
+      const prep = getProxyBrasilSessionPrepareStatus(instancePick.instancia);
+      if (prep?.status !== "preparing") {
+        void prepareProxyBrasilSessionForCampaignSend(instancePick.instancia, {
+          callEvoAction,
+          evoApiBase: EVO_API_BASE,
+          ...getProxyBrasilCampaignPrepareDeps(),
+        });
+      }
+      console.warn(
+        `[Campanha] Aguardando proxy+sessão pronta em ${instancePick.instancia} (status=${prep?.status || "idle"}).`,
+      );
+      lead.status = "pending";
+      scheduleCampaignProxyPrepareRetry(campaignId, prep?.status === "failed" ? 30_000 : 15_000);
+      return;
+    }
+
     const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
     const numero = normalizeWhatsAppNumber(lead.phone);
     const digitsCheck = String(numero || "").replace(/\D/g, "");
@@ -12450,6 +12497,21 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         instancePick.instancia,
         instanceLiveState || "desconhecido",
       );
+      // Não queima lead: proxy/restart pode estar restabelecendo a sessão.
+      if (proxyCfg?.enabled || isEvoConnectionInProgress(instanceLiveState)) {
+        void prepareProxyBrasilSessionForCampaignSend(
+          instancePick.instancia,
+          {
+            callEvoAction,
+            evoApiBase: EVO_API_BASE,
+            ...getProxyBrasilCampaignPrepareDeps(),
+          },
+          { forceRestart: true },
+        );
+        lead.status = "pending";
+        scheduleCampaignProxyPrepareRetry(campaignId, 20_000);
+        return;
+      }
       await persistLeadFailed(lead, "send_error");
       scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
       return;
@@ -12833,6 +12895,7 @@ app.post(
       previouslySelectedInstanceNames: previousSelectedForProxy,
       callEvoAction,
       evoApiBase: EVO_API_BASE,
+      prepareDeps: getProxyBrasilCampaignPrepareDeps(),
     });
 
     const now = new Date().toISOString();
@@ -13501,6 +13564,14 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
     campaign.status = nextStatus;
     if (ativa) {
       campaignNextAllowedSendAt.set(id, 0);
+      const selected = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
+        ? campaign.configSnapshot.selectedDisparadorInstances
+            .map((n) => String(n || "").trim())
+            .filter(Boolean)
+        : [];
+      if (selected.length) {
+        queueProxyBrasilPrepareForCampaignInstances(selected);
+      }
     }
 
     const supabase = getSupabaseClient();
@@ -13665,8 +13736,8 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
 
     const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
     const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
-    // Só liga proxy nos números recém-adicionados (não no meio do wizard de config).
-    queueApplyProxyBrasilToInstances(incoming, callEvoAction, EVO_API_BASE);
+    // Só liga proxy + restabelece sessão nos números recém-adicionados (não no wizard de config).
+    queueProxyBrasilPrepareForCampaignInstances(incoming);
 
     return res.json({
       ok: true,
