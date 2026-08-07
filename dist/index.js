@@ -4996,8 +4996,23 @@ function buildTemplateUrl(template, instanceName) {
 function normalizeWhatsAppNumber(num) {
     return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(num);
 }
+/**
+ * Número para ENVIO em campanha: preferir 55+DDD+9+8 (13 dígitos).
+ * `canonicalizeBrazilWhatsAppNumber` remove o 9º dígito (chave de dedupe) e,
+ * se usado no envio, a mensagem pode ir para JID errado sem chegar no celular.
+ */
+function preferredBrazilWhatsAppSendNumber(raw) {
+    const variants = (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(String(raw || ""));
+    const withNineIntl = variants.find((v) => v.startsWith("55") && v.length === 13 && v.charAt(4) === "9");
+    if (withNineIntl)
+        return withNineIntl;
+    const withNineNational = variants.find((v) => !v.startsWith("55") && v.length === 11 && v.charAt(2) === "9");
+    if (withNineNational)
+        return `55${withNineNational}`;
+    return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(String(raw || ""));
+}
 function normalizeCampaignPhone(input) {
-    return (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(String(input || ""));
+    return preferredBrazilWhatsAppSendNumber(String(input || ""));
 }
 /** Uma linha de contato → um destino *dentro da mesma campanha*.
  * Telefone repetido em campanhas diferentes continua sendo enviado normalmente
@@ -5010,11 +5025,12 @@ function deduplicateCampaignDestinationPhones(digitCandidates) {
         const digits = normalizeCampaignPhone(String(cand || ""));
         if (digits.length < 12)
             continue;
-        if (seen.has(digits)) {
+        const dedupeKey = (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(digits) || digits;
+        if (seen.has(dedupeKey)) {
             removedDuplicates += 1;
             continue;
         }
-        seen.add(digits);
+        seen.add(dedupeKey);
         phones.push(digits);
     }
     return { phones, removedDuplicates };
@@ -10853,7 +10869,8 @@ async function processOneCampaignDispatch(campaignId) {
             }
         }
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
-        const numero = normalizeWhatsAppNumber(lead.phone);
+        // Sempre preferir formato com 9º dígito no envio (leads antigos podem estar sem o 9).
+        const numero = preferredBrazilWhatsAppSendNumber(lead.phone) || normalizeWhatsAppNumber(lead.phone);
         const digitsCheck = String(numero || "").replace(/\D/g, "");
         if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
             await persistLeadFailed(lead, "invalid_phone");

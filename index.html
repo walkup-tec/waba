@@ -42508,6 +42508,7 @@
                       "instance-action-btn enabled btn-campaign-secondary btn-campaign-report";
                     reportBtn.dataset.campaignId = campaignId;
                     reportBtn.dataset.campaignName = campaignName;
+                    reportBtn.dataset.campaignSource = "disparos";
                     reportBtn.textContent = "Relatório";
       
                     const editBtn = document.createElement("button");
@@ -43036,7 +43037,7 @@
             window.location.pathname + (qs ? `?${qs}` : "") + (window.location.hash || "");
           window.history.replaceState(null, "", cleanUrl);
           setActiveTab("disparos", { skipPolicyCheck: true });
-          void openDisCampaignReportModal(campaignId, "", "intake");
+          void openDisCampaignReportModal(campaignId, "", "disparos");
         } catch {
           /* ignore deep-link errors */
         }
@@ -43135,6 +43136,7 @@
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
         const id = String(campaignId || "").trim();
+        // "intake" = campanhas manuais (aba Intake). Demais = campanhas do motor Disparos.
         const reportUrl =
           source === "intake"
             ? `/disparos/campanhas/intake/${encodeURIComponent(id)}/relatorio`
@@ -50456,7 +50458,7 @@
             const id = reportBtn.dataset.campaignId || reportBtn.getAttribute("data-campaign-id");
             const nm =
               reportBtn.dataset.campaignName ?? reportBtn.getAttribute("data-campaign-name") ?? "";
-            const source = reportBtn.dataset.campaignSource || "intake";
+            const source = reportBtn.dataset.campaignSource || "disparos";
             if (id) void openDisCampaignReportModal(id, nm, source);
             return;
           }
