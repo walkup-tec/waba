@@ -206,8 +206,11 @@ import {
   getProxyBrasilSessionPrepareStatus,
   isProxyBrasilSessionReadyForSend,
   prepareProxyBrasilSessionForCampaignSend,
+  prepareProxyBrasilSessionsForCampaign,
   queueApplyProxyBrasilToInstances,
+  queueDisableProxyBrasilOnInstances,
   queueSyncProxyBrasilForCampaignSelection,
+  rollbackProxyBrasilSessionToDirect,
 } from "./proxy/evo-instance-proxy.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -5828,6 +5831,7 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
       evoApiBase: EVO_API_BASE,
       prepareDeps: getProxyBrasilCampaignPrepareDeps(),
     });
+    // prepare em background não aplica proxy a quente em sessão open (evita derrubar Baileys).
 
     if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
       numbers = numbers.slice(0, plannedSendCount);
@@ -8845,20 +8849,37 @@ async function resetEvoInstanceForQr(instanceName: string): Promise<void> {
 }
 
 /** Soft-reset só na Evolution (mesmo nome). Não apaga lifecycle/ownership no WABA. */
-async function softResetDisconnectedEvoInstanceForQr(instanceName: string): Promise<void> {
+async function softResetDisconnectedEvoInstanceForQr(
+  instanceName: string,
+  opts?: { campaignProxy?: boolean; force?: boolean },
+): Promise<void> {
   const name = String(instanceName || "").trim();
   if (!name) return;
+  const campaignProxy = opts?.campaignProxy === true;
   try {
-    await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
+    if (campaignProxy) {
+      await applyProxyBrasilToEvoInstance(name, callEvoAction, EVO_API_BASE);
+    } else {
+      await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
+    }
   } catch {
     /* best-effort */
   }
   const live = await fetchEvoInstanceConnectionState(name, { fresh: true });
-  if (live.open) return;
+  if (live.open && !opts?.force && !campaignProxy) return;
   console.warn(
-    `[QR] ${name}: soft-reset EVO (logout+delete+recreate) — sessão desconectada/corrompida; WABA preservado.`,
+    campaignProxy
+      ? `[QR] ${name}: soft-reset EVO com Proxy Campanha (logout+delete+recreate) — parear via proxy.`
+      : `[QR] ${name}: soft-reset EVO (logout+delete+recreate) — sessão desconectada/corrompida; WABA preservado.`,
   );
   await resetEvoInstanceForQr(name);
+  if (campaignProxy) {
+    try {
+      await applyProxyBrasilToEvoInstance(name, callEvoAction, EVO_API_BASE);
+    } catch {
+      /* best-effort */
+    }
+  }
 }
 
 type EvoQrFetchOptions = {
@@ -8918,6 +8939,8 @@ type RegistrarQrcodeInput = {
   number: string;
   ownerEmail: string;
   ownershipAlreadyClaimed?: boolean;
+  /** Parear já com Proxy Brasil (envio de campanha). */
+  campaignProxy?: boolean;
 };
 
 type RegistrarQrcodeSuccess = {
@@ -8956,20 +8979,31 @@ async function runRegistrarQrcode(
     void ensureAquecedorInstanceRegistered(name);
   }
 
-  // Proxy ligado impede pareamento WhatsApp. Sempre desligar antes de gerar QR (sem excluir no WABA).
+  // Proxy ligado impede pareamento WhatsApp — exceto fluxo «Proxy Campanha».
+  const campaignProxy = input.campaignProxy === true;
   try {
-    await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
+    if (campaignProxy) {
+      await applyProxyBrasilToEvoInstance(name, callEvoAction, EVO_API_BASE);
+    } else {
+      await disableProxyBrasilOnEvoInstance(name, callEvoAction, EVO_API_BASE);
+    }
   } catch (err) {
-    console.warn(`[QR] ${name}: falha ao desligar proxy antes do QR:`, err);
+    console.warn(
+      `[QR] ${name}: falha ao ${campaignProxy ? "aplicar" : "desligar"} proxy antes do QR:`,
+      err,
+    );
   }
 
   const liveBefore = await fetchEvoInstanceConnectionState(name, { fresh: true });
-  if (liveBefore.open) {
+  if (liveBefore.open && !campaignProxy) {
     return {
       ok: false,
       httpStatus: 409,
       error: "Esta instância já está conectada no sistema WABA - Drax.",
     };
+  }
+  if (liveBefore.open && campaignProxy) {
+    await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy: true, force: true });
   }
 
   const createPayload: Record<string, unknown> = {
@@ -9021,7 +9055,7 @@ async function runRegistrarQrcode(
   // Instância já existia (409) e está desconectada: limpa sessão Baileys na EVO e recria o mesmo nome.
   // Não remove ownership/lifecycle/aquecimento no WABA.
   if (createOk && !instanceWasNew && !qrFromCreate) {
-    await softResetDisconnectedEvoInstanceForQr(name);
+    await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
     createOk = false;
     lastCreateStatus = 0;
     lastCreateDetail = "";
@@ -9029,14 +9063,20 @@ async function runRegistrarQrcode(
     instanceWasNew = false;
     await tryCreateOnce();
   } else if (!createOk && liveBefore.ok) {
-    await softResetDisconnectedEvoInstanceForQr(name);
+    await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
     await tryCreateOnce();
   }
 
-  // Proxy Brasil NÃO aplica no Aquecedor/QR — só no «Gerar Campanha».
+  // Proxy Brasil: no Aquecedor normal fica off; no «Proxy Campanha» permanece on.
   let createWarning: string | null = null;
   if (!createOk) {
     createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
+  } else if (campaignProxy) {
+    try {
+      await applyProxyBrasilToEvoInstance(name, callEvoAction, EVO_API_BASE);
+    } catch {
+      /* */
+    }
   }
 
   if (qrFromCreate) {
@@ -9265,9 +9305,16 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
     }
 
     const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
+    const campaignProxy =
+      String(req.query.campaignProxy || "").trim() === "1" ||
+      req.body?.campaignProxy === true ||
+      String(req.body?.campaignProxy || "").trim() === "1";
 
-    // Reconexão sem excluir no WABA: tira proxy e limpa sessão Baileys corrompida na EVO.
-    await softResetDisconnectedEvoInstanceForQr(instanceName);
+    // Reconexão: Aquecedor normal tira proxy; Proxy Campanha mantém/liga proxy e força re-pareamento.
+    await softResetDisconnectedEvoInstanceForQr(instanceName, {
+      campaignProxy,
+      force: campaignProxy,
+    });
     // Recria o mesmo nome se o soft-reset apagou na EVO.
     await callEvoAction(
       `${EVO_API_BASE}/instance/create`,
@@ -9281,6 +9328,13 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
       },
       { timeoutMs: Math.min(defaultEvoHttpTimeoutMs(), 30000), retries: 2 },
     );
+    if (campaignProxy) {
+      try {
+        await applyProxyBrasilToEvoInstance(instanceName, callEvoAction, EVO_API_BASE);
+      } catch {
+        /* */
+      }
+    }
 
     let qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
       prepareSession: false,
@@ -9301,8 +9355,11 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
     }
     return res.json({
       ok: true,
-      message: "QRCode solicitado com sucesso.",
+      message: campaignProxy
+        ? "QRCode solicitado com Proxy Campanha. Escaneie para parear já com proxy."
+        : "QRCode solicitado com sucesso.",
       qrCode: qrFetch.qrCode,
+      campaignProxy,
       providerResponse: qrFetch.providerResponse,
     });
   } catch (error) {
@@ -9428,6 +9485,9 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
           number,
           ownerEmail,
           ownershipAlreadyClaimed: true,
+          campaignProxy:
+            req.body?.campaignProxy === true ||
+            String(req.body?.campaignProxy || "").trim() === "1",
         });
         const updatedAt = Date.now();
         if (result.ok) {
@@ -12388,8 +12448,37 @@ function queueProxyBrasilPrepareForCampaignInstances(instanceNames: string[]) {
   );
 }
 
+async function prepareProxyBrasilForCampaignInstancesNow(instanceNames: string[]) {
+  return prepareProxyBrasilSessionsForCampaign(instanceNames, {
+    callEvoAction,
+    evoApiBase: EVO_API_BASE,
+    ...getProxyBrasilCampaignPrepareDeps(),
+  });
+}
+
 function scheduleCampaignProxyPrepareRetry(campaignId: string, waitMs = 15_000) {
   campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.max(5_000, waitMs));
+}
+
+async function pauseCampaignDueToProxyPrepareFailure(
+  campaignId: string,
+  reason: string,
+): Promise<void> {
+  const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
+  if (!campaign || campaign.status !== "running") return;
+  campaign.status = "paused";
+  console.warn(`[Campanha] ${campaignId} pausada (proxy/sessão): ${reason}`);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await (supabase.from("disparos_campaigns" as any) as any)
+        .update({ status: "paused" })
+        .eq("id", campaignId);
+    } catch {
+      /* */
+    }
+  }
+  queuePersistDisparosLocalState();
 }
 
 function scheduleNextCampaignDispatchDelay(campaignId: string, config: DisparosConfig) {
@@ -12467,18 +12556,33 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     const proxyCfg = loadProxyBrasilConfig();
     if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
       const prep = getProxyBrasilSessionPrepareStatus(instancePick.instancia);
+      if (prep?.status === "failed" || prep?.needsProxyPairing) {
+        await pauseCampaignDueToProxyPrepareFailure(
+          campaignId,
+          prep.reason || "Proxy/sessão não prontos para envio.",
+        );
+        lead.status = "pending";
+        return;
+      }
       if (prep?.status !== "preparing") {
         void prepareProxyBrasilSessionForCampaignSend(instancePick.instancia, {
           callEvoAction,
           evoApiBase: EVO_API_BASE,
           ...getProxyBrasilCampaignPrepareDeps(),
+        }).then(async (result) => {
+          if (!result.ok) {
+            await pauseCampaignDueToProxyPrepareFailure(
+              campaignId,
+              result.reason || "Proxy/sessão não prontos para envio.",
+            );
+          }
         });
       }
       console.warn(
         `[Campanha] Aguardando proxy+sessão pronta em ${instancePick.instancia} (status=${prep?.status || "idle"}).`,
       );
       lead.status = "pending";
-      scheduleCampaignProxyPrepareRetry(campaignId, prep?.status === "failed" ? 30_000 : 15_000);
+      scheduleCampaignProxyPrepareRetry(campaignId, 15_000);
       return;
     }
 
@@ -12497,17 +12601,22 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         instancePick.instancia,
         instanceLiveState || "desconhecido",
       );
-      // Não queima lead: proxy/restart pode estar restabelecendo a sessão.
-      if (proxyCfg?.enabled || isEvoConnectionInProgress(instanceLiveState)) {
-        void prepareProxyBrasilSessionForCampaignSend(
-          instancePick.instancia,
-          {
-            callEvoAction,
-            evoApiBase: EVO_API_BASE,
-            ...getProxyBrasilCampaignPrepareDeps(),
-          },
-          { forceRestart: true },
+      if (proxyCfg?.enabled) {
+        const rb = await rollbackProxyBrasilSessionToDirect(instancePick.instancia, {
+          callEvoAction,
+          evoApiBase: EVO_API_BASE,
+          ...getProxyBrasilCampaignPrepareDeps(),
+        });
+        await pauseCampaignDueToProxyPrepareFailure(
+          campaignId,
+          rb.restored
+            ? "Sessão caiu com proxy; conexão restaurada sem proxy. Reconecte com Proxy Campanha e ative de novo."
+            : "Sessão caiu com proxy; reconecte no Aquecedor (Proxy Campanha) e ative de novo.",
         );
+        lead.status = "pending";
+        return;
+      }
+      if (isEvoConnectionInProgress(instanceLiveState)) {
         lead.status = "pending";
         scheduleCampaignProxyPrepareRetry(campaignId, 20_000);
         return;
@@ -12890,13 +12999,18 @@ app.post(
     }
 
     const previousSelectedForProxy = (await loadDisparosConfigFromDb()).selectedDisparadorInstances || [];
-    queueSyncProxyBrasilForCampaignSelection({
-      selectedInstanceNames: campaignInstances,
-      previouslySelectedInstanceNames: previousSelectedForProxy,
-      callEvoAction,
-      evoApiBase: EVO_API_BASE,
-      prepareDeps: getProxyBrasilCampaignPrepareDeps(),
-    });
+    const previousLower = new Set(
+      previousSelectedForProxy.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean),
+    );
+    const selectedLower = new Set(campaignInstances.map((n) => n.toLowerCase()));
+    const toDisableProxy = [...previousLower].filter((n) => !selectedLower.has(n));
+    if (toDisableProxy.length) {
+      queueDisableProxyBrasilOnInstances(toDisableProxy, callEvoAction, EVO_API_BASE);
+    }
+    const proxyPrepareResults = loadProxyBrasilConfig()?.enabled
+      ? await prepareProxyBrasilForCampaignInstancesNow(campaignInstances)
+      : [];
+    const proxyPrepareNotReady = proxyPrepareResults.filter((r) => !r.ok);
 
     const now = new Date().toISOString();
     const campaignId = crypto.randomUUID();
@@ -12968,11 +13082,21 @@ app.post(
     return res.json({
       ok: true,
       message:
-        "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos." + msgExtra,
+        (proxyPrepareNotReady.length
+          ? "Campanha criada (pausada). Para disparar com Proxy Brasil: reconecte as instâncias com QR campaignProxy=1 e depois ative. "
+          : "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos. ") + msgExtra,
       duplicatesRemoved,
       importedLineCount,
       plannedSendCount: numbers.length,
       importSummary,
+      proxyPrepare: {
+        ready: proxyPrepareResults.filter((r) => r.ok).map((r) => r.instanceName),
+        notReady: proxyPrepareNotReady.map((r) => ({
+          instanceName: r.instanceName,
+          reason: r.reason,
+          needsProxyPairing: r.needsProxyPairing === true,
+        })),
+      },
       durability: {
         /** Sempre que `queuePersistDisparosLocalState` rodou após criar. */
         localStateFile: true,
@@ -13560,18 +13684,36 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
           instanceHealth: health,
         });
       }
-    }
-    campaign.status = nextStatus;
-    if (ativa) {
-      campaignNextAllowedSendAt.set(id, 0);
-      const selected = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
+      const selectedForProxy = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
         ? campaign.configSnapshot.selectedDisparadorInstances
             .map((n) => String(n || "").trim())
             .filter(Boolean)
         : [];
-      if (selected.length) {
-        queueProxyBrasilPrepareForCampaignInstances(selected);
+      if (selectedForProxy.length && loadProxyBrasilConfig()?.enabled) {
+        const prepareResults = await prepareProxyBrasilForCampaignInstancesNow(selectedForProxy);
+        const notReady = prepareResults.filter((r) => !r.ok);
+        if (notReady.length) {
+          const detail = notReady
+            .map((r) => `${r.instanceName}: ${r.reason || "não pronta"}`)
+            .join(" | ");
+          return res.status(409).json({
+            error:
+              "Campanha não iniciada: as instâncias precisam estar conectadas COM Proxy Brasil (pareamento via QR com campaignProxy=1). Gerar campanha não aplica mais proxy a quente (isso derrubava a sessão).",
+            detail,
+            code: "campaign_proxy_pairing_required",
+            prepareResults: notReady.map((r) => ({
+              instanceName: r.instanceName,
+              reason: r.reason,
+              needsProxyPairing: r.needsProxyPairing === true,
+              rolledBack: r.rolledBack === true,
+            })),
+          });
+        }
       }
+    }
+    campaign.status = nextStatus;
+    if (ativa) {
+      campaignNextAllowedSendAt.set(id, 0);
     }
 
     const supabase = getSupabaseClient();

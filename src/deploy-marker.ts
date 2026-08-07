@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-proxy-prepare-before-send";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-07-proxy-no-hot-apply-rollback";
 
