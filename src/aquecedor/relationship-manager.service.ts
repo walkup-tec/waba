@@ -30,6 +30,14 @@ function phoneReceivedToday(owner: OwnerConversationGraph, name: string): number
   return stats.receivedToday || 0;
 }
 
+/** Volume vitalício do número (enviadas + recebidas) — base da justiça na UI. */
+function phoneLifetimeTotal(owner: OwnerConversationGraph, name: string): number {
+  const key = String(name || "").trim();
+  const stats = owner.phones[key];
+  if (!stats) return 0;
+  return Math.max(0, (stats.sentTotal || 0) + (stats.receivedTotal || 0));
+}
+
 function pairUsageToday(pair: ConversationPair): number {
   const today = dayKeySaoPaulo();
   if (pair.dayKey !== today) return 0;
@@ -73,6 +81,9 @@ export function scoreRelationshipCandidate(
     avgSentToday: number;
     avgRecvToday: number;
     avgPairTotal: number;
+    avgPhoneTotal: number;
+    phoneSpread: number;
+    hasColdPhones: boolean;
     lastSelectedPairKey: string | null;
   },
 ): { score: number; reason: string; breakdown: PairScoreBreakdown } {
@@ -81,6 +92,8 @@ export function scoreRelationshipCandidate(
   const usageToday = pairUsageToday(pair);
   const originSent = phoneSentToday(owner, origem);
   const destRecv = phoneReceivedToday(owner, destino);
+  const originLifetime = phoneLifetimeTotal(owner, origem);
+  const destLifetime = phoneLifetimeTotal(owner, destino);
   const minutesIdle = minutesSinceLastPair(pair.lastMessageAt);
 
   // 1) Desequilíbrio de sentido — prioridade alta, mas não absoluta sobre cobertura.
@@ -95,6 +108,10 @@ export function scoreRelationshipCandidate(
   const isBalancingReply =
     (pair.balance > 0 && origem === pair.b && destino === pair.a) ||
     (pair.balance < 0 && origem === pair.a && destino === pair.b);
+  const bothPhonesHot =
+    ctx.avgPhoneTotal > 5 &&
+    originLifetime > ctx.avgPhoneTotal * 1.25 &&
+    destLifetime > ctx.avgPhoneTotal * 1.25;
   let repetitionPenalty = 0;
   if (ctx.lastSelectedPairKey && ctx.lastSelectedPairKey === pairKey && !isBalancingReply) {
     repetitionPenalty = 5_000_000_000; // hard demote — quase nunca escolhe o mesmo par em seguida
@@ -105,16 +122,27 @@ export function scoreRelationshipCandidate(
     if (minutesIdle < 15) {
       repetitionPenalty += (15 - minutesIdle) * 80_000;
     }
+  } else if (bothPhonesHot && ctx.hasColdPhones) {
+    // Não deixar ping-pong de par quente monopolizar enquanto há números frios.
+    repetitionPenalty -= 400_000;
   } else {
-    // Resposta pendente: prioridade absoluta para completar A→B / B→A.
+    // Resposta pendente: prioridade alta para completar A→B / B→A.
     repetitionPenalty -= 8_000_000_000;
   }
   // 4) Cobertura: par sem histórico sobe fortemente.
   const coverageScore = total === 0 ? 2_000_000 : Math.max(0, 8 - total) * 80_000;
 
-  // 5) Participação dos números (origem pouco enviou / destino pouco recebeu).
-  const participationScore =
+  // 5) Participação: dia + vitalício (o que a UI de Mensagens mostra).
+  const dailyParticipation =
     (ctx.avgSentToday - originSent) * 1_000 + (ctx.avgRecvToday - destRecv) * 100;
+  const lifetimeFairness =
+    (ctx.avgPhoneTotal - originLifetime) * 90_000 +
+    (ctx.avgPhoneTotal - destLifetime) * 90_000;
+  const overheatPenalty =
+    ctx.avgPhoneTotal > 5 && originLifetime > ctx.avgPhoneTotal * 1.4
+      ? (originLifetime - ctx.avgPhoneTotal) * 150_000
+      : 0;
+  const participationScore = dailyParticipation + lifetimeFairness - overheatPenalty;
 
   // 6) Histórico LRU leve (desempate).
   const historyScore = Math.min(minutesIdle, 10_000);
@@ -141,8 +169,15 @@ export function scoreRelationshipCandidate(
   if (absBalance >= 1) reasons.push(`saldo=${pair.balance > 0 ? "+" : ""}${pair.balance}`);
   if (volumeDeficit > 0.5) reasons.push(`volume atrasado (−${volumeDeficit.toFixed(0)} vs média)`);
   if (total === 0) reasons.push("cobertura (par novo)");
-  if (isBalancingReply) reasons.push("resposta do turno (A→B / B→A)");
-  else if (ctx.lastSelectedPairKey === pairKey) reasons.push("penalidade: mesmo par anterior");
+  if (isBalancingReply) {
+    reasons.push(
+      bothPhonesHot && ctx.hasColdPhones
+        ? "resposta adiada (par quente; há números frios)"
+        : "resposta do turno (A→B / B→A)",
+    );
+  } else if (ctx.lastSelectedPairKey === pairKey) reasons.push("penalidade: mesmo par anterior");
+  if (lifetimeFairness > 50_000) reasons.push("justiça vitalícia (números abaixo da média)");
+  if (overheatPenalty > 0) reasons.push("penalidade: origem acima da média");
   if (usageToday > 0 && !isBalancingReply) reasons.push(`uso hoje=${usageToday}`);
   if (!reasons.length) reasons.push("rede equilibrada — LRU/participação");
 
@@ -196,12 +231,26 @@ export function pickNextRelationship(
   });
   let pool = reducesToOneOrLess.length ? reducesToOneOrLess : raw;
 
+  const lifetimeValues = names.map((n) => phoneLifetimeTotal(owner, n));
+  const avgPhoneTotal =
+    lifetimeValues.reduce((s, v) => s + v, 0) / Math.max(1, lifetimeValues.length);
+  const phoneMax = lifetimeValues.length ? Math.max(...lifetimeValues) : 0;
+  const phoneMin = lifetimeValues.length ? Math.min(...lifetimeValues) : 0;
+  const phoneSpread = phoneMax - phoneMin;
+  const coldThreshold = Math.max(0, avgPhoneTotal * 0.7);
+  const coldPhones = new Set(
+    names.filter((n) => phoneLifetimeTotal(owner, n) <= coldThreshold),
+  );
+  const hasColdPhones = coldPhones.size > 0 && phoneSpread >= Math.max(6, avgPhoneTotal * 0.4);
+
   // Completar conversa: se o último par está desequilibrado, a resposta do turno
   // (B→A após A→B) tem prioridade — não excluir o par "para evitar ping-pong".
   // Se a resposta exige instância fora do ciclo (ex.: 8927 close), não forçar o par:
   // seguir com o pool geral para não travar o motor.
   // Se a direção curativa está em cooldown/soft-skip (blocked), também NÃO forçar —
   // senão o motor fica em loop eterno no mesmo A→B morto.
+  // Se o par anterior é entre dois números quentes e há números frios, NÃO forçar —
+  // senão o ping-pong impede equalizar a coluna Mensagens.
   const lastKey = owner.lastSelectedPairKey || null;
   const lastPair = lastKey ? owner.pairs[lastKey] : null;
   if (lastPair && Math.abs(lastPair.balance) >= 1) {
@@ -214,12 +263,27 @@ export function pickNextRelationship(
       const nextBalance = direction === "a_to_b" ? pair.balance + 1 : pair.balance - 1;
       return Math.abs(nextBalance) < Math.abs(pair.balance);
     });
-    if (replyPool.length) {
+    const replyTouchesCold = replyPool.some(
+      ({ origem, destino }) => coldPhones.has(origem) || coldPhones.has(destino),
+    );
+    const replyBothHot =
+      hasColdPhones &&
+      phoneLifetimeTotal(owner, lastPair.a) > avgPhoneTotal * 1.25 &&
+      phoneLifetimeTotal(owner, lastPair.b) > avgPhoneTotal * 1.25;
+    if (replyPool.length && (!replyBothHot || replyTouchesCold)) {
       pool = replyPool;
     }
   } else if (lastKey && pool.length > 1) {
     const withoutLast = pool.filter((c) => c.pairKey !== lastKey);
     if (withoutLast.length) pool = withoutLast;
+  }
+
+  // Soft filter: com spread alto, priorizar candidatos que tocam número abaixo da média.
+  if (hasColdPhones && pool.length > 1) {
+    const withCold = pool.filter(
+      ({ origem, destino }) => coldPhones.has(origem) || coldPhones.has(destino),
+    );
+    if (withCold.length) pool = withCold;
   }
 
   if (!pool.length) return null;
@@ -236,6 +300,9 @@ export function pickNextRelationship(
     avgSentToday,
     avgRecvToday,
     avgPairTotal: avgTotal,
+    avgPhoneTotal,
+    phoneSpread,
+    hasColdPhones,
     lastSelectedPairKey: lastKey,
   };
 

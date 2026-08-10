@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-10-mensageiro-imagem-1080";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-10-aquecedor-justica-volume-numeros";
 
