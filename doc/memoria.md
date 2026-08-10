@@ -1,4 +1,8 @@
-﻿## 2026-07-26 10:18 — Aquecedor motor unlock (volume vs intervalo)
+## 2026-08-10 15:14 — Campanha Oficial: WhatsApp + leads Excel/TXT + min 1000
+- Wizard: Seu WhatsApp (DDD, nome, logo 500x500); leads Excel/TXT; minimo 1000 envios
+- Operacional: secao WhatsApp + download logo; intake API v5
+- LOGs: doc/LOG-2026-08-10__150332__campanha-oficial-whatsapp-nome-logo.md ; doc/LOG-2026-08-10__151424__campanha-leads-excel-txt-min-1000.md
+## 2026-07-26 10:18 — Aquecedor motor unlock (volume vs intervalo)
 - Soft-skip de direções mortas no ciclo; stale par 90min; peer offline libera origem
 - Testes: scripts/test-aquecedor-motor-unlock.mjs (+ deadlock + pausa humana)
 - Marker: DEPLOY-2026-07-26-aquecedor-motor-unlock

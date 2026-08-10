@@ -33,9 +33,44 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isCampaignLeadsTxtFileName = exports.isCampaignLeadsFileName = exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = void 0;
+exports.countTxtImportedRows = countTxtImportedRows;
+exports.trimTxtBufferToRowCount = trimTxtBufferToRowCount;
 exports.countSpreadsheetImportedRows = countSpreadsheetImportedRows;
 exports.trimSpreadsheetBufferToRowCount = trimSpreadsheetBufferToRowCount;
+exports.countLeadsImportedRows = countLeadsImportedRows;
+exports.trimLeadsBufferToRowCount = trimLeadsBufferToRowCount;
 const XLSX = __importStar(require("xlsx"));
+/** Extensões aceitas no intake de leads (wizard API Oficial). */
+exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".txt"];
+const isCampaignLeadsFileName = (fileName) => {
+    const lower = String(fileName || "").trim().toLowerCase();
+    return exports.CAMPAIGN_LEADS_ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+};
+exports.isCampaignLeadsFileName = isCampaignLeadsFileName;
+const isCampaignLeadsTxtFileName = (fileName) => String(fileName || "").trim().toLowerCase().endsWith(".txt");
+exports.isCampaignLeadsTxtFileName = isCampaignLeadsTxtFileName;
+/** Conta linhas não vazias de um TXT (um contato por linha). */
+function countTxtImportedRows(buffer) {
+    const text = buffer.toString("utf8");
+    if (!text.trim())
+        return 0;
+    return text
+        .split(/\r\n|\n|\r/)
+        .map((line) => line.trim())
+        .filter(Boolean).length;
+}
+/** Mantém as primeiras `maxRows` linhas não vazias do TXT. */
+function trimTxtBufferToRowCount(buffer, maxRows) {
+    const rowLimit = Math.max(0, Math.round(Number(maxRows) || 0));
+    const text = buffer.toString("utf8");
+    const lines = text
+        .split(/\r\n|\n|\r/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const trimmed = rowLimit > 0 ? lines.slice(0, rowLimit) : [];
+    return Buffer.from(`${trimmed.join("\n")}${trimmed.length ? "\n" : ""}`, "utf8");
+}
 /** Conta linhas de dados da primeira aba (mesma regra do preview no painel). */
 function countSpreadsheetImportedRows(buffer) {
     const wb = XLSX.read(buffer, { type: "buffer" });
@@ -60,4 +95,18 @@ function trimSpreadsheetBufferToRowCount(buffer, maxRows) {
     const nextWorkbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(nextWorkbook, nextSheet, sheetName);
     return Buffer.from(XLSX.write(nextWorkbook, { type: "buffer", bookType: "xlsx" }));
+}
+/** Conta leads conforme extensão do arquivo (.xlsx/.xls ou .txt). */
+function countLeadsImportedRows(buffer, fileName) {
+    if ((0, exports.isCampaignLeadsTxtFileName)(fileName)) {
+        return countTxtImportedRows(buffer);
+    }
+    return countSpreadsheetImportedRows(buffer);
+}
+/** Corta o arquivo de leads ao limite de envios, preservando o tipo (Excel→xlsx / TXT→txt). */
+function trimLeadsBufferToRowCount(buffer, maxRows, fileName) {
+    if ((0, exports.isCampaignLeadsTxtFileName)(fileName)) {
+        return trimTxtBufferToRowCount(buffer, maxRows);
+    }
+    return trimSpreadsheetBufferToRowCount(buffer, maxRows);
 }

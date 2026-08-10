@@ -60,6 +60,19 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
         }
         return res.download(download.filePath, download.fileName);
     });
+    app.get("/admin/operacional/campanhas/:id/logo-whatsapp", (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        const download = operacionalCampanhasService.resolveWhatsappLogoDownload(req.params.id, {
+            email: auth.email,
+            role: auth.role,
+        });
+        if (!download) {
+            return res.status(404).json({ error: "Logo do WhatsApp não encontrada." });
+        }
+        return res.download(download.filePath, download.fileName);
+    });
     app.get("/admin/operacional/campanhas/:id/planilha", (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
@@ -69,9 +82,12 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             role: auth.role,
         });
         if (!download) {
-            return res.status(404).json({ error: "Planilha de leads não encontrada." });
+            return res.status(404).json({ error: "Arquivo de leads não encontrado." });
         }
-        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        const isTxt = String(download.fileName || "").toLowerCase().endsWith(".txt");
+        res.setHeader("Content-Type", isTxt
+            ? "text/plain; charset=utf-8"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="${download.fileName}"`);
         return res.status(200).send(download.buffer);
     });

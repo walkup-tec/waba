@@ -13,7 +13,8 @@ import {
   type WabaDispatchesApiKind,
 } from "../disparos/waba-dispatches-api-kind";
 import {
-  trimSpreadsheetBufferToRowCount,
+  isCampaignLeadsTxtFileName,
+  trimLeadsBufferToRowCount,
 } from "../disparos/waba-campaign-spreadsheet.util";
 import { isWabaMasterEmail } from "../auth/waba-auth.service";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
@@ -100,6 +101,9 @@ export type OperacionalBmInoperanteResult = {
 
 export type OperacionalCampaignDetail = OperacionalCampaignListItem & {
   regionDdd: string;
+  whatsappName: string;
+  whatsappLogoFileName: string;
+  hasWhatsappLogo: boolean;
   textOptions: [string, string, string];
   responseLink: string;
   imageFileName: string;
@@ -377,9 +381,17 @@ export class WabaOperacionalCampanhasService {
       intake.spreadsheetTrimmedFileName ||
       `leads-${plannedSendCount}-envios.xlsx`;
 
+    const whatsappLogoStoredPath = String(intake.whatsappLogoStoredPath ?? "").trim();
+    const hasWhatsappLogo = Boolean(
+      whatsappLogoStoredPath && existsSync(whatsappLogoStoredPath),
+    );
+
     return {
       ...base,
       regionDdd: intake.regionDdd,
+      whatsappName: String(intake.whatsappName ?? "").trim(),
+      whatsappLogoFileName: String(intake.whatsappLogoFileName ?? "").trim(),
+      hasWhatsappLogo,
       textOptions: intake.textOptions,
       responseLink: String(intake.responseLink ?? "").trim(),
       imageFileName: intake.imageFileName,
@@ -600,6 +612,23 @@ export class WabaOperacionalCampanhasService {
     };
   }
 
+  resolveWhatsappLogoDownload(
+    intakeId: string,
+    staff: OperacionalCampanhasStaffContext,
+  ): { filePath: string; fileName: string } | null {
+    const intake = this.intakeRepository.getById(intakeId);
+    if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
+    const logoPath = String(intake.whatsappLogoStoredPath ?? "").trim();
+    if (!logoPath || !existsSync(logoPath)) {
+      return null;
+    }
+    return {
+      filePath: logoPath,
+      fileName:
+        String(intake.whatsappLogoFileName || "").trim() || path.basename(logoPath),
+    };
+  }
+
   resolveSpreadsheetDownload(
     intakeId: string,
     staff: OperacionalCampanhasStaffContext,
@@ -608,9 +637,15 @@ export class WabaOperacionalCampanhasService {
     if (!intake || !this.matchesStaffCampaignFilter(intake, staff)) return null;
 
     const plannedSendCount = resolvePlannedSendCount(intake);
+    const sourceName =
+      intake.spreadsheetTrimmedFileName ||
+      intake.spreadsheetFileName ||
+      intake.spreadsheetStoredPath ||
+      "";
+    const isTxt = isCampaignLeadsTxtFileName(sourceName);
     const trimmedFileName =
       intake.spreadsheetTrimmedFileName ||
-      `leads-${plannedSendCount}-envios.xlsx`;
+      `leads-${plannedSendCount}-envios.${isTxt ? "txt" : "xlsx"}`;
 
     if (intake.spreadsheetTrimmedPath && existsSync(intake.spreadsheetTrimmedPath)) {
       return {
@@ -625,7 +660,11 @@ export class WabaOperacionalCampanhasService {
 
     const originalBuffer = readFileSync(intake.spreadsheetStoredPath);
     return {
-      buffer: trimSpreadsheetBufferToRowCount(originalBuffer, plannedSendCount),
+      buffer: trimLeadsBufferToRowCount(
+        originalBuffer,
+        plannedSendCount,
+        intake.spreadsheetFileName || intake.spreadsheetStoredPath,
+      ),
       fileName: trimmedFileName,
     };
   }

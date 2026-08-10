@@ -66,6 +66,12 @@ export type WabaCampaignIntake = {
   ownerEmail: string;
   campaignName: string;
   regionDdd: string;
+  /** Nome exibido no WhatsApp (informado pelo assinante no wizard). */
+  whatsappName?: string;
+  /** Logo do WhatsApp (500×500) — nome original do arquivo. */
+  whatsappLogoFileName?: string;
+  /** Logo do WhatsApp (500×500) — caminho gravado no servidor. */
+  whatsappLogoStoredPath?: string;
   textOptions: [string, string, string];
   /** Link de resposta (CTA) informado pelo assinante no wizard. */
   responseLink?: string;

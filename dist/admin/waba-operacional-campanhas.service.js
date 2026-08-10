@@ -232,9 +232,14 @@ class WabaOperacionalCampanhasService {
         const plannedSendCount = base.plannedSendCount;
         const trimmedName = intake.spreadsheetTrimmedFileName ||
             `leads-${plannedSendCount}-envios.xlsx`;
+        const whatsappLogoStoredPath = String(intake.whatsappLogoStoredPath ?? "").trim();
+        const hasWhatsappLogo = Boolean(whatsappLogoStoredPath && (0, node_fs_1.existsSync)(whatsappLogoStoredPath));
         return {
             ...base,
             regionDdd: intake.regionDdd,
+            whatsappName: String(intake.whatsappName ?? "").trim(),
+            whatsappLogoFileName: String(intake.whatsappLogoFileName ?? "").trim(),
+            hasWhatsappLogo,
             textOptions: intake.textOptions,
             responseLink: String(intake.responseLink ?? "").trim(),
             imageFileName: intake.imageFileName,
@@ -403,13 +408,31 @@ class WabaOperacionalCampanhasService {
             fileName: intake.imageFileName || node_path_1.default.basename(intake.imageStoredPath),
         };
     }
+    resolveWhatsappLogoDownload(intakeId, staff) {
+        const intake = this.intakeRepository.getById(intakeId);
+        if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
+            return null;
+        const logoPath = String(intake.whatsappLogoStoredPath ?? "").trim();
+        if (!logoPath || !(0, node_fs_1.existsSync)(logoPath)) {
+            return null;
+        }
+        return {
+            filePath: logoPath,
+            fileName: String(intake.whatsappLogoFileName || "").trim() || node_path_1.default.basename(logoPath),
+        };
+    }
     resolveSpreadsheetDownload(intakeId, staff) {
         const intake = this.intakeRepository.getById(intakeId);
         if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
         const plannedSendCount = resolvePlannedSendCount(intake);
+        const sourceName = intake.spreadsheetTrimmedFileName ||
+            intake.spreadsheetFileName ||
+            intake.spreadsheetStoredPath ||
+            "";
+        const isTxt = (0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sourceName);
         const trimmedFileName = intake.spreadsheetTrimmedFileName ||
-            `leads-${plannedSendCount}-envios.xlsx`;
+            `leads-${plannedSendCount}-envios.${isTxt ? "txt" : "xlsx"}`;
         if (intake.spreadsheetTrimmedPath && (0, node_fs_1.existsSync)(intake.spreadsheetTrimmedPath)) {
             return {
                 buffer: (0, node_fs_1.readFileSync)(intake.spreadsheetTrimmedPath),
@@ -421,7 +444,7 @@ class WabaOperacionalCampanhasService {
         }
         const originalBuffer = (0, node_fs_1.readFileSync)(intake.spreadsheetStoredPath);
         return {
-            buffer: (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(originalBuffer, plannedSendCount),
+            buffer: (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(originalBuffer, plannedSendCount, intake.spreadsheetFileName || intake.spreadsheetStoredPath),
             fileName: trimmedFileName,
         };
     }

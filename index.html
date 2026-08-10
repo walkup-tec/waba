@@ -17780,7 +17780,7 @@
                 <div id="dis-campaign-wizard" class="dis-campaign-wizard">
                   <div class="dis-campaign-wizard-steps" id="dis-campaign-wizard-steps" aria-label="Etapas da campanha">
                     <div class="dis-campaign-wizard-step is-active" data-wizard-step-indicator="1">1. Nome</div>
-                    <div class="dis-campaign-wizard-step" data-wizard-step-indicator="2">2. DDD</div>
+                    <div class="dis-campaign-wizard-step" data-wizard-step-indicator="2">2. WhatsApp</div>
                     <div class="dis-campaign-wizard-step" data-wizard-step-indicator="3">3. Imagem</div>
                     <div class="dis-campaign-wizard-step" data-wizard-step-indicator="4">4. Textos</div>
                     <div class="dis-campaign-wizard-step" data-wizard-step-indicator="5">5. Leads</div>
@@ -17803,7 +17803,7 @@
                   </div>
 
                   <div class="dis-campaign-wizard-panel" data-wizard-step="2" hidden>
-                    <h3 class="dis-campaign-wizard-panel-title">DDD da sua região</h3>
+                    <h3 class="dis-campaign-wizard-panel-title">Seu WhatsApp</h3>
                     <div class="aquecedor-field">
                       <label for="dis-wizard-region-ddd">Informe o DDD (2 dígitos)</label>
                       <input
@@ -17818,6 +17818,34 @@
                         pattern="[0-9]{2}"
                       />
                       <span class="aquecedor-hint">Usamos o DDD para direcionar a operação na sua região.</span>
+                    </div>
+                    <div class="aquecedor-field" style="margin-top: 14px;">
+                      <label for="dis-wizard-whatsapp-name">Nome no WhatsApp</label>
+                      <input
+                        id="dis-wizard-whatsapp-name"
+                        class="register-input"
+                        type="text"
+                        maxlength="80"
+                        placeholder="Ex.: Credilix Atendimento"
+                        autocomplete="off"
+                        required
+                        minlength="2"
+                      />
+                      <span class="aquecedor-hint">Informe o nome que você deseja que apareça para o seu cliente.</span>
+                    </div>
+                    <div class="aquecedor-field" style="margin-top: 14px;">
+                      <label for="dis-wizard-whatsapp-logo">Imagem do seu WhatsApp (500 × 500 px)</label>
+                      <input
+                        id="dis-wizard-whatsapp-logo"
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg"
+                        required
+                      />
+                      <span class="aquecedor-hint">Informe a logo do seu negócio. A imagem precisa ter exatamente 500 px de largura e 500 px de altura (PNG ou JPG).</span>
+                      <span id="dis-wizard-whatsapp-logo-error" class="field-error hidden"></span>
+                    </div>
+                    <div id="dis-wizard-whatsapp-logo-preview" class="dis-campaign-wizard-image-preview" aria-hidden="true">
+                      <img id="dis-wizard-whatsapp-logo-preview-img" alt="Prévia da logo do WhatsApp" />
                     </div>
                   </div>
 
@@ -17873,14 +17901,14 @@
                   <div class="dis-campaign-wizard-panel" data-wizard-step="5" hidden>
                     <h3 class="dis-campaign-wizard-panel-title">Lista de clientes (leads)</h3>
                     <div class="dis-campaign-import-wrap">
-                      <span class="dis-campaign-import-label">Planilha Excel com os leads</span>
+                      <span class="dis-campaign-import-label">Arquivo com os leads</span>
                       <div class="dis-campaign-dropzone" id="dis-wizard-leads-dropzone">
                         <input
                           type="file"
                           id="dis-wizard-leads-file"
                           class="dis-campaign-file-input"
-                          accept=".xlsx,.xls"
-                          aria-label="Selecionar planilha Excel de leads"
+                          accept=".xlsx,.xls,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/plain"
+                          aria-label="Selecionar arquivo de leads (Excel ou TXT)"
                           required
                         />
                         <div class="dis-campaign-dropzone-visual">
@@ -17893,8 +17921,11 @@
                             </svg>
                           </div>
                           <div class="dis-campaign-dropzone-text">
-                            <strong>Arraste a planilha até aqui</strong>
-                            <span>ou clique para escolher · .xlsx ou .xls</span>
+                            <strong>Arraste o arquivo até aqui</strong>
+                            <span>ou clique para escolher</span>
+                            <span class="aquecedor-hint" style="display:block;margin-top:6px;">
+                              Formatos aceitos: Excel (.xlsx, .xls) ou TXT (.txt). Outros formatos serão bloqueados.
+                            </span>
                             <div class="dis-campaign-file-meta" id="dis-wizard-leads-file-label">Nenhum arquivo carregado.</div>
                           </div>
                         </div>
@@ -17907,10 +17938,10 @@
                             id="dis-wizard-planned-send-count"
                             class="register-input"
                             type="number"
-                            min="1"
+                            min="1000"
                             step="1"
                             inputmode="numeric"
-                            placeholder="Ex.: 100"
+                            placeholder="Ex.: 1000"
                             required
                           />
                           <p class="dis-wizard-leads-count-hint" id="dis-wizard-leads-count-hint"></p>
@@ -32149,6 +32180,8 @@
       let adminCampanhasBmInoperanteBusy = false;
       let adminCampanhasStartBusy = false;
       let adminCampanhasDetailImageName = "campanha-imagem";
+      let adminCampanhasDetailWhatsappLogoName = "whatsapp-logo";
+      let adminCampanhasDetailHasWhatsappLogo = false;
       let adminCampanhasDetailSpreadsheetName = "leads-envios.xlsx";
       let adminCampanhasDetailTextOptions = [];
       let adminCampanhasDetailResponseLink = "";
@@ -32743,7 +32776,6 @@
             "Campanha",
             [
               renderAdminCampanhasDetailField("Nome da campanha", escapeAdminHtml(campaignName)),
-              renderAdminCampanhasDetailField("DDD da região", escapeAdminHtml(campaign.regionDdd || "—")),
               renderAdminCampanhasDetailField(
                 "Operador atribuído",
                 escapeAdminHtml(
@@ -32761,6 +32793,22 @@
             ].join("")
           ),
           renderAdminCampanhasDetailSection(
+            "WhatsApp",
+            [
+              renderAdminCampanhasDetailField("DDD", escapeAdminHtml(campaign.regionDdd || "—")),
+              renderAdminCampanhasDetailField(
+                "Nome do WhatsApp",
+                escapeAdminHtml(String(campaign.whatsappName || "").trim() || "—")
+              ),
+              renderAdminCampanhasDetailField(
+                "Logo",
+                campaign.hasWhatsappLogo
+                  ? `<button id="admin-campanhas-download-whatsapp-logo" class="instance-action-btn btn-qrcode enabled" type="button">Baixar logo</button>`
+                  : '<span class="muted">Não informada</span>'
+              ),
+            ].join("")
+          ),
+          renderAdminCampanhasDetailSection(
             "Registro",
             [
               renderAdminCampanhasDetailField("Criada em", escapeAdminHtml(campaign.createdAtLabel || "—")),
@@ -32774,8 +32822,17 @@
 
         adminCampanhasDetailCampaignId = String(campaign.id || "");
         adminCampanhasDetailImageName = campaign.imageFileName || "campanha-imagem";
+        adminCampanhasDetailWhatsappLogoName =
+          campaign.whatsappLogoFileName || "whatsapp-logo";
+        adminCampanhasDetailHasWhatsappLogo = Boolean(campaign.hasWhatsappLogo);
         adminCampanhasDetailSpreadsheetName =
           campaign.spreadsheetTrimmedFileName || "leads-envios.xlsx";
+
+        document
+          .getElementById("admin-campanhas-download-whatsapp-logo")
+          ?.addEventListener("click", () => {
+            void downloadAdminCampanhasAsset("whatsappLogo");
+          });
 
         const startBtn = document.getElementById("admin-campanhas-start-btn");
         const bmInoperanteBtn = document.getElementById("admin-campanhas-bm-inoperante-btn");
@@ -33666,15 +33723,28 @@
           return;
         }
 
+        if (kind === "whatsappLogo" && !adminCampanhasDetailHasWhatsappLogo) {
+          showToast("Logo do WhatsApp não disponível para esta campanha.", "warning");
+          return;
+        }
+
         const path =
           kind === "image"
             ? `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/imagem`
-            : `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/planilha`;
+            : kind === "whatsappLogo"
+              ? `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/logo-whatsapp`
+              : `/admin/operacional/campanhas/${encodeURIComponent(campaignId)}/planilha`;
         const fileName =
-          kind === "image" ? adminCampanhasDetailImageName : adminCampanhasDetailSpreadsheetName;
+          kind === "image"
+            ? adminCampanhasDetailImageName
+            : kind === "whatsappLogo"
+              ? adminCampanhasDetailWhatsappLogoName
+              : adminCampanhasDetailSpreadsheetName;
         const imageBtn = document.getElementById("admin-campanhas-download-image");
+        const logoBtn = document.getElementById("admin-campanhas-download-whatsapp-logo");
         const spreadsheetBtn = document.getElementById("admin-campanhas-download-spreadsheet");
-        const activeBtn = kind === "image" ? imageBtn : spreadsheetBtn;
+        const activeBtn =
+          kind === "image" ? imageBtn : kind === "whatsappLogo" ? logoBtn : spreadsheetBtn;
         const previousLabel = activeBtn?.textContent || "";
 
         if (activeBtn) {
@@ -37668,7 +37738,9 @@
       };
       let disCampaignWizardStep = 1;
       const DIS_CAMPAIGN_WIZARD_TOTAL_STEPS = 5;
+      const DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT = 1000;
       let disCampaignWizardImageFile = null;
+      let disCampaignWizardWhatsappLogoFile = null;
       let disCampaignWizardLeadsFile = null;
       let disCampaignWizardImportedLineCount = 0;
       let disCampaignWizardSubmitInFlight = false;
@@ -37748,6 +37820,20 @@
           if (ddd.length !== 2 || Number(ddd) < 11 || Number(ddd) > 99) {
             return "Informe um DDD válido com 2 dígitos.";
           }
+          const whatsappName = String(document.getElementById("dis-wizard-whatsapp-name")?.value || "").trim();
+          if (whatsappName.length < 2) {
+            return "Informe o nome no WhatsApp (mínimo 2 caracteres).";
+          }
+          if (whatsappName.length > 80) {
+            return "O nome no WhatsApp deve ter no máximo 80 caracteres.";
+          }
+          if (!disCampaignWizardWhatsappLogoFile) {
+            const logoFromInput = document.getElementById("dis-wizard-whatsapp-logo")?.files?.[0] || null;
+            if (!logoFromInput) {
+              return "Envie a logo do WhatsApp (500×500 px).";
+            }
+            return "Aguarde a validação da logo ou envie um arquivo 500×500 px (PNG ou JPG).";
+          }
           return "";
         }
         if (step === 3) {
@@ -37777,17 +37863,26 @@
             if (remaining < 1) {
               return "Você não possui envios disponíveis na API Oficial. Contrate envios antes de gerar a campanha.";
             }
+            if (remaining < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+              return `É necessário ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios disponíveis para gerar a campanha.`;
+            }
           }
           if (!disCampaignWizardLeadsFile) {
-            return "Envie a planilha Excel (.xlsx ou .xls) com a lista de leads.";
+            return "Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).";
           }
           const imported = Math.max(0, Math.floor(Number(disCampaignWizardImportedLineCount) || 0));
           if (imported < 1) {
-            return "A planilha não contém linhas de leads.";
+            return "O arquivo não contém linhas de leads.";
+          }
+          if (imported < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+            return `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos para gerar a campanha.`;
           }
           const planned = getDisCampaignWizardPlannedSendCountValue();
           if (!planned || planned < 1) {
             return "Informe a quantidade de envios desejada.";
+          }
+          if (planned < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+            return `A campanha deve ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios.`;
           }
           if (!hasMasterAccess()) {
             const remaining = getDisCampaignWizardRemainingShipments();
@@ -37796,7 +37891,7 @@
             }
           }
           if (planned > imported) {
-            return `A planilha tem apenas ${formatDisparosQty(imported)} contato(s). Reduza a quantidade ou importe mais linhas.`;
+            return `O arquivo tem apenas ${formatDisparosQty(imported)} contato(s). Reduza a quantidade ou importe mais linhas.`;
           }
           return "";
         }
@@ -37818,6 +37913,19 @@
 
       async function validateDisCampaignWizardForSubmit() {
         await ensureDisCampaignWizardArtifacts();
+        if (!disCampaignWizardWhatsappLogoFile) {
+          const logoFromInput = document.getElementById("dis-wizard-whatsapp-logo")?.files?.[0] || null;
+          const logoOk = logoFromInput
+            ? await validateDisCampaignWizardWhatsappLogoFile(logoFromInput)
+            : false;
+          if (!logoOk) {
+            showDisCampaignWizardSubmitError(
+              "Envie a logo do WhatsApp com 500×500 px (PNG ou JPG).",
+              2
+            );
+            return false;
+          }
+        }
         if (!disCampaignWizardImageFile) {
           const imageFromInput = document.getElementById("dis-wizard-campaign-image")?.files?.[0] || null;
           const imageOk = imageFromInput
@@ -37842,7 +37950,7 @@
         return true;
       }
 
-      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 4;
+      const WABA_CAMPAIGN_INTAKE_API_VERSION_EXPECTED = 5;
       let wabaCampaignIntakeBackendCache = null;
 
       function isCampaignIntakeGatewayStatus(status) {
@@ -37987,6 +38095,10 @@
           String(document.getElementById("dis-wizard-region-ddd")?.value || "").replace(/\D/g, "")
         );
         formData.append(
+          "whatsappName",
+          String(document.getElementById("dis-wizard-whatsapp-name")?.value || "").trim()
+        );
+        formData.append(
           "textOption1",
           String(document.getElementById("dis-wizard-text-1")?.value || "").trim()
         );
@@ -38001,6 +38113,7 @@
         formData.append("responseLink", responseLink);
         formData.append("apiKind", apiKind);
         formData.append("image", disCampaignWizardImageFile);
+        formData.append("whatsappLogo", disCampaignWizardWhatsappLogoFile);
         formData.append("spreadsheet", disCampaignWizardLeadsFile);
         formData.append("plannedSendCount", String(getDisCampaignWizardPlannedSendCountValue()));
         if (disCampaignWizardSubmitRequestId) {
@@ -38018,8 +38131,9 @@
 
       function resolveDisCampaignWizardSubmitTimeoutMs() {
         const imageBytes = Number(disCampaignWizardImageFile?.size || 0);
+        const logoBytes = Number(disCampaignWizardWhatsappLogoFile?.size || 0);
         const sheetBytes = Number(disCampaignWizardLeadsFile?.size || 0);
-        const totalKb = Math.ceil((imageBytes + sheetBytes) / 1024);
+        const totalKb = Math.ceil((imageBytes + logoBytes + sheetBytes) / 1024);
         return Math.min(300000, Math.max(180000, 90000 + totalKb * 120));
       }
 
@@ -38140,6 +38254,69 @@
         }
       }
 
+      async function validateDisCampaignWizardWhatsappLogoFile(file) {
+        const errorEl = document.getElementById("dis-wizard-whatsapp-logo-error");
+        const previewWrap = document.getElementById("dis-wizard-whatsapp-logo-preview");
+        const previewImg = document.getElementById("dis-wizard-whatsapp-logo-preview-img");
+        if (!file) {
+          disCampaignWizardWhatsappLogoFile = null;
+          if (errorEl) {
+            errorEl.textContent = "";
+            errorEl.classList.add("hidden");
+          }
+          if (previewWrap) {
+            previewWrap.classList.remove("is-visible");
+            previewWrap.setAttribute("aria-hidden", "true");
+          }
+          return false;
+        }
+        const mime = String(file.type || "").toLowerCase();
+        if (!mime.startsWith("image/")) {
+          disCampaignWizardWhatsappLogoFile = null;
+          if (errorEl) {
+            errorEl.textContent = "Use PNG ou JPG.";
+            errorEl.classList.remove("hidden");
+          }
+          return false;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        try {
+          const dimensions = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            img.onerror = () => reject(new Error("invalid"));
+            img.src = objectUrl;
+          });
+          if (dimensions.width !== 500 || dimensions.height !== 500) {
+            disCampaignWizardWhatsappLogoFile = null;
+            if (errorEl) {
+              errorEl.textContent = `A logo deve ser 500×500 px (enviada: ${dimensions.width}×${dimensions.height}).`;
+              errorEl.classList.remove("hidden");
+            }
+            if (previewWrap) previewWrap.classList.remove("is-visible");
+            return false;
+          }
+          disCampaignWizardWhatsappLogoFile = file;
+          if (errorEl) {
+            errorEl.textContent = "";
+            errorEl.classList.add("hidden");
+          }
+          if (previewImg && previewWrap) {
+            previewImg.src = objectUrl;
+            previewWrap.classList.add("is-visible");
+            previewWrap.setAttribute("aria-hidden", "false");
+          }
+          return true;
+        } catch {
+          disCampaignWizardWhatsappLogoFile = null;
+          if (errorEl) {
+            errorEl.textContent = "Não foi possível ler a logo.";
+            errorEl.classList.remove("hidden");
+          }
+          return false;
+        }
+      }
+
       function resolveDisparosCreditsApiBucket(apiKind) {
         const kind = apiKind === "alternativa" ? "alternativa" : "oficial";
         const bucket = disparosCreditsCache?.byApi?.[kind];
@@ -38182,6 +38359,10 @@
       }
 
       async function ensureDisCampaignWizardArtifacts() {
+        const logoInput = document.getElementById("dis-wizard-whatsapp-logo");
+        if (!disCampaignWizardWhatsappLogoFile && logoInput?.files?.[0]) {
+          await validateDisCampaignWizardWhatsappLogoFile(logoInput.files[0]);
+        }
         const imageInput = document.getElementById("dis-wizard-campaign-image");
         if (!disCampaignWizardImageFile && imageInput?.files?.[0]) {
           await validateDisCampaignWizardImageFile(imageInput.files[0]);
@@ -38236,10 +38417,14 @@
         const remaining = getDisCampaignWizardRemainingShipments();
         const maxAllowed = hasMasterAccess() ? imported : Math.min(imported, remaining);
         if (input) {
-          input.max = String(Math.max(1, maxAllowed));
+          input.min = String(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT);
+          input.max = String(Math.max(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT, maxAllowed));
         }
         if (hintEl) {
-          const parts = [`Até ${formatDisparosQty(imported)} contato(s) na planilha`];
+          const parts = [
+            `Até ${formatDisparosQty(imported)} contato(s) no arquivo`,
+            `mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} envios`,
+          ];
           if (!hasMasterAccess()) {
             parts.push(
               `${formatDisparosQty(remaining)} envio(s) disponível(is) na ${renderWabaApiKindLabelHtml("oficial")}`
@@ -38251,9 +38436,30 @@
         renderCampaignImportStatsElement(statsEl, imported, planned);
       }
 
+      function isDisCampaignWizardLeadsFileName(fileName) {
+        const lower = String(fileName || "").toLowerCase();
+        return lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".txt");
+      }
+
+      async function countDisCampaignWizardLeadsRows(file) {
+        const lower = String(file?.name || "").toLowerCase();
+        if (lower.endsWith(".txt")) {
+          const text = await file.text();
+          if (!String(text || "").trim()) return 0;
+          return text
+            .split(/\r\n|\n|\r/)
+            .map((line) => String(line || "").trim())
+            .filter(Boolean).length;
+        }
+        await ensureXlsxParserReady();
+        const rows = await parseSpreadsheetFile(file);
+        return rows.length;
+      }
+
       async function setDisCampaignWizardLeadsFile(file) {
         const label = document.getElementById("dis-wizard-leads-file-label");
         const countInput = document.getElementById("dis-wizard-planned-send-count");
+        const leadsInput = document.getElementById("dis-wizard-leads-file");
         if (!file) {
           disCampaignWizardLeadsFile = null;
           disCampaignWizardImportedLineCount = 0;
@@ -38263,36 +38469,53 @@
           updateDisCampaignWizardLeadsCountUi();
           return;
         }
-        const lower = file.name.toLowerCase();
-        if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
+        if (!isDisCampaignWizardLeadsFileName(file.name)) {
           disCampaignWizardLeadsFile = null;
           disCampaignWizardImportedLineCount = 0;
+          if (leadsInput) leadsInput.value = "";
+          if (label) label.textContent = "Nenhum arquivo carregado.";
           if (countInput) countInput.value = "";
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
-          showToast("Envie apenas arquivo Excel (.xlsx ou .xls).", "warning");
+          showToast(
+            "Formato inválido. Envie apenas Excel (.xlsx, .xls) ou TXT (.txt).",
+            "warning",
+            5200
+          );
           return;
         }
         disCampaignWizardLeadsFile = file;
         try {
-          await ensureXlsxParserReady();
-          const rows = await parseSpreadsheetFile(file);
-          const importedLineCount = rows.length;
+          const importedLineCount = await countDisCampaignWizardLeadsRows(file);
           disCampaignWizardImportedLineCount = importedLineCount;
           if (label) {
             label.textContent = `${file.name} · ${formatDisparosQty(importedLineCount)} linha(s)`;
+          }
+          if (importedLineCount < DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+            if (countInput) countInput.value = "";
+            updateDisCampaignWizardLeadsCountUi();
+            showDisCampaignWizardLeadsCountError(
+              `O arquivo precisa ter no mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)} contatos.`
+            );
+            showToast(
+              `Arquivo com ${formatDisparosQty(importedLineCount)} contato(s). Mínimo: ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}.`,
+              "warning",
+              5200
+            );
+            return;
           }
           const remaining = getDisCampaignWizardRemainingShipments();
           const suggested = hasMasterAccess()
             ? importedLineCount
             : Math.min(importedLineCount, remaining);
           if (countInput) {
-            countInput.value = suggested > 0 ? String(suggested) : "";
+            countInput.value =
+              suggested >= DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT ? String(suggested) : "";
           }
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
           showToast(
-            `Planilha importada: ${formatDisparosQty(importedLineCount)} linha(s). Informe quantos envios deseja realizar.`,
+            `Arquivo importado: ${formatDisparosQty(importedLineCount)} linha(s). Informe quantos envios deseja realizar (mínimo ${formatDisparosQty(DIS_CAMPAIGN_MIN_PLANNED_SEND_COUNT)}).`,
             "success",
             4500
           );
@@ -38302,12 +38525,14 @@
           if (countInput) countInput.value = "";
           clearDisCampaignWizardLeadsCountError();
           updateDisCampaignWizardLeadsCountUi();
+          showToast("Não foi possível ler o arquivo de leads.", "error");
         }
       }
 
       function resetDisCampaignWizard() {
         disCampaignWizardStep = 1;
         disCampaignWizardImageFile = null;
+        disCampaignWizardWhatsappLogoFile = null;
         disCampaignWizardLeadsFile = null;
         disCampaignWizardSubmitInFlight = false;
         disCampaignWizardSubmitRequestId = "";
@@ -38318,10 +38543,14 @@
         if (success) success.hidden = true;
         const nameInput = document.getElementById("dis-wizard-campaign-name");
         const dddInput = document.getElementById("dis-wizard-region-ddd");
+        const whatsappNameInput = document.getElementById("dis-wizard-whatsapp-name");
+        const whatsappLogoInput = document.getElementById("dis-wizard-whatsapp-logo");
         const imageInput = document.getElementById("dis-wizard-campaign-image");
         const leadsInput = document.getElementById("dis-wizard-leads-file");
         if (nameInput) nameInput.value = "";
         if (dddInput) dddInput.value = "";
+        if (whatsappNameInput) whatsappNameInput.value = "";
+        if (whatsappLogoInput) whatsappLogoInput.value = "";
         if (imageInput) imageInput.value = "";
         if (leadsInput) leadsInput.value = "";
         const plannedSendInput = document.getElementById("dis-wizard-planned-send-count");
@@ -38334,6 +38563,7 @@
         });
         const responseLinkInput = document.getElementById("dis-wizard-response-link");
         if (responseLinkInput) responseLinkInput.value = "";
+        void validateDisCampaignWizardWhatsappLogoFile(null);
         void validateDisCampaignWizardImageFile(null);
         setDisCampaignWizardLeadsFile(null);
         renderDisCampaignWizardStep();
@@ -38396,11 +38626,14 @@
           if (!apiKind) {
             throw new Error("Selecione o plano de envio (API Oficial ou API Alternativa).");
           }
+          if (!disCampaignWizardWhatsappLogoFile) {
+            throw new Error("Envie a logo do WhatsApp (500×500 px).");
+          }
           if (!disCampaignWizardImageFile) {
             throw new Error("Envie a imagem da campanha (1080×1080 px).");
           }
           if (!disCampaignWizardLeadsFile) {
-            throw new Error("Envie a planilha Excel com a lista de leads.");
+            throw new Error("Envie o arquivo de leads em Excel (.xlsx, .xls) ou TXT (.txt).");
           }
 
           const timeoutMs = resolveDisCampaignWizardSubmitTimeoutMs();
@@ -38521,6 +38754,11 @@
           const input = event.target;
           if (!input) return;
           input.value = String(input.value || "").replace(/\D/g, "").slice(0, 2);
+        });
+
+        document.getElementById("dis-wizard-whatsapp-logo")?.addEventListener("change", async (event) => {
+          const file = event.target?.files?.[0] || null;
+          await validateDisCampaignWizardWhatsappLogoFile(file);
         });
 
         document.getElementById("dis-wizard-campaign-image")?.addEventListener("change", async (event) => {
