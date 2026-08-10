@@ -1,7 +1,9 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WA_CONNECTING_RESTRICTION_MS = void 0;
-exports.WA_CONNECTING_RECHECK_MS = void 0;
+exports.WA_CONNECTING_RECHECK_MS = exports.WA_CONNECTING_RESTRICTION_MS = void 0;
 exports.syncWhatsappConnectingRestriction = syncWhatsappConnectingRestriction;
 exports.markWhatsappRestrictionExplicit = markWhatsappRestrictionExplicit;
 exports.clearWhatsappConnectingRestriction = clearWhatsappConnectingRestriction;
@@ -9,7 +11,7 @@ exports.purgeAutomaticWhatsappConnectingRestrictions = purgeAutomaticWhatsappCon
 exports.getWhatsappConnectingRestrictionMap = getWhatsappConnectingRestrictionMap;
 exports.recheckWhatsappConnectingRestrictions = recheckWhatsappConnectingRestrictions;
 const fs_1 = require("fs");
-const path = require("path");
+const path_1 = __importDefault(require("path"));
 const data_path_1 = require("../data-path");
 const evo_connection_state_service_1 = require("./evo-connection-state.service");
 const STORE_FILE = (0, data_path_1.resolveDataFile)("whatsapp-connecting-restriction.json");
@@ -48,14 +50,20 @@ async function loadStore() {
 async function saveStore(store) {
     store.updatedAt = new Date().toISOString();
     cache = store;
-    await fs_1.promises.mkdir(path.dirname(STORE_FILE), { recursive: true });
+    await fs_1.promises.mkdir(path_1.default.dirname(STORE_FILE), { recursive: true });
     const tmp = `${STORE_FILE}.tmp`;
     await fs_1.promises.writeFile(tmp, JSON.stringify(store, null, 2), "utf-8");
     await fs_1.promises.rename(tmp, STORE_FILE);
 }
 /**
- * connecting sozinho NÃO é restrição WhatsApp (QR/reconnect/device_removed).
- * Remove tags automáticas legadas.
+ * Alinha o store ao live state.
+ *
+ * Importante: `connecting` sozinho NÃO é restrição WhatsApp.
+ * Costuma ser QR, reconnect após device_removed, ou Baileys reiniciando —
+ * falso positivo observado em 6973 / 5181076973.
+ *
+ * Tags automáticas antigas (`connecting-auto` ou sem source) são removidas.
+ * Restrição explícita futura pode usar `markWhatsappRestrictionExplicit`.
  */
 async function syncWhatsappConnectingRestriction(instanceName, liveState) {
     const name = String(instanceName || "").trim();
@@ -74,6 +82,7 @@ async function syncWhatsappConnectingRestriction(instanceName, liveState) {
         console.warn(`[WA-Restrição] removida tag automática de ${name} (live=${state || "—"}; connecting ≠ restrição).`);
         return null;
     }
+    // Restrição explícita: limpa se saiu de connecting/open com sucesso ou expirou.
     const untilMs = new Date(existing.restrictedUntil).getTime();
     const now = Date.now();
     if (!Number.isFinite(untilMs) || untilMs <= now || state === "open" || state === "close") {
@@ -87,6 +96,7 @@ async function syncWhatsappConnectingRestriction(instanceName, liveState) {
     await saveStore(store);
     return { ...existing };
 }
+/** Marca restrição explícita (ex.: recusa EVO com indício de ban) — não usar para connecting genérico. */
 async function markWhatsappRestrictionExplicit(instanceName, detail) {
     const name = String(instanceName || "").trim();
     if (!name)
@@ -118,6 +128,7 @@ async function clearWhatsappConnectingRestriction(instanceName) {
     await saveStore(store);
     return true;
 }
+/** Remove todas as tags automáticas legadas (connecting → restrição). */
 async function purgeAutomaticWhatsappConnectingRestrictions() {
     const store = await loadStore();
     const cleared = [];
@@ -159,6 +170,7 @@ async function getWhatsappConnectingRestrictionMap() {
         await saveStore(store);
     return out;
 }
+/** Rechecagem: consulta connectionState e remove quem não deve mais ter tag. */
 async function recheckWhatsappConnectingRestrictions() {
     const store = await loadStore();
     const names = Object.keys(store.instances);

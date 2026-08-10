@@ -89,6 +89,7 @@ const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
 const waba_dispatches_api_kind_1 = require("./disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./disparos/waba-campaign-spreadsheet.util");
+const waba_campaign_messenger_images_service_1 = require("./disparos/waba-campaign-messenger-images.service");
 const waba_disparos_credits_service_1 = require("./billing/waba-disparos-credits.service");
 const waba_feature_flags_1 = require("./config/waba-feature-flags");
 const waba_entitlement_routes_1 = require("./entitlements/waba-entitlement.routes");
@@ -330,6 +331,18 @@ const uploadCampaignSpreadsheet = (0, multer_1.default)({
         cb(new Error("Envie arquivo Excel (.xlsx ou .xls)."));
     },
 });
+const uploadMessengerImage = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const mime = String(file.mimetype || "").toLowerCase();
+        if (mime === "image/jpeg" || mime === "image/png" || mime === "image/webp") {
+            cb(null, true);
+            return;
+        }
+        cb(new Error("Envie JPEG, PNG ou WebP 1080×1080."));
+    },
+});
 function isDisparosCampaignCreatePost(req) {
     if (req.method !== "POST")
         return false;
@@ -343,6 +356,8 @@ function shouldSkipBodyParserForMultipart(req) {
     const p = String(req.path || "").replace(/\/+$/, "") || "/";
     // Intake do wizard é sempre multipart; não depender só do Content-Type (proxies podem alterá-lo).
     if (p === "/disparos/campanhas/intake")
+        return true;
+    if (p === "/disparos/messenger-images")
         return true;
     const ct = String(req.headers["content-type"] || "");
     if (!ct.includes("multipart/form-data"))
@@ -779,8 +794,8 @@ function parseDisparosConfig(input) {
         provider === "waba"
         ? provider
         : "waba";
-    const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
-    const safeMode = mode === "database" ? "database" : "ai";
+    // Base de mensagens (planilha) removida: campanhas Alternativa usam apenas IA.
+    const safeMode = "ai";
     const selectedRaw = input?.selectedDisparadorInstances ?? input?.selected_disparador_instances;
     const selectedDisparadorInstances = Array.isArray(selectedRaw)
         ? Array.from(new Set(selectedRaw
@@ -817,6 +832,7 @@ function parseDisparosConfig(input) {
         whatsappTargetNumber: normalizeWhatsAppNumber(String(input?.whatsappTargetNumber || "")),
         responseUrl: normalizeDisparosResponseUrl(String(input?.responseUrl || "")),
         selectedDisparadorInstances,
+        messengerImages: (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(input?.messengerImages),
     };
 }
 function normalizeDisparosResponseUrl(raw) {
@@ -904,13 +920,14 @@ function validateRequiredDisparosConfigPayload(input) {
     const linkDestinationError = validateDisparosLinkDestination(input);
     if (linkDestinationError)
         return linkDestinationError;
-    const mode = String(input?.messageMode || "").toLowerCase();
-    if (mode === "ai") {
-        const aiRequired = ["aiTone", "aiCta", "aiAudience", "aiBriefing"];
-        for (const key of aiRequired) {
-            if (!hasValue(key))
-                return `Campo obrigatório ausente no modo IA: ${key}.`;
-        }
+    const aiRequired = ["aiTone", "aiCta", "aiAudience", "aiBriefing"];
+    for (const key of aiRequired) {
+        if (!hasValue(key))
+            return `Campo obrigatório ausente no modo IA: ${key}.`;
+    }
+    const images = (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(input?.messengerImages);
+    if (!(0, waba_campaign_messenger_images_service_1.messengerImagesAreComplete)(images)) {
+        return "Envie as 4 imagens 1080×1080 px na aba Imagem do Mensageiro.";
     }
     return null;
 }
@@ -986,6 +1003,9 @@ const EVO_RENAME_URL_TEMPLATE = process.env.EVO_RENAME_URL_TEMPLATE || `${EVO_AP
 const EVO_CREATE_INSTANCE_URL = process.env.EVO_CREATE_INSTANCE_URL || `${EVO_API_BASE}/instance/create`;
 const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
+const EVO_SEND_MEDIA_URL_TEMPLATE = process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
+/** ~1,2 MB em base64 (4/3) — alinhado ao limite inline do Push/EVO. */
+const CAMPAIGN_MEDIA_INLINE_BASE64_MAX_CHARS = Math.floor(1.2 * 1024 * 1024 * (4 / 3));
 const OPENAI_API_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/responses";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -2254,6 +2274,7 @@ const DISPAROS_DEFAULTS = {
     whatsappTargetNumber: "",
     responseUrl: "",
     selectedDisparadorInstances: [],
+    messengerImages: [],
 };
 function isDisparosWindowOpen(config, now) {
     const day = now.getDay();
@@ -2442,6 +2463,8 @@ async function loadDisparosLocalState() {
     }
 }
 const campaignNextAllowedSendAt = new Map();
+/** Round-robin de imagens 1080×1080 por campanha (Alternativa). */
+const campaignMessengerImageCursor = new Map();
 /** Evita dois processamentos paralelos da mesma campanha (tick a cada 7s vs typing/IA). */
 const campaignDispatchBusy = new Set();
 let campaignDispatchTickRunning = false;
@@ -9758,6 +9781,48 @@ app.post("/disparos/messenger-products", async (req, res) => {
             .json({ error: "Erro ao gravar produto na biblioteca." });
     }
 });
+app.post("/disparos/messenger-images", (req, res, next) => {
+    uploadMessengerImage.single("image")(req, res, (err) => {
+        if (err) {
+            const limitErr = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE";
+            return res.status(400).json({
+                error: limitErr
+                    ? "Imagem acima de 5 MB."
+                    : err.message || "Falha no upload da imagem.",
+            });
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file?.buffer?.length) {
+            return res.status(400).json({ error: "Selecione um arquivo de imagem." });
+        }
+        const slot = Math.floor(Number(req.body?.slot ?? req.query?.slot));
+        const saved = (0, waba_campaign_messenger_images_service_1.saveCampaignMessengerImage)({
+            buffer: file.buffer,
+            fileName: file.originalname || "imagem.jpg",
+            mimeType: file.mimetype || "image/jpeg",
+            slot,
+        });
+        return res.json({ ok: true, image: saved });
+    }
+    catch (err) {
+        return res.status(400).json({
+            error: err?.message || "Não foi possível salvar a imagem 1080×1080.",
+        });
+    }
+});
+/** Público para a Evolution baixar mídia (fallback URL; preferimos base64). */
+app.get("/disparos/messenger-images/:id/file", (req, res) => {
+    const file = (0, waba_campaign_messenger_images_service_1.resolveCampaignMessengerImageFile)(String(req.params.id || ""));
+    if (!file)
+        return res.status(404).json({ error: "Imagem não encontrada." });
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.sendFile(file.absolutePath);
+});
 app.get("/disparos/diagnostico", async (req, res) => {
     try {
         const nowSp = nowInSaoPaulo();
@@ -10197,86 +10262,14 @@ app.get("/disparos/next-instance", async (req, res) => {
     }
 });
 app.get("/disparos/templates", async (_req, res) => {
-    try {
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                const { data } = await (supabase
-                    .from("disparos_message_templates")
-                    .select("id, message_text, alias, segment, source, created_at, active")
-                    .eq("active", true)
-                    .order("created_at", { ascending: false })
-                    .limit(200));
-                if (Array.isArray(data)) {
-                    const items = data.map((row) => ({
-                        id: String(row?.id || ""),
-                        text: String(row?.message_text || ""),
-                        alias: String(row?.alias || ""),
-                        segment: String(row?.segment || ""),
-                        source: row?.source === "manual" ? "manual" : "spreadsheet",
-                        createdAt: String(row?.created_at || ""),
-                        active: row?.active !== false,
-                    }));
-                    return res.json({ items });
-                }
-            }
-            catch {
-                // fallback em memória
-            }
-        }
-        return res.json({ items: disparosTemplatesMemory.slice(0, 200) });
-    }
-    catch {
-        return res.status(500).json({ error: "Erro ao listar templates de mensagem." });
-    }
+    return res.status(410).json({
+        error: "Base de mensagens por planilha foi descontinuada. Use o Mensageiro com IA.",
+    });
 });
-app.post("/disparos/templates/import", async (req, res) => {
-    try {
-        const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-        const mapped = rows
-            .map((row) => ({
-            id: crypto_1.default.randomUUID(),
-            text: String(row?.text || "").trim(),
-            alias: String(row?.alias || "").trim(),
-            segment: String(row?.segment || "").trim(),
-            source: "spreadsheet",
-            createdAt: new Date().toISOString(),
-            active: true,
-        }))
-            .filter((row) => row.text.length > 0);
-        if (!mapped.length) {
-            return res.status(400).json({ error: "Nenhuma mensagem válida encontrada para importar." });
-        }
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                const payload = mapped.map((row) => ({
-                    id: row.id,
-                    message_text: row.text,
-                    alias: row.alias,
-                    segment: row.segment,
-                    source: row.source,
-                    created_at: row.createdAt,
-                    active: row.active,
-                }));
-                await supabase.from("disparos_message_templates").insert(payload);
-            }
-            catch {
-                disparosTemplatesMemory.unshift(...mapped);
-            }
-        }
-        else {
-            disparosTemplatesMemory.unshift(...mapped);
-        }
-        return res.json({
-            ok: true,
-            imported: mapped.length,
-            message: `${mapped.length} mensagem(ns) importada(s) com sucesso.`,
-        });
-    }
-    catch {
-        return res.status(500).json({ error: "Erro ao importar templates de mensagem." });
-    }
+app.post("/disparos/templates/import", async (_req, res) => {
+    return res.status(410).json({
+        error: "Importação de mensagens por planilha foi descontinuada. Use o Mensageiro com IA.",
+    });
 });
 async function hydrateCampaignFromDbIfNeeded(campaignId, options = {}) {
     const existing = disparosCampaignsMemory.find((c) => c.id === campaignId);
@@ -10569,60 +10562,6 @@ async function sendEvoComposingPresenceBeforeText(instanceName, number, typingDe
 async function composeOutboundMessageForConfig(config, opts) {
     const buttonMode = opts?.buttonMode === true;
     const buttonLabel = normalizeButtonDisplayText(String(config.aiCta || "Quero saber mais"));
-    if (config.messageMode === "database") {
-        let templates = [];
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                const { data } = await (supabase
-                    .from("disparos_message_templates")
-                    .select("id, message_text, alias, segment, source, created_at, active")
-                    .eq("active", true)
-                    .order("created_at", { ascending: false })
-                    .limit(200));
-                if (Array.isArray(data)) {
-                    templates = data.map((row) => ({
-                        id: String(row?.id || ""),
-                        text: String(row?.message_text || ""),
-                        alias: String(row?.alias || ""),
-                        segment: String(row?.segment || ""),
-                        source: row?.source === "manual" ? "manual" : "spreadsheet",
-                        createdAt: String(row?.created_at || ""),
-                        active: row?.active !== false,
-                    }));
-                }
-            }
-            catch {
-                /* */
-            }
-        }
-        if (!templates.length) {
-            templates = disparosTemplatesMemory.filter((t) => t.active !== false);
-        }
-        const pick = templates[Math.floor(Math.random() * templates.length)];
-        if (!pick?.text?.trim()) {
-            return {
-                text: "Olá! Temos uma informação importante para você. Responda quando puder.",
-                shortUrl: null,
-                buttonLabel,
-            };
-        }
-        const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
-        let text = pick.text.trim();
-        if (buttonMode) {
-            text =
-                prepareOutboundWhatsAppText(text, { stripUrls: true }) || text;
-            return { text, shortUrl, buttonLabel };
-        }
-        const httpRegex = /https?:\/\/[^\s)]+/gi;
-        if (httpRegex.test(text)) {
-            text = prepareOutboundWhatsAppText(text.replace(httpRegex, shortUrl));
-        }
-        else {
-            text = ensureMessageContainsLink(text, shortUrl, String(config.aiCta || "Acesse aqui"));
-        }
-        return { text, shortUrl, buttonLabel };
-    }
     const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
     const briefing = String(config.aiBriefing || "");
     const prompt = buildDisparosAiPrompt({
@@ -10775,6 +10714,103 @@ function scheduleNextCampaignDispatchDelay(campaignId, config) {
     const waitSec = minS + Math.random() * (maxS - minS);
     campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
 }
+function extractCampaignSendMessageId(json) {
+    if (!json || typeof json !== "object")
+        return "";
+    const root = json;
+    const key = root.key;
+    return String(key?.id || root.id || "").trim();
+}
+function sleepCampaignMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+async function probeCampaignMessageAckStatus(instanceName, messageId, options) {
+    const name = String(instanceName || "").trim();
+    const id = String(messageId || "").trim();
+    if (!name || !id)
+        return { status: "UNKNOWN" };
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 8);
+    const intervalMs = Math.max(500, options?.intervalMs ?? 2000);
+    const requireDevice = options?.requireDeviceDelivery === true;
+    let last = "UNKNOWN";
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (attempt > 1)
+            await sleepCampaignMs(intervalMs);
+        const statusUrl = `${EVO_API_BASE}/chat/findStatusMessage/${encodeURIComponent(name)}`;
+        const statusResult = await callEvoAction(statusUrl, "POST", { where: { id } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 15000), retries: 1 });
+        if (statusResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(statusResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last))
+                return { status: last };
+            if (requireDevice) {
+                if ((0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last))
+                    return { status: last };
+            }
+            else if (last === "SERVER_ACK" || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last)) {
+                return { status: last };
+            }
+        }
+        const msgUrl = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(name)}`;
+        const msgResult = await callEvoAction(msgUrl, "POST", { where: { key: { id } } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000), retries: 1 });
+        if (msgResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(msgResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last))
+                return { status: last };
+            if (requireDevice) {
+                if ((0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last))
+                    return { status: last };
+            }
+            else if (last === "SERVER_ACK" || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last)) {
+                return { status: last };
+            }
+        }
+    }
+    return { status: last };
+}
+function buildCampaignMessengerMediaPublicUrl(imageId) {
+    const base = (0, waba_public_base_url_1.resolveWabaPublicBaseUrl)().replace(/\/+$/, "");
+    const prefix = base_path_1.BASE_PATH ? base_path_1.BASE_PATH.replace(/\/+$/, "") : "";
+    return `${base}${prefix}/disparos/messenger-images/${encodeURIComponent(imageId)}/file`;
+}
+async function sendCampaignMessengerImageToEvo(input) {
+    const mediaData = (0, waba_campaign_messenger_images_service_1.readCampaignMessengerImageBase64)(input.image.id);
+    if (!mediaData) {
+        return { ok: false, json: null, status: 0, body: "Imagem do Mensageiro não encontrada no disco." };
+    }
+    const sendUrl = buildTemplateUrl(EVO_SEND_MEDIA_URL_TEMPLATE, input.instanceName);
+    const baseBody = {
+        number: input.number,
+        mediatype: "image",
+        mimetype: mediaData.mimeType || "image/jpeg",
+        caption: "",
+        fileName: mediaData.fileName || input.image.fileName || "campanha.jpg",
+    };
+    const canInline = mediaData.base64.length > 0 &&
+        mediaData.base64.length <= CAMPAIGN_MEDIA_INLINE_BASE64_MAX_CHARS &&
+        mediaData.sizeBytes <= 1.2 * 1024 * 1024;
+    if (canInline) {
+        const media = `data:${mediaData.mimeType};base64,${mediaData.base64.replace(/\s+/g, "")}`;
+        const result = await callEvoAction(sendUrl, "POST", { ...baseBody, media }, {
+            timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+            retries: 2,
+        });
+        if (result.ok) {
+            return { ok: true, json: result.json, status: result.status, body: String(result.body || "") };
+        }
+        console.warn("[Campanha] sendMedia base64 falhou; tentando URL:", result.status, String(result.body || "").slice(0, 160));
+    }
+    const mediaUrl = buildCampaignMessengerMediaPublicUrl(input.image.id);
+    const result = await callEvoAction(sendUrl, "POST", { ...baseBody, media: mediaUrl }, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+        retries: 2,
+    });
+    return {
+        ok: result.ok,
+        json: result.json,
+        status: result.status,
+        body: String(result.body || ""),
+    };
+}
 async function processOneCampaignDispatch(campaignId) {
     const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
     if (!campaign || campaign.status !== "running")
@@ -10884,6 +10920,45 @@ async function processOneCampaignDispatch(campaignId) {
             await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`);
             lead.status = "pending";
             return;
+        }
+        const messengerImages = (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(campaign.configSnapshot.messengerImages);
+        if ((0, waba_campaign_messenger_images_service_1.messengerImagesAreComplete)(messengerImages)) {
+            const imageIdx = (0, waba_campaign_messenger_images_service_1.pickNextMessengerImageIndex)(campaignMessengerImageCursor, campaign.id, messengerImages.length);
+            const imageMeta = messengerImages[imageIdx];
+            const mediaSend = await sendCampaignMessengerImageToEvo({
+                instanceName: instancePick.instancia,
+                number: numero,
+                image: imageMeta,
+            });
+            if (!mediaSend.ok) {
+                console.error("[Campanha] EVO sendMedia falhou:", mediaSend.status, String(mediaSend.body || "").slice(0, 200));
+                await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+            const mediaMessageId = extractCampaignSendMessageId(mediaSend.json);
+            if (!mediaMessageId) {
+                console.error("[Campanha] sendMedia sem messageId — não envia texto sem ACK da imagem:", lead.phone);
+                await persistLeadFailed(lead, "send_error");
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+            const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
+                maxAttempts: 10,
+                intervalMs: 2000,
+                requireDeviceDelivery: true,
+            });
+            console.info(`[Campanha] ACK imagem slot=${imageMeta.slot + 1} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(mediaAck.status) || !(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
+                console.error("[Campanha] Imagem sem confirmação de entrega no destino — texto não enviado:", mediaAck.status, lead.phone);
+                await persistLeadFailed(lead, "send_error");
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+            await sleepCampaignMs(800);
+        }
+        else {
+            console.warn("[Campanha] Sem 4 imagens 1080×1080 no snapshot — enviando apenas texto:", campaign.id);
         }
         const buttonLabel = outbound.buttonLabel ||
             normalizeButtonDisplayText(String(campaign.configSnapshot.aiCta || "Quero saber mais"));

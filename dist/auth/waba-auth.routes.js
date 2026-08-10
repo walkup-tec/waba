@@ -127,6 +127,7 @@ const isAuthBypassPath = (method, reqPath) => {
         p === "/drax-logo.png" ||
         p.startsWith("/media/") ||
         p.startsWith("/push/public-media/") ||
+        /^\/disparos\/messenger-images\/[^/]+\/file$/.test(p) ||
         p === "/instancias/avatar" ||
         p === "/integrations/soma/aquecedor-instances" ||
         p === "/integrations/soma/alternativa-campaigns") {

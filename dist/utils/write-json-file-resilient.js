@@ -1,15 +1,23 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeJsonFileResilient = writeJsonFileResilient;
 exports.isFsPermissionError = isFsPermissionError;
+exports.writeJsonFileResilient = writeJsonFileResilient;
 const fs_1 = require("fs");
-const path_1 = require("path");
+const path_1 = __importDefault(require("path"));
 function isFsPermissionError(err) {
-    const code = String((err && err.code) || "");
+    const code = String(err?.code || "");
     return code === "EACCES" || code === "EPERM";
 }
+/**
+ * Escrita resiliente para volumes Docker onde um ficheiro pode ficar root-owned
+ * (ex.: após `docker cp` no purge) enquanto o diretório continua gravável pelo UID do app.
+ * Ordem: tmp → rename → write direto → unlink+replace.
+ */
 async function writeJsonFileResilient(filePath, data) {
-    const dir = (0, path_1.dirname)(filePath);
+    const dir = path_1.default.dirname(filePath);
     await fs_1.promises.mkdir(dir, { recursive: true });
     const payload = `${JSON.stringify(data, null, 2)}\n`;
     const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;

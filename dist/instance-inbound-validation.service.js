@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.INBOUND_VALIDATION_KEYWORD = void 0;
 exports.setInboundValidationFinishedHandler = setInboundValidationFinishedHandler;
+exports.inboundAcceptMinTimestampMs = inboundAcceptMinTimestampMs;
 exports.refreshInboundValidation = refreshInboundValidation;
 exports.handleInboundValidationWebhook = handleInboundValidationWebhook;
 exports.getInboundValidationStatus = getInboundValidationStatus;
@@ -478,17 +479,25 @@ async function ensureInstanceWebhook(instanceName) {
 const INBOUND_CLOCK_SKEW_MS = Math.max(0, Math.min(5000, Number(process.env.INBOUND_VALIDATION_CLOCK_SKEW_MS || 2000) || 2000));
 /**
  * Aceita CONFIRMAR enviado até N ms ANTES do start da validação.
+ * Sem isso, o usuário que manda a palavra enquanto o Passo 3 ainda inicia
+ * (ou antes de um forceRestart) fica preso em «Processando» para sempre.
  */
 const INBOUND_PRESTART_GRACE_MS = Math.max(30000, Math.min(600000, Number(process.env.INBOUND_VALIDATION_PRESTART_GRACE_MS || 180000) || 180000));
+/** @internal exported for unit tests */
 function inboundAcceptMinTimestampMs(record) {
     const graceFloor = record.validationStartedAtMs - INBOUND_PRESTART_GRACE_MS;
     const captured = record.keywordHighWaterMarkMs || 0;
+    // Piso = início − graça (default 3 min). Assim:
+    // - CONFIRMAR enviado enquanto o Passo 3 sobe / antes do forceRestart → aceito
+    // - CONFIRMAR de horas atrás → rejeitado (ts < graceFloor)
+    // Não usar max(grace, captured+1) quando captured é recente: isso staleava a própria msg.
+    // Não usar skewFloor (~now) como piso: anulava a graça.
     if (captured > 0 && captured < graceFloor) {
+        // Histórico antigo já fica fora da graça; graceFloor basta.
         return graceFloor;
     }
     return graceFloor;
 }
-exports.inboundAcceptMinTimestampMs = inboundAcceptMinTimestampMs;
 function inboundKeywordSearchOptions(record) {
     return {
         minTimestampMs: inboundAcceptMinTimestampMs(record),
@@ -1135,6 +1144,8 @@ async function pollReceiveIfDue(record) {
     record.pollTick += 1;
     const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
     try {
+        // Sempre findMessages + findChats.lastMessage em paralelo (@lid / addressingMode).
+        // Doc EVO: findMessages + findChats — lastMessage evita N×findMessages por JID.
         const hit = await resolveInboundHit(record, { deep });
         record.receivePollCache = {
             atMs: now,
@@ -1380,7 +1391,8 @@ async function startInboundValidation(input) {
     const validationId = crypto_1.default.randomUUID();
     const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
     const keyword = exports.INBOUND_VALIDATION_KEYWORD;
-    // Watermark = pico histórico capturado. NÃO elevar para Date.now().
+    // Watermark = pico histórico capturado. NÃO elevar para Date.now() — isso tornava
+    // qualquer CONFIRMAR já na caixa (enviado segundos antes) "stale" para sempre.
     const capturedWaterMarkMs = await captureKeywordHighWaterMark(connected.instancia, keyword);
     const validationStartedAtMs = Date.now();
     const keywordHighWaterMarkMs = capturedWaterMarkMs;

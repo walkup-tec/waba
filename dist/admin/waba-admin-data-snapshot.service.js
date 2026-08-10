@@ -1,8 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildWabaDataSnapshot = buildWabaDataSnapshot;
 const node_fs_1 = require("node:fs");
-const path_1 = require("node:path");
+const node_path_1 = __importDefault(require("node:path"));
 const data_path_1 = require("../data-path");
 const production_data_persistence_service_1 = require("../services/production-data-persistence.service");
 const EXTRA_DATA_FILES = [
@@ -54,7 +57,7 @@ function buildWabaDataSnapshot() {
     const skipped = [];
     let totalBytes = 0;
     for (const file of listCandidateFiles(dataDir)) {
-        const filePath = (0, path_1.join)(dataDir, file);
+        const filePath = node_path_1.default.join(dataDir, file);
         if (!(0, node_fs_1.existsSync)(filePath)) {
             skipped.push({ file, reason: "ausente" });
             continue;
