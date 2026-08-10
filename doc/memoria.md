@@ -1,3 +1,8 @@
+## 2026-08-10 15:56 — Resumo Enviados = sentCount das campanhas
+- Bug: Resumo só somava campanhas completed/finished (pausada ficava 0)
+- Fix: somar sentCount de todas; API conta leads sent em memória
+- LOG: doc/LOG-2026-08-10__155612__fix-resumo-enviados-campanha.md
+
 ## 2026-08-10 15:45 — Dashboard Disparos: indicadores por API Oficial e Alternativa
 - Contagem/Distribuicao/Taxas separados por API; saldo no resumo por byApi
 - LOG: doc/LOG-2026-08-10__154500__dashboard-disparos-indicadores-por-api.md

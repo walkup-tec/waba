@@ -12976,6 +12976,14 @@ async function stopAllDispatchActivityOnServer(
   return { pausedCampaignIds: Array.from(pausedSet) };
 }
 
+function countCampaignLeadsSent(campaignId: string, sentFallback: number): number {
+  const memLeads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId);
+  if (memLeads.length > 0) {
+    return memLeads.filter((l) => l.status === "sent").length;
+  }
+  return Math.max(0, Number(sentFallback || 0));
+}
+
 function countCampaignLeadsProcessed(campaignId: string, sentFallback: number, totalNumbers: number): number {
   const memLeads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId);
   if (memLeads.length > 0) {
@@ -13327,7 +13335,8 @@ app.get("/disparos/campanhas", async (req, res) => {
     const mapRowToItem = (row: any) => {
       const id = String(row?.id || "");
       const total = Number(row?.total_numbers ?? row?.totalNumbers ?? 0);
-      const sent = Number(row?.sent_count ?? row?.sentCount ?? 0);
+      const sentRaw = Number(row?.sent_count ?? row?.sentCount ?? 0);
+      const sent = countCampaignLeadsSent(id, sentRaw);
       const progressPercent = progressPercentForCampaignListItem(id, total, sent);
       const processedCount = countCampaignLeadsProcessed(id, sent, total);
       const nextAllowedAtMs = campaignNextAllowedSendAt.get(id) || 0;
@@ -13406,7 +13415,7 @@ app.get("/disparos/campanhas", async (req, res) => {
 
     for (const c of disparosCampaignsMemory) {
       const total = Number(c.totalNumbers || 0);
-      const sent = Number(c.sentCount || 0);
+      const sent = countCampaignLeadsSent(c.id, Number(c.sentCount || 0));
       const progressPercent = progressPercentForCampaignListItem(c.id, total, sent);
       const processedCount = countCampaignLeadsProcessed(c.id, sent, total);
       byId.set(c.id, {

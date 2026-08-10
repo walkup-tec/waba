@@ -17739,7 +17739,7 @@
                     <article class="disparos-resumo-stat">
                       <div class="disparos-resumo-label">Enviados</div>
                       <div class="disparos-resumo-value" id="disparos-resumo-enviados">—</div>
-                      <div class="disparos-resumo-hint">Total de envios finalizados</div>
+                      <div class="disparos-resumo-hint">Total de envios realizados nas campanhas</div>
                     </article>
                     <article class="disparos-resumo-stat">
                       <div class="disparos-resumo-label">Em fila</div>
@@ -42263,9 +42263,6 @@
 
       function computeDisparosEnviadosFinalizados(items) {
         return (Array.isArray(items) ? items : []).reduce((acc, item) => {
-          const status = String(item?.status || "").toLowerCase();
-          const isFinalized = status === "completed" || status === "finished";
-          if (!isFinalized) return acc;
           const sent = Math.max(0, Math.floor(Number(item?.sentCount ?? 0)));
           return acc + sent;
         }, 0);
