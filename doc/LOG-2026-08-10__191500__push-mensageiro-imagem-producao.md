@@ -26,13 +26,23 @@ Usuário pediu push de tudo que ainda não estava disponível para Deploy em pro
 
 `DEPLOY-2026-08-10-mensageiro-imagem-1080`
 
+## Correção 2026-08-10 20:15 — dist faltando
+
+Sintoma: produção ≠ V02 (ainda com «Usar base de mensagens»; `/health` = `DEPLOY-2026-08-07-campaign-ack-check`).
+
+Causa: push `ada713a` só tinha `src/` + `index.html` raiz. Docker EasyPanel usa `COPY dist` e **não** compila TypeScript.
+
+Ação: `npm run build` + commit/push de `dist/` (marker + HTML + sendMedia).
+
+**Obrigatório após este push:** Redeploy EasyPanel `waba_disparador` até `/health` mostrar `DEPLOY-2026-08-10-mensageiro-imagem-1080`.
+
 ## Como validar após Deploy
 
 1. GitHub Actions → Deploy FTP (bundle)
-2. Redeploy Node no host se necessário
-3. `/health` com marker acima
-4. Mensageiro: aba Imagem exige 4 arquivos 1080×1080
-5. Campanha Alternativa: imagens variando por destino
+2. **Redeploy EasyPanel** do serviço Node (obrigatório)
+3. `/health` com marker `DEPLOY-2026-08-10-mensageiro-imagem-1080`
+4. Mensageiro: aba Imagem exige 4 arquivos 1080×1080 (sem planilha)
+5. Hard refresh (Ctrl+F5)
 
 ## Palavras-chave
 
