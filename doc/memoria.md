@@ -1,3 +1,9 @@
+## 2026-08-10 20:36 — Aquecedor: justiça de volume entre números
+- Causa: ping-pong A↔B dominava; participação por número era fraca (só “hoje”)
+- Fix: peso vitalício + não forçar resposta em par quente se há números frios
+- Marker: DEPLOY-2026-08-10-aquecedor-justica-volume-numeros
+- LOG: doc/LOG-2026-08-10__203641__aquecedor-justica-volume-numeros.md
+
 ## 2026-08-10 18:45 — Mensageiro abas Imagem + variação 1080×1080
 - 4 imagens obrigatórias; round-robin; envio imagem → ACK → texto; sendMedia base64-first
 - LOG: doc/LOG-2026-08-10__184500__mensageiro-abas-imagem-1080-variacao.md
