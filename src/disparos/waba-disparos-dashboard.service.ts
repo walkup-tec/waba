@@ -64,6 +64,10 @@ export type DisparosDashboardOverview = {
     withReport: number;
   };
   indicators: DisparosDashboardIndicators;
+  /** Indicadores separados por API (somente campanhas com relatório). */
+  indicatorsByApi: Record<WabaDispatchesApiKind, DisparosDashboardIndicators>;
+  /** Quantidade de campanhas com relatório por API. */
+  withReportByApi: Record<WabaDispatchesApiKind, number>;
   campaignComparison: DisparosDashboardCampaignComparisonItem[];
   availableApiKinds: WabaDispatchesApiKind[];
   hasPartialReports: boolean;
@@ -170,6 +174,14 @@ const listAvailableApiKinds = (
   return ordered;
 };
 
+const emptyIndicators = (): DisparosDashboardIndicators => ({
+  totalLeads: 0,
+  enviados: 0,
+  entregues: 0,
+  lidos: 0,
+  falhados: 0,
+});
+
 const aggregateDisparosDashboardFromIntakes = (
   intakes: WabaCampaignIntake[],
   comparisonOptions?: { includeOwnerEmail?: boolean },
@@ -179,12 +191,14 @@ const aggregateDisparosDashboardFromIntakes = (
   let awaiting = 0;
   let withReport = 0;
 
-  const indicators: DisparosDashboardIndicators = {
-    totalLeads: 0,
-    enviados: 0,
-    entregues: 0,
-    lidos: 0,
-    falhados: 0,
+  const indicators = emptyIndicators();
+  const indicatorsByApi: Record<WabaDispatchesApiKind, DisparosDashboardIndicators> = {
+    oficial: emptyIndicators(),
+    alternativa: emptyIndicators(),
+  };
+  const withReportByApi: Record<WabaDispatchesApiKind, number> = {
+    oficial: 0,
+    alternativa: 0,
   };
 
   for (const intake of intakes) {
@@ -196,12 +210,26 @@ const aggregateDisparosDashboardFromIntakes = (
     if (status !== "completed" || !intake.performanceReport) continue;
 
     withReport += 1;
+    const apiKind = resolveIntakeApiKindFromIntake(intake);
+    withReportByApi[apiKind] += 1;
     const report = intake.performanceReport;
-    indicators.totalLeads += roundMetric(report.totalLeads);
-    indicators.enviados += roundMetric(report.sent);
-    indicators.entregues += roundMetric(report.delivered);
-    indicators.lidos += roundMetric(report.read);
-    indicators.falhados += roundMetric(report.failed);
+    const addLeads = roundMetric(report.totalLeads);
+    const addSent = roundMetric(report.sent);
+    const addDelivered = roundMetric(report.delivered);
+    const addRead = roundMetric(report.read);
+    const addFailed = roundMetric(report.failed);
+
+    indicators.totalLeads += addLeads;
+    indicators.enviados += addSent;
+    indicators.entregues += addDelivered;
+    indicators.lidos += addRead;
+    indicators.falhados += addFailed;
+
+    indicatorsByApi[apiKind].totalLeads += addLeads;
+    indicatorsByApi[apiKind].enviados += addSent;
+    indicatorsByApi[apiKind].entregues += addDelivered;
+    indicatorsByApi[apiKind].lidos += addRead;
+    indicatorsByApi[apiKind].falhados += addFailed;
   }
 
   const campaignComparison = buildCampaignComparisonFromIntakes(intakes, comparisonOptions);
@@ -217,6 +245,8 @@ const aggregateDisparosDashboardFromIntakes = (
       withReport,
     },
     indicators,
+    indicatorsByApi,
+    withReportByApi,
     campaignComparison,
     availableApiKinds: listAvailableApiKinds(campaignComparison),
     hasPartialReports,

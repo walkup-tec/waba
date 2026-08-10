@@ -4827,6 +4827,36 @@
         margin-top: 0;
       }
 
+      .disparos-dashboard-api-sections {
+        display: grid;
+        gap: 1.25rem;
+      }
+
+      .disparos-dashboard-api-section {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 14px;
+        padding: 1rem 1rem 0.35rem;
+        background: rgba(15, 23, 42, 0.35);
+      }
+
+      .disparos-dashboard-api-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin: 0 0 0.85rem;
+        flex-wrap: wrap;
+      }
+
+      .disparos-dashboard-api-section-meta {
+        color: #94a3b8;
+        font-size: 0.82rem;
+      }
+
+      .disparos-dashboard-api-section .camp-report-dashboard {
+        margin-top: 0;
+      }
+
       .disparos-dashboard-shell {
         position: relative;
         min-height: 420px;
@@ -36205,6 +36235,9 @@
       function buildDisparosDashboardRenderFingerprint(overview, credits) {
         const campaigns = overview?.campaigns || {};
         const indicators = overview?.indicators || {};
+        const indicatorsByApi = overview?.indicatorsByApi || {};
+        const withReportByApi = overview?.withReportByApi || {};
+        const byApiCredits = credits?.byApi || {};
         return JSON.stringify({
           scope: overview?.scope || "",
           subscriberCount: overview?.subscriberCount ?? null,
@@ -36213,6 +36246,8 @@
           allCampaignsFinalized: Boolean(overview?.allCampaignsFinalized),
           campaigns,
           indicators,
+          indicatorsByApi,
+          withReportByApi,
           campaignComparison: overview?.campaignComparison || [],
           availableApiKinds: overview?.availableApiKinds || [],
           credits: credits
@@ -36222,6 +36257,16 @@
                 contractedShipments: Number(credits.contractedShipments || 0),
                 consumedShipments: Number(credits.consumedShipments || 0),
                 pendingBonusShipments: Number(credits.pendingBonusShipments || 0),
+                byApi: {
+                  oficial: {
+                    remainingShipments: Number(byApiCredits.oficial?.remainingShipments || 0),
+                    contractedShipments: Number(byApiCredits.oficial?.contractedShipments || 0),
+                  },
+                  alternativa: {
+                    remainingShipments: Number(byApiCredits.alternativa?.remainingShipments || 0),
+                    contractedShipments: Number(byApiCredits.alternativa?.contractedShipments || 0),
+                  },
+                },
               }
             : null,
         });
@@ -36242,11 +36287,41 @@
         }
 
         if (!isMasterScope && credits?.hasCredits) {
-          const remaining = Math.max(0, Number(credits.remainingShipments || 0));
-          const contracted = Math.max(0, Number(credits.contractedShipments || 0));
-          parts.push(
-            `Saldo: ${formatDisparosQty(remaining)} de ${formatDisparosQty(contracted)} envios disponíveis.`
+          const byApi = credits?.byApi || {};
+          const oficialRemaining = Math.max(0, Number(byApi.oficial?.remainingShipments || 0));
+          const oficialContracted = Math.max(0, Number(byApi.oficial?.contractedShipments || 0));
+          const alternativaRemaining = Math.max(0, Number(byApi.alternativa?.remainingShipments || 0));
+          const alternativaContracted = Math.max(
+            0,
+            Number(byApi.alternativa?.contractedShipments || 0)
           );
+          const hasSplit =
+            oficialContracted > 0 ||
+            alternativaContracted > 0 ||
+            oficialRemaining > 0 ||
+            alternativaRemaining > 0;
+          if (hasSplit) {
+            const saldoParts = [];
+            if (oficialContracted > 0 || oficialRemaining > 0) {
+              saldoParts.push(
+                `API Oficial ${formatDisparosQty(oficialRemaining)}/${formatDisparosQty(oficialContracted)}`
+              );
+            }
+            if (alternativaContracted > 0 || alternativaRemaining > 0) {
+              saldoParts.push(
+                `API Alternativa ${formatDisparosQty(alternativaRemaining)}/${formatDisparosQty(alternativaContracted)}`
+              );
+            }
+            if (saldoParts.length) {
+              parts.push(`Saldo: ${saldoParts.join(" · ")}.`);
+            }
+          } else {
+            const remaining = Math.max(0, Number(credits.remainingShipments || 0));
+            const contracted = Math.max(0, Number(credits.contractedShipments || 0));
+            parts.push(
+              `Saldo: ${formatDisparosQty(remaining)} de ${formatDisparosQty(contracted)} envios disponíveis.`
+            );
+          }
         }
         const campaigns = overview?.campaigns;
         if (campaigns?.total > 0) {
@@ -36811,30 +36886,61 @@
 
         syncDisparosDashboardGate(overview);
 
-        const indicators = overview.indicators || {};
+        const indicatorsByApi = overview.indicatorsByApi || {};
+        const withReportByApi = overview.withReportByApi || {};
+        const availableKinds = Array.isArray(overview.availableApiKinds)
+          ? overview.availableApiKinds.filter((kind) => kind === "oficial" || kind === "alternativa")
+          : [];
+        const kindsToRender = (availableKinds.length
+          ? availableKinds
+          : ["oficial", "alternativa"]
+        ).filter((kind) => Number(withReportByApi?.[kind] || 0) > 0);
+
         const isMasterScope = overview?.scope === "master_subscribers";
-        const campaignLabel = isMasterScope
-          ? withReport === 1
-            ? "1 campanha de assinantes"
-            : `${formatDisparosQty(withReport)} campanhas de assinantes`
-          : withReport === 1
-            ? "1 campanha finalizada"
-            : `${formatDisparosQty(withReport)} campanhas finalizadas`;
-        const nextReportHtml = buildCampaignPerformanceDashboardHtml(
-          {
-            totalLeads: indicators.totalLeads,
-            enviados: indicators.enviados,
-            entregues: indicators.entregues,
-            lidos: indicators.lidos,
-            falhados: indicators.falhados,
-          },
-          {
-            campaignName: `Consolidado — ${campaignLabel}`,
-            isFinalized:
-              Boolean(overview.allCampaignsFinalized) && !Boolean(overview.hasPartialReports),
-            showProgress: false,
-          }
-        );
+        const isFinalized =
+          Boolean(overview.allCampaignsFinalized) && !Boolean(overview.hasPartialReports);
+
+        const sectionsHtml = (kindsToRender.length
+          ? kindsToRender
+          : ["oficial"]
+        )
+          .map((apiKind) => {
+            const indicators = indicatorsByApi?.[apiKind] || overview.indicators || {};
+            const count = Number(withReportByApi?.[apiKind] || overview?.campaigns?.withReport || 0);
+            const campaignLabel = isMasterScope
+              ? count === 1
+                ? "1 campanha de assinantes"
+                : `${formatDisparosQty(count)} campanhas de assinantes`
+              : count === 1
+                ? "1 campanha finalizada"
+                : `${formatDisparosQty(count)} campanhas finalizadas`;
+            const bodyHtml = buildCampaignPerformanceDashboardHtml(
+              {
+                totalLeads: indicators.totalLeads,
+                enviados: indicators.enviados,
+                entregues: indicators.entregues,
+                lidos: indicators.lidos,
+                falhados: indicators.falhados,
+              },
+              {
+                campaignName: "",
+                isFinalized,
+                showProgress: false,
+              }
+            );
+            return `
+              <section class="disparos-dashboard-api-section" data-dashboard-api="${escapeReportHtml(apiKind)}">
+                <div class="disparos-dashboard-api-section-head">
+                  ${renderWabaApiKindLabelHtml(apiKind, { size: "md" })}
+                  <span class="disparos-dashboard-api-section-meta">${escapeReportHtml(campaignLabel)}</span>
+                </div>
+                ${bodyHtml}
+              </section>
+            `;
+          })
+          .join("");
+
+        const nextReportHtml = `<div class="disparos-dashboard-api-sections">${sectionsHtml}</div>`;
         if (reportEl.innerHTML !== nextReportHtml) {
           reportEl.innerHTML = nextReportHtml;
         }

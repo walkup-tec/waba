@@ -1,3 +1,6 @@
+## 2026-08-10 15:45 — Dashboard Disparos: indicadores por API Oficial e Alternativa
+- Contagem/Distribuicao/Taxas separados por API; saldo no resumo por byApi
+- LOG: doc/LOG-2026-08-10__154500__dashboard-disparos-indicadores-por-api.md
 ## 2026-08-10 15:14 — Campanha Oficial: WhatsApp + leads Excel/TXT + min 1000
 - Wizard: Seu WhatsApp (DDD, nome, logo 500x500); leads Excel/TXT; minimo 1000 envios
 - Operacional: secao WhatsApp + download logo; intake API v5
