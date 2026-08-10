@@ -1,3 +1,13 @@
+## 2026-08-10 18:45 — Mensageiro abas Imagem + variação 1080×1080
+- 4 imagens obrigatórias; round-robin; envio imagem → ACK → texto; sendMedia base64-first
+- LOG: doc/LOG-2026-08-10__184500__mensageiro-abas-imagem-1080-variacao.md
+- Palavras-chave: mensageiro, imagem, 1080, sendMedia, messengerImages
+
+## 2026-08-10 18:11 — Remover base de mensagens (planilha) no Mensageiro
+- messageMode sempre IA; /disparos/templates* → 410; UI planilha de mensagens removida
+- LOG: doc/LOG-2026-08-10__181124__remove-base-mensagens-planilha-alternativa.md
+- Palavras-chave: base de mensagens, planilha, messageMode, templates/import
+
 ## 2026-08-10 15:56 — Resumo Enviados = sentCount das campanhas
 - Bug: Resumo só somava campanhas completed/finished (pausada ficava 0)
 - Fix: somar sentCount de todas; API conta leads sent em memória

@@ -12692,6 +12692,70 @@
         background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(14, 116, 144, 0.35));
         box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
       }
+      .dis-messenger-tabs {
+        display: flex;
+        gap: 0;
+        margin: 0 0 14px;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(2, 6, 23, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        max-width: 360px;
+      }
+      .dis-messenger-tab {
+        flex: 1;
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        color: rgba(148, 163, 184, 0.95);
+        background: transparent;
+        cursor: pointer;
+        transition: background 0.18s ease, color 0.18s ease;
+      }
+      .dis-messenger-tab.active {
+        color: #fff;
+        background: #2563eb;
+      }
+      .dis-messenger-panel.hidden {
+        display: none !important;
+      }
+      .dis-messenger-image-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      @media (max-width: 720px) {
+        .dis-messenger-image-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .dis-messenger-image-slot {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(15, 23, 42, 0.45);
+      }
+      .dis-messenger-image-slot-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: rgba(226, 232, 240, 0.92);
+      }
+      .dis-messenger-image-preview {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.55);
+        border: 1px dashed rgba(148, 163, 184, 0.28);
+        margin-bottom: 8px;
+      }
+      .dis-messenger-image-preview[src=""],
+      .dis-messenger-image-preview:not([src]) {
+        display: none;
+      }
       .dis-link-mode-panel.hidden {
         display: none;
       }
@@ -18329,16 +18393,36 @@
 
                     <div class="aquecedor-section">
                       <div class="aquecedor-section-title">6) Mensageiro</div>
-                      <div class="disparos-inline-actions">
-                        <label class="aquecedor-toggle">
-                          <input id="dis-mode-ai" type="radio" name="dis-message-mode" value="ai" checked />
-                          Gerar mensagens com IA
-                        </label>
-                        <label class="aquecedor-toggle">
-                          <input id="dis-mode-db" type="radio" name="dis-message-mode" value="database" />
-                          Usar base de mensagens (planilha)
-                        </label>
+                      <div
+                        id="dis-messenger-tabs"
+                        class="dis-messenger-tabs"
+                        role="tablist"
+                        aria-label="Mensageiro"
+                      >
+                        <button
+                          type="button"
+                          class="dis-messenger-tab active"
+                          data-messenger-tab="mensagem"
+                          role="tab"
+                          aria-selected="true"
+                        >
+                          Mensagem
+                        </button>
+                        <button
+                          type="button"
+                          class="dis-messenger-tab"
+                          data-messenger-tab="imagem"
+                          role="tab"
+                          aria-selected="false"
+                        >
+                          Imagem
+                        </button>
                       </div>
+
+                      <div id="dis-messenger-panel-mensagem" class="dis-messenger-panel" role="tabpanel">
+                      <p class="aquecedor-hint" style="margin: 0 0 10px;">
+                        As mensagens da campanha são geradas com IA a partir dos critérios abaixo.
+                      </p>
 
                       <div id="dis-ai-box" class="disparos-box">
                         <div id="dis-messenger-product-field-wrap" class="aquecedor-field" style="margin-bottom: 12px;">
@@ -18485,17 +18569,40 @@
                           ></p>
                         </div>
                       </div>
+                      </div>
 
-                      <div id="dis-db-box" class="disparos-box hidden">
-                        <div class="aquecedor-field">
-                          <label for="dis-spreadsheet-file">Planilha de mensagens (somente Excel: .xlsx ou .xls)</label>
-                          <input id="dis-spreadsheet-file" type="file" accept=".xlsx,.xls" />
+                      <div id="dis-messenger-panel-imagem" class="dis-messenger-panel hidden" role="tabpanel" hidden>
+                        <div class="disparos-box">
+                          <p class="aquecedor-hint" style="margin: 0 0 12px;">
+                            Envie 4 imagens obrigatórias em 1080×1080 px (JPEG, PNG ou WebP).
+                          </p>
+                          <div class="dis-messenger-image-grid" id="dis-messenger-image-grid">
+                            <div class="dis-messenger-image-slot" data-slot="0">
+                              <div class="dis-messenger-image-slot-title">Imagem 1</div>
+                              <img class="dis-messenger-image-preview" id="dis-messenger-preview-0" alt="" />
+                              <input id="dis-messenger-image-0" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+                              <span class="aquecedor-hint" id="dis-messenger-image-status-0" style="display:block;margin-top:6px;">Nenhuma imagem.</span>
+                            </div>
+                            <div class="dis-messenger-image-slot" data-slot="1">
+                              <div class="dis-messenger-image-slot-title">Imagem 2</div>
+                              <img class="dis-messenger-image-preview" id="dis-messenger-preview-1" alt="" />
+                              <input id="dis-messenger-image-1" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+                              <span class="aquecedor-hint" id="dis-messenger-image-status-1" style="display:block;margin-top:6px;">Nenhuma imagem.</span>
+                            </div>
+                            <div class="dis-messenger-image-slot" data-slot="2">
+                              <div class="dis-messenger-image-slot-title">Imagem 3</div>
+                              <img class="dis-messenger-image-preview" id="dis-messenger-preview-2" alt="" />
+                              <input id="dis-messenger-image-2" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+                              <span class="aquecedor-hint" id="dis-messenger-image-status-2" style="display:block;margin-top:6px;">Nenhuma imagem.</span>
+                            </div>
+                            <div class="dis-messenger-image-slot" data-slot="3">
+                              <div class="dis-messenger-image-slot-title">Imagem 4</div>
+                              <img class="dis-messenger-image-preview" id="dis-messenger-preview-3" alt="" />
+                              <input id="dis-messenger-image-3" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+                              <span class="aquecedor-hint" id="dis-messenger-image-status-3" style="display:block;margin-top:6px;">Nenhuma imagem.</span>
+                            </div>
+                          </div>
                         </div>
-                        <div class="disparos-inline-actions" style="margin-top: 10px;">
-                          <button id="dis-download-template-btn" class="instance-action-btn enabled" type="button">Baixar modelo Excel</button>
-                          <button id="dis-open-mapping-btn" class="instance-action-btn btn-qrcode enabled" type="button">Mapear colunas e importar</button>
-                        </div>
-                        <span id="dis-import-status" class="muted" style="display:block; margin-top:8px;">Nenhuma importação executada.</span>
                       </div>
                     </div>
 
@@ -20501,29 +20608,6 @@
         <div class="register-actions">
           <button id="rename-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
           <button id="rename-save-btn" class="instance-action-btn btn-qrcode enabled" type="button">Salvar nome</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="dis-mapping-overlay" class="confirm-overlay" aria-hidden="true">
-      <div class="confirm-modal register-modal" role="dialog" aria-modal="true">
-        <div class="confirm-title">Mapeamento da planilha de mensagens</div>
-        <div class="muted" style="margin-bottom: 10px;">
-          Selecione quais colunas da planilha correspondem aos campos da base de mensagens.
-        </div>
-        <div class="register-grid">
-          <label class="register-label" for="dis-map-text">Coluna da mensagem *</label>
-          <select id="dis-map-text" class="register-input"></select>
-
-          <label class="register-label" for="dis-map-alias">Coluna do alias (opcional)</label>
-          <select id="dis-map-alias" class="register-input"></select>
-
-          <label class="register-label" for="dis-map-segment">Coluna do segmento (opcional)</label>
-          <select id="dis-map-segment" class="register-input"></select>
-        </div>
-        <div class="register-actions">
-          <button id="dis-map-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
-          <button id="dis-map-import-btn" class="instance-action-btn btn-qrcode enabled" type="button">Importar mensagens</button>
         </div>
       </div>
     </div>
@@ -38941,7 +39025,7 @@
       const WA_RESTRICTION_RECHECK_MS = 60 * 60 * 1000;
       let disparosConfigCache = null;
       let disparosAlternativaThrottleCache = null;
-      let spreadsheetRowsCache = [];
+      let disparosMessengerImagesCache = [null, null, null, null];
       let campaignSpreadsheetRowsCache = [];
       let disCampaignMappingConfirmed = false;
       let disCampaignMappedNumberColumn = "";
@@ -40772,14 +40856,10 @@
       }
 
       function toggleDisparosModeBoxes() {
-        const isAi = Boolean(document.getElementById("dis-mode-ai")?.checked);
         const aiBox = document.getElementById("dis-ai-box");
-        const dbBox = document.getElementById("dis-db-box");
         const productWrap = document.getElementById("dis-messenger-product-field-wrap");
-        if (aiBox) aiBox.classList.toggle("hidden", !isAi);
-        if (dbBox) dbBox.classList.toggle("hidden", isAi);
-        if (productWrap) productWrap.classList.toggle("hidden", !isAi);
-        if (!isAi) hideMessengerLibrarySavePanel();
+        if (aiBox) aiBox.classList.remove("hidden");
+        if (productWrap) productWrap.classList.remove("hidden");
       }
 
       function syncDisparosAiBriefingHiddenFromForm() {
@@ -40897,6 +40977,7 @@
           aiAudience: "CORBAN",
           whatsappTargetNumber: "",
           selectedDisparadorInstances: [],
+          messengerImages: [],
         };
         setDisparosFormValues(baseConfig);
         [
@@ -40930,6 +41011,8 @@
         hideMessengerLibrarySavePanel();
         resetDisparosSectionFlow();
         toggleDisparosModeBoxes();
+        setDisparosMessengerImagesFromConfig([]);
+        setDisparosMessengerTab("mensagem");
         campaignSpreadsheetRowsCache = [];
         resetDisCampaignMappingState();
         renderDisCampaignPreviewTable([]);
@@ -41115,7 +41198,7 @@
           workingDays: getDisparosWorkingDays(),
           startHour,
           endHour,
-          messageMode: document.getElementById("dis-mode-db")?.checked ? "database" : "ai",
+          messageMode: "ai",
           aiBriefing,
           aiTone: String(document.getElementById("dis-ai-tone")?.value || "consultivo"),
           aiCta: getDisAiCtaValue(),
@@ -41124,7 +41207,152 @@
           whatsappTargetNumber: getWhatsappTargetDigits(), // backend adiciona +55
           responseUrl: getResponseUrlValue(),
           selectedDisparadorInstances: selectedInstances,
+          messengerImages: getDisparosMessengerImagesForPayload(),
         };
+      }
+
+      function getDisparosMessengerImagesForPayload() {
+        return (Array.isArray(disparosMessengerImagesCache) ? disparosMessengerImagesCache : [])
+          .filter(Boolean)
+          .map((img, idx) => ({
+            id: String(img.id || ""),
+            fileName: String(img.fileName || ""),
+            mimeType: String(img.mimeType || "image/jpeg"),
+            width: Number(img.width) || 1080,
+            height: Number(img.height) || 1080,
+            sizeBytes: Number(img.sizeBytes) || 0,
+            slot: Number.isFinite(Number(img.slot)) ? Number(img.slot) : idx,
+            createdAt: String(img.createdAt || ""),
+          }))
+          .filter((img) => img.id);
+      }
+
+      function setDisparosMessengerImagesFromConfig(images) {
+        disparosMessengerImagesCache = [null, null, null, null];
+        const list = Array.isArray(images) ? images : [];
+        list.forEach((img) => {
+          const slot = Math.max(0, Math.min(3, Math.floor(Number(img?.slot ?? 0))));
+          if (!img?.id) return;
+          disparosMessengerImagesCache[slot] = {
+            id: String(img.id),
+            fileName: String(img.fileName || ""),
+            mimeType: String(img.mimeType || "image/jpeg"),
+            width: Number(img.width) || 1080,
+            height: Number(img.height) || 1080,
+            sizeBytes: Number(img.sizeBytes) || 0,
+            slot,
+            createdAt: String(img.createdAt || ""),
+          };
+        });
+        for (let slot = 0; slot < 4; slot += 1) {
+          syncDisparosMessengerImageSlotUi(slot);
+        }
+      }
+
+      function syncDisparosMessengerImageSlotUi(slot) {
+        const img = disparosMessengerImagesCache[slot];
+        const status = document.getElementById(`dis-messenger-image-status-${slot}`);
+        const preview = document.getElementById(`dis-messenger-preview-${slot}`);
+        if (status) {
+          status.textContent = img?.id
+            ? `OK · ${img.fileName || img.id} · ${img.width || 1080}×${img.height || 1080}`
+            : "Nenhuma imagem.";
+          status.style.color = img?.id ? "#86efac" : "";
+        }
+        if (preview) {
+          if (img?.id) {
+            const pathBase = String(window.location.pathname || "/").replace(/\/?$/, "/");
+            preview.src = `${pathBase}disparos/messenger-images/${encodeURIComponent(img.id)}/file`;
+            preview.alt = img.fileName || `Imagem ${slot + 1}`;
+          } else {
+            preview.removeAttribute("src");
+            preview.alt = "";
+          }
+        }
+      }
+
+      function setDisparosMessengerTab(tabName) {
+        const next = tabName === "imagem" ? "imagem" : "mensagem";
+        document.querySelectorAll(".dis-messenger-tab").forEach((btn) => {
+          const active = btn.dataset.messengerTab === next;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        const panelMsg = document.getElementById("dis-messenger-panel-mensagem");
+        const panelImg = document.getElementById("dis-messenger-panel-imagem");
+        if (panelMsg) {
+          panelMsg.classList.toggle("hidden", next !== "mensagem");
+          panelMsg.hidden = next !== "mensagem";
+        }
+        if (panelImg) {
+          panelImg.classList.toggle("hidden", next !== "imagem");
+          panelImg.hidden = next !== "imagem";
+        }
+      }
+
+      function readImageFileDimensions(file) {
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = () => {
+            const width = image.naturalWidth || image.width;
+            const height = image.naturalHeight || image.height;
+            URL.revokeObjectURL(url);
+            resolve({ width, height });
+          };
+          image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Não foi possível ler a imagem."));
+          };
+          image.src = url;
+        });
+      }
+
+      async function uploadDisparosMessengerImageSlot(slot, file) {
+        const status = document.getElementById(`dis-messenger-image-status-${slot}`);
+        if (!file) return;
+        try {
+          const dims = await readImageFileDimensions(file);
+          if (dims.width !== 1080 || dims.height !== 1080) {
+            showToast(`Imagem ${slot + 1}: obrigatório 1080×1080 px (recebido ${dims.width}×${dims.height}).`, "warning");
+            if (status) {
+              status.textContent = `Rejeitada · ${dims.width}×${dims.height} (exige 1080×1080)`;
+              status.style.color = "#fda4af";
+            }
+            disparosMessengerImagesCache[slot] = null;
+            syncDisparosMessengerImageSlotUi(slot);
+            return;
+          }
+          if (status) {
+            status.textContent = "Enviando…";
+            status.style.color = "";
+          }
+          const body = new FormData();
+          body.append("image", file);
+          body.append("slot", String(slot));
+          const response = await fetchWithTimeout("/disparos/messenger-images", {
+            method: "POST",
+            body,
+          }, 60000);
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showToast(data?.error || `Falha ao enviar imagem ${slot + 1}.`, "error");
+            if (status) {
+              status.textContent = data?.error || "Falha no upload.";
+              status.style.color = "#fda4af";
+            }
+            return;
+          }
+          disparosMessengerImagesCache[slot] = data?.image || null;
+          syncDisparosMessengerImageSlotUi(slot);
+          showToast(`Imagem ${slot + 1} salva (1080×1080).`, "success");
+        } catch (err) {
+          showToast(err?.message || `Erro na imagem ${slot + 1}.`, "error");
+          if (status) {
+            status.textContent = err?.message || "Erro.";
+            status.style.color = "#fda4af";
+          }
+        }
       }
 
       function setDisparosFormValues(config) {
@@ -41158,13 +41386,7 @@
         pendingSelectedDisparadorInstances = [];
         syncDisparadorNumberPicker();
         setDisparosWorkingDays(config?.workingDays || ["seg", "ter", "qua", "qui", "sex"]);
-        const modeAi = document.getElementById("dis-mode-ai");
-        const modeDb = document.getElementById("dis-mode-db");
-        if (modeAi && modeDb) {
-          const isDb = config?.messageMode === "database";
-          modeAi.checked = !isDb;
-          modeDb.checked = isDb;
-        }
+        setDisparosMessengerImagesFromConfig(config?.messengerImages);
         toggleDisparosModeBoxes();
         syncDisparoEvoMessengerCtaUi();
       }
@@ -41894,7 +42116,7 @@
         const skipWhatsappValidation = options?.skipWhatsappValidation === true;
         const skipRequiredValidation = options?.skipRequiredValidation === true;
         const allowPartialSave = skipRequiredValidation === true;
-        const isAiMode = !document.getElementById("dis-mode-db")?.checked;
+        const isAiMode = true;
         if (!skipRequiredValidation) {
           const requiredFields = [
             ...(isDisparoEvoUi()
@@ -41955,6 +42177,12 @@
                 : "Informe um WhatsApp válido no padrão +55 (DDD) 9XXXX-XXXX.",
               "warning"
             );
+            return false;
+          }
+          const imgs = getDisparosMessengerImagesForPayload();
+          if (imgs.length !== 4) {
+            setDisparosMessengerTab("imagem");
+            showToast("Envie as 4 imagens 1080×1080 px na aba Imagem do Mensageiro.", "warning");
             return false;
           }
         }
@@ -42158,7 +42386,7 @@
         const statusEl = document.getElementById("dis-ai-test-status");
         const outputEl = document.getElementById("dis-ai-test-output");
         const original = btn?.textContent || "Gerar mensagem teste (IA)";
-        const isAiMode = Boolean(document.getElementById("dis-mode-ai")?.checked);
+        const isAiMode = true;
         if (!isAiMode) {
           showToast("Ative o modo 'Gerar mensagens com IA' para testar.", "warning");
           return;
@@ -50926,18 +51154,9 @@
         .getElementById("dis-campaign-last-message-close-btn")
         ?.addEventListener("click", () => closeDisCampaignLastMessageModal());
 
-      const disModeAi = document.getElementById("dis-mode-ai");
-      const disModeDb = document.getElementById("dis-mode-db");
-      if (disModeAi) disModeAi.addEventListener("change", () => toggleDisparosModeBoxes());
-      if (disModeDb) disModeDb.addEventListener("change", () => toggleDisparosModeBoxes());
-
       const disMessengerOpenLibraryBtn = document.getElementById("dis-messenger-open-library-panel-btn");
       if (disMessengerOpenLibraryBtn) {
         disMessengerOpenLibraryBtn.addEventListener("click", () => {
-          if (!document.getElementById("dis-mode-ai")?.checked) {
-            showToast("Ative o modo 'Gerar mensagens com IA' para usar a biblioteca.", "warning");
-            return;
-          }
           const feedbackOpen = document.getElementById("dis-messenger-library-feedback");
           if (feedbackOpen) {
             feedbackOpen.textContent = "";
@@ -51085,8 +51304,6 @@
         }
       }
 
-      const disOpenMappingBtn = document.getElementById("dis-open-mapping-btn");
-      if (disOpenMappingBtn) disOpenMappingBtn.addEventListener("click", () => openDisMappingFlow());
       const disCampaignFileInput = document.getElementById("dis-campaign-file");
       const disCampaignDropzone = document.getElementById("dis-campaign-dropzone");
       if (disCampaignFileInput) {
@@ -51185,20 +51402,26 @@
           );
         });
       }
+      document.querySelectorAll(".dis-messenger-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          setDisparosMessengerTab(tab.dataset.messengerTab || "mensagem");
+        });
+      });
+      for (let slot = 0; slot < 4; slot += 1) {
+        const input = document.getElementById(`dis-messenger-image-${slot}`);
+        if (!input) continue;
+        input.addEventListener("change", async () => {
+          const file = input.files?.[0];
+          if (file) await uploadDisparosMessengerImageSlot(slot, file);
+          input.value = "";
+        });
+      }
+      setDisparosMessengerTab("mensagem");
+      setDisparosMessengerImagesFromConfig([]);
       initDisPickerWarmthFilter();
       initDisNumberSourceTabs();
       initDisparosSectionSaveDelegation();
 
-      const disDownloadTemplateBtn = document.getElementById("dis-download-template-btn");
-      if (disDownloadTemplateBtn) {
-        disDownloadTemplateBtn.addEventListener("click", () => downloadDisparosExcelTemplate());
-      }
-
-      const disMapCancelBtn = document.getElementById("dis-map-cancel-btn");
-      if (disMapCancelBtn) disMapCancelBtn.addEventListener("click", () => closeDisMappingModal());
-
-      const disMapImportBtn = document.getElementById("dis-map-import-btn");
-      if (disMapImportBtn) disMapImportBtn.addEventListener("click", () => importMappedSpreadsheet());
       const disWhatsappTargetInput = document.getElementById("dis-whatsapp-target");
       if (disWhatsappTargetInput) {
         disWhatsappTargetInput.addEventListener("input", (e) => {
@@ -51227,12 +51450,6 @@
         disResponseUrlInput.addEventListener("blur", () => validateResponseUrl(true));
       }
 
-      const disMappingOverlay = document.getElementById("dis-mapping-overlay");
-      if (disMappingOverlay) {
-        disMappingOverlay.addEventListener("click", (e) => {
-          if (e.target === disMappingOverlay) closeDisMappingModal();
-        });
-      }
       const disWarmthWarningOverlay = document.getElementById("dis-warmth-warning-overlay");
       if (disWarmthWarningOverlay) {
         disWarmthWarningOverlay.addEventListener("click", (e) => {
