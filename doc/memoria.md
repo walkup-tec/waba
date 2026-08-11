@@ -1,4 +1,4 @@
-﻿# MemÃ³ria Consolidada do Projeto
+## 2026-08-11 14:35 — Motivo real da pausa de campanha\n- untimeStage.detail deixa de ser genérico («Pausa Manual») e informa saúde/créditos/ativação\n- Campo pauseReason na memória local; tick/créditos/parar-envios gravam o motivo\n- LOG: doc/LOG-2026-08-11__143500__campanha-motivo-real-pausa.md\n\n﻿# MemÃ³ria Consolidada do Projeto
 
 Este arquivo Ã© atualizado a cada tarefa executada.
 
