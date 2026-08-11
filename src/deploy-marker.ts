@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-11-protecao-ativa-ativar-1-clique";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-11-mensagem-ia-280";
 

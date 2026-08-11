@@ -6788,7 +6788,7 @@ function buildDisparosAiPrompt(input) {
         ? [
             "Regras:",
             "- Retorne apenas uma mensagem final pronta para envio.",
-            "- Mensagem curta (maximo 400 caracteres).",
+            "- Mensagem curta (maximo 280 caracteres).",
             "- Nao use aspas nem explicacoes extras.",
             "- Nao inclua links, URLs, wa.me nem 'http' na mensagem.",
             "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase (ex.: *Vem Card*). Nunca deixe a abertura/saudacao em negrito.",
@@ -6797,7 +6797,7 @@ function buildDisparosAiPrompt(input) {
         : [
             "Regras:",
             "- Retorne apenas uma mensagem final pronta para envio.",
-            "- Mensagem curta (maximo 400 caracteres).",
+            "- Mensagem curta (maximo 280 caracteres).",
             "- Nao use aspas nem explicacoes extras.",
             "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase. Nunca deixe a abertura/saudacao em negrito.",
             accessLink

@@ -1,3 +1,8 @@
+## 2026-08-11 13:10 — Limite mensagem IA 280 caracteres
+- Prompt do Mensageiro: máximo 280 (antes 400)
+- Marker: DEPLOY-2026-08-11-mensagem-ia-280
+- LOG: doc/LOG-2026-08-11__131000__limite-mensagem-ia-280.md
+
 ## 2026-08-11 10:08 — Proteção ativa + ativar no 1º clique
 - Tag no card só com Proxy confirmada (`/proxy/find` ou set recente)
 - Ativar não espera prepare; prepare em background
