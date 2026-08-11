@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-10-aquecedor-justica-volume-numeros";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-10-aquecedor-warmth-por-chip";
 

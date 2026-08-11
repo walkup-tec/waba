@@ -63,6 +63,12 @@ export type OwnerConversationGraph = {
   updatedAt: string;
   /** true após bootstrap a partir de envios históricos. */
   bootstrapped: boolean;
+  /**
+   * Identidade do grafo:
+   * - chip = chaves são números WhatsApp canônicos (obrigatório)
+   * - instance = legado por nome de instância (migrar com force bootstrap)
+   */
+  identityMode?: "chip" | "instance";
   /** Último par escolhido (anti-repetição de relacionamento). */
   lastSelectedPairKey: string | null;
   /** Histórico das últimas seleções do algoritmo. */

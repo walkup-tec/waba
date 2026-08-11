@@ -1,3 +1,17 @@
+## 2026-08-10 21:05 — Aquecedor: warmth por chip + identidade chip
+- Warmth: aliases/idade/volume vitalício por número; sem teto punitivo; pisos lifetime
+- Envio/grafo/turnos já por chip (`identityMode=chip`)
+- Marker: DEPLOY-2026-08-10-aquecedor-warmth-por-chip
+- LOG: doc/LOG-2026-08-10__210500__aquecedor-warmth-por-chip.md
+- Palavras-chave: warmth, foguinhos, chip, 6973, 2477
+
+## 2026-08-10 20:51 — Aquecedor: identidade por número do chip
+- Regra: lógica de envio/grafo/turnos/stats usam chip canônico, não nome da instância
+- Migração `identityMode=chip`; turn manager alinhado aos eventos por chip
+- Marker: DEPLOY-2026-08-10-aquecedor-identidade-chip
+- LOG: doc/LOG-2026-08-10__205115__aquecedor-identidade-chip.md
+- Palavras-chave: aquecedor, chip, identidade, rename, conversation-graph
+
 ## 2026-08-10 20:36 — Aquecedor: justiça de volume entre números
 - Causa: ping-pong A↔B dominava; participação por número era fraca (só “hoje”)
 - Fix: peso vitalício + não forçar resposta em par quente se há números frios

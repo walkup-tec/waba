@@ -57,6 +57,7 @@ const outbound_ack_health_service_1 = require("./aquecedor/outbound-ack-health.s
 const delivery_cooldown_service_1 = require("./aquecedor/delivery-cooldown.service");
 const pair_orchestrator_service_1 = require("./aquecedor/pair-orchestrator.service");
 const network_health_service_1 = require("./aquecedor/network-health.service");
+const aquecedor_chip_identity_1 = require("./aquecedor/aquecedor-chip-identity");
 const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
@@ -1240,31 +1241,57 @@ function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
     const target = resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase();
     return (connected.find((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase() === target) || null);
 }
-async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance) {
+async function loadAquecedorExchangeEvents(supabase, connected, _canonicalMap, _numberToInstance) {
     const events = [];
-    const instanceNames = connected.map((item) => item.instancia).filter(Boolean);
-    if (instanceNames.length < 2)
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+    if (chipIndex.chips.length < 2)
         return events;
-    const connectedCanonical = new Set(instanceNames.map((name) => resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase()));
+    const variantToChip = (0, aquecedor_chip_identity_1.buildAquecedorNumberVariantToChipMap)(connected);
+    const nameToChip = new Map(chipIndex.instanceToChip);
+    const chipSet = new Set(chipIndex.chips);
+    try {
+        const { data: controle } = await (supabase
+            .from("controle_instancia")
+            .select("instancia, numero_whatsapp")
+            .limit(500));
+        for (const row of Array.isArray(controle) ? controle : []) {
+            const inst = String(row?.instancia || "").trim();
+            const chip = (0, aquecedor_chip_identity_1.resolveNumberVariantToChip)(String(row?.numero_whatsapp || ""), variantToChip);
+            if (!inst || !chip || !chipSet.has(chip))
+                continue;
+            nameToChip.set(inst.toLowerCase(), chip);
+        }
+    }
+    catch {
+        /* optional */
+    }
+    const resolveNameToChip = (rawName) => {
+        const key = String(rawName || "").trim().toLowerCase();
+        if (!key)
+            return "";
+        return nameToChip.get(key) || "";
+    };
+    const historicalNames = Array.from(new Set([
+        ...connected.map((c) => c.instancia),
+        ...Array.from(nameToChip.keys()),
+    ])).filter(Boolean);
+    if (historicalNames.length < 2)
+        return events;
     try {
         const { data, error } = await (supabase
             .from("aquecedor")
             .select("instancia, numero_destino, sent_at")
             .eq("status", "ENVIADO")
-            .in("instancia", instanceNames)
+            .in("instancia", historicalNames)
             .order("sent_at", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
             for (const row of data) {
-                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-                const toInst = resolveAquecedorInstanceByNumber(String(row?.numero_destino || ""), numberToInstance);
+                const fromChip = resolveNameToChip(String(row?.instancia || ""));
+                const toChip = (0, aquecedor_chip_identity_1.resolveNumberVariantToChip)(String(row?.numero_destino || ""), variantToChip);
                 const at = String(row?.sent_at || "").trim();
-                if (fromInst &&
-                    toInst &&
-                    at &&
-                    connectedCanonical.has(fromInst.toLowerCase()) &&
-                    connectedCanonical.has(toInst.toLowerCase())) {
-                    events.push({ at, fromInst, toInst });
+                if (fromChip && toChip && at && chipSet.has(fromChip) && chipSet.has(toChip) && fromChip !== toChip) {
+                    events.push({ at, fromInst: fromChip, toInst: toChip });
                 }
             }
         }
@@ -1276,21 +1303,17 @@ async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, nu
         const { data, error } = await (supabase
             .from("logs_envios")
             .select("instancia_origem, instancia_destino, data_envio")
-            .in("instancia_origem", instanceNames)
-            .in("instancia_destino", instanceNames)
+            .in("instancia_origem", historicalNames)
+            .in("instancia_destino", historicalNames)
             .order("data_envio", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
             for (const row of data) {
-                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia_origem || ""), canonicalMap);
-                const toInst = resolveAquecedorCanonicalInstance(String(row?.instancia_destino || ""), canonicalMap);
+                const fromChip = resolveNameToChip(String(row?.instancia_origem || ""));
+                const toChip = resolveNameToChip(String(row?.instancia_destino || ""));
                 const at = String(row?.data_envio || "").trim();
-                if (fromInst &&
-                    toInst &&
-                    at &&
-                    connectedCanonical.has(fromInst.toLowerCase()) &&
-                    connectedCanonical.has(toInst.toLowerCase())) {
-                    events.push({ at, fromInst, toInst });
+                if (fromChip && toChip && at && chipSet.has(fromChip) && chipSet.has(toChip) && fromChip !== toChip) {
+                    events.push({ at, fromInst: fromChip, toInst: toChip });
                 }
             }
         }
@@ -1302,7 +1325,7 @@ async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, nu
     for (const ev of events) {
         const atMs = new Date(ev.at).getTime();
         const bucket = Number.isFinite(atMs) ? Math.floor(atMs / 1000) : ev.at;
-        const key = `${ev.fromInst.toLowerCase()}|${ev.toInst.toLowerCase()}|${bucket}`;
+        const key = `${ev.fromInst}|${ev.toInst}|${bucket}`;
         if (!dedup.has(key))
             dedup.set(key, ev);
     }
@@ -1312,6 +1335,20 @@ async function loadAquecedorTurnManager(supabase, connected) {
     const aliasesMap = await loadInstanceAliasesMap();
     const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
     const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+    const resolveToChip = (raw) => {
+        const fromInstance = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(raw, chipIndex);
+        if (fromInstance)
+            return fromInstance;
+        // Aceita chip já canônico (ex.: chaves internas / cooldowns migrados).
+        const asChip = (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(raw);
+        if (asChip && chipIndex.chipToInstance.has(asChip))
+            return asChip;
+        const key = String(raw || "").trim().toLowerCase();
+        if (key && chipIndex.chipToInstance.has(key))
+            return key;
+        return "";
+    };
     const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
     const instanceStats = new Map();
     const pairLastSender = new Map();
@@ -1399,63 +1436,62 @@ async function loadAquecedorTurnManager(supabase, connected) {
         const ev = events[i];
         recentDirectedEdges.push(buildAquecedorDirectedKey(ev.fromInst, ev.toInst));
     }
-    const connectedCanonical = new Set(connected
-        .map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase())
-        .filter(Boolean));
+    const connectedChips = new Set(chipIndex.chips);
     const owesPairReply = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
+        if (!origem || !destino || origem === destino)
             return false;
         const pairKey = buildAquecedorPairKey(origem, destino);
         const pairState = pairStates.get(pairKey);
-        return pairState?.pendingReplyFrom?.toLowerCase() === origem.toLowerCase();
+        return pairState?.pendingReplyFrom === origem;
     };
     const canSendDirected = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
+        if (!origem || !destino || origem === destino)
             return false;
-        if (!connectedCanonical.has(origem.toLowerCase()) || !connectedCanonical.has(destino.toLowerCase())) {
+        if (!connectedChips.has(origem) || !connectedChips.has(destino)) {
             return false;
         }
         const pairKey = buildAquecedorPairKey(origem, destino);
         const lastSender = pairLastSender.get(pairKey);
-        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+        if (lastSender && lastSender === origem) {
             return false;
         }
         if (owesPairReply(origemRaw, destinoRaw)) {
             return true;
         }
-        const stats = instanceStats.get(origem.toLowerCase());
+        const stats = instanceStats.get(origem);
         if (!stats?.lastSentAt || stats.outboundSinceInbound === 0)
             return true;
         // Peer do último outbound saiu do ciclo → não congelar a origem para outros pares.
         const lastTo = stats.lastOutboundTo;
-        if (lastTo && !connectedCanonical.has(lastTo.toLowerCase())) {
+        if (lastTo && !connectedChips.has(lastTo)) {
             return true;
         }
         return false;
     };
     const describeBlockReason = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
+        const label = (chip) => chipIndex.chipToInstance.get(chip) || chip;
         const pairKey = buildAquecedorPairKey(origem, destino);
         const lastSender = pairLastSender.get(pairKey);
-        const stats = instanceStats.get(origem.toLowerCase());
-        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
-            return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
+        const stats = instanceStats.get(origem);
+        if (lastSender && lastSender === origem) {
+            return `${label(origem)} já enviou para ${label(destino)} e precisa aguardar resposta de ${label(destino)} no par (A→B, depois B→A).`;
         }
         if (owesPairReply(origemRaw, destinoRaw)) {
-            return `${origem} deve responder ${destino} neste par antes de outras combinações.`;
+            return `${label(origem)} deve responder ${label(destino)} neste par antes de outras combinações.`;
         }
         if (stats && stats.outboundSinceInbound > 0) {
             const esperado = stats.lastReceivedFrom
-                ? ` Responder a ${stats.lastReceivedFrom} libera o turno global.`
+                ? ` Responder a ${label(stats.lastReceivedFrom)} libera o turno global.`
                 : "";
-            return `${origem} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+            return `${label(origem)} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
         }
-        return `${origem} não pode enviar para ${destino} no turno atual.`;
+        return `${label(origem) || origemRaw} não pode enviar para ${label(destino) || destinoRaw} no turno atual.`;
     };
     const lastEvent = events.length ? events[events.length - 1] : null;
     const lastEventPairKey = lastEvent
@@ -1463,15 +1499,15 @@ async function loadAquecedorTurnManager(supabase, connected) {
         : null;
     const getLastEventPairKey = () => lastEventPairKey;
     const scoreEquityCombination = (origemRaw, destinoRaw, comboIndex, startIndex, equityBaseline) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
         const directedKey = buildAquecedorDirectedKey(origem, destino);
         const directed = directedSendCounts.get(directedKey) ?? 0;
         const pairTotal = getUndirectedPairSendTotal(origem, destino);
-        const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
-        const oRecv = instanceStats.get(origem.toLowerCase())?.receiveCount ?? 0;
-        const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
-        const dSend = instanceStats.get(destino.toLowerCase())?.sendCount ?? 0;
+        const oSend = instanceStats.get(origem)?.sendCount ?? 0;
+        const oRecv = instanceStats.get(origem)?.receiveCount ?? 0;
+        const dRecv = instanceStats.get(destino)?.receiveCount ?? 0;
+        const dSend = instanceStats.get(destino)?.sendCount ?? 0;
         const replyDue = owesPairReply(origemRaw, destinoRaw);
         let score = 0;
         // Rodízio de conversas: o par que acabou de trocar cede a vez — EXCETO se a resposta
@@ -1509,14 +1545,14 @@ async function loadAquecedorTurnManager(supabase, connected) {
         return score;
     };
     const getDirectedSendCount = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
         if (!origem || !destino)
             return 0;
         return directedSendCounts.get(buildAquecedorDirectedKey(origem, destino)) ?? 0;
     };
-    const getOriginSendCount = (origemRaw) => instanceStats.get(resolveAquecedorCanonicalInstance(origemRaw, canonicalMap).toLowerCase())?.sendCount ?? 0;
-    const getDestReceiveCount = (destinoRaw) => instanceStats.get(resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap).toLowerCase())?.receiveCount ?? 0;
+    const getOriginSendCount = (origemRaw) => instanceStats.get(resolveToChip(origemRaw))?.sendCount ?? 0;
+    const getDestReceiveCount = (destinoRaw) => instanceStats.get(resolveToChip(destinoRaw))?.receiveCount ?? 0;
     const getUndirectedPairSendTotal = (instA, instB) => getDirectedSendCount(instA, instB) + getDirectedSendCount(instB, instA);
     const getTotalDirectedSendCount = () => {
         let total = 0;
@@ -1545,19 +1581,26 @@ async function canAquecedorOrigemSendDirected(supabase, connected, instanciaOrig
     return turn.canSendDirected(instanciaOrigem, instanciaDestino);
 }
 async function ensureAquecedorOwnerConversationGraph(ownerEmail, supabase, connected) {
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+    const chipKeys = chipIndex.chips;
+    if (chipKeys.length < 2) {
+        return (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
+    }
     const aliasesMap = await loadInstanceAliasesMap();
     const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
     const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
-    const instanceNames = connected.map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap));
     const existing = await (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
-    if (!existing.bootstrapped) {
+    const needsChipIdentity = existing.identityMode !== "chip";
+    if (!existing.bootstrapped || needsChipIdentity) {
         const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
         await (0, conversation_graph_service_1.bootstrapOwnerGraphFromEvents)(ownerEmail, events, {
-            instanceNames,
+            force: needsChipIdentity,
+            instanceNames: chipKeys,
+            identityMode: "chip",
         });
     }
     else {
-        await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, instanceNames);
+        await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, chipKeys);
     }
     return (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
 }
@@ -1565,10 +1608,9 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
     if (!combinations.length || connected.length < 2)
         return null;
     const owner = (0, aquecedor_owner_runtime_registry_1.normalizeAquecedorOwnerEmail)(ownerEmail || "") || "default";
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
     const graph = await ensureAquecedorOwnerConversationGraph(owner, supabase, connected);
-    const aliasesMapForPick = await loadInstanceAliasesMap();
-    const canonicalMapForPick = buildAquecedorInstanceCanonicalMap(connected, aliasesMapForPick);
-    const eligibleNames = connected.map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick));
+    const eligibleChips = chipIndex.chips;
     const turn = await loadAquecedorTurnManager(supabase, connected);
     const blocked = await (0, delivery_cooldown_service_1.listBlockedDirectedKeys)();
     if (extraBlockedDirectedKeys?.size) {
@@ -1580,26 +1622,37 @@ async function pickAquecedorCombinationAsync(supabase, connected, combinations, 
             blocked.add((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(combo.instancia_origem, combo.instancia_destino));
         }
     }
-    const pick = (0, pair_orchestrator_service_1.pickNextDirectedExchange)(graph, eligibleNames, {
+    // Cooldowns legados por nome → também bloquear pelo chip.
+    const blockedForPick = new Set(blocked);
+    for (const key of blocked) {
+        const parts = String(key || "").split("→");
+        if (parts.length !== 2)
+            continue;
+        const oChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(parts[0], chipIndex);
+        const dChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(parts[1], chipIndex);
+        if (oChip && dChip)
+            blockedForPick.add((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(oChip, dChip));
+    }
+    for (const combo of combinations) {
+        const oChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_origem, chipIndex);
+        const dChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_destino, chipIndex);
+        if (oChip &&
+            dChip &&
+            blocked.has((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(combo.instancia_origem, combo.instancia_destino))) {
+            blockedForPick.add((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(oChip, dChip));
+        }
+    }
+    const pick = (0, pair_orchestrator_service_1.pickNextDirectedExchange)(graph, eligibleChips, {
         startIndex,
-        blockedDirectedKeys: blocked,
+        blockedDirectedKeys: blockedForPick,
     });
     if (!pick)
         return null;
-    const origemLc = pick.origem.toLowerCase();
-    const destinoLc = pick.destino.toLowerCase();
     for (let index = 0; index < combinations.length; index += 1) {
         const combo = combinations[index];
-        if (String(combo.instancia_origem || "").trim().toLowerCase() === origemLc &&
-            String(combo.instancia_destino || "").trim().toLowerCase() === destinoLc) {
-            return { chosen: combo, index, pickMeta: pick };
-        }
-    }
-    for (let index = 0; index < combinations.length; index += 1) {
-        const combo = combinations[index];
-        const o = resolveAquecedorCanonicalInstance(combo.instancia_origem, canonicalMapForPick);
-        const d = resolveAquecedorCanonicalInstance(combo.instancia_destino, canonicalMapForPick);
-        if (o.toLowerCase() === origemLc && d.toLowerCase() === destinoLc) {
+        const oChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_origem, chipIndex);
+        const dChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_destino, chipIndex);
+        if (oChip && dChip && oChip === pick.origem && dChip === pick.destino) {
             return { chosen: combo, index, pickMeta: pick };
         }
     }
@@ -3464,8 +3517,8 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
             });
             await (0, conversation_graph_service_1.recordDirectedSend)({
                 ownerEmail,
-                fromInst: chosen.instancia_origem,
-                toInst: chosen.instancia_destino,
+                fromInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(connected.find((c) => c.instancia === chosen.instancia_origem)?.numero || "") || chosen.instancia_origem,
+                toInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(chosen.numero_whatsapp || "") || chosen.instancia_destino,
             });
             aquecedorCycleRuntime().lastEvoError = null;
             aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
@@ -3877,8 +3930,10 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         await (0, aquecedor_instance_lifecycle_service_1.recordAquecedorInstanceDailySend)(chosen.instancia_origem);
         await (0, conversation_graph_service_1.recordDirectedSend)({
             ownerEmail,
-            fromInst: chosen.instancia_origem,
-            toInst: chosen.instancia_destino,
+            fromInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(connected.find((c) => c.instancia === chosen.instancia_origem)?.numero || "") || chosen.instancia_origem,
+            toInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(connected.find((c) => c.instancia === chosen.instancia_destino)?.numero ||
+                chosen.numero_whatsapp ||
+                "") || chosen.instancia_destino,
             at: new Date().toISOString(),
         });
         if (picked.pickMeta) {
@@ -6031,9 +6086,19 @@ async function attachAquecedorMessageStatsToInstanceItems(items, ownerEmail) {
     const names = items.map((row) => String(row?.name || "").trim()).filter(Boolean);
     if (!names.length)
         return items;
+    const numberByInstance = new Map();
+    for (const row of items) {
+        const name = String(row?.name || "").trim();
+        if (!name)
+            continue;
+        const number = String(row?.number || row?.numero || "").trim();
+        if (number)
+            numberByInstance.set(name, number);
+    }
     const stats = await (0, aquecedor_instance_message_stats_service_1.getAquecedorMessageStatsForInstances)(names, {
         ownerEmail,
         supabase: getSupabaseClient(),
+        numberByInstance,
     });
     return items.map((row) => {
         const name = String(row?.name || "").trim();
@@ -8442,12 +8507,23 @@ app.get("/aquecedor/network-health", async (req, res) => {
             await ensureAquecedorOwnerConversationGraph(ownerEmail, supabase, connected);
         }
         else if (connected.length >= 2) {
-            await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, connected.map((item) => item.instancia));
+            const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+            await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, chipIndex.chips);
         }
         const graph = await (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
+        const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
         const report = (0, network_health_service_1.buildNetworkHealthReport)(ownerEmail, graph, {
-            instanceNames: connected.map((item) => item.instancia),
+            instanceNames: chipIndex.chips,
         });
+        // Labels amigáveis: chip → nome atual da instância (quando houver).
+        if (report.relationshipMatrix?.labels?.length) {
+            report.relationshipMatrix.labels = report.relationshipMatrix.labels.map((chip) => chipIndex.chipToInstance.get(chip) || chip);
+        }
+        for (const phone of report.phones || []) {
+            const label = chipIndex.chipToInstance.get(String(phone.phone || ""));
+            if (label)
+                phone.phone = label;
+        }
         return res.json({ ok: true, ...report });
     }
     catch (error) {

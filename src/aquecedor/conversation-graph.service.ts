@@ -60,6 +60,7 @@ function emptyOwnerGraph(): OwnerConversationGraph {
     phones: {},
     updatedAt: new Date().toISOString(),
     bootstrapped: false,
+    identityMode: "chip",
     lastSelectedPairKey: null,
     selectionHistory: [],
   };
@@ -279,11 +280,13 @@ export async function ensureCompletePairGraph(
 export async function bootstrapOwnerGraphFromEvents(
   ownerEmail: string,
   events: DirectedExchangeEvent[],
-  options: { force?: boolean; instanceNames?: string[] } = {},
+  options: { force?: boolean; instanceNames?: string[]; identityMode?: "chip" | "instance" } = {},
 ): Promise<OwnerConversationGraph> {
   const store = await loadStore();
   const owner = getOrCreateOwner(store, ownerEmail);
-  if (owner.bootstrapped && !options.force) {
+  const desiredMode = options.identityMode || "chip";
+  const needsIdentityMigration = owner.identityMode !== desiredMode;
+  if (owner.bootstrapped && !options.force && !needsIdentityMigration) {
     if (options.instanceNames?.length) {
       await ensureCompletePairGraph(ownerEmail, options.instanceNames);
     }
@@ -311,6 +314,7 @@ export async function bootstrapOwnerGraphFromEvents(
     }
   }
   owner.bootstrapped = true;
+  owner.identityMode = desiredMode;
   owner.updatedAt = new Date().toISOString();
   enqueueWrite(store);
   return owner;

@@ -360,8 +360,22 @@ async function restoreAquecedorLifecyclesFromHistoryBatch(entries) {
             refreshRestrictionPhase(existing.row);
             const alreadyWarm = Boolean(existing.row.activatedAt) &&
                 (existing.row.phase === "active" || existing.row.phase === "restricted_wait");
-            if (alreadyWarm)
+            if (alreadyWarm) {
+                // Rename/recreate não pode “rejuvenescer” o chip: preserva a 1ª atividade conhecida.
+                const prevMs = existing.row.activatedAt
+                    ? new Date(existing.row.activatedAt).getTime()
+                    : Number.POSITIVE_INFINITY;
+                if (Number.isFinite(activityMs) && activityMs < prevMs) {
+                    existing.row.activatedAt = new Date(activityMs).toISOString();
+                    existing.row.dailyCap = computeDailyCapForInstance(name, existing.row.activatedAt);
+                    if (existing.key !== key) {
+                        delete store.instances[existing.key];
+                    }
+                    store.instances[key] = existing.row;
+                    changed += 1;
+                }
                 continue;
+            }
             existing.row.phase = "active";
             existing.row.preparingSince = null;
             existing.row.activatedAt = new Date(activityMs).toISOString();
