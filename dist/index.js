@@ -2436,6 +2436,7 @@ function queuePersistDisparosLocalState() {
                     totalNumbers: c.totalNumbers,
                     sentCount: c.sentCount,
                     ownerEmail: c.ownerEmail || "",
+                    pauseReason: c.pauseReason || "",
                     configSnapshot: c.configSnapshot,
                 })),
                 leads: disparosCampaignLeadsMemory.map((l) => ({
@@ -2482,6 +2483,7 @@ async function loadDisparosLocalState() {
                 totalNumbers: Number(c?.totalNumbers || 0),
                 sentCount: Number(c?.sentCount || 0),
                 ownerEmail: String(c?.ownerEmail || "").trim() || undefined,
+                pauseReason: String(c?.pauseReason || "").trim() || undefined,
                 configSnapshot: parseDisparosConfig(c?.configSnapshot || {}),
             });
         }
@@ -4762,6 +4764,7 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
             totalNumbers,
             sentCount: 0,
             ownerEmail,
+            pauseReason: "Aguardando ativação. Clique em Ativar campanha para iniciar os disparos.",
             configSnapshot,
         };
         const leads = numbers.map((phone) => ({
@@ -5662,6 +5665,43 @@ function getCampaignInstanceHealth(config, evoRows) {
         needsMoreInstancesForMinimum,
         missingConnectedForMinimum,
     };
+}
+/** Texto exibido na UI para status pausada — prioriza regra de saúde atual. */
+function describeCampaignPauseDetail(instanceHealth, options) {
+    const health = instanceHealth;
+    const parts = [];
+    if (health?.needsMoreInstancesForMinimum === true) {
+        parts.push("apenas " +
+            health.connectedCount +
+            " de " +
+            Math.max(health.selectedCount, health.connectedCount) +
+            " números conectados (mínimo " +
+            health.minConnectedRequired +
+            "; faltam " +
+            health.missingConnectedForMinimum +
+            ")");
+    }
+    if (health?.shouldPauseByDisconnectedRatio === true) {
+        parts.push(health.disconnectedPercent +
+            "% das instâncias selecionadas estão desconectadas (" +
+            health.disconnectedCount +
+            " de " +
+            health.selectedCount +
+            ")");
+    }
+    if (parts.length) {
+        return "Pausa automática por saúde: " + parts.join("; ") + ".";
+    }
+    const stored = String(options?.storedReason || "").trim();
+    if (stored)
+        return stored;
+    if ((options?.sentCount ?? 0) <= 0) {
+        return "Aguardando ativação. Clique em Ativar campanha para iniciar os disparos.";
+    }
+    return "Campanha pausada manualmente.";
+}
+function pauseReasonFromInstanceHealth(health) {
+    return describeCampaignPauseDetail(health);
 }
 function resolveUsageFromMap(usageMap, instanceName) {
     const key = String(instanceName || "").trim();
@@ -11183,6 +11223,8 @@ async function processOneCampaignDispatch(campaignId) {
                 if (!disparosCreditsService.isMasterUnlimited(ownerEmail) &&
                     disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0) {
                     campaign.status = "paused";
+                    campaign.pauseReason =
+                        "Pausa automática: créditos de envio esgotados para a API Alternativa.";
                     const supabase = getSupabaseClient();
                     if (supabase) {
                         try {
@@ -11225,6 +11267,7 @@ async function runCampaignDispatchTick() {
         const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
         if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
             c.status = "paused";
+            c.pauseReason = pauseReasonFromInstanceHealth(health);
             const supabase = getSupabaseClient();
             if (supabase) {
                 try {
@@ -11285,6 +11328,7 @@ async function stopAllDispatchActivityOnServer(ownerEmail) {
     for (const c of disparosCampaignsMemory) {
         if (c.status === "running") {
             c.status = "paused";
+            c.pauseReason = "Pausa automática: envios interrompidos no servidor.";
             pausedSet.add(c.id);
         }
     }
@@ -11459,6 +11503,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
             totalNumbers: numbers.length,
             sentCount: 0,
             ownerEmail,
+            pauseReason: "Aguardando ativação. Clique em Ativar campanha para iniciar os disparos.",
             configSnapshot,
         };
         const leads = numbers.map((phone) => ({
@@ -11556,14 +11601,13 @@ app.get("/disparos/campanhas", async (req, res) => {
                 };
             }
             if (st === "paused") {
-                const pausedByHealthRule = instanceHealth?.shouldPauseByDisconnectedRatio === true ||
-                    instanceHealth?.needsMoreInstancesForMinimum === true;
                 return {
                     phase: "paused",
                     label: "Pausada",
-                    detail: pausedByHealthRule
-                        ? "Pausa manual ou automática por regra de saúde."
-                        : "Campanha pausada manualmente.",
+                    detail: describeCampaignPauseDetail(instanceHealth, {
+                        sentCount: Number(item.sentCount || 0),
+                        storedReason: item.pauseReason,
+                    }),
                     fillPercent: 100,
                 };
             }
@@ -11610,6 +11654,7 @@ app.get("/disparos/campanhas", async (req, res) => {
             const progressPercent = progressPercentForCampaignListItem(id, total, sent);
             const processedCount = countCampaignLeadsProcessed(id, sent, total);
             const nextAllowedAtMs = campaignNextAllowedSendAt.get(id) || 0;
+            const mem = disparosCampaignsMemory.find((c) => c.id === id);
             return {
                 id,
                 name: String(row?.campaign_name ?? (row?.name || "")),
@@ -11620,6 +11665,7 @@ app.get("/disparos/campanhas", async (req, res) => {
                 processedCount,
                 progressPercent,
                 nextAllowedAt: nextAllowedAtMs > 0 ? new Date(nextAllowedAtMs).toISOString() : null,
+                pauseReason: String(mem?.pauseReason || "").trim() || undefined,
             };
         };
         const byId = new Map();
@@ -11686,6 +11732,7 @@ app.get("/disparos/campanhas", async (req, res) => {
                 nextAllowedAt: (campaignNextAllowedSendAt.get(c.id) || 0) > 0
                     ? new Date(campaignNextAllowedSendAt.get(c.id) || 0).toISOString()
                     : null,
+                pauseReason: String(c.pauseReason || "").trim() || undefined,
             });
             configByCampaignId.set(c.id, c.configSnapshot);
         }
@@ -12100,6 +12147,10 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
         campaign.status = nextStatus;
         if (ativa) {
             campaignNextAllowedSendAt.set(id, 0);
+            campaign.pauseReason = undefined;
+        }
+        else {
+            campaign.pauseReason = "Campanha pausada manualmente.";
         }
         const supabase = getSupabaseClient();
         if (supabase) {
@@ -12118,6 +12169,7 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             id,
             status: nextStatus,
             ativa,
+            pauseReason: campaign.pauseReason || null,
             message: ativa ? "Campanha ativada. Os disparos serão processados em sequência." : "Campanha pausada.",
         });
     }

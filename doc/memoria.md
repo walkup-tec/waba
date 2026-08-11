@@ -1,3 +1,8 @@
+## 2026-08-11 14:35 — Motivo real da pausa de campanha
+- `runtimeStage.detail` deixa de ser genérico («Pausa Manual») e informa saúde/créditos/ativação
+- Campo `pauseReason` na memória local; tick/créditos/parar-envios gravam o motivo
+- LOG: doc/LOG-2026-08-11__143500__campanha-motivo-real-pausa.md
+
 ## 2026-08-11 13:10 — Limite mensagem IA 280 caracteres
 - Prompt do Mensageiro: máximo 280 (antes 400)
 - Marker: DEPLOY-2026-08-11-mensagem-ia-280
