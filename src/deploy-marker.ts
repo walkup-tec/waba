@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-10-aquecedor-warmth-por-chip";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-11-campanha-proxy-obrigatoria";
 

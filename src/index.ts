@@ -220,10 +220,11 @@ import {
 import {
   applyProxyBrasilToEvoInstance,
   disableProxyBrasilOnEvoInstance,
-  getProxyBrasilSessionPrepareStatus,
   isProxyBrasilSessionReadyForSend,
-  markProxyBrasilSessionReadyForSend,
   prepareProxyBrasilSessionsForCampaign,
+  campaignStatusHoldsProxyBrasil,
+  instanceNamesToReleaseAfterCampaignEnd,
+  prepareProxyBrasilSessionForCampaignSend,
   queueApplyProxyBrasilToInstances,
   queueDisableProxyBrasilOnInstances,
   queueSyncProxyBrasilForCampaignSelection,
@@ -5910,7 +5911,7 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
       evoApiBase: EVO_API_BASE,
       prepareDeps: getProxyBrasilCampaignPrepareDeps(),
     });
-    // prepare em background não aplica proxy a quente em sessão open (evita derrubar Baileys).
+    // Liga Proxy Brasil nas selecionadas; se a sessão cair, a campanha pede QR com Proxy Campanha.
 
     if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
       numbers = numbers.slice(0, plannedSendCount);
@@ -12566,6 +12567,29 @@ async function prepareProxyBrasilForCampaignInstancesNow(instanceNames: string[]
   });
 }
 
+function selectedInstanceNamesFromCampaign(campaign: { configSnapshot?: DisparosConfig | null }): string[] {
+  const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
+  return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
+}
+
+function queueReleaseProxyBrasilAfterCampaignEnd(endedCampaign: {
+  id: string;
+  configSnapshot?: DisparosConfig | null;
+}): void {
+  if (!loadProxyBrasilConfig()?.enabled) return;
+  const ending = selectedInstanceNamesFromCampaign(endedCampaign);
+  if (!ending.length) return;
+  const otherLive = disparosCampaignsMemory
+    .filter(
+      (c) =>
+        c.id !== endedCampaign.id && campaignStatusHoldsProxyBrasil(String(c.status || "")),
+    )
+    .flatMap((c) => selectedInstanceNamesFromCampaign(c));
+  const toDisable = instanceNamesToReleaseAfterCampaignEnd(ending, otherLive);
+  if (!toDisable.length) return;
+  queueDisableProxyBrasilOnInstances(toDisable, callEvoAction, EVO_API_BASE);
+}
+
 function scheduleCampaignProxyPrepareRetry(campaignId: string, waitMs = 15_000) {
   campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.max(5_000, waitMs));
 }
@@ -12760,6 +12784,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       ).length;
       if (sentN > campaign.sentCount) campaign.sentCount = sentN;
       campaign.status = "finished";
+      queueReleaseProxyBrasilAfterCampaignEnd(campaign);
       const supabase = getSupabaseClient();
       if (supabase) {
         try {
@@ -12803,21 +12828,23 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const proxyCfg = loadProxyBrasilConfig();
     if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
-      const liveForReady = await fetchEvoInstanceLiveState(instancePick.instancia, { fresh: true });
-      if (isEvoLiveStateOpen(liveForReady)) {
-        // Após redeploy o mapa ready zera; se está open, libera envio SEM restart.
-        markProxyBrasilSessionReadyForSend(instancePick.instancia, {
-          state: liveForReady,
-          reason: "ready no disparo (open) — sem restart",
-        });
-      } else {
-        const prep = getProxyBrasilSessionPrepareStatus(instancePick.instancia);
+      const prep = await prepareProxyBrasilSessionForCampaignSend(
+        instancePick.instancia,
+        {
+          callEvoAction,
+          evoApiBase: EVO_API_BASE,
+          ...getProxyBrasilCampaignPrepareDeps(),
+        },
+      );
+      if (!prep.ok) {
         console.warn(
-          `[Campanha] Instância ${instancePick.instancia} não open (${liveForReady || "?"} / prep=${prep?.status || "idle"}). Pausando sem restart.`,
+          `[Campanha] Instância ${instancePick.instancia} sem Proxy Brasil pronta (${prep.reason || "falha"}).`,
         );
         await pauseCampaignDueToProxyPrepareFailure(
           campaignId,
-          `Instância ${instancePick.instancia} desconectada no EVO. Reconecte no Aquecedor (QR) e ative a campanha — o disparo não reinicia a sessão automaticamente.`,
+          prep.needsProxyPairing
+            ? `Instância ${instancePick.instancia}: ligue a Proxy e reconecte o QR com Proxy Campanha.`
+            : `Instância ${instancePick.instancia} sem Proxy Brasil (${prep.reason || "não pronta"}).`,
         );
         lead.status = "pending";
         return;
@@ -14334,6 +14361,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
     if (!campaign) {
       return res.status(404).json({ error: "Campanha não encontrada." });
     }
+    queueReleaseProxyBrasilAfterCampaignEnd(campaign);
     const idx = disparosCampaignsMemory.findIndex((c) => c.id === id);
     if (idx !== -1) disparosCampaignsMemory.splice(idx, 1);
     for (let k = disparosCampaignLeadsMemory.length - 1; k >= 0; k--) {

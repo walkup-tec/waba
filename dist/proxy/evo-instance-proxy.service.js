@@ -11,6 +11,8 @@ exports.rollbackProxyBrasilSessionToDirect = rollbackProxyBrasilSessionToDirect;
 exports.prepareProxyBrasilSessionForCampaignSend = prepareProxyBrasilSessionForCampaignSend;
 exports.prepareProxyBrasilSessionsForCampaign = prepareProxyBrasilSessionsForCampaign;
 exports.queueApplyProxyBrasilToInstances = queueApplyProxyBrasilToInstances;
+exports.campaignStatusHoldsProxyBrasil = campaignStatusHoldsProxyBrasil;
+exports.instanceNamesToReleaseAfterCampaignEnd = instanceNamesToReleaseAfterCampaignEnd;
 exports.queueDisableProxyBrasilOnInstances = queueDisableProxyBrasilOnInstances;
 exports.queueSyncProxyBrasilForCampaignSelection = queueSyncProxyBrasilForCampaignSelection;
 const proxy_brasil_config_1 = require("./proxy-brasil.config");
@@ -267,8 +269,8 @@ async function rollbackProxyBrasilSessionToDirect(instanceName, deps, opts) {
     return { restored: false, state: waited.state };
 }
 /**
- * Liga proxy (se preciso), restart leve, exige open estável.
- * Se falhar: rollback (desliga proxy) para não perder a conexão do número.
+ * Liga Proxy Brasil no número selecionado para campanha Alternativa.
+ * Se a sessão cair ao aplicar, a Proxy permanece ligada e exige QR com Proxy Campanha.
  */
 async function prepareProxyBrasilSessionForCampaignSend(instanceName, deps, opts) {
     const name = String(instanceName || "").trim();
@@ -348,73 +350,38 @@ async function prepareProxyBrasilSessionForCampaignSend(instanceName, deps, opts
                         restarted: false,
                     };
                 }
-                // Proxy on mas sessão instável/morta: rollback para recuperar.
-                return failAndRollback(`Proxy ligado mas sessão instável (state=${stable.state || liveBefore}).`, { state: stable.state || liveBefore });
-            }
-            // Proxy ligado + sessão morta: recuperar conexão direta (não deixar travado).
-            if (proxyEnabled === true && !wasOpen) {
-                return failAndRollback(`Proxy ligado com sessão morta (state=${liveBefore || "desconhecido"}).`, { state: liveBefore });
-            }
-            // Proxy a quente em sessão já pareada derruba o Baileys.
-            // Se já está open: libera envio SEM aplicar proxy e SEM restart/rollback.
-            if (proxyEnabled !== true && wasOpen) {
-                const stable = await assertStableOpen(deps, name, { rounds: 2, gapMs: 800 });
-                if (stable.ok) {
-                    const entry = setPrepareStatus(name, {
-                        status: "ready",
-                        state: stable.state,
-                        reason: "sessão open — envio liberado sem hot-apply de proxy (preserva pareamento)",
-                        proxyApplied: false,
-                        restarted: false,
-                    });
-                    console.info(`[ProxyBrasil] ${name}: ${entry.reason}`);
-                    return {
-                        ok: true,
-                        instanceName: name,
-                        status: entry.status,
-                        state: stable.state,
-                        reason: entry.reason,
-                        proxyApplied: false,
-                        restarted: false,
-                    };
-                }
-                // Flicker transitório: NÃO dar restart (pode gerar device_removed no meio do disparo).
-                const waited = await deps.waitForOpenLenient(name, { maxWaitMs: 20000, pollMs: 1000 });
-                if (waited.open) {
-                    const entry = setPrepareStatus(name, {
-                        status: "ready",
-                        state: waited.state,
-                        reason: "sessão open após wait — sem restart",
-                        proxyApplied: false,
-                        restarted: false,
-                    });
-                    return {
-                        ok: true,
-                        instanceName: name,
-                        status: entry.status,
-                        state: waited.state,
-                        reason: entry.reason,
-                    };
-                }
                 const entry = setPrepareStatus(name, {
                     status: "failed",
-                    state: waited.state || stable.state || liveBefore,
-                    reason: "Sessão não está open de forma estável. Campanha deve pausar — sem restart automático (protege o número).",
-                    proxyApplied: false,
-                    restarted: false,
-                    rolledBack: false,
-                    needsProxyPairing: false,
+                    state: stable.state || liveBefore,
+                    reason: `Proxy ligado mas sessão instável (state=${stable.state || liveBefore}). Reconecte o QR com Proxy Campanha.`,
+                    needsProxyPairing: true,
                 });
-                console.warn(`[ProxyBrasil] ${name}: ${entry.reason}`);
                 return {
                     ok: false,
                     instanceName: name,
                     status: entry.status,
                     state: entry.state,
                     reason: entry.reason,
+                    needsProxyPairing: true,
                 };
             }
-            // Sem sessão open: arma proxy e exige pareamento via QR com proxy.
+            if (proxyEnabled === true && !wasOpen) {
+                const entry = setPrepareStatus(name, {
+                    status: "failed",
+                    state: liveBefore,
+                    reason: `Proxy ligado com sessão morta (state=${liveBefore || "desconhecido"}). Reconecte o QR com Proxy Campanha.`,
+                    needsProxyPairing: true,
+                });
+                return {
+                    ok: false,
+                    instanceName: name,
+                    status: entry.status,
+                    state: liveBefore,
+                    reason: entry.reason,
+                    needsProxyPairing: true,
+                };
+            }
+            // Número selecionado na campanha Alternativa: Proxy Brasil é obrigatória.
             if (proxyEnabled !== true) {
                 const apply = await applyProxyBrasilToEvoInstance(name, deps.callEvoAction, deps.evoApiBase, {
                     config: cfg,
@@ -435,6 +402,81 @@ async function prepareProxyBrasilSessionForCampaignSend(instanceName, deps, opts
                         needsProxyPairing: true,
                     };
                 }
+                const enabledAfter = await fetchEvoProxyEnabled(name, deps.callEvoAction, deps.evoApiBase);
+                if (enabledAfter !== true) {
+                    const entry = setPrepareStatus(name, {
+                        status: "failed",
+                        state: liveBefore,
+                        reason: "Proxy Brasil não ficou ligado na Evolution após proxy/set.",
+                        needsProxyPairing: true,
+                    });
+                    return {
+                        ok: false,
+                        instanceName: name,
+                        status: entry.status,
+                        state: liveBefore,
+                        reason: entry.reason,
+                        needsProxyPairing: true,
+                    };
+                }
+                const liveAfter = await deps.fetchLiveState(name, { fresh: true });
+                if (deps.isLiveStateOpen(liveAfter)) {
+                    const stable = await assertStableOpen(deps, name, { rounds: 2, gapMs: 800 });
+                    if (stable.ok) {
+                        const entry = setPrepareStatus(name, {
+                            status: "ready",
+                            state: stable.state,
+                            reason: "proxy ligado na seleção da campanha",
+                            proxyApplied: true,
+                            restarted: false,
+                        });
+                        console.info(`[ProxyBrasil] ${name}: ${entry.reason}`);
+                        return {
+                            ok: true,
+                            instanceName: name,
+                            status: entry.status,
+                            state: stable.state,
+                            reason: entry.reason,
+                            proxyApplied: true,
+                            restarted: false,
+                        };
+                    }
+                }
+                const waited = await deps.waitForOpenLenient(name, { maxWaitMs: 45000, pollMs: 1500 });
+                if (waited.open) {
+                    const entry = setPrepareStatus(name, {
+                        status: "ready",
+                        state: waited.state,
+                        reason: "proxy ligado na seleção da campanha (sessão restabelecida)",
+                        proxyApplied: true,
+                        restarted: false,
+                    });
+                    return {
+                        ok: true,
+                        instanceName: name,
+                        status: entry.status,
+                        state: waited.state,
+                        reason: entry.reason,
+                        proxyApplied: true,
+                    };
+                }
+                const entry = setPrepareStatus(name, {
+                    status: "failed",
+                    state: waited.state || liveAfter || liveBefore,
+                    reason: "Proxy ligado. A sessão caiu ao aplicar — reconecte o QR com Proxy Campanha e ative de novo.",
+                    proxyApplied: true,
+                    needsProxyPairing: true,
+                });
+                console.warn(`[ProxyBrasil] ${name}: ${entry.reason}`);
+                return {
+                    ok: false,
+                    instanceName: name,
+                    status: entry.status,
+                    state: entry.state,
+                    reason: entry.reason,
+                    proxyApplied: true,
+                    needsProxyPairing: true,
+                };
             }
             if (opts?.forceRestart && proxyEnabled === true) {
                 const restarted = await deps.restartInstanceLight(name, deps.apiKey);
@@ -544,6 +586,15 @@ function queueApplyProxyBrasilToInstances(instanceNames, callEvoAction, evoApiBa
             }
         }
     })();
+}
+/** Campanha ainda “segura” a Proxy (selecionada e não encerrada). */
+function campaignStatusHoldsProxyBrasil(status) {
+    const s = String(status || "").trim().toLowerCase();
+    return s === "running" || s === "paused";
+}
+function instanceNamesToReleaseAfterCampaignEnd(endingSelected, otherLiveSelected) {
+    const held = new Set(normalizeInstanceNameList(otherLiveSelected).map((n) => n.toLowerCase()));
+    return normalizeInstanceNameList(endingSelected).filter((n) => !held.has(n.toLowerCase()));
 }
 function queueDisableProxyBrasilOnInstances(instanceNames, callEvoAction, evoApiBase) {
     const names = normalizeInstanceNameList(instanceNames);

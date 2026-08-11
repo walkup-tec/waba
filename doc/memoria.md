@@ -1,3 +1,8 @@
+## 2026-08-11 09:38 — Campanha Alternativa: Proxy obrigatória
+- Liga Proxy ao selecionar/ativar; desliga no finished/exclusão se ninguém mais segura o número
+- Marker: DEPLOY-2026-08-11-campanha-proxy-obrigatoria
+- LOG: doc/LOG-2026-08-11__093800__campanha-proxy-obrigatoria.md
+
 ## 2026-08-10 21:05 — Aquecedor: warmth por chip + identidade chip
 - Warmth: aliases/idade/volume vitalício por número; sem teto punitivo; pisos lifetime
 - Envio/grafo/turnos já por chip (`identityMode=chip`)
