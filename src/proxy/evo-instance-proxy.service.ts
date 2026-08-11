@@ -121,10 +121,36 @@ async function postEvoProxySet(
   return { ok: false, status: lastStatus, body: lastBody };
 }
 
+const PROXY_FIND_CACHE_TTL_MS = 90_000;
+const proxyFindCache = new Map<string, { enabled: boolean; at: number }>();
+
+export function rememberConfirmedProxyFind(instanceName: string, enabled: boolean): void {
+  const key = prepareKey(instanceName);
+  if (!key) return;
+  proxyFindCache.set(key, { enabled: Boolean(enabled), at: Date.now() });
+}
+
+/** `true`/`false` só com confirmação recente via `/proxy/find` ou set. */
+export function getConfirmedProxyFind(instanceName: string): boolean | null {
+  const key = prepareKey(instanceName);
+  if (!key) return null;
+  const hit = proxyFindCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > PROXY_FIND_CACHE_TTL_MS) return null;
+  return hit.enabled;
+}
+
+export function areAllInstanceNamesProxyConfirmedEnabled(instanceNames: string[]): boolean {
+  const names = normalizeInstanceNameList(instanceNames);
+  if (!names.length) return false;
+  return names.every((n) => getConfirmedProxyFind(n) === true);
+}
+
 async function fetchEvoProxyEnabled(
   instanceName: string,
   callEvoAction: CallEvoAction,
   evoApiBase: string,
+  opts?: { timeoutMs?: number; retries?: number },
 ): Promise<boolean | null> {
   const name = String(instanceName || "").trim();
   if (!name) return null;
@@ -135,17 +161,63 @@ async function fetchEvoProxyEnabled(
   ];
   for (const url of urls) {
     const result = await callEvoAction(url, "GET", undefined, {
-      timeoutMs: 12_000,
-      retries: 1,
+      timeoutMs: opts?.timeoutMs ?? 12_000,
+      retries: opts?.retries ?? 1,
     });
     if (!result.ok) continue;
     const json = result.json;
-    if (json == null) return null;
+    if (json == null) {
+      rememberConfirmedProxyFind(name, false);
+      return false;
+    }
     if (typeof json === "object" && json !== null && "enabled" in json) {
-      return Boolean((json as { enabled?: unknown }).enabled);
+      const enabled = Boolean((json as { enabled?: unknown }).enabled);
+      rememberConfirmedProxyFind(name, enabled);
+      return enabled;
     }
   }
   return null;
+}
+
+export async function refreshConfirmedProxyFindForNames(
+  instanceNames: string[],
+  callEvoAction: CallEvoAction,
+  evoApiBase: string,
+): Promise<void> {
+  const names = normalizeInstanceNameList(instanceNames).filter(
+    (n) => getConfirmedProxyFind(n) === null,
+  );
+  if (!names.length) return;
+  const queue = names.slice(0, 24);
+  const concurrency = 4;
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (idx < queue.length) {
+      const name = queue[idx];
+      idx += 1;
+      try {
+        await fetchEvoProxyEnabled(name, callEvoAction, evoApiBase, {
+          timeoutMs: 6_000,
+          retries: 0,
+        });
+      } catch {
+        /* */
+      }
+    }
+  });
+  await Promise.all(workers);
+}
+
+export function queueConfirmProxyFindForInstanceNames(
+  instanceNames: string[],
+  callEvoAction: CallEvoAction,
+  evoApiBase: string,
+): void {
+  const names = normalizeInstanceNameList(instanceNames);
+  if (!names.length) return;
+  void refreshConfirmedProxyFindForNames(names, callEvoAction, evoApiBase).catch(() => {
+    /* */
+  });
 }
 
 export async function applyProxyBrasilToEvoInstance(
@@ -181,6 +253,7 @@ export async function applyProxyBrasilToEvoInstance(
 
   const result = await postEvoProxySet(name, callEvoAction, evoApiBase, buildProxyPayload(cfg));
   if (result.ok) {
+    rememberConfirmedProxyFind(name, true);
     console.info(
       `[ProxyBrasil] proxy aplicado em ${name} via ${cfg.host}:${cfg.port} (${cfg.slot}/${cfg.source})`,
     );
@@ -224,6 +297,7 @@ export async function disableProxyBrasilOnEvoInstance(
     buildProxyDisablePayload(),
   );
   if (result.ok) {
+    rememberConfirmedProxyFind(name, false);
     console.info(`[ProxyBrasil] proxy desligado em ${name}`);
     return { ok: true, instanceName: name, status: result.status, body: result.body };
   }

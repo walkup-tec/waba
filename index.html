@@ -14890,6 +14890,35 @@
         font-size: 0.74rem;
         white-space: nowrap;
       }
+      .dis-campaign-proxy-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 6px 0 2px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #bbf7d0;
+        background: rgba(34, 197, 94, 0.16);
+        border: 1px solid rgba(34, 197, 94, 0.38);
+        width: fit-content;
+        max-width: 100%;
+      }
+      .dis-campaign-proxy-tag-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: #22c55e;
+        color: #052e16;
+        font-size: 0.62rem;
+        line-height: 1;
+        flex-shrink: 0;
+      }
       .disparos-campaign-secondary-actions {
         display: flex;
         flex-direction: column;
@@ -37915,6 +37944,7 @@
       let disparosNextInstanceTechnicalCache = null;
       let disparosHasRunningCampaign = false;
       let disparosCampaignItemsCache = [];
+      const disparosCampaignToggleInflight = new Set();
       const DISPAROS_CAMPAIGN_LIST_SCOPE = {
         OFICIAL: "oficial-intake",
         ALTERNATIVA: "alternativa-evo",
@@ -40647,6 +40677,7 @@
               String(item?.plannedSendCount ?? ""),
               String(item?.importedLineCount ?? ""),
               String(item?.sentCount ?? ""),
+              item?.proxyProtectionActive === true ? "px1" : "px0",
             ].join("|");
           })
           .join(";");
@@ -43029,10 +43060,16 @@
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
                   }
       
+                  const proxyTag =
+                    item?.proxyProtectionActive === true
+                      ? `<div class="dis-campaign-proxy-tag" title="Proxy Brasil confirmada nas instâncias desta campanha"><span class="dis-campaign-proxy-tag-icon" aria-hidden="true">✓</span> Proteção ativa</div>`
+                      : "";
+
                   const body = document.createElement("div");
                   body.className = "disparos-campaign-item-body";
                   body.innerHTML = `
                       <div class="aquecedor-envio-main">${safeName}</div>
+                      ${proxyTag}
                       <div class="aquecedor-envio-time">Início: ${dateText}</div>
                       <div class="aquecedor-envio-time">${processedCount} de ${totalNumbers} destinos processados · ${sentCount} enviados</div>
                       ${tagsBlock}
@@ -43281,7 +43318,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ativa }),
           },
-          60000
+          20000
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -43290,11 +43327,15 @@
           showToast(detail ? `${baseErr} ${detail}` : baseErr, "error", 7200);
           return false;
         }
+        const nextStatus = ativa ? "running" : "paused";
+        disparosCampaignItemsCache = disparosCampaignItemsCache.map((item) =>
+          String(item?.id || "") === id ? { ...item, status: nextStatus } : item
+        );
         showToast(String(data?.message || (ativa ? "Campanha ativada." : "Campanha pausada.")), "success");
         if (isDisparoEvoUi()) {
-          await loadDisparosEvoCampaigns();
+          void loadDisparosEvoCampaigns({ silent: true });
         } else {
-          await loadDisparosTemplates();
+          void loadDisparosTemplates({ silent: true });
         }
         return true;
       }
@@ -51097,13 +51138,31 @@
           e.stopPropagation();
           const id = btn.dataset.campaignId || btn.getAttribute("data-campaign-id");
           if (!id) return;
+          if (disparosCampaignToggleInflight.has(id)) return;
           const running = (btn.dataset.campaignRunning || btn.getAttribute("data-campaign-running")) === "1";
           const nextActive = !running;
+          disparosCampaignToggleInflight.add(id);
           btn.setAttribute("disabled", "true");
+          btn.textContent = nextActive ? "Ativando…" : "Pausando…";
+          btn.dataset.campaignRunning = nextActive ? "1" : "0";
           try {
-            await setDisparosCampaignActive(id, nextActive);
-          } finally {
+            const ok = await setDisparosCampaignActive(id, nextActive);
+            if (ok) {
+              btn.textContent = nextActive ? "Pausar" : "Ativar campanha";
+              if (nextActive) btn.classList.add("running");
+              else btn.classList.remove("running");
+            } else {
+              btn.dataset.campaignRunning = running ? "1" : "0";
+              btn.textContent = running ? "Pausar" : "Ativar campanha";
+              btn.removeAttribute("disabled");
+            }
+          } catch (err) {
+            btn.dataset.campaignRunning = running ? "1" : "0";
+            btn.textContent = running ? "Pausar" : "Ativar campanha";
             btn.removeAttribute("disabled");
+            showToast(err?.message || "Não foi possível alterar o estado da campanha.", "error");
+          } finally {
+            disparosCampaignToggleInflight.delete(id);
           }
         });
       }

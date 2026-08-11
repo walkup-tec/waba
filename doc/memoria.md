@@ -1,3 +1,9 @@
+## 2026-08-11 10:08 — Proteção ativa + ativar no 1º clique
+- Tag no card só com Proxy confirmada (`/proxy/find` ou set recente)
+- Ativar não espera prepare; prepare em background
+- Marker: DEPLOY-2026-08-11-protecao-ativa-ativar-1-clique
+- LOG: doc/LOG-2026-08-11__100800__protecao-ativa-ativar-1-clique.md
+
 ## 2026-08-11 09:38 — Campanha Alternativa: Proxy obrigatória
 - Liga Proxy ao selecionar/ativar; desliga no finished/exclusão se ninguém mais segura o número
 - Marker: DEPLOY-2026-08-11-campanha-proxy-obrigatoria

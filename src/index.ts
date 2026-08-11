@@ -219,15 +219,19 @@ import {
 } from "./proxy/proxy-brasil.config";
 import {
   applyProxyBrasilToEvoInstance,
+  areAllInstanceNamesProxyConfirmedEnabled,
   disableProxyBrasilOnEvoInstance,
+  getConfirmedProxyFind,
   isProxyBrasilSessionReadyForSend,
   prepareProxyBrasilSessionsForCampaign,
   campaignStatusHoldsProxyBrasil,
   instanceNamesToReleaseAfterCampaignEnd,
   prepareProxyBrasilSessionForCampaignSend,
   queueApplyProxyBrasilToInstances,
+  queueConfirmProxyFindForInstanceNames,
   queueDisableProxyBrasilOnInstances,
   queueSyncProxyBrasilForCampaignSelection,
+  refreshConfirmedProxyFindForNames,
 } from "./proxy/evo-instance-proxy.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -6743,15 +6747,15 @@ function digitKeysFromStoredLabel(storedName: string): Set<string> {
 function resolveStoredNameToEvoTag(
   storedName: string,
   rows: EvoInstanceTagRow[]
-): { displayName: string; connected: boolean } {
+): { displayName: string; connected: boolean; instanceKey: string } {
   const raw = String(storedName || "").trim();
   const rawLc = raw.toLowerCase();
-  if (!raw) return { displayName: "", connected: false };
-  if (!rows.length) return { displayName: raw, connected: false };
+  if (!raw) return { displayName: "", connected: false, instanceKey: "" };
+  if (!rows.length) return { displayName: raw, connected: false, instanceKey: raw };
 
   for (const r of rows) {
     if (r.nameKeys.has(rawLc)) {
-      return { displayName: r.displayName, connected: r.connected };
+      return { displayName: r.displayName, connected: r.connected, instanceKey: r.instanceKey };
     }
   }
 
@@ -6771,14 +6775,32 @@ function resolveStoredNameToEvoTag(
   }
   if (digitHits.length === 1) {
     const r = digitHits[0];
-    return { displayName: r.displayName, connected: r.connected };
+    return { displayName: r.displayName, connected: r.connected, instanceKey: r.instanceKey };
   }
   if (digitHits.length > 1) {
     const pick = pickBestDigitHitRow(raw, rawLc, digitHits);
-    return { displayName: pick.displayName, connected: pick.connected };
+    return {
+      displayName: pick.displayName,
+      connected: pick.connected,
+      instanceKey: pick.instanceKey,
+    };
   }
 
-  return { displayName: raw, connected: false };
+  return { displayName: raw, connected: false, instanceKey: raw };
+}
+
+function resolveSelectedNamesToEvoKeys(
+  storedNames: string[],
+  evoRows: EvoInstanceTagRow[]
+): string[] {
+  const keys = new Set<string>();
+  for (const name of storedNames) {
+    const n = String(name || "").trim();
+    if (!n) continue;
+    const r = resolveStoredNameToEvoTag(n, evoRows);
+    keys.add(r.instanceKey || n);
+  }
+  return Array.from(keys);
 }
 
 /** Quando várias instâncias compartilham dígitos com o snapshot, prioriza quem «casa» melhor com o texto (ex.: «SOMA - 8927»). */
@@ -13668,6 +13690,8 @@ app.get("/disparos/campanhas", async (req, res) => {
     );
     const nowSp = nowInSaoPaulo();
 
+    const proxyBrasilOn = Boolean(loadProxyBrasilConfig()?.enabled);
+    const proxyKeysByCampaignId = new Map<string, string[]>();
     const items = Array.from(byId.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((item) => {
@@ -13678,32 +13702,58 @@ app.get("/disparos/campanhas", async (req, res) => {
         const st = String(item.status || "").toLowerCase();
         const useGlobal =
           !snapshotTags.length && st === "running" && globalSelected.length > 0;
+        const configForTags = useGlobal
+          ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
+          : configByCampaignId.get(item.id);
         const tags = useGlobal
-          ? disparadorInstanceTagsForCampaign(
-              { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected },
-              evoRows
-            )
+          ? disparadorInstanceTagsForCampaign(configForTags, evoRows)
           : snapshotTags;
-        const instanceHealth = getCampaignInstanceHealth(
-          useGlobal
-            ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
-            : configByCampaignId.get(item.id),
-          evoRows
-        );
+        const instanceHealth = getCampaignInstanceHealth(configForTags, evoRows);
         const runtimeStage = buildCampaignRuntimeStage(
           item,
           configByCampaignId.get(item.id),
           nowSp,
           instanceHealth
         );
+        const selectedRaw = Array.isArray(configForTags?.selectedDisparadorInstances)
+          ? configForTags.selectedDisparadorInstances
+              .map((n) => String(n || "").trim())
+              .filter(Boolean)
+          : [];
+        const evoKeys = resolveSelectedNamesToEvoKeys(selectedRaw, evoRows);
+        proxyKeysByCampaignId.set(item.id, evoKeys);
+        const proxyProtectionActive =
+          proxyBrasilOn &&
+          evoKeys.length > 0 &&
+          areAllInstanceNamesProxyConfirmedEnabled(evoKeys);
         return {
           ...item,
           disparadorInstances: tags,
           disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
           instanceHealth,
           runtimeStage,
+          proxyProtectionActive,
         };
       });
+
+    if (proxyBrasilOn) {
+      const uniqueKeys = Array.from(
+        new Set(Array.from(proxyKeysByCampaignId.values()).flat())
+      );
+      const uncached = uniqueKeys.filter((k) => getConfirmedProxyFind(k) === null);
+      if (uncached.length) {
+        await Promise.race([
+          refreshConfirmedProxyFindForNames(uncached, callEvoAction, EVO_API_BASE),
+          new Promise<void>((resolve) => setTimeout(resolve, 2800)),
+        ]);
+        for (const item of items) {
+          const keys = proxyKeysByCampaignId.get(item.id) || [];
+          item.proxyProtectionActive =
+            keys.length > 0 && areAllInstanceNamesProxyConfirmedEnabled(keys);
+        }
+      }
+      queueConfirmProxyFindForInstanceNames(uniqueKeys, callEvoAction, EVO_API_BASE);
+    }
 
     return res.json({ items });
   } catch {
@@ -14055,9 +14105,15 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             .filter(Boolean)
         : [];
       if (selectedForProxy.length && loadProxyBrasilConfig()?.enabled) {
-        // Prepara em silêncio: se open, libera envio; se proxy morto, faz rollback.
-        // Não bloqueia o clique do usuário com 409 — a campanha deve ativar e disparar.
-        await prepareProxyBrasilForCampaignInstancesNow(selectedForProxy);
+        const evoKeys = resolveSelectedNamesToEvoKeys(selectedForProxy, evoRows);
+        const namesForProxy = evoKeys.length ? evoKeys : selectedForProxy;
+        // Não espera o prepare (pode levar >60s). O 1º clique precisa ativar na hora.
+        queueApplyProxyBrasilToInstances(
+          namesForProxy,
+          callEvoAction,
+          EVO_API_BASE,
+          getProxyBrasilCampaignPrepareDeps()
+        );
       }
     }
     campaign.status = nextStatus;
