@@ -6731,12 +6731,36 @@ async function fetchEvoInstanceTagRows(): Promise<EvoInstanceTagRow[]> {
         : Array.isArray(raw?.data)
           ? raw.data
           : [];
-    return buildEvoInstanceTagRowsFromList(list, whatsappMap, aliasesMap);
+    const rows = buildEvoInstanceTagRowsFromList(list, whatsappMap, aliasesMap);
+    // fetchInstances mente "open" com frequência; tags/saúde usam connectionState real.
+    return enrichEvoInstanceTagRowsWithLiveState(rows);
   } catch {
     return [];
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/** Sobrescreve `connected` com /instance/connectionState (fonte de verdade). */
+async function enrichEvoInstanceTagRowsWithLiveState(
+  rows: EvoInstanceTagRow[]
+): Promise<EvoInstanceTagRow[]> {
+  if (!rows.length) return rows;
+  const concurrency = 10;
+  for (let i = 0; i < rows.length; i += concurrency) {
+    const chunk = rows.slice(i, i + concurrency);
+    await Promise.all(
+      chunk.map(async (row) => {
+        try {
+          const live = await fetchEvoInstanceLiveState(row.instanceKey);
+          row.connected = isEvoLiveStateOpen(live);
+        } catch {
+          row.connected = false;
+        }
+      })
+    );
+  }
+  return rows;
 }
 
 function digitKeysFromStoredLabel(storedName: string): Set<string> {
@@ -6906,13 +6930,30 @@ function getCampaignInstanceHealth(
   };
 }
 
+/** Quantos números conectar/adicionar para sair do bloqueio (mínimo + ratio ≥50% offline). */
+function computeCampaignInstancesToAdd(health: CampaignInstanceHealth): number {
+  const missingMin = Math.max(0, Number(health.missingConnectedForMinimum) || 0);
+  const disconnected = Math.max(0, Number(health.disconnectedCount) || 0);
+  const selected = Math.max(0, Number(health.selectedCount) || 0);
+  let toFixRatio = 0;
+  if (disconnected > 0) {
+    // Precisa disconnected/(selected+X) < 0.5 ⇒ X > 2*disconnected - selected
+    toFixRatio = Math.max(1, 2 * disconnected - selected + 1);
+  }
+  return Math.max(missingMin, toFixRatio);
+}
+
 /** Texto exibido na UI para status pausada — prioriza regra de saúde atual. */
 function describeCampaignPauseDetail(
   instanceHealth?: CampaignInstanceHealth,
-  options?: { sentCount?: number; storedReason?: string }
+  options?: { sentCount?: number; storedReason?: string; disconnectedNames?: string[] }
 ): string {
   const health = instanceHealth;
   const parts: string[] = [];
+  const offlineNames = (options?.disconnectedNames || [])
+    .map((n) => String(n || "").trim())
+    .filter(Boolean);
+  const offlineSuffix = offlineNames.length ? " — offline: " + offlineNames.join(", ") : "";
   if (health?.needsMoreInstancesForMinimum === true) {
     parts.push(
       "apenas " +
@@ -6923,7 +6964,8 @@ function describeCampaignPauseDetail(
         health.minConnectedRequired +
         "; faltam " +
         health.missingConnectedForMinimum +
-        ")"
+        ")" +
+        offlineSuffix
     );
   }
   if (health?.shouldPauseByDisconnectedRatio === true) {
@@ -6933,7 +6975,8 @@ function describeCampaignPauseDetail(
         health.disconnectedCount +
         " de " +
         health.selectedCount +
-        ")"
+        ")" +
+        offlineSuffix
     );
   }
   if (parts.length) {
@@ -6944,11 +6987,15 @@ function describeCampaignPauseDetail(
   if ((options?.sentCount ?? 0) <= 0) {
     return "Aguardando ativação. Clique em Ativar campanha para iniciar os disparos.";
   }
-  return "Campanha pausada manualmente.";
+  // Sem motivo gravado: NÃO assumir clique em Pausar (pausas automáticas antigas perdiam o reason).
+  return "Campanha pausada automaticamente. Verifique a conexão das instâncias e ative novamente.";
 }
 
-function pauseReasonFromInstanceHealth(health: CampaignInstanceHealth): string {
-  return describeCampaignPauseDetail(health);
+function pauseReasonFromInstanceHealth(
+  health: CampaignInstanceHealth,
+  disconnectedNames?: string[]
+): string {
+  return describeCampaignPauseDetail(health, { disconnectedNames });
 }
 
 function resolveUsageFromMap(
@@ -12181,7 +12228,13 @@ app.post("/disparos/templates/import", async (_req, res) => {
 
 async function hydrateCampaignFromDbIfNeeded(
   campaignId: string,
-  options: { skipQueueLocalPersist?: boolean } = {}
+  options: {
+    skipQueueLocalPersist?: boolean;
+    /** Sem message_text/short_url — rápido o bastante para Ativar no 1º clique. */
+    lightLeads?: boolean;
+    /** Só cabeçalho+config; leads sobem depois (use com cuidado se for marcar running). */
+    skipLeads?: boolean;
+  } = {}
 ): Promise<DisparosCampaign | null> {
   const existing = disparosCampaignsMemory.find((c) => c.id === campaignId);
   const supabase = getSupabaseClient();
@@ -12221,26 +12274,37 @@ async function hydrateCampaignFromDbIfNeeded(
     }
 
     let leadRows: any[] = [];
-    try {
-      let lr: any[] | null = null;
-      const withMessage = await (supabase
-        .from("disparos_campaign_leads" as any)
-        .select("id, campaign_id, phone, status, created_at, sent_at, short_url, message_text")
-        .eq("campaign_id", campaignId)
-        .limit(100000)) as any;
-      if (!withMessage.error && Array.isArray(withMessage.data)) {
-        lr = withMessage.data;
-      } else {
-        const legacy = await (supabase
-          .from("disparos_campaign_leads" as any)
-          .select("id, campaign_id, phone, status, created_at, sent_at")
-          .eq("campaign_id", campaignId)
-          .limit(100000)) as any;
-        if (!legacy.error && Array.isArray(legacy.data)) lr = legacy.data;
+    if (!options.skipLeads) {
+      try {
+        let lr: any[] | null = null;
+        if (options.lightLeads) {
+          const light = await (supabase
+            .from("disparos_campaign_leads" as any)
+            .select("id, campaign_id, phone, status, created_at, sent_at")
+            .eq("campaign_id", campaignId)
+            .limit(100000)) as any;
+          if (!light.error && Array.isArray(light.data)) lr = light.data;
+        } else {
+          const withMessage = await (supabase
+            .from("disparos_campaign_leads" as any)
+            .select("id, campaign_id, phone, status, created_at, sent_at, short_url, message_text")
+            .eq("campaign_id", campaignId)
+            .limit(100000)) as any;
+          if (!withMessage.error && Array.isArray(withMessage.data)) {
+            lr = withMessage.data;
+          } else {
+            const legacy = await (supabase
+              .from("disparos_campaign_leads" as any)
+              .select("id, campaign_id, phone, status, created_at, sent_at")
+              .eq("campaign_id", campaignId)
+              .limit(100000)) as any;
+            if (!legacy.error && Array.isArray(legacy.data)) lr = legacy.data;
+          }
+        }
+        if (Array.isArray(lr)) leadRows = lr;
+      } catch (e) {
+        console.error("[Campanha] Falha ao ler leads no hydrate:", campaignId, e);
       }
-      if (Array.isArray(lr)) leadRows = lr;
-    } catch (e) {
-      console.error("[Campanha] Falha ao ler leads no hydrate:", campaignId, e);
     }
 
     if (!row?.id) {
@@ -12632,6 +12696,37 @@ function queueProxyBrasilPrepareForCampaignInstances(instanceNames: string[]) {
   );
 }
 
+/** Desliga Proxy Brasil das instâncias offline da campanha (connectionState≠open). */
+function queueDisableProxyBrasilForDisconnectedCampaignInstances(
+  campaign: { configSnapshot?: DisparosConfig | null },
+  evoRows: EvoInstanceTagRow[],
+  explicitInstanceNames?: string[]
+): void {
+  if (!loadProxyBrasilConfig()?.enabled) return;
+  const names = new Set<string>();
+  for (const raw of explicitInstanceNames || []) {
+    const n = String(raw || "").trim();
+    if (n) names.add(n);
+  }
+  // Sem evoRows, tags marcariam tudo como offline (falso) — só usa lista explícita.
+  if (evoRows.length) {
+    const offlineTags = disparadorInstanceTagsForCampaign(campaign.configSnapshot, evoRows).filter(
+      (t) => t.connected !== true
+    );
+    for (const t of offlineTags) {
+      const resolved = resolveStoredNameToEvoTag(t.instanceName, evoRows);
+      const key = String(resolved.instanceKey || t.instanceName || "").trim();
+      if (key) names.add(key);
+    }
+  }
+  if (!names.size) return;
+  console.warn(
+    "[Campanha] Desligando Proxy Brasil em instância(ões) desconectada(s):",
+    Array.from(names).join(", ")
+  );
+  queueDisableProxyBrasilOnInstances(Array.from(names), callEvoAction, EVO_API_BASE);
+}
+
 async function prepareProxyBrasilForCampaignInstancesNow(instanceNames: string[]) {
   return prepareProxyBrasilSessionsForCampaign(instanceNames, {
     callEvoAction,
@@ -12670,11 +12765,29 @@ function scheduleCampaignProxyPrepareRetry(campaignId: string, waitMs = 15_000) 
 async function pauseCampaignDueToProxyPrepareFailure(
   campaignId: string,
   reason: string,
+  options?: { instanceName?: string }
 ): Promise<void> {
   const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
   if (!campaign || campaign.status !== "running") return;
   campaign.status = "paused";
-  console.warn(`[Campanha] ${campaignId} pausada (proxy/sessão): ${reason}`);
+  const detail =
+    String(reason || "").trim() ||
+    "Pausa automática: falha de sessão/proxy na instância.";
+  campaign.pauseReason = detail.startsWith("Pausa automática")
+    ? detail
+    : `Pausa automática: ${detail}`;
+  console.warn(`[Campanha] ${campaignId} pausada (proxy/sessão): ${campaign.pauseReason}`);
+  const offlineName = String(options?.instanceName || "").trim();
+  if (offlineName) {
+    queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, [], [offlineName]);
+  } else if (loadProxyBrasilConfig()?.enabled) {
+    try {
+      const evoRows = await fetchEvoInstanceTagRows();
+      queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows);
+    } catch {
+      /* */
+    }
+  }
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -12918,6 +13031,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           prep.needsProxyPairing
             ? `Instância ${instancePick.instancia}: ligue a Proxy e reconecte o QR com Proxy Campanha.`
             : `Instância ${instancePick.instancia} sem Proxy Brasil (${prep.reason || "não pronta"}).`,
+          { instanceName: instancePick.instancia },
         );
         lead.status = "pending";
         return;
@@ -12944,6 +13058,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       await pauseCampaignDueToProxyPrepareFailure(
         campaignId,
         `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
+        { instanceName: instancePick.instancia },
       );
       lead.status = "pending";
       return;
@@ -13203,7 +13318,11 @@ async function runCampaignDispatchTick(): Promise<void> {
     const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
     if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
       c.status = "paused";
-      c.pauseReason = pauseReasonFromInstanceHealth(health);
+      const offline = disparadorInstanceTagsForCampaign(c.configSnapshot, evoRows)
+        .filter((t) => t.connected !== true)
+        .map((t) => t.instanceName);
+      c.pauseReason = pauseReasonFromInstanceHealth(health, offline);
+      queueDisableProxyBrasilForDisconnectedCampaignInstances(c, evoRows);
       const supabase = getSupabaseClient();
       if (supabase) {
         try {
@@ -13573,7 +13692,8 @@ app.get("/disparos/campanhas", async (req, res) => {
       item: { id: string; status: string; sentCount?: number; pauseReason?: string },
       configSnapshot: DisparosConfig | undefined,
       nowSp: Date,
-      instanceHealth?: CampaignInstanceHealth
+      instanceHealth?: CampaignInstanceHealth,
+      disconnectedNames?: string[]
     ): CampaignRuntimeStage => {
       const st = String(item.status || "").toLowerCase();
       if (st === "finished") {
@@ -13591,6 +13711,7 @@ app.get("/disparos/campanhas", async (req, res) => {
           detail: describeCampaignPauseDetail(instanceHealth, {
             sentCount: Number(item.sentCount || 0),
             storedReason: item.pauseReason,
+            disconnectedNames,
           }),
           fillPercent: 100,
         };
@@ -13768,11 +13889,16 @@ app.get("/disparos/campanhas", async (req, res) => {
           ? disparadorInstanceTagsForCampaign(configForTags, evoRows)
           : snapshotTags;
         const instanceHealth = getCampaignInstanceHealth(configForTags, evoRows);
+        const disconnectedNames = tags
+          .filter((t) => t.connected !== true)
+          .map((t) => String(t.instanceName || "").trim())
+          .filter(Boolean);
         const runtimeStage = buildCampaignRuntimeStage(
           item,
           configByCampaignId.get(item.id),
           nowSp,
-          instanceHealth
+          instanceHealth,
+          disconnectedNames
         );
         const selectedRaw = Array.isArray(configForTags?.selectedDisparadorInstances)
           ? configForTags.selectedDisparadorInstances
@@ -14115,7 +14241,17 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
 
     let campaign = disparosCampaignsMemory.find((c) => c.id === id);
     if (!campaign) {
-      campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
+      // lightLeads: Ativar no 1º clique sem baixar message_text de milhares de leads.
+      campaign =
+        (await hydrateCampaignFromDbIfNeeded(id, { lightLeads: true })) || undefined;
+    } else {
+      const hasLeads = disparosCampaignLeadsMemory.some((l) => l.campaignId === id);
+      if (ativa && !hasLeads) {
+        await hydrateCampaignFromDbIfNeeded(id, {
+          lightLeads: true,
+          skipQueueLocalPersist: true,
+        });
+      }
     }
     if (!campaign) {
       return res.status(404).json({ error: "Campanha não encontrada." });
@@ -14287,10 +14423,11 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
 
     const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
     const healthBefore = getCampaignInstanceHealth(prev, evoRows);
+    const instancesToAdd = computeCampaignInstancesToAdd(healthBefore);
 
     let incoming: string[] = [];
     if (auto) {
-      if (!healthBefore.needsMoreInstancesForMinimum) {
+      if (instancesToAdd <= 0) {
         return res.status(400).json({
           error: "A campanha já possui números conectados suficientes.",
           instanceHealth: healthBefore,
@@ -14300,7 +14437,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         auth,
         prev,
         evoRows,
-        healthBefore.missingConnectedForMinimum
+        instancesToAdd
       );
       if (!incoming.length) {
         return res.status(409).json({
@@ -14357,10 +14494,13 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
       instanceHealth,
       stillNeedsMore,
-      needsPurchase: stillNeedsMore && incoming.length < healthBefore.missingConnectedForMinimum,
-      message: stillNeedsMore
-        ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda faltam ${instanceHealth.missingConnectedForMinimum} conectado(s). Compre mais números para concluir a campanha.`
-        : "Instâncias adicionadas à campanha. Você já pode ativar novamente.",
+      needsPurchase:
+        computeCampaignInstancesToAdd(instanceHealth) > 0 &&
+        incoming.length < instancesToAdd,
+      message:
+        computeCampaignInstancesToAdd(instanceHealth) > 0
+          ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda há instâncias desconectadas ou abaixo do mínimo. Compre/adicione mais números ou reconecte e ative de novo.`
+          : "Instâncias adicionadas à campanha (Proxy Brasil será ligada nos novos números). Você já pode ativar novamente.",
     });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || "Erro ao adicionar instâncias na campanha." });

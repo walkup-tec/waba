@@ -1,3 +1,22 @@
+## 2026-08-12 11:00 — Proxy off no offline + botão + Instâncias
+- Desliga Proxy ao detectar instância offline (pausa saúde/sessão)
+- UI mostra «+ Instâncias» com qualquer desconectado; auto-add cura ratio ≥50%
+- Novas instâncias: Proxy ligada via prepare já existente
+- Marker: DEPLOY-2026-08-12-proxy-offline-add-instancias
+- LOG: doc/LOG-2026-08-12__110000__proxy-offline-add-instancias.md
+
+## 2026-08-12 10:52 — Motivo real da pausa + tags live (connectionState)
+- Tags de campanha usam connectionState (não fetchInstances mentiroso)
+- pauseReason gravado em pausa proxy/sessão; fallback deixa de dizer «manual»
+- Marker: DEPLOY-2026-08-12-pausa-motivo-tags-live
+- LOG: doc/LOG-2026-08-12__105200__pausa-motivo-tags-live.md
+
+## 2026-08-11 16:21 — Ativar campanha no 1º clique + anti duplo clique
+- Hydrate leve (`lightLeads`) no `POST .../estado`; timeout UI 60s
+- Toggle em `pointerdown` + lock (`toggleBusy` / inflight / disabled)
+- Marker: DEPLOY-2026-08-11-ativar-campanha-primeiro-clique
+- LOG: doc/LOG-2026-08-11__162100__ativar-campanha-primeiro-clique.md
+
 ## 2026-08-11 14:35 — Motivo real da pausa de campanha
 - `runtimeStage.detail` deixa de ser genérico («Pausa Manual») e informa saúde/créditos/ativação
 - Campo `pauseReason` na memória local; tick/créditos/parar-envios gravam o motivo

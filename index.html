@@ -43016,6 +43016,15 @@
                     health?.shouldPauseByDisconnectedRatio === true;
                   const campaignBlockedByHealth =
                     needsMoreInstancesForMinimum || shouldPauseByDisconnectedRatio;
+                  const disconnectedCount = Math.max(
+                    0,
+                    Math.floor(Number(health?.disconnectedCount) || 0)
+                  );
+                  const showAddInstances =
+                    !isFinished &&
+                    (needsMoreInstancesForMinimum ||
+                      shouldPauseByDisconnectedRatio ||
+                      disconnectedCount > 0);
                   const minConnectedRequired = Math.max(
                     1,
                     Math.floor(Number(health?.minConnectedRequired) || 1)
@@ -43040,8 +43049,8 @@
                         ? "dis-campaign-instance-tag dis-campaign-instance-tag--connected"
                         : "dis-campaign-instance-tag dis-campaign-instance-tag--disconnected";
                       const title = ok
-                        ? "Instância conectada na EVO"
-                        : "Desconectada ou indisponível na EVO neste momento";
+                        ? "Instância conectada (connectionState=open)"
+                        : "Desconectada — connectionState≠open (vermelho = offline)";
                       return `<span class="${cls}" title="${title}">${safe || "—"}</span>`;
                     });
                     tagsBlock = `<div class="dis-campaign-instance-tags" aria-label="Instâncias desta campanha">${parts.join("")}</div>`;
@@ -43054,10 +43063,13 @@
                       '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
                   }
                   if (shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}).</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). Use «+ Instâncias» ou reconecte.</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
+                  }
+                  if (!needsMoreInstancesForMinimum && disconnectedCount > 0 && !shouldPauseByDisconnectedRatio) {
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). Proxy desses números será desligada; use «+ Instâncias» se precisar substituir.</div>`;
                   }
       
                   const proxyTag =
@@ -43132,7 +43144,7 @@
                     delBtn.textContent = "Excluir";
       
                     if (isFinished) secondary.appendChild(reportBtn);
-                    if (needsMoreInstancesForMinimum) secondary.appendChild(addInstancesBtn);
+                    if (showAddInstances) secondary.appendChild(addInstancesBtn);
                     secondary.appendChild(editBtn);
                     secondary.appendChild(delBtn);
                     actions.appendChild(toggleBtn);
@@ -43311,14 +43323,19 @@
       async function setDisparosCampaignActive(campaignId, ativa) {
         const id = String(campaignId || "").trim();
         if (!id) return false;
+        const url =
+          typeof resolveWabaPublicPath === "function"
+            ? resolveWabaPublicPath(`/disparos/campanhas/${encodeURIComponent(id)}/estado`)
+            : `/disparos/campanhas/${encodeURIComponent(id)}/estado`;
         const response = await fetchWithTimeout(
-          `/disparos/campanhas/${encodeURIComponent(id)}/estado`,
+          url,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
             body: JSON.stringify({ ativa }),
           },
-          20000
+          60000
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -51059,6 +51076,64 @@
       }
       const disparosListEl = document.getElementById("disparos-list");
       if (disparosListEl) {
+        async function runCampaignToggleFromButton(btn) {
+          if (!btn || btn.disabled || (btn.dataset.campaignFinished || "") === "1") return;
+          if ((btn.dataset.toggleBusy || "") === "1") return;
+          const id = btn.dataset.campaignId || btn.getAttribute("data-campaign-id");
+          if (!id) return;
+          if (disparosCampaignToggleInflight.has(id)) return;
+          const running =
+            (btn.dataset.campaignRunning || btn.getAttribute("data-campaign-running")) === "1";
+          const nextActive = !running;
+          disparosCampaignToggleInflight.add(id);
+          btn.dataset.toggleBusy = "1";
+          btn.setAttribute("disabled", "true");
+          btn.setAttribute("aria-busy", "true");
+          btn.style.pointerEvents = "none";
+          btn.textContent = nextActive ? "Ativando…" : "Pausando…";
+          try {
+            const ok = await setDisparosCampaignActive(id, nextActive);
+            if (ok) {
+              btn.dataset.campaignRunning = nextActive ? "1" : "0";
+              btn.textContent = nextActive ? "Pausar" : "Ativar campanha";
+              if (nextActive) btn.classList.add("running");
+              else btn.classList.remove("running");
+              await new Promise((r) => setTimeout(r, 800));
+              btn.removeAttribute("disabled");
+              btn.style.pointerEvents = "";
+            } else {
+              btn.dataset.campaignRunning = running ? "1" : "0";
+              btn.textContent = running ? "Pausar" : "Ativar campanha";
+              btn.removeAttribute("disabled");
+              btn.style.pointerEvents = "";
+            }
+          } catch (err) {
+            btn.dataset.campaignRunning = running ? "1" : "0";
+            btn.textContent = running ? "Pausar" : "Ativar campanha";
+            btn.removeAttribute("disabled");
+            btn.style.pointerEvents = "";
+            showToast(err?.message || "Não foi possível alterar o estado da campanha.", "error");
+          } finally {
+            btn.removeAttribute("aria-busy");
+            btn.dataset.toggleBusy = "0";
+            disparosCampaignToggleInflight.delete(id);
+          }
+        }
+
+        // pointerdown: 1º clique não é cancelado por blur de outro campo (mesmo padrão do Push).
+        disparosListEl.addEventListener(
+          "pointerdown",
+          (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
+            if (!btn || !disparosListEl.contains(btn)) return;
+            if (e.button != null && e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            void runCampaignToggleFromButton(btn);
+          },
+          true
+        );
+
         disparosListEl.addEventListener("click", async (e) => {
           const reportBtn = e.target && e.target.closest ? e.target.closest(".btn-campaign-report") : null;
           if (reportBtn && disparosListEl.contains(reportBtn)) {
@@ -51131,38 +51206,10 @@
             }
             return;
           }
-          const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
-          if (!btn || !disparosListEl.contains(btn)) return;
-          if (btn.disabled || (btn.dataset.campaignFinished || "") === "1") return;
-          e.preventDefault();
-          e.stopPropagation();
-          const id = btn.dataset.campaignId || btn.getAttribute("data-campaign-id");
-          if (!id) return;
-          if (disparosCampaignToggleInflight.has(id)) return;
-          const running = (btn.dataset.campaignRunning || btn.getAttribute("data-campaign-running")) === "1";
-          const nextActive = !running;
-          disparosCampaignToggleInflight.add(id);
-          btn.setAttribute("disabled", "true");
-          btn.textContent = nextActive ? "Ativando…" : "Pausando…";
-          btn.dataset.campaignRunning = nextActive ? "1" : "0";
-          try {
-            const ok = await setDisparosCampaignActive(id, nextActive);
-            if (ok) {
-              btn.textContent = nextActive ? "Pausar" : "Ativar campanha";
-              if (nextActive) btn.classList.add("running");
-              else btn.classList.remove("running");
-            } else {
-              btn.dataset.campaignRunning = running ? "1" : "0";
-              btn.textContent = running ? "Pausar" : "Ativar campanha";
-              btn.removeAttribute("disabled");
-            }
-          } catch (err) {
-            btn.dataset.campaignRunning = running ? "1" : "0";
-            btn.textContent = running ? "Pausar" : "Ativar campanha";
-            btn.removeAttribute("disabled");
-            showToast(err?.message || "Não foi possível alterar o estado da campanha.", "error");
-          } finally {
-            disparosCampaignToggleInflight.delete(id);
+          // Toggle Ativar/Pausar: tratado em pointerdown (anti blur / 1º clique).
+          if (e.target && e.target.closest && e.target.closest(".btn-campaign-toggle")) {
+            e.preventDefault();
+            e.stopPropagation();
           }
         });
       }

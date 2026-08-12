@@ -1,3 +1,3 @@
-﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
-
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-11-campanha-motivo-real-pausa";
+﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
+
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-12-proxy-offline-add-instancias";
