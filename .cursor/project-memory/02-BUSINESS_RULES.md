@@ -11,6 +11,19 @@ Somente regras permanentes. Sem detalhes de implementação.
 - A senha em plaintext **não** é armazenada; no reenvio a mensagem usa fallback orientando a senha do cadastro / “Esqueci a senha”.
 - Canais do reenvio: e-mail + WhatsApp (Evolution), pelos canais já configurados para boas-vindas.
 
+### Campanha Alternativa — troca de bloqueados
+
+- Números bloqueados/offline aparecem em vermelho na campanha.
+- Em «+ Instâncias», cada número conectado adicionado **substitui** um bloqueado (sai da seleção da campanha).
+- A Proxy Brasil é ligada nos novos e desligada nos removidos.
+- A tag «Proteção ativa» aparece quando a Proxy está confirmada nas instâncias **conectadas** da campanha.
+
+### Boas-vindas WhatsApp vs aquecedor
+
+- A mensagem de boas-vindas WhatsApp (cadastro e reenvio) **deve ser enviada** mesmo se a instância de origem estiver em **Preparando** ou **3 horas pausa humana**.
+- Lifecycle do aquecedor (Preparando / pausa humana / cota diária) aplica-se a aquecedor e campanhas Alternativa — **não** bloqueia boas-vindas.
+- Boas-vindas é envio crítico: retry até sucesso quando a falha for transitória / instância temporariamente offline.
+
 ### Owners excluídos de métricas e split
 
 Campanhas e pedidos dos e-mails abaixo **não** entram na contabilização de:

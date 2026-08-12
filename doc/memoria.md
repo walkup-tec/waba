@@ -1,3 +1,16 @@
+## 2026-08-12 15:00 — + Instâncias troca bloqueados + Proteção ativa
+- Ao adicionar número, remove 1 offline/bloqueado (1:1); Proxy nos novos / off nos removidos
+- Tag «Proteção ativa» baseada só nas instâncias conectadas com proxy confirmada
+- Marker: DEPLOY-2026-08-12-swap-blocked-proxy-tag
+- LOG: doc/LOG-2026-08-12__150000__swap-blocked-instancias-proxy-tag.md
+
+## 2026-08-12 14:01 — Boas-vindas ignora Preparando/pausa humana + retry
+- `ignoreAquecedorLifecycle` + `backgroundRetryKey` nas boas-vindas (assinante/equipe)
+- Fallback qualquer EVO open se hints offline; aquecedor/campanha continuam filtrando lifecycle
+- Marker: DEPLOY-2026-08-12-welcome-bypass-lifecycle
+- LOG: doc/LOG-2026-08-12__140130__welcome-bypass-lifecycle-retry.md
+- Palavras-chave: `boas-vindas`, `ignoreAquecedorLifecycle`, `pausa humana`, `preparando`
+
 ## 2026-08-12 11:00 — Proxy off no offline + botão + Instâncias
 - Desliga Proxy ao detectar instância offline (pausa saúde/sessão)
 - UI mostra «+ Instâncias» com qualquer desconectado; auto-add cura ratio ≥50%

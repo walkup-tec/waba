@@ -18,8 +18,10 @@ Não usar como histórico de desenvolvimento.
 ## Funcionalidades em andamento
 
 - Operação contínua em produção; locais V02/V03 para desenvolvimento
+- Troca de bloqueados no «+ Instâncias» + tag Proteção ativa (código pronto; aguarda commit/push + Redeploy) — marker `DEPLOY-2026-08-12-swap-blocked-proxy-tag`
+- Boas-vindas WhatsApp com bypass de Preparando/pausa humana + retry (mesmo worktree; aguarda commit) — marker anterior `DEPLOY-2026-08-12-welcome-bypass-lifecycle`
 
 ## Pendências relevantes
 
 - Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
-- Validar em produção (após redeploy) marker `DEPLOY-2026-08-04-operacional-multi-api`: operacional com 2 APIs e dois cadastros de fornecedor
+- Validar em produção (após redeploy) marker `DEPLOY-2026-08-12-swap-blocked-proxy-tag`: «+ Instâncias» remove vermelho, Proxy no novo, tag Proteção ativa

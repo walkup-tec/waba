@@ -125,17 +125,27 @@ export const buildStaffWelcomeWhatsAppText = (input: StaffWelcomeWhatsAppInput):
     .join("\n");
 };
 
+const buildWelcomeRetryKey = (kind: string, email: string, whatsapp: string): string => {
+  const digits = String(whatsapp || "").replace(/\D/g, "");
+  const mail = String(email || "").trim().toLowerCase() || "unknown";
+  return `welcome:${kind}:${mail}:${digits || "no-wa"}`;
+};
+
 const deliverWelcomeWhatsAppMessage = async (input: {
   email: string;
   whatsapp: string;
   text: string;
   logLabel: string;
+  retryKind: string;
 }): Promise<WabaWhatsAppDeliveryResult> => {
+  // Crítico: não falhar por Preparando / pausa humana; retry em background até sent.
   return deliverWabaEvolutionWhatsApp({
     targetWhatsapp: input.whatsapp,
     recipientEmail: input.email,
     text: input.text,
     logLabel: input.logLabel || "boas-vindas",
+    ignoreAquecedorLifecycle: true,
+    backgroundRetryKey: buildWelcomeRetryKey(input.retryKind, input.email, input.whatsapp),
   });
 };
 
@@ -149,6 +159,7 @@ export const deliverSubscriberWelcomeWhatsApp = async (
     whatsapp: input.whatsapp,
     text,
     logLabel: "boas-vindas",
+    retryKind: "subscriber",
   });
 };
 
@@ -162,6 +173,7 @@ export const deliverStaffWelcomeWhatsApp = async (
     whatsapp: input.whatsapp,
     text,
     logLabel: "boas-vindas equipe",
+    retryKind: "staff",
   });
 };
 

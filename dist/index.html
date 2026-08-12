@@ -43063,13 +43063,13 @@
                       '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
                   }
                   if (shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). Use «+ Instâncias» ou reconecte.</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). Use «+ Instâncias» para trocar os bloqueados (vermelhos) por números conectados.</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
                   }
                   if (!needsMoreInstancesForMinimum && disconnectedCount > 0 && !shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). Proxy desses números será desligada; use «+ Instâncias» se precisar substituir.</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). Use «+ Instâncias» para trocar por um conectado (o bloqueado sai da campanha e a Proxy é transferida).</div>`;
                   }
       
                   const proxyTag =

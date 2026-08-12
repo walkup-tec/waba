@@ -96,12 +96,20 @@ const buildStaffWelcomeWhatsAppText = (input) => {
         .join("\n");
 };
 exports.buildStaffWelcomeWhatsAppText = buildStaffWelcomeWhatsAppText;
+const buildWelcomeRetryKey = (kind, email, whatsapp) => {
+    const digits = String(whatsapp || "").replace(/\D/g, "");
+    const mail = String(email || "").trim().toLowerCase() || "unknown";
+    return `welcome:${kind}:${mail}:${digits || "no-wa"}`;
+};
 const deliverWelcomeWhatsAppMessage = async (input) => {
+    // Crítico: não falhar por Preparando / pausa humana; retry em background até sent.
     return (0, waba_evolution_whatsapp_delivery_service_1.deliverWabaEvolutionWhatsApp)({
         targetWhatsapp: input.whatsapp,
         recipientEmail: input.email,
         text: input.text,
         logLabel: input.logLabel || "boas-vindas",
+        ignoreAquecedorLifecycle: true,
+        backgroundRetryKey: buildWelcomeRetryKey(input.retryKind, input.email, input.whatsapp),
     });
 };
 const deliverSubscriberWelcomeWhatsApp = async (input) => {
@@ -112,6 +120,7 @@ const deliverSubscriberWelcomeWhatsApp = async (input) => {
         whatsapp: input.whatsapp,
         text,
         logLabel: "boas-vindas",
+        retryKind: "subscriber",
     });
 };
 exports.deliverSubscriberWelcomeWhatsApp = deliverSubscriberWelcomeWhatsApp;
@@ -123,6 +132,7 @@ const deliverStaffWelcomeWhatsApp = async (input) => {
         whatsapp: input.whatsapp,
         text,
         logLabel: "boas-vindas equipe",
+        retryKind: "staff",
     });
 };
 exports.deliverStaffWelcomeWhatsApp = deliverStaffWelcomeWhatsApp;

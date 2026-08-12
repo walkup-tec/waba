@@ -5687,17 +5687,69 @@ function getCampaignInstanceHealth(config, evoRows) {
         missingConnectedForMinimum,
     };
 }
-/** Quantos números conectar/adicionar para sair do bloqueio (mínimo + ratio ≥50% offline). */
+/** Quantos números adicionar (com troca 1:1 dos offline) para sair do bloqueio. */
 function computeCampaignInstancesToAdd(health) {
-    const missingMin = Math.max(0, Number(health.missingConnectedForMinimum) || 0);
     const disconnected = Math.max(0, Number(health.disconnectedCount) || 0);
+    const connected = Math.max(0, Number(health.connectedCount) || 0);
     const selected = Math.max(0, Number(health.selectedCount) || 0);
-    let toFixRatio = 0;
-    if (disconnected > 0) {
-        // Precisa disconnected/(selected+X) < 0.5 ⇒ X > 2*disconnected - selected
-        toFixRatio = Math.max(1, 2 * disconnected - selected + 1);
+    const minReq = Math.max(1, Number(health.minConnectedRequired) || 1);
+    // Cada adição troca 1 offline (selected estável) até acabar a fila de offline.
+    for (let k = 0; k <= disconnected; k += 1) {
+        const nextConnected = connected + k;
+        const nextDisconnected = disconnected - k;
+        const ratioOk = selected === 0 || nextDisconnected / selected < 0.5;
+        const minOk = nextConnected >= minReq;
+        if (ratioOk && minOk)
+            return k;
     }
-    return Math.max(missingMin, toFixRatio);
+    // Offline esgotados: ainda falta mínimo → só acrescenta.
+    const afterSwapConnected = connected + disconnected;
+    if (afterSwapConnected < minReq) {
+        return disconnected + (minReq - afterSwapConnected);
+    }
+    return Math.max(disconnected, 0);
+}
+/** Nomes do snapshot que estão desconectados/bloqueados (vermelhos). */
+function listDisconnectedStoredInstanceNames(selectedNames, evoRows) {
+    const out = [];
+    for (const name of selectedNames) {
+        const stored = String(name || "").trim();
+        if (!stored)
+            continue;
+        const resolved = resolveStoredNameToEvoTag(stored, evoRows);
+        if (resolved.connected !== true)
+            out.push(stored);
+    }
+    return out;
+}
+/**
+ * Ao acrescentar números, remove a mesma quantidade de bloqueados/offline da seleção
+ * (troca 1:1) para a campanha não ficar parada pelo ratio ≥50%.
+ */
+function mergeCampaignInstancesReplacingBlocked(input) {
+    const prevSelected = input.prevSelected
+        .map((n) => String(n || "").trim())
+        .filter(Boolean);
+    const incoming = input.incoming.map((n) => String(n || "").trim()).filter(Boolean);
+    const prevKeySet = new Set(prevSelected.map((n) => {
+        const r = resolveStoredNameToEvoTag(n, input.evoRows);
+        return String(r.instanceKey || n).trim().toLowerCase();
+    }));
+    const added = [];
+    for (const name of incoming) {
+        const r = resolveStoredNameToEvoTag(name, input.evoRows);
+        const key = String(r.instanceKey || name).trim().toLowerCase();
+        if (!key || prevKeySet.has(key))
+            continue;
+        prevKeySet.add(key);
+        added.push(name);
+    }
+    const disconnected = listDisconnectedStoredInstanceNames(prevSelected, input.evoRows);
+    const removedBlocked = disconnected.slice(0, added.length);
+    const removeSet = new Set(removedBlocked.map((n) => n.toLowerCase()));
+    const kept = prevSelected.filter((n) => !removeSet.has(n.toLowerCase()));
+    const selected = Array.from(new Set([...kept, ...added]));
+    return { selected, added, removedBlocked };
 }
 /** Texto exibido na UI para status pausada — prioriza regra de saúde atual. */
 function describeCampaignPauseDetail(instanceHealth, options) {
@@ -11870,10 +11922,18 @@ app.get("/disparos/campanhas", async (req, res) => {
                     .filter(Boolean)
                 : [];
             const evoKeys = resolveSelectedNamesToEvoKeys(selectedRaw, evoRows);
-            proxyKeysByCampaignId.set(item.id, evoKeys);
+            const connectedEvoKeys = Array.from(new Set(tags
+                .filter((t) => t.connected === true)
+                .map((t) => {
+                const r = resolveStoredNameToEvoTag(t.instanceName, evoRows);
+                return String(r.instanceKey || t.instanceName || "").trim();
+            })
+                .filter(Boolean)));
+            // Chaves para confirmar proxy: só conectadas (offline não pode bloquear a tag).
+            proxyKeysByCampaignId.set(item.id, connectedEvoKeys.length ? connectedEvoKeys : evoKeys);
             const proxyProtectionActive = proxyBrasilOn &&
-                evoKeys.length > 0 &&
-                (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(evoKeys);
+                connectedEvoKeys.length > 0 &&
+                (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(connectedEvoKeys);
             return {
                 ...item,
                 disparadorInstances: tags,
@@ -12396,10 +12456,14 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
             ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
-        const mergedSelected = Array.from(new Set([...prevSelected, ...incoming]));
+        const swapped = mergeCampaignInstancesReplacingBlocked({
+            prevSelected,
+            incoming,
+            evoRows,
+        });
         campaign.configSnapshot = parseDisparosConfig({
             ...prev,
-            selectedDisparadorInstances: mergedSelected,
+            selectedDisparadorInstances: swapped.selected,
         });
         const supabase = getSupabaseClient();
         if (supabase) {
@@ -12415,21 +12479,33 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         queuePersistDisparosLocalState();
         const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
         const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
-        // Só liga proxy + restabelece sessão nos números recém-adicionados (não no wizard de config).
-        queueProxyBrasilPrepareForCampaignInstances(incoming);
+        // Proxy: liga nos novos; desliga nos bloqueados removidos da campanha.
+        if (swapped.added.length) {
+            queueProxyBrasilPrepareForCampaignInstances(swapped.added);
+        }
+        if (swapped.removedBlocked.length) {
+            queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
+        }
+        const addedCount = swapped.added.length;
+        const removedCount = swapped.removedBlocked.length;
+        const swapNote = removedCount > 0
+            ? ` Substituímos ${removedCount} número(s) bloqueado(s)/offline (${swapped.removedBlocked.join(", ")}).`
+            : "";
         return res.json({
             ok: true,
             id,
             auto,
             selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
-            addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
+            addedCount,
+            removedBlockedCount: removedCount,
+            removedBlocked: swapped.removedBlocked,
             instanceHealth,
             stillNeedsMore,
             needsPurchase: computeCampaignInstancesToAdd(instanceHealth) > 0 &&
-                incoming.length < instancesToAdd,
+                addedCount < instancesToAdd,
             message: computeCampaignInstancesToAdd(instanceHealth) > 0
-                ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda há instâncias desconectadas ou abaixo do mínimo. Compre/adicione mais números ou reconecte e ative de novo.`
-                : "Instâncias adicionadas à campanha (Proxy Brasil será ligada nos novos números). Você já pode ativar novamente.",
+                ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Compre/adicione mais ou reconecte e ative de novo.`
+                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números. Você já pode ativar novamente.`,
         });
     }
     catch (error) {

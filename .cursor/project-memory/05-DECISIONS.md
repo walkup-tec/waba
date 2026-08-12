@@ -4,6 +4,18 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-12 — + Instâncias substitui bloqueados + Proteção ativa nas conectadas
+
+- **Decisão:** «+ Instâncias» troca 1:1 offline/bloqueado; Proxy nos novos / off nos removidos; tag «Proteção ativa» só exige proxy nas conectadas.
+- **Motivo:** Manter bloqueados na seleção pausava a campanha (≥50%) e escondia a tag de proteção.
+- **Impacto:** Marker `DEPLOY-2026-08-12-swap-blocked-proxy-tag`.
+
+### 2026-08-12 — Boas-vindas WhatsApp ignora lifecycle do aquecedor
+
+- **Decisão:** Boas-vindas (assinante/equipe) usam `ignoreAquecedorLifecycle` + `backgroundRetryKey`; Preparando e pausa humana não bloqueiam; fallback para qualquer EVO open se os hints preferidos falharem.
+- **Motivo:** Cadastro não pode falhar o WhatsApp de boas-vindas por regras do aquecedor.
+- **Impacto:** Aquecedor/campanhas continuam filtrando lifecycle; marker `DEPLOY-2026-08-12-welcome-bypass-lifecycle`.
+
 ### 2026-07-30 — Bootstrap da Memória do Projeto
 
 - **Decisão:** Criar `.cursor/project-memory/` neste repositório e usá-la como memória permanente do Waba a partir desta data.
