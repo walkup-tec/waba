@@ -133,6 +133,7 @@ import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/wa
 import { registerWabaAdminRoutes } from "./admin/waba-admin.routes";
 import { registerWabaPushRoutes } from "./push/waba-push.routes";
 import { registerWabaOperacionalCampanhasRoutes } from "./admin/waba-operacional-campanhas.routes";
+import { registerDeviceCloudRoutes } from "./device-cloud/waba-device-cloud.routes";
 import { startAsaasIntegrationMonitorScheduler } from "./monitoring/asaas-integration-monitor.service";
 import { startUptimeMonitorScheduler } from "./monitoring/uptime-monitor.service";
 import { startCampaignSupplierAssignmentScheduler } from "./services/waba-campaign-supplier-assignment.service";
@@ -14750,6 +14751,7 @@ registerWabaSupportRoutes(app);
 registerWabaPushRoutes(app);
 registerWabaAdminRoutes(app);
 registerWabaOperacionalCampanhasRoutes(app);
+registerDeviceCloudRoutes(app);
 
 new WabaSystemUserService().ensureBootstrapFromEnvMaster();
 

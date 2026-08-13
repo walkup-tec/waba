@@ -1,3 +1,8 @@
+## 2026-08-12 16:30 — DRAX Device Cloud MVP + menu Dispositivos
+- Novo repo `drax-device-cloud` (Nest/Next/Redroid); WABA menu Aquecedor→Dispositivos (production + mozart.pmo)
+- SSO `POST /device-cloud/sso`; marker DEPLOY-2026-08-12-device-cloud-menu-sso
+- LOG: doc/LOG-2026-08-12__163000__device-cloud-mvp-menu-sso.md
+
 ## 2026-08-12 15:00 — + Instâncias troca bloqueados + Proteção ativa
 - Ao adicionar número, remove 1 offline/bloqueado (1:1); Proxy nos novos / off nos removidos
 - Tag «Proteção ativa» baseada só nas instâncias conectadas com proxy confirmada

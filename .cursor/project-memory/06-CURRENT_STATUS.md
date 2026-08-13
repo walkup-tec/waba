@@ -18,9 +18,10 @@ Não usar como histórico de desenvolvimento.
 ## Funcionalidades em andamento
 
 - Operação contínua em produção; locais V02/V03 para desenvolvimento
+- DRAX Device Cloud MVP (repo `drax-device-cloud`) — menu WABA pronto; deploy do API/web + worker KVM pendente
 
 ## Pendências relevantes
 
 - Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
-- **Redeploy EasyPanel** `waba_disparador` para marker `DEPLOY-2026-08-12-swap-blocked-proxy-tag` (`425a41e` em `origin/master`)
-- Validar: «+ Instâncias» remove vermelho + Proxy no novo; tag Proteção ativa; boas-vindas com número em Preparando/pausa humana
+- **Redeploy EasyPanel** para marker `DEPLOY-2026-08-12-device-cloud-menu-sso` + configurar `DEVICE_CLOUD_PUBLIC_URL` / `DEVICE_CLOUD_SSO_SECRET`
+- Provisionar host Linux+KVM para `REDROID_MODE=docker`

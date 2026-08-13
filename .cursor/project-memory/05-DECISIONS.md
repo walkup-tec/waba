@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-12 — DRAX Device Cloud (repo próprio) + menu WABA
+
+- **Decisão:** Device Cloud em `drax-device-cloud` (Nest/Next/Redroid); WABA só menu/SSO; visível em production para `mozart.pmo@gmail.com`.
+- **Motivo:** Escala/virtualização isolada do monólito WABA; gate de acesso controlado.
+- **Impacto:** Marker `DEPLOY-2026-08-12-device-cloud-menu-sso`; envs `DEVICE_CLOUD_*`.
+
 ### 2026-08-12 — + Instâncias substitui bloqueados + Proteção ativa nas conectadas
 
 - **Decisão:** «+ Instâncias» troca 1:1 offline/bloqueado; Proxy nos novos / off nos removidos; tag «Proteção ativa» só exige proxy nas conectadas.

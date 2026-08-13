@@ -15952,6 +15952,25 @@
                   <span class="tab-label">Dashboard</span>
                 </button>
                 <button
+                  id="tab-btn-dispositivos"
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-dispositivos"
+                  data-tab="dispositivos"
+                  data-menu-key="dispositivos"
+                  hidden
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <rect x="6" y="3" width="12" height="18" rx="2"></rect>
+                      <path d="M9 7h6M9 11h6M9 15h4"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Dispositivos</span>
+                </button>
+                <button
                   id="tab-btn-instancias"
                   class="tab-button"
                   type="button"
@@ -16434,6 +16453,17 @@
             <button
               class="tab-button"
               type="button"
+              data-tab="dispositivos"
+              data-menu-key="dispositivos"
+              role="menuitemradio"
+              aria-checked="false"
+              hidden
+            >
+              Dispositivos
+            </button>
+            <button
+              class="tab-button"
+              type="button"
               data-tab="instancias"
               data-menu-key="instancias"
               role="menuitemradio"
@@ -16857,6 +16887,31 @@
           </div>
           </aside>
           </div>
+        </div>
+
+        <div id="tab-dispositivos" class="tab-panel tab-hidden">
+          <section class="panel">
+            <div class="panel-header">
+              <div class="panel-title">DRAX Device Cloud</div>
+            </div>
+            <p class="muted" style="margin-bottom:14px;">
+              Dispositivos Android virtuais (WhatsApp Business). Disponível apenas para a conta autorizada em produção.
+            </p>
+            <div id="device-cloud-gate-msg" class="aquecedor-hint" style="margin-bottom:12px;"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" id="device-cloud-open-btn" class="instance-action-btn enabled">
+                Abrir Device Cloud
+              </button>
+              <button type="button" id="device-cloud-refresh-sso-btn" class="instance-action-btn enabled btn-campaign-secondary">
+                Gerar acesso SSO
+              </button>
+            </div>
+            <iframe
+              id="device-cloud-frame"
+              title="DRAX Device Cloud"
+              style="width:100%;min-height:72vh;margin-top:16px;border:1px solid rgba(148,163,184,.25);border-radius:12px;background:#0b1220;display:none;"
+            ></iframe>
+          </section>
         </div>
 
         <div id="tab-instancias" class="tab-panel tab-hidden">
@@ -22261,6 +22316,71 @@
         ).trim();
         applyMenuSectionAccess();
         syncAdminCampanhasScopeHint();
+        syncDeviceCloudMenuVisibility();
+      }
+
+      const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
+
+      function canAccessDeviceCloudMenu() {
+        const profile = String(window.WABA_UI_PROFILE || "").trim().toLowerCase();
+        if (profile !== "production") return false;
+        const email = String(wabaSessionEmail || "").trim().toLowerCase();
+        return DEVICE_CLOUD_ALLOWLIST.has(email);
+      }
+
+      function syncDeviceCloudMenuVisibility() {
+        const allowed = canAccessDeviceCloudMenu();
+        document.querySelectorAll('[data-menu-key="dispositivos"]').forEach((el) => {
+          if (allowed) el.removeAttribute("hidden");
+          else el.setAttribute("hidden", "hidden");
+        });
+        const gate = document.getElementById("device-cloud-gate-msg");
+        if (gate) {
+          gate.textContent = allowed
+            ? "Acesso liberado. Use «Abrir Device Cloud» para gerenciar dispositivos virtuais."
+            : "Menu restrito à conta autorizada em produção.";
+        }
+        if (!allowed && activeTab === "dispositivos") {
+          setActiveTab("dashboard");
+        }
+      }
+
+      async function openDeviceCloudPanel(embed) {
+        const msg = document.getElementById("device-cloud-gate-msg");
+        if (!canAccessDeviceCloudMenu()) {
+          if (msg) msg.textContent = "Sem permissão para Device Cloud.";
+          return;
+        }
+        try {
+          const res = await fetch("/device-cloud/sso", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (msg) msg.textContent = String(data.error || "Falha ao gerar SSO Device Cloud.");
+            return;
+          }
+          const url = String(data.url || "").trim();
+          if (!url) {
+            if (msg) msg.textContent = "URL Device Cloud não configurada (DEVICE_CLOUD_PUBLIC_URL).";
+            return;
+          }
+          if (embed) {
+            const frame = document.getElementById("device-cloud-frame");
+            if (frame) {
+              frame.style.display = "block";
+              frame.src = url;
+            }
+          } else {
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
+          if (msg) msg.textContent = "SSO gerado. Sessão Device Cloud pronta.";
+        } catch (err) {
+          if (msg) msg.textContent = err instanceof Error ? err.message : String(err);
+        }
       }
 
       function isStaffRole(role) {
@@ -22969,6 +23089,7 @@
 
       function isTabBlockedByMenuPolicy(tabName) {
         if (!tabName) return false;
+        if (tabName === "dispositivos" && !canAccessDeviceCloudMenu()) return true;
         if (tabName === "admin-usuarios") return !hasMasterAccess();
         if (tabName === "admin-assinantes") return !hasMasterAccess();
         if (tabName === "admin-chamados") return !hasMasterAccess();
@@ -23218,6 +23339,8 @@
         syncWabaSupportButtonVisibility();
 
         syncCampanhasMenuVisibility();
+
+        syncDeviceCloudMenuVisibility();
 
         if (isTabBlockedByMenuPolicy(activeTab)) {
           const fallback = resolveFirstAllowedStaffTab();
@@ -51222,6 +51345,10 @@
       }
       document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
       document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
+      document.getElementById("device-cloud-open-btn")?.addEventListener("click", () => void openDeviceCloudPanel(true));
+      document
+        .getElementById("device-cloud-refresh-sso-btn")
+        ?.addEventListener("click", () => void openDeviceCloudPanel(false));
 
       const disCampaignDeleteOverlay = document.getElementById("dis-campaign-delete-overlay");
       if (disCampaignDeleteOverlay) {
