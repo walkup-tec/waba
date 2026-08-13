@@ -1,3 +1,8 @@
+## 2026-08-13 08:49 — Fix aba Dispositivos vazia
+- `setActiveTab` não exibia `#tab-dispositivos` (ficava `tab-hidden`)
+- Marker: DEPLOY-2026-08-13-device-cloud-tab-show
+- LOG: doc/LOG-2026-08-13__084958__fix-dispositivos-tab-show.md
+
 ## 2026-08-12 16:30 — DRAX Device Cloud MVP + menu Dispositivos
 - Novo repo `drax-device-cloud` (Nest/Next/Redroid); WABA menu Aquecedor→Dispositivos (production + mozart.pmo)
 - SSO `POST /device-cloud/sso`; marker DEPLOY-2026-08-12-device-cloud-menu-sso

@@ -23,5 +23,6 @@ Não usar como histórico de desenvolvimento.
 ## Pendências relevantes
 
 - Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
-- **Redeploy EasyPanel** para marker `DEPLOY-2026-08-12-device-cloud-menu-sso` + configurar `DEVICE_CLOUD_PUBLIC_URL` / `DEVICE_CLOUD_SSO_SECRET`
+- **Redeploy EasyPanel** para marker `DEPLOY-2026-08-13-device-cloud-tab-show` (fix aba Dispositivos vazia) + `DEVICE_CLOUD_PUBLIC_URL` / `DEVICE_CLOUD_SSO_SECRET`
+- Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
 - Provisionar host Linux+KVM para `REDROID_MODE=docker`

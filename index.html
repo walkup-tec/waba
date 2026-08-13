@@ -44617,6 +44617,7 @@
         }
 
         const dashboardPanel = document.getElementById("tab-dashboard");
+        const dispositivosPanel = document.getElementById("tab-dispositivos");
         const instanciasPanel = document.getElementById("tab-instancias");
         const aquecedorPanel = document.getElementById("tab-aquecedor");
         const disparosPanel = document.getElementById("tab-disparos");
@@ -44651,6 +44652,17 @@
           dashboardPanel.setAttribute(
             "aria-hidden",
             nextTab !== "dashboard" ? "true" : "false"
+          );
+        }
+
+        if (dispositivosPanel) {
+          dispositivosPanel.classList.toggle(
+            "tab-hidden",
+            nextTab !== "dispositivos"
+          );
+          dispositivosPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "dispositivos" ? "true" : "false"
           );
         }
 
