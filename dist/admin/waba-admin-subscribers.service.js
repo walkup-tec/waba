@@ -240,6 +240,20 @@ class WabaAdminSubscribersService {
         ]);
         return { email, whatsapp };
     }
+    /** Valida assinante e dispara reenvio em background (ACK WhatsApp não bloqueia o HTTP). */
+    queueSubscriberWelcomeResend(subscriberId) {
+        const id = String(subscriberId || "").trim();
+        if (!id)
+            throw new Error("Assinante inválido.");
+        const subscriber = this.subscriberRepository.getById(id);
+        if (!subscriber)
+            throw new Error("Assinante não encontrado.");
+        void this.resendSubscriberWelcome(id).catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[admin] reenvio boas-vindas async falhou (${subscriber.email}):`, message);
+        });
+        return { email: subscriber.email };
+    }
     listPurchaseHistory(email, limit = 50) {
         const normalized = normalizeEmail(email);
         if (!normalized)

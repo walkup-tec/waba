@@ -215,21 +215,13 @@ export const registerWabaAdminRoutes = (app: Express) => {
   app.post("/admin/subscribers/:subscriberId/resend-welcome", async (req, res) => {
     if (!rejectNonMaster(req, res)) return;
     try {
-      const result = await adminSubscribersService.resendSubscriberWelcome(
-        String(req.params.subscriberId ?? ""),
-      );
-      const emailSent = String(result?.email?.status || "").toLowerCase() === "sent";
-      const whatsappSent = String(result?.whatsapp?.status || "").toLowerCase() === "sent";
-      return res.status(200).json({
+      const subscriberId = String(req.params.subscriberId ?? "");
+      const { email } = adminSubscribersService.queueSubscriberWelcomeResend(subscriberId);
+      return res.status(202).json({
         ok: true,
-        emailSent,
-        whatsappSent,
-        bothSent: emailSent && whatsappSent,
-        message:
-          emailSent && whatsappSent
-            ? "Mensagem de boas-vindas reenviada no WhatsApp e e-mail"
-            : undefined,
-        ...result,
+        queued: true,
+        email,
+        message: "Boas-vindas sendo reenviadas por e-mail e WhatsApp.",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível reenviar as boas-vindas.";

@@ -26031,11 +26031,20 @@
               headers: { "Content-Type": "application/json" },
               body: "{}",
             },
-            120000
+            30000
           );
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             throw new Error(payload.error || "Não foi possível reenviar as boas-vindas.");
+          }
+          if (payload?.queued || response.status === 202) {
+            showToast(
+              payload?.message || "Boas-vindas sendo reenviadas por e-mail e WhatsApp.",
+              "success",
+              5200,
+            );
+            closeAdminSubscriberResendModal();
+            return;
           }
           const emailOk = payload?.email?.status === "sent";
           const whatsappOk = payload?.whatsapp?.status === "sent";

@@ -1,3 +1,8 @@
+## 2026-08-14 09:45 — Modal reenviar boas-vindas async (202)
+- Endpoint responde 202 imediatamente; envio e ACK em background
+- Marker: DEPLOY-2026-08-14-resend-welcome-async-ui
+- LOG: doc/LOG-2026-08-14__094500__fix-resend-welcome-modal-async.md
+
 ## 2026-08-14 08:15 — Boas-vindas WhatsApp: ACK + failover
 - sendText HTTP 2xx não basta; exige DELIVERY_ACK/READ/PLAYED; ERROR tenta próxima instância
 - Marker: DEPLOY-2026-08-14-welcome-whatsapp-ack-failover
