@@ -55,18 +55,16 @@ function readCoord(value: unknown, name: string): number {
 }
 
 export function registerDeviceCloudRoutes(app: Express): void {
-  app.post("/device-cloud/device", async (req: Request, res: Response) => {
+  app.post("/device-cloud/device", (req: Request, res: Response) => {
     const user = requireDeviceCloudUser(req, res);
     if (!user) return;
     try {
-      const device = await wabaDeviceCloudService.ensureDevice(user.email);
+      const session = wabaDeviceCloudService.bootstrap(user.email);
       return res.json({
         ok: true,
-        device: {
-          id: device.id,
-          name: device.name || "Android",
-          status: device.status || "ONLINE",
-        },
+        apiUrl: session.apiUrl,
+        ssoToken: session.ssoToken,
+        expiresInSec: session.expiresInSec,
       });
     } catch (err) {
       return sendDeviceCloudError(res, err);

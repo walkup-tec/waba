@@ -22348,6 +22348,8 @@
       }
 
       let deviceCloudActiveId = "";
+      let deviceCloudApiUrl = "";
+      let deviceCloudAccessToken = "";
       let deviceCloudPollTimer = 0;
       let deviceCloudPtr = null;
       const DEVICE_CLOUD_SWIPE_PX = 24;
@@ -22377,19 +22379,25 @@
         };
       }
 
+      function deviceCloudHeaders(json) {
+        const headers = { Authorization: "Bearer " + deviceCloudAccessToken };
+        if (json) headers["Content-Type"] = "application/json";
+        return headers;
+      }
+
       let deviceCloudScreenUrl = "";
 
       async function refreshDeviceCloudScreen() {
-        if (!deviceCloudActiveId) return;
+        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
         const img = document.getElementById("device-cloud-screen");
         if (!img) return;
         const res = await fetch(
-          "/device-cloud/device/" + encodeURIComponent(deviceCloudActiveId) + "/screenshot?t=" + Date.now(),
-          { credentials: "same-origin" },
+          deviceCloudApiUrl + "/devices/" + encodeURIComponent(deviceCloudActiveId) + "/screenshot?t=" + Date.now(),
+          { headers: deviceCloudHeaders(false) },
         );
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(String(data.error || "Falha ao atualizar a tela."));
+          throw new Error(String(data.message || data.error || "Falha ao atualizar a tela."));
         }
         const blob = await res.blob();
         if (deviceCloudScreenUrl) URL.revokeObjectURL(deviceCloudScreenUrl);
@@ -22398,15 +22406,17 @@
       }
 
       async function sendDeviceCloudInput(path, body) {
-        if (!deviceCloudActiveId) return;
-        const res = await fetch("/device-cloud/device/" + encodeURIComponent(deviceCloudActiveId) + "/input/" + path, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
+        const res = await fetch(
+          deviceCloudApiUrl + "/devices/" + encodeURIComponent(deviceCloudActiveId) + "/input/" + path,
+          {
+            method: "POST",
+            headers: deviceCloudHeaders(true),
+            body: JSON.stringify(body),
+          },
+        );
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(String(data.error || "Falha no toque."));
+        if (!res.ok) throw new Error(String(data.message || data.error || "Falha no toque."));
         await refreshDeviceCloudScreen();
       }
 
@@ -22433,23 +22443,47 @@
         }
         setDeviceCloudMsg("Preparando o celular…");
         try {
-          const res = await fetch("/device-cloud/device", {
+          const bootRes = await fetch("/device-cloud/device", {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: "{}",
           });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            setDeviceCloudMsg(String(data.error || "Não foi possível criar o dispositivo."));
+          const boot = await bootRes.json().catch(() => ({}));
+          if (!bootRes.ok) {
+            setDeviceCloudMsg(String(boot.error || "Não foi possível criar o dispositivo."));
             return;
           }
-          const id = String(data.device && data.device.id ? data.device.id : "").trim();
-          if (!id) {
-            setDeviceCloudMsg("Dispositivo não retornado.");
+          deviceCloudApiUrl = String(boot.apiUrl || "").replace(/\/$/, "");
+          const ssoToken = String(boot.ssoToken || "").trim();
+          if (!deviceCloudApiUrl || !ssoToken) {
+            setDeviceCloudMsg("Device Cloud não configurado.");
             return;
           }
-          startDeviceCloudScreen(id);
+          const ssoRes = await fetch(deviceCloudApiUrl + "/auth/sso", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ssoToken }),
+          });
+          const sso = await ssoRes.json().catch(() => ({}));
+          if (!ssoRes.ok || !sso.accessToken) {
+            setDeviceCloudMsg("Acesso ao Device Cloud recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
+            return;
+          }
+          deviceCloudAccessToken = String(sso.accessToken);
+          const listRes = await fetch(deviceCloudApiUrl + "/devices", {
+            headers: deviceCloudHeaders(false),
+          });
+          const listed = await listRes.json().catch(() => []);
+          const devices = Array.isArray(listed) ? listed : [];
+          const online = devices.find((d) => String(d && d.status ? d.status : "").toUpperCase() === "ONLINE");
+          const ready = devices.find((d) => d && d.id && String(d.status || "").toUpperCase() !== "ERROR");
+          const chosen = online || ready || devices[0];
+          if (!chosen || !chosen.id) {
+            setDeviceCloudMsg("Nenhum celular virtual disponível no servidor.");
+            return;
+          }
+          startDeviceCloudScreen(String(chosen.id));
           setDeviceCloudMsg("Toque na tela como em um celular. Arraste para deslizar.");
           if (btn) btn.textContent = "Dispositivo pronto";
         } catch (err) {

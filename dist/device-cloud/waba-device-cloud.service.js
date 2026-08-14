@@ -41,6 +41,17 @@ class WabaDeviceCloudService {
     isConfigured() {
         return Boolean(this.ssoSecret());
     }
+    bootstrap(email) {
+        const secret = this.ssoSecret();
+        if (!secret) {
+            throw new DeviceCloudHttpError("Device Cloud não configurado no ambiente.", 503);
+        }
+        return {
+            apiUrl: this.apiUrl(),
+            ssoToken: this.signSsoToken(String(email || "").trim().toLowerCase(), secret),
+            expiresInSec: 300,
+        };
+    }
     async ensureDevice(email) {
         const token = await this.accessToken(email);
         const existing = await this.listDevices(token);

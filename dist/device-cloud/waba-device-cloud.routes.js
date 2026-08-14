@@ -49,19 +49,17 @@ function readCoord(value, name) {
     return Math.round(n);
 }
 function registerDeviceCloudRoutes(app) {
-    app.post("/device-cloud/device", async (req, res) => {
+    app.post("/device-cloud/device", (req, res) => {
         const user = requireDeviceCloudUser(req, res);
         if (!user)
             return;
         try {
-            const device = await waba_device_cloud_service_1.wabaDeviceCloudService.ensureDevice(user.email);
+            const session = waba_device_cloud_service_1.wabaDeviceCloudService.bootstrap(user.email);
             return res.json({
                 ok: true,
-                device: {
-                    id: device.id,
-                    name: device.name || "Android",
-                    status: device.status || "ONLINE",
-                },
+                apiUrl: session.apiUrl,
+                ssoToken: session.ssoToken,
+                expiresInSec: session.expiresInSec,
             });
         }
         catch (err) {
