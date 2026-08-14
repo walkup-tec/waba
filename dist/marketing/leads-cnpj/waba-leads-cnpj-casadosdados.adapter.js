@@ -603,14 +603,26 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     onProgress?.(headless
         ? "Abrindo Portal: iniciando navegador (headless)…"
         : "Abrindo Portal: abrindo janela do Casa dos Dados (visível)…");
-    const browser = await playwright.chromium.launch({
-        headless,
-        slowMo,
-        args: [
-            "--disable-blink-features=AutomationControlled",
-            ...(headless ? [] : ["--start-maximized"]),
-        ],
-    });
+    let browser;
+    try {
+        browser = await playwright.chromium.launch({
+            headless,
+            slowMo,
+            args: [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                ...(headless ? [] : ["--start-maximized"]),
+            ],
+        });
+    }
+    catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        if (/Executable doesn't exist|browserType\.launch/i.test(detail)) {
+            throw new Error("Chromium do Playwright ausente no servidor. No Docker: rode `npx playwright install --with-deps chromium` na imagem (ver Dockerfile) e faça Redeploy.");
+        }
+        throw error;
+    }
     try {
         const context = await browser.newContext({
             locale: "pt-BR",

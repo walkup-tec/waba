@@ -2,4 +2,4 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-marketing-leads-pj-master";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-playwright-chromium-docker";

@@ -2,21 +2,27 @@
 # Motivo: tsc de src/index.ts (~320 KB) trava ou leva 30+ min em VPS com pouca RAM.
 # Antes do push: npm run build && commit dist/ + src/deploy-marker.ts
 #
+# Chromium (Playwright) é necessário para Marketing · Leads PJ (Casa dos Dados).
+# Base Debian slim: Alpine não traz o browser do Playwright de forma confiável.
+#
 # Run: docker run -p 3000:3000 --env-file .env -v waba-data:/app/data waba:latest
 
-FROM node:20.18-alpine
+FROM node:20.18-bookworm-slim
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN addgroup -g 1001 -S nodejs \
-  && adduser -S nodejs -u 1001 -G nodejs
+RUN groupadd --gid 1001 nodejs \
+  && useradd --uid 1001 --gid nodejs --create-home --shell /usr/sbin/nologin nodejs
 
 COPY package.json package-lock.json ./
 RUN echo ">>> npm ci --omit=dev" \
   && npm ci --omit=dev --no-audit --no-fund \
-  && echo ">>> npm ci OK"
+  && echo ">>> playwright install chromium" \
+  && npx playwright install --with-deps chromium \
+  && echo ">>> npm/playwright OK"
 
 COPY dist ./dist
 COPY scripts ./scripts
@@ -27,7 +33,7 @@ RUN test -f dist/index.js || (echo "ERRO: dist/index.js ausente — rode npm run
 RUN test -f dist/disparos/alternativa-dispatch-rules.js || (echo "ERRO: dist/disparos/alternativa-dispatch-rules.js ausente — rode npm run build e commit dist/" && exit 1)
 
 RUN mkdir -p /app/data \
-  && chown -R nodejs:nodejs /app
+  && chown -R nodejs:nodejs /app /ms-playwright
 
 USER nodejs
 
