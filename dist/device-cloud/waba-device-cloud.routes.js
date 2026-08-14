@@ -8,9 +8,17 @@ const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 function isDeviceCloudEmailAllowed(email) {
     return DEVICE_CLOUD_ALLOWLIST.has(String(email || "").trim().toLowerCase());
 }
+function isDeviceCloudProductionProfile() {
+    const explicit = String(process.env.WABA_UI_PROFILE || "").trim().toLowerCase();
+    if (explicit === "production")
+        return true;
+    if (explicit === "full" || explicit === "baseline")
+        return false;
+    const env = String(process.env.WABA_ENV || "").trim().toLowerCase();
+    return env !== "v01";
+}
 function requireDeviceCloudUser(req, res) {
-    const profile = String(process.env.WABA_UI_PROFILE || "").trim().toLowerCase();
-    if (profile !== "production") {
+    if (!isDeviceCloudProductionProfile()) {
         res.status(403).json({ error: "Device Cloud disponível apenas no perfil production." });
         return null;
     }

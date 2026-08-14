@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-campaign-transfer-split-pix";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-1205-criar-dispositivo";
 

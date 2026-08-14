@@ -53,14 +53,24 @@ export class WabaDeviceCloudService {
     const existing = await this.listDevices(token);
     const online = existing.find((d) => String(d.status || "").toUpperCase() === "ONLINE");
     if (online?.id) return online;
-    if (existing[0]?.id) return existing[0];
-    try {
-      return await this.createDevice(token, "Android");
-    } catch (err) {
-      const retry = await this.listDevices(token);
-      if (retry[0]?.id) return retry[0];
-      throw err;
+    const ready = existing.find((d) => {
+      const status = String(d.status || "").toUpperCase();
+      return Boolean(d.id) && status !== "ERROR";
+    });
+    if (ready?.id) return ready;
+    if (existing.length > 0) {
+      throw new DeviceCloudHttpError(
+        "O celular virtual não está pronto. Tente de novo em alguns segundos.",
+        502,
+      );
     }
+    const created = await this.createDevice(token, "Android");
+    const createdStatus = String(created.status || "").toUpperCase();
+    if (created.id && createdStatus !== "ERROR") return created;
+    const retry = await this.listDevices(token);
+    const retryOnline = retry.find((d) => String(d.status || "").toUpperCase() === "ONLINE");
+    if (retryOnline?.id) return retryOnline;
+    throw new DeviceCloudHttpError("Não foi possível criar o dispositivo.", 502);
   }
 
   async screenshotPng(email: string, deviceId: string): Promise<Buffer> {
@@ -138,8 +148,18 @@ export class WabaDeviceCloudService {
       body: JSON.stringify({ ssoToken }),
       timeoutMs: 15000,
     });
-    const payload = (await res.json().catch(() => null)) as { accessToken?: string } | null;
+    const payload = (await res.json().catch(() => null)) as {
+      accessToken?: string;
+      message?: string;
+      error?: string;
+    } | null;
     if (!res.ok || !payload?.accessToken) {
+      if (res.status === 401) {
+        throw new DeviceCloudHttpError(
+          "Acesso ao Device Cloud recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel (igual ao worker AWS).",
+          502,
+        );
+      }
       throw new DeviceCloudHttpError("Não foi possível abrir o dispositivo. Tente de novo.", 502);
     }
     tokenCache.set(normalized, {
