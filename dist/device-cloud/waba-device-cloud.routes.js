@@ -1,71 +1,147 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isDeviceCloudEmailAllowed = isDeviceCloudEmailAllowed;
-exports.signDeviceCloudSsoToken = signDeviceCloudSsoToken;
 exports.registerDeviceCloudRoutes = registerDeviceCloudRoutes;
-const crypto_1 = __importDefault(require("crypto"));
 const waba_request_auth_1 = require("../auth/waba-request-auth");
+const waba_device_cloud_service_1 = require("./waba-device-cloud.service");
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 function isDeviceCloudEmailAllowed(email) {
     return DEVICE_CLOUD_ALLOWLIST.has(String(email || "").trim().toLowerCase());
 }
-function resolveDeviceCloudWebUrl() {
-    const web = String(process.env.DEVICE_CLOUD_WEB_URL || "").trim().replace(/\/$/, "");
-    if (web)
-        return web;
-    const publicUrl = String(process.env.DEVICE_CLOUD_PUBLIC_URL || "").trim().replace(/\/$/, "");
-    if (publicUrl.includes("://api-devices.draxsistemas.com.br")) {
-        return "https://devices.draxsistemas.com.br";
+function requireDeviceCloudUser(req, res) {
+    const profile = String(process.env.WABA_UI_PROFILE || "").trim().toLowerCase();
+    if (profile !== "production") {
+        res.status(403).json({ error: "Device Cloud disponível apenas no perfil production." });
+        return null;
     }
-    return publicUrl;
+    const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+    const email = String(auth.email || "").trim().toLowerCase();
+    if (!email || !isDeviceCloudEmailAllowed(email)) {
+        res.status(403).json({ error: "Conta não autorizada para Device Cloud." });
+        return null;
+    }
+    if (!waba_device_cloud_service_1.wabaDeviceCloudService.isConfigured()) {
+        res.status(503).json({ error: "DEVICE_CLOUD_SSO_SECRET não configurado no ambiente." });
+        return null;
+    }
+    return { email };
 }
-/** Compact SSO token: base64url(json).base64url(hmac-sha256) */
-function signDeviceCloudSsoToken(claims, secret, expiresInSec = 300) {
-    const payload = {
-        ...claims,
-        aud: "drax-device-cloud",
-        exp: Math.floor(Date.now() / 1000) + expiresInSec,
-        iat: Math.floor(Date.now() / 1000),
-    };
-    const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-    const sig = crypto_1.default.createHmac("sha256", secret).update(body).digest("base64url");
-    return `${body}.${sig}`;
+function sendDeviceCloudError(res, err) {
+    if (err instanceof waba_device_cloud_service_1.DeviceCloudHttpError) {
+        res.status(err.status).json({ error: err.message });
+        return;
+    }
+    res.status(502).json({ error: "Falha ao falar com o Device Cloud." });
+}
+function readCoord(value, name) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > 4096) {
+        throw new waba_device_cloud_service_1.DeviceCloudHttpError(`Coordenada ${name} inválida.`, 400);
+    }
+    return Math.round(n);
 }
 function registerDeviceCloudRoutes(app) {
-    app.post("/device-cloud/sso", (req, res) => {
-        const profile = String(process.env.WABA_UI_PROFILE || "").trim().toLowerCase();
-        if (profile !== "production") {
-            return res.status(403).json({
-                error: "Device Cloud disponível apenas no perfil production.",
+    app.post("/device-cloud/device", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        try {
+            const device = await waba_device_cloud_service_1.wabaDeviceCloudService.ensureDevice(user.email);
+            return res.json({
+                ok: true,
+                device: {
+                    id: device.id,
+                    name: device.name || "Android",
+                    status: device.status || "ONLINE",
+                },
             });
         }
-        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const email = String(auth.email || "").trim().toLowerCase();
-        if (!email || !isDeviceCloudEmailAllowed(email)) {
-            return res.status(403).json({ error: "Conta não autorizada para Device Cloud." });
+        catch (err) {
+            return sendDeviceCloudError(res, err);
         }
-        const secret = String(process.env.DEVICE_CLOUD_SSO_SECRET || "").trim();
-        const publicUrl = resolveDeviceCloudWebUrl();
-        if (!secret || !publicUrl) {
-            return res.status(503).json({
-                error: "DEVICE_CLOUD_SSO_SECRET / DEVICE_CLOUD_PUBLIC_URL não configurados no ambiente.",
+    });
+    app.get("/device-cloud/device/:id/screenshot", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        try {
+            const png = await waba_device_cloud_service_1.wabaDeviceCloudService.screenshotPng(user.email, id);
+            res.setHeader("Content-Type", "image/png");
+            res.setHeader("Cache-Control", "no-store");
+            return res.send(png);
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/device/:id/input/tap", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        try {
+            await waba_device_cloud_service_1.wabaDeviceCloudService.inputTap(user.email, id, readCoord(req.body?.x, "x"), readCoord(req.body?.y, "y"));
+            return res.json({ ok: true });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/device/:id/input/swipe", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        try {
+            await waba_device_cloud_service_1.wabaDeviceCloudService.inputSwipe(user.email, id, {
+                x1: readCoord(req.body?.x1, "x1"),
+                y1: readCoord(req.body?.y1, "y1"),
+                x2: readCoord(req.body?.x2, "x2"),
+                y2: readCoord(req.body?.y2, "y2"),
+                durationMs: 280,
             });
+            return res.json({ ok: true });
         }
-        const ssoToken = signDeviceCloudSsoToken({
-            sub: email,
-            email,
-            tenant: process.env.DEVICE_CLOUD_DEFAULT_TENANT_ID || "00000000-0000-4000-8000-000000000001",
-            userId: process.env.DEVICE_CLOUD_DEFAULT_USER_ID || "00000000-0000-4000-8000-000000000011",
-            role: "admin",
-        }, secret, 300);
-        const url = `${publicUrl}/?sso=${encodeURIComponent(ssoToken)}`;
-        return res.json({
-            ok: true,
-            url,
-            expiresInSec: 300,
-        });
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/device/:id/input/text", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        const text = String(req.body?.text || "");
+        if (!text || text.length > 200) {
+            return res.status(400).json({ error: "Texto inválido." });
+        }
+        try {
+            await waba_device_cloud_service_1.wabaDeviceCloudService.inputText(user.email, id, text);
+            return res.json({ ok: true });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/device/:id/input/key", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        const key = String(req.body?.key || "").trim().toLowerCase();
+        if (key !== "back" && key !== "home" && key !== "enter") {
+            return res.status(400).json({ error: "Tecla inválida." });
+        }
+        try {
+            await waba_device_cloud_service_1.wabaDeviceCloudService.inputKey(user.email, id, key);
+            return res.json({ ok: true });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
     });
 }

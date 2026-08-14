@@ -1,3 +1,8 @@
+## 2026-08-14 10:40 — Dispositivos: um botão + tela Android
+- WABA faz SSO e proxy no backend; aba só tem Criar Dispositivo
+- Marker: DEPLOY-2026-08-14-device-cloud-one-button
+- LOG: doc/LOG-2026-08-14__104000__dispositivos-um-botao-tela-android.md
+
 ## 2026-08-14 10:12 — Dispositivos abre Device Cloud Web
 - Iframe automático + fallback api-devices → devices
 - Marker: DEPLOY-2026-08-14-device-cloud-web-iframe

@@ -16892,25 +16892,27 @@
         <div id="tab-dispositivos" class="tab-panel tab-hidden">
           <section class="panel">
             <div class="panel-header">
-              <div class="panel-title">DRAX Device Cloud</div>
+              <div class="panel-title">Dispositivos</div>
             </div>
             <p class="muted" style="margin-bottom:14px;">
-              Dispositivos Android virtuais (WhatsApp Business). Disponível apenas para a conta autorizada em produção.
+              Crie um celular Android virtual e use a tela como no aparelho: toque, arraste e instale o WhatsApp Business.
             </p>
             <div id="device-cloud-gate-msg" class="aquecedor-hint" style="margin-bottom:12px;"></div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-              <button type="button" id="device-cloud-open-btn" class="instance-action-btn enabled">
-                Abrir Device Cloud
-              </button>
-              <button type="button" id="device-cloud-refresh-sso-btn" class="instance-action-btn enabled btn-campaign-secondary">
-                Gerar acesso SSO
-              </button>
+            <button type="button" id="device-cloud-create-btn" class="instance-action-btn enabled">
+              Criar Dispositivo
+            </button>
+            <div id="device-cloud-phone-wrap" style="display:none;margin-top:18px;max-width:420px;">
+              <img
+                id="device-cloud-screen"
+                alt="Tela do Android"
+                draggable="false"
+                style="width:100%;max-height:72vh;object-fit:contain;background:#000;border-radius:18px;border:1px solid rgba(148,163,184,.25);touch-action:none;user-select:none;cursor:pointer;"
+              />
+              <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+                <button type="button" id="device-cloud-key-back" class="instance-action-btn enabled btn-campaign-secondary">Voltar</button>
+                <button type="button" id="device-cloud-key-home" class="instance-action-btn enabled btn-campaign-secondary">Início</button>
+              </div>
             </div>
-            <iframe
-              id="device-cloud-frame"
-              title="DRAX Device Cloud"
-              style="width:100%;min-height:72vh;margin-top:16px;border:1px solid rgba(148,163,184,.25);border-radius:12px;background:#0b1220;display:none;"
-            ></iframe>
           </section>
         </div>
 
@@ -22337,7 +22339,7 @@
         const gate = document.getElementById("device-cloud-gate-msg");
         if (gate) {
           gate.textContent = allowed
-            ? "Acesso liberado. Abrindo a tela do Android…"
+            ? "Clique em Criar Dispositivo para abrir o celular."
             : "Menu restrito à conta autorizada em produção.";
         }
         if (!allowed && activeTab === "dispositivos") {
@@ -22345,14 +22347,93 @@
         }
       }
 
-      async function openDeviceCloudPanel(embed) {
+      let deviceCloudActiveId = "";
+      let deviceCloudPollTimer = 0;
+      let deviceCloudPtr = null;
+      const DEVICE_CLOUD_SWIPE_PX = 24;
+
+      function setDeviceCloudMsg(text) {
         const msg = document.getElementById("device-cloud-gate-msg");
+        if (msg) msg.textContent = text;
+      }
+
+      function stopDeviceCloudScreen() {
+        if (deviceCloudPollTimer) {
+          clearInterval(deviceCloudPollTimer);
+          deviceCloudPollTimer = 0;
+        }
+      }
+
+      function mapDeviceCloudPoint(img, clientX, clientY) {
+        const rect = img.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return null;
+        const nw = img.naturalWidth || 720;
+        const nh = img.naturalHeight || 1280;
+        const x = Math.round(((clientX - rect.left) / rect.width) * nw);
+        const y = Math.round(((clientY - rect.top) / rect.height) * nh);
+        return {
+          x: Math.max(0, Math.min(nw - 1, x)),
+          y: Math.max(0, Math.min(nh - 1, y)),
+        };
+      }
+
+      let deviceCloudScreenUrl = "";
+
+      async function refreshDeviceCloudScreen() {
+        if (!deviceCloudActiveId) return;
+        const img = document.getElementById("device-cloud-screen");
+        if (!img) return;
+        const res = await fetch(
+          "/device-cloud/device/" + encodeURIComponent(deviceCloudActiveId) + "/screenshot?t=" + Date.now(),
+          { credentials: "same-origin" },
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(String(data.error || "Falha ao atualizar a tela."));
+        }
+        const blob = await res.blob();
+        if (deviceCloudScreenUrl) URL.revokeObjectURL(deviceCloudScreenUrl);
+        deviceCloudScreenUrl = URL.createObjectURL(blob);
+        img.src = deviceCloudScreenUrl;
+      }
+
+      async function sendDeviceCloudInput(path, body) {
+        if (!deviceCloudActiveId) return;
+        const res = await fetch("/device-cloud/device/" + encodeURIComponent(deviceCloudActiveId) + "/input/" + path, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(String(data.error || "Falha no toque."));
+        await refreshDeviceCloudScreen();
+      }
+
+      function startDeviceCloudScreen(id) {
+        deviceCloudActiveId = id;
+        const wrap = document.getElementById("device-cloud-phone-wrap");
+        if (wrap) wrap.style.display = "block";
+        stopDeviceCloudScreen();
+        void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        deviceCloudPollTimer = setInterval(() => {
+          void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        }, 1000);
+      }
+
+      async function createDeviceCloudDevice() {
         if (!canAccessDeviceCloudMenu()) {
-          if (msg) msg.textContent = "Sem permissão para Device Cloud.";
+          setDeviceCloudMsg("Sem permissão para Device Cloud.");
           return;
         }
+        const btn = document.getElementById("device-cloud-create-btn");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Preparando…";
+        }
+        setDeviceCloudMsg("Preparando o celular…");
         try {
-          const res = await fetch("/device-cloud/sso", {
+          const res = await fetch("/device-cloud/device", {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
@@ -22360,26 +22441,24 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            if (msg) msg.textContent = String(data.error || "Falha ao gerar SSO Device Cloud.");
+            setDeviceCloudMsg(String(data.error || "Não foi possível criar o dispositivo."));
             return;
           }
-          const url = String(data.url || "").trim();
-          if (!url) {
-            if (msg) msg.textContent = "URL Device Cloud não configurada (DEVICE_CLOUD_PUBLIC_URL).";
+          const id = String(data.device && data.device.id ? data.device.id : "").trim();
+          if (!id) {
+            setDeviceCloudMsg("Dispositivo não retornado.");
             return;
           }
-          if (embed) {
-            const frame = document.getElementById("device-cloud-frame");
-            if (frame) {
-              frame.style.display = "block";
-              frame.src = url;
-            }
-          } else {
-            window.open(url, "_blank", "noopener,noreferrer");
-          }
-          if (msg) msg.textContent = "SSO gerado. Sessão Device Cloud pronta.";
+          startDeviceCloudScreen(id);
+          setDeviceCloudMsg("Toque na tela como em um celular. Arraste para deslizar.");
+          if (btn) btn.textContent = "Dispositivo pronto";
         } catch (err) {
-          if (msg) msg.textContent = err instanceof Error ? err.message : String(err);
+          setDeviceCloudMsg(err instanceof Error ? err.message : String(err));
+        } finally {
+          if (btn && !deviceCloudActiveId) {
+            btn.disabled = false;
+            btn.textContent = "Criar Dispositivo";
+          }
         }
       }
 
@@ -44673,8 +44752,8 @@
             "aria-hidden",
             nextTab !== "dispositivos" ? "true" : "false"
           );
-          if (nextTab === "dispositivos") {
-            void openDeviceCloudPanel(true);
+          if (nextTab !== "dispositivos") {
+            stopDeviceCloudScreen();
           }
         }
 
@@ -51369,10 +51448,39 @@
       }
       document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
       document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
-      document.getElementById("device-cloud-open-btn")?.addEventListener("click", () => void openDeviceCloudPanel(true));
-      document
-        .getElementById("device-cloud-refresh-sso-btn")
-        ?.addEventListener("click", () => void openDeviceCloudPanel(false));
+      document.getElementById("device-cloud-create-btn")?.addEventListener("click", () => void createDeviceCloudDevice());
+      document.getElementById("device-cloud-key-back")?.addEventListener("click", () => void sendDeviceCloudInput("key", { key: "back" }).catch((err) => setDeviceCloudMsg(err.message || String(err))));
+      document.getElementById("device-cloud-key-home")?.addEventListener("click", () => void sendDeviceCloudInput("key", { key: "home" }).catch((err) => setDeviceCloudMsg(err.message || String(err))));
+      (function bindDeviceCloudScreen() {
+        const img = document.getElementById("device-cloud-screen");
+        if (!img) return;
+        img.addEventListener("pointerdown", (e) => {
+          const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY);
+          if (!mapped) return;
+          img.setPointerCapture(e.pointerId);
+          deviceCloudPtr = { clientX: e.clientX, clientY: e.clientY, x: mapped.x, y: mapped.y };
+        });
+        img.addEventListener("pointerup", (e) => {
+          const start = deviceCloudPtr;
+          deviceCloudPtr = null;
+          if (!start) return;
+          const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY);
+          if (!mapped) return;
+          const dx = e.clientX - start.clientX;
+          const dy = e.clientY - start.clientY;
+          const action =
+            Math.hypot(dx, dy) >= DEVICE_CLOUD_SWIPE_PX
+              ? sendDeviceCloudInput("swipe", {
+                  x1: start.x,
+                  y1: start.y,
+                  x2: mapped.x,
+                  y2: mapped.y,
+                  durationMs: 280,
+                })
+              : sendDeviceCloudInput("tap", { x: mapped.x, y: mapped.y });
+          void action.catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        });
+      })();
 
       const disCampaignDeleteOverlay = document.getElementById("dis-campaign-delete-overlay");
       if (disCampaignDeleteOverlay) {
