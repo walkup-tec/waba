@@ -1,3 +1,8 @@
+## 2026-08-14 09:55 — Boas-vindas só pelo número eleito (sem failover)
+- Pausa humana/Preparando não troca para 5197462102; repete no 5181077770
+- Marker: DEPLOY-2026-08-14-welcome-primary-only-no-failover
+- LOG: doc/LOG-2026-08-14__095500__welcome-primary-only-no-failover.md
+
 ## 2026-08-14 09:45 — Modal reenviar boas-vindas async (202)
 - Endpoint responde 202 imediatamente; envio e ACK em background
 - Marker: DEPLOY-2026-08-14-resend-welcome-async-ui

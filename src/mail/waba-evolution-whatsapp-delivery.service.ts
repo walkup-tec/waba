@@ -124,12 +124,18 @@ type EvoSendSlot = {
  */
 const resolveEvoSendSlots = async (
   phoneHints: string[],
-  opts?: { allowAnyOpenFallback?: boolean; logLabel?: string },
+  opts?: {
+    allowAnyOpenFallback?: boolean;
+    logLabel?: string;
+    verifyLiveIfCatalogClosed?: boolean;
+  },
 ): Promise<EvoSendSlot[]> => {
   const slots: EvoSendSlot[] = [];
   const seen = new Set<string>();
   for (const phoneHint of phoneHints) {
-    const instanceName = await resolveConnectedEvoInstanceByPhoneHint(phoneHint);
+    const instanceName = await resolveConnectedEvoInstanceByPhoneHint(phoneHint, {
+      verifyLiveIfCatalogClosed: Boolean(opts?.verifyLiveIfCatalogClosed),
+    });
     if (!instanceName) {
       console.warn(`[whatsapp] instância ${phoneHint} indisponível (desconectada ou não encontrada).`);
       continue;
@@ -237,12 +243,20 @@ const trySendViaSlot = async (input: {
     return { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName };
   }
 
+  const ackDetail = `${slot.instanceName}: WhatsApp não entregue (ack=${ack.status})`;
+  if (input.ignoreAquecedorLifecycle) {
+    console.warn(
+      `[whatsapp] sendText OK mas ACK pendente/erro (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Boas-vindas repete no mesmo número (sem failover).`,
+    );
+    return null;
+  }
+
   console.warn(
     `[whatsapp] sendText OK mas não entregue (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Tentando próxima instância.`,
   );
   return {
     status: "failed",
-    message: `${slot.instanceName}: WhatsApp não entregue (ack=${ack.status})`,
+    message: ackDetail,
     instanceName: slot.instanceName,
   };
 };
@@ -255,7 +269,7 @@ export type WabaEvolutionWhatsAppDeliveryInput = {
   backgroundRetryKey?: string;
   /**
    * Envios críticos (ex.: boas-vindas): nunca bloquear por Preparando / pausa humana do aquecedor.
-   * Também habilita fallback para qualquer instância EVO open se os hints preferidos falharem.
+   * Usa só o número primário (5181077770/drax-oficial), sem failover para secundário/terciário.
    */
   ignoreAquecedorLifecycle?: boolean;
 };
@@ -284,16 +298,18 @@ const runWabaEvolutionWhatsAppDelivery = async (
     return { status: "skipped", message: `${logLabel}: mensagem vazia.` };
   }
 
-  const phoneHints = resolveWabaWhatsAppPhoneHints();
+  const phoneHintsAll = resolveWabaWhatsAppPhoneHints();
+  const ignoreAquecedorLifecycle = Boolean(input.ignoreAquecedorLifecycle);
+  const phoneHints = ignoreAquecedorLifecycle ? phoneHintsAll.slice(0, 1) : phoneHintsAll;
   const maxRounds = Math.max(1, options.maxRounds);
   const roundDelayMs = resolveWabaWhatsAppRoundDelayMs();
   const timeoutMs = resolveWabaWhatsAppSendTimeoutMs();
-  const ignoreAquecedorLifecycle = Boolean(input.ignoreAquecedorLifecycle);
   const errors: string[] = [];
 
   for (let round = 1; round <= maxRounds; round += 1) {
     const slots = await resolveEvoSendSlots(phoneHints, {
-      allowAnyOpenFallback: ignoreAquecedorLifecycle,
+      allowAnyOpenFallback: false,
+      verifyLiveIfCatalogClosed: ignoreAquecedorLifecycle,
       logLabel,
     });
     if (!slots.length) {
@@ -307,7 +323,9 @@ const runWabaEvolutionWhatsAppDelivery = async (
     if (round === 1) {
       console.info(
         `[whatsapp] ${logLabel}: sequência ${slots.map((s) => `${s.phoneHint}→${s.instanceName}`).join(", ")}${
-          ignoreAquecedorLifecycle ? " (ignora Preparando/pausa humana)" : ""
+          ignoreAquecedorLifecycle
+            ? " (número eleito; ignora Preparando/pausa humana; sem failover)"
+            : ""
         }.`,
       );
     } else {
