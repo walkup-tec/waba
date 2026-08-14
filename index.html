@@ -26516,6 +26516,90 @@
         };
       }
 
+      function supplierRoutingGroupKey(supplier) {
+        const apiKind = supplier?.apiKind === "alternativa" ? "alternativa" : "oficial";
+        const segment = supplier?.segment === "bets" ? "bets" : "outros";
+        return `${apiKind}:${segment}`;
+      }
+
+      function clampSupplierPriority(value) {
+        return Math.max(1, Math.min(5, Math.round(Number(value ?? 1))));
+      }
+
+      function findActiveSupplierIndexByGroupPriority(suppliers, groupKey, priority, excludeIndex) {
+        return (suppliers || []).findIndex(
+          (item, index) =>
+            index !== excludeIndex &&
+            item?.active !== false &&
+            supplierRoutingGroupKey(item) === groupKey &&
+            clampSupplierPriority(item.priority) === priority
+        );
+      }
+
+      function applySupplierPrioritySwap(suppliers, changedIndex, newPriorityRaw) {
+        if (!Array.isArray(suppliers) || !Number.isFinite(changedIndex)) return false;
+        const changed = suppliers[changedIndex];
+        if (!changed || changed.active === false) return false;
+        const newPriority = clampSupplierPriority(newPriorityRaw);
+        const oldPriority = clampSupplierPriority(changed.priority);
+        if (newPriority === oldPriority) return false;
+        const groupKey = supplierRoutingGroupKey(changed);
+        const conflictIndex = findActiveSupplierIndexByGroupPriority(
+          suppliers,
+          groupKey,
+          newPriority,
+          changedIndex
+        );
+        changed.priority = newPriority;
+        if (conflictIndex >= 0) {
+          suppliers[conflictIndex].priority = oldPriority;
+        }
+        return true;
+      }
+
+      function resolveSupplierPriorityConflict(suppliers, changedIndex) {
+        if (!Array.isArray(suppliers) || !Number.isFinite(changedIndex)) return false;
+        const changed = suppliers[changedIndex];
+        if (!changed || changed.active === false) return false;
+        const groupKey = supplierRoutingGroupKey(changed);
+        const priority = clampSupplierPriority(changed.priority);
+        const conflictIndex = findActiveSupplierIndexByGroupPriority(
+          suppliers,
+          groupKey,
+          priority,
+          changedIndex
+        );
+        if (conflictIndex < 0) return false;
+        const used = new Set();
+        suppliers.forEach((item, index) => {
+          if (index === changedIndex || item?.active === false) return;
+          if (supplierRoutingGroupKey(item) === groupKey) {
+            used.add(clampSupplierPriority(item.priority));
+          }
+        });
+        let nextFree = 0;
+        for (let candidate = 1; candidate <= 5; candidate += 1) {
+          if (!used.has(candidate)) {
+            nextFree = candidate;
+            break;
+          }
+        }
+        if (!nextFree) return false;
+        changed.priority = nextFree;
+        return true;
+      }
+
+      function hasDuplicateSupplierPriorities(suppliers) {
+        const seen = new Set();
+        for (const supplier of suppliers || []) {
+          if (supplier?.active === false) continue;
+          const key = `${supplierRoutingGroupKey(supplier)}:${clampSupplierPriority(supplier.priority)}`;
+          if (seen.has(key)) return true;
+          seen.add(key);
+        }
+        return false;
+      }
+
       function normalizeSplitDraft(config) {
         const source = config || {};
         const suppliers = Array.isArray(source.suppliers) ? source.suppliers : [];
@@ -27267,6 +27351,14 @@
             return false;
           }
         }
+        if (hasDuplicateSupplierPriorities(suppliers)) {
+          showToast(
+            "Há prioridades duplicadas no mesmo plano/segmento. Ajuste a ordem antes de salvar.",
+            "warning",
+            5200
+          );
+          return false;
+        }
         const participants = Array.isArray(payload?.participants) ? payload.participants : [];
         for (const participant of participants) {
           if (participant.active === false) continue;
@@ -27306,7 +27398,7 @@
               return;
             }
             if (field === "priority") {
-              target.priority = Math.max(1, Math.min(5, Math.round(Number(input.value ?? 1))));
+              applySupplierPrioritySwap(adminFinanceiroSplitDraft.suppliers, index, input.value);
               return;
             }
             if (field === "systemUserEmail") {
@@ -32462,8 +32554,35 @@
               syncAdminFinanceiroSplitSupplierDraftOperacionalPreview();
             }
             if (event.target?.closest?.("[data-supplier-field]")) {
+              const field = event.target?.getAttribute("data-supplier-field");
+              const row = event.target?.closest(
+                ".admin-financeiro-split-supplier-row[data-supplier-index]"
+              );
+              const index = Number(row?.getAttribute("data-supplier-index"));
+              if (
+                field === "priority" &&
+                Number.isFinite(index) &&
+                adminFinanceiroSplitDraft
+              ) {
+                applySupplierPrioritySwap(
+                  adminFinanceiroSplitDraft.suppliers,
+                  index,
+                  event.target.value
+                );
+                renderAdminFinanceiroSplitSuppliers();
+                scheduleAdminFinanceiroSplitPersist();
+                return;
+              }
               collectAdminFinanceiroSplitDraftFromDom();
-              if (event.target?.getAttribute("data-supplier-field") === "systemUserEmail") {
+              if (
+                (field === "segment" || field === "apiKind") &&
+                Number.isFinite(index) &&
+                adminFinanceiroSplitDraft
+              ) {
+                resolveSupplierPriorityConflict(adminFinanceiroSplitDraft.suppliers, index);
+                renderAdminFinanceiroSplitSuppliers();
+              }
+              if (field === "systemUserEmail") {
                 renderAdminFinanceiroSplitSuppliers();
               }
               scheduleAdminFinanceiroSplitPersist();

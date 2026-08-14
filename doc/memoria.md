@@ -1,3 +1,8 @@
+## 2026-08-14 11:25 — Fornecedores: persistência ordem prioridade
+- Swap automático ao mudar prioridade (evita 400 por duplicata no PUT split-config)
+- `npm run verify:supplier-priority` | marker `DEPLOY-2026-08-14-supplier-priority-persist`
+- LOG: doc/LOG-2026-08-14__fix-supplier-priority-persist.md
+
 ## 2026-08-14 11:15 — Marker Criar Dispositivo
 - Marker: DEPLOY-2026-08-14-criar-dispositivo
 - Shell cache SW v4 para a aba nova aparecer após Redeploy
