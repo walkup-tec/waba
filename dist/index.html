@@ -16901,24 +16901,37 @@
             <button type="button" id="device-cloud-create-btn" class="instance-action-btn enabled">
               Criar Dispositivo
             </button>
-            <div id="device-cloud-list" style="display:none;margin-top:16px;flex-direction:column;gap:8px;max-width:520px;"></div>
-            <div id="device-cloud-phone-wrap" style="display:none;margin-top:16px;max-width:240px;">
+            <div id="device-cloud-name-wrap" style="display:none;margin-top:16px;max-width:360px;">
+              <label class="muted" style="display:block;margin-bottom:6px;font-size:12px;">Nome do dispositivo</label>
+              <input id="device-cloud-device-name" type="text" maxlength="80" placeholder="Nome do celular" style="width:100%;" />
+            </div>
+            <div id="device-cloud-phone-wrap" style="display:none;margin-top:16px;max-width:360px;">
               <img
                 id="device-cloud-screen"
                 alt="Tela do Android"
                 draggable="false"
-                style="width:220px;height:auto;max-height:400px;display:block;background:#000;border-radius:14px;border:1px solid rgba(148,163,184,.25);touch-action:none;user-select:none;cursor:pointer;"
+                style="width:253px;height:auto;max-height:460px;display:block;background:#000;border-radius:14px;border:1px solid rgba(148,163,184,.25);touch-action:none;user-select:none;cursor:pointer;"
               />
-              <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
+              <div style="display:flex;gap:8px;margin-top:8px;">
                 <button type="button" id="device-cloud-key-back" class="instance-action-btn enabled btn-campaign-secondary">Voltar</button>
                 <button type="button" id="device-cloud-key-home" class="instance-action-btn enabled btn-campaign-secondary">Início</button>
               </div>
-              <label class="muted" style="display:block;margin-top:12px;font-size:12px;">Número novo (DDI + DDD + número)</label>
-              <div style="display:flex;gap:8px;margin-top:6px;max-width:240px;">
-                <input id="device-cloud-phone-number" type="tel" inputmode="numeric" placeholder="5511987654321" style="flex:1;min-width:0;" />
+              <label class="muted" style="display:block;margin-top:12px;font-size:12px;">Número WhatsApp</label>
+              <div style="display:flex;align-items:stretch;gap:8px;margin-top:6px;">
+                <div aria-label="Brasil DDI 55" title="Brasil" style="display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:8px;border:1px solid rgba(148,163,184,.35);background:rgba(15,23,42,.55);white-space:nowrap;font-weight:600;">
+                  <span aria-hidden="true" style="display:inline-flex;width:22px;height:16px;border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.25);">
+                    <svg viewBox="0 0 22 16" width="22" height="16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <rect width="22" height="16" fill="#009b3a"/>
+                      <polygon points="11,1.5 20.5,8 11,14.5 1.5,8" fill="#fedd00"/>
+                      <circle cx="11" cy="8" r="3.1" fill="#002776"/>
+                    </svg>
+                  </span>
+                  <span>+55</span>
+                </div>
+                <input id="device-cloud-phone-number" type="tel" inputmode="numeric" placeholder="11 98765-4321" style="flex:1;min-width:0;" />
                 <button type="button" id="device-cloud-send-number" class="instance-action-btn enabled">Enviar</button>
               </div>
-              <p class="muted" style="margin-top:8px;font-size:12px;">Toque no campo do número no celular, depois envie. Aguarde o WhatsApp mostrar o código de verificação.</p>
+              <p class="muted" style="margin-top:8px;font-size:12px;">Toque no campo do número no celular, depois envie. O DDI 55 é fixo. Aguarde o código de verificação na tela.</p>
             </div>
           </section>
         </div>
@@ -22432,46 +22445,40 @@
         await refreshDeviceCloudScreen();
       }
 
-      function renderDeviceCloudList(devices) {
-        const list = document.getElementById("device-cloud-list");
-        if (!list) return;
-        const rows = Array.isArray(devices) ? devices.filter((d) => d && d.id) : [];
-        if (!rows.length) {
-          list.style.display = "none";
-          list.innerHTML = "";
-          return;
-        }
-        list.style.display = "flex";
-        list.innerHTML = rows
-          .map((d) => {
-            const id = String(d.id);
-            const name = String(d.name || "Android");
-            const status = String(d.status || "").toUpperCase() || "—";
-            const active = id === deviceCloudActiveId;
-            return (
-              '<button type="button" class="instance-action-btn' +
-              (active ? " enabled" : " btn-campaign-secondary") +
-              '" data-device-cloud-id="' +
-              id +
-              '" style="text-align:left;justify-content:flex-start;">' +
-              name +
-              " · " +
-              status +
-              "</button>"
-            );
-          })
-          .join("");
-        list.querySelectorAll("[data-device-cloud-id]").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            startDeviceCloudScreen(String(btn.getAttribute("data-device-cloud-id") || ""));
-            renderDeviceCloudList(rows);
-            setDeviceCloudMsg("Toque na tela. Para conectar: número novo e aguarde o código.");
-          });
+      function usableDeviceCloudDevices(devices) {
+        return (Array.isArray(devices) ? devices : []).filter((d) => {
+          if (!d || !d.id) return false;
+          if (String(d.status || "").toUpperCase() === "ERROR") return false;
+          if (/pixel extra/i.test(String(d.name || ""))) return false;
+          return true;
         });
       }
 
-      function startDeviceCloudScreen(id) {
+      function fillDeviceCloudName(name) {
+        const input = document.getElementById("device-cloud-device-name");
+        const wrap = document.getElementById("device-cloud-name-wrap");
+        if (wrap) wrap.style.display = "block";
+        if (input && document.activeElement !== input) input.value = String(name || "");
+      }
+
+      async function saveDeviceCloudName() {
+        const input = document.getElementById("device-cloud-device-name");
+        const name = String(input && input.value ? input.value : "").trim();
+        if (!name || !deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
+        const res = await fetch(deviceCloudApiUrl + "/devices/" + encodeURIComponent(deviceCloudActiveId), {
+          method: "PATCH",
+          headers: deviceCloudHeaders(true),
+          body: JSON.stringify({ name }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(String(data.message || data.error || "Não foi possível salvar o nome."));
+        }
+      }
+
+      function startDeviceCloudScreen(id, name) {
         deviceCloudActiveId = id;
+        fillDeviceCloudName(name);
         const wrap = document.getElementById("device-cloud-phone-wrap");
         if (wrap) wrap.style.display = "block";
         stopDeviceCloudScreen();
@@ -22483,13 +22490,15 @@
 
       async function sendDeviceCloudNumber() {
         const input = document.getElementById("device-cloud-phone-number");
-        const digits = String(input && input.value ? input.value : "").replace(/\D+/g, "");
+        let digits = String(input && input.value ? input.value : "").replace(/\D+/g, "");
+        if (digits.startsWith("55") && digits.length >= 12) digits = digits.slice(2);
         if (digits.length < 10) {
-          setDeviceCloudMsg("Informe o número com DDI, DDD e telefone.");
+          setDeviceCloudMsg("Informe DDD e número. O DDI 55 já está selecionado.");
           return;
         }
+        const full = "55" + digits;
         setDeviceCloudMsg("Enviando número para o WhatsApp…");
-        await sendDeviceCloudInput("text", { text: digits });
+        await sendDeviceCloudInput("text", { text: full });
         await sendDeviceCloudInput("key", { key: "enter" });
         setDeviceCloudMsg("Número enviado. Aguarde o WhatsApp mostrar o código de verificação na tela.");
       }
@@ -22538,16 +22547,14 @@
             headers: deviceCloudHeaders(false),
           });
           const listed = await listRes.json().catch(() => []);
-          const devices = Array.isArray(listed) ? listed : [];
+          const devices = usableDeviceCloudDevices(listed);
           const online = devices.find((d) => String(d && d.status ? d.status : "").toUpperCase() === "ONLINE");
-          const ready = devices.find((d) => d && d.id && String(d.status || "").toUpperCase() !== "ERROR");
-          const chosen = online || ready || devices[0];
+          const chosen = online || devices[0];
           if (!chosen || !chosen.id) {
             setDeviceCloudMsg("Nenhum celular virtual disponível no servidor.");
             return;
           }
-          startDeviceCloudScreen(String(chosen.id));
-          renderDeviceCloudList(devices);
+          startDeviceCloudScreen(String(chosen.id), chosen.name || "Android");
           setDeviceCloudMsg("Toque na tela. Conecte um número novo e aguarde o código de verificação.");
           if (btn) btn.textContent = "Atualizar lista";
         } catch (err) {
@@ -51669,6 +51676,7 @@
       document.getElementById("device-cloud-key-back")?.addEventListener("click", () => void sendDeviceCloudInput("key", { key: "back" }).catch((err) => setDeviceCloudMsg(err.message || String(err))));
       document.getElementById("device-cloud-key-home")?.addEventListener("click", () => void sendDeviceCloudInput("key", { key: "home" }).catch((err) => setDeviceCloudMsg(err.message || String(err))));
       document.getElementById("device-cloud-send-number")?.addEventListener("click", () => void sendDeviceCloudNumber().catch((err) => setDeviceCloudMsg(err.message || String(err))));
+      document.getElementById("device-cloud-device-name")?.addEventListener("change", () => void saveDeviceCloudName().catch((err) => setDeviceCloudMsg(err.message || String(err))));
       (function bindDeviceCloudScreen() {
         const img = document.getElementById("device-cloud-screen");
         if (!img) return;
