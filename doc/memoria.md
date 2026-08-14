@@ -1,3 +1,7 @@
+## 2026-08-14 09:58 — Boas-vindas: failover só se eleito desconectado
+- Pausa humana mantém 5181077770; secundário só se primário offline
+- Marker: DEPLOY-2026-08-14-welcome-failover-if-disconnected
+
 ## 2026-08-14 09:55 — Boas-vindas só pelo número eleito (sem failover)
 - Pausa humana/Preparando não troca para 5197462102; repete no 5181077770
 - Marker: DEPLOY-2026-08-14-welcome-primary-only-no-failover

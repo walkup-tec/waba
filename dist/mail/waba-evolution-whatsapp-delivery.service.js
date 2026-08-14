@@ -136,6 +136,35 @@ const resolveEvoSendSlots = async (phoneHints, opts) => {
     }
     return slots;
 };
+/**
+ * Boas-vindas: usa o número eleito (1º hint) mesmo em pausa humana/Preparando.
+ * Só avança para secundário/terciário se o eleito estiver desconectado.
+ */
+const resolveWelcomeEvoSendSlots = async (phoneHints, logLabel) => {
+    if (!phoneHints.length)
+        return [];
+    const primaryHint = phoneHints[0];
+    const primaryInstance = await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(primaryHint, {
+        verifyLiveIfCatalogClosed: true,
+    });
+    if (primaryInstance) {
+        const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(primaryInstance, { fresh: true });
+        if (!shouldSkipInstanceForSend(liveState)) {
+            return [{ phoneHint: primaryHint, instanceName: primaryInstance }];
+        }
+        console.warn(`[whatsapp] ${logLabel}: número eleito ${primaryHint} (${primaryInstance}) desconectado (connectionState=${liveState || "?"}). Próximo da fila: ${phoneHints.slice(1).join(" → ") || "—"}.`);
+    }
+    else {
+        console.warn(`[whatsapp] ${logLabel}: número eleito ${primaryHint} indisponível. Próximo da fila: ${phoneHints.slice(1).join(" → ") || "—"}.`);
+    }
+    if (phoneHints.length <= 1)
+        return [];
+    return resolveEvoSendSlots(phoneHints.slice(1), {
+        allowAnyOpenFallback: false,
+        verifyLiveIfCatalogClosed: true,
+        logLabel,
+    });
+};
 const logCriticalLifecycleBypass = async (instanceName, logLabel) => {
     try {
         const life = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(instanceName);
@@ -219,17 +248,19 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
     }
     const phoneHintsAll = resolveWabaWhatsAppPhoneHints();
     const ignoreAquecedorLifecycle = Boolean(input.ignoreAquecedorLifecycle);
-    const phoneHints = ignoreAquecedorLifecycle ? phoneHintsAll.slice(0, 1) : phoneHintsAll;
+    const phoneHints = phoneHintsAll;
     const maxRounds = Math.max(1, options.maxRounds);
     const roundDelayMs = resolveWabaWhatsAppRoundDelayMs();
     const timeoutMs = resolveWabaWhatsAppSendTimeoutMs();
     const errors = [];
     for (let round = 1; round <= maxRounds; round += 1) {
-        const slots = await resolveEvoSendSlots(phoneHints, {
-            allowAnyOpenFallback: false,
-            verifyLiveIfCatalogClosed: ignoreAquecedorLifecycle,
-            logLabel,
-        });
+        const slots = ignoreAquecedorLifecycle
+            ? await resolveWelcomeEvoSendSlots(phoneHintsAll, logLabel)
+            : await resolveEvoSendSlots(phoneHints, {
+                allowAnyOpenFallback: false,
+                verifyLiveIfCatalogClosed: false,
+                logLabel,
+            });
         if (!slots.length) {
             const msg = `rodada ${round}/${maxRounds}: nenhuma instância conectada (${phoneHints.join(" → ")}).`;
             errors.push(msg);
@@ -239,9 +270,12 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
             continue;
         }
         if (round === 1) {
-            console.info(`[whatsapp] ${logLabel}: sequência ${slots.map((s) => `${s.phoneHint}→${s.instanceName}`).join(", ")}${ignoreAquecedorLifecycle
-                ? " (número eleito; ignora Preparando/pausa humana; sem failover)"
-                : ""}.`);
+            const welcomeNote = ignoreAquecedorLifecycle
+                ? slots.length === 1 && slots[0]?.phoneHint === phoneHintsAll[0]
+                    ? " (número eleito conectado; ignora pausa humana/Preparando)"
+                    : " (failover: número eleito desconectado)"
+                : "";
+            console.info(`[whatsapp] ${logLabel}: sequência ${slots.map((s) => `${s.phoneHint}→${s.instanceName}`).join(", ")}${welcomeNote}.`);
         }
         else {
             console.info(`[whatsapp] ${logLabel}: repetindo sequência (rodada ${round}/${maxRounds}).`);
