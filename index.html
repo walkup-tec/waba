@@ -3034,6 +3034,10 @@
           --menu-section-accent-rgb: 250, 204, 21;
         }
 
+        .menu-group[data-menu-group="marketing"] {
+          --menu-section-accent-rgb: 251, 113, 133;
+        }
+
         .menu-group[data-menu-group="suporte"] {
           --menu-section-accent-rgb: 186, 230, 253;
         }
@@ -3084,6 +3088,15 @@
 
       body:not(.waba-master-visible) .menu-group[data-menu-group="suporte"] {
         display: none !important;
+      }
+
+      body:not(.waba-master-visible) .menu-group[data-menu-group="marketing"] {
+        display: none !important;
+      }
+
+      .menu-group[data-menu-group="marketing"] .menu-group-toggle {
+        background: rgba(76, 5, 25, 0.88);
+        color: #fda4af;
       }
 
       .menu-group[data-menu-group="suporte"] .menu-group-toggle {
@@ -3359,13 +3372,270 @@
       body.admin-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
       body.suporte-section-active #waba-main > #tab-admin-monitor-cpu:not(.tab-hidden),
       body.admin-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
-      body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden) {
+      body.suporte-section-active #waba-main > #tab-admin-push:not(.tab-hidden),
+      body.admin-section-active #waba-main > #tab-marketing-leads-pj:not(.tab-hidden),
+      body.marketing-section-active #waba-main > #tab-marketing-leads-pj:not(.tab-hidden) {
         display: block;
       }
 
       #tab-admin-push .panel {
         padding: 28px 24px 32px;
       }
+
+      /* Marketing · Leads PJ — formulário compacto */
+      #tab-marketing-leads-pj .panel {
+        padding: 18px 18px 22px;
+      }
+      #tab-marketing-leads-pj .panel-header {
+        margin-bottom: 12px;
+        gap: 6px;
+      }
+      #tab-marketing-leads-pj .panel-title {
+        font-size: 1.05rem;
+        font-weight: 650;
+      }
+      #tab-marketing-leads-pj .panel-header .muted {
+        font-size: 0.82rem;
+        line-height: 1.35;
+      }
+      .mlc-form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .mlc-section {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.35);
+        padding: 12px 12px 10px;
+      }
+      .mlc-section-title {
+        margin: 0 0 10px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #fda4af;
+      }
+      .mlc-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 10px 12px;
+      }
+      .mlc-col-3 { grid-column: span 3; }
+      .mlc-col-4 { grid-column: span 4; }
+      .mlc-col-6 { grid-column: span 6; }
+      .mlc-col-8 { grid-column: span 8; }
+      .mlc-col-12 { grid-column: span 12; }
+      .mlc-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .mlc-field label,
+      .mlc-field .field-label {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #cbd5e1;
+      }
+      .mlc-field .admin-push-input,
+      .mlc-field .admin-push-textarea {
+        width: 100%;
+        min-height: 36px;
+        padding: 7px 10px;
+        font-size: 0.88rem;
+      }
+      .mlc-field .admin-push-textarea {
+        min-height: 88px;
+      }
+      .mlc-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        align-items: center;
+      }
+      .mlc-checks .admin-push-audience-item {
+        margin: 0;
+        font-size: 0.8rem;
+        padding: 4px 0;
+      }
+      .mlc-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-top: 2px;
+      }
+      #tab-marketing-leads-pj .admin-subscribers-toolbar {
+        margin-top: 14px;
+        margin-bottom: 8px;
+      }
+
+      .mlc-history-wrap {
+        overflow-x: auto;
+      }
+      .mlc-history-table {
+        table-layout: fixed;
+        width: 100%;
+      }
+      .mlc-history-table .mlc-col-actions { width: 12%; }
+      .mlc-history-table .mlc-col-name { width: 18%; }
+      .mlc-history-table .mlc-col-date { width: 14%; }
+      .mlc-history-table .mlc-col-leads { width: 7%; }
+      .mlc-history-table .mlc-col-stage { width: 49%; }
+      .mlc-history-table td.mlc-col-name,
+      .mlc-history-table th.mlc-col-name {
+        max-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .mlc-history-table td.mlc-col-stage {
+        white-space: normal;
+      }
+      .mlc-history-table td.mlc-col-actions {
+        vertical-align: middle;
+      }
+      .mlc-history-table tr.mlc-row-deleting {
+        outline: 2px solid #ef4444;
+        outline-offset: -2px;
+        background: rgba(239, 68, 68, 0.08);
+        transition: background 0.15s ease, outline-color 0.15s ease;
+      }
+      .mlc-stage {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .mlc-stage-current {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 650;
+        font-size: 0.88rem;
+      }
+      .mlc-stage-steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .mlc-stage-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.68rem;
+        line-height: 1.2;
+        padding: 2px 7px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        color: #94a3b8;
+        background: rgba(15, 23, 42, 0.35);
+      }
+      .mlc-stage-pill.is-done {
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.35);
+        background: rgba(34, 197, 94, 0.1);
+      }
+      .mlc-stage-pill.is-active {
+        color: #fda4af;
+        border-color: rgba(251, 113, 133, 0.45);
+        background: rgba(251, 113, 133, 0.12);
+      }
+      .mlc-stage-pill.is-failed {
+        color: #fca5a5;
+        border-color: rgba(248, 113, 113, 0.4);
+      }
+      .mlc-stage-check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, 0.9);
+        color: #052e16;
+        font-size: 9px;
+        font-weight: 800;
+        line-height: 1;
+        flex: 0 0 auto;
+      }
+      .mlc-spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid rgba(253, 164, 175, 0.25);
+        border-top-color: #fda4af;
+        animation: mlc-spin 0.8s linear infinite;
+        flex: 0 0 auto;
+      }
+      .mlc-spinner.is-done {
+        animation: none;
+        border-color: #86efac;
+        background: #86efac;
+      }
+      @keyframes mlc-spin {
+        to { transform: rotate(360deg); }
+      }
+      .mlc-download-cell {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-top: 0;
+      }
+      .mlc-download-cell .instance-action-btn {
+        font-size: 12px;
+        padding: 4px 10px;
+        white-space: nowrap;
+      }
+      .mlc-delete-btn.is-deleting {
+        pointer-events: none;
+        opacity: 0.9;
+      }
+      .mlc-delete-btn.is-deleting .mlc-delete-spin {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 6px;
+        border-radius: 50%;
+        border: 2px solid rgba(254, 226, 226, 0.35);
+        border-top-color: #fecaca;
+        animation: mlc-spin 0.8s linear infinite;
+        vertical-align: -2px;
+      }
+      .mlc-delete-btn .mlc-delete-spin {
+        display: none;
+      }
+      #mlc-refresh.is-loading .mlc-refresh-label::before {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 6px;
+        border-radius: 50%;
+        border: 2px solid rgba(226, 232, 240, 0.25);
+        border-top-color: #e2e8f0;
+        animation: mlc-spin 0.8s linear infinite;
+        vertical-align: -2px;
+      }
+
+      @media (max-width: 900px) {
+        .mlc-col-3,
+        .mlc-col-4,
+        .mlc-col-6,
+        .mlc-col-8 {
+          grid-column: span 12;
+        }
+      }
+      @media (min-width: 901px) and (max-width: 1100px) {
+        .mlc-col-3 { grid-column: span 4; }
+        .mlc-col-4 { grid-column: span 6; }
+      }
+
+
 
       .admin-push-grid {
         display: grid;
@@ -7226,7 +7496,8 @@
 
       /* Admin: centralizar painel na área útil (à direita da sidebar) */
       body.admin-section-active #waba-main.aquecedor-section-shell,
-      body.suporte-section-active #waba-main.aquecedor-section-shell {
+      body.suporte-section-active #waba-main.aquecedor-section-shell,
+      body.marketing-section-active #waba-main.aquecedor-section-shell {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -16450,6 +16721,30 @@
                 </button>
               </div>
             </div>
+
+            <div class="menu-group" data-menu-group="marketing">
+              <button type="button" class="menu-group-toggle" data-menu-group-toggle="marketing" aria-expanded="false">
+                <span class="menu-group-title">Marketing</span>
+                <span class="menu-group-caret" aria-hidden="true">â–¾</span>
+              </button>
+              <div class="menu-group-items">
+                <button
+                  id="tab-btn-marketing-leads-pj"
+                  class="tab-button admin-tab-button admin-master-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-marketing-leads-pj"
+                  data-tab="marketing-leads-pj"
+                  data-menu-key="marketing-leads-pj"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M7 16V9"></path><path d="M12 16V5"></path><path d="M17 16v-4"></path></svg>
+                  </span>
+                  <span class="tab-label">Leads PJ</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -16726,6 +17021,17 @@
               aria-checked="false"
             >
               <span>Push</span>
+            </button>
+            <div class="mobile-tabs-section-label admin-master-only" data-menu-section="marketing">Marketing</div>
+            <button
+              class="tab-button admin-tab-button admin-master-only"
+              type="button"
+              data-tab="marketing-leads-pj"
+              data-menu-key="marketing-leads-pj"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              <span>Leads PJ</span>
             </button>
           </div>
         </div>
@@ -19967,6 +20273,244 @@
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+                        <div id="tab-marketing-leads-pj" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Marketing · Leads PJ</div>
+                <span class="muted">Defina os filtros, extraia a lista e baixe o Excel enriquecido.</span>
+              </div>
+              <div class="aquecedor-section">
+                <form id="marketing-leads-cnpj-form" class="mlc-form">
+                  <div class="mlc-section">
+                    <div class="mlc-section-title">Lista</div>
+                    <div class="mlc-grid">
+                      <div class="mlc-field mlc-col-8">
+                        <label class="field-label" for="mlc-name">Nome da lista</label>
+                        <input id="mlc-name" class="admin-push-input" type="text" maxlength="120" required placeholder="Ex.: Corretores Seguro RS" />
+                      </div>
+                      <div class="mlc-field mlc-col-4">
+                        <label class="field-label" for="mlc-source">Origem</label>
+                        <select id="mlc-source" class="admin-push-input">
+                          <option value="portal">Casa dos Dados</option>
+                          <option value="manual">Manual (colar CNPJs)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="mlc-filters">
+                    <div class="mlc-section">
+                      <div class="mlc-section-title">CNPJ e busca</div>
+                      <div class="mlc-grid">
+                        <div class="mlc-field mlc-col-6">
+                          <label class="field-label" for="mlc-cnpj">CNPJ</label>
+                          <input id="mlc-cnpj" class="admin-push-input" type="text" placeholder="33.000.167/0001-01 ou 33000167000101" />
+                        </div>
+                        <div class="mlc-field mlc-col-6">
+                          <label class="field-label" for="mlc-busca">Busca textual</label>
+                          <input id="mlc-busca" class="admin-push-input" type="text" placeholder="Ex.: Seguro" />
+                        </div>
+                        <div class="mlc-field mlc-col-8">
+                          <span class="field-label">Buscar em</span>
+                          <div class="mlc-checks">
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-busca-razao" checked /> Razão Social</label>
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-busca-fantasia" checked /> Nome Fantasia</label>
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-busca-socio" checked /> Nome do Sócio</label>
+                          </div>
+                        </div>
+                        <div class="mlc-field mlc-col-4">
+                          <label class="field-label" for="mlc-tipo">Tipo de pesquisa</label>
+                          <select id="mlc-tipo" class="admin-push-input">
+                            <option value="Exata" selected>Exata</option>
+                            <option value="Aproximada">Aproximada</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mlc-section">
+                      <div class="mlc-section-title">Cadastro e CNAE</div>
+                      <div class="mlc-grid">
+                        <div class="mlc-field mlc-col-4">
+                          <label class="field-label" for="mlc-raiz">CNPJ raiz</label>
+                          <input id="mlc-raiz" class="admin-push-input" type="text" maxlength="8" placeholder="8 dígitos" />
+                        </div>
+                        <div class="mlc-field mlc-col-8">
+                          <label class="field-label" for="mlc-cnae">Atividade principal (CNAE)</label>
+                          <input id="mlc-cnae" class="admin-push-input" type="text" placeholder="Código ou nome da atividade" />
+                        </div>
+                        <div class="mlc-field mlc-col-8">
+                          <label class="field-label" for="mlc-natureza">Natureza jurídica</label>
+                          <input id="mlc-natureza" class="admin-push-input" type="text" placeholder="Código ou nome da natureza" />
+                        </div>
+                        <div class="mlc-field mlc-col-4">
+                          <span class="field-label">Opção CNAE</span>
+                          <div class="mlc-checks">
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-cnae-sec" /> Incluir atividade secundária</label>
+                          </div>
+                        </div>
+                        <div class="mlc-field mlc-col-12">
+                          <span class="field-label">Situação cadastral</span>
+                          <div class="mlc-checks">
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-sit-ativa" checked /> Ativa</label>
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-sit-baixada" /> Baixada</label>
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-sit-inapta" /> Inapta</label>
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-sit-nula" /> Nula</label>
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-sit-suspensa" /> Suspensa</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mlc-section">
+                      <div class="mlc-section-title">Localização e contato</div>
+                      <div class="mlc-grid">
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-uf">Estado (UF)</label>
+                          <input id="mlc-uf" class="admin-push-input" type="text" maxlength="2" placeholder="UF" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-municipio">Município</label>
+                          <input id="mlc-municipio" class="admin-push-input" type="text" placeholder="Município" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-bairro">Bairro</label>
+                          <input id="mlc-bairro" class="admin-push-input" type="text" placeholder="Bairro" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-cep">CEP</label>
+                          <input id="mlc-cep" class="admin-push-input" type="text" maxlength="8" placeholder="8 dígitos" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-ddd">DDD</label>
+                          <input id="mlc-ddd" class="admin-push-input" type="text" maxlength="2" placeholder="2 dígitos" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-telefone">Telefone</label>
+                          <input id="mlc-telefone" class="admin-push-input" type="text" maxlength="11" placeholder="10 ou 11 dígitos" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-max-pages">Máx. páginas</label>
+                          <input id="mlc-max-pages" class="admin-push-input" type="number" min="1" max="50" value="5" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-porte">Porte da empresa</label>
+                          <input id="mlc-porte" class="admin-push-input" type="text" placeholder="Porte" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mlc-section">
+                      <div class="mlc-section-title">Datas e capital</div>
+                      <div class="mlc-grid">
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-abertura-de">Abertura de</label>
+                          <input id="mlc-abertura-de" class="admin-push-input" type="text" placeholder="dd/mm/aaaa" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-abertura-ate">Abertura até</label>
+                          <input id="mlc-abertura-ate" class="admin-push-input" type="text" placeholder="dd/mm/aaaa" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-cap-min">Capital mínimo</label>
+                          <input id="mlc-cap-min" class="admin-push-input" type="text" placeholder="A partir de" />
+                        </div>
+                        <div class="mlc-field mlc-col-3">
+                          <label class="field-label" for="mlc-cap-max">Capital máximo</label>
+                          <input id="mlc-cap-max" class="admin-push-input" type="text" placeholder="Até" />
+                        </div>
+                        <div class="mlc-field mlc-col-6">
+                          <div class="mlc-checks" style="margin-bottom:6px">
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-exc-mei" /> Excluídas do MEI</label>
+                          </div>
+                          <div class="mlc-grid">
+                            <div class="mlc-field mlc-col-6">
+                              <label class="field-label" for="mlc-exc-mei-de">De</label>
+                              <input id="mlc-exc-mei-de" class="admin-push-input" type="text" placeholder="dd/mm/aaaa" />
+                            </div>
+                            <div class="mlc-field mlc-col-6">
+                              <label class="field-label" for="mlc-exc-mei-ate">Até</label>
+                              <input id="mlc-exc-mei-ate" class="admin-push-input" type="text" placeholder="dd/mm/aaaa" />
+                            </div>
+                          </div>
+                        </div>
+                        <div class="mlc-field mlc-col-6">
+                          <div class="mlc-checks" style="margin-bottom:6px">
+                            <label class="admin-push-audience-item"><input type="checkbox" id="mlc-exc-simples" /> Excluídas do Simples</label>
+                          </div>
+                          <div class="mlc-grid">
+                            <div class="mlc-field mlc-col-6">
+                              <label class="field-label" for="mlc-exc-simples-de">De</label>
+                              <input id="mlc-exc-simples-de" class="admin-push-input" type="text" placeholder="dd/mm/aaaa" />
+                            </div>
+                            <div class="mlc-field mlc-col-6">
+                              <label class="field-label" for="mlc-exc-simples-ate">Até</label>
+                              <input id="mlc-exc-simples-ate" class="admin-push-input" type="text" placeholder="dd/mm/aaaa" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mlc-section">
+                      <div class="mlc-section-title">Filtros rápidos</div>
+                      <div class="mlc-checks">
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-somente-mei" /> Somente MEI</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-excluir-mei" /> Excluir MEI</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-somente-matriz" /> Somente matriz</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-somente-filial" /> Somente filial</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-empresas-simples" /> Empresas do Simples</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-excluir-simples" /> Excluir Simples</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-com-telefone" /> Com telefone</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-somente-fixo" /> Somente fixo</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-somente-celular" /> Somente celular</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-com-email" /> Com e-mail</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-excluir-visualizadas" /> Excluir visualizadas</label>
+                        <label class="admin-push-audience-item"><input type="checkbox" id="mlc-excluir-contab" /> Excluir e-mail "contab"</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="mlc-manual-wrap" class="mlc-section" hidden>
+                    <div class="mlc-section-title">CNPJs manuais</div>
+                    <div class="mlc-field">
+                      <label class="field-label" for="mlc-manual">Cole os CNPJs (um por linha ou separados)</label>
+                      <textarea id="mlc-manual" class="admin-push-textarea" placeholder="00.000.000/0000-00"></textarea>
+                    </div>
+                  </div>
+
+                  <div class="mlc-actions">
+                    <button id="mlc-submit" class="instance-action-btn btn-qrcode enabled" type="submit">Extrair lista</button>
+                    <button id="mlc-refresh" class="instance-action-btn btn-refresh enabled" type="button" title="Atualizar etapas do processo">
+                      <span class="mlc-refresh-label">Atualizar processo</span>
+                    </button>
+                    <p id="mlc-feedback" class="muted" style="margin:0" role="status" aria-live="polite"></p>
+                  </div>
+                </form>
+
+                <div class="admin-subscribers-toolbar">
+                  <span id="mlc-summary" class="admin-subscribers-summary">Histórico de listas</span>
+                </div>
+                <div class="admin-subscribers-table-wrap mlc-history-wrap">
+                  <table class="admin-subscribers-table mlc-history-table" aria-label="Histórico Leads CNPJ">
+                    <thead>
+                      <tr>
+                        <th class="mlc-col-actions">Ações</th>
+                        <th class="mlc-col-name">Nome</th>
+                        <th class="mlc-col-date">Data gerada</th>
+                        <th class="mlc-col-leads">Leads</th>
+                        <th class="mlc-col-stage">Etapa</th>
+                      </tr>
+                    </thead>
+                    <tbody id="mlc-tbody"><tr><td colspan="5" class="muted">Carregando…</td></tr></tbody>
+                  </table>
                 </div>
               </div>
             </section>
@@ -23336,6 +23880,7 @@
       }
 
       function getMenuSectionForTab(tabName) {
+        if (isMarketingTab(tabName)) return "marketing";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (tabName === "disparos" || tabName === "disparo-evo" || isOfficialTab(tabName)) return "disparos";
@@ -23344,6 +23889,10 @@
 
       function isSuporteTab(tabName) {
         return tabName === "admin-chamados" || tabName === "admin-monitor-cpu" || tabName === "admin-push";
+      }
+
+      function isMarketingTab(tabName) {
+        return tabName === "marketing-leads-pj";
       }
 
       function isMenuSectionLocked(section) {
@@ -23359,6 +23908,7 @@
         if (tabName === "admin-chamados") return !hasMasterAccess();
         if (tabName === "admin-monitor-cpu") return !hasMasterAccess();
         if (tabName === "admin-push") return !hasMasterAccess();
+        if (tabName === "marketing-leads-pj") return !hasMasterAccess();
         if (tabName === "disparos-lancamento" && !shouldShowDisparosLancamentoMenu()) {
           return true;
         }
@@ -23577,10 +24127,11 @@
           const section = getMenuSectionForTab(tab);
           const lockedByAdmin = section === "admin" && !hasAdminAccess();
           const lockedBySuporte = section === "suporte" && !hasMasterAccess();
+          const lockedByMarketing = section === "marketing" && !hasMasterAccess();
           const lockedByInstances =
             section === "aquecedor" && isTabLocked(tab) && hasAquecedorAccess();
-          const locked = lockedByAdmin || lockedBySuporte || lockedByInstances;
-          btn.classList.toggle("menu-section-locked", lockedByAdmin || lockedBySuporte);
+          const locked = lockedByAdmin || lockedBySuporte || lockedByMarketing || lockedByInstances;
+          btn.classList.toggle("menu-section-locked", lockedByAdmin || lockedBySuporte || lockedByMarketing);
           btn.classList.toggle("disabled", locked);
           btn.setAttribute("aria-disabled", locked ? "true" : "false");
           if (lockedByAdmin) {
@@ -31059,6 +31610,428 @@
           .join("");
       }
 
+
+      let marketingLeadsCnpjPollTimer = null;
+      function stopMarketingLeadsCnpjPolling() {
+        if (!marketingLeadsCnpjPollTimer) return;
+        clearInterval(marketingLeadsCnpjPollTimer);
+        marketingLeadsCnpjPollTimer = null;
+      }
+      function startMarketingLeadsCnpjPolling() {
+        stopMarketingLeadsCnpjPolling();
+        marketingLeadsCnpjPollTimer = setInterval(() => {
+          if (typeof activeTab === "string" && activeTab !== "marketing-leads-pj") {
+            stopMarketingLeadsCnpjPolling();
+            return;
+          }
+          void loadMarketingLeadsCnpjHistory({ silent: true });
+        }, 2000);
+      }
+      function syncMarketingLeadsCnpjSourceUi() {
+        const isManual = String(document.getElementById("mlc-source")?.value || "portal") === "manual";
+        const filters = document.getElementById("mlc-filters");
+        const manual = document.getElementById("mlc-manual-wrap");
+        if (filters) filters.hidden = isManual;
+        if (manual) manual.hidden = !isManual;
+      }
+      function formatMarketingLeadsCnpjDate(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "—";
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) return raw;
+        return date.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      }
+      function marketingLeadsCnpjStatusLabel(status) {
+        return (
+          {
+            draft: "Rascunho",
+            scraping: "Coletando",
+            enriching: "Enriquecendo",
+            ready: "Pronto",
+            failed: "Falhou",
+          }[String(status || "")] || String(status || "—")
+        );
+      }
+      const MLC_STAGES = [
+        { key: "abrindo", label: "Abrindo Portal" },
+        { key: "pesquisando", label: "Pesquisando" },
+        { key: "copiando", label: "Copiando" },
+        { key: "enriquecendo", label: "Enriquecendo" },
+        { key: "baixar", label: "Baixar" },
+      ];
+      function resolveMarketingLeadsCnpjStage(item) {
+        const status = String(item?.status || "");
+        const msg = String(item?.progressMessage || item?.error || "").toLowerCase();
+        if (status === "ready") return "baixar";
+        if (status === "failed") {
+          if (/enriquec|receitaws|lote/.test(msg)) return "enriquecendo";
+          if (/página|copi|card|cnpj|colet/.test(msg)) return "copiando";
+          if (/filtro|pesquis|cnae|buscar|aplicando/.test(msg)) return "pesquisando";
+          return "abrindo";
+        }
+        if (status === "enriching") return "enriquecendo";
+        if (status === "scraping" || status === "draft") {
+          if (/enriquec|receitaws|lote do dia/.test(msg)) return "enriquecendo";
+          if (/página|copi|card|lendo|coletados|avançando/.test(msg)) return "copiando";
+          if (/filtro|pesquis|cnae|buscar|aplicando|atividade/.test(msg)) return "pesquisando";
+          return "abrindo";
+        }
+        return "abrindo";
+      }
+      function renderMarketingLeadsCnpjStageCell(item) {
+        const status = String(item?.status || "");
+        const activeKey = resolveMarketingLeadsCnpjStage(item);
+        const busy = status === "scraping" || status === "enriching" || status === "draft";
+        const failed = status === "failed";
+        const activeIdx = MLC_STAGES.findIndex((s) => s.key === activeKey);
+        const currentLabel = failed
+          ? "Falhou"
+          : MLC_STAGES.find((s) => s.key === activeKey)?.label ||
+            marketingLeadsCnpjStatusLabel(status);
+        const spinnerClass =
+          busy ? "mlc-spinner" : status === "ready" ? "mlc-spinner is-done" : "mlc-spinner is-done";
+        const pills = MLC_STAGES.map((stage, idx) => {
+          let cls = "mlc-stage-pill";
+          let done = false;
+          if (failed && idx === activeIdx) cls += " is-failed is-active";
+          else if (status === "ready" || idx < activeIdx) {
+            cls += " is-done";
+            done = true;
+          } else if (idx === activeIdx) cls += " is-active";
+          const check = done
+            ? '<span class="mlc-stage-check" aria-hidden="true">✓</span>'
+            : "";
+          return '<span class="' + cls + '">' + check + escapeAdminHtml(stage.label) + "</span>";
+        }).join("");
+        const detail = item?.error
+          ? '<div class="muted" style="font-size:11px;margin-top:2px;color:#fca5a5">' +
+            escapeAdminHtml(String(item.error).slice(0, 160)) +
+            "</div>"
+          : item?.progressMessage && busy
+            ? '<div class="muted" style="font-size:11px;margin-top:2px">' +
+              escapeAdminHtml(String(item.progressMessage).slice(0, 120)) +
+              "</div>"
+            : "";
+        return (
+          '<div class="mlc-stage">' +
+          '<div class="mlc-stage-current">' +
+          (busy || status === "ready"
+            ? '<span class="' + spinnerClass + '" aria-hidden="true"></span>'
+            : "") +
+          "<span>" +
+          escapeAdminHtml(currentLabel) +
+          "</span>" +
+          "</div>" +
+          '<div class="mlc-stage-steps" aria-label="Etapas do processo">' +
+          pills +
+          "</div>" +
+          detail +
+          "</div>"
+        );
+      }
+      function renderMarketingLeadsCnpjActionsCell(item) {
+        const status = String(item?.status || "");
+        const id = encodeURIComponent(String(item?.id || ""));
+        const deleteBtn =
+          '<button type="button" class="instance-action-btn btn-delete enabled mlc-delete-btn" data-mlc-id="' +
+          id +
+          '" data-mlc-name="' +
+          escapeAdminHtml(String(item?.name || "lista")) +
+          '" title="Excluir esta linha do histórico"><span class="mlc-delete-spin" aria-hidden="true"></span><span class="mlc-delete-label">Excluir</span></button>';
+        const downloadBtn =
+          status === "ready"
+            ? '<a class="instance-action-btn btn-refresh enabled" href="' +
+              resolveWabaPublicPath("/admin/marketing/leads-cnpj/" + id + "/download") +
+              '">Baixar Excel</a>'
+            : "";
+        return '<div class="mlc-download-cell">' + deleteBtn + downloadBtn + "</div>";
+      }
+      function collectMarketingLeadsCnpjFilters() {
+        const situacao = [];
+        if (document.getElementById("mlc-sit-ativa")?.checked) situacao.push("Ativa");
+        if (document.getElementById("mlc-sit-baixada")?.checked) situacao.push("Baixada");
+        if (document.getElementById("mlc-sit-inapta")?.checked) situacao.push("Inapta");
+        if (document.getElementById("mlc-sit-nula")?.checked) situacao.push("Nula");
+        if (document.getElementById("mlc-sit-suspensa")?.checked) situacao.push("Suspensa");
+        const maxPagesRaw = Number(document.getElementById("mlc-max-pages")?.value || 0);
+        return {
+          cnpj: String(document.getElementById("mlc-cnpj")?.value || "").trim(),
+          buscaTextual: String(document.getElementById("mlc-busca")?.value || "").trim(),
+          buscaEmRazaoSocial: Boolean(document.getElementById("mlc-busca-razao")?.checked),
+          buscaEmNomeFantasia: Boolean(document.getElementById("mlc-busca-fantasia")?.checked),
+          buscaEmNomeSocio: Boolean(document.getElementById("mlc-busca-socio")?.checked),
+          tipoPesquisa: String(document.getElementById("mlc-tipo")?.value || "Exata"),
+          cnpjRaiz: String(document.getElementById("mlc-raiz")?.value || "").trim(),
+          situacaoCadastral: situacao,
+          atividadePrincipalCnae: String(document.getElementById("mlc-cnae")?.value || "").trim(),
+          incluirAtividadeSecundaria: Boolean(document.getElementById("mlc-cnae-sec")?.checked),
+          naturezaJuridica: String(document.getElementById("mlc-natureza")?.value || "").trim(),
+          estadoUf: String(document.getElementById("mlc-uf")?.value || "").trim(),
+          municipio: String(document.getElementById("mlc-municipio")?.value || "").trim(),
+          bairro: String(document.getElementById("mlc-bairro")?.value || "").trim(),
+          cep: String(document.getElementById("mlc-cep")?.value || "").trim(),
+          ddd: String(document.getElementById("mlc-ddd")?.value || "").trim(),
+          telefone: String(document.getElementById("mlc-telefone")?.value || "").trim(),
+          dataAberturaDe: String(document.getElementById("mlc-abertura-de")?.value || "").trim(),
+          dataAberturaAte: String(document.getElementById("mlc-abertura-ate")?.value || "").trim(),
+          capitalSocialMin: String(document.getElementById("mlc-cap-min")?.value || "").trim(),
+          capitalSocialMax: String(document.getElementById("mlc-cap-max")?.value || "").trim(),
+          empresasExcluidasMei: Boolean(document.getElementById("mlc-exc-mei")?.checked),
+          excluidasMeiDe: String(document.getElementById("mlc-exc-mei-de")?.value || "").trim(),
+          excluidasMeiAte: String(document.getElementById("mlc-exc-mei-ate")?.value || "").trim(),
+          empresasExcluidasSimples: Boolean(document.getElementById("mlc-exc-simples")?.checked),
+          excluidasSimplesDe: String(document.getElementById("mlc-exc-simples-de")?.value || "").trim(),
+          excluidasSimplesAte: String(document.getElementById("mlc-exc-simples-ate")?.value || "").trim(),
+          porteEmpresa: String(document.getElementById("mlc-porte")?.value || "").trim(),
+          somenteMei: Boolean(document.getElementById("mlc-somente-mei")?.checked),
+          excluirMei: Boolean(document.getElementById("mlc-excluir-mei")?.checked),
+          somenteMatriz: Boolean(document.getElementById("mlc-somente-matriz")?.checked),
+          somenteFilial: Boolean(document.getElementById("mlc-somente-filial")?.checked),
+          empresasDoSimples: Boolean(document.getElementById("mlc-empresas-simples")?.checked),
+          excluirEmpresasDoSimples: Boolean(document.getElementById("mlc-excluir-simples")?.checked),
+          comContatoTelefone: Boolean(document.getElementById("mlc-com-telefone")?.checked),
+          somenteFixo: Boolean(document.getElementById("mlc-somente-fixo")?.checked),
+          somenteCelular: Boolean(document.getElementById("mlc-somente-celular")?.checked),
+          comEmail: Boolean(document.getElementById("mlc-com-email")?.checked),
+          excluirEmpresasVisualizadas: Boolean(
+            document.getElementById("mlc-excluir-visualizadas")?.checked
+          ),
+          excluirEmailContab: Boolean(document.getElementById("mlc-excluir-contab")?.checked),
+          maxPages: Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 0,
+        };
+      }
+      function renderMarketingLeadsCnpjHistory(items) {
+        const tbody = document.getElementById("mlc-tbody");
+        const summary = document.getElementById("mlc-summary");
+        if (!tbody) return;
+        const rows = Array.isArray(items) ? items : [];
+        if (summary) {
+          summary.textContent =
+            rows.length === 1 ? "1 lista no histórico" : rows.length + " listas no histórico";
+        }
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="muted">Nenhuma lista gerada ainda.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows
+          .map((item) => {
+            const name = escapeAdminHtml(item.name || "—");
+            const started = escapeAdminHtml(formatMarketingLeadsCnpjDate(item.createdAt));
+            const actionsHtml = renderMarketingLeadsCnpjActionsCell(item);
+            const stageHtml = renderMarketingLeadsCnpjStageCell(item);
+            return (
+              '<tr data-mlc-row="' +
+              encodeURIComponent(String(item.id || "")) +
+              '">' +
+              '<td class="mlc-col-actions">' +
+              actionsHtml +
+              "</td>" +
+              '<td class="mlc-col-name" title="' +
+              name +
+              '"><strong>' +
+              name +
+              "</strong></td>" +
+              '<td class="mlc-col-date">' +
+              started +
+              "</td>" +
+              '<td class="mlc-col-leads">' +
+              Number(item.leadCount || 0) +
+              "</td>" +
+              '<td class="mlc-col-stage">' +
+              stageHtml +
+              "</td>" +
+              "</tr>"
+            );
+          })
+          .join("");
+      }
+      async function deleteMarketingLeadsCnpjList(id, name, btn) {
+        const listId = String(id || "").trim();
+        if (!listId) return;
+        if (btn?.classList?.contains("is-deleting")) return;
+        const label = String(name || "esta lista");
+        if (
+          !window.confirm(
+            'Excluir "' +
+              label +
+              '" do histórico? O arquivo Excel (se houver) também será removido.'
+          )
+        ) {
+          return;
+        }
+        const row =
+          btn?.closest?.("tr") ||
+          document.querySelector(
+            '#mlc-tbody tr[data-mlc-row="' + CSS.escape(encodeURIComponent(listId)) + '"]'
+          );
+        row?.classList.add("mlc-row-deleting");
+        if (btn) {
+          btn.classList.add("is-deleting");
+          btn.setAttribute("disabled", "true");
+          const labelEl = btn.querySelector(".mlc-delete-label");
+          if (labelEl) labelEl.textContent = "Excluindo…";
+        }
+        try {
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath("/admin/marketing/leads-cnpj/" + encodeURIComponent(listId)),
+            { method: "DELETE" },
+            30000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha ao excluir.");
+          showToast("Lista excluída do histórico.", "success");
+          void loadMarketingLeadsCnpjHistory({ silent: true });
+        } catch (error) {
+          row?.classList.remove("mlc-row-deleting");
+          if (btn) {
+            btn.classList.remove("is-deleting");
+            btn.removeAttribute("disabled");
+            const labelEl = btn.querySelector(".mlc-delete-label");
+            if (labelEl) labelEl.textContent = "Excluir";
+          }
+          showToast(error?.message || "Falha ao excluir a lista.", "error");
+        }
+      }
+      async function loadMarketingLeadsCnpjHistory(options = {}) {
+        const tbody = document.getElementById("mlc-tbody");
+        const refreshBtn = document.getElementById("mlc-refresh");
+        if (!hasMasterAccess()) {
+          if (tbody) {
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="muted">Área restrita ao usuário master.</td></tr>';
+          }
+          stopMarketingLeadsCnpjPolling();
+          return;
+        }
+        if (!options.silent && tbody) {
+          tbody.innerHTML = '<tr><td colspan="5" class="muted">Atualizando processo…</td></tr>';
+        }
+        if (refreshBtn && !options.silent) refreshBtn.classList.add("is-loading");
+        try {
+          const response = await fetchWithTimeout(
+            resolveWabaPublicPath("/admin/marketing/leads-cnpj"),
+            {},
+            60000
+          );
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || "Falha ao carregar listas.");
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          renderMarketingLeadsCnpjHistory(items);
+          const busy = items.some(
+            (item) =>
+              item.status === "scraping" ||
+              item.status === "enriching" ||
+              item.status === "draft"
+          );
+          if (busy) startMarketingLeadsCnpjPolling();
+          else stopMarketingLeadsCnpjPolling();
+        } catch (error) {
+          if (tbody && !options.silent) {
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="muted">' +
+              escapeAdminHtml(error?.message || "Falha ao carregar histórico.") +
+              "</td></tr>";
+          }
+          if (!options.silent) {
+            showToast(error?.message || "Falha ao carregar histórico de leads CNPJ.", "error");
+          }
+        } finally {
+          if (refreshBtn) refreshBtn.classList.remove("is-loading");
+        }
+      }
+      function initMarketingLeadsCnpjUi() {
+        const form = document.getElementById("marketing-leads-cnpj-form");
+        if (!form || form.dataset.bound === "1") {
+          syncMarketingLeadsCnpjSourceUi();
+          return;
+        }
+        form.dataset.bound = "1";
+        document
+          .getElementById("mlc-source")
+          ?.addEventListener("change", syncMarketingLeadsCnpjSourceUi);
+        document.getElementById("mlc-refresh")?.addEventListener("click", () => {
+          void loadMarketingLeadsCnpjHistory();
+        });
+        document.getElementById("mlc-tbody")?.addEventListener("click", (event) => {
+          const btn = event.target?.closest?.(".mlc-delete-btn");
+          if (!btn) return;
+          event.preventDefault();
+          void deleteMarketingLeadsCnpjList(
+            btn.getAttribute("data-mlc-id"),
+            btn.getAttribute("data-mlc-name"),
+            btn
+          );
+        });
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const feedback = document.getElementById("mlc-feedback");
+          const submitBtn = document.getElementById("mlc-submit");
+          const name = String(document.getElementById("mlc-name")?.value || "").trim();
+          const source = String(document.getElementById("mlc-source")?.value || "portal");
+          if (!name) {
+            showToast("Informe o nome da lista.", "warning");
+            return;
+          }
+          const body = {
+            name,
+            source,
+            filters: collectMarketingLeadsCnpjFilters(),
+            manualCnpjs: String(document.getElementById("mlc-manual")?.value || ""),
+          };
+          if (submitBtn) {
+            submitBtn.textContent = "Iniciando…";
+            submitBtn.setAttribute("disabled", "true");
+          }
+          if (feedback) feedback.textContent = "Criando lista…";
+          try {
+            const response = await fetchWithTimeout(
+              resolveWabaPublicPath("/admin/marketing/leads-cnpj"),
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              },
+              30000
+            );
+            const rawText = await response.text().catch(() => "");
+            let payload = {};
+            try {
+              payload = rawText ? JSON.parse(rawText) : {};
+            } catch (_) {
+              payload = {};
+            }
+            if (!response.ok) {
+              const detail =
+                payload?.error || rawText.slice(0, 240) || "HTTP " + response.status;
+              throw new Error(detail);
+            }
+            if (feedback) {
+              feedback.textContent =
+                payload?.item?.progressMessage || "Lista criada. Processando…";
+            }
+            showToast("Extração iniciada.", "success");
+            void loadMarketingLeadsCnpjHistory();
+            startMarketingLeadsCnpjPolling();
+          } catch (error) {
+            if (feedback) feedback.textContent = error?.message || "Falha ao criar lista.";
+            showToast(error?.message || "Falha ao criar lista.", "error");
+          } finally {
+            if (submitBtn) {
+              submitBtn.textContent = "Extrair lista";
+              submitBtn.removeAttribute("disabled");
+            }
+          }
+        });
+        syncMarketingLeadsCnpjSourceUi();
+      }
+
       async function loadAdminPushHistory() {
         const tbody = document.getElementById("admin-push-history-tbody");
         if (!hasMasterAccess()) {
@@ -31670,6 +32643,7 @@
         oficial: "Disparos",
         admin: "Admin",
         suporte: "Suporte",
+        marketing: "Marketing",
       };
 
       function resolveMenuSectionLabel(section, fallback = "") {
@@ -45059,6 +46033,7 @@
         const adminChamadosPanel = document.getElementById("tab-admin-chamados");
         const adminMonitorCpuPanel = document.getElementById("tab-admin-monitor-cpu");
         const adminPushPanel = document.getElementById("tab-admin-push");
+        const marketingLeadsPjPanel = document.getElementById("tab-marketing-leads-pj");
         const dashboardFilters = document.getElementById("dashboard-filters");
 
         if (nextTab !== "admin-monitor-cpu") {
@@ -45232,8 +46207,17 @@
           );
         }
 
+        if (marketingLeadsPjPanel) {
+          marketingLeadsPjPanel.classList.toggle("tab-hidden", nextTab !== "marketing-leads-pj");
+          marketingLeadsPjPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "marketing-leads-pj" ? "true" : "false"
+          );
+        }
+
         document.body.classList.toggle("admin-section-active", isMasterWorkspaceTab(nextTab));
         document.body.classList.toggle("suporte-section-active", isSuporteTab(nextTab));
+        document.body.classList.toggle("marketing-section-active", isMarketingTab(nextTab));
         syncWabaSidebarStackTop();
 
         if (dashboardFilters) {
@@ -45353,6 +46337,14 @@
             void loadAdminMonitorCpu();
             startAdminMonitorCpuPolling();
           }
+        } else if (nextTab === "marketing-leads-pj") {
+          stopAquecedorEnviosPolling();
+          stopDisparosCampaignsPolling();
+          stopDisparosDashboardPolling();
+          stopAdminCampanhasPolling();
+          stopAdminMonitorCpuPolling();
+          initMarketingLeadsCnpjUi();
+          void loadMarketingLeadsCnpjHistory();
         } else if (nextTab === "admin-push") {
           stopAquecedorEnviosPolling();
           stopDisparosCampaignsPolling();
@@ -49386,6 +50378,7 @@
       }
 
       function resolveMenuGroupForTab(tabName) {
+        if (isMarketingTab(tabName)) return "marketing";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (isOfficialTab(tabName)) return "oficial";
@@ -49395,7 +50388,7 @@
       /** Ao expandir a sidebar, abre só o grupo da aba ativa (evita menu maior que a tela). */
       function focusDesktopMenuGroupForActiveTab() {
         const activeGroup = resolveMenuGroupForTab(activeTab);
-        ["nao-oficial", "oficial", "admin", "suporte"].forEach((groupName) => {
+        ["nao-oficial", "oficial", "admin", "suporte", "marketing"].forEach((groupName) => {
           setDesktopMenuGroupOpen(groupName, groupName === activeGroup);
         });
       }
@@ -49492,7 +50485,7 @@
       }
 
       function isMasterWorkspaceTab(tabName) {
-        return isAdminTab(tabName) || isSuporteTab(tabName);
+        return isAdminTab(tabName) || isSuporteTab(tabName) || isMarketingTab(tabName);
       }
 
       function syncIntegrationEnvWithTab(tabName) {

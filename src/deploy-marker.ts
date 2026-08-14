@@ -2,5 +2,4 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-min-credito-alternativa-200";
-
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-marketing-leads-pj-master";
