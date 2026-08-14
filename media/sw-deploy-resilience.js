@@ -2,7 +2,7 @@
  * Service worker — mantém a shell do app disponível durante redeploy (502/503 do proxy).
  * Cache isolado por rota (produção ≠ /version-01). Nunca alias /version-01 → /.
  */
-const CACHE_SHELL = "waba-deploy-shell-v3";
+const CACHE_SHELL = "waba-deploy-shell-v4";
 
 function isNavigationRequest(request) {
   if (request.mode === "navigate") return true;

@@ -1,3 +1,7 @@
+## 2026-08-14 11:15 — Marker Criar Dispositivo
+- Marker: DEPLOY-2026-08-14-criar-dispositivo
+- Shell cache SW v4 para a aba nova aparecer após Redeploy
+
 ## 2026-08-14 10:55 — Deploy bundle boas-vindas + verify script
 - Marker: DEPLOY-2026-08-14-welcome-eleito-pausa-failover-offline
 - `npm run verify:welcome-routing`
