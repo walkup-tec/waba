@@ -1,3 +1,9 @@
+## 2026-08-14 18:15 — Dispositivos: tela do celular e toque real
+- Removidos Voltar/Início/Avançar, DDI, Digitar e o guia; tela 253×460 → 329×598 (+30%)
+- Clique no WhatsApp exigia uinput (`ddc-virt-tap`); `adb input tap` não chega nos widgets
+- Marker `DEPLOY-2026-08-14-dispositivos-tela-celular`
+- LOG: doc/LOG-2026-08-14__181500__fix-dispositivos-tela-celular.md
+
 ## 2026-08-14 14:55 — Mínimo API Alternativa R$ 200
 - Checkout PIX deixava de aceitar o pacote de R$ 200 (mínimo global era R$ 300)
 - Marker `DEPLOY-2026-08-14-min-credito-alternativa-200`
