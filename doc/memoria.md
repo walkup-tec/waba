@@ -1,3 +1,8 @@
+## 2026-08-14 14:45 — Gerar PIX do checkout de créditos
+- Clique no botão era engolido (z-index/FAB) ou o botão ficava disabled sem aviso
+- Marker `DEPLOY-2026-08-14-gerar-pix-click`
+- LOG: doc/LOG-2026-08-14__fix-gerar-pix-click.md
+
 ## 2026-08-14 14:15 — Dispositivos: fluxo WhatsApp habitual
 - SMS só após Avançar/confirmar no app; dígitos um a um; abre WA Business
 - Marker `DEPLOY-2026-08-14-device-cloud-wa-natural`

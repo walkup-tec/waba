@@ -830,7 +830,8 @@
         display: none !important;
       }
 
-      body.waba-support-modal-open .waba-support-fab {
+      body.waba-support-modal-open .waba-support-fab,
+      body.waba-billing-modal-open .waba-support-fab {
         opacity: 0 !important;
         pointer-events: none !important;
       }
@@ -12462,7 +12463,7 @@
       }
       #disparos-billing-overlay,
       #disparos-pix-overlay {
-        z-index: 2600;
+        z-index: 5320;
       }
       #disparos-pricing-overlay,
       #disparos-billing-overlay,
@@ -21411,6 +21412,7 @@
             <p id="disparos-billing-coupon-summary" class="disparos-billing-coupon-summary" hidden></p>
           </div>
         </div>
+        <p id="disparos-billing-checkout-error" class="disparos-billing-hint" hidden style="color:#fca5a5;margin:10px 0 0;"></p>
         <div class="register-actions">
           <button id="disparos-billing-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
           <button id="disparos-billing-submit-btn" class="instance-action-btn btn-qrcode enabled" type="button">
@@ -36179,6 +36181,9 @@
         if (!el) return;
         el.classList.add("open");
         el.setAttribute("aria-hidden", "false");
+        if (overlayId === "disparos-billing-overlay" || overlayId === "disparos-pix-overlay") {
+          document.body.classList.add("waba-billing-modal-open");
+        }
       }
 
       function closeDisparosOverlay(overlayId) {
@@ -36186,6 +36191,13 @@
         if (!el) return;
         el.classList.remove("open");
         el.setAttribute("aria-hidden", "true");
+        if (overlayId === "disparos-billing-overlay" || overlayId === "disparos-pix-overlay") {
+          const billingOpen = document.getElementById("disparos-billing-overlay")?.classList.contains("open");
+          const pixOpen = document.getElementById("disparos-pix-overlay")?.classList.contains("open");
+          if (!billingOpen && !pixOpen) {
+            document.body.classList.remove("waba-billing-modal-open");
+          }
+        }
       }
 
       function restoreDisparosPurchaseContent() {
@@ -37902,7 +37914,9 @@
             summary.textContent = "";
             summary.classList.remove("is-error");
           }
-          void syncDisparosBillingModalState(loadDisparosBillingConfig().catch(() => ({})));
+          void loadDisparosBillingConfig()
+            .then((config) => syncDisparosBillingModalState(config))
+            .catch(() => {});
           return;
         }
         if (focusInput) {
@@ -37982,15 +37996,25 @@
         }
       }
 
+      function setDisparosBillingCheckoutError(message) {
+        const el = document.getElementById("disparos-billing-checkout-error");
+        if (!el) return;
+        const text = String(message || "").trim();
+        el.hidden = !text;
+        el.textContent = text;
+      }
+
       function syncDisparosBillingModalState(config) {
-        const configured = Boolean(config?.paymentConfigured);
+        const configured = Boolean(config && config.paymentConfigured);
         const unconfiguredEl = document.getElementById("disparos-billing-unconfigured");
         const submitBtn = document.getElementById("disparos-billing-submit-btn");
         const valueInput = document.getElementById("disparos-billing-value");
+        const billingOpen = Boolean(
+          document.getElementById("disparos-billing-overlay")?.classList.contains("open")
+        );
         if (unconfiguredEl) unconfiguredEl.hidden = configured;
         if (submitBtn) {
-          submitBtn.disabled =
-            !configured || !disparosSelectedPackage || disparosBillingCheckoutInFlight;
+          submitBtn.disabled = disparosBillingCheckoutInFlight || (!configured && !billingOpen);
           if (!disparosBillingCheckoutInFlight) {
             submitBtn.textContent = configured ? "Gerar PIX" : "PIX indisponível";
           }
@@ -38018,8 +38042,10 @@
           }
           syncDisparosBillingModalState(config);
           prefillDisparosBillingForm();
+          setDisparosBillingCheckoutError("");
           closeDisparosOverlay("disparos-pricing-overlay");
           openDisparosOverlay("disparos-billing-overlay");
+          syncDisparosBillingModalState(config);
           if (!config.paymentConfigured) {
             showToast(
               "Configure ASAAS_API_KEY no servidor para gerar o PIX.",
@@ -38044,6 +38070,8 @@
       }
 
       async function submitDisparosBillingCheckout() {
+        if (disparosBillingCheckoutInFlight) return;
+        setDisparosBillingCheckoutError("");
         if (isAlternativaNumbersCheckoutContext()) {
           await submitAlternativaNumbersCheckout();
           return;
@@ -38054,11 +38082,15 @@
         const whatsapp = String(document.getElementById("disparos-billing-whatsapp")?.value || "").trim();
 
         if (!disparosSelectedPackage) {
-          showToast("Selecione um pacote na tabela de preços.", "error", 4200);
+          const msg = "Selecione um pacote na tabela de preços.";
+          setDisparosBillingCheckoutError(msg);
+          showToast(msg, "error", 4200);
           return;
         }
         if (!name || !ownerEmail || !cpfCnpj || !whatsapp) {
-          showToast("Preencha todos os campos obrigatórios.", "error", 4200);
+          const msg = "Preencha todos os campos obrigatórios.";
+          setDisparosBillingCheckoutError(msg);
+          showToast(msg, "error", 4200);
           return;
         }
 
@@ -38067,6 +38099,7 @@
         try {
           const response = await fetch("/billing/disparos/checkout", {
             method: "POST",
+            credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               apiKind: disparosBillingSelectedKind,
@@ -38088,7 +38121,9 @@
           closeDisparosOverlay("disparos-billing-overlay");
           showDisparosPixCheckout(payload);
         } catch (error) {
-          showToast(error?.message || "Erro ao gerar PIX.", "error", 5200);
+          const msg = error?.message || "Erro ao gerar PIX.";
+          setDisparosBillingCheckoutError(msg);
+          showToast(msg, "error", 5200);
         } finally {
           setDisparosBillingSubmitLoading(false);
           syncDisparosBillingModalState(await loadDisparosBillingConfig().catch(() => ({})));
