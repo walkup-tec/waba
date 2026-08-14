@@ -20344,7 +20344,7 @@
                         </div>
                         <div class="mlc-field mlc-col-8">
                           <label class="field-label" for="mlc-cnae">Atividade principal (CNAE)</label>
-                          <input id="mlc-cnae" class="admin-push-input" type="text" placeholder="Código ou nome da atividade" />
+                          <input id="mlc-cnae" class="admin-push-input" type="text" placeholder="Ex.: 6619-3/02 → 6619302 ou nome" />
                         </div>
                         <div class="mlc-field mlc-col-8">
                           <label class="field-label" for="mlc-natureza">Natureza jurídica</label>
@@ -31753,6 +31753,22 @@
             : "";
         return '<div class="mlc-download-cell">' + deleteBtn + downloadBtn + "</div>";
       }
+      function normalizeMlcCnaeInput(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        // Código com máscara (6619-3/02, 66.19-3/02) → só dígitos
+        if (/\d/.test(raw) && /^[\d\s.\-\/]+$/.test(raw)) {
+          return raw.replace(/\D/g, "");
+        }
+        return raw;
+      }
+      function applyMlcCnaeNormalization() {
+        const el = document.getElementById("mlc-cnae");
+        if (!el) return "";
+        const next = normalizeMlcCnaeInput(el.value);
+        if (el.value !== next) el.value = next;
+        return next;
+      }
       function collectMarketingLeadsCnpjFilters() {
         const situacao = [];
         if (document.getElementById("mlc-sit-ativa")?.checked) situacao.push("Ativa");
@@ -31770,7 +31786,7 @@
           tipoPesquisa: String(document.getElementById("mlc-tipo")?.value || "Exata"),
           cnpjRaiz: String(document.getElementById("mlc-raiz")?.value || "").trim(),
           situacaoCadastral: situacao,
-          atividadePrincipalCnae: String(document.getElementById("mlc-cnae")?.value || "").trim(),
+          atividadePrincipalCnae: applyMlcCnaeNormalization(),
           incluirAtividadeSecundaria: Boolean(document.getElementById("mlc-cnae-sec")?.checked),
           naturezaJuridica: String(document.getElementById("mlc-natureza")?.value || "").trim(),
           estadoUf: String(document.getElementById("mlc-uf")?.value || "").trim(),
@@ -31956,6 +31972,13 @@
         document
           .getElementById("mlc-source")
           ?.addEventListener("change", syncMarketingLeadsCnpjSourceUi);
+        const cnaeInput = document.getElementById("mlc-cnae");
+        if (cnaeInput) {
+          cnaeInput.addEventListener("blur", () => applyMlcCnaeNormalization());
+          cnaeInput.addEventListener("paste", () => {
+            setTimeout(() => applyMlcCnaeNormalization(), 0);
+          });
+        }
         document.getElementById("mlc-refresh")?.addEventListener("click", () => {
           void loadMarketingLeadsCnpjHistory();
         });
