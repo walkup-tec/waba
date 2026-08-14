@@ -1,3 +1,7 @@
+## 2026-08-14 10:55 — Deploy bundle boas-vindas + verify script
+- Marker: DEPLOY-2026-08-14-welcome-eleito-pausa-failover-offline
+- `npm run verify:welcome-routing`
+
 ## 2026-08-14 10:40 — Dispositivos: um botão + tela Android
 - WABA faz SSO e proxy no backend; aba só tem Criar Dispositivo
 - Marker: DEPLOY-2026-08-14-device-cloud-one-button
