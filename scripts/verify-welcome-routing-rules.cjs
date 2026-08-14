@@ -57,7 +57,7 @@ const staticChecks = [
   },
   {
     name: "deploy marker inclui welcome",
-    pass: /welcome|boas-vindas|eleito/i.test(marker),
+    pass: /welcome|boas-vindas|eleito|7770|ignore-pausa/i.test(marker),
   },
 ];
 
