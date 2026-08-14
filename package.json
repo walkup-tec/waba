@@ -14,6 +14,7 @@
     "build": "node scripts/generate-brand-logo-module.mjs && tsc && node scripts/copy-index-html.mjs",
     "build:h": "node scripts/build-with-local-deps.cjs",
     "verify:uptime-diagnose": "node scripts/verify-uptime-diagnose.cjs",
+    "verify:welcome-routing": "node scripts/verify-welcome-routing-rules.cjs",
     "check:traefik-entrypoints": "bash scripts/check-traefik-entrypoint-names.sh",
     "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
     "backup:production-data": "node scripts/backup-production-data.mjs",
