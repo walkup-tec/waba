@@ -579,6 +579,110 @@ export class WabaFinanceiroSplitService {
     return this.configRepository.get().suppliers.find((item) => item.id === normalized) ?? null;
   }
 
+  /**
+   * Fornecedor eleito para repasse PIX da campanha — usa operacional atribuído
+   * (e-mail + plano + segmento) para refletir transferências entre operacionais.
+   */
+  resolveSupplierForCampaignIntake(intake: WabaCampaignIntake): SplitSupplier | null {
+    const assignedEmail = String(intake.assignedOperacionalEmail || "")
+      .trim()
+      .toLowerCase();
+    const assignedId = String(intake.assignedSupplierId || "").trim();
+    if (!assignedEmail && !assignedId) return null;
+
+    const apiKind = resolveIntakeApiKindFromIntake(intake);
+    const subscriberSegment = this.resolveSubscriberSegmentForEmail(intake.ownerEmail);
+    const supplierSegment: WabaSystemUserOperacionalSegment =
+      subscriberSegment === "bets" ? "bets" : "outros";
+    const suppliers = this.configRepository.get().suppliers;
+
+    if (assignedEmail) {
+      const byEmail =
+        suppliers.find(
+          (row) =>
+            row.active &&
+            row.systemUserEmail.toLowerCase() === assignedEmail &&
+            row.apiKind === apiKind &&
+            row.segment === supplierSegment,
+        ) ??
+        suppliers.find(
+          (row) =>
+            row.active &&
+            row.systemUserEmail.toLowerCase() === assignedEmail &&
+            row.apiKind === apiKind,
+        ) ??
+        null;
+      if (byEmail) return byEmail;
+    }
+
+    if (assignedId) {
+      return this.getSupplierById(assignedId);
+    }
+    return null;
+  }
+
+  /**
+   * Atualiza settlement pendente da campanha quando o operacional muda
+   * (participantId, e-mail e chave PIX do fornecedor eleito).
+   */
+  syncCampaignSupplierSettlementForIntake(
+    intake: WabaCampaignIntake,
+    existing?: FinanceiroSplitSettlement | null,
+  ): FinanceiroSplitSettlement | null {
+    const supplier = this.resolveSupplierForCampaignIntake(intake);
+    if (!supplier?.pixKey) return null;
+
+    const orderId = this.buildCampaignSupplierOrderId(intake.id);
+    const settlement = existing ?? this.settlementRepository.getByOrderId(orderId);
+    if (!settlement) return null;
+
+    const supplierLineIndex = settlement.lines.findIndex((line) => line.lineKind === "supplier");
+    if (supplierLineIndex < 0) return null;
+
+    const line = settlement.lines[supplierLineIndex];
+    if (line.payoutStatus === "paid" || line.payoutStatus === "processing") {
+      return settlement;
+    }
+
+    const participantEmail = supplier.systemUserEmail || "";
+    const needsUpdate =
+      line.participantId !== supplier.id ||
+      line.pixKey !== supplier.pixKey ||
+      line.participantEmail !== participantEmail ||
+      line.participantLabel !== supplier.name ||
+      settlement.supplierId !== supplier.id;
+
+    if (!needsUpdate) return settlement;
+
+    const operatorChanged = line.participantId !== supplier.id;
+    const updatedLines = [...settlement.lines];
+    updatedLines[supplierLineIndex] = {
+      ...line,
+      participantId: supplier.id,
+      participantLabel: supplier.name,
+      participantEmail,
+      pixKey: supplier.pixKey,
+      payoutStatus: line.payoutStatus === "failed" ? "pending" : line.payoutStatus,
+      ...(operatorChanged
+        ? {
+            asaasTransferId: undefined,
+            payoutExternalReference: undefined,
+            transactionReceiptUrl: undefined,
+            paidAt: undefined,
+            failureReason: undefined,
+          }
+        : {}),
+    };
+
+    return this.settlementRepository.save({
+      ...settlement,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      lines: updatedLines,
+      payoutStatus: deriveSettlementPayoutStatus(updatedLines),
+    });
+  }
+
   buildCampaignSupplierOrderId(intakeId: string): string {
     return `campaign-supplier:${String(intakeId || "").trim()}`;
   }
@@ -597,16 +701,31 @@ export class WabaFinanceiroSplitService {
     const billableSent = resolveBillableSentForSupplierSplit(intake);
     if (billableSent <= 0) return null;
 
-    const supplierId = String(intake.assignedSupplierId || "").trim();
-    if (!supplierId) return null;
-    const supplier = this.getSupplierById(supplierId);
+    const supplier = this.resolveSupplierForCampaignIntake(intake);
     if (!supplier?.pixKey) return null;
 
     const orderId = this.buildCampaignSupplierOrderId(intake.id);
     const existing = this.settlementRepository.getByOrderId(orderId);
     if (existing) {
       if (isWabaMetricsExcludedOwnerEmail(existing.ownerEmail)) return null;
-      return existing;
+      const synced = this.syncCampaignSupplierSettlementForIntake(intake, existing) ?? existing;
+      const supplierLine = synced.lines.find((line) => line.lineKind === "supplier");
+      if (
+        this.payoutService.isPayoutEnabled() &&
+        supplierLine &&
+        supplierLine.payoutStatus === "pending" &&
+        supplierLine.amountCents > 0
+      ) {
+        try {
+          return (await this.payoutService.executeForSettlement(synced)) ?? synced;
+        } catch (error) {
+          console.error(
+            `[FinanceiroSplit] falha no repasse PIX da campanha ${intake.id} (settlement existente):`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+      return synced;
     }
 
     const apiKind = resolveIntakeApiKindFromIntake(intake);

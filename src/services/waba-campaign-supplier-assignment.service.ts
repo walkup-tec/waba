@@ -133,6 +133,7 @@ export class WabaCampaignSupplierAssignmentService {
       updatedAt: now,
     });
     if (!updated) throw new Error("Não foi possível atribuir a campanha.");
+    this.splitService.syncCampaignSupplierSettlementForIntake(updated);
     return updated;
   }
 

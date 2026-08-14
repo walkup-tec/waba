@@ -16,6 +16,8 @@
     "verify:uptime-diagnose": "node scripts/verify-uptime-diagnose.cjs",
     "verify:welcome-routing": "node scripts/verify-welcome-routing-rules.cjs",
     "verify:supplier-priority": "node scripts/verify-supplier-priority-swap.cjs",
+    "verify:split-external-ref": "node scripts/verify-split-external-reference.cjs",
+    "verify:campaign-transfer-split-pix": "node scripts/verify-campaign-transfer-split-pix.cjs",
     "check:traefik-entrypoints": "bash scripts/check-traefik-entrypoint-names.sh",
     "bundle:ftp": "node scripts/prepare-ftp-bundle.mjs",
     "backup:production-data": "node scripts/backup-production-data.mjs",

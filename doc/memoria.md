@@ -1,3 +1,19 @@
+## 2026-08-14 12:05 — Split PIX ao transferir campanha entre operacionais
+- Repasse fornecedor usa operador eleito (e-mail + plano + segmento), não só assignedSupplierId
+- Sync settlement pending/failed ao transferir | `npm run verify:campaign-transfer-split-pix`
+- Marker `DEPLOY-2026-08-14-campaign-transfer-split-pix`
+- LOG: doc/LOG-2026-08-14__fix-campaign-transfer-split-pix.md
+
+## 2026-08-14 11:50 — Financeiro: Walkup PIX pago não aparecia falha
+- Causa: externalReference > 100 chars no retry Asaas; sync não reconciliava DONE
+- Fix refs compactas + sync failed/processing | `npm run verify:split-external-ref`
+- LOG: doc/LOG-2026-08-14__fix-split-pix-walkup-false-failed.md
+
+## 2026-08-14 11:45 — Boas-vindas: failover após 3 ACK ERROR no 7770
+- Após 3 ACK ERROR no eleito → secundário/terciário; retry background mantém contador
+- `npm run verify:welcome-routing` | marker `DEPLOY-2026-08-14-welcome-ack-failover-3`
+- LOG: doc/LOG-2026-08-14__welcome-ack-failover-3.md
+
 ## 2026-08-14 11:25 — Fornecedores: persistência ordem prioridade
 - Swap automático ao mudar prioridade (evita 400 por duplicata no PUT split-config)
 - `npm run verify:supplier-priority` | marker `DEPLOY-2026-08-14-supplier-priority-persist`

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deliverWabaEvolutionWhatsApp = exports.DEFAULT_WABA_WHATSAPP_PHONE_HINTS = void 0;
+exports.deliverWabaEvolutionWhatsApp = exports.resolveWelcomeAckFailoverThreshold = exports.DEFAULT_WABA_WHATSAPP_PHONE_HINTS = void 0;
 const evo_http_client_1 = require("../evo-http.client");
 const evo_connection_state_service_1 = require("../instances/evo-connection-state.service");
 const evo_text_alert_client_1 = require("../monitoring/evo-text-alert.client");
@@ -66,6 +66,18 @@ const resolveWabaWhatsAppSendTimeoutMs = () => {
     }
     return (0, evo_http_client_1.defaultEvoSendTextTimeoutMs)();
 };
+/** Boas-vindas: após N ACK ERROR no número eleito, failover para secundário/terciário. */
+const resolveWelcomeAckFailoverThreshold = () => {
+    const raw = process.env.WABA_WELCOME_ACK_FAILOVER_AFTER ||
+        process.env.WABA_WHATSAPP_WELCOME_ACK_FAILOVER_AFTER;
+    if (raw !== undefined && String(raw).trim() !== "") {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n >= 1)
+            return Math.min(10, Math.round(n));
+    }
+    return 3;
+};
+exports.resolveWelcomeAckFailoverThreshold = resolveWelcomeAckFailoverThreshold;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 const isRecoverableSendFailure = (detail, status) => {
     const text = String(detail || "").toLowerCase();
@@ -138,11 +150,24 @@ const resolveEvoSendSlots = async (phoneHints, opts) => {
 };
 /**
  * Boas-vindas: usa o número eleito (1º hint) mesmo em pausa humana/Preparando.
- * Só avança para secundário/terciário se o eleito estiver desconectado.
+ * Failover imediato se o eleito estiver desconectado.
+ * Após `primaryAckErrors` >= limiar (padrão 3 ACK ERROR), usa secundário/terciário.
  */
-const resolveWelcomeEvoSendSlots = async (phoneHints, logLabel) => {
+const resolveWelcomeEvoSendSlots = async (phoneHints, logLabel, options) => {
     if (!phoneHints.length)
         return [];
+    const primaryAckErrors = Math.max(0, Math.round(Number(options?.primaryAckErrors ?? 0)));
+    const ackFailoverThreshold = Math.max(1, Math.round(Number(options?.ackFailoverThreshold ?? (0, exports.resolveWelcomeAckFailoverThreshold)())));
+    if (primaryAckErrors >= ackFailoverThreshold) {
+        if (phoneHints.length <= 1)
+            return [];
+        console.warn(`[whatsapp] ${logLabel}: ${primaryAckErrors} ACK ERROR no eleito ${phoneHints[0]} — failover para ${phoneHints.slice(1).join(" → ")}.`);
+        return resolveEvoSendSlots(phoneHints.slice(1), {
+            allowAnyOpenFallback: false,
+            verifyLiveIfCatalogClosed: true,
+            logLabel,
+        });
+    }
     const primaryHint = phoneHints[0];
     const primaryInstance = await (0, waba_push_community_service_1.resolveConnectedEvoInstanceByPhoneHint)(primaryHint, {
         verifyLiveIfCatalogClosed: true,
@@ -183,7 +208,7 @@ const trySendViaSlot = async (input) => {
     const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(slot.instanceName, { fresh: true });
     if (shouldSkipInstanceForSend(liveState)) {
         console.warn(`[whatsapp] ${slot.instanceName} (${slot.phoneHint}) ignorada — connectionState=${liveState || "?"}.`);
-        return null;
+        return { result: null };
     }
     if (input.ignoreAquecedorLifecycle) {
         await logCriticalLifecycleBypass(slot.instanceName, input.logLabel || "whatsapp");
@@ -200,12 +225,14 @@ const trySendViaSlot = async (input) => {
         console.warn(`[whatsapp] tentativa falhou (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}):`, detail);
         if (!isRecoverableSendFailure(detail, result.status)) {
             return {
-                status: "failed",
-                message: `${slot.instanceName}: ${detail}`,
-                instanceName: slot.instanceName,
+                result: {
+                    status: "failed",
+                    message: `${slot.instanceName}: ${detail}`,
+                    instanceName: slot.instanceName,
+                },
             };
         }
-        return null;
+        return { result: null };
     }
     const ack = await (0, waba_evolution_delivery_ack_1.waitForEvoOutboundDeliveryAck)({
         instanceName: slot.instanceName,
@@ -215,18 +242,28 @@ const trySendViaSlot = async (input) => {
     });
     if (ack.outcome === "delivered") {
         console.log(`[whatsapp] entregue no aparelho para ${targetWhatsapp} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`);
-        return { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName };
+        return {
+            result: { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName },
+        };
     }
     const ackDetail = `${slot.instanceName}: WhatsApp não entregue (ack=${ack.status})`;
-    if (input.ignoreAquecedorLifecycle) {
-        console.warn(`[whatsapp] sendText OK mas ACK pendente/erro (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Boas-vindas repete no mesmo número (sem failover).`);
-        return null;
+    const isPrimarySlot = Boolean(input.primaryPhoneHint) &&
+        slot.phoneHint.replace(/\D/g, "") === String(input.primaryPhoneHint).replace(/\D/g, "");
+    if (input.ignoreAquecedorLifecycle && input.welcomeRetryPrimaryOnly && ack.outcome === "error") {
+        console.warn(`[whatsapp] sendText OK mas ACK erro (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Boas-vindas repete no eleito (failover após ${(0, exports.resolveWelcomeAckFailoverThreshold)()} ACK ERROR).`);
+        return { result: null, primaryAckError: isPrimarySlot };
+    }
+    if (input.ignoreAquecedorLifecycle && input.welcomeRetryPrimaryOnly) {
+        console.warn(`[whatsapp] sendText OK mas ACK pendente (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Boas-vindas repete no eleito.`);
+        return { result: null };
     }
     console.warn(`[whatsapp] sendText OK mas não entregue (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Tentando próxima instância.`);
     return {
-        status: "failed",
-        message: ackDetail,
-        instanceName: slot.instanceName,
+        result: {
+            status: "failed",
+            message: ackDetail,
+            instanceName: slot.instanceName,
+        },
     };
 };
 const backgroundRetries = new Map();
@@ -253,9 +290,20 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
     const roundDelayMs = resolveWabaWhatsAppRoundDelayMs();
     const timeoutMs = resolveWabaWhatsAppSendTimeoutMs();
     const errors = [];
+    const ackFailoverThreshold = (0, exports.resolveWelcomeAckFailoverThreshold)();
+    let primaryAckErrors = Math.max(0, Math.round(Number(options.initialPrimaryAckErrors ?? 0)));
+    let welcomeFailoverActive = Boolean(options.welcomeFailoverActive);
     for (let round = 1; round <= maxRounds; round += 1) {
+        if (ignoreAquecedorLifecycle &&
+            !welcomeFailoverActive &&
+            primaryAckErrors >= ackFailoverThreshold) {
+            welcomeFailoverActive = true;
+        }
         const slots = ignoreAquecedorLifecycle
-            ? await resolveWelcomeEvoSendSlots(phoneHintsAll, logLabel)
+            ? await resolveWelcomeEvoSendSlots(phoneHintsAll, logLabel, {
+                primaryAckErrors: welcomeFailoverActive ? ackFailoverThreshold : primaryAckErrors,
+                ackFailoverThreshold,
+            })
             : await resolveEvoSendSlots(phoneHints, {
                 allowAnyOpenFallback: false,
                 verifyLiveIfCatalogClosed: false,
@@ -271,17 +319,21 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
         }
         if (round === 1) {
             const welcomeNote = ignoreAquecedorLifecycle
-                ? slots.length === 1 && slots[0]?.phoneHint === phoneHintsAll[0]
-                    ? " (número eleito conectado; ignora pausa humana/Preparando)"
-                    : " (failover: número eleito desconectado)"
+                ? welcomeFailoverActive || primaryAckErrors >= ackFailoverThreshold
+                    ? ` (failover ACK ERROR após ${ackFailoverThreshold} tentativa(s) no eleito)`
+                    : slots.length === 1 && slots[0]?.phoneHint === phoneHintsAll[0]
+                        ? " (número eleito conectado; ignora pausa humana/Preparando)"
+                        : " (failover: número eleito desconectado)"
                 : "";
             console.info(`[whatsapp] ${logLabel}: sequência ${slots.map((s) => `${s.phoneHint}→${s.instanceName}`).join(", ")}${welcomeNote}.`);
         }
         else {
             console.info(`[whatsapp] ${logLabel}: repetindo sequência (rodada ${round}/${maxRounds}).`);
         }
+        const welcomeRetryPrimaryOnly = ignoreAquecedorLifecycle && !welcomeFailoverActive && primaryAckErrors < ackFailoverThreshold;
+        const primaryPhoneHint = phoneHintsAll[0] || "";
         for (const slot of slots) {
-            const outcome = await trySendViaSlot({
+            const sendOutcome = await trySendViaSlot({
                 slot,
                 targetWhatsapp: whatsapp,
                 text,
@@ -289,9 +341,24 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
                 timeoutMs,
                 logLabel,
                 ignoreAquecedorLifecycle,
+                welcomeRetryPrimaryOnly,
+                primaryPhoneHint,
             });
-            if (outcome?.status === "sent")
-                return outcome;
+            if (sendOutcome.primaryAckError) {
+                primaryAckErrors += 1;
+                if (primaryAckErrors >= ackFailoverThreshold) {
+                    welcomeFailoverActive = true;
+                    break;
+                }
+            }
+            const outcome = sendOutcome.result;
+            if (outcome?.status === "sent") {
+                return {
+                    ...outcome,
+                    primaryAckErrors,
+                    welcomeFailoverActive,
+                };
+            }
             if (outcome?.status === "failed")
                 errors.push(outcome.message);
         }
@@ -301,7 +368,12 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
     const message = errors.filter(Boolean).join(" | ") ||
         `${logLabel} WhatsApp ${recipientLabel}: falha após ${maxRounds} rodada(s) na sequência ${phoneHints.join(" → ")}.`;
     console.error(`[whatsapp] ${logLabel} falhou para ${whatsapp} (${recipientLabel}):`, message);
-    return { status: "failed", message };
+    return {
+        status: "failed",
+        message,
+        primaryAckErrors,
+        welcomeFailoverActive,
+    };
 };
 const resolveBackgroundRetryMaxAttempts = () => {
     const raw = Number(process.env.WABA_WHATSAPP_BACKGROUND_RETRY_MAX ?? 12);
@@ -322,13 +394,20 @@ const scheduleBackgroundRetry = (input) => {
             return;
         attempts += 1;
         console.info(`[whatsapp] ${input.logLabel}: retry em background #${attempts} (${key}).`);
-        const result = await runWabaEvolutionWhatsAppDelivery(input, { maxRounds: 1 });
+        const result = await runWabaEvolutionWhatsAppDelivery(input, {
+            maxRounds: 1,
+            initialPrimaryAckErrors: pending.primaryAckErrors,
+            welcomeFailoverActive: pending.welcomeFailoverActive,
+        });
         if (result.status === "sent") {
             clearTimeout(pending.timer);
             backgroundRetries.delete(key);
             console.log(`[whatsapp] ${input.logLabel}: retry em background OK (${key}).`);
             return;
         }
+        pending.primaryAckErrors = Math.max(pending.primaryAckErrors, Math.round(Number(result.primaryAckErrors ?? pending.primaryAckErrors)));
+        pending.welcomeFailoverActive =
+            pending.welcomeFailoverActive || Boolean(result.welcomeFailoverActive);
         if (attempts >= maxAttempts) {
             clearTimeout(pending.timer);
             backgroundRetries.delete(key);
@@ -338,12 +417,22 @@ const scheduleBackgroundRetry = (input) => {
         const nextTimer = setTimeout(() => {
             void tick();
         }, roundDelayMs);
-        backgroundRetries.set(key, { timer: nextTimer, attempts });
+        backgroundRetries.set(key, {
+            timer: nextTimer,
+            attempts,
+            primaryAckErrors: pending.primaryAckErrors,
+            welcomeFailoverActive: pending.welcomeFailoverActive,
+        });
     };
     const initialTimer = setTimeout(() => {
         void tick();
     }, roundDelayMs);
-    backgroundRetries.set(key, { timer: initialTimer, attempts: 0 });
+    backgroundRetries.set(key, {
+        timer: initialTimer,
+        attempts: 0,
+        primaryAckErrors: 0,
+        welcomeFailoverActive: false,
+    });
     console.warn(`[whatsapp] ${input.logLabel}: retry em background até sucesso (${key}).`);
 };
 const deliverWabaEvolutionWhatsApp = async (input) => {

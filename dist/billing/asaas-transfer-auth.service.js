@@ -15,15 +15,28 @@ class AsaasTransferAuthService {
         const transfer = payload.transfer ?? {};
         const transferId = normalizeReference(transfer.id);
         const externalReference = normalizeReference(transfer.externalReference);
-        if (!externalReference.startsWith(`${asaas_identifiers_1.WABA_ASAAS_ORDER_PREFIX}split:`)) {
-            return { status: "REFUSED", refuseReason: "Transferência sem referência WABA split." };
+        if (!externalReference.startsWith(asaas_identifiers_1.WABA_ASAAS_ORDER_PREFIX)) {
+            return { status: "REFUSED", refuseReason: "Transferência sem referência WABA." };
         }
         const settlements = this.settlementRepository.list(500);
         for (const settlement of settlements) {
             for (const line of settlement.lines) {
-                const lineRef = normalizeReference(line.payoutExternalReference) ||
-                    `${asaas_identifiers_1.WABA_ASAAS_ORDER_PREFIX}split:${settlement.orderId}:${line.lineKind}:${line.participantId}`;
-                if (lineRef !== externalReference)
+                const candidates = [
+                    normalizeReference(line.payoutExternalReference),
+                    (0, asaas_identifiers_1.buildSplitLineAsaasExternalReference)({
+                        orderId: settlement.orderId,
+                        lineKind: line.lineKind,
+                        participantId: line.participantId,
+                    }),
+                    (0, asaas_identifiers_1.buildLegacySplitLineAsaasExternalReference)({
+                        orderId: settlement.orderId,
+                        lineKind: line.lineKind,
+                        participantId: line.participantId,
+                    }),
+                    (0, asaas_identifiers_1.baseSplitLineExternalReference)(normalizeReference(line.payoutExternalReference)),
+                ].filter(Boolean);
+                const matched = candidates.some((lineRef) => (0, asaas_identifiers_1.splitLineExternalReferencesMatch)(lineRef, externalReference));
+                if (!matched)
                     continue;
                 if (line.payoutStatus === "paid") {
                     return { status: "REFUSED", refuseReason: "Linha de split já repassada." };

@@ -2,7 +2,8 @@
 /**
  * Valida regras de boas-vindas antes de deploy:
  * - Sempre tenta número eleito (1º hint) mesmo em pausa humana/Preparando
- * - Failover secundário/terciário só se eleito desconectado
+ * - Failover secundário/terciário se eleito desconectado
+ * - Após 3 ACK ERROR no eleito, failover para próximo número
  * - ignoreAquecedorLifecycle ligado no serviço de boas-vindas
  *
  * Uso: node scripts/verify-welcome-routing-rules.cjs
@@ -43,21 +44,37 @@ const staticChecks = [
   },
   {
     name: "boas-vindas chama resolveWelcomeEvoSendSlots",
-    pass: delivery.includes("await resolveWelcomeEvoSendSlots(phoneHintsAll, logLabel)"),
+    pass: delivery.includes("await resolveWelcomeEvoSendSlots(phoneHintsAll, logLabel"),
   },
   {
-    name: "failover só quando eleito desconectado (comentário/código)",
+    name: "failover quando eleito desconectado",
     pass:
-      delivery.includes("Só avança para secundário/terciário se o eleito estiver desconectado") &&
+      delivery.includes("desconectado (connectionState=") &&
       delivery.includes("shouldSkipInstanceForSend(liveState)"),
   },
   {
-    name: "ACK erro em boas-vindas não faz failover de instância",
-    pass: delivery.includes("Boas-vindas repete no mesmo número (sem failover)"),
+    name: "limiar ACK ERROR exportado (padrão 3)",
+    pass:
+      delivery.includes("resolveWelcomeAckFailoverThreshold") &&
+      delivery.includes("WABA_WELCOME_ACK_FAILOVER_AFTER") &&
+      delivery.includes("return 3"),
+  },
+  {
+    name: "failover após ACK ERROR no eleito",
+    pass:
+      delivery.includes("ACK ERROR no eleito") &&
+      delivery.includes("welcomeFailoverActive") &&
+      delivery.includes("primaryAckErrors"),
+  },
+  {
+    name: "retry background persiste contador ACK ERROR",
+    pass:
+      delivery.includes("initialPrimaryAckErrors: pending.primaryAckErrors") &&
+      delivery.includes("welcomeFailoverActive: pending.welcomeFailoverActive"),
   },
   {
     name: "deploy marker inclui welcome",
-    pass: /welcome|boas-vindas|eleito|7770|ignore-pausa/i.test(marker),
+    pass: /welcome|boas-vindas|eleito|7770|ack-failover/i.test(marker),
   },
 ];
 
@@ -127,9 +144,18 @@ async function liveEvoChecks() {
     "GET",
     `/instance/connectionState/${encodeURIComponent("drax-oficial")}`,
   );
-  const state = String(cs.json?.instance?.state || cs.json?.state || "").toLowerCase();
-  if (state === "open") ok("drax-oficial connectionState=open");
-  else fail(`drax-oficial connectionState=${state || "?"}`);
+  let state = String(cs.json?.instance?.state || cs.json?.state || "").toLowerCase();
+  if (state !== "open") {
+    const csAlt = await evoRequest(
+      base,
+      apiKey,
+      "GET",
+      `/instance/connectionState/${encodeURIComponent("drax")}`,
+    );
+    state = String(csAlt.json?.instance?.state || csAlt.json?.state || "").toLowerCase();
+  }
+  if (state === "open") ok("instância 7770 connectionState=open");
+  else fail(`instância 7770 connectionState=${state || "?"}`);
 
   const list = await evoRequest(base, apiKey, "GET", "/instance/fetchInstances");
   if (list.status < 200 || list.status >= 300) {
@@ -162,5 +188,5 @@ async function liveEvoChecks() {
     console.error("\nVerificação FALHOU — não faça deploy até corrigir.");
     process.exit(1);
   }
-  console.log("\nVerificação OK — pronto para deploy (comportamento em pausa humana: testar reenvio pós-deploy).");
+  console.log("\nVerificação OK — pronto para deploy.");
 })();

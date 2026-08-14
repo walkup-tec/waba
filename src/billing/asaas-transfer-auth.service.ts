@@ -1,4 +1,10 @@
-import { WABA_ASAAS_ORDER_PREFIX } from "./asaas-identifiers";
+import {
+  baseSplitLineExternalReference,
+  buildLegacySplitLineAsaasExternalReference,
+  buildSplitLineAsaasExternalReference,
+  splitLineExternalReferencesMatch,
+  WABA_ASAAS_ORDER_PREFIX,
+} from "./asaas-identifiers";
 import { WabaFinanceiroSplitSettlementRepository } from "./waba-financeiro-split-settlement.repository";
 
 type TransferAuthPayload = {
@@ -31,18 +37,32 @@ export class AsaasTransferAuthService {
     const transferId = normalizeReference(transfer.id);
     const externalReference = normalizeReference(transfer.externalReference);
 
-    if (!externalReference.startsWith(`${WABA_ASAAS_ORDER_PREFIX}split:`)) {
-      return { status: "REFUSED", refuseReason: "Transferência sem referência WABA split." };
+    if (!externalReference.startsWith(WABA_ASAAS_ORDER_PREFIX)) {
+      return { status: "REFUSED", refuseReason: "Transferência sem referência WABA." };
     }
 
     const settlements = this.settlementRepository.list(500);
     for (const settlement of settlements) {
       for (const line of settlement.lines) {
-        const lineRef =
-          normalizeReference(line.payoutExternalReference) ||
-          `${WABA_ASAAS_ORDER_PREFIX}split:${settlement.orderId}:${line.lineKind}:${line.participantId}`;
+        const candidates = [
+          normalizeReference(line.payoutExternalReference),
+          buildSplitLineAsaasExternalReference({
+            orderId: settlement.orderId,
+            lineKind: line.lineKind,
+            participantId: line.participantId,
+          }),
+          buildLegacySplitLineAsaasExternalReference({
+            orderId: settlement.orderId,
+            lineKind: line.lineKind,
+            participantId: line.participantId,
+          }),
+          baseSplitLineExternalReference(normalizeReference(line.payoutExternalReference)),
+        ].filter(Boolean);
 
-        if (lineRef !== externalReference) continue;
+        const matched = candidates.some((lineRef) =>
+          splitLineExternalReferencesMatch(lineRef, externalReference),
+        );
+        if (!matched) continue;
 
         if (line.payoutStatus === "paid") {
           return { status: "REFUSED", refuseReason: "Linha de split já repassada." };
