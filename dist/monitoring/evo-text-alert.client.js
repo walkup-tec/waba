@@ -48,6 +48,48 @@ const isEvoSendTextAccepted = (json, body) => {
         return false;
     return rawBody.length > 0;
 };
+const extractSendMessageMeta = (json) => {
+    const visit = (node, depth) => {
+        if (node == null || depth > 8)
+            return null;
+        if (Array.isArray(node)) {
+            for (const item of node) {
+                const hit = visit(item, depth + 1);
+                if (hit?.id)
+                    return hit;
+            }
+            return null;
+        }
+        if (typeof node !== "object")
+            return null;
+        const rec = node;
+        const key = rec.key;
+        if (key && typeof key === "object") {
+            const keyRec = key;
+            const id = String(keyRec.id || rec.messageId || rec.id || "").trim();
+            if (id) {
+                return { id, remoteJid: String(keyRec.remoteJid || rec.remoteJid || "").trim() };
+            }
+        }
+        for (const value of Object.values(rec)) {
+            const hit = visit(value, depth + 1);
+            if (hit?.id)
+                return hit;
+        }
+        return null;
+    };
+    return visit(json, 0) || { id: "", remoteJid: "" };
+};
+const toSendResult = (ok, detail, status, json) => {
+    const meta = extractSendMessageMeta(json);
+    return {
+        ok,
+        detail,
+        status,
+        messageId: meta.id || undefined,
+        remoteJid: meta.remoteJid || undefined,
+    };
+};
 async function sendEvoTextAlert(input) {
     const instanceName = String(input.instanceName || "").trim();
     const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
@@ -76,7 +118,7 @@ async function sendEvoTextAlert(input) {
     });
     let accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
     if (accepted) {
-        return { ok: true, detail: "sendText OK.", status: result.status };
+        return toSendResult(true, "sendText OK.", result.status, result.json);
     }
     const initialDetail = result.error ||
         result.body ||
@@ -95,14 +137,10 @@ async function sendEvoTextAlert(input) {
         });
         accepted = recovered.ok && isEvoSendTextAccepted(recovered.json, recovered.body);
         if (accepted) {
-            return { ok: true, detail: "sendText OK (após restart EVO).", status: recovered.status };
+            return toSendResult(true, "sendText OK (após restart EVO).", recovered.status, recovered.json);
         }
         const recoveredDetail = recovered.error || recovered.body || initialDetail;
-        return {
-            ok: false,
-            detail: String(recoveredDetail).slice(0, 300),
-            status: recovered.status || result.status,
-        };
+        return toSendResult(false, String(recoveredDetail).slice(0, 300), recovered.status || result.status, recovered.json);
     }
     const detail = result.error ||
         result.body ||
@@ -110,9 +148,5 @@ async function sendEvoTextAlert(input) {
             ? String(result.json.message ?? "")
             : "") ||
         "Falha no envio via sistema WABA - Drax.";
-    return {
-        ok: false,
-        detail: String(detail).slice(0, 300),
-        status: result.status,
-    };
+    return toSendResult(false, String(detail).slice(0, 300), result.status, result.json);
 }

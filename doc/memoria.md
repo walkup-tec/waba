@@ -1,3 +1,8 @@
+## 2026-08-14 08:15 — Boas-vindas WhatsApp: ACK + failover
+- sendText HTTP 2xx não basta; exige DELIVERY_ACK/READ/PLAYED; ERROR tenta próxima instância
+- Marker: DEPLOY-2026-08-14-welcome-whatsapp-ack-failover
+- LOG: doc/LOG-2026-08-14__081500__welcome-whatsapp-ack-failover.md
+
 ## 2026-08-13 08:49 — Fix aba Dispositivos vazia
 - `setActiveTab` não exibia `#tab-dispositivos` (ficava `tab-hidden`)
 - Marker: DEPLOY-2026-08-13-device-cloud-tab-show

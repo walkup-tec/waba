@@ -6,6 +6,7 @@ const evo_connection_state_service_1 = require("../instances/evo-connection-stat
 const evo_text_alert_client_1 = require("../monitoring/evo-text-alert.client");
 const waba_push_community_service_1 = require("../push/waba-push-community.service");
 const aquecedor_instance_lifecycle_service_1 = require("../services/aquecedor-instance-lifecycle.service");
+const waba_evolution_delivery_ack_1 = require("./waba-evolution-delivery-ack");
 /** Sequência padrão Evolution para todos os envios WhatsApp do WABA. */
 exports.DEFAULT_WABA_WHATSAPP_PHONE_HINTS = ["51981077770", "51997462102", "51981082477"];
 const resolveWabaWhatsAppPhoneHints = () => {
@@ -163,20 +164,34 @@ const trySendViaSlot = async (input) => {
         timeoutMs,
         retries: 2,
     });
-    if (result.ok) {
-        console.log(`[whatsapp] enviado para ${targetWhatsapp} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}).`);
+    if (!result.ok) {
+        const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
+        console.warn(`[whatsapp] tentativa falhou (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}):`, detail);
+        if (!isRecoverableSendFailure(detail, result.status)) {
+            return {
+                status: "failed",
+                message: `${slot.instanceName}: ${detail}`,
+                instanceName: slot.instanceName,
+            };
+        }
+        return null;
+    }
+    const ack = await (0, waba_evolution_delivery_ack_1.waitForEvoOutboundDeliveryAck)({
+        instanceName: slot.instanceName,
+        targetNumber: targetWhatsapp,
+        messageId: result.messageId,
+        remoteJid: result.remoteJid,
+    });
+    if (ack.outcome === "delivered") {
+        console.log(`[whatsapp] entregue no aparelho para ${targetWhatsapp} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`);
         return { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName };
     }
-    const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
-    console.warn(`[whatsapp] tentativa falhou (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}):`, detail);
-    if (!isRecoverableSendFailure(detail, result.status)) {
-        return {
-            status: "failed",
-            message: `${slot.instanceName}: ${detail}`,
-            instanceName: slot.instanceName,
-        };
-    }
-    return null;
+    console.warn(`[whatsapp] sendText OK mas não entregue (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Tentando próxima instância.`);
+    return {
+        status: "failed",
+        message: `${slot.instanceName}: WhatsApp não entregue (ack=${ack.status})`,
+        instanceName: slot.instanceName,
+    };
 };
 const backgroundRetries = new Map();
 const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
@@ -243,11 +258,18 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
     console.error(`[whatsapp] ${logLabel} falhou para ${whatsapp} (${recipientLabel}):`, message);
     return { status: "failed", message };
 };
+const resolveBackgroundRetryMaxAttempts = () => {
+    const raw = Number(process.env.WABA_WHATSAPP_BACKGROUND_RETRY_MAX ?? 12);
+    if (Number.isFinite(raw) && raw >= 1)
+        return Math.min(40, Math.round(raw));
+    return 12;
+};
 const scheduleBackgroundRetry = (input) => {
     const key = String(input.backgroundRetryKey || "").trim();
     if (!key || backgroundRetries.has(key))
         return;
     const roundDelayMs = resolveWabaWhatsAppRoundDelayMs();
+    const maxAttempts = resolveBackgroundRetryMaxAttempts();
     let attempts = 0;
     const tick = async () => {
         const pending = backgroundRetries.get(key);
@@ -260,6 +282,12 @@ const scheduleBackgroundRetry = (input) => {
             clearTimeout(pending.timer);
             backgroundRetries.delete(key);
             console.log(`[whatsapp] ${input.logLabel}: retry em background OK (${key}).`);
+            return;
+        }
+        if (attempts >= maxAttempts) {
+            clearTimeout(pending.timer);
+            backgroundRetries.delete(key);
+            console.error(`[whatsapp] ${input.logLabel}: retry em background esgotado após ${attempts} tentativa(s) (${key}).`);
             return;
         }
         const nextTimer = setTimeout(() => {
@@ -276,7 +304,7 @@ const scheduleBackgroundRetry = (input) => {
 const deliverWabaEvolutionWhatsApp = async (input) => {
     const maxRounds = resolveWabaWhatsAppMaxRounds();
     const result = await runWabaEvolutionWhatsAppDelivery(input, { maxRounds });
-    if (result.status === "failed" && input.backgroundRetryKey) {
+    if (result.status !== "sent" && input.backgroundRetryKey) {
         scheduleBackgroundRetry(input);
     }
     return result;

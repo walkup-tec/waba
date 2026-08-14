@@ -9,6 +9,7 @@ import {
   resolveConnectedEvoOutboundInstance,
 } from "../push/waba-push-community.service";
 import { getAquecedorLifecycleStatusForInstance } from "../services/aquecedor-instance-lifecycle.service";
+import { waitForEvoOutboundDeliveryAck } from "./waba-evolution-delivery-ack";
 import type {
   WabaWhatsAppDeliveryResult,
   WabaWhatsAppDeliveryStatus,
@@ -204,28 +205,46 @@ const trySendViaSlot = async (input: {
     retries: 2,
   });
 
-  if (result.ok) {
+  if (!result.ok) {
+    const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
+    console.warn(
+      `[whatsapp] tentativa falhou (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}):`,
+      detail,
+    );
+
+    if (!isRecoverableSendFailure(detail, result.status)) {
+      return {
+        status: "failed",
+        message: `${slot.instanceName}: ${detail}`,
+        instanceName: slot.instanceName,
+      };
+    }
+
+    return null;
+  }
+
+  const ack = await waitForEvoOutboundDeliveryAck({
+    instanceName: slot.instanceName,
+    targetNumber: targetWhatsapp,
+    messageId: result.messageId,
+    remoteJid: result.remoteJid,
+  });
+
+  if (ack.outcome === "delivered") {
     console.log(
-      `[whatsapp] enviado para ${targetWhatsapp} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}).`,
+      `[whatsapp] entregue no aparelho para ${targetWhatsapp} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`,
     );
     return { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName };
   }
 
-  const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
   console.warn(
-    `[whatsapp] tentativa falhou (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}):`,
-    detail,
+    `[whatsapp] sendText OK mas não entregue (${slot.instanceName} / ${slot.phoneHint}) para ${targetWhatsapp} (${recipientLabel}): ack=${ack.status}. Tentando próxima instância.`,
   );
-
-  if (!isRecoverableSendFailure(detail, result.status)) {
-    return {
-      status: "failed",
-      message: `${slot.instanceName}: ${detail}`,
-      instanceName: slot.instanceName,
-    };
-  }
-
-  return null;
+  return {
+    status: "failed",
+    message: `${slot.instanceName}: WhatsApp não entregue (ack=${ack.status})`,
+    instanceName: slot.instanceName,
+  };
 };
 
 export type WabaEvolutionWhatsAppDeliveryInput = {
@@ -319,11 +338,18 @@ const runWabaEvolutionWhatsAppDelivery = async (
   return { status: "failed", message };
 };
 
+const resolveBackgroundRetryMaxAttempts = (): number => {
+  const raw = Number(process.env.WABA_WHATSAPP_BACKGROUND_RETRY_MAX ?? 12);
+  if (Number.isFinite(raw) && raw >= 1) return Math.min(40, Math.round(raw));
+  return 12;
+};
+
 const scheduleBackgroundRetry = (input: WabaEvolutionWhatsAppDeliveryInput): void => {
   const key = String(input.backgroundRetryKey || "").trim();
   if (!key || backgroundRetries.has(key)) return;
 
   const roundDelayMs = resolveWabaWhatsAppRoundDelayMs();
+  const maxAttempts = resolveBackgroundRetryMaxAttempts();
   let attempts = 0;
 
   const tick = async (): Promise<void> => {
@@ -338,6 +364,15 @@ const scheduleBackgroundRetry = (input: WabaEvolutionWhatsAppDeliveryInput): voi
       clearTimeout(pending.timer);
       backgroundRetries.delete(key);
       console.log(`[whatsapp] ${input.logLabel}: retry em background OK (${key}).`);
+      return;
+    }
+
+    if (attempts >= maxAttempts) {
+      clearTimeout(pending.timer);
+      backgroundRetries.delete(key);
+      console.error(
+        `[whatsapp] ${input.logLabel}: retry em background esgotado após ${attempts} tentativa(s) (${key}).`,
+      );
       return;
     }
 
@@ -359,7 +394,7 @@ export const deliverWabaEvolutionWhatsApp = async (
 ): Promise<WabaWhatsAppDeliveryResult> => {
   const maxRounds = resolveWabaWhatsAppMaxRounds();
   const result = await runWabaEvolutionWhatsAppDelivery(input, { maxRounds });
-  if (result.status === "failed" && input.backgroundRetryKey) {
+  if (result.status !== "sent" && input.backgroundRetryKey) {
     scheduleBackgroundRetry(input);
   }
   return result;
