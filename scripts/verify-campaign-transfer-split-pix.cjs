@@ -193,4 +193,42 @@ const intakeManualId = {
 const resolvedManual = resolveSupplierForCampaignIntake(intakeManualId, suppliers, "outros");
 assert(resolvedManual?.id === "sup-eduardo", "ID manual deve resolver fornecedor pelo e-mail");
 
+const orderSettlementGabriel = {
+  orderId: "58aa9a81-order",
+  supplierId: "sup-walkup",
+  supplierName: "Walkup",
+  lines: [
+    {
+      lineKind: "supplier",
+      participantId: "sup-walkup",
+      participantLabel: "Walkup",
+      participantEmail: "walkup@example.com",
+      pixKey: "",
+      payoutStatus: "skipped",
+      amountCents: 19000,
+    },
+    {
+      lineKind: "partner",
+      participantId: "partner-1",
+      participantLabel: "Walkup Master",
+      participantEmail: "walkup@example.com",
+      pixKey: "walkup@example.com",
+      payoutStatus: "paid",
+      amountCents: 6351,
+    },
+  ],
+};
+
+const orderSynced = syncCampaignSupplierSettlement(
+  intakeTransferred,
+  orderSettlementGabriel,
+  suppliers,
+  "outros",
+);
+assert(orderSynced?.supplierId === "sup-eduardo", "split do pedido deve seguir o operador eleito");
+assert(orderSynced?.lines[0].participantLabel === "Eduardo", "Financeiro deve mostrar Douglas/Eduardo");
+assert(orderSynced?.lines[0].pixKey === "11999998888", "PIX do pedido adiado deve ser do eleito");
+assert(orderSynced?.lines[0].payoutStatus === "skipped", "linha adiada permanece skipped");
+assert(orderSynced?.lines[1].payoutStatus === "paid", "lucro já pago não deve ser alterado");
+
 console.log("verify-campaign-transfer-split-pix: OK");

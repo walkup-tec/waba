@@ -247,6 +247,12 @@ export class WabaAdminFinanceiroService {
         `[Financeiro] removidos ${purgeBonus.removed} settlement(s) de campanhas 100% bônus de envio`,
       );
     }
+    const syncedSuppliers = this.splitService.syncDeferredSupplierSettlementsFromOpenCampaigns();
+    if (syncedSuppliers > 0) {
+      console.info(
+        `[Financeiro] ${syncedSuppliers} split(s) de pedido alinhado(s) ao operacional da campanha vigente`,
+      );
+    }
 
     const orders = this.listDisparosOrdersSorted();
 

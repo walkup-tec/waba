@@ -1,3 +1,24 @@
+## 2026-08-14 14:15 — Dispositivos: fluxo WhatsApp habitual
+- SMS só após Avançar/confirmar no app; dígitos um a um; abre WA Business
+- Marker `DEPLOY-2026-08-14-device-cloud-wa-natural`
+- LOG: doc/LOG-2026-08-14__ui-device-cloud-wa-natural.md
+
+## 2026-08-14 14:05 — Dispositivos: tela +20%
+- Wrap 420px → 504px; screenshot max-height 72vh → 86vh
+- Marker `DEPLOY-2026-08-14-device-cloud-screen-20`
+- LOG: doc/LOG-2026-08-14__ui-device-cloud-screen-20.md
+
+## 2026-08-14 13:55 — Dispositivos: inputs no tema escuro
+- Nome e número WhatsApp usam tokens `--bg-card-alt` / `--text` (sem fundo branco)
+- Marker `DEPLOY-2026-08-14-device-cloud-inputs-dark`
+- LOG: doc/LOG-2026-08-14__ui-device-cloud-inputs-dark.md
+
+## 2026-08-14 13:40 — Split do pedido segue o operacional da campanha vigente
+- Cancelar/gerar outra campanha atualiza fornecedor/PIX no Financeiro (não só no campaign-supplier)
+- Overview sincroniza linhas skipped/pending | `npm run verify:campaign-transfer-split-pix`
+- Marker `DEPLOY-2026-08-14-split-supplier-elected-sync`
+- LOG: doc/LOG-2026-08-14__fix-split-pedido-operador-eleito.md
+
 ## 2026-08-14 12:05 — Split PIX ao transferir campanha entre operacionais
 - Repasse fornecedor usa operador eleito (e-mail + plano + segmento), não só assignedSupplierId
 - Sync settlement pending/failed ao transferir | `npm run verify:campaign-transfer-split-pix`

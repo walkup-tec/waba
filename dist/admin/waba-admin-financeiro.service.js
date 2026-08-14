@@ -223,6 +223,10 @@ class WabaAdminFinanceiroService {
         if (purgeBonus.removed > 0) {
             console.warn(`[Financeiro] removidos ${purgeBonus.removed} settlement(s) de campanhas 100% bônus de envio`);
         }
+        const syncedSuppliers = this.splitService.syncDeferredSupplierSettlementsFromOpenCampaigns();
+        if (syncedSuppliers > 0) {
+            console.info(`[Financeiro] ${syncedSuppliers} split(s) de pedido alinhado(s) ao operacional da campanha vigente`);
+        }
         const orders = this.listDisparosOrdersSorted();
         await this.splitService.syncSettlementTransferStatuses(100);
         let pendingCount = 0;

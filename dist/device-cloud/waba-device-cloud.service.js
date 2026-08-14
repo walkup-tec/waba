@@ -103,6 +103,23 @@ class WabaDeviceCloudService {
     async inputKey(email, deviceId, key) {
         await this.input(email, deviceId, "key", { key });
     }
+    async launchWhatsAppBusiness(email, deviceId) {
+        this.assertDeviceId(deviceId);
+        const token = await this.accessToken(email);
+        const res = await this.apiFetch(`/devices/${deviceId}/launch-whatsapp-business`, {
+            method: "POST",
+            headers: {
+                authorization: `Bearer ${token}`,
+                "content-type": "application/json",
+            },
+            body: "{}",
+            timeoutMs: 30000,
+        });
+        if (!res.ok) {
+            const raw = await res.text().catch(() => "");
+            throw new DeviceCloudHttpError(this.safeMessage(raw, "Não foi possível abrir o WhatsApp Business."), res.status);
+        }
+    }
     async input(email, deviceId, path, body) {
         this.assertDeviceId(deviceId);
         const token = await this.accessToken(email);

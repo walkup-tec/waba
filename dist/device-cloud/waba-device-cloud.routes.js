@@ -84,6 +84,22 @@ function registerDeviceCloudRoutes(app) {
             return sendDeviceCloudError(res, err);
         }
     });
+    app.post("/device-cloud/device/:id/launch-whatsapp-business", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        try {
+            await waba_device_cloud_service_1.wabaDeviceCloudService.launchWhatsAppBusiness(user.email, id);
+            return res.json({ ok: true });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
     app.post("/device-cloud/device/:id/input/tap", async (req, res) => {
         const user = requireDeviceCloudUser(req, res);
         if (!user)

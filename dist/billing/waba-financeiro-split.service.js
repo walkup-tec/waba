@@ -484,18 +484,7 @@ class WabaFinanceiroSplitService {
         }
         return null;
     }
-    /**
-     * Atualiza settlement pendente da campanha quando o operacional muda
-     * (participantId, e-mail e chave PIX do fornecedor eleito).
-     */
-    syncCampaignSupplierSettlementForIntake(intake, existing) {
-        const supplier = this.resolveSupplierForCampaignIntake(intake);
-        if (!supplier?.pixKey)
-            return null;
-        const orderId = this.buildCampaignSupplierOrderId(intake.id);
-        const settlement = existing ?? this.settlementRepository.getByOrderId(orderId);
-        if (!settlement)
-            return null;
+    applyElectedSupplierToSettlement(settlement, supplier) {
         const supplierLineIndex = settlement.lines.findIndex((line) => line.lineKind === "supplier");
         if (supplierLineIndex < 0)
             return null;
@@ -504,8 +493,9 @@ class WabaFinanceiroSplitService {
             return settlement;
         }
         const participantEmail = supplier.systemUserEmail || "";
+        const pixKey = supplier.pixKey || line.pixKey || "";
         const needsUpdate = line.participantId !== supplier.id ||
-            line.pixKey !== supplier.pixKey ||
+            line.pixKey !== pixKey ||
             line.participantEmail !== participantEmail ||
             line.participantLabel !== supplier.name ||
             settlement.supplierId !== supplier.id;
@@ -518,7 +508,7 @@ class WabaFinanceiroSplitService {
             participantId: supplier.id,
             participantLabel: supplier.name,
             participantEmail,
-            pixKey: supplier.pixKey,
+            pixKey,
             payoutStatus: line.payoutStatus === "failed" ? "pending" : line.payoutStatus,
             ...(operatorChanged
                 ? {
@@ -537,6 +527,70 @@ class WabaFinanceiroSplitService {
             lines: updatedLines,
             payoutStatus: (0, waba_financeiro_split_settlement_repository_1.deriveSettlementPayoutStatus)(updatedLines),
         });
+    }
+    /**
+     * Atualiza settlement pendente da campanha quando o operacional muda
+     * (participantId, e-mail e chave PIX do fornecedor eleito).
+     * Também atualiza o split do pedido pago (linha fornecedor adiada) para
+     * refletir o operador da campanha vigente — cancelar e gerar outra não
+     * pode deixar o Financeiro no operador antigo.
+     */
+    syncCampaignSupplierSettlementForIntake(intake, existing) {
+        const supplier = this.resolveSupplierForCampaignIntake(intake);
+        if (!supplier?.pixKey)
+            return null;
+        const campaignOrderId = this.buildCampaignSupplierOrderId(intake.id);
+        const campaignSettlement = existing ?? this.settlementRepository.getByOrderId(campaignOrderId);
+        let updatedCampaign = null;
+        if (campaignSettlement) {
+            updatedCampaign = this.applyElectedSupplierToSettlement(campaignSettlement, supplier);
+        }
+        this.syncDeferredOrderSettlementsForIntake(intake, supplier);
+        return updatedCampaign;
+    }
+    /**
+     * Pedido pago congela o fornecedor no momento do PIX do assinante.
+     * Se a campanha vigente mudou de operacional, a linha adiada (skipped/pending)
+     * precisa seguir o eleito — sem mexer em linhas já pagas (lucro).
+     */
+    syncDeferredOrderSettlementsForIntake(intake, supplierOverride) {
+        const supplier = supplierOverride ?? this.resolveSupplierForCampaignIntake(intake);
+        if (!supplier?.pixKey)
+            return 0;
+        const ownerEmail = String(intake.ownerEmail || "")
+            .trim()
+            .toLowerCase();
+        if (!ownerEmail)
+            return 0;
+        const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
+        const campaignOrderPrefix = "campaign-supplier:";
+        let updated = 0;
+        for (const settlement of this.settlementRepository.list(500)) {
+            if (String(settlement.orderId || "").startsWith(campaignOrderPrefix))
+                continue;
+            if (String(settlement.ownerEmail || "").trim().toLowerCase() !== ownerEmail)
+                continue;
+            if (settlement.apiKind !== apiKind)
+                continue;
+            const saved = this.applyElectedSupplierToSettlement(settlement, supplier);
+            if (saved && saved !== settlement)
+                updated += 1;
+        }
+        return updated;
+    }
+    /** Corrige splits de pedidos cuja campanha aberta já está em outro operacional. */
+    syncDeferredSupplierSettlementsFromOpenCampaigns() {
+        const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
+        let updated = 0;
+        for (const intake of intakeRepository.listAll()) {
+            const status = String(intake.status || "");
+            if (status !== "generated" && status !== "in_progress")
+                continue;
+            if (!String(intake.assignedOperacionalEmail || "").trim())
+                continue;
+            updated += this.syncDeferredOrderSettlementsForIntake(intake);
+        }
+        return updated;
     }
     buildCampaignSupplierOrderId(intakeId) {
         return `campaign-supplier:${String(intakeId || "").trim()}`;

@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-1325-dispositivos-ui";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-device-cloud-wa-natural";
 
