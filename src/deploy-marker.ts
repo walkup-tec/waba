@@ -2,5 +2,5 @@
 
 
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-gerar-pix-click";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-14-min-credito-alternativa-200";
 

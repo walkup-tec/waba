@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-14 — Mínimo de crédito da API Alternativa = R$ 200
+
+- **Decisão:** Checkout PIX da API Alternativa aceita a partir de R$ 200,00; Oficial permanece R$ 300,00.
+- **Motivo:** Pacote menor da Alternativa é 1.000 envios por R$ 200; o mínimo global de R$ 300 rejeitava o PIX.
+- **Impacto:** Marker `DEPLOY-2026-08-14-min-credito-alternativa-200`; env `WABA_DISPAROS_MIN_CREDIT_CENTS_ALTERNATIVA`.
+
 ### 2026-08-12 — DRAX Device Cloud (repo próprio) + menu WABA
 
 - **Decisão:** Device Cloud em `drax-device-cloud` (Nest/Next/Redroid); WABA só menu/SSO; visível em production para `mozart.pmo@gmail.com`.

@@ -1,3 +1,8 @@
+## 2026-08-14 14:55 — Mínimo API Alternativa R$ 200
+- Checkout PIX deixava de aceitar o pacote de R$ 200 (mínimo global era R$ 300)
+- Marker `DEPLOY-2026-08-14-min-credito-alternativa-200`
+- LOG: doc/LOG-2026-08-14__fix-min-credito-alternativa-200.md
+
 ## 2026-08-14 14:45 — Gerar PIX do checkout de créditos
 - Clique no botão era engolido (z-index/FAB) ou o botão ficava disabled sem aviso
 - Marker `DEPLOY-2026-08-14-gerar-pix-click`

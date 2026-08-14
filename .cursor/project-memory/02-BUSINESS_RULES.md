@@ -4,6 +4,12 @@ Somente regras permanentes. Sem detalhes de implementação.
 
 ## Regras
 
+### Crédito mínimo no checkout PIX (Disparos)
+
+- API Alternativa: mínimo **R$ 200,00** (pacote de 1.000 envios).
+- API Oficial: mínimo **R$ 300,00** (pacote de 1.000 envios é R$ 320,00).
+- Os mínimos são independentes (`WABA_DISPAROS_MIN_CREDIT_CENTS` vs `WABA_DISPAROS_MIN_CREDIT_CENTS_ALTERNATIVA`).
+
 ### Reenvio de boas-vindas (assinante)
 
 - O master pode reenviar e-mail e WhatsApp de boas-vindas pelo Admin · Assinantes.
