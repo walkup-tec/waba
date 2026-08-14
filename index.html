@@ -22337,7 +22337,7 @@
         const gate = document.getElementById("device-cloud-gate-msg");
         if (gate) {
           gate.textContent = allowed
-            ? "Acesso liberado. Use «Abrir Device Cloud» para gerenciar dispositivos virtuais."
+            ? "Acesso liberado. Abrindo a tela do Android…"
             : "Menu restrito à conta autorizada em produção.";
         }
         if (!allowed && activeTab === "dispositivos") {
@@ -44673,6 +44673,9 @@
             "aria-hidden",
             nextTab !== "dispositivos" ? "true" : "false"
           );
+          if (nextTab === "dispositivos") {
+            void openDeviceCloudPanel(true);
+          }
         }
 
         if (instanciasPanel) {

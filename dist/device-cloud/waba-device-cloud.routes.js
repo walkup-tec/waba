@@ -12,6 +12,16 @@ const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 function isDeviceCloudEmailAllowed(email) {
     return DEVICE_CLOUD_ALLOWLIST.has(String(email || "").trim().toLowerCase());
 }
+function resolveDeviceCloudWebUrl() {
+    const web = String(process.env.DEVICE_CLOUD_WEB_URL || "").trim().replace(/\/$/, "");
+    if (web)
+        return web;
+    const publicUrl = String(process.env.DEVICE_CLOUD_PUBLIC_URL || "").trim().replace(/\/$/, "");
+    if (publicUrl.includes("://api-devices.draxsistemas.com.br")) {
+        return "https://devices.draxsistemas.com.br";
+    }
+    return publicUrl;
+}
 /** Compact SSO token: base64url(json).base64url(hmac-sha256) */
 function signDeviceCloudSsoToken(claims, secret, expiresInSec = 300) {
     const payload = {
@@ -38,7 +48,7 @@ function registerDeviceCloudRoutes(app) {
             return res.status(403).json({ error: "Conta não autorizada para Device Cloud." });
         }
         const secret = String(process.env.DEVICE_CLOUD_SSO_SECRET || "").trim();
-        const publicUrl = String(process.env.DEVICE_CLOUD_PUBLIC_URL || "").trim().replace(/\/$/, "");
+        const publicUrl = resolveDeviceCloudWebUrl();
         if (!secret || !publicUrl) {
             return res.status(503).json({
                 error: "DEVICE_CLOUD_SSO_SECRET / DEVICE_CLOUD_PUBLIC_URL não configurados no ambiente.",

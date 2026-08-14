@@ -1,3 +1,8 @@
+## 2026-08-14 10:12 — Dispositivos abre Device Cloud Web
+- Iframe automático + fallback api-devices → devices
+- Marker: DEPLOY-2026-08-14-device-cloud-web-iframe
+- LOG: doc/LOG-2026-08-14__101200__waba-dispositivos-iframe-web.md
+
 ## 2026-08-14 09:58 — Boas-vindas: failover só se eleito desconectado
 - Pausa humana mantém 5181077770; secundário só se primário offline
 - Marker: DEPLOY-2026-08-14-welcome-failover-if-disconnected
