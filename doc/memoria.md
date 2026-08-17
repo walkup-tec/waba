@@ -1,3 +1,10 @@
+## 2026-08-17 10:27 — Campanhas: relatório visível com saldo zerado
+- Assinante sem créditos continua vendo lista e relatórios (API Oficial e Alternativa)
+- Alerta de créditos só na criação de nova campanha (card compacto, sem overlay na tela inteira)
+- Gate usa saldo da API da aba atual (`oficial` / `alternativa`)
+- Marker `DEPLOY-2026-08-17-campanhas-relatorio-saldo-zero`
+- LOG: doc/LOG-2026-08-17__094600__campanhas-relatorio-sem-creditos-view.md
+
 ## 2026-08-17 07:30 — Dispositivos flutuantes na aba
 - Celular permanece na aba Dispositivos, arrastável, sem sobrepor outros menus
 - Excluir tira da tela (não destrói o Redroid)

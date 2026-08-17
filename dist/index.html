@@ -14216,27 +14216,44 @@
         color: #cbd5e1;
         line-height: 1.4;
       }
-      body.disparos-saldo-zero .disparos-config-panel {
-        position: relative;
-        opacity: 0.52;
-        pointer-events: none;
-        user-select: none;
+      body.disparos-saldo-zero .disparos-config-panel,
+      body.disparos-saldo-zero #dis-campaign-wizard,
+      body.disparos-saldo-zero #dis-campaign-wizard-success,
+      body.disparos-saldo-zero #disparos-config-legacy,
+      body.disparos-saldo-zero.waba-disparo-evo-mode #disparos-config-legacy,
+      body.disparos-saldo-zero.waba-ui-baseline #disparos-config-legacy {
+        display: none !important;
       }
-      body.disparos-saldo-zero .disparos-config-panel::after {
-        content: "Adicione créditos para criar uma nova campanha.";
-        position: absolute;
-        inset: 0;
+      .disparos-create-credits-lock {
+        margin-top: 16px;
+        padding: 16px 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(251, 146, 60, 0.42);
+        background: rgba(67, 20, 7, 0.28);
         display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        text-align: center;
-        font-size: 0.9rem;
-        font-weight: 600;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .disparos-create-credits-lock[hidden] {
+        display: none !important;
+      }
+      .disparos-create-credits-lock-text {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        flex: 1 1 240px;
+      }
+      .disparos-create-credits-lock-text strong {
         color: #fdba74;
-        background: rgba(2, 6, 23, 0.55);
-        border-radius: 12px;
-        pointer-events: none;
+        font-size: 0.92rem;
+      }
+      .disparos-create-credits-lock-text p {
+        margin: 0;
+        color: #cbd5e1;
+        font-size: 0.82rem;
+        line-height: 1.45;
       }
       .disparos-config-panel {
         margin-top: 20px;
@@ -18330,7 +18347,7 @@
               <div id="disparos-credits-top-nudge" class="disparos-credits-top-nudge" hidden>
                 <div class="disparos-credits-top-nudge-text">
                   <strong>Saldo de envios esgotado</strong>
-                  <span>Contrate mais créditos para voltar a gerar campanhas.</span>
+                  <span>Os relatórios das campanhas já geradas continuam disponíveis. Adicione créditos para criar uma nova.</span>
                 </div>
                 <button
                   id="disparos-credits-top-nudge-btn"
@@ -18463,7 +18480,7 @@
                     <div class="disparos-credits-nudge-pulse" aria-hidden="true"></div>
                     <div class="disparos-credits-nudge-body">
                       <strong>Saldo zerado</strong>
-                      <p>Seus envios contratados acabaram. Adicione créditos para continuar.</p>
+                      <p>Você ainda pode ver os relatórios. Adicione créditos para criar uma nova campanha.</p>
                       <button
                         id="disparos-credits-nudge-btn"
                         type="button"
@@ -18474,6 +18491,22 @@
                     </div>
                   </div>
                 </div>
+              </div>
+              <div id="disparos-create-credits-lock" class="disparos-create-credits-lock" hidden>
+                <div class="disparos-create-credits-lock-text">
+                  <strong>Adicione créditos para criar uma nova campanha</strong>
+                  <p>
+                    Os relatórios das campanhas já geradas continuam disponíveis. O saldo atual não
+                    permite gerar outra campanha neste plano.
+                  </p>
+                </div>
+                <button
+                  id="disparos-create-credits-lock-btn"
+                  type="button"
+                  class="instance-action-btn btn-qrcode enabled"
+                >
+                  Adicionar créditos
+                </button>
               </div>
               <div class="disparos-config-panel disparos-saas-only">
                 <div class="disparos-config-panel-title">Nova campanha</div>
@@ -25130,6 +25163,9 @@
         }
         initDisparosCampanhasLayoutSync();
         syncDisparosCampanhasListLayout();
+        if (typeof syncDisparosCreditsEmptyNudge === "function") {
+          syncDisparosCreditsEmptyNudge();
+        }
         syncDisparoEvoMessengerCtaUi();
         const panelTitle = document.querySelector("#tab-disparos .panel-title");
         if (panelTitle && on && isProductionUi()) {
@@ -40971,6 +41007,10 @@
           showToast("Aguarde, a campanha já está sendo enviada…", "warning", 3200);
           return;
         }
+        if (!canCreateDisparosCampaignWithCredits()) {
+          promptDisparosCreateRequiresCredits();
+          return;
+        }
         disCampaignWizardSubmitInFlight = true;
         if (!disCampaignWizardSubmitRequestId) {
           disCampaignWizardSubmitRequestId = createDisCampaignWizardClientRequestId();
@@ -44885,21 +44925,53 @@
         showToast("Abra a aba Créditos para contratar envios.", "info");
       }
 
+      function getActiveDisparosCampaignApiKind() {
+        return isDisparoEvoUi() ? "alternativa" : "oficial";
+      }
+
+      function getActiveDisparosCreateRemainingShipments() {
+        if (hasMasterAccess() || Boolean(disparosCreditsCache?.unlimitedCredits)) {
+          return Number.MAX_SAFE_INTEGER;
+        }
+        const bucket = resolveDisparosCreditsApiBucket(getActiveDisparosCampaignApiKind());
+        return Math.max(0, Math.floor(Number(bucket.remainingShipments) || 0));
+      }
+
+      function canCreateDisparosCampaignWithCredits() {
+        if (hasMasterAccess() || Boolean(disparosCreditsCache?.unlimitedCredits)) return true;
+        if (disparosCreditsCache == null) return true;
+        return getActiveDisparosCreateRemainingShipments() > 0;
+      }
+
+      function promptDisparosCreateRequiresCredits() {
+        const apiKind = getActiveDisparosCampaignApiKind();
+        const planLabel = apiKind === "alternativa" ? "API Alternativa" : "API Oficial";
+        showToast(
+          `Adicione créditos de ${planLabel} para criar uma nova campanha. Os relatórios das campanhas já geradas continuam disponíveis.`,
+          "warning",
+          5600
+        );
+        if (canUserBuyDisparosCredits()) {
+          goToDisparosAddCredits();
+        }
+      }
+
       function syncDisparosCreditsEmptyNudge() {
-        const remaining =
-          disparosCreditsCache?.remainingShipments != null
-            ? Math.max(0, Number(disparosCreditsCache.remainingShipments))
-            : null;
-        const depleted = disparosCreditsCache != null && remaining === 0;
-        const showNudge = depleted && canUserBuyDisparosCredits();
+        const depleted =
+          disparosCreditsCache != null && !canCreateDisparosCampaignWithCredits();
+        const showBuyCta = depleted && canUserBuyDisparosCredits();
         const card = document.getElementById("disparos-resumo-disponiveis-card");
         const sideNudge = document.getElementById("disparos-credits-nudge");
         const topNudge = document.getElementById("disparos-credits-top-nudge");
+        const createLock = document.getElementById("disparos-create-credits-lock");
+        const createLockBtn = document.getElementById("disparos-create-credits-lock-btn");
 
-        card?.classList.toggle("is-depleted", showNudge);
-        document.body.classList.toggle("disparos-saldo-zero", showNudge);
-        if (sideNudge) sideNudge.hidden = !showNudge;
-        if (topNudge) topNudge.hidden = !showNudge;
+        card?.classList.toggle("is-depleted", depleted);
+        document.body.classList.toggle("disparos-saldo-zero", depleted);
+        if (sideNudge) sideNudge.hidden = !showBuyCta;
+        if (topNudge) topNudge.hidden = !showBuyCta;
+        if (createLock) createLock.hidden = !depleted;
+        if (createLockBtn) createLockBtn.hidden = !showBuyCta;
       }
 
       function syncDisparosResumoSide(campaignItems) {
@@ -46301,6 +46373,10 @@
 
       async function createCampaignFromMappedSpreadsheet() {
         if (disCampaignCreateInFlight) return false;
+        if (!canCreateDisparosCampaignWithCredits()) {
+          promptDisparosCreateRequiresCredits();
+          return false;
+        }
         const campaignName = String(document.getElementById("dis-campaign-name")?.value || "").trim();
         const numberCol = String(disCampaignMappedNumberColumn || "").trim();
         const statusEl = document.getElementById("dis-campaign-create-status");
@@ -53238,6 +53314,10 @@
       const disparosCreditsTopNudgeBtn = document.getElementById("disparos-credits-top-nudge-btn");
       if (disparosCreditsTopNudgeBtn) {
         disparosCreditsTopNudgeBtn.addEventListener("click", () => goToDisparosAddCredits());
+      }
+      const disparosCreateCreditsLockBtn = document.getElementById("disparos-create-credits-lock-btn");
+      if (disparosCreateCreditsLockBtn) {
+        disparosCreateCreditsLockBtn.addEventListener("click", () => goToDisparosAddCredits());
       }
       const disparosDiagnosticoBtn = document.getElementById("disparos-diagnostico-btn");
       if (disparosDiagnosticoBtn) {
