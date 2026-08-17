@@ -1,0 +1,163 @@
+# Ajusta performanceReport.read de uma campanha já finalizada (UI fica somente leitura).
+# Secrets: VPS_SSH_PRIVATE_KEY, opcional VPS_HOST
+#
+# Manual: Actions → Patch Campaign Report Read (SSH) → Run workflow
+# Auto: push em .github/campaign-report-patches/*.json (master)
+
+name: Patch Campaign Report Read (SSH)
+
+on:
+  workflow_dispatch:
+    inputs:
+      campaignName:
+        description: Nome da campanha (trecho)
+        required: true
+        type: string
+      createdLocal:
+        description: Data/hora local (YYYY-MM-DD HH:mm)
+        required: true
+        type: string
+      read:
+        description: Valor de Lidos
+        required: true
+        type: string
+      timezone:
+        description: Fuso
+        required: false
+        default: America/Sao_Paulo
+        type: string
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/campaign-report-patches/**"
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (trigger por push)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+
+      - name: Resolver parâmetros
+        id: params
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "campaign_name=${{ github.event.inputs.campaignName }}" >> "$GITHUB_OUTPUT"
+            echo "created_local=${{ github.event.inputs.createdLocal }}" >> "$GITHUB_OUTPUT"
+            echo "read=${{ github.event.inputs.read }}" >> "$GITHUB_OUTPUT"
+            echo "timezone=${{ github.event.inputs.timezone }}" >> "$GITHUB_OUTPUT"
+            echo "request_id=manual-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            FILE="$(find .github/campaign-report-patches -maxdepth 1 -name '*.json' -type f | head -1)"
+            if [ -z "$FILE" ]; then
+              echo "::error::Nenhum arquivo em .github/campaign-report-patches/"
+              exit 1
+            fi
+            NAME="$(jq -r '.campaignName // empty' "$FILE")"
+            CREATED="$(jq -r '.createdLocal // empty' "$FILE")"
+            READ="$(jq -r '.read // empty' "$FILE")"
+            TZ_NAME="$(jq -r '.timezone // "America/Sao_Paulo"' "$FILE")"
+            REQUEST_ID="$(jq -r '.requestId // empty' "$FILE")"
+            if [ -z "$NAME" ] || [ -z "$CREATED" ] || [ -z "$READ" ]; then
+              echo "::error::Campos campaignName, createdLocal e read são obrigatórios em $FILE"
+              exit 1
+            fi
+            if [ -z "$REQUEST_ID" ]; then
+              REQUEST_ID="$(basename "$FILE" .json)"
+            fi
+            echo "campaign_name=$NAME" >> "$GITHUB_OUTPUT"
+            echo "created_local=$CREATED" >> "$GITHUB_OUTPUT"
+            echo "read=$READ" >> "$GITHUB_OUTPUT"
+            echo "timezone=$TZ_NAME" >> "$GITHUB_OUTPUT"
+            echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+            echo "Trigger: $FILE"
+          fi
+
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY não configurado."
+            exit 1
+          fi
+
+      - name: SSH — patch Lidos no volume WABA
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 4m
+          script: |
+            set -euo pipefail
+            NAME="${{ steps.params.outputs.campaign_name }}"
+            CREATED="${{ steps.params.outputs.created_local }}"
+            READ="${{ steps.params.outputs.read }}"
+            TZ_NAME="${{ steps.params.outputs.timezone }}"
+            REQUEST_ID="${{ steps.params.outputs.request_id }}"
+            CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | grep -vE 'v02|v01' | head -1 || true)"
+            if [ -z "$CONTAINER" ]; then
+              CONTAINER="$(docker ps --format '{{.Names}}' | grep -E 'waba.*disparador' | head -1 || true)"
+            fi
+            if [ -z "$CONTAINER" ]; then
+              echo "::error::Container waba_disparador não encontrado."
+              docker ps --format '{{.Names}}' | head -20
+              exit 1
+            fi
+            echo "Container: $CONTAINER"
+            docker exec "$CONTAINER" node -e "
+            const fs=require('fs');
+            const path=require('path');
+            const wantName=String(process.argv[1]||'').trim();
+            const createdLocal=String(process.argv[2]||'').trim();
+            const nextRead=Math.max(0, Math.round(Number(process.argv[3]||0)));
+            const tz=String(process.argv[4]||'America/Sao_Paulo').trim()||'America/Sao_Paulo';
+            const requestId=String(process.argv[5]||'').trim();
+            if(!wantName || !createdLocal || !Number.isFinite(nextRead)) throw new Error('Parâmetros inválidos');
+            const file=path.join('/app/data','waba-campaign-intakes.json');
+            const raw=JSON.parse(fs.readFileSync(file,'utf8'));
+            if(!raw || raw.version!==1 || !Array.isArray(raw.intakes)) throw new Error('Store inválido');
+            const normName=(s)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/RESEIDENCIAL/g,'RESIDENCIAL').replace(/\s+/g,' ').trim();
+            const targetName=normName(wantName);
+            const m=createdLocal.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})$/);
+            if(!m) throw new Error('createdLocal deve ser YYYY-MM-DD HH:mm');
+            const targetStamp=m[1]+' '+m[2]+':'+m[3];
+            const fmt=(iso)=>{
+              const d=new Date(iso);
+              if(Number.isNaN(d.getTime())) return '';
+              const parts=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d);
+              const get=(t)=>String(parts.find(p=>p.type===t)?.value||'');
+              return get('year')+'-'+get('month')+'-'+get('day')+' '+get('hour')+':'+get('minute');
+            };
+            const named=raw.intakes.filter((row)=>normName(row.campaignName).includes(targetName) || targetName.includes(normName(row.campaignName)));
+            const sameDay=named.filter((row)=>fmt(row.createdAt).startsWith(m[1]));
+            const exact=sameDay.filter((row)=>fmt(row.createdAt)===targetStamp);
+            const pool=exact.length?exact:sameDay;
+            if(pool.length<1){
+              const sample=raw.intakes.slice(0,30).map(r=>({id:r.id,name:r.campaignName,createdAt:r.createdAt,local:fmt(r.createdAt),read:r.performanceReport&&r.performanceReport.read}));
+              throw new Error('Campanha não encontrada. amostra='+JSON.stringify({wantName,createdLocal,named:named.map(r=>({id:r.id,name:r.campaignName,local:fmt(r.createdAt)}),sample)}));
+            }
+            if(pool.length>1){
+              throw new Error('Mais de uma campanha casou: '+JSON.stringify(pool.map(r=>({id:r.id,name:r.campaignName,local:fmt(r.createdAt)}))));
+            }
+            const intake=pool[0];
+            if(!intake.performanceReport) throw new Error('Campanha sem performanceReport: '+intake.id);
+            const prev=intake.performanceReport.read;
+            if(prev===nextRead){
+              console.log(JSON.stringify({ok:true,skipped:true,requestId,id:intake.id,campaignName:intake.campaignName,read:prev}));
+              process.exit(0);
+            }
+            const bak=file+'.bak-'+requestId.replace(/[^a-zA-Z0-9._-]+/g,'_');
+            fs.copyFileSync(file, bak);
+            intake.performanceReport.read=nextRead;
+            intake.updatedAt=new Date().toISOString();
+            const tmp=file+'.'+process.pid+'.'+Date.now()+'.tmp';
+            fs.writeFileSync(tmp, JSON.stringify(raw,null,2));
+            fs.renameSync(tmp, file);
+            console.log(JSON.stringify({ok:true,requestId,id:intake.id,campaignName:intake.campaignName,createdAt:intake.createdAt,createdLocal:fmt(intake.createdAt),readBefore:prev,readAfter:intake.performanceReport.read,backup:bak}));
+            " "$NAME" "$CREATED" "$READ" "$TZ_NAME" "$REQUEST_ID"

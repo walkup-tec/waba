@@ -1,3 +1,8 @@
+## 2026-08-17 14:08 — Relatório SQUARE RESIDENCIAL: Lidos = 480
+- Campanha 14/08/2026 15:54; relatório finalizado é somente leitura na UI
+- Patch em produção via Actions SSH em `waba-campaign-intakes.json` (`performanceReport.read`)
+- LOG: doc/LOG-2026-08-17__170800__square-residencial-lidos-480.md
+
 ## 2026-08-17 13:28 — Marker redeploy Device Cloud (dialpad)
 - Marker `DEPLOY-2026-08-17-1628-device-cloud-dialpad` (`src` + `dist`)
 - Serve para validar `/health` após o próximo Redeploy (evitar archive GitHub 429: usar fonte Git/clone)
