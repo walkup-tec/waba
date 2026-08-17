@@ -29005,7 +29005,8 @@
         const amount = escapeAdminHtml(formatDisparosMoneyFromCents(line?.amountCents || 0));
         if (line?.lineKind === "supplier") {
           const envios = Number(line?.shipmentCount ?? item?.purchasedShipmentCount ?? 0);
-          return `${amount} <span class="admin-financeiro-split-line-value-note">(${envios.toLocaleString("pt-BR")} envios)</span>`;
+          const unitLabel = item?.campaignIntakeId ? "entregues" : "envios";
+          return `${amount} <span class="admin-financeiro-split-line-value-note">(${envios.toLocaleString("pt-BR")} ${unitLabel})</span>`;
         }
         if (line?.lineKind === "cet") {
           return `${amount} <span class="admin-financeiro-split-line-value-note">(retido na fonte)</span>`;
@@ -29019,7 +29020,8 @@
         const amount = escapeAdminHtml(formatDisparosMoneyFromCents(line?.amountCents || 0));
         if (line?.lineKind === "supplier") {
           const envios = Number(line?.shipmentCount ?? item?.purchasedShipmentCount ?? 0);
-          return `${label}: ${amount} (${envios.toLocaleString("pt-BR")} envios)`;
+          const unitLabel = item?.campaignIntakeId ? "entregues" : "envios";
+          return `${label}: ${amount} (${envios.toLocaleString("pt-BR")} ${unitLabel})`;
         }
         if (line?.lineKind === "cet") {
           return `${label}: ${amount} (retido na fonte)`;

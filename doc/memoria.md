@@ -1,3 +1,9 @@
+## 2026-08-17 15:28 — Financeiro: comprovante do fornecedor na linha do pedido + PIX por entregues
+- Causa: finalizar campanha criava `campaign-supplier:` e pagava `sent`
+- Fix: anexar comprovante na linha original; valor = entregues (cap enviados/planejado/crédito pago)
+- Marker `DEPLOY-2026-08-17-financeiro-split-fornecedor-entregues`
+- LOG: doc/LOG-2026-08-17__152800__fix-financeiro-split-fornecedor-entregues.md
+
 ## 2026-08-17 15:12 — Avançar Device Cloud validado (360,1100)
 - Back + swipe no Play quebravam o fluxo; Avançar era y=1060 (acima do botão)
 - Toque real `360,1100` abriu o diálogo Continuar

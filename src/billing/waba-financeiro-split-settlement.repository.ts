@@ -219,6 +219,10 @@ export class WabaFinanceiroSplitSettlementRepository {
     return this.readStore().settlements.find((item) => item.id === normalized) ?? null;
   }
 
+  listAll(): FinanceiroSplitSettlement[] {
+    return this.readStore().settlements.slice();
+  }
+
   getByOrderId(orderId: string): FinanceiroSplitSettlement | null {
     const normalized = String(orderId ?? "").trim();
     if (!normalized) return null;

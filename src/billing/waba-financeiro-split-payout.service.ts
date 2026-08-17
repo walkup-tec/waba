@@ -412,6 +412,52 @@ export class WabaFinanceiroSplitPayoutService {
     return this.finalizeSettlementRecord(working);
   }
 
+  async executeSingleLine(
+    settlement: FinanceiroSplitSettlement,
+    participantId: string,
+  ): Promise<FinanceiroSplitSettlement> {
+    const index = settlement.lines.findIndex(
+      (line) => String(line.participantId) === String(participantId),
+    );
+    if (index < 0) return settlement;
+
+    const line = settlement.lines[index];
+    if (line.lineKind === "cet" || line.payoutStatus === "paid" || line.payoutStatus === "skipped") {
+      return settlement;
+    }
+    if (!this.isPayoutEnabled()) return settlement;
+    if (!this.isTransferApiConfigured()) {
+      const reason =
+        "Repasse PIX indisponível: configure ASAAS_TRANSFER_API_KEY com permissão de saque no Asaas.";
+      const lines = settlement.lines.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, payoutStatus: "failed" as const, failureReason: reason }
+          : item,
+      );
+      return this.finalizeSettlementRecord({ ...settlement, lines });
+    }
+
+    const working = { ...settlement, lines: settlement.lines.map((item) => ({ ...item })) };
+    const current = working.lines[index];
+
+    if (current.payoutStatus === "processing" && current.asaasTransferId) {
+      try {
+        const transfer = await getAsaasTransfer(current.asaasTransferId);
+        working.lines[index] = this.applyTransferResult(current, transfer);
+      } catch (error) {
+        console.warn(
+          `[SplitPayout] consulta transfer ${current.asaasTransferId} indisponível:`,
+          error instanceof Error ? error.message : error,
+        );
+        working.lines[index] = { ...current, payoutStatus: "processing", failureReason: undefined };
+      }
+      return this.finalizeSettlementRecord(working);
+    }
+
+    working.lines[index] = await this.payoutLine(working, current);
+    return this.finalizeSettlementRecord(working);
+  }
+
   /** Consulta Asaas e atualiza linhas pendentes/falhas — sem reenviar PIX. */
   async syncSettlementLinesForSettlement(
     settlement: FinanceiroSplitSettlement,

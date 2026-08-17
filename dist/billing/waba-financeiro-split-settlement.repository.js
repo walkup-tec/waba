@@ -141,6 +141,9 @@ class WabaFinanceiroSplitSettlementRepository {
             return null;
         return this.readStore().settlements.find((item) => item.id === normalized) ?? null;
     }
+    listAll() {
+        return this.readStore().settlements.slice();
+    }
     getByOrderId(orderId) {
         const normalized = String(orderId ?? "").trim();
         if (!normalized)

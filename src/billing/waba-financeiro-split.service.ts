@@ -166,6 +166,7 @@ export class WabaFinanceiroSplitService {
   }
 
   listSettlements(limit = 100) {
+    this.absorbSyntheticCampaignSupplierSettlements();
     return filterOutMetricsExcludedOwners(this.settlementRepository.list(limit));
   }
 
@@ -541,6 +542,7 @@ export class WabaFinanceiroSplitService {
   }
 
   async processPendingPayouts(limit = 50) {
+    this.absorbSyntheticCampaignSupplierSettlements();
     return this.payoutService.executePendingSettlements(limit);
   }
 
@@ -746,6 +748,232 @@ export class WabaFinanceiroSplitService {
     return `campaign-supplier:${String(intakeId || "").trim()}`;
   }
 
+  private isCampaignSupplierOrderId(orderId: string): boolean {
+    return String(orderId || "").trim().startsWith("campaign-supplier:");
+  }
+
+  private normalizeOwnerEmail(email: string): string {
+    return String(email || "").trim().toLowerCase();
+  }
+
+  private findSupplierLine(settlement: FinanceiroSplitSettlement): SplitSettlementLine | undefined {
+    return settlement.lines.find((line) => line.lineKind === "supplier");
+  }
+
+  private settlementMatchesSupplier(
+    settlement: FinanceiroSplitSettlement,
+    supplierId: string,
+  ): boolean {
+    if (!supplierId) return true;
+    if (String(settlement.supplierId || "").trim() === supplierId) return true;
+    return String(this.findSupplierLine(settlement)?.participantId || "").trim() === supplierId;
+  }
+
+  private isUnusedDeferredSupplierSettlement(settlement: FinanceiroSplitSettlement): boolean {
+    if (this.isCampaignSupplierOrderId(settlement.orderId)) return false;
+    const line = this.findSupplierLine(settlement);
+    if (!line || line.amountCents <= 0) return false;
+    if (line.payoutStatus === "paid" || line.payoutStatus === "processing") return false;
+    return line.payoutStatus === "skipped" || line.payoutStatus === "pending";
+  }
+
+  private findDeferredSupplierSettlement(params: {
+    ownerEmail: string;
+    apiKind: WabaDispatchesApiKind;
+    supplierId: string;
+    campaignIntakeId?: string;
+    preferredCostPerShipmentCents?: number;
+    excludeSettlementIds?: Set<string>;
+  }): FinanceiroSplitSettlement | null {
+    const ownerEmail = this.normalizeOwnerEmail(params.ownerEmail);
+    const supplierId = String(params.supplierId || "").trim();
+    const campaignIntakeId = String(params.campaignIntakeId || "").trim();
+    const excluded = params.excludeSettlementIds ?? new Set<string>();
+    const preferredCost = Math.max(0, Math.round(Number(params.preferredCostPerShipmentCents ?? 0)));
+
+    const all = this.settlementRepository
+      .listAll()
+      .filter((item) => !excluded.has(item.id))
+      .filter((item) => !this.isCampaignSupplierOrderId(item.orderId))
+      .filter((item) => this.normalizeOwnerEmail(item.ownerEmail) === ownerEmail)
+      .filter((item) => item.apiKind === params.apiKind)
+      .filter((item) => this.settlementMatchesSupplier(item, supplierId));
+
+    if (campaignIntakeId) {
+      const linked = all.find((item) => item.campaignIntakeId === campaignIntakeId);
+      if (linked) return linked;
+    }
+
+    return (
+      all
+        .filter((item) => !item.campaignIntakeId)
+        .filter((item) => this.isUnusedDeferredSupplierSettlement(item))
+        .sort((a, b) => {
+          if (preferredCost > 0) {
+            const deltaA = Math.abs(
+              Math.max(0, Math.round(Number(a.costPerShipmentCents ?? 0))) - preferredCost,
+            );
+            const deltaB = Math.abs(
+              Math.max(0, Math.round(Number(b.costPerShipmentCents ?? 0))) - preferredCost,
+            );
+            if (deltaA !== deltaB) return deltaA - deltaB;
+          }
+          return String(a.createdAt).localeCompare(String(b.createdAt));
+        })[0] ?? null
+    );
+  }
+
+  private mergeSupplierPayoutIntoOriginal(
+    original: FinanceiroSplitSettlement,
+    sourceLine: SplitSettlementLine,
+    campaignIntakeId: string,
+  ): FinanceiroSplitSettlement {
+    const lines = original.lines.map((line) => {
+      if (line.lineKind !== "supplier") return line;
+      if (line.payoutStatus === "paid") return line;
+      return {
+        ...line,
+        pixKey: sourceLine.pixKey || line.pixKey,
+        amountCents: sourceLine.amountCents || line.amountCents,
+        shipmentCount: sourceLine.shipmentCount ?? line.shipmentCount,
+        costPerShipmentCents: sourceLine.costPerShipmentCents ?? line.costPerShipmentCents,
+        payoutStatus: sourceLine.payoutStatus,
+        asaasTransferId: sourceLine.asaasTransferId,
+        payoutExternalReference: sourceLine.payoutExternalReference,
+        transactionReceiptUrl: sourceLine.transactionReceiptUrl,
+        paidAt: sourceLine.paidAt,
+        failureReason: sourceLine.failureReason,
+      };
+    });
+    const supplierLine = lines.find((line) => line.lineKind === "supplier");
+    return {
+      ...original,
+      campaignIntakeId: original.campaignIntakeId || campaignIntakeId,
+      supplierCostCents: supplierLine?.amountCents ?? original.supplierCostCents,
+      lines,
+      payoutStatus: deriveSettlementPayoutStatus(lines),
+    };
+  }
+
+  private absorbSyntheticCampaignSupplierSettlements(): number {
+    const synthetics = this.settlementRepository
+      .listAll()
+      .filter((item) => this.isCampaignSupplierOrderId(item.orderId))
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    if (!synthetics.length) return 0;
+
+    const usedOriginalIds = new Set<string>();
+    let absorbed = 0;
+
+    for (const synthetic of synthetics) {
+      const sourceLine = this.findSupplierLine(synthetic);
+      if (!sourceLine) continue;
+
+      const original = this.findDeferredSupplierSettlement({
+        ownerEmail: synthetic.ownerEmail,
+        apiKind: synthetic.apiKind,
+        supplierId: String(synthetic.supplierId || sourceLine.participantId || "").trim(),
+        campaignIntakeId: synthetic.campaignIntakeId,
+        preferredCostPerShipmentCents:
+          sourceLine.costPerShipmentCents ?? synthetic.costPerShipmentCents,
+        excludeSettlementIds: usedOriginalIds,
+      });
+      if (!original) {
+        console.warn(
+          `[FinanceiroSplit] settlement sintético ${synthetic.orderId} sem pedido original para absorver o comprovante`,
+        );
+        continue;
+      }
+
+      const merged = this.mergeSupplierPayoutIntoOriginal(
+        original,
+        sourceLine,
+        String(synthetic.campaignIntakeId || "").trim(),
+      );
+      this.settlementRepository.save(merged);
+      this.settlementRepository.deleteByOrderIds([synthetic.orderId]);
+      usedOriginalIds.add(original.id);
+      absorbed += 1;
+    }
+
+    return absorbed;
+  }
+
+  private prepareDeferredSupplierLine(
+    settlement: FinanceiroSplitSettlement,
+    supplier: SplitSupplier,
+    deliveredCount: number,
+    campaignIntakeId: string,
+  ): FinanceiroSplitSettlement {
+    const aligned = this.applyElectedSupplierToSettlement(settlement, supplier) ?? settlement;
+    const existingLine = this.findSupplierLine(aligned);
+    const costPerShipmentCents = Math.max(
+      0,
+      Math.round(
+        Number(
+          existingLine?.costPerShipmentCents ??
+            aligned.costPerShipmentCents ??
+            supplier.costPerShipmentCents ??
+            0,
+        ),
+      ),
+    );
+    const supplierCostCents = Math.max(0, Math.round(deliveredCount * costPerShipmentCents));
+    const lines = aligned.lines.map((line) => {
+      if (line.lineKind !== "supplier") return line;
+      if (line.payoutStatus === "paid" || line.payoutStatus === "processing") return line;
+      return {
+        ...line,
+        participantId: line.participantId || supplier.id,
+        participantLabel: line.participantLabel || supplier.name,
+        participantEmail: line.participantEmail || supplier.systemUserEmail || "",
+        pixKey: supplier.pixKey,
+        amountCents: supplierCostCents || line.amountCents,
+        shipmentCount: deliveredCount || line.shipmentCount,
+        costPerShipmentCents,
+        payoutStatus: line.payoutStatus === "skipped" ? "pending" : line.payoutStatus,
+      };
+    });
+    const supplierLine = lines.find((line) => line.lineKind === "supplier");
+    return this.settlementRepository.save({
+      ...aligned,
+      campaignIntakeId: aligned.campaignIntakeId || campaignIntakeId,
+      supplierCostCents: supplierLine?.amountCents ?? aligned.supplierCostCents,
+      lines,
+      payoutStatus: deriveSettlementPayoutStatus(lines),
+    });
+  }
+
+  private async ensureSupplierPayoutOnSettlement(
+    settlement: FinanceiroSplitSettlement,
+    supplier: SplitSupplier,
+    deliveredCount: number,
+    campaignIntakeId: string,
+  ): Promise<FinanceiroSplitSettlement> {
+    const prepared = this.prepareDeferredSupplierLine(
+      settlement,
+      supplier,
+      deliveredCount,
+      campaignIntakeId,
+    );
+    const supplierLine = this.findSupplierLine(prepared);
+    if (!supplierLine) return prepared;
+    if (supplierLine.payoutStatus === "paid") return prepared;
+    if (!this.payoutService.isPayoutEnabled()) return prepared;
+    try {
+      return (
+        (await this.payoutService.executeSingleLine(prepared, supplierLine.participantId)) ??
+        prepared
+      );
+    } catch (error) {
+      console.error(
+        `[FinanceiroSplit] falha no repasse PIX do fornecedor no pedido ${prepared.orderId}:`,
+        error instanceof Error ? error.message : error,
+      );
+      return prepared;
+    }
+  }
+
   async payoutSupplierForCompletedCampaign(intake: WabaCampaignIntake): Promise<FinanceiroSplitSettlement | null> {
     if (intake.status !== "completed") return null;
     if (isWabaMetricsExcludedOwnerEmail(intake.ownerEmail)) return null;
@@ -757,39 +985,52 @@ export class WabaFinanceiroSplitService {
       return null;
     }
 
-    const billableSent = resolveBillableSentForSupplierSplit(intake);
-    if (billableSent <= 0) return null;
+    const deliveredCount = resolveBillableSentForSupplierSplit(intake);
+    if (deliveredCount <= 0) return null;
 
     const supplier = this.resolveSupplierForCampaignIntake(intake);
     if (!supplier?.pixKey) return null;
 
-    const orderId = this.buildCampaignSupplierOrderId(intake.id);
-    const existing = this.settlementRepository.getByOrderId(orderId);
-    if (existing) {
-      if (isWabaMetricsExcludedOwnerEmail(existing.ownerEmail)) return null;
-      const synced = this.syncCampaignSupplierSettlementForIntake(intake, existing) ?? existing;
-      const supplierLine = synced.lines.find((line) => line.lineKind === "supplier");
-      if (
-        this.payoutService.isPayoutEnabled() &&
-        supplierLine &&
-        supplierLine.payoutStatus === "pending" &&
-        supplierLine.amountCents > 0
-      ) {
-        try {
-          return (await this.payoutService.executeForSettlement(synced)) ?? synced;
-        } catch (error) {
-          console.error(
-            `[FinanceiroSplit] falha no repasse PIX da campanha ${intake.id} (settlement existente):`,
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
-      return synced;
-    }
+    this.absorbSyntheticCampaignSupplierSettlements();
+    this.syncDeferredOrderSettlementsForIntake(intake, supplier);
 
     const apiKind = resolveIntakeApiKindFromIntake(intake);
+    const linkedCandidates = this.settlementRepository
+      .listAll()
+      .filter((item) => item.campaignIntakeId === intake.id)
+      .sort(
+        (a, b) =>
+          Number(this.isCampaignSupplierOrderId(a.orderId)) -
+          Number(this.isCampaignSupplierOrderId(b.orderId)),
+      );
+    const linked =
+      linkedCandidates[0] ??
+      this.settlementRepository.getByOrderId(this.buildCampaignSupplierOrderId(intake.id));
+
+    const target =
+      linked && !this.isCampaignSupplierOrderId(linked.orderId)
+        ? linked
+        : this.findDeferredSupplierSettlement({
+            ownerEmail: intake.ownerEmail,
+            apiKind,
+            supplierId: supplier.id,
+            campaignIntakeId: intake.id,
+            preferredCostPerShipmentCents: supplier.costPerShipmentCents,
+          });
+
+    if (target && !this.isCampaignSupplierOrderId(target.orderId)) {
+      if (isWabaMetricsExcludedOwnerEmail(target.ownerEmail)) return null;
+      return this.ensureSupplierPayoutOnSettlement(target, supplier, deliveredCount, intake.id);
+    }
+
+    if (linked && this.isCampaignSupplierOrderId(linked.orderId)) {
+      if (isWabaMetricsExcludedOwnerEmail(linked.ownerEmail)) return null;
+      return this.ensureSupplierPayoutOnSettlement(linked, supplier, deliveredCount, intake.id);
+    }
+
+    const orderId = this.buildCampaignSupplierOrderId(intake.id);
     const costPerShipmentCents = Math.max(0, Math.round(Number(supplier.costPerShipmentCents ?? 0)));
-    const supplierCostCents = Math.max(0, Math.round(billableSent * costPerShipmentCents));
+    const supplierCostCents = Math.max(0, Math.round(deliveredCount * costPerShipmentCents));
     if (supplierCostCents <= 0) return null;
 
     const lines: SplitSettlementLine[] = [
@@ -801,20 +1042,20 @@ export class WabaFinanceiroSplitService {
         pixKey: supplier.pixKey,
         sharePercent: 0,
         amountCents: supplierCostCents,
-        shipmentCount: billableSent,
+        shipmentCount: deliveredCount,
         costPerShipmentCents,
         payoutStatus: "pending",
       },
     ];
 
-    const settlement = this.settlementRepository.create({
+    const fallback = this.settlementRepository.create({
       orderId,
       campaignIntakeId: intake.id,
       apiKind,
       ownerEmail: intake.ownerEmail,
       customerName: intake.campaignName,
       paidValueCents: 0,
-      purchasedShipmentCount: billableSent,
+      purchasedShipmentCount: deliveredCount,
       costPerShipmentCents,
       supplierCostCents,
       totalCostCents: supplierCostCents,
@@ -827,15 +1068,6 @@ export class WabaFinanceiroSplitService {
       payoutStatus: deriveSettlementPayoutStatus(lines),
     });
 
-    if (!this.payoutService.isPayoutEnabled()) return settlement;
-    try {
-      return (await this.payoutService.executeForSettlement(settlement)) ?? settlement;
-    } catch (error) {
-      console.error(
-        `[FinanceiroSplit] falha no repasse PIX da campanha ${intake.id}:`,
-        error instanceof Error ? error.message : error,
-      );
-      return settlement;
-    }
+    return this.ensureSupplierPayoutOnSettlement(fallback, supplier, deliveredCount, intake.id);
   }
 }
