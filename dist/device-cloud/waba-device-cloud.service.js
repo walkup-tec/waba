@@ -3,7 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.wabaDeviceCloudService = exports.WabaDeviceCloudService = exports.DeviceCloudHttpError = void 0;
+exports.wabaDeviceCloudService = exports.WabaDeviceCloudService = exports.DEVICE_CLOUD_WABA_NAME_PREFIX = exports.DeviceCloudHttpError = void 0;
+exports.isSaasPublishedDeviceCloudName = isSaasPublishedDeviceCloudName;
+exports.withWabaDeviceCloudName = withWabaDeviceCloudName;
+exports.isDeviceVisibleOnWaba = isDeviceVisibleOnWaba;
 exports.isDeviceCloudDeviceId = isDeviceCloudDeviceId;
 const crypto_1 = __importDefault(require("crypto"));
 const SSO_AUDIENCE = "drax-device-cloud";
@@ -16,6 +19,23 @@ class DeviceCloudHttpError extends Error {
     }
 }
 exports.DeviceCloudHttpError = DeviceCloudHttpError;
+/** Devices do SaaS (devices.draxsistemas.com.br) não entram na aba Dispositivos do WABA. */
+exports.DEVICE_CLOUD_WABA_NAME_PREFIX = "WABA · ";
+const DEVICE_CLOUD_SAAS_NAME_PREFIXES = ["SAAS · ", "DRAX-DEVICES · "];
+function isSaasPublishedDeviceCloudName(name) {
+    const label = String(name || "").trim();
+    return DEVICE_CLOUD_SAAS_NAME_PREFIXES.some((prefix) => label.toUpperCase().startsWith(prefix.toUpperCase()));
+}
+function withWabaDeviceCloudName(name) {
+    const base = String(name || "").trim() || `Android ${new Date().toISOString().slice(11, 16).replace(":", "")}`;
+    if (base.toUpperCase().startsWith(exports.DEVICE_CLOUD_WABA_NAME_PREFIX.toUpperCase())) {
+        return base.slice(0, 48);
+    }
+    return `${exports.DEVICE_CLOUD_WABA_NAME_PREFIX}${base}`.slice(0, 48);
+}
+function isDeviceVisibleOnWaba(device) {
+    return Boolean(device?.id) && !isSaasPublishedDeviceCloudName(String(device.name || ""));
+}
 const tokenCache = new Map();
 const trimEnv = (value) => String(value ?? "").trim();
 function isDeviceCloudDeviceId(id) {
@@ -54,11 +74,11 @@ class WabaDeviceCloudService {
     }
     async listDevicesForUser(email) {
         const token = await this.accessToken(email);
-        return this.listDevices(token);
+        return (await this.listDevices(token)).filter(isDeviceVisibleOnWaba);
     }
     async createNewDevice(email, name) {
         const token = await this.accessToken(email);
-        const label = String(name || "").trim() || `Android ${new Date().toISOString().slice(11, 16).replace(":", "")}`;
+        const label = withWabaDeviceCloudName(name);
         const created = await this.createDevice(token, label.slice(0, 48));
         const createdStatus = String(created.status || "").toUpperCase();
         if (created.id && createdStatus !== "ERROR")
@@ -71,7 +91,7 @@ class WabaDeviceCloudService {
     }
     async ensureDevice(email) {
         const token = await this.accessToken(email);
-        const existing = await this.listDevices(token);
+        const existing = (await this.listDevices(token)).filter(isDeviceVisibleOnWaba);
         const online = existing.find((d) => String(d.status || "").toUpperCase() === "ONLINE");
         if (online?.id)
             return online;
@@ -84,7 +104,7 @@ class WabaDeviceCloudService {
         if (existing.length > 0) {
             throw new DeviceCloudHttpError("O celular virtual não está pronto. Tente de novo em alguns segundos.", 502);
         }
-        const created = await this.createDevice(token, "Android");
+        const created = await this.createDevice(token, withWabaDeviceCloudName("Android"));
         const createdStatus = String(created.status || "").toUpperCase();
         if (created.id && createdStatus !== "ERROR")
             return created;
@@ -202,7 +222,7 @@ class WabaDeviceCloudService {
                 authorization: `Bearer ${token}`,
                 "content-type": "application/json",
             },
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({ name, origin: "waba", product: "waba" }),
             timeoutMs: 180000,
         });
         const payload = (await res.json().catch(() => null));
@@ -225,6 +245,7 @@ class WabaDeviceCloudService {
             tenant: trimEnv(process.env.DEVICE_CLOUD_DEFAULT_TENANT_ID) || "00000000-0000-4000-8000-000000000001",
             userId: trimEnv(process.env.DEVICE_CLOUD_DEFAULT_USER_ID) || "00000000-0000-4000-8000-000000000011",
             role: "admin",
+            product: "waba",
         };
         const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
         const sig = crypto_1.default.createHmac("sha256", secret).update(body).digest("base64url");

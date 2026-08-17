@@ -23501,6 +23501,8 @@
           if (!d || !d.id) return false;
           if (String(d.status || "").toUpperCase() === "ERROR") return false;
           if (/pixel extra/i.test(String(d.name || ""))) return false;
+          const name = String(d.name || "").trim().toUpperCase();
+          if (name.startsWith("SAAS ·") || name.startsWith("DRAX-DEVICES ·")) return false;
           return true;
         });
       }

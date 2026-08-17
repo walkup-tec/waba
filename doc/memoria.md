@@ -1,3 +1,9 @@
+## 2026-08-17 14:53 — Isolamento Device Cloud WABA vs SaaS
+- Publicação futura: `https://devices.draxsistemas.com.br/`
+- WABA não lista devices `SAAS ·` / `DRAX-DEVICES ·`; criações WABA usam `WABA ·`
+- Tenant SSO separado fica para o SaaS; até lá o filtro de nome vale no WABA
+- LOG: doc/LOG-2026-08-17__175300__device-cloud-isolamento-waba-saas.md
+
 ## 2026-08-17 14:46 — Digitar já toca Avançar/Continuar
 - Play Services heads-up desviava o toque; teclado some e o Device avança sozinho
 - Marker `DEPLOY-2026-08-17-device-cloud-avancar`

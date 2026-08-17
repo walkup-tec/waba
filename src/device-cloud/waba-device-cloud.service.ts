@@ -19,6 +19,28 @@ export type DeviceCloudDevice = {
   status?: string;
 };
 
+/** Devices do SaaS (devices.draxsistemas.com.br) não entram na aba Dispositivos do WABA. */
+export const DEVICE_CLOUD_WABA_NAME_PREFIX = "WABA · ";
+const DEVICE_CLOUD_SAAS_NAME_PREFIXES = ["SAAS · ", "DRAX-DEVICES · "];
+
+export function isSaasPublishedDeviceCloudName(name: string): boolean {
+  const label = String(name || "").trim();
+  return DEVICE_CLOUD_SAAS_NAME_PREFIXES.some((prefix) => label.toUpperCase().startsWith(prefix.toUpperCase()));
+}
+
+export function withWabaDeviceCloudName(name?: string): string {
+  const base =
+    String(name || "").trim() || `Android ${new Date().toISOString().slice(11, 16).replace(":", "")}`;
+  if (base.toUpperCase().startsWith(DEVICE_CLOUD_WABA_NAME_PREFIX.toUpperCase())) {
+    return base.slice(0, 48);
+  }
+  return `${DEVICE_CLOUD_WABA_NAME_PREFIX}${base}`.slice(0, 48);
+}
+
+export function isDeviceVisibleOnWaba(device: DeviceCloudDevice): boolean {
+  return Boolean(device?.id) && !isSaasPublishedDeviceCloudName(String(device.name || ""));
+}
+
 type CachedToken = { accessToken: string; expMs: number };
 
 const tokenCache = new Map<string, CachedToken>();
@@ -62,12 +84,12 @@ export class WabaDeviceCloudService {
 
   async listDevicesForUser(email: string): Promise<DeviceCloudDevice[]> {
     const token = await this.accessToken(email);
-    return this.listDevices(token);
+    return (await this.listDevices(token)).filter(isDeviceVisibleOnWaba);
   }
 
   async createNewDevice(email: string, name?: string): Promise<DeviceCloudDevice> {
     const token = await this.accessToken(email);
-    const label = String(name || "").trim() || `Android ${new Date().toISOString().slice(11, 16).replace(":", "")}`;
+    const label = withWabaDeviceCloudName(name);
     const created = await this.createDevice(token, label.slice(0, 48));
     const createdStatus = String(created.status || "").toUpperCase();
     if (created.id && createdStatus !== "ERROR") return created;
@@ -79,7 +101,7 @@ export class WabaDeviceCloudService {
 
   async ensureDevice(email: string): Promise<DeviceCloudDevice> {
     const token = await this.accessToken(email);
-    const existing = await this.listDevices(token);
+    const existing = (await this.listDevices(token)).filter(isDeviceVisibleOnWaba);
     const online = existing.find((d) => String(d.status || "").toUpperCase() === "ONLINE");
     if (online?.id) return online;
     const ready = existing.find((d) => {
@@ -93,7 +115,7 @@ export class WabaDeviceCloudService {
         502,
       );
     }
-    const created = await this.createDevice(token, "Android");
+    const created = await this.createDevice(token, withWabaDeviceCloudName("Android"));
     const createdStatus = String(created.status || "").toUpperCase();
     if (created.id && createdStatus !== "ERROR") return created;
     const retry = await this.listDevices(token);
@@ -236,7 +258,7 @@ export class WabaDeviceCloudService {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, origin: "waba", product: "waba" }),
       timeoutMs: 180000,
     });
     const payload = (await res.json().catch(() => null)) as DeviceCloudDevice | { message?: string; error?: string } | null;
@@ -261,6 +283,7 @@ export class WabaDeviceCloudService {
       tenant: trimEnv(process.env.DEVICE_CLOUD_DEFAULT_TENANT_ID) || "00000000-0000-4000-8000-000000000001",
       userId: trimEnv(process.env.DEVICE_CLOUD_DEFAULT_USER_ID) || "00000000-0000-4000-8000-000000000011",
       role: "admin",
+      product: "waba",
     };
     const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
     const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
