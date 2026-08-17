@@ -1,3 +1,8 @@
+## 2026-08-17 13:28 — Marker redeploy Device Cloud (dialpad)
+- Marker `DEPLOY-2026-08-17-1628-device-cloud-dialpad` (`src` + `dist`)
+- Serve para validar `/health` após o próximo Redeploy (evitar archive GitHub 429: usar fonte Git/clone)
+- LOG: doc/LOG-2026-08-17__162800__deploy-marker-device-cloud-redeploy.md
+
 ## 2026-08-17 10:27 — Campanhas: relatório visível com saldo zerado
 - Assinante sem créditos continua vendo lista e relatórios (API Oficial e Alternativa)
 - Alerta de créditos só na criação de nova campanha (card compacto, sem overlay na tela inteira)
