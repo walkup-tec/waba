@@ -1,3 +1,9 @@
+## 2026-08-17 15:12 — Avançar Device Cloud validado (360,1100)
+- Back + swipe no Play quebravam o fluxo; Avançar era y=1060 (acima do botão)
+- Toque real `360,1100` abriu o diálogo Continuar
+- Marker `DEPLOY-2026-08-17-device-cloud-avancar-1100`
+- LOG: doc/LOG-2026-08-17__181200__device-cloud-avancar-coords-validadas.md
+
 ## 2026-08-17 14:53 — Isolamento Device Cloud WABA vs SaaS
 - Publicação futura: `https://devices.draxsistemas.com.br/`
 - WABA não lista devices `SAAS ·` / `DRAX-DEVICES ·`; criações WABA usam `WABA ·`

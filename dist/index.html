@@ -23436,28 +23436,16 @@
         return new Promise((r) => setTimeout(r, ms));
       }
 
-      async function dismissDeviceCloudPlayBanner(deviceId) {
-        await sendDeviceCloudInput(
-          deviceId,
-          "swipe",
-          { x1: 80, y1: 125, x2: 660, y2: 125 },
-          { skipRefresh: true },
-        );
-      }
-
-      /** Teclado some → Avançar. Se aparecer “número já confirmado”, toca Continuar. */
+      /**
+       * Após Digitar: teclado já some. Não usar Back (sai da tela) nem swipe no topo
+       * (cai no banner do Play). Avançar medido no shot 720×1280: faixa preta y 1064–1136.
+       * Continuar do diálogo “número já confirmado”: texto verde ~x 444–563, y 764–780.
+       */
       async function advanceDeviceCloudAfterPhoneNumber(deviceId) {
-        await sleepDeviceCloud(450);
-        await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
-        await sleepDeviceCloud(400);
-        await dismissDeviceCloudPlayBanner(deviceId);
-        await sleepDeviceCloud(250);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 690 }, { skipRefresh: true });
-        await sleepDeviceCloud(500);
-        await dismissDeviceCloudPlayBanner(deviceId);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1060 }, { skipRefresh: true });
-        await sleepDeviceCloud(900);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 540, y: 790 }, { skipRefresh: true });
+        await sleepDeviceCloud(800);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1100 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 520, y: 768 }, { skipRefresh: true });
       }
 
       async function submitDeviceCloudPhoneNumber(id, inputEl) {
