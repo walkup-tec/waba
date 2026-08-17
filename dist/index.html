@@ -23432,6 +23432,34 @@
         }
       }
 
+      function sleepDeviceCloud(ms) {
+        return new Promise((r) => setTimeout(r, ms));
+      }
+
+      async function dismissDeviceCloudPlayBanner(deviceId) {
+        await sendDeviceCloudInput(
+          deviceId,
+          "swipe",
+          { x1: 80, y1: 125, x2: 660, y2: 125 },
+          { skipRefresh: true },
+        );
+      }
+
+      /** Teclado some → Avançar. Se aparecer “número já confirmado”, toca Continuar. */
+      async function advanceDeviceCloudAfterPhoneNumber(deviceId) {
+        await sleepDeviceCloud(450);
+        await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
+        await sleepDeviceCloud(400);
+        await dismissDeviceCloudPlayBanner(deviceId);
+        await sleepDeviceCloud(250);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 690 }, { skipRefresh: true });
+        await sleepDeviceCloud(500);
+        await dismissDeviceCloudPlayBanner(deviceId);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1060 }, { skipRefresh: true });
+        await sleepDeviceCloud(900);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 540, y: 790 }, { skipRefresh: true });
+      }
+
       async function submitDeviceCloudPhoneNumber(id, inputEl) {
         const deviceId = String(id || "");
         if (!deviceId) return;
@@ -23457,8 +23485,10 @@
           await sendDeviceCloudInput(deviceId, "tap", { x: 439, y: 553 }, { skipRefresh: true });
           await new Promise((r) => setTimeout(r, 700));
           await tapDeviceCloudDialDigits(deviceId, local);
+          setDeviceCloudMsg("Avançando no WhatsApp…");
+          await advanceDeviceCloudAfterPhoneNumber(deviceId);
           await refreshDeviceCloudScreen(deviceId);
-          setDeviceCloudMsg("Número digitado. Confira na tela e toque em Avançar.");
+          setDeviceCloudMsg("Avançou. Se pedir SMS, confira o celular.");
         } catch (err) {
           setDeviceCloudMsg(err.message || String(err));
         } finally {

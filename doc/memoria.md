@@ -1,3 +1,8 @@
+## 2026-08-17 14:46 — Digitar já toca Avançar/Continuar
+- Play Services heads-up desviava o toque; teclado some e o Device avança sozinho
+- Marker `DEPLOY-2026-08-17-device-cloud-avancar`
+- LOG: doc/LOG-2026-08-17__174600__device-cloud-avancar-apos-digitar.md
+
 ## 2026-08-17 14:26 — Digitar Device Cloud: laterais do teclado
 - `51982006034` virava `5820-00-4`: toques X=120/600 erravam 1,3,4,6,7,9
 - Não é split de DDD; coords internas + delay 280ms
