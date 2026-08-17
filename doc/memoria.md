@@ -1,3 +1,9 @@
+## 2026-08-17 14:26 — Digitar Device Cloud: laterais do teclado
+- `51982006034` virava `5820-00-4`: toques X=120/600 erravam 1,3,4,6,7,9
+- Não é split de DDD; coords internas + delay 280ms
+- Marker `DEPLOY-2026-08-17-device-cloud-dialpad-laterais`
+- LOG: doc/LOG-2026-08-17__172600__device-cloud-dialpad-laterais.md
+
 ## 2026-08-17 14:14 — Lidos no relatório via código (480 / 518)
 - SQUARE RESIDENCIAL → 480; 6 DE AGOSTO → 518 (14/08/2026)
 - Override só na leitura do relatório/dashboard; JSON de produção intacto
