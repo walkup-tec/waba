@@ -15,6 +15,7 @@ const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
 const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
+const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
@@ -279,7 +280,7 @@ class WabaOperacionalCampanhasService {
             throw new Error("O relatório fica disponível após iniciar a campanha.");
         }
         const totalLeads = resolvePlannedSendCount(intake);
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,

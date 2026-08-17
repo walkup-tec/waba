@@ -30,6 +30,7 @@ import {
   type WabaCampaignPerformanceReport,
   type WabaCampaignErrorReport,
 } from "../disparos/waba-campaign-intake.repository";
+import { applyCampaignReportReadOverride } from "../disparos/waba-campaign-report-read-overrides";
 import {
   normalizeCampaignIntakeStatus,
   toCampaignIntakeDisplayStatus,
@@ -453,7 +454,11 @@ export class WabaOperacionalCampanhasService {
     }
 
     const totalLeads = resolvePlannedSendCount(intake);
-    const report = intake.performanceReport;
+    const report = applyCampaignReportReadOverride(
+      intake.campaignName,
+      intake.createdAt,
+      intake.performanceReport,
+    );
     return {
       campaignId: intake.id,
       campaignName: intake.campaignName,

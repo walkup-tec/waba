@@ -28,6 +28,7 @@ import {
   isCampaignLeadsTxtFileName,
   trimLeadsBufferToRowCount,
 } from "./waba-campaign-spreadsheet.util";
+import { applyCampaignReportReadOverride } from "./waba-campaign-report-read-overrides";
 import {
   scheduleOperacionalStaffNotifyOnCampaignAssigned,
   type OperacionalNotifyResult,
@@ -609,7 +610,11 @@ export const registerWabaCampaignIntakeRoutes = (app: Express) => {
       });
     }
 
-    const report = intake.performanceReport;
+    const report = applyCampaignReportReadOverride(
+      intake.campaignName,
+      intake.createdAt,
+      intake.performanceReport,
+    );
     const indicators = report
       ? {
           totalLeads: report.totalLeads,

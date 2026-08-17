@@ -1,3 +1,9 @@
+## 2026-08-17 14:14 — Lidos no relatório via código (480 / 518)
+- SQUARE RESIDENCIAL → 480; 6 DE AGOSTO → 518 (14/08/2026)
+- Override só na leitura do relatório/dashboard; JSON de produção intacto
+- Marker `DEPLOY-2026-08-17-lidos-relatorio-480-518`
+- LOG: doc/LOG-2026-08-17__171400__lidos-relatorio-override-codigo.md
+
 ## 2026-08-17 14:11 — Relatório 6 DE AGOSTO: Lidos = 518
 - Campanha 14/08/2026 15:54 (nome corrigido; pedido anterior citava SQUARE RESIDENCIAL)
 - Patch via Actions SSH: `performanceReport.read = 518`

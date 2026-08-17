@@ -8,6 +8,7 @@ import type {
   WabaCampaignIntakeStatus,
 } from "./waba-campaign-intake.repository";
 import { normalizeCampaignIntakeStatus } from "./waba-campaign-intake-status";
+import { applyCampaignReportReadOverride } from "./waba-campaign-report-read-overrides";
 import {
   filterOutMetricsExcludedOwners,
   isWabaMetricsExcludedOwnerEmail,
@@ -116,7 +117,11 @@ export const buildCampaignComparisonFromIntakes = (
       return status === "completed" && Boolean(intake.performanceReport);
     })
     .map((intake) => {
-      const report = intake.performanceReport!;
+      const report = applyCampaignReportReadOverride(
+        intake.campaignName,
+        intake.createdAt,
+        intake.performanceReport,
+      )!;
       const apiKind = resolveIntakeApiKindFromIntake(intake);
       const rates = computeRatesFromReport(report);
       return {
@@ -212,7 +217,11 @@ const aggregateDisparosDashboardFromIntakes = (
     withReport += 1;
     const apiKind = resolveIntakeApiKindFromIntake(intake);
     withReportByApi[apiKind] += 1;
-    const report = intake.performanceReport;
+    const report = applyCampaignReportReadOverride(
+      intake.campaignName,
+      intake.createdAt,
+      intake.performanceReport,
+    )!;
     const addLeads = roundMetric(report.totalLeads);
     const addSent = roundMetric(report.sent);
     const addDelivered = roundMetric(report.delivered);

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.filterIntakesBySubscriberEmails = exports.buildMasterSubscribersDisparosDashboardOverview = exports.buildDisparosDashboardOverview = exports.buildCompareSubscribersFromIntakes = exports.buildCampaignComparisonFromIntakes = void 0;
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
+const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
 const roundMetric = (value) => {
@@ -36,7 +37,7 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
         return status === "completed" && Boolean(intake.performanceReport);
     })
         .map((intake) => {
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         const rates = computeRatesFromReport(report);
         return {
@@ -119,7 +120,7 @@ const aggregateDisparosDashboardFromIntakes = (intakes, comparisonOptions) => {
         withReport += 1;
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         withReportByApi[apiKind] += 1;
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const addLeads = roundMetric(report.totalLeads);
         const addSent = roundMetric(report.sent);
         const addDelivered = roundMetric(report.delivered);

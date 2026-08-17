@@ -15,6 +15,7 @@ const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segmen
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
+const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
@@ -503,7 +504,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 error: "O relatório fica disponível quando a campanha estiver com status Finalizado.",
             });
         }
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const indicators = report
             ? {
                 totalLeads: report.totalLeads,
