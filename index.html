@@ -6156,10 +6156,6 @@
         cursor: pointer;
       }
 
-      #device-cloud-add-btn[hidden] {
-        display: none !important;
-      }
-
       .device-cloud-window {
         position: absolute;
         left: 0;
@@ -17412,10 +17408,7 @@
             </div>
             <div id="device-cloud-gate-msg" class="aquecedor-hint" style="margin-bottom:12px;"></div>
             <div class="device-cloud-toolbar">
-              <button type="button" id="device-cloud-create-btn" class="instance-action-btn enabled">
-                Criar Dispositivo
-              </button>
-              <button type="button" id="device-cloud-add-btn" hidden>Adicionar dispositivo</button>
+              <button type="button" id="device-cloud-add-btn">Adicionar dispositivo</button>
             </div>
             <div id="device-cloud-stage"></div>
             <template id="device-cloud-window-template">
@@ -23165,8 +23158,7 @@
 
       function syncDeviceCloudToolbar() {
         const addBtn = document.getElementById("device-cloud-add-btn");
-        const n = deviceCloudWindowCount();
-        if (addBtn) addBtn.hidden = n < 1;
+        if (addBtn) addBtn.hidden = false;
       }
 
       function adaptDeviceCloudStageLayout() {
@@ -23383,6 +23375,30 @@
           .replace(/^0+/, "");
       }
 
+      /** Teclado numérico WhatsApp — Redroid 720×1280 (virt-tap; adb input text não funciona). */
+      const DEVICE_CLOUD_DIALPAD_720 = {
+        1: [120, 780],
+        2: [360, 780],
+        3: [600, 780],
+        4: [120, 880],
+        5: [360, 880],
+        6: [600, 880],
+        7: [120, 980],
+        8: [360, 980],
+        9: [600, 980],
+        0: [360, 1080],
+      };
+
+      async function tapDeviceCloudDialDigits(deviceId, text) {
+        const digits = String(text || "").replace(/\D/g, "");
+        for (const ch of digits) {
+          const pt = DEVICE_CLOUD_DIALPAD_720[ch];
+          if (!pt) continue;
+          await sendDeviceCloudInput(deviceId, "tap", { x: pt[0], y: pt[1] }, { skipRefresh: true });
+          await new Promise((r) => setTimeout(r, 130));
+        }
+      }
+
       async function submitDeviceCloudPhoneNumber(id, inputEl) {
         const deviceId = String(id || "");
         if (!deviceId) return;
@@ -23405,15 +23421,11 @@
         focusDeviceCloudWindow(deviceId);
         setDeviceCloudMsg("Digitando número no WhatsApp…");
         try {
-          await sendDeviceCloudInput(deviceId, "tap", { x: 174, y: 553 }, { skipRefresh: true });
-          await new Promise((r) => setTimeout(r, 350));
-          await sendDeviceCloudInput(deviceId, "text", { text: "55" }, { skipRefresh: true });
-          await new Promise((r) => setTimeout(r, 250));
-          await sendDeviceCloudInput(deviceId, "tap", { x: 440, y: 553 }, { skipRefresh: true });
-          await new Promise((r) => setTimeout(r, 350));
-          await sendDeviceCloudInput(deviceId, "text", { text: local }, { skipRefresh: true });
+          await sendDeviceCloudInput(deviceId, "tap", { x: 439, y: 553 }, { skipRefresh: true });
+          await new Promise((r) => setTimeout(r, 450));
+          await tapDeviceCloudDialDigits(deviceId, local);
           await refreshDeviceCloudScreen(deviceId);
-          setDeviceCloudMsg("Número enviado. Confira na tela e toque em Avançar.");
+          setDeviceCloudMsg("Número digitado. Confira na tela e toque em Avançar.");
         } catch (err) {
           setDeviceCloudMsg(err.message || String(err));
         } finally {
@@ -23687,7 +23699,7 @@
             startDeviceCloudScreen(String(d.id), { name: d.name, launch: false });
           });
           if (deviceCloudWindowCount() < 1) {
-            setDeviceCloudMsg("Use Criar Dispositivo ou Adicionar dispositivo para abrir um celular.");
+            setDeviceCloudMsg("Use Adicionar dispositivo para abrir um celular.");
             return;
           }
           adaptDeviceCloudStageLayout();
@@ -23745,9 +23757,7 @@
           setDeviceCloudMsg("Sem permissão para Device Cloud.");
           return;
         }
-        const busyBtn = forceCreate
-          ? document.getElementById("device-cloud-add-btn")
-          : document.getElementById("device-cloud-create-btn");
+        const busyBtn = document.getElementById("device-cloud-add-btn");
         const prevLabel = busyBtn ? busyBtn.textContent : "";
         if (busyBtn) {
           busyBtn.disabled = true;
@@ -23784,18 +23794,14 @@
         } finally {
           if (busyBtn) {
             busyBtn.disabled = false;
-            busyBtn.textContent = prevLabel || (forceCreate ? "Adicionar dispositivo" : "Criar Dispositivo");
+            busyBtn.textContent = prevLabel || "Adicionar dispositivo";
           }
           syncDeviceCloudToolbar();
         }
       }
 
       async function createDeviceCloudDevice() {
-        await addDeviceCloudDevice(false);
-      }
-
-      async function addAnotherDeviceCloudDevice() {
-        await addDeviceCloudDevice(true);
+        await addDeviceCloudDevice(deviceCloudWindowCount() >= 1);
       }
 
       function isStaffRole(role) {
@@ -53464,8 +53470,7 @@
       }
       document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
       document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
-      document.getElementById("device-cloud-create-btn")?.addEventListener("click", () => void createDeviceCloudDevice());
-      document.getElementById("device-cloud-add-btn")?.addEventListener("click", () => void addAnotherDeviceCloudDevice());
+      document.getElementById("device-cloud-add-btn")?.addEventListener("click", () => void createDeviceCloudDevice());
       window.addEventListener("resize", () => {
         adaptDeviceCloudStageLayout();
         clampAllDeviceCloudWindows();
