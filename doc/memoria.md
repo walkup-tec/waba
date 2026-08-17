@@ -1,3 +1,16 @@
+## 2026-08-17 19:45 — Device Cloud: upload imagens locais (PC → Download Android)
+- WABA: multer + FormData push-media; skip body parser multipart
+- Device Cloud: endpoint push-file (adb push + media scan) — commit cb12758
+- Produção: redeploy Easypanel device-cloud-api + WABA pendente
+- LOG: doc/LOG-2026-08-17__194500__device-cloud-upload-local-files.md
+
+## 2026-08-17 18:55 — Device Cloud: Abrir WhatsApp fallback + upload perfil/capa
+- Causa: API launch 502; WA Business em crash loop no Android teste 1
+- Fix WABA: fallback launcher; botão Reiniciar; UI upload JPG/PNG/WebP (proxy push-file)
+- Upload depende de `POST /devices/:id/push-file` no Device Cloud AWS (501 até lá)
+- Marker `DEPLOY-2026-08-17-device-cloud-abrir-wa-upload`
+- LOG: doc/LOG-2026-08-17__185500__fix-device-cloud-abrir-wa-upload.md
+
 ## 2026-08-17 16:05 — Device Cloud: Play SMS bloqueava o Avançar
 - Causa: Play Services sem permissão de SMS; WhatsApp voltava à tela do número
 - Fix: Avançar 690/1100 + Continuar 520,768; se o heads-up do Play aparecer, conceder SMS e repetir

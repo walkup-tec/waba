@@ -177,6 +177,63 @@ export class WabaDeviceCloudService {
     }
   }
 
+  async restartDevice(email: string, deviceId: string): Promise<void> {
+    this.assertDeviceId(deviceId);
+    const token = await this.accessToken(email);
+    const res = await this.apiFetch(`/devices/${deviceId}/restart`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: "{}",
+      timeoutMs: 120000,
+    });
+    if (!res.ok) {
+      const raw = await res.text().catch(() => "");
+      throw new DeviceCloudHttpError(this.safeMessage(raw, "Não foi possível reiniciar o celular."), res.status);
+    }
+  }
+
+  async pushDownloadFile(
+    email: string,
+    deviceId: string,
+    body: { filename: string; contentBase64?: string; buffer?: Buffer },
+  ): Promise<{ remotePath: string }> {
+    this.assertDeviceId(deviceId);
+    const filename = String(body.filename || "")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .slice(0, 80);
+    const fromBuffer = body.buffer && body.buffer.length ? body.buffer : null;
+    const contentBase64 = String(body.contentBase64 || "").trim();
+    const payloadBase64 = fromBuffer ? fromBuffer.toString("base64") : contentBase64;
+    if (!filename || !payloadBase64 || payloadBase64.length > 8_000_000) {
+      throw new DeviceCloudHttpError("Arquivo inválido ou grande demais.", 400);
+    }
+    const token = await this.accessToken(email);
+    const remotePath = `/sdcard/Download/${filename}`;
+    const res = await this.apiFetch(`/devices/${deviceId}/push-file`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ remotePath, contentBase64: payloadBase64 }),
+      timeoutMs: 60000,
+    });
+    if (!res.ok) {
+      const raw = await res.text().catch(() => "");
+      if (res.status === 404) {
+        throw new DeviceCloudHttpError(
+          "Envio de imagem ao celular ainda não está disponível no Device Cloud (endpoint push-file).",
+          501,
+        );
+      }
+      throw new DeviceCloudHttpError(this.safeMessage(raw, "Não foi possível enviar a imagem ao celular."), res.status);
+    }
+    return { remotePath };
+  }
+
   private async input(
     email: string,
     deviceId: string,
