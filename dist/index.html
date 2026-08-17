@@ -6175,6 +6175,24 @@
         white-space: nowrap;
       }
 
+      .device-cloud-window-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      #device-cloud-open-wa {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 8px;
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        background: rgba(6, 95, 70, 0.78);
+        color: #fff;
+        cursor: pointer;
+      }
+
       #device-cloud-delete-btn {
         height: 28px;
         padding: 0 10px;
@@ -17288,7 +17306,10 @@
               <div id="device-cloud-window" class="device-cloud-window" hidden>
                 <div class="device-cloud-window-bar" id="device-cloud-window-drag">
                   <span class="device-cloud-window-title" id="device-cloud-window-title">Celular</span>
-                  <button type="button" id="device-cloud-delete-btn">Excluir</button>
+                  <div class="device-cloud-window-actions">
+                    <button type="button" id="device-cloud-open-wa">Abrir WhatsApp</button>
+                    <button type="button" id="device-cloud-delete-btn">Excluir</button>
+                  </div>
                 </div>
                 <img
                   id="device-cloud-screen"
@@ -23233,7 +23254,7 @@
           return;
         }
         startDeviceCloudScreen(String(chosen.id), { name: chosen.name, launch: false });
-        setDeviceCloudMsg("Toque na tela como em um celular. Número e código SMS entram no WhatsApp Business.");
+        setDeviceCloudMsg("WhatsApp aberto na tela de número. Toque o campo do telefone. Se for à tela inicial, use Abrir WhatsApp.");
       }
 
       function removeDeviceCloudFromBoard() {
@@ -23260,7 +23281,7 @@
           return;
         }
         await refreshDeviceCloudScreen().catch(() => {});
-        setDeviceCloudMsg("Toque na tela como em um celular. Número e código SMS entram no WhatsApp Business.");
+        setDeviceCloudMsg("WhatsApp aberto na tela de número. Toque o campo do telefone. Se for à tela inicial, use Abrir WhatsApp.");
       }
 
       async function createDeviceCloudDevice() {
@@ -52914,6 +52935,11 @@
       document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
       document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
       document.getElementById("device-cloud-create-btn")?.addEventListener("click", () => void createDeviceCloudDevice());
+      document.getElementById("device-cloud-open-wa")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void launchDeviceCloudWhatsApp().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+      });
       document.getElementById("device-cloud-delete-btn")?.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -52925,7 +52951,7 @@
         const stage = document.getElementById("device-cloud-stage");
         if (!bar || !win || !stage) return;
         bar.addEventListener("pointerdown", (e) => {
-          if (e.target.closest("#device-cloud-delete-btn")) return;
+          if (e.target.closest("#device-cloud-delete-btn, #device-cloud-open-wa")) return;
           e.preventDefault();
           try {
             bar.setPointerCapture(e.pointerId);
