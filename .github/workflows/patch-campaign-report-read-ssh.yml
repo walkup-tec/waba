@@ -122,7 +122,7 @@ jobs:
             const file=path.join('/app/data','waba-campaign-intakes.json');
             const raw=JSON.parse(fs.readFileSync(file,'utf8'));
             if(!raw || raw.version!==1 || !Array.isArray(raw.intakes)) throw new Error('Store inválido');
-            const normName=(s)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/RESEIDENCIAL/g,'RESIDENCIAL').replace(/\s+/g,' ').trim();
+            const normName=(s)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/RESEIDENCIAL/g,'RESIDENCIAL').replace(/\s+/g,' ').replace(/\\b0+(\\d+)\\b/g,'$1').trim();
             const targetName=normName(wantName);
             const m=createdLocal.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})$/);
             if(!m) throw new Error('createdLocal deve ser YYYY-MM-DD HH:mm');

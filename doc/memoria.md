@@ -1,3 +1,8 @@
+## 2026-08-17 14:11 — Relatório 6 DE AGOSTO: Lidos = 518
+- Campanha 14/08/2026 15:54 (nome corrigido; pedido anterior citava SQUARE RESIDENCIAL)
+- Patch via Actions SSH: `performanceReport.read = 518`
+- LOG: doc/LOG-2026-08-17__171100__6-de-agosto-lidos-518.md
+
 ## 2026-08-17 14:08 — Relatório SQUARE RESIDENCIAL: Lidos = 480
 - Campanha 14/08/2026 15:54; relatório finalizado é somente leitura na UI
 - Patch em produção via Actions SSH em `waba-campaign-intakes.json` (`performanceReport.read`)
