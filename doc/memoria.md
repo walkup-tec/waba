@@ -1,3 +1,9 @@
+## 2026-08-17 07:30 — Dispositivos flutuantes na aba
+- Celular permanece na aba Dispositivos, arrastável, sem sobrepor outros menus
+- Excluir tira da tela (não destrói o Redroid)
+- Marker `DEPLOY-2026-08-17-dispositivos-flutuante`
+- LOG: doc/LOG-2026-08-17__073000__ui-dispositivos-flutuante.md
+
 ## 2026-08-14 18:15 — Dispositivos: tela do celular e toque real
 - Removidos Voltar/Início/Avançar, DDI, Digitar e o guia; tela 253×460 → 329×598 (+30%)
 - Clique no WhatsApp exigia uinput (`ddc-virt-tap`); `adb input tap` não chega nos widgets

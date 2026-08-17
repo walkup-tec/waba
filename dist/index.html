@@ -6124,6 +6124,69 @@
         box-shadow: 0 0 0 1px var(--accent);
       }
 
+      #tab-dispositivos {
+        overflow: hidden;
+      }
+
+      #device-cloud-stage {
+        position: relative;
+        min-height: 680px;
+        margin-top: 16px;
+        overflow: hidden;
+      }
+
+      .device-cloud-window {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 2;
+        width: max-content;
+        max-width: 100%;
+        background: var(--bg-card, #0f172a);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 16px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+      }
+
+      .device-cloud-window[hidden] {
+        display: none !important;
+      }
+
+      .device-cloud-window-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 8px 6px 12px;
+        cursor: grab;
+        user-select: none;
+        touch-action: none;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      }
+
+      .device-cloud-window-bar:active {
+        cursor: grabbing;
+      }
+
+      .device-cloud-window-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text, #e2e8f0);
+        white-space: nowrap;
+      }
+
+      #device-cloud-delete-btn {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 8px;
+        border: 1px solid rgba(251, 113, 133, 0.45);
+        background: rgba(153, 27, 27, 0.72);
+        color: #fff;
+        cursor: pointer;
+      }
+
       #device-cloud-screen {
         width: 329px;
         height: auto;
@@ -6132,8 +6195,8 @@
         object-position: center;
         display: block;
         background: #000;
-        border-radius: 14px;
-        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 0 0 14px 14px;
+        border: 0;
         touch-action: none;
         user-select: none;
         cursor: pointer;
@@ -17221,13 +17284,19 @@
             <button type="button" id="device-cloud-create-btn" class="instance-action-btn enabled">
               Criar Dispositivo
             </button>
-            <div id="device-cloud-phone-wrap" style="display:none;margin-top:16px;">
-              <img
-                id="device-cloud-screen"
-                alt="Tela do Android"
-                draggable="false"
-                tabindex="0"
-              />
+            <div id="device-cloud-stage">
+              <div id="device-cloud-window" class="device-cloud-window" hidden>
+                <div class="device-cloud-window-bar" id="device-cloud-window-drag">
+                  <span class="device-cloud-window-title" id="device-cloud-window-title">Celular</span>
+                  <button type="button" id="device-cloud-delete-btn">Excluir</button>
+                </div>
+                <img
+                  id="device-cloud-screen"
+                  alt="Tela do Android"
+                  draggable="false"
+                  tabindex="0"
+                />
+              </div>
             </div>
           </section>
         </div>
@@ -22908,7 +22977,9 @@
       let deviceCloudPollTimer = 0;
       let deviceCloudPtr = null;
       let deviceCloudPtrLock = false;
+      let deviceCloudWindowDrag = null;
       const DEVICE_CLOUD_SWIPE_PX = 24;
+      const DEVICE_CLOUD_LAYOUT_KEY = "waba-device-cloud-layout-v1";
 
       function setDeviceCloudMsg(text) {
         const msg = document.getElementById("device-cloud-gate-msg");
@@ -22920,6 +22991,88 @@
           clearInterval(deviceCloudPollTimer);
           deviceCloudPollTimer = 0;
         }
+      }
+
+      function loadDeviceCloudLayout() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(DEVICE_CLOUD_LAYOUT_KEY) || "{}");
+          return raw && typeof raw === "object" ? raw : {};
+        } catch {
+          return {};
+        }
+      }
+
+      function saveDeviceCloudLayout(layout) {
+        try {
+          localStorage.setItem(DEVICE_CLOUD_LAYOUT_KEY, JSON.stringify(layout || {}));
+        } catch {
+          /* ignore quota */
+        }
+      }
+
+      function isDeviceCloudHidden(id) {
+        const hidden = loadDeviceCloudLayout().hidden;
+        return Boolean(hidden && hidden[id]);
+      }
+
+      function setDeviceCloudHidden(id, hidden) {
+        if (!id) return;
+        const layout = loadDeviceCloudLayout();
+        layout.hidden = layout.hidden && typeof layout.hidden === "object" ? layout.hidden : {};
+        if (hidden) layout.hidden[id] = true;
+        else delete layout.hidden[id];
+        saveDeviceCloudLayout(layout);
+      }
+
+      function applyDeviceCloudWindowPosition(id) {
+        const win = document.getElementById("device-cloud-window");
+        const stage = document.getElementById("device-cloud-stage");
+        if (!win || !stage) return;
+        const layout = loadDeviceCloudLayout();
+        const saved = layout.windows && layout.windows[id];
+        const left = saved && Number.isFinite(saved.x) ? saved.x : 0;
+        const top = saved && Number.isFinite(saved.y) ? saved.y : 0;
+        win.style.left = left + "px";
+        win.style.top = top + "px";
+        clampDeviceCloudWindow();
+      }
+
+      function persistDeviceCloudWindowPosition() {
+        const win = document.getElementById("device-cloud-window");
+        if (!win || !deviceCloudActiveId) return;
+        const layout = loadDeviceCloudLayout();
+        layout.windows = layout.windows && typeof layout.windows === "object" ? layout.windows : {};
+        layout.windows[deviceCloudActiveId] = {
+          x: parseInt(win.style.left, 10) || 0,
+          y: parseInt(win.style.top, 10) || 0,
+        };
+        saveDeviceCloudLayout(layout);
+      }
+
+      function clampDeviceCloudWindow() {
+        const win = document.getElementById("device-cloud-window");
+        const stage = document.getElementById("device-cloud-stage");
+        if (!win || !stage || win.hidden) return;
+        const maxX = Math.max(0, stage.clientWidth - win.offsetWidth);
+        const maxY = Math.max(0, stage.clientHeight - win.offsetHeight);
+        const x = Math.min(maxX, Math.max(0, parseInt(win.style.left, 10) || 0));
+        const y = Math.min(maxY, Math.max(0, parseInt(win.style.top, 10) || 0));
+        win.style.left = x + "px";
+        win.style.top = y + "px";
+      }
+
+      function syncDeviceCloudCreateBtn() {
+        const btn = document.getElementById("device-cloud-create-btn");
+        if (!btn) return;
+        btn.textContent = deviceCloudActiveId ? "Atualizar lista" : "Criar Dispositivo";
+      }
+
+      function hideDeviceCloudWindow() {
+        const win = document.getElementById("device-cloud-window");
+        if (win) win.hidden = true;
+        stopDeviceCloudScreen();
+        deviceCloudActiveId = "";
+        syncDeviceCloudCreateBtn();
       }
 
       function mapDeviceCloudPoint(img, clientX, clientY) {
@@ -22995,18 +23148,100 @@
         });
       }
 
-      function startDeviceCloudScreen(id) {
+      function startDeviceCloudScreen(id, opts) {
+        const options = opts && typeof opts === "object" ? opts : {};
         deviceCloudActiveId = id;
-        const wrap = document.getElementById("device-cloud-phone-wrap");
+        const win = document.getElementById("device-cloud-window");
+        const title = document.getElementById("device-cloud-window-title");
         const img = document.getElementById("device-cloud-screen");
-        if (wrap) wrap.style.display = "block";
+        if (title) title.textContent = String(options.name || "Celular");
+        if (win) win.hidden = false;
         if (img) img.tabIndex = 0;
+        applyDeviceCloudWindowPosition(id);
         stopDeviceCloudScreen();
         void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
         deviceCloudPollTimer = setInterval(() => {
           void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
         }, 1000);
-        void launchDeviceCloudWhatsApp();
+        syncDeviceCloudCreateBtn();
+        if (options.launch !== false) void launchDeviceCloudWhatsApp();
+      }
+
+      function resumeDeviceCloudScreen() {
+        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
+        const win = document.getElementById("device-cloud-window");
+        if (win) win.hidden = false;
+        applyDeviceCloudWindowPosition(deviceCloudActiveId);
+        stopDeviceCloudScreen();
+        void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        deviceCloudPollTimer = setInterval(() => {
+          void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        }, 1000);
+      }
+
+      async function ensureDeviceCloudSession() {
+        if (deviceCloudApiUrl && deviceCloudAccessToken) return true;
+        const bootRes = await fetch("/device-cloud/device", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        const boot = await bootRes.json().catch(() => ({}));
+        if (!bootRes.ok) {
+          setDeviceCloudMsg(String(boot.error || "Não foi possível abrir o Device Cloud."));
+          return false;
+        }
+        deviceCloudApiUrl = String(boot.apiUrl || "").replace(/\/$/, "");
+        const ssoToken = String(boot.ssoToken || "").trim();
+        if (!deviceCloudApiUrl || !ssoToken) {
+          setDeviceCloudMsg("Device Cloud não configurado.");
+          return false;
+        }
+        const ssoRes = await fetch(deviceCloudApiUrl + "/auth/sso", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssoToken }),
+        });
+        const sso = await ssoRes.json().catch(() => ({}));
+        if (!ssoRes.ok || !sso.accessToken) {
+          setDeviceCloudMsg("Acesso ao Device Cloud recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
+          return false;
+        }
+        deviceCloudAccessToken = String(sso.accessToken);
+        return true;
+      }
+
+      async function restoreDeviceCloudBoard() {
+        if (!canAccessDeviceCloudMenu()) return;
+        if (deviceCloudActiveId) {
+          resumeDeviceCloudScreen();
+          return;
+        }
+        const ok = await ensureDeviceCloudSession();
+        if (!ok) return;
+        const listRes = await fetch(deviceCloudApiUrl + "/devices", {
+          headers: deviceCloudHeaders(false),
+        });
+        const listed = await listRes.json().catch(() => []);
+        const devices = usableDeviceCloudDevices(listed).filter((d) => !isDeviceCloudHidden(String(d.id)));
+        const online = devices.find((d) => String(d && d.status ? d.status : "").toUpperCase() === "ONLINE");
+        const chosen = online || devices[0];
+        if (!chosen || !chosen.id) {
+          hideDeviceCloudWindow();
+          setDeviceCloudMsg("Crie um dispositivo para usar o WhatsApp Business neste celular.");
+          return;
+        }
+        startDeviceCloudScreen(String(chosen.id), { name: chosen.name, launch: false });
+        setDeviceCloudMsg("Toque na tela como em um celular. Número e código SMS entram no WhatsApp Business.");
+      }
+
+      function removeDeviceCloudFromBoard() {
+        if (!deviceCloudActiveId) return;
+        if (!window.confirm("Excluir este dispositivo da tela Dispositivos?")) return;
+        setDeviceCloudHidden(deviceCloudActiveId, true);
+        hideDeviceCloudWindow();
+        setDeviceCloudMsg("Dispositivo excluído da tela. Use Criar Dispositivo para trazê-lo de volta.");
       }
 
       async function launchDeviceCloudWhatsApp() {
@@ -23040,34 +23275,8 @@
         }
         setDeviceCloudMsg("Preparando o celular…");
         try {
-          const bootRes = await fetch("/device-cloud/device", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: "{}",
-          });
-          const boot = await bootRes.json().catch(() => ({}));
-          if (!bootRes.ok) {
-            setDeviceCloudMsg(String(boot.error || "Não foi possível criar o dispositivo."));
-            return;
-          }
-          deviceCloudApiUrl = String(boot.apiUrl || "").replace(/\/$/, "");
-          const ssoToken = String(boot.ssoToken || "").trim();
-          if (!deviceCloudApiUrl || !ssoToken) {
-            setDeviceCloudMsg("Device Cloud não configurado.");
-            return;
-          }
-          const ssoRes = await fetch(deviceCloudApiUrl + "/auth/sso", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ssoToken }),
-          });
-          const sso = await ssoRes.json().catch(() => ({}));
-          if (!ssoRes.ok || !sso.accessToken) {
-            setDeviceCloudMsg("Acesso ao Device Cloud recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
-            return;
-          }
-          deviceCloudAccessToken = String(sso.accessToken);
+          const ok = await ensureDeviceCloudSession();
+          if (!ok) return;
           const listRes = await fetch(deviceCloudApiUrl + "/devices", {
             headers: deviceCloudHeaders(false),
           });
@@ -23079,15 +23288,15 @@
             setDeviceCloudMsg("Nenhum celular virtual disponível no servidor.");
             return;
           }
-          startDeviceCloudScreen(String(chosen.id));
+          setDeviceCloudHidden(String(chosen.id), false);
+          startDeviceCloudScreen(String(chosen.id), { name: chosen.name, launch: true });
           setDeviceCloudMsg("Abrindo o WhatsApp Business…");
-          if (btn) btn.textContent = "Atualizar lista";
         } catch (err) {
           setDeviceCloudMsg(err instanceof Error ? err.message : String(err));
         } finally {
           if (btn) {
             btn.disabled = false;
-            btn.textContent = deviceCloudActiveId ? "Atualizar lista" : "Criar Dispositivo";
+            syncDeviceCloudCreateBtn();
           }
         }
       }
@@ -45990,6 +46199,8 @@
           );
           if (nextTab !== "dispositivos") {
             stopDeviceCloudScreen();
+          } else {
+            void restoreDeviceCloudBoard().catch((err) => setDeviceCloudMsg(err.message || String(err)));
           }
         }
 
@@ -52703,6 +52914,56 @@
       document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
       document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
       document.getElementById("device-cloud-create-btn")?.addEventListener("click", () => void createDeviceCloudDevice());
+      document.getElementById("device-cloud-delete-btn")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeDeviceCloudFromBoard();
+      });
+      (function bindDeviceCloudWindowDrag() {
+        const bar = document.getElementById("device-cloud-window-drag");
+        const win = document.getElementById("device-cloud-window");
+        const stage = document.getElementById("device-cloud-stage");
+        if (!bar || !win || !stage) return;
+        bar.addEventListener("pointerdown", (e) => {
+          if (e.target.closest("#device-cloud-delete-btn")) return;
+          e.preventDefault();
+          try {
+            bar.setPointerCapture(e.pointerId);
+          } catch {
+            /* ignore */
+          }
+          const winRect = win.getBoundingClientRect();
+          deviceCloudWindowDrag = {
+            pointerId: e.pointerId,
+            dx: e.clientX - winRect.left,
+            dy: e.clientY - winRect.top,
+          };
+        });
+        bar.addEventListener("pointermove", (e) => {
+          if (!deviceCloudWindowDrag || deviceCloudWindowDrag.pointerId !== e.pointerId) return;
+          const stageRect = stage.getBoundingClientRect();
+          let x = e.clientX - deviceCloudWindowDrag.dx - stageRect.left;
+          let y = e.clientY - deviceCloudWindowDrag.dy - stageRect.top;
+          const maxX = Math.max(0, stage.clientWidth - win.offsetWidth);
+          const maxY = Math.max(0, stage.clientHeight - win.offsetHeight);
+          x = Math.min(maxX, Math.max(0, x));
+          y = Math.min(maxY, Math.max(0, y));
+          win.style.left = x + "px";
+          win.style.top = y + "px";
+        });
+        const endDrag = (e) => {
+          if (!deviceCloudWindowDrag || deviceCloudWindowDrag.pointerId !== e.pointerId) return;
+          deviceCloudWindowDrag = null;
+          clampDeviceCloudWindow();
+          persistDeviceCloudWindowPosition();
+        };
+        bar.addEventListener("pointerup", endDrag);
+        bar.addEventListener("pointercancel", endDrag);
+        window.addEventListener("resize", () => {
+          clampDeviceCloudWindow();
+          persistDeviceCloudWindowPosition();
+        });
+      })();
       (function bindDeviceCloudScreen() {
         const img = document.getElementById("device-cloud-screen");
         if (!img) return;
