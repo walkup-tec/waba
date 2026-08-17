@@ -148,7 +148,7 @@ export function registerDeviceCloudRoutes(app: Express): void {
         y1: readCoord(req.body?.y1, "y1"),
         x2: readCoord(req.body?.x2, "x2"),
         y2: readCoord(req.body?.y2, "y2"),
-        durationMs: 280,
+        durationMs: Math.max(150, Math.min(800, Math.round(Number(req.body?.durationMs ?? 280)))),
       });
       return res.json({ ok: true });
     } catch (err) {

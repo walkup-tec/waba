@@ -23437,15 +23437,100 @@
       }
 
       /**
-       * Após Digitar: teclado já some. Não usar Back (sai da tela) nem swipe no topo
-       * (cai no banner do Play). Avançar medido no shot 720×1280: faixa preta y 1064–1136.
-       * Continuar do diálogo “número já confirmado”: texto verde ~x 444–563, y 764–780.
+       * Pad aberto: Avançar ~y 690 (y 1100 é a tecla 0).
+       * Pad fechado: Avançar ~y 1100.
        */
-      async function advanceDeviceCloudAfterPhoneNumber(deviceId) {
-        await sleepDeviceCloud(800);
+      async function tapDeviceCloudWhatsAppAvancar(deviceId) {
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 690 }, { skipRefresh: true });
+        await sleepDeviceCloud(450);
         await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1100 }, { skipRefresh: true });
-        await sleepDeviceCloud(1200);
+      }
+
+      async function tapDeviceCloudWhatsAppContinuar(deviceId) {
         await sendDeviceCloudInput(deviceId, "tap", { x: 520, y: 768 }, { skipRefresh: true });
+      }
+
+      async function deviceCloudHasPlayHeadsUp(deviceId) {
+        const res = await fetch(
+          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/screenshot?t=" + Date.now(),
+          { credentials: "same-origin" },
+        );
+        if (!res.ok) return false;
+        const blob = await res.blob();
+        const bitmap = await createImageBitmap(blob);
+        const h = Math.min(220, bitmap.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return false;
+        ctx.drawImage(bitmap, 0, 0);
+        const { data } = ctx.getImageData(0, 0, canvas.width, h);
+        let white = 0;
+        for (let i = 0; i < data.length; i += 16) {
+          if (data[i] > 230 && data[i + 1] > 230 && data[i + 2] > 230) white += 1;
+        }
+        return white > 80;
+      }
+
+      /** Play pede SMS; sem isso o WhatsApp volta para a tela do número. */
+      async function grantDeviceCloudPlaySmsPermission(deviceId) {
+        await sendDeviceCloudInput(
+          deviceId,
+          "swipe",
+          { x1: 360, y1: 10, x2: 360, y2: 800, durationMs: 500 },
+          { skipRefresh: true },
+        );
+        await sleepDeviceCloud(1400);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 160, y: 470 }, { skipRefresh: true });
+        await sleepDeviceCloud(2200);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 890 }, { skipRefresh: true });
+        await sleepDeviceCloud(1000);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 540, y: 822 }, { skipRefresh: true });
+        await sleepDeviceCloud(2000);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 280, y: 1165 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+        await sendDeviceCloudInput(
+          deviceId,
+          "swipe",
+          { x1: 360, y1: 1000, x2: 360, y2: 350, durationMs: 450 },
+          { skipRefresh: true },
+        );
+        await sleepDeviceCloud(700);
+        await sendDeviceCloudInput(
+          deviceId,
+          "swipe",
+          { x1: 360, y1: 1000, x2: 360, y2: 350, durationMs: 450 },
+          { skipRefresh: true },
+        );
+        await sleepDeviceCloud(700);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 280, y: 1008 }, { skipRefresh: true });
+        await sleepDeviceCloud(1400);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 280, y: 916 }, { skipRefresh: true });
+        await sleepDeviceCloud(800);
+        await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
+        await sleepDeviceCloud(700);
+        await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
+        await sleepDeviceCloud(700);
+        await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
+      }
+
+      async function advanceDeviceCloudAfterPhoneNumber(deviceId) {
+        await sleepDeviceCloud(700);
+        await tapDeviceCloudWhatsAppAvancar(deviceId);
+        await sleepDeviceCloud(1200);
+        await tapDeviceCloudWhatsAppContinuar(deviceId);
+        await sleepDeviceCloud(1800);
+        if (!(await deviceCloudHasPlayHeadsUp(deviceId))) return;
+        await grantDeviceCloudPlaySmsPermission(deviceId);
+        await sleepDeviceCloud(800);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 330, y: 765 }, { skipRefresh: true });
+        await sleepDeviceCloud(800);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1125 }, { skipRefresh: true });
+        await sleepDeviceCloud(1500);
+        await tapDeviceCloudWhatsAppAvancar(deviceId);
+        await sleepDeviceCloud(1200);
+        await tapDeviceCloudWhatsAppContinuar(deviceId);
       }
 
       async function submitDeviceCloudPhoneNumber(id, inputEl) {

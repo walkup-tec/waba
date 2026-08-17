@@ -1,3 +1,16 @@
+## 2026-08-17 16:05 — Device Cloud: Play SMS bloqueava o Avançar
+- Causa: Play Services sem permissão de SMS; WhatsApp voltava à tela do número
+- Fix: Avançar 690/1100 + Continuar 520,768; se o heads-up do Play aparecer, conceder SMS e repetir
+- Validado no Android teste 1: tela **Confirmar seu número** (SMS 6 dígitos)
+- Marker `DEPLOY-2026-08-17-device-cloud-gms-sms-avancar`
+- LOG: doc/LOG-2026-08-17__160500__fix-device-cloud-gms-sms-avancar.md
+
+## 2026-08-17 15:36 — Device Cloud: Digitar não acrescenta 03
+- Causa: Avançar/Continuar com teclado aberto acertavam teclas 0 e 3
+- Fix: toque em Avançar y=690 (pad aberto) e depois y=1100 (pad fechado)
+- Marker `DEPLOY-2026-08-17-device-cloud-digitar-sem-03`
+- LOG: doc/LOG-2026-08-17__153600__fix-device-cloud-digitar-03.md
+
 ## 2026-08-17 15:28 — Financeiro: comprovante do fornecedor na linha do pedido + PIX por entregues
 - Causa: finalizar campanha criava `campaign-supplier:` e pagava `sent`
 - Fix: anexar comprovante na linha original; valor = entregues (cap enviados/planejado/crédito pago)
