@@ -362,6 +362,8 @@ function shouldSkipBodyParserForMultipart(req) {
         return true;
     if (p === "/disparos/messenger-images")
         return true;
+    if (/^\/device-cloud\/device\/[^/]+\/push-media$/.test(p))
+        return true;
     const ct = String(req.headers["content-type"] || "");
     if (!ct.includes("multipart/form-data"))
         return false;

@@ -1,10 +1,27 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isDeviceCloudEmailAllowed = isDeviceCloudEmailAllowed;
 exports.registerDeviceCloudRoutes = registerDeviceCloudRoutes;
+const multer_1 = __importDefault(require("multer"));
 const waba_request_auth_1 = require("../auth/waba-request-auth");
 const waba_device_cloud_service_1 = require("./waba-device-cloud.service");
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
+const DEVICE_CLOUD_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
+const DEVICE_CLOUD_MEDIA_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const uploadDeviceCloudMedia = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: DEVICE_CLOUD_MEDIA_MAX_BYTES, files: 1 },
+    fileFilter: (_req, file, cb) => {
+        if (!DEVICE_CLOUD_MEDIA_MIME.has(String(file.mimetype || "").toLowerCase())) {
+            cb(new Error("Use JPG, PNG ou WebP."));
+            return;
+        }
+        cb(null, true);
+    },
+});
 function isDeviceCloudEmailAllowed(email) {
     return DEVICE_CLOUD_ALLOWLIST.has(String(email || "").trim().toLowerCase());
 }
@@ -120,6 +137,59 @@ function registerDeviceCloudRoutes(app) {
         try {
             await waba_device_cloud_service_1.wabaDeviceCloudService.launchWhatsAppBusiness(user.email, id);
             return res.json({ ok: true });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/device/:id/restart", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        try {
+            await waba_device_cloud_service_1.wabaDeviceCloudService.restartDevice(user.email, id);
+            return res.json({ ok: true });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/device/:id/push-media", (req, res, next) => {
+        uploadDeviceCloudMedia.single("file")(req, res, (err) => {
+            if (err) {
+                const limitErr = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE";
+                return res.status(400).json({
+                    error: limitErr ? "Imagem até 5 MB." : err.message || "Falha no upload.",
+                });
+            }
+            next();
+        });
+    }, async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        const file = req.file;
+        if (!file?.buffer?.length) {
+            return res.status(400).json({ error: "Selecione uma imagem do seu computador." });
+        }
+        const kind = String(req.body?.kind || "profile").trim().toLowerCase();
+        const prefix = kind === "cover" ? "waba-capa" : "waba-perfil";
+        const ext = file.mimetype === "image/png" ? "png" : file.mimetype === "image/webp" ? "webp" : "jpg";
+        const filename = `${prefix}-${Date.now()}.${ext}`;
+        try {
+            const result = await waba_device_cloud_service_1.wabaDeviceCloudService.pushDownloadFile(user.email, id, {
+                filename,
+                buffer: file.buffer,
+            });
+            return res.json({ ok: true, remotePath: result.remotePath, filename });
         }
         catch (err) {
             return sendDeviceCloudError(res, err);

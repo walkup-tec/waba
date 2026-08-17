@@ -6296,6 +6296,48 @@
         cursor: not-allowed;
       }
 
+      .device-cloud-media-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px 8px;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(15, 23, 42, 0.96);
+      }
+
+      .device-cloud-media-bar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 30px;
+        padding: 0 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.85);
+        color: var(--text, #e2e8f0);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .device-cloud-media-bar input[type="file"] {
+        display: none;
+      }
+
+      .device-cloud-restart-btn {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 8px;
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        background: rgba(30, 64, 175, 0.72);
+        color: #fff;
+        cursor: pointer;
+      }
+
       .device-cloud-tap-flash {
         position: fixed;
         width: 18px;
@@ -17434,10 +17476,21 @@
                   <span class="device-cloud-window-title">Celular</span>
                   <div class="device-cloud-window-actions">
                     <button type="button" class="device-cloud-open-wa">Abrir WhatsApp</button>
+                    <button type="button" class="device-cloud-restart-btn">Reiniciar</button>
                     <button type="button" class="device-cloud-delete-btn">Excluir</button>
                   </div>
                 </div>
                 <img class="device-cloud-screen" alt="Tela do Android" draggable="false" tabindex="0" />
+                <div class="device-cloud-media-bar">
+                  <label class="device-cloud-profile-upload">
+                    Foto perfil
+                    <input type="file" class="device-cloud-profile-file" accept="image/jpeg,image/png,image/webp" />
+                  </label>
+                  <label class="device-cloud-cover-upload">
+                    Capa
+                    <input type="file" class="device-cloud-cover-file" accept="image/jpeg,image/png,image/webp" />
+                  </label>
+                </div>
                 <div class="device-cloud-phone-bar">
                   <input
                     type="tel"
@@ -23594,6 +23647,27 @@
           e.stopPropagation();
           void launchDeviceCloudWhatsApp(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
         });
+        win.querySelector(".device-cloud-restart-btn")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void restartDeviceCloudDevice(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        });
+        win.querySelector(".device-cloud-profile-file")?.addEventListener("change", (e) => {
+          const file = e.target && e.target.files && e.target.files[0];
+          if (!file) return;
+          void uploadDeviceCloudWhatsAppMedia(deviceId, file, "profile").catch((err) =>
+            setDeviceCloudMsg(err.message || String(err)),
+          );
+          e.target.value = "";
+        });
+        win.querySelector(".device-cloud-cover-file")?.addEventListener("change", (e) => {
+          const file = e.target && e.target.files && e.target.files[0];
+          if (!file) return;
+          void uploadDeviceCloudWhatsAppMedia(deviceId, file, "cover").catch((err) =>
+            setDeviceCloudMsg(err.message || String(err)),
+          );
+          e.target.value = "";
+        });
         win.querySelector(".device-cloud-delete-btn")?.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -23614,7 +23688,7 @@
 
         if (bar && stage) {
           bar.addEventListener("pointerdown", (e) => {
-            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-open-wa")) return;
+            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-open-wa, .device-cloud-restart-btn")) return;
             e.preventDefault();
             focusDeviceCloudWindow(deviceId);
             try {
@@ -23866,9 +23940,86 @@
         setDeviceCloudMsg("Dispositivo removido da tela. Use Adicionar dispositivo para criar outro.");
       }
 
+      async function dismissDeviceCloudWhatsAppCrash(deviceId) {
+        await sendDeviceCloudInput(deviceId, "tap", { x: 520, y: 640 }, { skipRefresh: true });
+        await sleepDeviceCloud(700);
+      }
+
+      /** Launcher → gaveta → ícone WA Business (720×1280). */
+      async function openDeviceCloudWhatsAppFromDrawer(deviceId) {
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1250 }, { skipRefresh: true });
+        await sleepDeviceCloud(1000);
+        await sendDeviceCloudInput(
+          deviceId,
+          "swipe",
+          { x1: 360, y1: 1100, x2: 360, y2: 350, durationMs: 450 },
+          { skipRefresh: true },
+        );
+        await sleepDeviceCloud(1200);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 120, y: 820 }, { skipRefresh: true });
+        await sleepDeviceCloud(2800);
+        await dismissDeviceCloudWhatsAppCrash(deviceId);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 330, y: 765 }, { skipRefresh: true });
+        await sleepDeviceCloud(700);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1125 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+      }
+
+      async function restartDeviceCloudDevice(id) {
+        const deviceId = String(id || "");
+        if (!deviceId) return;
+        setDeviceCloudMsg("Reiniciando celular…");
+        const res = await fetch("/device-cloud/device/" + encodeURIComponent(deviceId) + "/restart", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(String(data.error || data.message || "Falha ao reiniciar."));
+        }
+        await sleepDeviceCloud(8000);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        setDeviceCloudMsg("Celular reiniciado. Toque em Abrir WhatsApp.");
+      }
+
+      async function uploadDeviceCloudWhatsAppMedia(id, file, kind) {
+        const deviceId = String(id || "");
+        if (!deviceId || !file) return;
+        const allowed = ["image/jpeg", "image/png", "image/webp"];
+        if (!allowed.includes(String(file.type || ""))) {
+          setDeviceCloudMsg("Use JPG, PNG ou WebP.");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          setDeviceCloudMsg("Imagem até 5 MB.");
+          return;
+        }
+        const prefix = kind === "cover" ? "waba-capa" : "waba-perfil";
+        setDeviceCloudMsg("Enviando " + (kind === "cover" ? "capa" : "foto de perfil") + " ao celular…");
+        const form = new FormData();
+        form.append("file", file, file.name || prefix + ".jpg");
+        form.append("kind", kind);
+        const res = await fetch("/device-cloud/device/" + encodeURIComponent(deviceId) + "/push-media", {
+          method: "POST",
+          credentials: "same-origin",
+          body: form,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(String(data.error || data.message || "Falha ao enviar imagem."));
+        }
+        const savedName = String(data.filename || file.name || "imagem");
+        setDeviceCloudMsg(
+          "Imagem enviada para Download do celular. No WhatsApp: Perfil → editar → Galeria → " + savedName + ".",
+        );
+      }
+
       async function launchDeviceCloudWhatsApp(id) {
         const deviceId = String(id || "");
         if (!deviceId) return;
+        setDeviceCloudMsg("Abrindo WhatsApp Business…");
         const res = await fetch(
           "/device-cloud/device/" + encodeURIComponent(deviceId) + "/launch-whatsapp-business",
           {
@@ -23880,7 +24031,14 @@
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setDeviceCloudMsg(String(data.message || data.error || "Toque no ícone do WhatsApp Business na tela."));
+          setDeviceCloudMsg("API indisponível — abrindo pelo launcher…");
+          await dismissDeviceCloudWhatsAppCrash(deviceId);
+          await openDeviceCloudWhatsAppFromDrawer(deviceId);
+          focusDeviceCloudWindow(deviceId);
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          setDeviceCloudMsg(
+            "WhatsApp aberto pelo launcher. Se o app fechar sozinho, use Reiniciar e tente de novo.",
+          );
           return;
         }
         focusDeviceCloudWindow(deviceId);
