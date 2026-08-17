@@ -60,6 +60,23 @@ export class WabaDeviceCloudService {
     };
   }
 
+  async listDevicesForUser(email: string): Promise<DeviceCloudDevice[]> {
+    const token = await this.accessToken(email);
+    return this.listDevices(token);
+  }
+
+  async createNewDevice(email: string, name?: string): Promise<DeviceCloudDevice> {
+    const token = await this.accessToken(email);
+    const label = String(name || "").trim() || `Android ${new Date().toISOString().slice(11, 16).replace(":", "")}`;
+    const created = await this.createDevice(token, label.slice(0, 48));
+    const createdStatus = String(created.status || "").toUpperCase();
+    if (created.id && createdStatus !== "ERROR") return created;
+    const retry = await this.listDevices(token);
+    const match = retry.find((d) => d.id === created.id) || retry[retry.length - 1];
+    if (match?.id) return match;
+    throw new DeviceCloudHttpError("Não foi possível criar o dispositivo.", 502);
+  }
+
   async ensureDevice(email: string): Promise<DeviceCloudDevice> {
     const token = await this.accessToken(email);
     const existing = await this.listDevices(token);

@@ -55,6 +55,29 @@ function readCoord(value: unknown, name: string): number {
 }
 
 export function registerDeviceCloudRoutes(app: Express): void {
+  app.get("/device-cloud/devices", async (req: Request, res: Response) => {
+    const user = requireDeviceCloudUser(req, res);
+    if (!user) return;
+    try {
+      const devices = await wabaDeviceCloudService.listDevicesForUser(user.email);
+      return res.json({ ok: true, devices });
+    } catch (err) {
+      return sendDeviceCloudError(res, err);
+    }
+  });
+
+  app.post("/device-cloud/devices", async (req: Request, res: Response) => {
+    const user = requireDeviceCloudUser(req, res);
+    if (!user) return;
+    const name = String(req.body?.name || "").trim();
+    try {
+      const device = await wabaDeviceCloudService.createNewDevice(user.email, name || undefined);
+      return res.json({ ok: true, device });
+    } catch (err) {
+      return sendDeviceCloudError(res, err);
+    }
+  });
+
   app.post("/device-cloud/device", (req: Request, res: Response) => {
     const user = requireDeviceCloudUser(req, res);
     if (!user) return;

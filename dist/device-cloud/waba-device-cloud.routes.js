@@ -49,6 +49,31 @@ function readCoord(value, name) {
     return Math.round(n);
 }
 function registerDeviceCloudRoutes(app) {
+    app.get("/device-cloud/devices", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        try {
+            const devices = await waba_device_cloud_service_1.wabaDeviceCloudService.listDevicesForUser(user.email);
+            return res.json({ ok: true, devices });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.post("/device-cloud/devices", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const name = String(req.body?.name || "").trim();
+        try {
+            const device = await waba_device_cloud_service_1.wabaDeviceCloudService.createNewDevice(user.email, name || undefined);
+            return res.json({ ok: true, device });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
     app.post("/device-cloud/device", (req, res) => {
         const user = requireDeviceCloudUser(req, res);
         if (!user)

@@ -6130,9 +6130,34 @@
 
       #device-cloud-stage {
         position: relative;
-        min-height: 680px;
+        min-height: 420px;
         margin-top: 16px;
-        overflow: hidden;
+        overflow: auto;
+        padding: 4px 2px 16px;
+      }
+
+      .device-cloud-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+
+      #device-cloud-add-btn {
+        height: 38px;
+        padding: 0 16px;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: 10px;
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        background: rgba(30, 64, 175, 0.75);
+        color: #fff;
+        cursor: pointer;
+      }
+
+      #device-cloud-add-btn[hidden] {
+        display: none !important;
       }
 
       .device-cloud-window {
@@ -6142,10 +6167,18 @@
         z-index: 2;
         width: max-content;
         max-width: 100%;
+        --dc-screen-width: 329px;
         background: var(--bg-card, #0f172a);
         border: 1px solid rgba(148, 163, 184, 0.28);
         border-radius: 16px;
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+        transition: width 0.2s ease, box-shadow 0.15s ease;
+      }
+
+      .device-cloud-window.is-focused {
+        z-index: 12;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.48);
+        border-color: rgba(96, 165, 250, 0.45);
       }
 
       .device-cloud-window[hidden] {
@@ -6181,7 +6214,8 @@
         gap: 6px;
       }
 
-      #device-cloud-open-wa {
+      #device-cloud-open-wa,
+      .device-cloud-open-wa {
         height: 28px;
         padding: 0 10px;
         font-size: 12px;
@@ -6193,7 +6227,8 @@
         cursor: pointer;
       }
 
-      #device-cloud-delete-btn {
+      #device-cloud-delete-btn,
+      .device-cloud-delete-btn {
         height: 28px;
         padding: 0 10px;
         font-size: 12px;
@@ -6205,20 +6240,89 @@
         cursor: pointer;
       }
 
-      #device-cloud-screen {
-        width: 329px;
+      #device-cloud-screen,
+      .device-cloud-screen {
+        width: var(--dc-screen-width, 329px);
         height: auto;
-        max-height: 598px;
+        max-height: calc(var(--dc-screen-width, 329px) * 598 / 329);
         object-fit: contain;
         object-position: center;
         display: block;
         background: #000;
-        border-radius: 0 0 14px 14px;
+        border-radius: 0;
         border: 0;
         touch-action: none;
         user-select: none;
         cursor: pointer;
         outline: none;
+      }
+
+      .device-cloud-phone-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px;
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 0 0 14px 14px;
+        background: rgba(15, 23, 42, 0.96);
+      }
+
+      #device-cloud-phone-input,
+      .device-cloud-phone-input {
+        flex: 1;
+        min-width: 0;
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(2, 6, 23, 0.85);
+        color: var(--text, #e2e8f0);
+        font-size: 13px;
+      }
+
+      #device-cloud-phone-submit,
+      .device-cloud-phone-submit {
+        height: 34px;
+        padding: 0 12px;
+        border-radius: 8px;
+        border: 0;
+        background: #16a34a;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      #device-cloud-phone-submit:disabled,
+      .device-cloud-phone-submit:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .device-cloud-tap-flash {
+        position: fixed;
+        width: 18px;
+        height: 18px;
+        margin-left: -9px;
+        margin-top: -9px;
+        border-radius: 50%;
+        border: 2px solid rgba(34, 197, 94, 0.95);
+        background: rgba(34, 197, 94, 0.25);
+        pointer-events: none;
+        z-index: 9999;
+        animation: device-cloud-tap-flash 420ms ease-out forwards;
+      }
+
+      @keyframes device-cloud-tap-flash {
+        from {
+          opacity: 1;
+          transform: scale(0.65);
+        }
+        to {
+          opacity: 0;
+          transform: scale(1.35);
+        }
       }
 
       .admin-financeiro-split-controls {
@@ -10147,6 +10251,14 @@
           padding: 13px 15px;
           font-size: 1.0625rem;
         }
+      }
+
+      #app-confirm-overlay.confirm-overlay {
+        z-index: 2400;
+      }
+
+      #app-confirm-text {
+        white-space: pre-wrap;
       }
 
       /* Acima do overlay de “processando planilha” (1300) e demais modais */
@@ -17299,26 +17411,35 @@
               <div class="panel-title">Dispositivos</div>
             </div>
             <div id="device-cloud-gate-msg" class="aquecedor-hint" style="margin-bottom:12px;"></div>
-            <button type="button" id="device-cloud-create-btn" class="instance-action-btn enabled">
-              Criar Dispositivo
-            </button>
-            <div id="device-cloud-stage">
-              <div id="device-cloud-window" class="device-cloud-window" hidden>
-                <div class="device-cloud-window-bar" id="device-cloud-window-drag">
-                  <span class="device-cloud-window-title" id="device-cloud-window-title">Celular</span>
+            <div class="device-cloud-toolbar">
+              <button type="button" id="device-cloud-create-btn" class="instance-action-btn enabled">
+                Criar Dispositivo
+              </button>
+              <button type="button" id="device-cloud-add-btn" hidden>Adicionar dispositivo</button>
+            </div>
+            <div id="device-cloud-stage"></div>
+            <template id="device-cloud-window-template">
+              <div class="device-cloud-window" hidden>
+                <div class="device-cloud-window-bar">
+                  <span class="device-cloud-window-title">Celular</span>
                   <div class="device-cloud-window-actions">
-                    <button type="button" id="device-cloud-open-wa">Abrir WhatsApp</button>
-                    <button type="button" id="device-cloud-delete-btn">Excluir</button>
+                    <button type="button" class="device-cloud-open-wa">Abrir WhatsApp</button>
+                    <button type="button" class="device-cloud-delete-btn">Excluir</button>
                   </div>
                 </div>
-                <img
-                  id="device-cloud-screen"
-                  alt="Tela do Android"
-                  draggable="false"
-                  tabindex="0"
-                />
+                <img class="device-cloud-screen" alt="Tela do Android" draggable="false" tabindex="0" />
+                <div class="device-cloud-phone-bar">
+                  <input
+                    type="tel"
+                    class="device-cloud-phone-input"
+                    inputmode="numeric"
+                    autocomplete="tel"
+                    placeholder="DDD + número (ex: 11981077770)"
+                  />
+                  <button type="button" class="device-cloud-phone-submit">Digitar</button>
+                </div>
               </div>
-            </div>
+            </template>
           </section>
         </div>
 
@@ -21149,6 +21270,17 @@
       </div>
     </div>
 
+    <div id="app-confirm-overlay" class="confirm-overlay" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="app-confirm-title" aria-describedby="app-confirm-text">
+        <div class="confirm-title" id="app-confirm-title">Confirmar</div>
+        <div class="confirm-text" id="app-confirm-text"></div>
+        <div class="confirm-actions">
+          <button id="app-confirm-cancel-btn" class="instance-action-btn" type="button">Cancelar</button>
+          <button id="app-confirm-ok-btn" class="instance-action-btn btn-delete enabled" type="button">OK</button>
+        </div>
+      </div>
+    </div>
+
     <div id="register-instance-overlay" class="confirm-overlay" aria-hidden="true">
       <div class="confirm-modal register-modal register-wizard-modal" role="dialog" aria-modal="true">
         <div class="reg-wizard-header">
@@ -22984,7 +23116,7 @@
         const gate = document.getElementById("device-cloud-gate-msg");
         if (gate) {
           gate.textContent = allowed
-            ? "Abra o celular e use a tela como um aparelho real. Número e código SMS entram no WhatsApp Business."
+            ? "Abra um ou mais celulares. Use Adicionar dispositivo para criar quantos precisar; a tela se adapta automaticamente."
             : "Menu restrito à conta autorizada em produção.";
         }
         if (!allowed && activeTab === "dispositivos") {
@@ -22992,26 +23124,109 @@
         }
       }
 
-      let deviceCloudActiveId = "";
       let deviceCloudApiUrl = "";
       let deviceCloudAccessToken = "";
-      let deviceCloudPollTimer = 0;
-      let deviceCloudPtr = null;
-      let deviceCloudPtrLock = false;
-      let deviceCloudWindowDrag = null;
+      const deviceCloudWindowState = new Map();
       const DEVICE_CLOUD_SWIPE_PX = 24;
-      const DEVICE_CLOUD_LAYOUT_KEY = "waba-device-cloud-layout-v1";
+      const DEVICE_CLOUD_LAYOUT_KEY = "waba-device-cloud-layout-v2";
+
+      function deviceCloudState(id) {
+        const key = String(id || "");
+        if (!deviceCloudWindowState.has(key)) {
+          deviceCloudWindowState.set(key, {
+            pollTimer: 0,
+            screenUrl: "",
+            ptr: null,
+            ptrLock: false,
+            drag: null,
+          });
+        }
+        return deviceCloudWindowState.get(key);
+      }
+
+      function getDeviceCloudWin(id) {
+        const safe = String(id || "").replace(/"/g, '\\"');
+        return document.querySelector('#device-cloud-stage .device-cloud-window[data-device-id="' + safe + '"]');
+      }
+
+      function listVisibleDeviceCloudWindows() {
+        return Array.from(document.querySelectorAll("#device-cloud-stage .device-cloud-window:not([hidden])"));
+      }
+
+      function deviceCloudWindowCount() {
+        return listVisibleDeviceCloudWindows().length;
+      }
+
+      function focusDeviceCloudWindow(id) {
+        listVisibleDeviceCloudWindows().forEach((win) => {
+          win.classList.toggle("is-focused", win.dataset.deviceId === String(id));
+        });
+      }
+
+      function syncDeviceCloudToolbar() {
+        const addBtn = document.getElementById("device-cloud-add-btn");
+        const n = deviceCloudWindowCount();
+        if (addBtn) addBtn.hidden = n < 1;
+      }
+
+      function adaptDeviceCloudStageLayout() {
+        const stage = document.getElementById("device-cloud-stage");
+        if (!stage) return;
+        const windows = listVisibleDeviceCloudWindows();
+        const n = windows.length;
+        let screenW = 329;
+        if (n >= 6) screenW = 190;
+        else if (n >= 4) screenW = 220;
+        else if (n >= 3) screenW = 250;
+        else if (n >= 2) screenW = 280;
+        const gap = 14;
+        const stageW = stage.clientWidth || 960;
+        const cols = Math.max(1, Math.floor((stageW + gap) / (screenW + gap + 8)));
+        const barH = 42;
+        const phoneBarH = 52;
+        const screenMaxH = Math.round(screenW * (598 / 329));
+        const winH = barH + screenMaxH + phoneBarH;
+        const layout = loadDeviceCloudLayout();
+        layout.windows = layout.windows && typeof layout.windows === "object" ? layout.windows : {};
+        windows.forEach((win, index) => {
+          win.style.setProperty("--dc-screen-width", screenW + "px");
+          const id = String(win.dataset.deviceId || "");
+          const saved = layout.windows[id];
+          if (!saved || saved.auto) {
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const x = col * (screenW + gap);
+            const y = row * (winH + gap);
+            win.style.left = x + "px";
+            win.style.top = y + "px";
+            layout.windows[id] = { x, y, auto: true };
+          } else {
+            win.style.left = (parseInt(saved.x, 10) || 0) + "px";
+            win.style.top = (parseInt(saved.y, 10) || 0) + "px";
+          }
+          clampDeviceCloudWindow(win);
+        });
+        saveDeviceCloudLayout(layout);
+        const rows = Math.max(1, Math.ceil(Math.max(n, 1) / cols));
+        stage.style.minHeight = Math.max(420, rows * (winH + gap) + 28) + "px";
+        syncDeviceCloudToolbar();
+      }
 
       function setDeviceCloudMsg(text) {
         const msg = document.getElementById("device-cloud-gate-msg");
         if (msg) msg.textContent = text;
       }
 
-      function stopDeviceCloudScreen() {
-        if (deviceCloudPollTimer) {
-          clearInterval(deviceCloudPollTimer);
-          deviceCloudPollTimer = 0;
+      function stopDeviceCloudScreen(id) {
+        const st = deviceCloudState(id);
+        if (st.pollTimer) {
+          clearInterval(st.pollTimer);
+          st.pollTimer = 0;
         }
+      }
+
+      function stopAllDeviceCloudScreens() {
+        deviceCloudWindowState.forEach((_, deviceId) => stopDeviceCloudScreen(deviceId));
       }
 
       function loadDeviceCloudLayout() {
@@ -23046,54 +23261,44 @@
       }
 
       function applyDeviceCloudWindowPosition(id) {
-        const win = document.getElementById("device-cloud-window");
+        const win = getDeviceCloudWin(id);
         const stage = document.getElementById("device-cloud-stage");
         if (!win || !stage) return;
         const layout = loadDeviceCloudLayout();
         const saved = layout.windows && layout.windows[id];
-        const left = saved && Number.isFinite(saved.x) ? saved.x : 0;
-        const top = saved && Number.isFinite(saved.y) ? saved.y : 0;
-        win.style.left = left + "px";
-        win.style.top = top + "px";
-        clampDeviceCloudWindow();
+        if (saved && !saved.auto) {
+          win.style.left = (parseInt(saved.x, 10) || 0) + "px";
+          win.style.top = (parseInt(saved.y, 10) || 0) + "px";
+        }
+        clampDeviceCloudWindow(win);
       }
 
-      function persistDeviceCloudWindowPosition() {
-        const win = document.getElementById("device-cloud-window");
-        if (!win || !deviceCloudActiveId) return;
+      function persistDeviceCloudWindowPosition(id, auto) {
+        const win = getDeviceCloudWin(id);
+        if (!win) return;
         const layout = loadDeviceCloudLayout();
         layout.windows = layout.windows && typeof layout.windows === "object" ? layout.windows : {};
-        layout.windows[deviceCloudActiveId] = {
+        layout.windows[id] = {
           x: parseInt(win.style.left, 10) || 0,
           y: parseInt(win.style.top, 10) || 0,
+          auto: Boolean(auto),
         };
         saveDeviceCloudLayout(layout);
       }
 
-      function clampDeviceCloudWindow() {
-        const win = document.getElementById("device-cloud-window");
+      function clampDeviceCloudWindow(win) {
         const stage = document.getElementById("device-cloud-stage");
         if (!win || !stage || win.hidden) return;
         const maxX = Math.max(0, stage.clientWidth - win.offsetWidth);
-        const maxY = Math.max(0, stage.clientHeight - win.offsetHeight);
+        const maxY = Math.max(0, stage.scrollHeight - win.offsetHeight);
         const x = Math.min(maxX, Math.max(0, parseInt(win.style.left, 10) || 0));
         const y = Math.min(maxY, Math.max(0, parseInt(win.style.top, 10) || 0));
         win.style.left = x + "px";
         win.style.top = y + "px";
       }
 
-      function syncDeviceCloudCreateBtn() {
-        const btn = document.getElementById("device-cloud-create-btn");
-        if (!btn) return;
-        btn.textContent = deviceCloudActiveId ? "Atualizar lista" : "Criar Dispositivo";
-      }
-
-      function hideDeviceCloudWindow() {
-        const win = document.getElementById("device-cloud-window");
-        if (win) win.hidden = true;
-        stopDeviceCloudScreen();
-        deviceCloudActiveId = "";
-        syncDeviceCloudCreateBtn();
+      function clampAllDeviceCloudWindows() {
+        listVisibleDeviceCloudWindows().forEach((win) => clampDeviceCloudWindow(win));
       }
 
       function mapDeviceCloudPoint(img, clientX, clientY) {
@@ -23124,40 +23329,96 @@
         return headers;
       }
 
-      let deviceCloudScreenUrl = "";
+      function showDeviceCloudTapFlash(clientX, clientY) {
+        const dot = document.createElement("div");
+        dot.className = "device-cloud-tap-flash";
+        dot.style.left = clientX + "px";
+        dot.style.top = clientY + "px";
+        document.body.appendChild(dot);
+        window.setTimeout(() => dot.remove(), 450);
+      }
 
-      async function refreshDeviceCloudScreen() {
-        if (deviceCloudPtrLock) return;
-        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
-        const img = document.getElementById("device-cloud-screen");
+      async function refreshDeviceCloudScreen(id) {
+        const deviceId = String(id || "");
+        const st = deviceCloudState(deviceId);
+        if (st.ptrLock) return;
+        const win = getDeviceCloudWin(deviceId);
+        if (!win || win.hidden) return;
+        const img = win.querySelector(".device-cloud-screen");
         if (!img) return;
         const res = await fetch(
-          deviceCloudApiUrl + "/devices/" + encodeURIComponent(deviceCloudActiveId) + "/screenshot?t=" + Date.now(),
-          { headers: deviceCloudHeaders(false) },
+          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/screenshot?t=" + Date.now(),
+          { credentials: "same-origin" },
         );
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(String(data.message || data.error || "Falha ao atualizar a tela."));
         }
         const blob = await res.blob();
-        if (deviceCloudScreenUrl) URL.revokeObjectURL(deviceCloudScreenUrl);
-        deviceCloudScreenUrl = URL.createObjectURL(blob);
-        img.src = deviceCloudScreenUrl;
+        if (st.screenUrl) URL.revokeObjectURL(st.screenUrl);
+        st.screenUrl = URL.createObjectURL(blob);
+        img.src = st.screenUrl;
       }
 
-      async function sendDeviceCloudInput(path, body, opts) {
-        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
+      async function sendDeviceCloudInput(id, path, body, opts) {
+        const deviceId = String(id || "");
+        if (!deviceId) return;
         const res = await fetch(
-          deviceCloudApiUrl + "/devices/" + encodeURIComponent(deviceCloudActiveId) + "/input/" + path,
+          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/input/" + path,
           {
             method: "POST",
-            headers: deviceCloudHeaders(true),
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           },
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(String(data.message || data.error || "Falha no toque."));
-        if (!opts || !opts.skipRefresh) await refreshDeviceCloudScreen();
+        if (!opts || !opts.skipRefresh) await refreshDeviceCloudScreen(deviceId);
+      }
+
+      function normalizeDeviceCloudPhoneDigits(raw) {
+        return String(raw || "")
+          .replace(/\D/g, "")
+          .replace(/^0+/, "");
+      }
+
+      async function submitDeviceCloudPhoneNumber(id, inputEl) {
+        const deviceId = String(id || "");
+        if (!deviceId) return;
+        const input = inputEl || getDeviceCloudWin(deviceId)?.querySelector(".device-cloud-phone-input");
+        const btn = getDeviceCloudWin(deviceId)?.querySelector(".device-cloud-phone-submit");
+        const digits = normalizeDeviceCloudPhoneDigits(input && input.value);
+        if (!digits || digits.length < 10) {
+          setDeviceCloudMsg("Informe DDD + número com pelo menos 10 dígitos.");
+          return;
+        }
+        let local = digits;
+        if ((local.length === 12 || local.length === 13) && local.startsWith("55")) {
+          local = local.slice(2);
+        }
+        if (local.length < 10 || local.length > 11) {
+          setDeviceCloudMsg("Número inválido. Use DDD + número (ex: 11981077770).");
+          return;
+        }
+        if (btn) btn.disabled = true;
+        focusDeviceCloudWindow(deviceId);
+        setDeviceCloudMsg("Digitando número no WhatsApp…");
+        try {
+          await sendDeviceCloudInput(deviceId, "tap", { x: 174, y: 553 }, { skipRefresh: true });
+          await new Promise((r) => setTimeout(r, 350));
+          await sendDeviceCloudInput(deviceId, "text", { text: "55" }, { skipRefresh: true });
+          await new Promise((r) => setTimeout(r, 250));
+          await sendDeviceCloudInput(deviceId, "tap", { x: 440, y: 553 }, { skipRefresh: true });
+          await new Promise((r) => setTimeout(r, 350));
+          await sendDeviceCloudInput(deviceId, "text", { text: local }, { skipRefresh: true });
+          await refreshDeviceCloudScreen(deviceId);
+          setDeviceCloudMsg("Número enviado. Confira na tela e toque em Avançar.");
+        } catch (err) {
+          setDeviceCloudMsg(err.message || String(err));
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       function usableDeviceCloudDevices(devices) {
@@ -23169,35 +23430,216 @@
         });
       }
 
-      function startDeviceCloudScreen(id, opts) {
-        const options = opts && typeof opts === "object" ? opts : {};
-        deviceCloudActiveId = id;
-        const win = document.getElementById("device-cloud-window");
-        const title = document.getElementById("device-cloud-window-title");
-        const img = document.getElementById("device-cloud-screen");
-        if (title) title.textContent = String(options.name || "Celular");
-        if (win) win.hidden = false;
-        if (img) img.tabIndex = 0;
-        applyDeviceCloudWindowPosition(id);
-        stopDeviceCloudScreen();
-        void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
-        deviceCloudPollTimer = setInterval(() => {
-          void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
-        }, 1000);
-        syncDeviceCloudCreateBtn();
-        if (options.launch !== false) void launchDeviceCloudWhatsApp();
+      function bindDeviceCloudWindowEvents(win) {
+        if (!win || win.dataset.dcBound === "1") return;
+        win.dataset.dcBound = "1";
+        const deviceId = String(win.dataset.deviceId || "");
+        const st = deviceCloudState(deviceId);
+        const bar = win.querySelector(".device-cloud-window-bar");
+        const img = win.querySelector(".device-cloud-screen");
+        const stage = document.getElementById("device-cloud-stage");
+
+        win.querySelector(".device-cloud-open-wa")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void launchDeviceCloudWhatsApp(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        });
+        win.querySelector(".device-cloud-delete-btn")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void removeDeviceCloudFromBoard(deviceId);
+        });
+        win.querySelector(".device-cloud-phone-submit")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const inputEl = win.querySelector(".device-cloud-phone-input");
+          void submitDeviceCloudPhoneNumber(deviceId, inputEl);
+        });
+        win.querySelector(".device-cloud-phone-input")?.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void submitDeviceCloudPhoneNumber(deviceId, e.currentTarget);
+          }
+        });
+
+        if (bar && stage) {
+          bar.addEventListener("pointerdown", (e) => {
+            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-open-wa")) return;
+            e.preventDefault();
+            focusDeviceCloudWindow(deviceId);
+            try {
+              bar.setPointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+            const winRect = win.getBoundingClientRect();
+            st.drag = {
+              pointerId: e.pointerId,
+              dx: e.clientX - winRect.left,
+              dy: e.clientY - winRect.top,
+            };
+          });
+          bar.addEventListener("pointermove", (e) => {
+            if (!st.drag || st.drag.pointerId !== e.pointerId) return;
+            const stageRect = stage.getBoundingClientRect();
+            let x = e.clientX - st.drag.dx - stageRect.left + stage.scrollLeft;
+            let y = e.clientY - st.drag.dy - stageRect.top + stage.scrollTop;
+            const maxX = Math.max(0, stage.clientWidth - win.offsetWidth);
+            const maxY = Math.max(0, stage.scrollHeight - win.offsetHeight);
+            x = Math.min(maxX, Math.max(0, x));
+            y = Math.min(maxY, Math.max(0, y));
+            win.style.left = x + "px";
+            win.style.top = y + "px";
+          });
+          const endDrag = (e) => {
+            if (!st.drag || st.drag.pointerId !== e.pointerId) return;
+            st.drag = null;
+            clampDeviceCloudWindow(win);
+            persistDeviceCloudWindowPosition(deviceId, false);
+          };
+          bar.addEventListener("pointerup", endDrag);
+          bar.addEventListener("pointercancel", endDrag);
+        }
+
+        if (img) {
+          const unlockPtr = () => {
+            st.ptr = null;
+            st.ptrLock = false;
+          };
+          img.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            focusDeviceCloudWindow(deviceId);
+            const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY);
+            if (!mapped) return;
+            img.focus();
+            st.ptrLock = true;
+            try {
+              img.setPointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+            st.ptr = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, x: mapped.x, y: mapped.y };
+            showDeviceCloudTapFlash(e.clientX, e.clientY);
+          });
+          img.addEventListener("keydown", (e) => {
+            if (/^[0-9]$/.test(e.key)) {
+              e.preventDefault();
+              void sendDeviceCloudInput(deviceId, "text", { text: e.key }).catch((err) =>
+                setDeviceCloudMsg(err.message || String(err)),
+              );
+              return;
+            }
+            if (e.key === "Backspace") {
+              e.preventDefault();
+              void sendDeviceCloudInput(deviceId, "key", { key: "back" }).catch((err) =>
+                setDeviceCloudMsg(err.message || String(err)),
+              );
+              return;
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void sendDeviceCloudInput(deviceId, "key", { key: "enter" }).catch((err) =>
+                setDeviceCloudMsg(err.message || String(err)),
+              );
+            }
+          });
+          img.addEventListener("pointerup", (e) => {
+            const start = st.ptr;
+            if (!start || start.pointerId !== e.pointerId) return;
+            st.ptr = null;
+            const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY) || { x: start.x, y: start.y };
+            const dx = e.clientX - start.clientX;
+            const dy = e.clientY - start.clientY;
+            const action = () => {
+              st.ptrLock = false;
+              if (Math.hypot(dx, dy) >= DEVICE_CLOUD_SWIPE_PX) {
+                return sendDeviceCloudInput(deviceId, "swipe", {
+                  x1: start.x,
+                  y1: start.y,
+                  x2: mapped.x,
+                  y2: mapped.y,
+                  durationMs: 280,
+                });
+              }
+              return sendDeviceCloudInput(deviceId, "tap", { x: start.x, y: start.y });
+            };
+            void action().catch((err) => {
+              st.ptrLock = false;
+              setDeviceCloudMsg(err.message || String(err));
+            });
+          });
+          img.addEventListener("pointercancel", unlockPtr);
+          img.addEventListener("lostpointercapture", () => {
+            if (st.ptr) return;
+            st.ptrLock = false;
+          });
+        }
       }
 
-      function resumeDeviceCloudScreen() {
-        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
-        const win = document.getElementById("device-cloud-window");
-        if (win) win.hidden = false;
-        applyDeviceCloudWindowPosition(deviceCloudActiveId);
-        stopDeviceCloudScreen();
-        void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
-        deviceCloudPollTimer = setInterval(() => {
-          void refreshDeviceCloudScreen().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+      function ensureDeviceCloudWindowElement(id, name) {
+        let win = getDeviceCloudWin(id);
+        if (win) return win;
+        const tpl = document.getElementById("device-cloud-window-template");
+        const stage = document.getElementById("device-cloud-stage");
+        if (!tpl || !stage) return null;
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        node.dataset.deviceId = String(id);
+        const title = node.querySelector(".device-cloud-window-title");
+        if (title) title.textContent = String(name || "Celular");
+        stage.appendChild(node);
+        bindDeviceCloudWindowEvents(node);
+        return node;
+      }
+
+      function startDeviceCloudScreen(id, opts) {
+        const options = opts && typeof opts === "object" ? opts : {};
+        const deviceId = String(id || "");
+        const win = ensureDeviceCloudWindowElement(deviceId, options.name);
+        if (!win) return;
+        const img = win.querySelector(".device-cloud-screen");
+        win.hidden = false;
+        if (img) img.tabIndex = 0;
+        focusDeviceCloudWindow(deviceId);
+        stopDeviceCloudScreen(deviceId);
+        const st = deviceCloudState(deviceId);
+        void refreshDeviceCloudScreen(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        st.pollTimer = setInterval(() => {
+          void refreshDeviceCloudScreen(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
         }, 1000);
+        adaptDeviceCloudStageLayout();
+        if (options.launch !== false) void launchDeviceCloudWhatsApp(deviceId);
+      }
+
+      function closeDeviceCloudWindow(id) {
+        const deviceId = String(id || "");
+        const win = getDeviceCloudWin(deviceId);
+        stopDeviceCloudScreen(deviceId);
+        if (win) win.remove();
+        deviceCloudWindowState.delete(deviceId);
+        adaptDeviceCloudStageLayout();
+        syncDeviceCloudToolbar();
+      }
+
+      async function fetchDeviceCloudDevicesList() {
+        const res = await fetch("/device-cloud/devices", { credentials: "same-origin" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(String(data.error || "Não foi possível listar dispositivos."));
+        return usableDeviceCloudDevices(data.devices);
+      }
+
+      async function createRemoteDeviceCloudDevice(name) {
+        const res = await fetch("/device-cloud/devices", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: String(name || "") }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.device || !data.device.id) {
+          throw new Error(String(data.error || data.message || "Não foi possível criar o dispositivo."));
+        }
+        return data.device;
       }
 
       async function ensureDeviceCloudSession() {
@@ -23235,43 +23677,54 @@
 
       async function restoreDeviceCloudBoard() {
         if (!canAccessDeviceCloudMenu()) return;
-        if (deviceCloudActiveId) {
-          resumeDeviceCloudScreen();
-          return;
-        }
         const ok = await ensureDeviceCloudSession();
         if (!ok) return;
-        const listRes = await fetch(deviceCloudApiUrl + "/devices", {
-          headers: deviceCloudHeaders(false),
-        });
-        const listed = await listRes.json().catch(() => []);
-        const devices = usableDeviceCloudDevices(listed).filter((d) => !isDeviceCloudHidden(String(d.id)));
-        const online = devices.find((d) => String(d && d.status ? d.status : "").toUpperCase() === "ONLINE");
-        const chosen = online || devices[0];
-        if (!chosen || !chosen.id) {
-          hideDeviceCloudWindow();
-          setDeviceCloudMsg("Crie um dispositivo para usar o WhatsApp Business neste celular.");
-          return;
+        try {
+          const devices = (await fetchDeviceCloudDevicesList()).filter((d) => !isDeviceCloudHidden(String(d.id)));
+          const openIds = new Set(listVisibleDeviceCloudWindows().map((w) => String(w.dataset.deviceId || "")));
+          devices.forEach((d) => {
+            if (!d.id || openIds.has(String(d.id))) return;
+            startDeviceCloudScreen(String(d.id), { name: d.name, launch: false });
+          });
+          if (deviceCloudWindowCount() < 1) {
+            setDeviceCloudMsg("Use Criar Dispositivo ou Adicionar dispositivo para abrir um celular.");
+            return;
+          }
+          adaptDeviceCloudStageLayout();
+          setDeviceCloudMsg(
+            deviceCloudWindowCount() > 1
+              ? deviceCloudWindowCount() + " celulares abertos. Arraste para organizar; a tela encolhe automaticamente."
+              : "WhatsApp aberto. Toque o campo na imagem ou use Digitar abaixo.",
+          );
+        } catch (err) {
+          setDeviceCloudMsg(err instanceof Error ? err.message : String(err));
         }
-        startDeviceCloudScreen(String(chosen.id), { name: chosen.name, launch: false });
-        setDeviceCloudMsg("WhatsApp aberto na tela de número. Toque o campo do telefone. Se for à tela inicial, use Abrir WhatsApp.");
       }
 
-      function removeDeviceCloudFromBoard() {
-        if (!deviceCloudActiveId) return;
-        if (!window.confirm("Excluir este dispositivo da tela Dispositivos?")) return;
-        setDeviceCloudHidden(deviceCloudActiveId, true);
-        hideDeviceCloudWindow();
-        setDeviceCloudMsg("Dispositivo excluído da tela. Use Criar Dispositivo para trazê-lo de volta.");
+      async function removeDeviceCloudFromBoard(id) {
+        const deviceId = String(id || "");
+        if (!deviceId) return;
+        const ok = await openAppConfirm({
+          title: "Excluir dispositivo",
+          text: "Excluir este dispositivo da tela Dispositivos?",
+          confirmLabel: "Excluir",
+          danger: true,
+        });
+        if (!ok) return;
+        setDeviceCloudHidden(deviceId, true);
+        closeDeviceCloudWindow(deviceId);
+        setDeviceCloudMsg("Dispositivo removido da tela. Use Adicionar dispositivo para criar outro.");
       }
 
-      async function launchDeviceCloudWhatsApp() {
-        if (!deviceCloudActiveId || !deviceCloudApiUrl || !deviceCloudAccessToken) return;
+      async function launchDeviceCloudWhatsApp(id) {
+        const deviceId = String(id || "");
+        if (!deviceId) return;
         const res = await fetch(
-          deviceCloudApiUrl + "/devices/" + encodeURIComponent(deviceCloudActiveId) + "/launch-whatsapp-business",
+          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/launch-whatsapp-business",
           {
             method: "POST",
-            headers: deviceCloudHeaders(true),
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
             body: "{}",
           },
         );
@@ -23280,46 +23733,69 @@
           setDeviceCloudMsg(String(data.message || data.error || "Toque no ícone do WhatsApp Business na tela."));
           return;
         }
-        await refreshDeviceCloudScreen().catch(() => {});
-        setDeviceCloudMsg("WhatsApp aberto na tela de número. Toque o campo do telefone. Se for à tela inicial, use Abrir WhatsApp.");
+        focusDeviceCloudWindow(deviceId);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        setDeviceCloudMsg(
+          "WhatsApp na tela de número. Toque o campo na imagem ou use Digitar abaixo.",
+        );
       }
 
-      async function createDeviceCloudDevice() {
+      async function addDeviceCloudDevice(forceCreate) {
         if (!canAccessDeviceCloudMenu()) {
           setDeviceCloudMsg("Sem permissão para Device Cloud.");
           return;
         }
-        const btn = document.getElementById("device-cloud-create-btn");
-        if (btn) {
-          btn.disabled = true;
-          btn.textContent = "Preparando…";
+        const busyBtn = forceCreate
+          ? document.getElementById("device-cloud-add-btn")
+          : document.getElementById("device-cloud-create-btn");
+        const prevLabel = busyBtn ? busyBtn.textContent : "";
+        if (busyBtn) {
+          busyBtn.disabled = true;
+          busyBtn.textContent = forceCreate ? "Criando…" : "Preparando…";
         }
-        setDeviceCloudMsg("Preparando o celular…");
+        setDeviceCloudMsg(forceCreate ? "Criando novo celular…" : "Preparando o celular…");
         try {
           const ok = await ensureDeviceCloudSession();
           if (!ok) return;
-          const listRes = await fetch(deviceCloudApiUrl + "/devices", {
-            headers: deviceCloudHeaders(false),
-          });
-          const listed = await listRes.json().catch(() => []);
-          const devices = usableDeviceCloudDevices(listed);
-          const online = devices.find((d) => String(d && d.status ? d.status : "").toUpperCase() === "ONLINE");
-          const chosen = online || devices[0];
+          const openIds = new Set(listVisibleDeviceCloudWindows().map((w) => String(w.dataset.deviceId || "")));
+          let chosen = null;
+          if (!forceCreate) {
+            const devices = (await fetchDeviceCloudDevicesList()).filter((d) => !openIds.has(String(d.id)));
+            const online = devices.find((d) => String(d.status || "").toUpperCase() === "ONLINE");
+            chosen = online || devices.find((d) => !isDeviceCloudHidden(String(d.id))) || devices[0];
+          }
+          if (!chosen) {
+            const n = deviceCloudWindowCount() + 1;
+            chosen = await createRemoteDeviceCloudDevice("Android teste " + n);
+          }
           if (!chosen || !chosen.id) {
             setDeviceCloudMsg("Nenhum celular virtual disponível no servidor.");
             return;
           }
           setDeviceCloudHidden(String(chosen.id), false);
           startDeviceCloudScreen(String(chosen.id), { name: chosen.name, launch: true });
-          setDeviceCloudMsg("Abrindo o WhatsApp Business…");
+          setDeviceCloudMsg(
+            deviceCloudWindowCount() > 1
+              ? "Novo celular adicionado. Arraste as janelas para organizar."
+              : "Abrindo o WhatsApp Business…",
+          );
         } catch (err) {
           setDeviceCloudMsg(err instanceof Error ? err.message : String(err));
         } finally {
-          if (btn) {
-            btn.disabled = false;
-            syncDeviceCloudCreateBtn();
+          if (busyBtn) {
+            busyBtn.disabled = false;
+            busyBtn.textContent = prevLabel || (forceCreate ? "Adicionar dispositivo" : "Criar Dispositivo");
           }
+          syncDeviceCloudToolbar();
         }
+      }
+
+      async function createDeviceCloudDevice() {
+        await addDeviceCloudDevice(false);
+      }
+
+      async function addAnotherDeviceCloudDevice() {
+        await addDeviceCloudDevice(true);
       }
 
       function isStaffRole(role) {
@@ -26405,11 +26881,13 @@
           openAlternativaNumberConnectWizard();
         });
         document.getElementById("alt-numbers-reset-selection-btn")?.addEventListener("click", async () => {
-          if (
-            !window.confirm(
-              "Limpar as ativações e refazer a seleção?\n\nOs números comprados (slots) serão mantidos."
-            )
-          ) {
+          const resetOk = await openAppConfirm({
+            title: "Refazer seleção",
+            text: "Limpar as ativações e refazer a seleção?\n\nOs números comprados (slots) serão mantidos.",
+            confirmLabel: "Limpar seleção",
+            danger: true,
+          });
+          if (!resetOk) {
             return;
           }
           try {
@@ -32004,13 +32482,16 @@
         if (!listId) return;
         if (btn?.classList?.contains("is-deleting")) return;
         const label = String(name || "esta lista");
-        if (
-          !window.confirm(
+        const deleteListOk = await openAppConfirm({
+          title: "Excluir lista",
+          text:
             'Excluir "' +
-              label +
-              '" do histórico? O arquivo Excel (se houver) também será removido.'
-          )
-        ) {
+            label +
+            '" do histórico? O arquivo Excel (se houver) também será removido.',
+          confirmLabel: "Excluir",
+          danger: true,
+        });
+        if (!deleteListOk) {
           return;
         }
         const row =
@@ -45101,6 +45582,55 @@
         }
       }
 
+      let appConfirmResolver = null;
+
+      function closeAppConfirm(result) {
+        const overlay = document.getElementById("app-confirm-overlay");
+        if (overlay) {
+          blurFocusInsideOverlay(overlay);
+          overlay.classList.remove("open");
+          overlay.setAttribute("aria-hidden", "true");
+        }
+        const resolve = appConfirmResolver;
+        appConfirmResolver = null;
+        if (typeof resolve === "function") resolve(Boolean(result));
+      }
+
+      function openAppConfirm(options) {
+        blurFocusTrappedInClosedOverlays();
+        const titleEl = document.getElementById("app-confirm-title");
+        const textEl = document.getElementById("app-confirm-text");
+        const okBtn = document.getElementById("app-confirm-ok-btn");
+        const cancelBtn = document.getElementById("app-confirm-cancel-btn");
+        const overlay = document.getElementById("app-confirm-overlay");
+        if (titleEl) titleEl.textContent = String(options?.title || "Confirmar");
+        if (textEl) textEl.textContent = String(options?.text || "");
+        if (okBtn) {
+          okBtn.textContent = String(options?.confirmLabel || "OK");
+          okBtn.classList.toggle("btn-delete", options?.danger !== false);
+          okBtn.classList.add("enabled");
+        }
+        if (cancelBtn) cancelBtn.textContent = String(options?.cancelLabel || "Cancelar");
+        return new Promise((resolve) => {
+          if (typeof appConfirmResolver === "function") appConfirmResolver(false);
+          appConfirmResolver = resolve;
+          if (!overlay) {
+            appConfirmResolver = null;
+            resolve(false);
+            return;
+          }
+          overlay.classList.add("open");
+          overlay.setAttribute("aria-hidden", "false");
+          window.setTimeout(() => {
+            try {
+              (cancelBtn || okBtn)?.focus();
+            } catch {
+              /* ignore */
+            }
+          }, 0);
+        });
+      }
+
       let pendingDisCampaignRenameId = "";
       function openDisCampaignRenameModal(campaignId, currentName) {
         blurFocusTrappedInClosedOverlays();
@@ -52935,130 +53465,24 @@
       document.getElementById("dis-campaign-rename-cancel-btn")?.addEventListener("click", () => closeDisCampaignRenameModal());
       document.getElementById("dis-campaign-rename-save-btn")?.addEventListener("click", () => void saveDisCampaignRename());
       document.getElementById("device-cloud-create-btn")?.addEventListener("click", () => void createDeviceCloudDevice());
-      document.getElementById("device-cloud-open-wa")?.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        void launchDeviceCloudWhatsApp().catch((err) => setDeviceCloudMsg(err.message || String(err)));
+      document.getElementById("device-cloud-add-btn")?.addEventListener("click", () => void addAnotherDeviceCloudDevice());
+      window.addEventListener("resize", () => {
+        adaptDeviceCloudStageLayout();
+        clampAllDeviceCloudWindows();
       });
-      document.getElementById("device-cloud-delete-btn")?.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        removeDeviceCloudFromBoard();
+      const appConfirmOverlay = document.getElementById("app-confirm-overlay");
+      if (appConfirmOverlay) {
+        appConfirmOverlay.addEventListener("click", (e) => {
+          if (e.target === appConfirmOverlay) closeAppConfirm(false);
+        });
+      }
+      document.getElementById("app-confirm-cancel-btn")?.addEventListener("click", () => closeAppConfirm(false));
+      document.getElementById("app-confirm-ok-btn")?.addEventListener("click", () => closeAppConfirm(true));
+      document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        const overlay = document.getElementById("app-confirm-overlay");
+        if (overlay?.classList.contains("open")) closeAppConfirm(false);
       });
-      (function bindDeviceCloudWindowDrag() {
-        const bar = document.getElementById("device-cloud-window-drag");
-        const win = document.getElementById("device-cloud-window");
-        const stage = document.getElementById("device-cloud-stage");
-        if (!bar || !win || !stage) return;
-        bar.addEventListener("pointerdown", (e) => {
-          if (e.target.closest("#device-cloud-delete-btn, #device-cloud-open-wa")) return;
-          e.preventDefault();
-          try {
-            bar.setPointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-          const winRect = win.getBoundingClientRect();
-          deviceCloudWindowDrag = {
-            pointerId: e.pointerId,
-            dx: e.clientX - winRect.left,
-            dy: e.clientY - winRect.top,
-          };
-        });
-        bar.addEventListener("pointermove", (e) => {
-          if (!deviceCloudWindowDrag || deviceCloudWindowDrag.pointerId !== e.pointerId) return;
-          const stageRect = stage.getBoundingClientRect();
-          let x = e.clientX - deviceCloudWindowDrag.dx - stageRect.left;
-          let y = e.clientY - deviceCloudWindowDrag.dy - stageRect.top;
-          const maxX = Math.max(0, stage.clientWidth - win.offsetWidth);
-          const maxY = Math.max(0, stage.clientHeight - win.offsetHeight);
-          x = Math.min(maxX, Math.max(0, x));
-          y = Math.min(maxY, Math.max(0, y));
-          win.style.left = x + "px";
-          win.style.top = y + "px";
-        });
-        const endDrag = (e) => {
-          if (!deviceCloudWindowDrag || deviceCloudWindowDrag.pointerId !== e.pointerId) return;
-          deviceCloudWindowDrag = null;
-          clampDeviceCloudWindow();
-          persistDeviceCloudWindowPosition();
-        };
-        bar.addEventListener("pointerup", endDrag);
-        bar.addEventListener("pointercancel", endDrag);
-        window.addEventListener("resize", () => {
-          clampDeviceCloudWindow();
-          persistDeviceCloudWindowPosition();
-        });
-      })();
-      (function bindDeviceCloudScreen() {
-        const img = document.getElementById("device-cloud-screen");
-        if (!img) return;
-        const unlockPtr = () => {
-          deviceCloudPtr = null;
-          deviceCloudPtrLock = false;
-        };
-        img.addEventListener("pointerdown", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY);
-          if (!mapped) return;
-          img.focus();
-          deviceCloudPtrLock = true;
-          try {
-            img.setPointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-          deviceCloudPtr = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, x: mapped.x, y: mapped.y };
-        });
-        img.addEventListener("keydown", (e) => {
-          if (!deviceCloudActiveId) return;
-          if (/^[0-9]$/.test(e.key)) {
-            e.preventDefault();
-            void sendDeviceCloudInput("text", { text: e.key }).catch((err) => setDeviceCloudMsg(err.message || String(err)));
-            return;
-          }
-          if (e.key === "Backspace") {
-            e.preventDefault();
-            void sendDeviceCloudInput("key", { key: "back" }).catch((err) => setDeviceCloudMsg(err.message || String(err)));
-            return;
-          }
-          if (e.key === "Enter") {
-            e.preventDefault();
-            void sendDeviceCloudInput("key", { key: "enter" }).catch((err) => setDeviceCloudMsg(err.message || String(err)));
-          }
-        });
-        img.addEventListener("pointerup", (e) => {
-          const start = deviceCloudPtr;
-          if (!start || start.pointerId !== e.pointerId) return;
-          deviceCloudPtr = null;
-          const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY) || { x: start.x, y: start.y };
-          const dx = e.clientX - start.clientX;
-          const dy = e.clientY - start.clientY;
-          const action = () => {
-            deviceCloudPtrLock = false;
-            if (Math.hypot(dx, dy) >= DEVICE_CLOUD_SWIPE_PX) {
-              return sendDeviceCloudInput("swipe", {
-                x1: start.x,
-                y1: start.y,
-                x2: mapped.x,
-                y2: mapped.y,
-                durationMs: 280,
-              });
-            }
-            return sendDeviceCloudInput("tap", { x: start.x, y: start.y });
-          };
-          void action().catch((err) => {
-            deviceCloudPtrLock = false;
-            setDeviceCloudMsg(err.message || String(err));
-          });
-        });
-        img.addEventListener("pointercancel", unlockPtr);
-        img.addEventListener("lostpointercapture", () => {
-          if (deviceCloudPtr) return;
-          deviceCloudPtrLock = false;
-        });
-      })();
 
       const disCampaignDeleteOverlay = document.getElementById("dis-campaign-delete-overlay");
       if (disCampaignDeleteOverlay) {
