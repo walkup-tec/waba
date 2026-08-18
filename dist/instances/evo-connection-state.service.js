@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isEvoLiveStateOpen = isEvoLiveStateOpen;
+exports.aquecedorLiveStateAllowsConnected = aquecedorLiveStateAllowsConnected;
 exports.isEvoConnectionInProgress = isEvoConnectionInProgress;
 exports.waitForEvoInstanceLiveOpen = waitForEvoInstanceLiveOpen;
 exports.waitForEvoInstanceLiveOpenLenient = waitForEvoInstanceLiveOpenLenient;
@@ -18,6 +19,17 @@ const LIVE_STATE_TTL_MS = Math.max(2000, Math.min(120000, Number(process.env.EVO
 let liveStateCache = new Map();
 function isEvoLiveStateOpen(state) {
     return String(state || "").trim().toLowerCase() === "open";
+}
+/**
+ * fetchInstances já marcou a linha como open. Só descarta quando o
+ * connectionState vier explícito e diferente de open (close/connecting).
+ * Estado vazio (timeout/404) não é ghost.
+ */
+function aquecedorLiveStateAllowsConnected(liveState) {
+    const state = String(liveState || "").trim().toLowerCase();
+    if (!state)
+        return true;
+    return isEvoLiveStateOpen(state);
 }
 function isEvoConnectionInProgress(state) {
     const s = String(state || "").trim().toLowerCase();

@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.aquecedorChipKeyFromNumber = aquecedorChipKeyFromNumber;
+exports.scoreAquecedorDuplicateInstance = scoreAquecedorDuplicateInstance;
+exports.dedupeAquecedorConnectedByNumber = dedupeAquecedorConnectedByNumber;
 exports.buildAquecedorChipIndex = buildAquecedorChipIndex;
 exports.resolveAquecedorInstanceToChip = resolveAquecedorInstanceToChip;
 exports.resolveAquecedorNumberToChip = resolveAquecedorNumberToChip;
@@ -18,6 +20,57 @@ function aquecedorChipKeyFromNumber(raw) {
     return (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(digits) || digits;
 }
 /**
+ * Quando duas instâncias compartilham o mesmo chip, preferir o nome técnico
+ * que coincide com o final do número (6635 em 555181076635) e nomes só-dígitos
+ * (9224 em vez de soma-9224).
+ */
+function scoreAquecedorDuplicateInstance(instanceName, numero) {
+    const name = String(instanceName || "").trim();
+    const nameDigits = digitsOnly(name);
+    const phone = aquecedorChipKeyFromNumber(numero);
+    let score = 0;
+    if (/^\d+$/.test(name))
+        score += 50;
+    if (nameDigits.length >= 3 && phone.endsWith(nameDigits))
+        score += 100;
+    if (/^soma-/i.test(name) || /proxy-/i.test(name))
+        score -= 25;
+    return score;
+}
+function dedupeAquecedorConnectedByNumber(rows) {
+    const best = new Map();
+    const withoutNumber = [];
+    for (const row of rows) {
+        const instancia = String(row?.instancia || "").trim();
+        if (!instancia)
+            continue;
+        const canon = aquecedorChipKeyFromNumber(row?.numero);
+        if (!canon) {
+            withoutNumber.push(row);
+            continue;
+        }
+        const current = best.get(canon);
+        if (!current) {
+            best.set(canon, row);
+            continue;
+        }
+        const nextScore = scoreAquecedorDuplicateInstance(instancia, canon);
+        const curScore = scoreAquecedorDuplicateInstance(String(current.instancia || ""), canon);
+        if (nextScore > curScore)
+            best.set(canon, row);
+    }
+    const winners = new Set(best.values());
+    const out = [];
+    const pushed = new Set();
+    for (const row of rows) {
+        if ((winners.has(row) || withoutNumber.includes(row)) && !pushed.has(row)) {
+            out.push(row);
+            pushed.add(row);
+        }
+    }
+    return out;
+}
+/**
  * Índice chip ↔ instância atual. A lógica de aquecimento deve usar `chips`,
  * não o nome técnico da instância (rename não muda o chip).
  */
@@ -30,8 +83,10 @@ function buildAquecedorChipIndex(connected) {
         if (!instancia || !chip)
             continue;
         instanceToChip.set(instancia.toLowerCase(), chip);
-        // Mantém a primeira instância conectada como “atual” do chip.
-        if (!chipToInstance.has(chip)) {
+        const current = chipToInstance.get(chip);
+        if (!current ||
+            scoreAquecedorDuplicateInstance(instancia, chip) >
+                scoreAquecedorDuplicateInstance(current, chip)) {
             chipToInstance.set(chip, instancia);
         }
     }

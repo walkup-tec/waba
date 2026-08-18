@@ -2894,8 +2894,11 @@ async function filterAquecedorRowsByEvoLiveOpen(rows) {
     const filtered = [];
     const ghost = [];
     for (const row of rows) {
-        const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia);
-        if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState)) {
+        let liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia);
+        if (!String(liveState || "").trim()) {
+            liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia, { fresh: true });
+        }
+        if ((0, evo_connection_state_service_1.aquecedorLiveStateAllowsConnected)(liveState)) {
             filtered.push(row);
         }
         else {
@@ -2916,11 +2919,12 @@ async function listMergedConnectedEvoInstancesUnscoped() {
     const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
     const merged = mergeAquecedorConnectedRows(fromLive, fromCache);
     const verified = await filterAquecedorRowsByEvoLiveOpen(merged.rows);
+    const deduped = (0, aquecedor_chip_identity_1.dedupeAquecedorConnectedByNumber)(verified.rows);
     const snapshots = evoList.ok && evoList.instances.length
         ? await (0, evo_connection_state_service_1.resolveEvoLiveConnectionSnapshots)(evoList.instances)
         : [];
     return {
-        rows: verified.rows,
+        rows: deduped,
         liveCount: fromLive.length,
         cacheCount: fromCache.length,
         evoOk: evoList.ok,

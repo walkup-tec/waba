@@ -6,6 +6,12 @@ Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 - Marker `DEPLOY-2026-08-18-device-cloud-remove-voltar`
 - LOG: doc/LOG-2026-08-18__123500__device-cloud-remove-voltar-btn.md
 
+## 2026-08-18 12:21 — Aquecedor: pool com connectionState vazio + chip duplicado
+- `6635` (Mozart / 5181076635) fora do ciclo automático; teste manual 1261→6635 chegou
+- Empty `connectionState` era ghost; índice de chip ficava com a primeira instância (`6035`)
+- Marker `DEPLOY-2026-08-18-aquecedor-pool-live-open`
+- LOG: doc/LOG-2026-08-18__122100__fix-aquecedor-pool-live-open.md
+
 ## 2026-08-18 12:00 — Device Cloud: roda do mouse na lista de horários
 - Giro curto era swipe pequeno / palco `overflow:auto`; lista não andava
 - Fix: swipe de página 320 ms na faixa da lista; capture na janela do celular

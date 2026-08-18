@@ -22,6 +22,17 @@ export function isEvoLiveStateOpen(state: string): boolean {
   return String(state || "").trim().toLowerCase() === "open";
 }
 
+/**
+ * fetchInstances já marcou a linha como open. Só descarta quando o
+ * connectionState vier explícito e diferente de open (close/connecting).
+ * Estado vazio (timeout/404) não é ghost.
+ */
+export function aquecedorLiveStateAllowsConnected(liveState: string): boolean {
+  const state = String(liveState || "").trim().toLowerCase();
+  if (!state) return true;
+  return isEvoLiveStateOpen(state);
+}
+
 export function isEvoConnectionInProgress(state: string): boolean {
   const s = String(state || "").trim().toLowerCase();
   return s === "connecting" || s === "pairing" || s === "qrcode";

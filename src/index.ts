@@ -81,6 +81,7 @@ import {
   aquecedorChipKeyFromNumber,
   buildAquecedorChipIndex,
   buildAquecedorNumberVariantToChipMap,
+  dedupeAquecedorConnectedByNumber,
   resolveAquecedorInstanceToChip,
   resolveNumberVariantToChip,
 } from "./aquecedor/aquecedor-chip-identity";
@@ -114,6 +115,7 @@ import {
   describeEvoConnectionMismatch,
   invalidateEvoLiveStateCache,
   fetchEvoInstanceLiveState,
+  aquecedorLiveStateAllowsConnected,
   isEvoLiveStateOpen,
   isEvoConnectionInProgress,
   pickEvoConnectionState,
@@ -3642,8 +3644,11 @@ async function filterAquecedorRowsByEvoLiveOpen<T extends { instancia: string }>
   const filtered: T[] = [];
   const ghost: string[] = [];
   for (const row of rows) {
-    const liveState = await fetchEvoInstanceLiveState(row.instancia);
-    if (isEvoLiveStateOpen(liveState)) {
+    let liveState = await fetchEvoInstanceLiveState(row.instancia);
+    if (!String(liveState || "").trim()) {
+      liveState = await fetchEvoInstanceLiveState(row.instancia, { fresh: true });
+    }
+    if (aquecedorLiveStateAllowsConnected(liveState)) {
       filtered.push(row);
     } else {
       ghost.push(`${row.instancia}(${liveState || "desconhecido"})`);
@@ -3674,12 +3679,13 @@ async function listMergedConnectedEvoInstancesUnscoped(): Promise<{
   const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
   const merged = mergeAquecedorConnectedRows(fromLive, fromCache);
   const verified = await filterAquecedorRowsByEvoLiveOpen(merged.rows);
+  const deduped = dedupeAquecedorConnectedByNumber(verified.rows);
   const snapshots =
     evoList.ok && evoList.instances.length
       ? await resolveEvoLiveConnectionSnapshots(evoList.instances)
       : [];
   return {
-    rows: verified.rows,
+    rows: deduped,
     liveCount: fromLive.length,
     cacheCount: fromCache.length,
     evoOk: evoList.ok,

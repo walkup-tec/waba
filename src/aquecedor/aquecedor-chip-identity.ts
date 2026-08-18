@@ -30,6 +30,55 @@ export function aquecedorChipKeyFromNumber(raw: string): string {
 }
 
 /**
+ * Quando duas instâncias compartilham o mesmo chip, preferir o nome técnico
+ * que coincide com o final do número (6635 em 555181076635) e nomes só-dígitos
+ * (9224 em vez de soma-9224).
+ */
+export function scoreAquecedorDuplicateInstance(instanceName: string, numero: string): number {
+  const name = String(instanceName || "").trim();
+  const nameDigits = digitsOnly(name);
+  const phone = aquecedorChipKeyFromNumber(numero);
+  let score = 0;
+  if (/^\d+$/.test(name)) score += 50;
+  if (nameDigits.length >= 3 && phone.endsWith(nameDigits)) score += 100;
+  if (/^soma-/i.test(name) || /proxy-/i.test(name)) score -= 25;
+  return score;
+}
+
+export function dedupeAquecedorConnectedByNumber<T extends AquecedorConnectedRow>(rows: T[]): T[] {
+  const best = new Map<string, T>();
+  const withoutNumber: T[] = [];
+  for (const row of rows) {
+    const instancia = String(row?.instancia || "").trim();
+    if (!instancia) continue;
+    const canon = aquecedorChipKeyFromNumber(row?.numero);
+    if (!canon) {
+      withoutNumber.push(row);
+      continue;
+    }
+    const current = best.get(canon);
+    if (!current) {
+      best.set(canon, row);
+      continue;
+    }
+    const nextScore = scoreAquecedorDuplicateInstance(instancia, canon);
+    const curScore = scoreAquecedorDuplicateInstance(String(current.instancia || ""), canon);
+    if (nextScore > curScore) best.set(canon, row);
+  }
+
+  const winners = new Set<T>(best.values());
+  const out: T[] = [];
+  const pushed = new Set<T>();
+  for (const row of rows) {
+    if ((winners.has(row) || withoutNumber.includes(row)) && !pushed.has(row)) {
+      out.push(row);
+      pushed.add(row);
+    }
+  }
+  return out;
+}
+
+/**
  * Índice chip ↔ instância atual. A lógica de aquecimento deve usar `chips`,
  * não o nome técnico da instância (rename não muda o chip).
  */
@@ -44,8 +93,12 @@ export function buildAquecedorChipIndex(
     const chip = aquecedorChipKeyFromNumber(item.numero);
     if (!instancia || !chip) continue;
     instanceToChip.set(instancia.toLowerCase(), chip);
-    // Mantém a primeira instância conectada como “atual” do chip.
-    if (!chipToInstance.has(chip)) {
+    const current = chipToInstance.get(chip);
+    if (
+      !current ||
+      scoreAquecedorDuplicateInstance(instancia, chip) >
+        scoreAquecedorDuplicateInstance(current, chip)
+    ) {
       chipToInstance.set(chip, instancia);
     }
   }
