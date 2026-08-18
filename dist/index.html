@@ -6275,6 +6275,11 @@
         overscroll-behavior: contain;
       }
 
+      .device-cloud-screen:focus {
+        outline: 2px solid rgba(37, 211, 102, 0.75);
+        outline-offset: -2px;
+      }
+
       .device-cloud-phone-bar {
         display: flex;
         align-items: center;
@@ -17490,7 +17495,7 @@
                     <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
                 </div>
-                <img class="device-cloud-screen" alt="Tela do Android" draggable="false" tabindex="0" />
+                <img class="device-cloud-screen" alt="Tela do Android" title="Clique na tela e digite com o teclado do computador" draggable="false" tabindex="0" />
                 <div class="device-cloud-media-bar">
                   <span class="device-cloud-wa-brand" aria-hidden="true">
                     <svg class="device-cloud-wa-icon" viewBox="0 0 24 24" width="16" height="16" focusable="false">
@@ -23251,6 +23256,9 @@
             wheelDy: 0,
             wheelX: 0,
             wheelY: 0,
+            typeBuf: "",
+            typeTimer: 0,
+            skipTypeKey: false,
           });
         }
         return deviceCloudWindowState.get(key);
@@ -23737,6 +23745,117 @@
         });
       }
 
+      const DEVICE_CLOUD_TYPEABLE_RE = /^[\p{L}\p{N} .,@_+\-()#*?!/:;']$/u;
+      let deviceCloudLocalKbdBound = false;
+
+      function deviceCloudTypeableChunk(raw) {
+        return Array.from(String(raw || "")).filter((ch) => DEVICE_CLOUD_TYPEABLE_RE.test(ch)).join("");
+      }
+
+      function flushDeviceCloudTypeBuffer(deviceId) {
+        const st = deviceCloudState(deviceId);
+        if (st.typeTimer) {
+          window.clearTimeout(st.typeTimer);
+          st.typeTimer = 0;
+        }
+        const text = String(st.typeBuf || "");
+        st.typeBuf = "";
+        if (!text) return Promise.resolve();
+        return sendDeviceCloudInput(deviceId, "text", { text }, { skipRefresh: true }).then(() => {
+          scheduleDeviceCloudScreenRefresh(deviceId, 280);
+        });
+      }
+
+      function queueDeviceCloudTypedText(deviceId, chunk) {
+        const text = deviceCloudTypeableChunk(chunk);
+        if (!text) return Promise.resolve();
+        const st = deviceCloudState(deviceId);
+        st.typeBuf = String(st.typeBuf || "") + text;
+        if (st.typeBuf.length >= 40) return flushDeviceCloudTypeBuffer(deviceId);
+        if (st.typeTimer) window.clearTimeout(st.typeTimer);
+        st.typeTimer = window.setTimeout(() => {
+          st.typeTimer = 0;
+          void flushDeviceCloudTypeBuffer(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
+        }, 90);
+        return Promise.resolve();
+      }
+
+      function handleDeviceCloudLocalKeyboard(deviceId, e) {
+        if (!deviceId || e.ctrlKey || e.metaKey || e.altKey) return false;
+        const st = deviceCloudState(deviceId);
+        if (st.skipTypeKey || e.isComposing || e.key === "Dead") return false;
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          if (st.typeBuf) {
+            st.typeBuf = String(st.typeBuf).slice(0, -1);
+            return true;
+          }
+          void sendDeviceCloudInput(deviceId, "key", { key: "del" }, { skipRefresh: true })
+            .then(() => scheduleDeviceCloudScreenRefresh(deviceId, 220))
+            .catch((err) => setDeviceCloudMsg(err.message || String(err)));
+          return true;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void flushDeviceCloudTypeBuffer(deviceId)
+            .then(() => sendDeviceCloudInput(deviceId, "key", { key: "enter" }, { skipRefresh: true }))
+            .then(() => scheduleDeviceCloudScreenRefresh(deviceId, 280))
+            .catch((err) => setDeviceCloudMsg(err.message || String(err)));
+          return true;
+        }
+        if (e.key.length === 1 && DEVICE_CLOUD_TYPEABLE_RE.test(e.key)) {
+          e.preventDefault();
+          void queueDeviceCloudTypedText(deviceId, e.key).catch((err) =>
+            setDeviceCloudMsg(err.message || String(err)),
+          );
+          return true;
+        }
+        return false;
+      }
+
+      function ensureDeviceCloudLocalKeyboard() {
+        if (deviceCloudLocalKbdBound) return;
+        deviceCloudLocalKbdBound = true;
+        /* deviceCloudLocalKeyboard */
+        document.addEventListener(
+          "keydown",
+          (e) => {
+            const win = document.querySelector("#device-cloud-stage .device-cloud-window.is-focused:not([hidden])");
+            if (!win) return;
+            const img = win.querySelector(".device-cloud-screen");
+            const t = e.target;
+            if (t instanceof Element) {
+              const field = t.closest("input, textarea, select");
+              if (field && !field.classList.contains("device-cloud-screen")) return;
+            }
+            if (document.activeElement !== img) return;
+            handleDeviceCloudLocalKeyboard(String(win.dataset.deviceId || ""), e);
+          },
+          true,
+        );
+        document.addEventListener(
+          "compositionend",
+          (e) => {
+            const win = document.querySelector("#device-cloud-stage .device-cloud-window.is-focused:not([hidden])");
+            if (!win) return;
+            const img = win.querySelector(".device-cloud-screen");
+            if (document.activeElement !== img && e.target !== img) return;
+            const text = deviceCloudTypeableChunk(e.data);
+            if (!text) return;
+            const deviceId = String(win.dataset.deviceId || "");
+            const st = deviceCloudState(deviceId);
+            st.skipTypeKey = true;
+            void queueDeviceCloudTypedText(deviceId, text).catch((err) =>
+              setDeviceCloudMsg(err.message || String(err)),
+            );
+            window.setTimeout(() => {
+              st.skipTypeKey = false;
+            }, 0);
+          },
+          true,
+        );
+      }
+
       function bindDeviceCloudWindowEvents(win) {
         if (!win || win.dataset.dcBound === "1") return;
         win.dataset.dcBound = "1";
@@ -23745,6 +23864,7 @@
         const bar = win.querySelector(".device-cloud-window-bar");
         const img = win.querySelector(".device-cloud-screen");
         const stage = document.getElementById("device-cloud-stage");
+        ensureDeviceCloudLocalKeyboard();
 
         win.querySelector(".device-cloud-open-wa")?.addEventListener("click", (e) => {
           e.preventDefault();
@@ -23882,28 +24002,6 @@
               at: Date.now(),
             };
             showDeviceCloudTapFlash(e.clientX, e.clientY);
-          });
-          img.addEventListener("keydown", (e) => {
-            if (/^[0-9]$/.test(e.key)) {
-              e.preventDefault();
-              void sendDeviceCloudInput(deviceId, "text", { text: e.key }).catch((err) =>
-                setDeviceCloudMsg(err.message || String(err)),
-              );
-              return;
-            }
-            if (e.key === "Backspace") {
-              e.preventDefault();
-              void sendDeviceCloudInput(deviceId, "key", { key: "back" }).catch((err) =>
-                setDeviceCloudMsg(err.message || String(err)),
-              );
-              return;
-            }
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void sendDeviceCloudInput(deviceId, "key", { key: "enter" }).catch((err) =>
-                setDeviceCloudMsg(err.message || String(err)),
-              );
-            }
           });
           img.addEventListener("pointerup", (e) => {
             const start = st.ptr;

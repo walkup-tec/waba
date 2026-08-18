@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-18 13:02 — Device Cloud: teclado do computador
+- Clique na tela (borda verde) e digite no PC; Backspace apaga (DEL), não volta
+- Marker `DEPLOY-2026-08-18-130200-device-cloud-local-kbd` (HTML `deviceCloudLocalKeyboard`)
+- LOG: doc/LOG-2026-08-18__130200__device-cloud-local-keyboard.md
+
 ## 2026-08-18 12:41 — Device Cloud: sem botão Voltar na barra
 - Toque na tela já volta no WhatsApp; o chrome Voltar apertava o layout
 - Removidos botão, CSS `.device-cloud-key-back` e handler `key: back`

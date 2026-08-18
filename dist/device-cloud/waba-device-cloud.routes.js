@@ -270,7 +270,7 @@ function registerDeviceCloudRoutes(app) {
             return;
         const id = String(req.params.id || "");
         const key = String(req.body?.key || "").trim().toLowerCase();
-        if (key !== "back" && key !== "home" && key !== "enter") {
+        if (key !== "back" && key !== "home" && key !== "enter" && key !== "del" && key !== "delete") {
             return res.status(400).json({ error: "Tecla inválida." });
         }
         try {
