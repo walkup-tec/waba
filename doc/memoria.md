@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-18 13:12 — Device Cloud: colar Ctrl+V no campo focado
+- Copiar no PC (Ctrl+C) e colar na tela do celular (Ctrl+V)
+- Marker `DEPLOY-2026-08-18-131200-device-cloud-paste` (HTML `deviceCloudLocalClipboard`)
+- LOG: doc/LOG-2026-08-18__131200__device-cloud-paste-clipboard.md
+
 ## 2026-08-18 13:02 — Device Cloud: teclado do computador
 - Clique na tela (borda verde) e digite no PC; Backspace apaga (DEL), não volta
 - Marker `DEPLOY-2026-08-18-130200-device-cloud-local-kbd` (HTML `deviceCloudLocalKeyboard`)

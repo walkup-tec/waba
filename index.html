@@ -23259,6 +23259,7 @@
             typeBuf: "",
             typeTimer: 0,
             skipTypeKey: false,
+            pasteAt: 0,
           });
         }
         return deviceCloudWindowState.get(key);
@@ -23780,8 +23781,89 @@
         return Promise.resolve();
       }
 
+      function deviceCloudNormalizePaste(raw) {
+        return String(raw || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n")
+          .replace(/\t/g, " ")
+          .replace(/[\u2018\u2019\u201C\u201D]/g, "'")
+          .replace(/[\u2013\u2014]/g, "-")
+          .replace(/\u00A0/g, " ");
+      }
+
+      async function pasteIntoDeviceCloud(deviceId, raw) {
+        const st = deviceCloudState(deviceId);
+        st.pasteAt = Date.now();
+        await flushDeviceCloudTypeBuffer(deviceId);
+        const lines = deviceCloudNormalizePaste(raw).split("\n");
+        let sent = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const line = deviceCloudTypeableChunk(lines[i]);
+          for (let pos = 0; pos < line.length; pos += 80) {
+            const piece = line.slice(pos, pos + 80);
+            if (!piece) continue;
+            await sendDeviceCloudInput(deviceId, "text", { text: piece }, { skipRefresh: true });
+            sent += piece.length;
+          }
+          if (i < lines.length - 1) {
+            await sendDeviceCloudInput(deviceId, "key", { key: "enter" }, { skipRefresh: true });
+          }
+        }
+        scheduleDeviceCloudScreenRefresh(deviceId, 280);
+        if (!sent) {
+          setDeviceCloudMsg("Nada para colar (área vazia ou caracteres não suportados).");
+          return;
+        }
+        setDeviceCloudMsg("Texto colado no WhatsApp.");
+      }
+
+      async function pasteDeviceCloudFromClipboard(deviceId, clipboardData) {
+        let text = "";
+        if (clipboardData && typeof clipboardData.getData === "function") {
+          text = clipboardData.getData("text/plain") || "";
+        }
+        if (!text && navigator.clipboard && navigator.clipboard.readText) {
+          try {
+            text = await navigator.clipboard.readText();
+          } catch {
+            setDeviceCloudMsg("Permita colar a área de transferência neste site e use Ctrl+V de novo.");
+            return;
+          }
+        }
+        await pasteIntoDeviceCloud(deviceId, text);
+      }
+
+      function getDeviceCloudTypingContext(eventTarget) {
+        const win = document.querySelector("#device-cloud-stage .device-cloud-window.is-focused:not([hidden])");
+        if (!win) return null;
+        const img = win.querySelector(".device-cloud-screen");
+        if (!img) return null;
+        const t = eventTarget;
+        if (t instanceof Element) {
+          const field = t.closest("input, textarea, select");
+          if (field && !field.classList.contains("device-cloud-screen")) return null;
+        }
+        if (document.activeElement !== img && t !== img) return null;
+        const deviceId = String(win.dataset.deviceId || "");
+        if (!deviceId) return null;
+        return { deviceId, img, win };
+      }
+
       function handleDeviceCloudLocalKeyboard(deviceId, e) {
-        if (!deviceId || e.ctrlKey || e.metaKey || e.altKey) return false;
+        if (!deviceId) return false;
+        const mod = e.ctrlKey || e.metaKey;
+        if (mod && !e.altKey && (e.key === "v" || e.key === "V")) {
+          e.preventDefault();
+          window.setTimeout(() => {
+            const st = deviceCloudState(deviceId);
+            if (Date.now() - (st.pasteAt || 0) < 250) return;
+            void pasteDeviceCloudFromClipboard(deviceId, null).catch((err) =>
+              setDeviceCloudMsg(err.message || String(err)),
+            );
+          }, 0);
+          return true;
+        }
+        if (e.ctrlKey || e.metaKey || e.altKey) return false;
         const st = deviceCloudState(deviceId);
         if (st.skipTypeKey || e.isComposing || e.key === "Dead") return false;
         if (e.key === "Backspace") {
@@ -23817,35 +23899,38 @@
         if (deviceCloudLocalKbdBound) return;
         deviceCloudLocalKbdBound = true;
         /* deviceCloudLocalKeyboard */
+        /* deviceCloudLocalClipboard */
         document.addEventListener(
           "keydown",
           (e) => {
-            const win = document.querySelector("#device-cloud-stage .device-cloud-window.is-focused:not([hidden])");
-            if (!win) return;
-            const img = win.querySelector(".device-cloud-screen");
-            const t = e.target;
-            if (t instanceof Element) {
-              const field = t.closest("input, textarea, select");
-              if (field && !field.classList.contains("device-cloud-screen")) return;
-            }
-            if (document.activeElement !== img) return;
-            handleDeviceCloudLocalKeyboard(String(win.dataset.deviceId || ""), e);
+            const ctx = getDeviceCloudTypingContext(e.target);
+            if (!ctx) return;
+            handleDeviceCloudLocalKeyboard(ctx.deviceId, e);
+          },
+          true,
+        );
+        document.addEventListener(
+          "paste",
+          (e) => {
+            const ctx = getDeviceCloudTypingContext(e.target);
+            if (!ctx) return;
+            e.preventDefault();
+            void pasteDeviceCloudFromClipboard(ctx.deviceId, e.clipboardData).catch((err) =>
+              setDeviceCloudMsg(err.message || String(err)),
+            );
           },
           true,
         );
         document.addEventListener(
           "compositionend",
           (e) => {
-            const win = document.querySelector("#device-cloud-stage .device-cloud-window.is-focused:not([hidden])");
-            if (!win) return;
-            const img = win.querySelector(".device-cloud-screen");
-            if (document.activeElement !== img && e.target !== img) return;
+            const ctx = getDeviceCloudTypingContext(e.target);
+            if (!ctx) return;
             const text = deviceCloudTypeableChunk(e.data);
             if (!text) return;
-            const deviceId = String(win.dataset.deviceId || "");
-            const st = deviceCloudState(deviceId);
+            const st = deviceCloudState(ctx.deviceId);
             st.skipTypeKey = true;
-            void queueDeviceCloudTypedText(deviceId, text).catch((err) =>
+            void queueDeviceCloudTypedText(ctx.deviceId, text).catch((err) =>
               setDeviceCloudMsg(err.message || String(err)),
             );
             window.setTimeout(() => {
