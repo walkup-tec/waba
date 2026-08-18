@@ -23447,10 +23447,10 @@
       }
 
       function queueDeviceCloudWheel(deviceId, img, clientX, clientY, deltaX, deltaY, deltaMode) {
+        /* deviceCloudWheelListSwipe */
         const st = deviceCloudState(deviceId);
         const nw = img.naturalWidth || 720;
         const nh = img.naturalHeight || 1280;
-        const mapped = mapDeviceCloudPoint(img, clientX, clientY);
         let dx = Number(deltaX) || 0;
         let dy = Number(deltaY) || 0;
         if (deltaMode === 1) {
@@ -23460,12 +23460,8 @@
           dx *= Math.max(1, img.clientWidth);
           dy *= Math.max(1, img.clientHeight);
         }
-        const sx = nw / Math.max(1, img.clientWidth);
-        const sy = nh / Math.max(1, img.clientHeight);
-        st.wheelX = mapped ? mapped.x : Math.round(nw / 2);
-        st.wheelY = mapped ? mapped.y : Math.round(nh * 0.52);
-        st.wheelDx = (st.wheelDx || 0) + dx * sx;
-        st.wheelDy = (st.wheelDy || 0) + dy * sy;
+        st.wheelDx = (st.wheelDx || 0) + dx;
+        st.wheelDy = (st.wheelDy || 0) + dy;
         if (st.wheelTimer) return;
         st.wheelTimer = window.setTimeout(() => {
           st.wheelTimer = 0;
@@ -23473,25 +23469,26 @@
           const my = st.wheelDy || 0;
           st.wheelDx = 0;
           st.wheelDy = 0;
-          if (Math.abs(mx) < 14 && Math.abs(my) < 14) return;
-          const x1 = Math.max(20, Math.min(nw - 20, st.wheelX || nw / 2));
-          const y1 = Math.max(90, Math.min(nh - 110, st.wheelY || nh * 0.52));
-          const x2 = Math.max(20, Math.min(nw - 20, x1 - mx));
-          const y2 = Math.max(90, Math.min(nh - 110, y1 - my));
-          if (Math.hypot(x2 - x1, y2 - y1) < 18) return;
+          if (Math.abs(mx) < 1 && Math.abs(my) < 1) return;
+          const x = Math.round(nw * 0.5);
+          const yHigh = Math.max(220, Math.min(nh - 280, 380));
+          const yLow = Math.max(yHigh + 200, Math.min(nh - 220, 980));
+          const down = Math.abs(my) >= Math.abs(mx) ? my > 0 : mx > 0;
+          const y1 = down ? yLow : yHigh;
+          const y2 = down ? yHigh : yLow;
           void sendDeviceCloudInput(
             deviceId,
             "swipe",
             {
-              x1: Math.round(x1),
+              x1: x,
               y1: Math.round(y1),
-              x2: Math.round(x2),
+              x2: x,
               y2: Math.round(y2),
-              durationMs: 160,
+              durationMs: 320,
             },
             { skipRefresh: false },
           ).catch(() => {});
-        }, 40);
+        }, 80);
       }
 
       function showDeviceCloudTapFlash(clientX, clientY) {
@@ -23556,7 +23553,7 @@
           );
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(String(data.message || data.error || "Falha no toque."));
-          if (!skipRefresh) scheduleDeviceCloudScreenRefresh(deviceId, 220);
+          if (!skipRefresh) scheduleDeviceCloudScreenRefresh(deviceId, path === "swipe" ? 480 : 220);
         };
         const next = st.inputChain.then(run, run);
         st.inputChain = next.catch(() => {});
@@ -23949,7 +23946,7 @@
             if (st.ptr) return;
             st.ptrLock = false;
           });
-          img.addEventListener(
+          win.addEventListener(
             "wheel",
             (e) => {
               e.preventDefault();
@@ -23957,7 +23954,7 @@
               focusDeviceCloudWindow(deviceId);
               queueDeviceCloudWheel(deviceId, img, e.clientX, e.clientY, e.deltaX, e.deltaY, e.deltaMode);
             },
-            { passive: false },
+            { passive: false, capture: true },
           );
         }
       }

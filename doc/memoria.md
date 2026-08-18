@@ -1,3 +1,17 @@
+Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
+
+## 2026-08-18 12:00 — Device Cloud: roda do mouse na lista de horários
+- Giro curto era swipe pequeno / palco `overflow:auto`; lista não andava
+- Fix: swipe de página 320 ms na faixa da lista; capture na janela do celular
+- Marker `DEPLOY-2026-08-18-device-cloud-wheel-list`
+- LOG: doc/LOG-2026-08-18__120000__device-cloud-wheel-hours-list.md
+
+## 2026-08-18 11:42 — Device Cloud: clique WABA não tocava o Android
+- Causa: `tryVirtTap` no API AWS considerava sucesso o `ddc-virt-tap` em `/dev/input/event4`, que não move o Compose; o `adb shell input tap` era pulado. `keyevent BACK` (botão Voltar da barra) não usava virt-touch e funcionava.
+- Fix: desligar virt-touch no tap/swipe (`adb.client.ts` + `dist`); `systemctl restart ddc-api`.
+- Validado na aba Dispositivos: tap Avançar perfil→categoria; pointer no Voltar do WA categoria→perfil.
+- LOG: doc/LOG-2026-08-18__114200__device-cloud-virt-tap-noop.md
+
 ## 2026-08-18 10:52 — Device Cloud: scroll do mouse na tela
 - Roda do mouse vira swipe no Android; a página WABA não rola
 - Marker `DEPLOY-2026-08-18-device-cloud-wheel-scroll`
