@@ -37,6 +37,7 @@ function isDeviceVisibleOnWaba(device) {
     return Boolean(device?.id) && !isSaasPublishedDeviceCloudName(String(device.name || ""));
 }
 const tokenCache = new Map();
+const screenshotCache = new Map();
 const trimEnv = (value) => String(value ?? "").trim();
 function isDeviceCloudDeviceId(id) {
     return DEVICE_ID_RE.test(id);
@@ -116,17 +117,39 @@ class WabaDeviceCloudService {
     }
     async screenshotPng(email, deviceId) {
         this.assertDeviceId(deviceId);
+        const cached = screenshotCache.get(deviceId);
+        if (cached?.png && cached.expMs > Date.now())
+            return cached.png;
+        if (cached?.inflight)
+            return cached.inflight;
         const token = await this.accessToken(email);
-        const res = await this.apiFetch(`/devices/${deviceId}/screenshot`, {
-            method: "GET",
-            headers: { authorization: `Bearer ${token}` },
-            timeoutMs: 20000,
-        });
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (!res.ok) {
-            throw new DeviceCloudHttpError(this.safeMessage(buf.toString("utf8"), "Falha ao capturar a tela."), res.status);
+        const inflight = (async () => {
+            const res = await this.apiFetch(`/devices/${deviceId}/screenshot`, {
+                method: "GET",
+                headers: { authorization: `Bearer ${token}` },
+                timeoutMs: 12000,
+            });
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (!res.ok) {
+                throw new DeviceCloudHttpError(this.safeMessage(buf.toString("utf8"), "Falha ao capturar a tela."), res.status);
+            }
+            screenshotCache.set(deviceId, { png: buf, expMs: Date.now() + 400 });
+            return buf;
+        })();
+        screenshotCache.set(deviceId, { png: cached?.png || Buffer.alloc(0), expMs: cached?.expMs || 0, inflight });
+        try {
+            return await inflight;
         }
-        return buf;
+        catch (err) {
+            screenshotCache.delete(deviceId);
+            throw err;
+        }
+        finally {
+            const cur = screenshotCache.get(deviceId);
+            if (cur?.inflight === inflight) {
+                screenshotCache.set(deviceId, { png: cur.png, expMs: cur.expMs });
+            }
+        }
     }
     async inputTap(email, deviceId, x, y) {
         await this.input(email, deviceId, "tap", { x, y });
@@ -215,12 +238,13 @@ class WabaDeviceCloudService {
                 "content-type": "application/json",
             },
             body: JSON.stringify(body),
-            timeoutMs: 15000,
+            timeoutMs: 8000,
         });
         if (!res.ok) {
             const raw = await res.text().catch(() => "");
             throw new DeviceCloudHttpError(this.safeMessage(raw, "Falha no toque na tela."), res.status);
         }
+        screenshotCache.delete(deviceId);
     }
     async accessToken(email) {
         const normalized = String(email || "").trim().toLowerCase();

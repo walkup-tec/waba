@@ -1,3 +1,9 @@
+## 2026-08-18 10:25 — Device Cloud: cliques lentos + WhatsApp fecha
+- Causa: crash JNI Kaleidoscope (ARM64 no x86) + toque esperava screenshot 1s poll
+- Fix: toque sem esperar tela; fila input; poll 1,6s; launch force-stop+am start
+- Marker `DEPLOY-2026-08-18-device-cloud-input-snappy`
+- LOG: doc/LOG-2026-08-18__102500__device-cloud-lag-wa-crash.md
+
 ## 2026-08-17 19:45 — Device Cloud: upload imagens locais (PC → Download Android)
 - WABA: multer + FormData push-media; skip body parser multipart
 - Device Cloud: endpoint push-file (adb push + media scan) — commit cb12758

@@ -23217,6 +23217,9 @@
             screenUrl: "",
             ptr: null,
             ptrLock: false,
+            screenBusy: false,
+            refreshTimer: 0,
+            inputChain: Promise.resolve(),
             drag: null,
           });
         }
@@ -23300,6 +23303,10 @@
         if (st.pollTimer) {
           clearInterval(st.pollTimer);
           st.pollTimer = 0;
+        }
+        if (st.refreshTimer) {
+          window.clearTimeout(st.refreshTimer);
+          st.refreshTimer = 0;
         }
       }
 
@@ -23419,40 +23426,61 @@
       async function refreshDeviceCloudScreen(id) {
         const deviceId = String(id || "");
         const st = deviceCloudState(deviceId);
-        if (st.ptrLock) return;
+        if (st.ptrLock || st.screenBusy) return;
         const win = getDeviceCloudWin(deviceId);
         if (!win || win.hidden) return;
         const img = win.querySelector(".device-cloud-screen");
         if (!img) return;
-        const res = await fetch(
-          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/screenshot?t=" + Date.now(),
-          { credentials: "same-origin" },
-        );
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(String(data.message || data.error || "Falha ao atualizar a tela."));
+        st.screenBusy = true;
+        try {
+          const res = await fetch(
+            "/device-cloud/device/" + encodeURIComponent(deviceId) + "/screenshot?t=" + Date.now(),
+            { credentials: "same-origin" },
+          );
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(String(data.message || data.error || "Falha ao atualizar a tela."));
+          }
+          const blob = await res.blob();
+          if (st.screenUrl) URL.revokeObjectURL(st.screenUrl);
+          st.screenUrl = URL.createObjectURL(blob);
+          img.src = st.screenUrl;
+        } finally {
+          st.screenBusy = false;
         }
-        const blob = await res.blob();
-        if (st.screenUrl) URL.revokeObjectURL(st.screenUrl);
-        st.screenUrl = URL.createObjectURL(blob);
-        img.src = st.screenUrl;
+      }
+
+      function scheduleDeviceCloudScreenRefresh(id, delayMs) {
+        const st = deviceCloudState(id);
+        if (st.refreshTimer) window.clearTimeout(st.refreshTimer);
+        st.refreshTimer = window.setTimeout(() => {
+          st.refreshTimer = 0;
+          void refreshDeviceCloudScreen(id).catch(() => {});
+        }, Math.max(80, Number(delayMs) || 280));
       }
 
       async function sendDeviceCloudInput(id, path, body, opts) {
         const deviceId = String(id || "");
         if (!deviceId) return;
-        const res = await fetch(
-          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/input/" + path,
-          {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          },
-        );
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(String(data.message || data.error || "Falha no toque."));
-        if (!opts || !opts.skipRefresh) await refreshDeviceCloudScreen(deviceId);
+        const st = deviceCloudState(deviceId);
+        const skipRefresh = Boolean(opts && opts.skipRefresh);
+        const run = async () => {
+          const res = await fetch(
+            "/device-cloud/device/" + encodeURIComponent(deviceId) + "/input/" + path,
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            },
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(String(data.message || data.error || "Falha no toque."));
+          if (!skipRefresh) scheduleDeviceCloudScreenRefresh(deviceId, 220);
+        };
+        const next = st.inputChain.then(run, run);
+        st.inputChain = next.catch(() => {});
+        await next;
       }
 
       function normalizeDeviceCloudPhoneDigits(raw) {
@@ -23481,7 +23509,7 @@
           const pt = DEVICE_CLOUD_DIALPAD_720[ch];
           if (!pt) continue;
           await sendDeviceCloudInput(deviceId, "tap", { x: pt[0], y: pt[1] }, { skipRefresh: true });
-          await new Promise((r) => setTimeout(r, 280));
+          await new Promise((r) => setTimeout(r, 140));
         }
       }
 
@@ -23829,8 +23857,8 @@
         const st = deviceCloudState(deviceId);
         void refreshDeviceCloudScreen(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
         st.pollTimer = setInterval(() => {
-          void refreshDeviceCloudScreen(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
-        }, 1000);
+          void refreshDeviceCloudScreen(deviceId).catch(() => {});
+        }, 1600);
         adaptDeviceCloudStageLayout();
         if (options.launch !== false) void launchDeviceCloudWhatsApp(deviceId);
       }
@@ -23942,27 +23970,18 @@
 
       async function dismissDeviceCloudWhatsAppCrash(deviceId) {
         await sendDeviceCloudInput(deviceId, "tap", { x: 520, y: 640 }, { skipRefresh: true });
-        await sleepDeviceCloud(700);
+        await sleepDeviceCloud(250);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 200, y: 640 }, { skipRefresh: true });
+        await sleepDeviceCloud(200);
+        await sendDeviceCloudInput(deviceId, "key", { key: "home" }, { skipRefresh: true });
       }
 
       /** Launcher → gaveta → ícone WA Business (720×1280). */
       async function openDeviceCloudWhatsAppFromDrawer(deviceId) {
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1250 }, { skipRefresh: true });
-        await sleepDeviceCloud(1000);
-        await sendDeviceCloudInput(
-          deviceId,
-          "swipe",
-          { x1: 360, y1: 1100, x2: 360, y2: 350, durationMs: 450 },
-          { skipRefresh: true },
-        );
-        await sleepDeviceCloud(1200);
+        await sendDeviceCloudInput(deviceId, "key", { key: "home" }, { skipRefresh: true });
+        await sleepDeviceCloud(400);
         await sendDeviceCloudInput(deviceId, "tap", { x: 120, y: 820 }, { skipRefresh: true });
-        await sleepDeviceCloud(2800);
-        await dismissDeviceCloudWhatsAppCrash(deviceId);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 330, y: 765 }, { skipRefresh: true });
-        await sleepDeviceCloud(700);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1125 }, { skipRefresh: true });
-        await sleepDeviceCloud(1200);
+        await sleepDeviceCloud(800);
       }
 
       async function restartDeviceCloudDevice(id) {
@@ -24020,6 +24039,7 @@
         const deviceId = String(id || "");
         if (!deviceId) return;
         setDeviceCloudMsg("Abrindo WhatsApp Business…");
+        await dismissDeviceCloudWhatsAppCrash(deviceId).catch(() => {});
         const res = await fetch(
           "/device-cloud/device/" + encodeURIComponent(deviceId) + "/launch-whatsapp-business",
           {
@@ -24031,20 +24051,16 @@
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setDeviceCloudMsg("API indisponível — abrindo pelo launcher…");
-          await dismissDeviceCloudWhatsAppCrash(deviceId);
           await openDeviceCloudWhatsAppFromDrawer(deviceId);
-          focusDeviceCloudWindow(deviceId);
-          await refreshDeviceCloudScreen(deviceId).catch(() => {});
-          setDeviceCloudMsg(
-            "WhatsApp aberto pelo launcher. Se o app fechar sozinho, use Reiniciar e tente de novo.",
-          );
-          return;
         }
+        await sleepDeviceCloud(700);
+        await dismissDeviceCloudWhatsAppCrash(deviceId).catch(() => {});
         focusDeviceCloudWindow(deviceId);
-        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        scheduleDeviceCloudScreenRefresh(deviceId, 200);
         setDeviceCloudMsg(
-          "WhatsApp na tela de número. Toque o campo na imagem ou use Digitar abaixo.",
+          data && data.recovered === false
+            ? "WhatsApp ainda instável neste Android. Use a tela normalmente; se fechar, toque Abrir WhatsApp de novo."
+            : "WhatsApp aberto. Se a tela de erro aparecer, toque Fechar e depois Abrir WhatsApp.",
         );
       }
 
