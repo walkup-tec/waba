@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-18 13:30 — Device Cloud: capa não aparecia na galeria
+- Nest JSON do Device Cloud era 100 KB; a capa em base64 não chegava no Android
+- Arquivo JPEG com nome .png; WhatsApp galeria lê Pictures, não só Download
+- Marker `DEPLOY-2026-08-18-133000-device-cloud-capa-gallery`
+- LOG: doc/LOG-2026-08-18__133000__device-cloud-capa-gallery.md
+
 ## 2026-08-18 13:12 — Device Cloud: colar Ctrl+V no campo focado
 - Copiar no PC (Ctrl+C) e colar na tela do celular (Ctrl+V)
 - Marker `DEPLOY-2026-08-18-131200-device-cloud-paste` (HTML `deviceCloudLocalClipboard`)

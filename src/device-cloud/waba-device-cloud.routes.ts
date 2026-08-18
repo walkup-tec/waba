@@ -69,6 +69,23 @@ function readCoord(value: unknown, name: string): number {
   return Math.round(n);
 }
 
+function sniffDeviceCloudImageExt(buffer: Buffer, mimetype: string): "png" | "jpg" | "webp" {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpg";
+  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return "png";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.slice(0, 4).toString("ascii") === "RIFF" &&
+    buffer.slice(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "webp";
+  }
+  if (mimetype === "image/png") return "png";
+  if (mimetype === "image/webp") return "webp";
+  return "jpg";
+}
+
 export function registerDeviceCloudRoutes(app: Express): void {
   app.get("/device-cloud/devices", async (req: Request, res: Response) => {
     const user = requireDeviceCloudUser(req, res);
@@ -198,8 +215,7 @@ export function registerDeviceCloudRoutes(app: Express): void {
     }
     const kind = String(req.body?.kind || "profile").trim().toLowerCase();
     const prefix = kind === "cover" ? "waba-capa" : "waba-perfil";
-    const ext =
-      file.mimetype === "image/png" ? "png" : file.mimetype === "image/webp" ? "webp" : "jpg";
+    const ext = sniffDeviceCloudImageExt(file.buffer, String(file.mimetype || ""));
     const filename = `${prefix}-${Date.now()}.${ext}`;
     try {
       const result = await wabaDeviceCloudService.pushDownloadFile(user.email, id, {
