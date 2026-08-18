@@ -6148,12 +6148,6 @@
         height: 38px;
         padding: 0 16px;
         font-size: 13px;
-        font-weight: 700;
-        border-radius: 10px;
-        border: 1px solid rgba(96, 165, 250, 0.45);
-        background: rgba(30, 64, 175, 0.75);
-        color: #fff;
-        cursor: pointer;
       }
 
       .device-cloud-window {
@@ -6202,6 +6196,39 @@
         font-weight: 600;
         color: var(--text, #e2e8f0);
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 160px;
+      }
+
+      .device-cloud-window-identity {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .device-cloud-rename-btn {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .device-cloud-window-title-input {
+        min-width: 0;
+        flex: 1;
+        max-width: 160px;
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(2, 6, 23, 0.9);
+        color: #fff;
+        font-size: 12px;
       }
 
       .device-cloud-window-actions {
@@ -6211,29 +6238,22 @@
       }
 
       #device-cloud-open-wa,
-      .device-cloud-open-wa {
+      .device-cloud-open-wa,
+      #device-cloud-delete-btn,
+      .device-cloud-delete-btn,
+      .device-cloud-restart-btn,
+      #device-cloud-phone-submit,
+      .device-cloud-phone-submit {
         height: 28px;
         padding: 0 10px;
-        font-size: 12px;
-        font-weight: 700;
-        border-radius: 8px;
-        border: 1px solid rgba(52, 211, 153, 0.4);
-        background: rgba(6, 95, 70, 0.78);
-        color: #fff;
-        cursor: pointer;
+        font-size: 11px;
+        white-space: nowrap;
       }
 
-      #device-cloud-delete-btn,
-      .device-cloud-delete-btn {
-        height: 28px;
-        padding: 0 10px;
-        font-size: 12px;
-        font-weight: 700;
-        border-radius: 8px;
-        border: 1px solid rgba(251, 113, 133, 0.45);
-        background: rgba(153, 27, 27, 0.72);
-        color: #fff;
-        cursor: pointer;
+      #device-cloud-phone-submit:disabled,
+      .device-cloud-phone-submit:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
 
       #device-cloud-screen,
@@ -6276,66 +6296,44 @@
         font-size: 13px;
       }
 
-      #device-cloud-phone-submit,
-      .device-cloud-phone-submit {
-        height: 34px;
-        padding: 0 12px;
-        border-radius: 8px;
-        border: 0;
-        background: #16a34a;
-        color: #fff;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-
-      #device-cloud-phone-submit:disabled,
-      .device-cloud-phone-submit:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-      }
-
       .device-cloud-media-bar {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
-        padding: 0 8px 8px;
+        padding: 8px;
         border-top: 1px solid rgba(148, 163, 184, 0.12);
         background: rgba(15, 23, 42, 0.96);
+      }
+
+      .device-cloud-wa-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 2px;
+        color: var(--text, #e2e8f0);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .device-cloud-wa-icon {
+        display: block;
+        flex: 0 0 auto;
       }
 
       .device-cloud-media-bar label {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        height: 30px;
-        padding: 0 8px;
-        border-radius: 8px;
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        background: rgba(2, 6, 23, 0.85);
-        color: var(--text, #e2e8f0);
-        font-size: 11px;
-        font-weight: 600;
+        height: 28px;
+        padding: 0 10px;
+        margin: 0;
         cursor: pointer;
         white-space: nowrap;
       }
 
       .device-cloud-media-bar input[type="file"] {
         display: none;
-      }
-
-      .device-cloud-restart-btn {
-        height: 28px;
-        padding: 0 10px;
-        font-size: 12px;
-        font-weight: 700;
-        border-radius: 8px;
-        border: 1px solid rgba(96, 165, 250, 0.45);
-        background: rgba(30, 64, 175, 0.72);
-        color: #fff;
-        cursor: pointer;
       }
 
       .device-cloud-tap-flash {
@@ -17467,26 +17465,50 @@
             </div>
             <div id="device-cloud-gate-msg" class="aquecedor-hint" style="margin-bottom:12px;"></div>
             <div class="device-cloud-toolbar">
-              <button type="button" id="device-cloud-add-btn">Adicionar dispositivo</button>
+              <button type="button" id="device-cloud-add-btn" class="instance-action-btn btn-qrcode enabled">Adicionar dispositivo</button>
             </div>
             <div id="device-cloud-stage"></div>
             <template id="device-cloud-window-template">
               <div class="device-cloud-window" hidden>
                 <div class="device-cloud-window-bar">
-                  <span class="device-cloud-window-title">Celular</span>
+                  <div class="device-cloud-window-identity">
+                    <span class="device-cloud-window-title">Celular</span>
+                    <input class="device-cloud-window-title-input" type="text" maxlength="40" hidden />
+                    <button type="button" class="device-cloud-rename-btn instance-inline-edit-btn" title="Editar nome" aria-label="Editar nome">
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                   <div class="device-cloud-window-actions">
-                    <button type="button" class="device-cloud-open-wa">Abrir WhatsApp</button>
-                    <button type="button" class="device-cloud-restart-btn">Reiniciar</button>
-                    <button type="button" class="device-cloud-delete-btn">Excluir</button>
+                    <button type="button" class="device-cloud-restart-btn instance-action-btn btn-refresh enabled">Reiniciar</button>
+                    <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
                 </div>
                 <img class="device-cloud-screen" alt="Tela do Android" draggable="false" tabindex="0" />
                 <div class="device-cloud-media-bar">
-                  <label class="device-cloud-profile-upload">
+                  <span class="device-cloud-wa-brand" aria-hidden="true">
+                    <svg class="device-cloud-wa-icon" viewBox="0 0 24 24" width="16" height="16" focusable="false">
+                      <path
+                        fill="#25D366"
+                        d="M12.04 2C6.58 2 2.15 6.43 2.15 11.89c0 1.75.46 3.45 1.32 4.95L2 22l5.3-1.39a9.86 9.86 0 0 0 4.74 1.21h.01c5.46 0 9.89-4.43 9.89-9.89C21.94 6.43 17.5 2 12.04 2z"
+                      />
+                      <path
+                        fill="#fff"
+                        d="M17.1 14.45c-.27-.14-1.62-.8-1.87-.89-.25-.09-.43-.14-.62.14-.18.27-.71.89-.87 1.07-.16.18-.32.2-.59.07-.27-.14-1.13-.42-2.16-1.33-.8-.71-1.34-1.59-1.5-1.86-.16-.27-.02-.41.12-.55.12-.12.27-.32.41-.48.14-.16.18-.27.27-.45.09-.18.05-.34-.02-.48-.07-.14-.62-1.49-.85-2.04-.22-.53-.45-.46-.62-.47h-.53c-.18 0-.48.07-.73.34-.25.27-.96.94-.96 2.29s.98 2.66 1.12 2.84c.14.18 1.93 2.95 4.67 4.14.65.28 1.16.45 1.56.58.66.21 1.25.18 1.72.11.53-.08 1.62-.66 1.85-1.3.23-.64.23-1.18.16-1.3-.07-.11-.25-.18-.52-.32z"
+                      />
+                    </svg>
+                    WhatsApp:
+                  </span>
+                  <button type="button" class="device-cloud-open-wa instance-action-btn btn-qrcode enabled">Abrir</button>
+                  <label class="device-cloud-profile-upload instance-action-btn enabled">
                     Foto perfil
                     <input type="file" class="device-cloud-profile-file" accept="image/jpeg,image/png,image/webp" />
                   </label>
-                  <label class="device-cloud-cover-upload">
+                  <label class="device-cloud-cover-upload instance-action-btn enabled">
                     Capa
                     <input type="file" class="device-cloud-cover-file" accept="image/jpeg,image/png,image/webp" />
                   </label>
@@ -17499,7 +17521,7 @@
                     autocomplete="tel"
                     placeholder="DDD + número (ex: 11981077770)"
                   />
-                  <button type="button" class="device-cloud-phone-submit">Digitar</button>
+                  <button type="button" class="device-cloud-phone-submit instance-action-btn btn-qrcode enabled">Digitar</button>
                 </div>
               </div>
             </template>
@@ -23264,9 +23286,10 @@
         const stageW = stage.clientWidth || 960;
         const cols = Math.max(1, Math.floor((stageW + gap) / (screenW + gap + 8)));
         const barH = 42;
+        const mediaBarH = 46;
         const phoneBarH = 52;
         const screenMaxH = Math.round(screenW * (598 / 329));
-        const winH = barH + screenMaxH + phoneBarH;
+        const winH = barH + screenMaxH + mediaBarH + phoneBarH;
         const layout = loadDeviceCloudLayout();
         layout.windows = layout.windows && typeof layout.windows === "object" ? layout.windows : {};
         windows.forEach((win, index) => {
@@ -23680,6 +23703,25 @@
           e.stopPropagation();
           void restartDeviceCloudDevice(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
         });
+        win.querySelector(".device-cloud-rename-btn")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          beginDeviceCloudRename(deviceId);
+        });
+        const titleInput = win.querySelector(".device-cloud-window-title-input");
+        titleInput?.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void commitDeviceCloudRename(deviceId);
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            cancelDeviceCloudRename(deviceId);
+          }
+        });
+        titleInput?.addEventListener("blur", () => {
+          void commitDeviceCloudRename(deviceId);
+        });
         win.querySelector(".device-cloud-profile-file")?.addEventListener("change", (e) => {
           const file = e.target && e.target.files && e.target.files[0];
           if (!file) return;
@@ -23716,7 +23758,7 @@
 
         if (bar && stage) {
           bar.addEventListener("pointerdown", (e) => {
-            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-open-wa, .device-cloud-restart-btn")) return;
+            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-restart-btn, .device-cloud-rename-btn, .device-cloud-window-title-input")) return;
             e.preventDefault();
             focusDeviceCloudWindow(deviceId);
             try {
@@ -23829,6 +23871,68 @@
         }
       }
 
+      function displayDeviceCloudName(name) {
+        const raw = String(name || "").trim() || "Celular";
+        return raw.replace(/^WABA\s*·\s*/i, "").trim() || "Celular";
+      }
+
+      function beginDeviceCloudRename(id) {
+        const win = getDeviceCloudWin(id);
+        if (!win) return;
+        const title = win.querySelector(".device-cloud-window-title");
+        const input = win.querySelector(".device-cloud-window-title-input");
+        const btn = win.querySelector(".device-cloud-rename-btn");
+        if (!title || !input) return;
+        input.value = displayDeviceCloudName(title.textContent);
+        title.hidden = true;
+        btn.hidden = true;
+        input.hidden = false;
+        input.focus();
+        input.select();
+      }
+
+      function cancelDeviceCloudRename(id) {
+        const win = getDeviceCloudWin(id);
+        if (!win) return;
+        const title = win.querySelector(".device-cloud-window-title");
+        const input = win.querySelector(".device-cloud-window-title-input");
+        const btn = win.querySelector(".device-cloud-rename-btn");
+        if (input) input.hidden = true;
+        if (title) title.hidden = false;
+        if (btn) btn.hidden = false;
+      }
+
+      async function commitDeviceCloudRename(id) {
+        const deviceId = String(id || "");
+        const win = getDeviceCloudWin(deviceId);
+        if (!win) return;
+        const title = win.querySelector(".device-cloud-window-title");
+        const input = win.querySelector(".device-cloud-window-title-input");
+        if (!input || input.hidden) return;
+        const next = String(input.value || "").trim();
+        const current = displayDeviceCloudName(title && title.textContent);
+        if (!next || next === current) {
+          cancelDeviceCloudRename(deviceId);
+          return;
+        }
+        try {
+          const res = await fetch("/device-cloud/device/" + encodeURIComponent(deviceId), {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: next }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(String(data.error || data.message || "Falha ao renomear."));
+          if (title) title.textContent = displayDeviceCloudName(data.name || next);
+          setDeviceCloudMsg("Nome atualizado.");
+        } catch (err) {
+          setDeviceCloudMsg(err.message || String(err));
+        } finally {
+          cancelDeviceCloudRename(deviceId);
+        }
+      }
+
       function ensureDeviceCloudWindowElement(id, name) {
         let win = getDeviceCloudWin(id);
         if (win) return win;
@@ -23838,7 +23942,7 @@
         const node = tpl.content.firstElementChild.cloneNode(true);
         node.dataset.deviceId = String(id);
         const title = node.querySelector(".device-cloud-window-title");
-        if (title) title.textContent = String(name || "Celular");
+        if (title) title.textContent = displayDeviceCloudName(name);
         stage.appendChild(node);
         bindDeviceCloudWindowEvents(node);
         return node;

@@ -158,6 +158,26 @@ function registerDeviceCloudRoutes(app) {
             return sendDeviceCloudError(res, err);
         }
     });
+    app.patch("/device-cloud/device/:id", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        const name = String(req.body?.name || "").trim();
+        if (!name || name.length > 40) {
+            return res.status(400).json({ error: "Informe um nome de até 40 caracteres." });
+        }
+        try {
+            const device = await waba_device_cloud_service_1.wabaDeviceCloudService.renameDevice(user.email, id, name);
+            return res.json({ ok: true, name: device.name, device });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
     app.post("/device-cloud/device/:id/push-media", (req, res, next) => {
         uploadDeviceCloudMedia.single("file")(req, res, (err) => {
             if (err) {

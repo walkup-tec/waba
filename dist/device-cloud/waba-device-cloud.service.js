@@ -115,6 +115,25 @@ class WabaDeviceCloudService {
             return retryOnline;
         throw new DeviceCloudHttpError("Não foi possível criar o dispositivo.", 502);
     }
+    async renameDevice(email, deviceId, name) {
+        this.assertDeviceId(deviceId);
+        const label = withWabaDeviceCloudName(name);
+        const token = await this.accessToken(email);
+        const res = await this.apiFetch(`/devices/${deviceId}`, {
+            method: "PATCH",
+            headers: {
+                authorization: `Bearer ${token}`,
+                "content-type": "application/json",
+            },
+            body: JSON.stringify({ name: label }),
+            timeoutMs: 15000,
+        });
+        const payload = (await res.json().catch(() => null));
+        if (!res.ok || !payload || !("id" in payload) || !payload.id) {
+            throw new DeviceCloudHttpError("Não foi possível renomear o dispositivo.", res.status >= 400 ? res.status : 502);
+        }
+        return payload;
+    }
     async screenshotPng(email, deviceId) {
         this.assertDeviceId(deviceId);
         const cached = screenshotCache.get(deviceId);
