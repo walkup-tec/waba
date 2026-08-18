@@ -11,7 +11,8 @@ Removido o botão, o CSS `.device-cloud-key-back` e o handler `key: back`. Manti
 ## Arquivos
 
 - `index.html`, `dist/index.html`
-- `src/deploy-marker.ts`, `dist/deploy-marker.js` — `DEPLOY-2026-08-18-device-cloud-remove-voltar`
+- `src/deploy-marker.ts`, `dist/deploy-marker.js` — `DEPLOY-2026-08-18-124100-device-cloud-no-voltar`
+- HTML: comentário `deviceCloudNoChromeVoltar`
 
 ## Validação
 

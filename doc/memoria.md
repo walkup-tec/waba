@@ -1,9 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
-## 2026-08-18 12:35 — Device Cloud: sem botão Voltar na barra
+## 2026-08-18 12:41 — Device Cloud: sem botão Voltar na barra
 - Toque na tela já volta no WhatsApp; o chrome Voltar apertava o layout
 - Removidos botão, CSS `.device-cloud-key-back` e handler `key: back`
-- Marker `DEPLOY-2026-08-18-device-cloud-remove-voltar`
+- Marker `DEPLOY-2026-08-18-124100-device-cloud-no-voltar` (HTML `deviceCloudNoChromeVoltar`)
 - LOG: doc/LOG-2026-08-18__123500__device-cloud-remove-voltar-btn.md
 
 ## 2026-08-18 12:21 — Aquecedor: pool com connectionState vazio + chip duplicado
