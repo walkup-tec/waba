@@ -6239,7 +6239,6 @@
 
       #device-cloud-open-wa,
       .device-cloud-open-wa,
-      .device-cloud-key-back,
       .device-cloud-key-home,
       #device-cloud-delete-btn,
       .device-cloud-delete-btn,
@@ -17507,7 +17506,6 @@
                     WhatsApp:
                   </span>
                   <button type="button" class="device-cloud-open-wa instance-action-btn btn-qrcode enabled">Abrir</button>
-                  <button type="button" class="device-cloud-key-back instance-action-btn enabled">Voltar</button>
                   <button type="button" class="device-cloud-key-home instance-action-btn enabled">Início</button>
                   <label class="device-cloud-profile-upload instance-action-btn enabled">
                     Foto perfil
@@ -23447,6 +23445,7 @@
       }
 
       function queueDeviceCloudWheel(deviceId, img, clientX, clientY, deltaX, deltaY, deltaMode) {
+        /* deviceCloudWheelListSwipe */
         const st = deviceCloudState(deviceId);
         const nw = img.naturalWidth || 720;
         const nh = img.naturalHeight || 1280;
@@ -23750,13 +23749,6 @@
           e.preventDefault();
           e.stopPropagation();
           void launchDeviceCloudWhatsApp(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
-        });
-        win.querySelector(".device-cloud-key-back")?.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          void sendDeviceCloudInput(deviceId, "key", { key: "back" }).catch((err) =>
-            setDeviceCloudMsg(err.message || String(err)),
-          );
         });
         win.querySelector(".device-cloud-key-home")?.addEventListener("click", (e) => {
           e.preventDefault();
