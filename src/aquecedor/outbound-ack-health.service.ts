@@ -1,6 +1,7 @@
 /**
  * Saúde de outbound EVO (MessageUpdate / findStatusMessage).
- * Instâncias "open" com 100% ERROR no fromMe não aquecem ninguém.
+ * Instâncias "open" com ERROR recente no fromMe não aquecem ninguém.
+ * Amostras velhas não expulsam: senão um QR reconectado fica fora para sempre.
  */
 import {
   classifyEvoOutboundSample,
@@ -11,6 +12,13 @@ import {
   type EvoOutboundHealthClass,
   normalizeEvoMessageAckStatus,
 } from "./delivery-verify.helpers";
+
+/** Só conta fromMe nesta janela. Padrão 12h. */
+export const AQUECEDOR_OUTBOUND_SAMPLE_MAX_AGE_MS = Math.max(
+  10 * 60 * 1000,
+  Number(process.env.AQUECEDOR_OUTBOUND_SAMPLE_MAX_AGE_MS ?? 12 * 60 * 60 * 1000) ||
+    12 * 60 * 60 * 1000,
+);
 
 type CacheEntry = {
   class: EvoOutboundHealthClass;
@@ -26,6 +34,19 @@ function cacheKey(name: string): string {
   return String(name || "")
     .trim()
     .toLowerCase();
+}
+
+export function evoRecordTimestampMs(rec: unknown): number | null {
+  if (!rec || typeof rec !== "object") return null;
+  const obj = rec as Record<string, unknown>;
+  const nested =
+    obj.message && typeof obj.message === "object"
+      ? (obj.message as Record<string, unknown>)
+      : null;
+  const raw = obj.messageTimestamp ?? nested?.messageTimestamp ?? obj.timestamp;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n > 1e12 ? n : n * 1000;
 }
 
 export function clearAquecedorOutboundHealthCache(): void {
@@ -60,22 +81,36 @@ export function rememberAquecedorOutboundHealth(
   });
 }
 
-export function collectFromMeAckStatusesFromPayload(json: unknown): EvoMessageAckStatus[] {
+export function collectFromMeAckStatusesFromPayload(
+  json: unknown,
+  options?: { nowMs?: number; maxAgeMs?: number },
+): EvoMessageAckStatus[] {
   const records =
     (json as { messages?: { records?: unknown[] } })?.messages?.records ||
     (json as { records?: unknown[] })?.records ||
     [];
   if (!Array.isArray(records)) return [];
-  return records.map((rec) => extractEvoMessageAckStatus(rec));
+  const nowMs = options?.nowMs ?? Date.now();
+  const maxAgeMs = options?.maxAgeMs ?? AQUECEDOR_OUTBOUND_SAMPLE_MAX_AGE_MS;
+  const out: EvoMessageAckStatus[] = [];
+  for (const rec of records) {
+    const ts = evoRecordTimestampMs(rec);
+    if (ts != null && nowMs - ts > maxAgeMs) continue;
+    out.push(extractEvoMessageAckStatus(rec));
+  }
+  return out;
 }
 
-export function evaluateOutboundSamplePayload(json: unknown): {
+export function evaluateOutboundSamplePayload(
+  json: unknown,
+  options?: { nowMs?: number; maxAgeMs?: number },
+): {
   class: EvoOutboundHealthClass;
   sampleSize: number;
   errorCount: number;
   statuses: EvoMessageAckStatus[];
 } {
-  const statuses = collectFromMeAckStatusesFromPayload(json);
+  const statuses = collectFromMeAckStatusesFromPayload(json, options);
   const errorCount = statuses.filter((s) => isEvoAckFailure(s)).length;
   return {
     class: classifyEvoOutboundSample(statuses, { minSamples: 3 }),

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-18 14:15 — Aquecedor: ERROR outbound antigo não expulsa + purge 6635
+- Classificador passou a ignorar `fromMe` com mais de 12h; ERROR recente continua `broken`
+- Produção: instância EVO `6635` e cadastro do chip 5181076635 removidos; `walkup`/`1261`/`9224` intactos
+- Marker `DEPLOY-2026-08-18-141500-aquecedor-outbound-recency`
+- LOG: doc/LOG-2026-08-18__141500__aquecedor-outbound-recency-purge-6635.md
+
 ## 2026-08-18 13:30 — Device Cloud: capa não aparecia na galeria
 - Nest JSON do Device Cloud era 100 KB; a capa em base64 não chegava no Android
 - Arquivo JPEG com nome .png; WhatsApp galeria lê Pictures, não só Download
