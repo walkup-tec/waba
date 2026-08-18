@@ -6239,6 +6239,8 @@
 
       #device-cloud-open-wa,
       .device-cloud-open-wa,
+      .device-cloud-key-back,
+      .device-cloud-key-home,
       #device-cloud-delete-btn,
       .device-cloud-delete-btn,
       .device-cloud-restart-btn,
@@ -6271,6 +6273,7 @@
         user-select: none;
         cursor: pointer;
         outline: none;
+        overscroll-behavior: contain;
       }
 
       .device-cloud-phone-bar {
@@ -17504,6 +17507,8 @@
                     WhatsApp:
                   </span>
                   <button type="button" class="device-cloud-open-wa instance-action-btn btn-qrcode enabled">Abrir</button>
+                  <button type="button" class="device-cloud-key-back instance-action-btn enabled">Voltar</button>
+                  <button type="button" class="device-cloud-key-home instance-action-btn enabled">Início</button>
                   <label class="device-cloud-profile-upload instance-action-btn enabled">
                     Foto perfil
                     <input type="file" class="device-cloud-profile-file" accept="image/jpeg,image/png,image/webp" />
@@ -23228,7 +23233,6 @@
       let deviceCloudApiUrl = "";
       let deviceCloudAccessToken = "";
       const deviceCloudWindowState = new Map();
-      const DEVICE_CLOUD_SWIPE_PX = 24;
       const DEVICE_CLOUD_LAYOUT_KEY = "waba-device-cloud-layout-v2";
 
       function deviceCloudState(id) {
@@ -23243,6 +23247,11 @@
             refreshTimer: 0,
             inputChain: Promise.resolve(),
             drag: null,
+            wheelTimer: 0,
+            wheelDx: 0,
+            wheelDy: 0,
+            wheelX: 0,
+            wheelY: 0,
           });
         }
         return deviceCloudWindowState.get(key);
@@ -23435,6 +23444,54 @@
         const headers = { Authorization: "Bearer " + deviceCloudAccessToken };
         if (json) headers["Content-Type"] = "application/json";
         return headers;
+      }
+
+      function queueDeviceCloudWheel(deviceId, img, clientX, clientY, deltaX, deltaY, deltaMode) {
+        const st = deviceCloudState(deviceId);
+        const nw = img.naturalWidth || 720;
+        const nh = img.naturalHeight || 1280;
+        const mapped = mapDeviceCloudPoint(img, clientX, clientY);
+        let dx = Number(deltaX) || 0;
+        let dy = Number(deltaY) || 0;
+        if (deltaMode === 1) {
+          dx *= 16;
+          dy *= 16;
+        } else if (deltaMode === 2) {
+          dx *= Math.max(1, img.clientWidth);
+          dy *= Math.max(1, img.clientHeight);
+        }
+        const sx = nw / Math.max(1, img.clientWidth);
+        const sy = nh / Math.max(1, img.clientHeight);
+        st.wheelX = mapped ? mapped.x : Math.round(nw / 2);
+        st.wheelY = mapped ? mapped.y : Math.round(nh * 0.52);
+        st.wheelDx = (st.wheelDx || 0) + dx * sx;
+        st.wheelDy = (st.wheelDy || 0) + dy * sy;
+        if (st.wheelTimer) return;
+        st.wheelTimer = window.setTimeout(() => {
+          st.wheelTimer = 0;
+          const mx = st.wheelDx || 0;
+          const my = st.wheelDy || 0;
+          st.wheelDx = 0;
+          st.wheelDy = 0;
+          if (Math.abs(mx) < 14 && Math.abs(my) < 14) return;
+          const x1 = Math.max(20, Math.min(nw - 20, st.wheelX || nw / 2));
+          const y1 = Math.max(90, Math.min(nh - 110, st.wheelY || nh * 0.52));
+          const x2 = Math.max(20, Math.min(nw - 20, x1 - mx));
+          const y2 = Math.max(90, Math.min(nh - 110, y1 - my));
+          if (Math.hypot(x2 - x1, y2 - y1) < 18) return;
+          void sendDeviceCloudInput(
+            deviceId,
+            "swipe",
+            {
+              x1: Math.round(x1),
+              y1: Math.round(y1),
+              x2: Math.round(x2),
+              y2: Math.round(y2),
+              durationMs: 160,
+            },
+            { skipRefresh: false },
+          ).catch(() => {});
+        }, 40);
       }
 
       function showDeviceCloudTapFlash(clientX, clientY) {
@@ -23698,6 +23755,20 @@
           e.stopPropagation();
           void launchDeviceCloudWhatsApp(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
         });
+        win.querySelector(".device-cloud-key-back")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void sendDeviceCloudInput(deviceId, "key", { key: "back" }).catch((err) =>
+            setDeviceCloudMsg(err.message || String(err)),
+          );
+        });
+        win.querySelector(".device-cloud-key-home")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void sendDeviceCloudInput(deviceId, "key", { key: "home" }).catch((err) =>
+            setDeviceCloudMsg(err.message || String(err)),
+          );
+        });
         win.querySelector(".device-cloud-restart-btn")?.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -23813,7 +23884,14 @@
             } catch {
               /* ignore */
             }
-            st.ptr = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, x: mapped.x, y: mapped.y };
+            st.ptr = {
+              pointerId: e.pointerId,
+              clientX: e.clientX,
+              clientY: e.clientY,
+              x: mapped.x,
+              y: mapped.y,
+              at: Date.now(),
+            };
             showDeviceCloudTapFlash(e.clientX, e.clientY);
           });
           img.addEventListener("keydown", (e) => {
@@ -23845,9 +23923,12 @@
             const mapped = mapDeviceCloudPoint(img, e.clientX, e.clientY) || { x: start.x, y: start.y };
             const dx = e.clientX - start.clientX;
             const dy = e.clientY - start.clientY;
+            const dist = Math.hypot(dx, dy);
+            const dt = Date.now() - (start.at || Date.now());
+            const slop = Math.max(64, (img.clientWidth || 320) * 0.2);
             const action = () => {
               st.ptrLock = false;
-              if (Math.hypot(dx, dy) >= DEVICE_CLOUD_SWIPE_PX) {
+              if (dt >= 280 && dist >= slop) {
                 return sendDeviceCloudInput(deviceId, "swipe", {
                   x1: start.x,
                   y1: start.y,
@@ -23868,6 +23949,16 @@
             if (st.ptr) return;
             st.ptrLock = false;
           });
+          img.addEventListener(
+            "wheel",
+            (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              focusDeviceCloudWindow(deviceId);
+              queueDeviceCloudWheel(deviceId, img, e.clientX, e.clientY, e.deltaX, e.deltaY, e.deltaMode);
+            },
+            { passive: false },
+          );
         }
       }
 
@@ -24076,8 +24167,6 @@
         await sendDeviceCloudInput(deviceId, "tap", { x: 520, y: 640 }, { skipRefresh: true });
         await sleepDeviceCloud(250);
         await sendDeviceCloudInput(deviceId, "tap", { x: 200, y: 640 }, { skipRefresh: true });
-        await sleepDeviceCloud(200);
-        await sendDeviceCloudInput(deviceId, "key", { key: "home" }, { skipRefresh: true });
       }
 
       /** Launcher → gaveta → ícone WA Business (720×1280). */
@@ -24143,7 +24232,6 @@
         const deviceId = String(id || "");
         if (!deviceId) return;
         setDeviceCloudMsg("Abrindo WhatsApp Business…");
-        await dismissDeviceCloudWhatsAppCrash(deviceId).catch(() => {});
         const res = await fetch(
           "/device-cloud/device/" + encodeURIComponent(deviceId) + "/launch-whatsapp-business",
           {
@@ -24158,14 +24246,9 @@
           await openDeviceCloudWhatsAppFromDrawer(deviceId);
         }
         await sleepDeviceCloud(700);
-        await dismissDeviceCloudWhatsAppCrash(deviceId).catch(() => {});
         focusDeviceCloudWindow(deviceId);
         scheduleDeviceCloudScreenRefresh(deviceId, 200);
-        setDeviceCloudMsg(
-          data && data.recovered === false
-            ? "WhatsApp ainda instável neste Android. Use a tela normalmente; se fechar, toque Abrir WhatsApp de novo."
-            : "WhatsApp aberto. Se a tela de erro aparecer, toque Fechar e depois Abrir WhatsApp.",
-        );
+        setDeviceCloudMsg("WhatsApp aberto. Toque o campo na imagem ou use Digitar abaixo.");
       }
 
       async function addDeviceCloudDevice(forceCreate) {

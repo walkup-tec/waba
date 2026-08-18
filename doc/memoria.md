@@ -1,3 +1,20 @@
+## 2026-08-18 10:52 — Device Cloud: scroll do mouse na tela
+- Roda do mouse vira swipe no Android; a página WABA não rola
+- Marker `DEPLOY-2026-08-18-device-cloud-wheel-scroll`
+- LOG: doc/LOG-2026-08-18__105200__device-cloud-wheel-scroll.md
+
+## 2026-08-18 10:48 — Device Cloud: clique na tela virava swipe
+- Causa: slop de 24px na imagem ~329px; Compose rolava em vez de clicar
+- Fix: tap vs swipe por duração/distância; botões Voltar/Início na barra
+- Marker `DEPLOY-2026-08-18-device-cloud-tap-not-swipe`
+- LOG: doc/LOG-2026-08-18__104800__device-cloud-tap-not-swipe.md
+
+## 2026-08-18 10:12 — Device Cloud: Abrir enviava HOME e fechava o WA
+- Causa: `dismissDeviceCloudWhatsAppCrash` com `key: home` 700ms após launch
+- Git/produção já estavam alinhados (rename-pencil); não havia deploy pendente
+- Marker `DEPLOY-2026-08-18-device-cloud-no-home-after-launch`
+- LOG: doc/LOG-2026-08-18__101200__device-cloud-home-fecha-wa.md
+
 ## 2026-08-18 10:25 — Device Cloud: cliques lentos + WhatsApp fecha
 - Causa: crash JNI Kaleidoscope (ARM64 no x86) + toque esperava screenshot 1s poll
 - Fix: toque sem esperar tela; fila input; poll 1,6s; launch force-stop+am start
