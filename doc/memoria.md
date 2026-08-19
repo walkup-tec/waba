@@ -3235,3 +3235,10 @@ Palavras-chave para buscar:
 - Fix: override CSS em `#device-cloud-warm-btn` reduz gap do ícone e aplica `#fb923c` no texto.
 - Marker `DEPLOY-2026-08-19-device-cloud-warm-btn-icon-orange`
 - LOG: doc/LOG-2026-08-19__112149__device-cloud-warm-btn-icon-orange-fix.md
+
+## 2026-08-19 11:45 — Device Cloud: Aquecer integra EVO sem CONFIRMAR
+- Fluxo enxuto: `registrar-qrcode` + pairing code + poll `status-conexao`; pula `validacao-inbound`.
+- Alias do device + `uso-config` aquecedor; refresh Instâncias.
+- Marker `DEPLOY-2026-08-19-device-cloud-aquecer-integracao-enxuta`
+- LOG: doc/LOG-2026-08-19__114500__device-cloud-aquecer-integracao-enxuta.md
+- Keywords: device-cloud aquecer, pairing-code, sem-confirmar, integracao-enxuta
