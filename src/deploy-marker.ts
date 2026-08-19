@@ -1,3 +1,3 @@
 ﻿/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 
-export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-19-125000-welcome-cover-sendmedia";
+export const WABA_DEPLOY_MARKER = "DEPLOY-2026-08-19-device-cloud-lingueta-tab";

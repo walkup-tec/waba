@@ -6388,7 +6388,6 @@
 
       #device-cloud-open-wa,
       .device-cloud-open-wa,
-      .device-cloud-key-home,
       #device-cloud-delete-btn,
       .device-cloud-delete-btn,
       .device-cloud-restart-btn,
@@ -17661,7 +17660,6 @@
                   </span>
                   <!-- deviceCloudNoChromeVoltar -->
                   <button type="button" class="device-cloud-open-wa instance-action-btn btn-qrcode enabled">Abrir</button>
-                  <button type="button" class="device-cloud-key-home instance-action-btn enabled">Início</button>
                   <label class="device-cloud-profile-upload instance-action-btn enabled">
                     Foto perfil
                     <input type="file" class="device-cloud-profile-file" accept="image/jpeg,image/png,image/webp" />
@@ -24188,6 +24186,15 @@
         }
       }
 
+      function ensureDeviceCloudWarmTabVisible(deviceId) {
+        const warmSt = getDeviceCloudWarmState(deviceId);
+        if (warmSt.tabPhase === "done") return;
+        setDeviceCloudWarmTab(deviceId, {
+          visible: true,
+          phase: warmSt.tabPhase === "busy" ? "busy" : "idle",
+        });
+      }
+
       function pulseInstanciasMenuForNewIntegration() {
         document
           .querySelectorAll('#tab-btn-instancias, .tab-button[data-menu-key="instancias"]')
@@ -24541,13 +24548,6 @@
           e.stopPropagation();
           void launchDeviceCloudWhatsApp(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
         });
-        win.querySelector(".device-cloud-key-home")?.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          void sendDeviceCloudInput(deviceId, "key", { key: "home" }).catch((err) =>
-            setDeviceCloudMsg(err.message || String(err)),
-          );
-        });
         win.querySelector(".device-cloud-restart-btn")?.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -24734,6 +24734,7 @@
             { passive: false, capture: true },
           );
         }
+        ensureDeviceCloudWarmTabVisible(deviceId);
       }
 
       function displayDeviceCloudName(name) {
@@ -24829,6 +24830,7 @@
           void refreshDeviceCloudScreen(deviceId).catch(() => {});
         }, 1600);
         adaptDeviceCloudStageLayout();
+        ensureDeviceCloudWarmTabVisible(deviceId);
         if (options.launch !== false) void launchDeviceCloudWhatsApp(deviceId);
       }
 

@@ -3268,3 +3268,8 @@ Palavras-chave para buscar:
 - UI Dispositivos: remove Evolution/EVO dos textos; device → dispositivo; Device Cloud → Dispositivos nas mensagens.
 - LOG: doc/LOG-2026-08-19__134300__device-cloud-copy-sem-evo-dispositivo.md
 - Keywords: device-cloud copy, dispositivo, sem-evo
+
+## 2026-08-19 13:52 — Device Cloud: lingueta visível + sem Início
+- Lingueta aparece ao abrir device; remove botão Início; marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab`.
+- LOG: doc/LOG-2026-08-19__135200__device-cloud-lingueta-visible-sem-inicio.md
+- Keywords: lingueta visivel, sem-inicio, deploy-marker
