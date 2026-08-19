@@ -23600,12 +23600,53 @@
         }
       }
 
+      async function fetchDeviceCloudRegisteredPhoneFromServer(deviceId, instanceName, deviceLabel) {
+        const id = String(deviceId || "").trim();
+        if (!id) return "";
+        try {
+          const qs = new URLSearchParams();
+          if (deviceLabel) qs.set("label", deviceLabel);
+          if (instanceName) qs.set("instanceName", instanceName);
+          const response = await fetchWithTimeout(
+            `/device-cloud/device/${encodeURIComponent(id)}/registered-phone?${qs.toString()}`,
+            { credentials: "same-origin" },
+            12000,
+          );
+          if (!response.ok) return "";
+          const payload = await response.json().catch(() => ({}));
+          return normalizeDeviceCloudPhoneDigits(payload?.phone || "");
+        } catch {
+          return "";
+        }
+      }
+
+      async function persistDeviceCloudPhoneToServer(deviceId, instanceName, deviceLabel, rawDigits) {
+        const id = String(deviceId || "").trim();
+        const digits = normalizeDeviceCloudPhoneDigits(rawDigits);
+        if (!id || !digits) return;
+        try {
+          await fetch(`/device-cloud/device/${encodeURIComponent(id)}/registered-phone`, {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              phone: digits,
+              label: String(deviceLabel || "").trim(),
+              instanceName: String(instanceName || "").trim(),
+            }),
+          });
+        } catch {
+          /* best-effort */
+        }
+      }
+
       async function resolveDeviceCloudWarmPhone(deviceId, instanceName, deviceLabel, phoneInput) {
         const persist = (digits) => {
           const normalized = normalizeDeviceCloudPhoneDigits(digits);
           if (!normalized) return "";
           setDeviceCloudRegisteredPhone(deviceId, normalized);
           setDeviceCloudPhoneByInstanceName(instanceName, normalized);
+          void persistDeviceCloudPhoneToServer(deviceId, instanceName, deviceLabel, normalized);
           return normalized;
         };
 
@@ -23619,6 +23660,9 @@
         if (digits) return persist(digits);
 
         digits = lookupDeviceCloudInstancePhone(instanceName, deviceLabel);
+        if (digits) return persist(digits);
+
+        digits = await fetchDeviceCloudRegisteredPhoneFromServer(deviceId, instanceName, deviceLabel);
         if (digits) return persist(digits);
 
         if (!instancesData?.items?.length) {
@@ -23667,8 +23711,15 @@
           getDeviceCloudRegisteredPhone(deviceId) ||
           getDeviceCloudPhoneByInstanceName(instanceName) ||
           lookupDeviceCloudInstancePhone(instanceName, deviceLabel);
-        if (!digits) return;
-        setDeviceCloudRegisteredPhone(deviceId, digits);
+        if (digits) {
+          setDeviceCloudRegisteredPhone(deviceId, digits);
+          void persistDeviceCloudPhoneToServer(deviceId, instanceName, deviceLabel, digits);
+          return;
+        }
+        void fetchDeviceCloudRegisteredPhoneFromServer(deviceId, instanceName, deviceLabel).then((remote) => {
+          if (!remote) return;
+          setDeviceCloudRegisteredPhone(deviceId, remote);
+        });
       }
 
       function deviceCloudState(id) {
@@ -24167,6 +24218,7 @@
             normalizeInstanceRegisterName(deviceLabel) ||
             normalizeInstanceRegisterName(`device-${deviceId.slice(0, 8)}`);
           setDeviceCloudPhoneByInstanceName(instanceName, digits);
+          void persistDeviceCloudPhoneToServer(deviceId, instanceName, deviceLabel, digits);
           setDeviceCloudWarmTab(deviceId, { visible: true, phase: "idle" });
           setDeviceCloudMsg("Número cadastrado. Clique em «Adicionar ao Aquecedor» para integrar.");
         } catch (err) {

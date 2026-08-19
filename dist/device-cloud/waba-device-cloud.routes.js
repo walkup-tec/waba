@@ -8,6 +8,7 @@ exports.registerDeviceCloudRoutes = registerDeviceCloudRoutes;
 const multer_1 = __importDefault(require("multer"));
 const waba_request_auth_1 = require("../auth/waba-request-auth");
 const waba_device_cloud_service_1 = require("./waba-device-cloud.service");
+const waba_device_cloud_phone_service_1 = require("./waba-device-cloud-phone.service");
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 const DEVICE_CLOUD_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 const DEVICE_CLOUD_MEDIA_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -190,6 +191,55 @@ function registerDeviceCloudRoutes(app) {
         try {
             const device = await waba_device_cloud_service_1.wabaDeviceCloudService.renameDevice(user.email, id, name);
             return res.json({ ok: true, name: device.name, device });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.get("/device-cloud/device/:id/registered-phone", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        try {
+            const result = await (0, waba_device_cloud_phone_service_1.resolveDeviceCloudRegisteredPhone)({
+                deviceId: id,
+                label: String(req.query.label || "").trim(),
+                instanceName: String(req.query.instanceName || "").trim(),
+            });
+            return res.json({
+                ok: true,
+                phone: result.phone || null,
+                source: result.source || null,
+            });
+        }
+        catch (err) {
+            return sendDeviceCloudError(res, err);
+        }
+    });
+    app.put("/device-cloud/device/:id/registered-phone", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        const phone = String(req.body?.phone || req.body?.phoneDigits || "").trim();
+        if (!phone) {
+            return res.status(400).json({ error: "Informe o número do WhatsApp." });
+        }
+        try {
+            const saved = await (0, waba_device_cloud_phone_service_1.saveDeviceCloudRegisteredPhone)({
+                deviceId: id,
+                phone,
+                label: String(req.body?.label || "").trim(),
+                instanceName: String(req.body?.instanceName || "").trim(),
+            });
+            return res.json({ ok: true, phone: saved || null });
         }
         catch (err) {
             return sendDeviceCloudError(res, err);
