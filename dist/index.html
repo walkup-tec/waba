@@ -6125,7 +6125,7 @@
       }
 
       #tab-dispositivos {
-        overflow: hidden;
+        overflow: visible;
       }
 
       #device-cloud-stage {
@@ -6133,7 +6133,7 @@
         min-height: 420px;
         margin-top: 16px;
         overflow: auto;
-        padding: 8px 2px 16px;
+        padding: 12px 2px 16px;
       }
 
       .device-cloud-toolbar {
@@ -6214,13 +6214,11 @@
       }
 
       .device-cloud-tab-slot {
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translate(-50%, -100%);
+        position: relative;
         z-index: 3;
         display: flex;
         justify-content: center;
+        margin-bottom: -1px;
         pointer-events: none;
       }
 
@@ -6238,12 +6236,14 @@
         border-radius: 12px;
         background: var(--bg-card, #0f172a);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-        margin-top: 18px;
         overflow: visible;
       }
 
       .device-cloud-chrome.has-warm-tab {
-        border-color: rgba(0, 139, 163, 0.72);
+        border-color: rgba(251, 146, 60, 0.38);
+        border-top: none;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
       }
 
       .device-cloud-screen-slot {
@@ -6268,22 +6268,24 @@
         gap: 8px;
         min-height: 36px;
         padding: 8px 18px 10px;
-        border: none;
+        border: 1px solid rgba(251, 146, 60, 0.38);
+        border-bottom: none;
         border-radius: 10px 10px 0 0;
-        background: linear-gradient(180deg, #c04a35 0%, #a53821 52%, #8f2f1c 100%);
-        color: #ffffff;
+        background: linear-gradient(145deg, rgba(84, 32, 8, 0.92), rgba(52, 22, 6, 0.88));
+        color: #f8fafc;
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.01em;
         cursor: pointer;
-        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.32);
+        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.28);
         white-space: nowrap;
         user-select: none;
-        transition: background 0.15s ease, filter 0.15s ease;
+        transition: background 0.15s ease, border-color 0.15s ease;
       }
 
       .device-cloud-warm-tab:hover:not(.is-busy):not(.is-done) {
-        filter: brightness(1.06);
+        background: linear-gradient(145deg, rgba(109, 54, 27, 0.96), rgba(84, 32, 8, 0.92));
+        border-color: rgba(251, 146, 60, 0.52);
       }
 
       .device-cloud-warm-tab[hidden] {
