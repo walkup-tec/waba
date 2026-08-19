@@ -6133,7 +6133,7 @@
         min-height: 420px;
         margin-top: 16px;
         overflow: auto;
-        padding: 12px 2px 16px;
+        padding: 24px 2px 16px;
       }
 
       .device-cloud-toolbar {
@@ -6214,11 +6214,13 @@
       }
 
       .device-cloud-tab-slot {
-        position: relative;
-        z-index: 3;
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translate(-50%, -100%);
+        z-index: 6;
         display: flex;
         justify-content: center;
-        margin-bottom: -1px;
         pointer-events: none;
       }
 
@@ -6240,10 +6242,10 @@
       }
 
       .device-cloud-chrome.has-warm-tab {
+        margin-top: 20px;
         border-color: rgba(251, 146, 60, 0.38);
-        border-top: none;
-        border-top-left-radius: 0;
-        border-top-right-radius: 0;
+        background: linear-gradient(145deg, rgba(84, 32, 8, 0.22), rgba(52, 22, 6, 0.18)),
+          var(--bg-card, #0f172a);
       }
 
       .device-cloud-screen-slot {
@@ -6261,7 +6263,7 @@
 
       .device-cloud-warm-tab {
         position: relative;
-        z-index: 3;
+        z-index: 7;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -6277,7 +6279,7 @@
         font-weight: 700;
         letter-spacing: 0.01em;
         cursor: pointer;
-        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.28);
+        box-shadow: none;
         white-space: nowrap;
         user-select: none;
         transition: background 0.15s ease, border-color 0.15s ease;
@@ -6296,13 +6298,13 @@
       .device-cloud-warm-tab.is-done {
         cursor: default;
         pointer-events: none;
-        filter: brightness(0.94);
+        opacity: 0.96;
       }
 
       .device-cloud-warm-tab .device-cloud-warm-tab-icon {
         width: 14px;
         height: 14px;
-        color: #ffffff;
+        color: #fb923c;
         stroke: currentColor;
         fill: none;
         stroke-width: 2;
@@ -6364,7 +6366,12 @@
         z-index: 12;
       }
 
-      .device-cloud-window.is-focused .device-cloud-chrome {
+      .device-cloud-window.is-focused .device-cloud-chrome.has-warm-tab {
+        border-color: rgba(251, 146, 60, 0.55);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
+      }
+
+      .device-cloud-window.is-focused .device-cloud-chrome:not(.has-warm-tab) {
         border-color: rgba(96, 165, 250, 0.55);
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
       }
