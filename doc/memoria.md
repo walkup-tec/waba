@@ -3273,3 +3273,8 @@ Palavras-chave para buscar:
 - Lingueta aparece ao abrir device; remove botão Início; marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab`.
 - LOG: doc/LOG-2026-08-19__135200__device-cloud-lingueta-visible-sem-inicio.md
 - Keywords: lingueta visivel, sem-inicio, deploy-marker
+
+## 2026-08-19 14:02 — Device Cloud: dist/index.html desatualizado (produção)
+- Easypanel serve `dist/`; commits só na raiz não atualizavam UI. Fix: build + commit `dist/index.html` + `dist/deploy-marker.js`.
+- LOG: doc/LOG-2026-08-19__140200__device-cloud-dist-index-desatualizado-fix.md
+- Keywords: dist/index.html, easypanel, waba_disparador, deploy-marker

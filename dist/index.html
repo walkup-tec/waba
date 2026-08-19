@@ -6150,6 +6150,154 @@
         font-size: 13px;
       }
 
+      .device-cloud-warm-panel {
+        padding: 10px 12px 12px;
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        font-size: 12px;
+      }
+
+      .device-cloud-warm-panel[hidden] {
+        display: none !important;
+      }
+
+      .device-cloud-warm-status {
+        margin-bottom: 8px;
+        color: var(--text-secondary, #94a3b8);
+        line-height: 1.4;
+      }
+
+      .device-cloud-warm-pairing {
+        text-align: center;
+        margin: 6px 0 8px;
+      }
+
+      .device-cloud-warm-pairing-label {
+        font-size: 11px;
+        color: var(--text-secondary, #94a3b8);
+        margin-bottom: 4px;
+      }
+
+      .device-cloud-warm-pairing-code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 1.35rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: #fb923c;
+      }
+
+      .device-cloud-warm-qr {
+        display: flex;
+        justify-content: center;
+        margin: 8px 0;
+      }
+
+      .device-cloud-warm-qr img {
+        max-width: 160px;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .device-cloud-warm-hint {
+        margin: 0 0 10px;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .device-cloud-warm-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .device-cloud-warm-slot {
+        position: relative;
+        padding-top: 34px;
+      }
+
+      .device-cloud-warm-tab {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 7px 18px 9px;
+        border: none;
+        border-radius: 10px 10px 0 0;
+        background: linear-gradient(180deg, #e07a52 0%, #b8432f 55%, #9a3528 100%);
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        box-shadow: 0 -3px 14px rgba(0, 0, 0, 0.28);
+        white-space: nowrap;
+        user-select: none;
+      }
+
+      .device-cloud-warm-tab[hidden] {
+        display: none !important;
+      }
+
+      .device-cloud-warm-tab.is-busy,
+      .device-cloud-warm-tab.is-done {
+        cursor: default;
+        pointer-events: none;
+        opacity: 0.96;
+      }
+
+      .device-cloud-warm-tab .device-cloud-warm-tab-icon {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        flex: 0 0 auto;
+      }
+
+      .device-cloud-warm-tab-text {
+        color: inherit;
+        font-weight: inherit;
+      }
+
+      .device-cloud-phone-shell {
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: transparent;
+        overflow: hidden;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+
+      .device-cloud-phone-shell.has-warm-tab {
+        border-color: rgba(34, 211, 238, 0.55);
+        background: rgba(15, 23, 42, 0.72);
+      }
+
+      @keyframes instancias-menu-pulse {
+        0%,
+        100% {
+          box-shadow:
+            0 0 0 0 rgba(251, 146, 60, 0.45),
+            inset 0 0 0 1px rgba(251, 146, 60, 0.35);
+        }
+        50% {
+          box-shadow:
+            0 0 0 5px rgba(251, 146, 60, 0.12),
+            inset 0 0 0 1px rgba(251, 146, 60, 0.65);
+        }
+      }
+
+      .tab-button.instancias-menu-new-highlight {
+        position: relative;
+        animation: instancias-menu-pulse 1.8s ease-in-out infinite;
+        border-color: rgba(251, 146, 60, 0.55) !important;
+        background: rgba(251, 146, 60, 0.14) !important;
+      }
+
       .device-cloud-window {
         position: absolute;
         left: 0;
@@ -6240,7 +6388,6 @@
 
       #device-cloud-open-wa,
       .device-cloud-open-wa,
-      .device-cloud-key-home,
       #device-cloud-delete-btn,
       .device-cloud-delete-btn,
       .device-cloud-restart-btn,
@@ -9401,13 +9548,6 @@
       .instance-action-btn .waba-aquecedor-label-text {
         color: inherit;
         font-weight: inherit;
-      }
-      /* Ajuste específico do botão "Aquecer" no Device Cloud */
-      .device-cloud-warm-btn .waba-aquecedor-label {
-        gap: 4px;
-      }
-      .device-cloud-warm-btn .waba-aquecedor-label-text {
-        color: #fb923c;
       }
       .instance-action-btn.btn-safe.enabled {
         border: 1px solid rgba(148, 163, 184, 0.35);
@@ -17499,21 +17639,6 @@
                     </button>
                   </div>
                   <div class="device-cloud-window-actions">
-                    <button
-                      type="button"
-                      id="device-cloud-warm-btn"
-                      class="device-cloud-warm-btn instance-action-btn btn-qrcode enabled"
-                      title="Aquecer"
-                      aria-label="Aquecer"
-                    >
-                      <span class="waba-aquecedor-label waba-aquecedor-label--inline">
-                        <svg class="flame-icon" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
-                          <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
-                        </svg>
-                        <span class="waba-aquecedor-label-text">Aquecer</span>
-                      </span>
-                    </button>
                     <button type="button" class="device-cloud-restart-btn instance-action-btn btn-refresh enabled">Reiniciar</button>
                     <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
@@ -17535,7 +17660,6 @@
                   </span>
                   <!-- deviceCloudNoChromeVoltar -->
                   <button type="button" class="device-cloud-open-wa instance-action-btn btn-qrcode enabled">Abrir</button>
-                  <button type="button" class="device-cloud-key-home instance-action-btn enabled">Início</button>
                   <label class="device-cloud-profile-upload instance-action-btn enabled">
                     Foto perfil
                     <input type="file" class="device-cloud-profile-file" accept="image/jpeg,image/png,image/webp" />
@@ -17545,15 +17669,50 @@
                     <input type="file" class="device-cloud-cover-file" accept="image/jpeg,image/png,image/webp" />
                   </label>
                 </div>
-                <div class="device-cloud-phone-bar">
-                  <input
-                    type="tel"
-                    class="device-cloud-phone-input"
-                    inputmode="numeric"
-                    autocomplete="tel"
-                    placeholder="DDD + número (ex: 11981077770)"
-                  />
-                  <button type="button" class="device-cloud-phone-submit instance-action-btn btn-qrcode enabled">Digitar</button>
+                <div class="device-cloud-warm-slot">
+                  <button
+                    type="button"
+                    class="device-cloud-warm-tab"
+                    hidden
+                    title="Integrar no aquecedor"
+                    aria-label="Adicionar ao Aquecedor"
+                  >
+                    <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                    <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
+                  </button>
+                  <div class="device-cloud-phone-shell">
+                    <div class="device-cloud-phone-bar">
+                      <input
+                        type="tel"
+                        class="device-cloud-phone-input"
+                        inputmode="numeric"
+                        autocomplete="tel"
+                        placeholder="DDD + número (ex: 11981077770)"
+                      />
+                      <button type="button" class="device-cloud-phone-submit instance-action-btn btn-qrcode enabled">Digitar</button>
+                    </div>
+                    <div class="device-cloud-warm-panel" hidden>
+                      <div class="device-cloud-warm-status">Pronto para integrar.</div>
+                      <div class="device-cloud-warm-pairing" hidden>
+                        <div class="device-cloud-warm-pairing-label">Código de vinculação</div>
+                        <div class="device-cloud-warm-pairing-code"></div>
+                      </div>
+                      <div class="device-cloud-warm-qr" hidden></div>
+                      <p class="device-cloud-warm-hint muted">
+                        No WhatsApp deste dispositivo: menu (⋮) → Aparelhos conectados → Conectar aparelho → Vincular com número de telefone → digite o código acima.
+                        Integração enxuta: sem etapa CONFIRMAR.
+                      </p>
+                      <div class="device-cloud-warm-actions">
+                        <button type="button" class="device-cloud-warm-cancel instance-action-btn enabled">Cancelar</button>
+                        <button type="button" class="device-cloud-warm-retry instance-action-btn btn-refresh enabled" hidden>
+                          Tentar de novo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </template>
@@ -23750,7 +23909,8 @@
           setDeviceCloudMsg("Avançando no WhatsApp…");
           await advanceDeviceCloudAfterPhoneNumber(deviceId);
           await refreshDeviceCloudScreen(deviceId);
-          setDeviceCloudMsg("Avançou. Se pedir SMS, confira o celular.");
+          setDeviceCloudWarmTab(deviceId, { visible: true, phase: "idle" });
+          setDeviceCloudMsg("Número cadastrado. Clique em «Adicionar ao Aquecedor» para integrar.");
         } catch (err) {
           setDeviceCloudMsg(err.message || String(err));
         } finally {
@@ -23964,6 +24124,415 @@
         );
       }
 
+      const deviceCloudWarmById = Object.create(null);
+
+      const DEVICE_CLOUD_WARM_TAB_LABELS = {
+        idle: "Adicionar ao Aquecedor",
+        busy: "Aguarde um instante...",
+        done: "Integração Finalizada",
+      };
+
+      function getDeviceCloudWarmState(deviceId) {
+        const id = String(deviceId || "");
+        if (!deviceCloudWarmById[id]) {
+          deviceCloudWarmById[id] = {
+            pollTimer: null,
+            instanceName: "",
+            busy: false,
+            startedAt: 0,
+            tabPhase: "idle",
+          };
+        }
+        return deviceCloudWarmById[id];
+      }
+
+      function clearDeviceCloudWarmPolling(deviceId) {
+        const st = getDeviceCloudWarmState(deviceId);
+        if (st.pollTimer) {
+          clearInterval(st.pollTimer);
+          st.pollTimer = null;
+        }
+      }
+
+      function setDeviceCloudWarmTab(deviceId, patch = {}) {
+        const win = getDeviceCloudWin(deviceId);
+        if (!win) return;
+        const tab = win.querySelector(".device-cloud-warm-tab");
+        const shell = win.querySelector(".device-cloud-phone-shell");
+        const textEl = win.querySelector(".device-cloud-warm-tab-text");
+        if (!tab) return;
+        const warmSt = getDeviceCloudWarmState(deviceId);
+
+        if (patch.visible === true) {
+          tab.hidden = false;
+          shell?.classList.add("has-warm-tab");
+        }
+        if (patch.visible === false) {
+          tab.hidden = true;
+          shell?.classList.remove("has-warm-tab");
+        }
+
+        if (patch.phase) {
+          warmSt.tabPhase = patch.phase;
+          tab.dataset.phase = patch.phase;
+          tab.classList.toggle("is-busy", patch.phase === "busy");
+          tab.classList.toggle("is-done", patch.phase === "done");
+          if (textEl && DEVICE_CLOUD_WARM_TAB_LABELS[patch.phase]) {
+            textEl.textContent = DEVICE_CLOUD_WARM_TAB_LABELS[patch.phase];
+          }
+        }
+        if (typeof patch.text === "string" && textEl) {
+          textEl.textContent = patch.text;
+        }
+      }
+
+      function ensureDeviceCloudWarmTabVisible(deviceId) {
+        const warmSt = getDeviceCloudWarmState(deviceId);
+        if (warmSt.tabPhase === "done") return;
+        setDeviceCloudWarmTab(deviceId, {
+          visible: true,
+          phase: warmSt.tabPhase === "busy" ? "busy" : "idle",
+        });
+      }
+
+      function pulseInstanciasMenuForNewIntegration() {
+        document
+          .querySelectorAll('#tab-btn-instancias, .tab-button[data-menu-key="instancias"]')
+          .forEach((btn) => {
+            btn.classList.add("instancias-menu-new-highlight");
+          });
+        if (typeof setDesktopMenuGroupOpen === "function") {
+          setDesktopMenuGroupOpen("nao-oficial", true);
+        }
+      }
+
+      function clearInstanciasMenuNewHighlight() {
+        document.querySelectorAll(".instancias-menu-new-highlight").forEach((btn) => {
+          btn.classList.remove("instancias-menu-new-highlight");
+        });
+      }
+
+      function formatDeviceCloudEvoNumber(rawDigits) {
+        let digits = normalizeDeviceCloudPhoneDigits(rawDigits);
+        if (!digits) return "";
+        if ((digits.length === 10 || digits.length === 11) && !digits.startsWith("55")) {
+          digits = "55" + digits;
+        }
+        return digits;
+      }
+
+      function extractPairingCodeFromPayload(data) {
+        const normalizePairing = (value, keyHint) => {
+          const raw = String(value || "").trim();
+          if (!raw) return "";
+          const key = String(keyHint || "").toLowerCase();
+          if (key === "code" && (raw.includes("@") || raw.includes(","))) return "";
+          if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(raw)) return raw.toUpperCase();
+          if (/^[A-Z0-9]{8}$/i.test(raw)) {
+            return `${raw.slice(0, 4).toUpperCase()}-${raw.slice(4).toUpperCase()}`;
+          }
+          if (
+            (key === "pairingcode" || key === "pairing_code" || key === "pairingCode") &&
+            /^[A-Z0-9-]{6,12}$/i.test(raw)
+          ) {
+            return raw.toUpperCase();
+          }
+          return "";
+        };
+
+        const visit = (node, depth = 0, keyHint = "") => {
+          if (depth > 6 || node == null) return "";
+          if (typeof node === "string" || typeof node === "number") {
+            return normalizePairing(node, keyHint);
+          }
+          if (Array.isArray(node)) {
+            for (const item of node) {
+              const found = visit(item, depth + 1, keyHint);
+              if (found) return found;
+            }
+            return "";
+          }
+          if (typeof node !== "object") return "";
+          const priorityKeys = ["pairingCode", "pairingcode", "pairing_code", "code"];
+          for (const key of priorityKeys) {
+            if (Object.prototype.hasOwnProperty.call(node, key)) {
+              const found = visit(node[key], depth + 1, key);
+              if (found) return found;
+            }
+          }
+          for (const [key, value] of Object.entries(node)) {
+            if (!/pairing|code/i.test(key)) continue;
+            const found = visit(value, depth + 1, key);
+            if (found) return found;
+          }
+          return "";
+        };
+
+        return visit(data);
+      }
+
+      function resolveQrImageSrcForDeviceWarm(data) {
+        const pairing = extractPairingCodeFromPayload(data);
+        const img = resolveQrImageSrcFromPayload(data);
+        if (img && pairing && img.length < 120) return "";
+        return img;
+      }
+
+      function setDeviceCloudWarmPanel(deviceId, patch = {}) {
+        const win = getDeviceCloudWin(deviceId);
+        if (!win) return;
+        const panel = win.querySelector(".device-cloud-warm-panel");
+        if (!panel) return;
+        if (patch.visible === true) panel.hidden = false;
+        if (patch.visible === false) panel.hidden = true;
+        if (typeof patch.status === "string") {
+          const statusEl = panel.querySelector(".device-cloud-warm-status");
+          if (statusEl) statusEl.textContent = patch.status;
+        }
+        if (typeof patch.pairingCode === "string") {
+          const wrap = panel.querySelector(".device-cloud-warm-pairing");
+          const codeEl = panel.querySelector(".device-cloud-warm-pairing-code");
+          if (wrap && codeEl) {
+            if (patch.pairingCode) {
+              wrap.hidden = false;
+              codeEl.textContent = patch.pairingCode;
+            } else {
+              wrap.hidden = true;
+              codeEl.textContent = "";
+            }
+          }
+        }
+        if (patch.qrSrc === null) {
+          const qrWrap = panel.querySelector(".device-cloud-warm-qr");
+          if (qrWrap) {
+            qrWrap.hidden = true;
+            qrWrap.innerHTML = "";
+          }
+        } else if (typeof patch.qrSrc === "string" && patch.qrSrc) {
+          const qrWrap = panel.querySelector(".device-cloud-warm-qr");
+          if (qrWrap) {
+            qrWrap.hidden = false;
+            qrWrap.innerHTML = `<img src="${escapeAdminHtml(patch.qrSrc)}" alt="QR Code de vinculação" />`;
+          }
+        }
+        const retryBtn = panel.querySelector(".device-cloud-warm-retry");
+        if (retryBtn && typeof patch.showRetry === "boolean") {
+          retryBtn.hidden = !patch.showRetry;
+        }
+      }
+
+      async function finishDeviceCloudWarmIntegration(deviceId, instanceName, deviceLabel) {
+        const name = String(instanceName || "").trim();
+        const label = String(deviceLabel || "").trim();
+        clearDeviceCloudWarmPolling(deviceId);
+        const warmSt = getDeviceCloudWarmState(deviceId);
+        warmSt.busy = false;
+        warmSt.instanceName = name;
+
+        try {
+          if (label) {
+            await fetchWithTimeout(
+              `/instancias/${encodeURIComponent(name)}/alias`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ alias: label }),
+              },
+              12000,
+            ).then(async (res) => {
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                console.warn("[DeviceCloud] alias:", data?.error || res.status);
+              }
+            });
+          }
+
+          await saveInstanceUsageConfig(name, {
+            useAquecedor: true,
+            useDisparador: false,
+            useFazenda: false,
+          });
+
+          await loadInstancesForInstanciasTab({ fullRefresh: true });
+
+          setDeviceCloudWarmPanel(deviceId, {
+            visible: false,
+            pairingCode: "",
+            qrSrc: null,
+            showRetry: false,
+          });
+          setDeviceCloudWarmTab(deviceId, { phase: "done" });
+          pulseInstanciasMenuForNewIntegration();
+          setDeviceCloudMsg(`Instância ${name} conectada e habilitada no aquecedor.`);
+          showToast(`Dispositivo integrado: ${label || name}`, "success");
+        } catch (err) {
+          const msg = err?.message || String(err);
+          setDeviceCloudWarmPanel(deviceId, {
+            visible: true,
+            status: `Conectado, mas falhou ao salvar metadados: ${msg}`,
+            showRetry: true,
+          });
+          setDeviceCloudWarmTab(deviceId, { phase: "idle" });
+          showToast("Conectado; confira Instâncias e tente salvar uso manualmente.", "warning");
+        }
+      }
+
+      function startDeviceCloudWarmConnectPolling(deviceId, instanceName, deviceLabel) {
+        clearDeviceCloudWarmPolling(deviceId);
+        const warmSt = getDeviceCloudWarmState(deviceId);
+        warmSt.instanceName = String(instanceName || "").trim();
+        warmSt.startedAt = Date.now();
+        let connectingNotified = false;
+
+        const pollOnce = async () => {
+          const name = warmSt.instanceName;
+          if (!name) return;
+          try {
+            if (Date.now() - warmSt.startedAt > 300000) {
+              clearDeviceCloudWarmPolling(deviceId);
+              warmSt.busy = false;
+              setDeviceCloudWarmPanel(deviceId, {
+                status: "Tempo esgotado. Gere um novo código e tente vincular de novo.",
+                showRetry: true,
+              });
+              setDeviceCloudWarmTab(deviceId, { phase: "idle" });
+              return;
+            }
+
+            const response = await fetchWithTimeout(
+              `/instancias/${encodeURIComponent(name)}/status-conexao`,
+              { credentials: "same-origin" },
+              8000,
+            );
+            if (!response.ok) return;
+            const payload = await response.json().catch(() => null);
+            const statusLc = String(payload?.connectionStatus || "").toLowerCase();
+            const isOpen = payload?.open === true || statusLc.includes("open");
+            const isConnecting =
+              payload?.connecting === true || statusLc.includes("connecting");
+
+            if (isConnecting && !isOpen && !connectingNotified) {
+              connectingNotified = true;
+              setDeviceCloudWarmPanel(deviceId, {
+                status: "Código aceito. Finalizando conexão…",
+              });
+            }
+            if (!isOpen) return;
+
+            clearDeviceCloudWarmPolling(deviceId);
+            setDeviceCloudWarmPanel(deviceId, {
+              status: "WhatsApp conectado. Registrando instância no aquecedor…",
+            });
+            await finishDeviceCloudWarmIntegration(deviceId, name, deviceLabel);
+          } catch {
+            /* polling silencioso */
+          }
+        };
+
+        void pollOnce();
+        warmSt.pollTimer = setInterval(pollOnce, 800);
+      }
+
+      function cancelDeviceCloudWarm(deviceId) {
+        clearDeviceCloudWarmPolling(deviceId);
+        const warmSt = getDeviceCloudWarmState(deviceId);
+        warmSt.busy = false;
+        if (warmSt.tabPhase !== "done") {
+          setDeviceCloudWarmTab(deviceId, { phase: "idle" });
+        }
+        setDeviceCloudWarmPanel(deviceId, {
+          visible: false,
+          pairingCode: "",
+          qrSrc: null,
+          showRetry: false,
+        });
+      }
+
+      async function warmDeviceCloudInstance(deviceId) {
+        const id = String(deviceId || "");
+        const win = getDeviceCloudWin(id);
+        if (!win) return;
+        const warmSt = getDeviceCloudWarmState(id);
+        if (warmSt.busy || warmSt.tabPhase === "done") return;
+
+        const titleEl = win.querySelector(".device-cloud-window-title");
+        const phoneInput = win.querySelector(".device-cloud-phone-input");
+        const deviceLabel = displayDeviceCloudName(titleEl && titleEl.textContent);
+        const rawName = normalizeInstanceRegisterName(deviceLabel);
+        const fallbackName = normalizeInstanceRegisterName(`device-${id.slice(0, 8)}`);
+        const instanceName = rawName || fallbackName;
+
+        const phoneDigits = normalizeDeviceCloudPhoneDigits(phoneInput && phoneInput.value);
+        const evoNumber = formatDeviceCloudEvoNumber(phoneDigits);
+        if (!evoNumber || evoNumber.length < 12) {
+          setDeviceCloudMsg("Informe o número do WhatsApp (DDD + número) antes de aquecer.");
+          phoneInput?.focus();
+          return;
+        }
+
+        warmSt.busy = true;
+        warmSt.instanceName = instanceName;
+        focusDeviceCloudWindow(id);
+        setDeviceCloudWarmTab(id, { phase: "busy" });
+        setDeviceCloudWarmPanel(id, {
+          visible: true,
+          status: "Criando instância e gerando código de vinculação…",
+          pairingCode: "",
+          qrSrc: null,
+          showRetry: false,
+        });
+        setDeviceCloudMsg("Integrando dispositivo no aquecedor…");
+
+        try {
+          const data = await submitAndPollRegistrarQrcode({
+            name: instanceName,
+            token: generateTokenLike(),
+            number: evoNumber,
+          });
+
+          if (data?.alreadyConnected) {
+            await finishDeviceCloudWarmIntegration(id, instanceName, deviceLabel);
+            return;
+          }
+
+          const pairingCode = extractPairingCodeFromPayload(data);
+          const qrSrc = resolveQrImageSrcForDeviceWarm(data);
+
+          if (!pairingCode && !qrSrc) {
+            throw new Error(
+              "O sistema não retornou código de vinculação. Tente de novo em alguns segundos.",
+            );
+          }
+
+          setDeviceCloudWarmPanel(id, {
+            visible: true,
+            status: pairingCode
+              ? "Digite o código no WhatsApp deste dispositivo (Aparelhos conectados)."
+              : "Escaneie o QR no WhatsApp deste dispositivo (Aparelhos conectados).",
+            pairingCode: pairingCode || "",
+            qrSrc: qrSrc || null,
+            showRetry: true,
+          });
+          setDeviceCloudWarmTab(id, { phase: "busy" });
+
+          startDeviceCloudWarmConnectPolling(id, instanceName, deviceLabel);
+        } catch (error) {
+          warmSt.busy = false;
+          const errMsg = resolveRegistrarQrcodeErrorMessage(error);
+          setDeviceCloudWarmPanel(id, {
+            visible: true,
+            status: errMsg,
+            pairingCode: "",
+            qrSrc: null,
+            showRetry: true,
+          });
+          setDeviceCloudWarmTab(id, { phase: "idle" });
+          setDeviceCloudMsg(errMsg);
+          showToast(errMsg, "error");
+        }
+      }
+
       function bindDeviceCloudWindowEvents(win) {
         if (!win || win.dataset.dcBound === "1") return;
         win.dataset.dcBound = "1";
@@ -23978,13 +24547,6 @@
           e.preventDefault();
           e.stopPropagation();
           void launchDeviceCloudWhatsApp(deviceId).catch((err) => setDeviceCloudMsg(err.message || String(err)));
-        });
-        win.querySelector(".device-cloud-key-home")?.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          void sendDeviceCloudInput(deviceId, "key", { key: "home" }).catch((err) =>
-            setDeviceCloudMsg(err.message || String(err)),
-          );
         });
         win.querySelector(".device-cloud-restart-btn")?.addEventListener("click", (e) => {
           e.preventDefault();
@@ -24031,6 +24593,23 @@
           e.stopPropagation();
           void removeDeviceCloudFromBoard(deviceId);
         });
+        win.querySelector(".device-cloud-warm-tab")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const warmSt = getDeviceCloudWarmState(deviceId);
+          if (warmSt.tabPhase === "done" || warmSt.busy) return;
+          void warmDeviceCloudInstance(deviceId);
+        });
+        win.querySelector(".device-cloud-warm-cancel")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cancelDeviceCloudWarm(deviceId);
+        });
+        win.querySelector(".device-cloud-warm-retry")?.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void warmDeviceCloudInstance(deviceId);
+        });
         win.querySelector(".device-cloud-phone-submit")?.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -24046,7 +24625,7 @@
 
         if (bar && stage) {
           bar.addEventListener("pointerdown", (e) => {
-            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-restart-btn, .device-cloud-warm-btn, .device-cloud-rename-btn, .device-cloud-window-title-input")) return;
+            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-restart-btn, .device-cloud-warm-tab, .device-cloud-rename-btn, .device-cloud-window-title-input")) return;
             e.preventDefault();
             focusDeviceCloudWindow(deviceId);
             try {
@@ -24155,6 +24734,7 @@
             { passive: false, capture: true },
           );
         }
+        ensureDeviceCloudWarmTabVisible(deviceId);
       }
 
       function displayDeviceCloudName(name) {
@@ -24250,6 +24830,7 @@
           void refreshDeviceCloudScreen(deviceId).catch(() => {});
         }, 1600);
         adaptDeviceCloudStageLayout();
+        ensureDeviceCloudWarmTabVisible(deviceId);
         if (options.launch !== false) void launchDeviceCloudWhatsApp(deviceId);
       }
 
@@ -24294,13 +24875,13 @@
         });
         const boot = await bootRes.json().catch(() => ({}));
         if (!bootRes.ok) {
-          setDeviceCloudMsg(String(boot.error || "Não foi possível abrir o Device Cloud."));
+          setDeviceCloudMsg(String(boot.error || "Não foi possível abrir Dispositivos."));
           return false;
         }
         deviceCloudApiUrl = String(boot.apiUrl || "").replace(/\/$/, "");
         const ssoToken = String(boot.ssoToken || "").trim();
         if (!deviceCloudApiUrl || !ssoToken) {
-          setDeviceCloudMsg("Device Cloud não configurado.");
+          setDeviceCloudMsg("Dispositivos não configurado.");
           return false;
         }
         const ssoRes = await fetch(deviceCloudApiUrl + "/auth/sso", {
@@ -24310,7 +24891,7 @@
         });
         const sso = await ssoRes.json().catch(() => ({}));
         if (!ssoRes.ok || !sso.accessToken) {
-          setDeviceCloudMsg("Acesso ao Device Cloud recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
+          setDeviceCloudMsg("Acesso a Dispositivos recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
           return false;
         }
         deviceCloudAccessToken = String(sso.accessToken);
@@ -24448,7 +25029,7 @@
 
       async function addDeviceCloudDevice(forceCreate) {
         if (!canAccessDeviceCloudMenu()) {
-          setDeviceCloudMsg("Sem permissão para Device Cloud.");
+          setDeviceCloudMsg("Sem permissão para Dispositivos.");
           return;
         }
         const busyBtn = document.getElementById("device-cloud-add-btn");
@@ -47443,6 +48024,9 @@
         if (nextTab === "disparos" && hasCampanhasMenuAccess()) {
           markCampanhasMenuSeen();
         }
+        if (nextTab === "instancias") {
+          clearInstanciasMenuNewHighlight();
+        }
 
         const dashboardPanel = document.getElementById("tab-dashboard");
         const dispositivosPanel = document.getElementById("tab-dispositivos");
@@ -50953,7 +51537,7 @@
             data?.error ||
               data?.detail ||
               (response.status === 502
-                ? "Sistema WABA - Drax indisponível. Verifique EVO_API_URL no servidor."
+                ? "Sistema WABA - Drax indisponível. Verifique a configuração do servidor."
                 : "Falha ao solicitar QRCode."),
           );
           if (data?.detail) err.detail = data.detail;
@@ -50983,7 +51567,7 @@
           return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
         }
         if (/integrationSession|prisma/i.test(`${msg}\n${detail}`)) {
-          return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL da EVO.";
+          return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL.";
         }
         if (/"count"\s*:\s*0/.test(detail)) {
           return "O sistema WABA - Drax não retornou QRCode (count:0). Aguarde alguns segundos e use «Atualizar QR». Se persistir, reinicie o serviço no Easypanel.";
@@ -51018,7 +51602,7 @@
           return firstLine.slice(0, 400);
         }
         if (!opaque && msg) return msg;
-        return "Falha ao gerar QRCode. Tente um nome novo e «Atualizar QR». Se repetir, a Evolution pode estar com sessão presa — avise para reiniciar o serviço EVO.";
+        return "Falha ao gerar QRCode. Tente um nome novo e «Atualizar QR». Se repetir, o serviço de conexão pode estar com sessão presa — avise o suporte para reiniciar.";
       }
 
       async function refreshQrCodeInRegisterModal() {
