@@ -162,6 +162,7 @@ async function sendEvoImageAlert(input) {
     const instanceName = String(input.instanceName || "").trim();
     const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
     const mediaBase64 = String(input.mediaBase64 || "").replace(/\s+/g, "");
+    const mediaUrl = String(input.mediaUrl || "").trim();
     const mimetype = String(input.mimetype || "image/jpeg").trim() || "image/jpeg";
     const fileName = String(input.fileName || "boas-vindas.jpg").trim() || "boas-vindas.jpg";
     if (!instanceName) {
@@ -170,36 +171,52 @@ async function sendEvoImageAlert(input) {
     if (!targetNumber) {
         return { ok: false, detail: "Número de destino inválido.", status: 0 };
     }
-    if (!mediaBase64) {
+    const mediaVariants = [];
+    if (mediaBase64) {
+        mediaVariants.push(`data:${mimetype};base64,${mediaBase64}`);
+        mediaVariants.push(mediaBase64);
+    }
+    if (/^https?:\/\//i.test(mediaUrl)) {
+        mediaVariants.push(mediaUrl);
+    }
+    if (!mediaVariants.length) {
         return { ok: false, detail: "Imagem de capa vazia.", status: 0 };
     }
     const url = buildTemplateUrl(resolveSendMediaUrlTemplate(), instanceName);
-    const body = {
-        number: targetNumber,
-        mediatype: "image",
-        mimetype,
-        caption: String(input.caption || "").trim(),
-        fileName,
-        media: `data:${mimetype};base64,${mediaBase64}`,
-    };
     const timeoutMs = typeof input.timeoutMs === "number" && input.timeoutMs >= 10000
         ? Math.round(input.timeoutMs)
-        : 20000;
-    const result = await (0, evo_api_config_1.evoHttpRequestWithBaseFailover)(url, "POST", {
-        apiKey: resolveEvoApiKey(),
-        body,
-        timeoutMs,
-        retries: 1,
-    });
-    const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
-    if (accepted) {
-        return toSendResult(true, "sendMedia OK.", result.status, result.json);
+        : Math.max(60000, (0, evo_http_client_1.defaultEvoHttpTimeoutMs)());
+    let lastDetail = "Falha no envio de imagem via Evolution.";
+    let lastStatus = 0;
+    let lastJson = null;
+    for (const media of mediaVariants) {
+        const body = {
+            number: targetNumber,
+            mediatype: "image",
+            mimetype,
+            caption: String(input.caption || "").trim(),
+            fileName,
+            media,
+        };
+        const result = await (0, evo_api_config_1.evoHttpRequestWithBaseFailover)(url, "POST", {
+            apiKey: resolveEvoApiKey(),
+            body,
+            timeoutMs,
+            retries: 2,
+        });
+        const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
+        if (accepted) {
+            return toSendResult(true, "sendMedia OK.", result.status, result.json);
+        }
+        lastStatus = result.status;
+        lastJson = result.json;
+        lastDetail =
+            result.error ||
+                result.body ||
+                (result.json && typeof result.json === "object"
+                    ? String(result.json.message ?? "")
+                    : "") ||
+                lastDetail;
     }
-    const detail = result.error ||
-        result.body ||
-        (result.json && typeof result.json === "object"
-            ? String(result.json.message ?? "")
-            : "") ||
-        "Falha no envio de imagem via Evolution.";
-    return toSendResult(false, String(detail).slice(0, 300), result.status, result.json);
+    return toSendResult(false, String(lastDetail).slice(0, 300), lastStatus, lastJson);
 }

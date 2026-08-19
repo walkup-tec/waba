@@ -25,7 +25,7 @@ Não usar como histórico de desenvolvimento.
 ## Pendências relevantes
 
 - Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
-- Após deploy `DEPLOY-2026-08-19-091200-welcome-layout-ios`: reenviar boas-vindas e confirmar no iPhone que o texto não corta e a capa não parece vídeo
+- Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - **Redeploy EasyPanel** para marker `DEPLOY-2026-08-13-device-cloud-tab-show` (fix aba Dispositivos vazia) + `DEVICE_CLOUD_PUBLIC_URL` / `DEVICE_CLOUD_SSO_SECRET`
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
 - Provisionar host Linux+KVM para `REDROID_MODE=docker`

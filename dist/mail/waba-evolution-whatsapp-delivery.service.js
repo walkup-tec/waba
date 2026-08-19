@@ -202,14 +202,15 @@ const resolveCanonicalDestinationNumber = async (instanceName, rawNumber) => {
 };
 const sendWelcomeCoverBestEffort = async (instanceName, targetNumber, logLabel) => {
     const mediaBase64 = (0, waba_welcome_cover_1.readWelcomeCoverJpegBase64)();
+    const mediaUrl = (0, waba_welcome_cover_1.resolveWelcomeCoverPublicUrl)();
     if (!mediaBase64) {
-        console.warn(`[whatsapp] ${logLabel}: capa ${waba_welcome_cover_1.WELCOME_COVER_FILE_NAME} ausente — texto já entregue.`);
-        return;
+        console.warn(`[whatsapp] ${logLabel}: JPEG ${waba_welcome_cover_1.WELCOME_COVER_FILE_NAME} não encontrado no disco — tentando URL pública.`);
     }
     const cover = await (0, evo_text_alert_client_1.sendEvoImageAlert)({
         instanceName,
         targetNumber,
         mediaBase64,
+        mediaUrl,
         mimetype: "image/jpeg",
         fileName: waba_welcome_cover_1.WELCOME_COVER_FILE_NAME,
     });

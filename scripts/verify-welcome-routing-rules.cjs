@@ -88,7 +88,10 @@ const staticChecks = [
   },
   {
     name: "capa JPEG via sendMedia após ACK",
-    pass: welcome.includes("sendWelcomeCover: true") && delivery.includes("sendWelcomeCoverBestEffort"),
+    pass:
+      welcome.includes("sendWelcomeCover: true") &&
+      delivery.includes("sendWelcomeCoverBestEffort") &&
+      delivery.includes("resolveWelcomeCoverPublicUrl"),
   },
 ];
 

@@ -8,7 +8,7 @@ Registrar apenas decisões permanentes.
 
 - **Decisão:** O texto de boas-vindas usa traço ASCII (`----`) e `linkPreview: false`. A arte BEM-VINDO vai como `sendMedia` JPEG após o ACK, não como card Open Graph do site.
 - **Motivo:** No iOS, `━` (U+2501) impede a quebra de linha e corta o texto; dois `https` + preview da Evolution geram card de “vídeo” + miniatura borrada.
-- **Impacto:** Marker `DEPLOY-2026-08-19-091200-welcome-layout-ios`. Credenciais continuam no `sendText`.
+- **Impacto:** A capa lê o JPEG via `__dirname` (`dist/media` e `/app/media`), timeout 60s e fallback de URL pública — o mesmo padrão das campanhas. Marker `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`.
 
 ### 2026-08-19 — Boas-vindas WhatsApp obrigatória na fila completa
 

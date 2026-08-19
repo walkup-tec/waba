@@ -47,6 +47,17 @@ else ok("sendText propaga linkPreview");
 if (!evoSrc.includes("sendMedia/{instance}")) fail("sendEvoImageAlert sem sendMedia");
 else ok("sendMedia de capa");
 
+if (!evoSrc.includes("Math.max(60_000, defaultEvoHttpTimeoutMs())")) {
+  fail("sendMedia sem timeout de 60s");
+} else ok("sendMedia timeout 60s");
+
+if (!deliverySrc.includes("resolveWelcomeCoverPublicUrl")) fail("capa sem fallback de URL pública");
+else ok("fallback URL pública");
+
+const coverSrc = fs.readFileSync(path.join(ROOT, "src/mail/waba-welcome-cover.ts"), "utf8");
+if (!coverSrc.includes("__dirname")) fail("capa não usa __dirname (cwd falha no container)");
+else ok("capa resolve via __dirname");
+
 const distWelcome = path.join(ROOT, "dist/mail/waba-welcome-whatsapp.service.js");
 if (fs.existsSync(distWelcome)) {
   const {
@@ -70,6 +81,14 @@ if (fs.existsSync(distWelcome)) {
   else ok(`separador ${[...sepLine].length} chars`);
 } else {
   console.log("SKIP: dist ainda não compilado — rode npm run build e repita");
+}
+
+const distCover = path.join(ROOT, "dist/mail/waba-welcome-cover.js");
+if (fs.existsSync(distCover)) {
+  const { readWelcomeCoverJpegBase64 } = require(distCover);
+  const b64 = String(readWelcomeCoverJpegBase64() || "");
+  if (b64.length < 1000) fail("JPEG de capa não lido do disco no dist/");
+  else ok(`JPEG de capa lido (${b64.length} chars base64)`);
 }
 
 if (process.exitCode) {

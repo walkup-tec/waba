@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-19 12:50 — Capa de boas-vindas não saía no sendMedia
+- Texto chegava; JPEG não. Capa lia só `cwd` (20s, sem URL)
+- Agora: `__dirname` + `/app/media` no Docker + timeout 60s + URL pública
+- Marker `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`
+- LOG: doc/LOG-2026-08-19__125000__welcome-cover-sendmedia.md
+
 ## 2026-08-19 09:12 — Layout boas-vindas iPhone (corte + preview OG)
 - Causa: traço `━` (U+2501) + `linkPreview` da Evolution nos dois https
 - Texto ASCII + `linkPreview: false`; capa JPEG via sendMedia após ACK

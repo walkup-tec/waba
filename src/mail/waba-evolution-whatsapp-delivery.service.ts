@@ -21,7 +21,11 @@ import type {
   WabaWhatsAppDeliveryResult,
   WabaWhatsAppDeliveryStatus,
 } from "./waba-welcome-whatsapp.service";
-import { readWelcomeCoverJpegBase64, WELCOME_COVER_FILE_NAME } from "./waba-welcome-cover";
+import {
+  readWelcomeCoverJpegBase64,
+  resolveWelcomeCoverPublicUrl,
+  WELCOME_COVER_FILE_NAME,
+} from "./waba-welcome-cover";
 
 export type { WabaWhatsAppDeliveryResult, WabaWhatsAppDeliveryStatus };
 
@@ -256,14 +260,17 @@ const sendWelcomeCoverBestEffort = async (
   logLabel: string,
 ): Promise<void> => {
   const mediaBase64 = readWelcomeCoverJpegBase64();
+  const mediaUrl = resolveWelcomeCoverPublicUrl();
   if (!mediaBase64) {
-    console.warn(`[whatsapp] ${logLabel}: capa ${WELCOME_COVER_FILE_NAME} ausente — texto já entregue.`);
-    return;
+    console.warn(
+      `[whatsapp] ${logLabel}: JPEG ${WELCOME_COVER_FILE_NAME} não encontrado no disco — tentando URL pública.`,
+    );
   }
   const cover = await sendEvoImageAlert({
     instanceName,
     targetNumber,
     mediaBase64,
+    mediaUrl,
     mimetype: "image/jpeg",
     fileName: WELCOME_COVER_FILE_NAME,
   });
