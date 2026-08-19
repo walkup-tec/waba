@@ -6128,12 +6128,16 @@
         overflow: visible;
       }
 
+      #tab-dispositivos .panel {
+        overflow: visible;
+      }
+
       #device-cloud-stage {
         position: relative;
         min-height: 420px;
         margin-top: 16px;
         overflow: auto;
-        padding: 24px 2px 16px;
+        padding: 12px 2px 16px;
       }
 
       .device-cloud-toolbar {
@@ -6217,7 +6221,7 @@
         position: absolute;
         top: 0;
         left: 50%;
-        transform: translate(-50%, -100%);
+        transform: translateX(-50%);
         z-index: 6;
         display: flex;
         justify-content: center;
@@ -6242,7 +6246,6 @@
       }
 
       .device-cloud-chrome.has-warm-tab {
-        margin-top: 20px;
         border-color: rgba(251, 146, 60, 0.38);
         background: linear-gradient(145deg, rgba(84, 32, 8, 0.22), rgba(52, 22, 6, 0.18)),
           var(--bg-card, #0f172a);
@@ -6354,12 +6357,26 @@
         width: var(--dc-screen-width, 329px);
         max-width: 100%;
         --dc-screen-width: 329px;
+        --dc-warm-tab-reserve: 0px;
+        padding-top: var(--dc-warm-tab-reserve);
         background: transparent;
         border: none;
         border-radius: 0;
         box-shadow: none;
         overflow: visible;
-        transition: width 0.2s ease;
+        transition: width 0.2s ease, padding-top 0.2s ease;
+      }
+
+      .device-cloud-window.has-warm-tab {
+        --dc-warm-tab-reserve: 44px;
+      }
+
+      .device-cloud-window.has-warm-tab .device-cloud-chrome {
+        position: relative;
+      }
+
+      .device-cloud-window.has-warm-tab .device-cloud-tab-slot {
+        top: calc(-1 * var(--dc-warm-tab-reserve));
       }
 
       .device-cloud-window.is-focused {
@@ -23582,8 +23599,9 @@
         const barH = 42;
         const mediaBarH = 46;
         const phoneBarH = 52;
+        const warmTabH = 44;
         const screenMaxH = Math.round(screenW * (598 / 329));
-        const winH = barH + screenMaxH + mediaBarH + phoneBarH;
+        const winH = warmTabH + barH + screenMaxH + mediaBarH + phoneBarH;
         const layout = loadDeviceCloudLayout();
         layout.windows = layout.windows && typeof layout.windows === "object" ? layout.windows : {};
         windows.forEach((win, index) => {
@@ -24265,11 +24283,13 @@
           tab.hidden = false;
           tabSlot.classList.remove("is-hidden");
           chrome.classList.add("has-warm-tab");
+          win.classList.add("has-warm-tab");
         }
         if (patch.visible === false) {
           tab.hidden = true;
           tabSlot.classList.add("is-hidden");
           chrome.classList.remove("has-warm-tab");
+          win.classList.remove("has-warm-tab");
         }
 
         if (patch.phase) {
