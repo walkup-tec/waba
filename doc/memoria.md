@@ -3253,3 +3253,13 @@ Palavras-chave para buscar:
 - Fundo `#231f20`, borda `#d68d54`, texto branco, chama `#ffa500`; sem `btn-qrcode`.
 - Marker `DEPLOY-2026-08-19-device-cloud-aquecer-btn-estilo`
 - LOG: doc/LOG-2026-08-19__124500__device-cloud-aquecer-btn-estilo-aquecedor.md
+
+## 2026-08-19 13:05 — Device Cloud: Aquecer = menu lateral Aquecedor (correção)
+- CSS espelha `#tab-btn-aquecedor.active`: `rgba(251,146,60,0.14)` fundo, borda `0.66`, texto `#f8fafc`, chama `#fb923c`.
+- LOG: doc/LOG-2026-08-19__130500__device-cloud-aquecer-btn-menu-lateral.md
+- Keywords: device-cloud aquecer, tab-btn-aquecedor, menu-section-accent-rgb
+
+## 2026-08-19 13:20 — Device Cloud: lingueta Adicionar ao Aquecedor
+- Substitui botão Aquecer na barra; lingueta após cadastrar número; estados idle/busy/done; pulso menu Instâncias.
+- LOG: doc/LOG-2026-08-19__132000__device-cloud-lingueta-aquecedor.md
+- Keywords: device-cloud lingueta, instancias-menu-pulse, aguarde um instante
