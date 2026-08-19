@@ -113,6 +113,11 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
   if (p === "/webhooks/asaas" || p === "/webhooks/evolution") return true;
   if (p === "/webhooks/asaas/transfer-authorization") return true;
 
+  // Integração Soma: chave própria no handler (não cookie de sessão).
+  if (p.startsWith("/integrations/soma/")) {
+    return true;
+  }
+
   if (method === "OPTIONS") return true;
 
   if (method !== "GET" && method !== "HEAD") return false;

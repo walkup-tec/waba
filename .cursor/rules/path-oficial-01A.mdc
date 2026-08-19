@@ -1,0 +1,12 @@
+﻿---
+description: Path oficial deste projeto em E:\01A-Drax-Servidor
+alwaysApply: true
+---
+
+# Path oficial
+
+Workspace oficial: `E:\01A-Drax-Servidor\Waba`
+
+- Espelho: `D:\01A-Drax-Servidor\Waba` (nao usar como principal)
+- Nao trabalhar em H: nem em C:
+- Abrir Cursor neste path E:

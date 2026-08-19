@@ -87,7 +87,7 @@ const registerWabaSubscriberRoutes = (app) => {
         }
         catch (error) {
             return res.status(400).json({
-                error: error instanceof Error ? error.message : "Não foi possível fazer login.",
+                error: error instanceof Error ? error.message : "Não foi possível entrar.",
             });
         }
     });

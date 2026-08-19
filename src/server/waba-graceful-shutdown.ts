@@ -43,7 +43,10 @@ export const registerWabaShutdownGate = (app: Express): void => {
   });
 };
 
-export const registerWabaGracefulShutdown = (server: Server): void => {
+export const registerWabaGracefulShutdown = (
+  server: Server,
+  onBeforeClose?: () => void | Promise<void>,
+): void => {
   const close = (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
@@ -51,15 +54,23 @@ export const registerWabaGracefulShutdown = (server: Server): void => {
       `[shutdown] ${signal} — drenando conexões (até ${Math.round(SHUTDOWN_GRACE_MS / 1000)}s); /health retorna 503 até encerrar.`,
     );
 
-    server.close((err) => {
-      if (err) {
-        console.error("[shutdown] erro ao fechar servidor:", err);
-        process.exit(1);
-        return;
+    void (async () => {
+      try {
+        await onBeforeClose?.();
+      } catch (err) {
+        console.error("[shutdown] onBeforeClose:", err);
       }
-      console.log("[shutdown] servidor encerrado com sucesso.");
-      process.exit(0);
-    });
+
+      server.close((err) => {
+        if (err) {
+          console.error("[shutdown] erro ao fechar servidor:", err);
+          process.exit(1);
+          return;
+        }
+        console.log("[shutdown] servidor encerrado com sucesso.");
+        process.exit(0);
+      });
+    })();
 
     setTimeout(() => {
       console.warn("[shutdown] tempo esgotado — encerramento forçado.");

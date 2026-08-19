@@ -28,6 +28,11 @@ exports.PRODUCTION_PERSISTENCE_CATALOG = [
     { id: "aquecedorEnviosLog", file: "aquecedor-envios-log.json", label: "Aquecedor / envios" },
     { id: "aquecedorCommandLog", file: "aquecedor-command-log.json", label: "Aquecedor / logs de comando" },
     { id: "runtimeIntent", file: "runtime-intent.json", label: "Motor disparador/aquecedor" },
+    {
+        id: "aquecedorDesiredOwners",
+        file: "aquecedor-desired-owners.json",
+        label: "Aquecedor / intenção ligada (pós-redeploy)",
+    },
     { id: "adminBadges", file: "waba-admin-master-menu-badges.json", label: "Dashboard / badges admin" },
     { id: "alternativaActivations", file: "alternativa-number-activations.json", label: "Números alternativa" },
 ];

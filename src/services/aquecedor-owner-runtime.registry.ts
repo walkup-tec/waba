@@ -38,6 +38,8 @@ export type AquecedorOwnerMotor = {
 };
 
 const RUNTIME_INTENT_FILE = resolveDataFile("runtime-intent.json");
+/** Intenção ligada/desligada — arquivo dedicado (não sobrescrito a cada ciclo). Sobrevive a redeploy. */
+const DESIRED_OWNERS_FILE = resolveDataFile("aquecedor-desired-owners.json");
 const AQUECEDOR_WORKER_LEASE_MS = 90_000;
 const AQUECEDOR_PERSISTED_RELOAD_MS = 2_000;
 const AQUECEDOR_PROCESSING_STALE_MS = 8 * 60 * 1000;
@@ -150,8 +152,11 @@ export function buildPersistedSnapshotFromMotor(
   motor: AquecedorOwnerMotor,
   overrides: Partial<AquecedorRuntimePersistedSnapshot> = {},
 ): AquecedorRuntimePersistedSnapshot {
+  // Intenção do usuário (desired) manda: com aquecedor ligado, nunca persistir running=false
+  // por glitch de timer/reload — senão o motor morre até alguém logar e dar auto-resume.
+  const runningWhileDesired = motor.desired === true ? true : motor.runtime.running;
   return {
-    running: motor.runtime.running,
+    running: runningWhileDesired,
     isProcessing: motor.runtime.isProcessing,
     nextAllowedAt: motor.runtime.nextAllowedAt,
     lastRunAt: motor.runtime.lastRunAt,
@@ -164,11 +169,43 @@ export function buildPersistedSnapshotFromMotor(
   };
 }
 
+/**
+ * Quem deve processar ciclos deste proprietário.
+ * Critério: desired=true + lease (não exige snapshot.running — isso travava o motor
+ * após logout quando a UI deixava de chamar /aquecedor/start).
+ */
 export function shouldProcessLeadOwnerMotor(motor: AquecedorOwnerMotor): boolean {
-  if (motor.desired !== true || !motor.snapshot.running) return false;
+  if (motor.desired !== true) return false;
   if (motor.snapshot.workerId === AQUECEDOR_OWNER_WORKER_ID) return true;
   if (!motor.snapshot.workerId || !isWorkerLeaseValid(motor.snapshot)) return true;
   return false;
+}
+
+function parseConnectedSummary(raw: unknown): AquecedorConnectedSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const names = Array.isArray(row.names)
+    ? row.names.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const preparingNames = Array.isArray(row.preparingNames)
+    ? row.preparingNames.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const at = typeof row.at === "number" && Number.isFinite(row.at) ? row.at : 0;
+  if (!at) return null;
+  return {
+    count: typeof row.count === "number" && Number.isFinite(row.count) ? row.count : names.length,
+    names,
+    preparingCount:
+      typeof row.preparingCount === "number" && Number.isFinite(row.preparingCount)
+        ? row.preparingCount
+        : preparingNames.length,
+    preparingNames,
+    totalEnabled:
+      typeof row.totalEnabled === "number" && Number.isFinite(row.totalEnabled)
+        ? row.totalEnabled
+        : names.length + preparingNames.length,
+    at,
+  };
 }
 
 function parseOwnerSnapshot(raw: unknown): AquecedorRuntimePersistedSnapshot {
@@ -212,36 +249,74 @@ function loadOwnerFromPersisted(
   applyPersistedSnapshotToMotor(motor, snapshot);
 }
 
+function mergeOwnerFromPersisted(
+  ownerEmail: string,
+  desired: boolean | null,
+  snapshot: AquecedorRuntimePersistedSnapshot,
+): void {
+  const existing = ownerMotors.get(ownerEmail);
+  if (!existing) {
+    loadOwnerFromPersisted(ownerEmail, desired, snapshot);
+    return;
+  }
+  const keepLocalTimer =
+    desired === true && existing.runtime.running === true && existing.scheduleTimer != null;
+  existing.desired = desired;
+  if (desired === true) {
+    snapshot.running = true;
+  }
+  applyPersistedSnapshotToMotor(existing, snapshot);
+  if (keepLocalTimer) {
+    // Reload do disco não pode matar o timer do processo líder.
+    existing.runtime.running = true;
+  }
+}
+
 function parsePersistedOwners(raw: Record<string, unknown>): void {
-  ownerMotors.clear();
   const version = Number(raw.version);
+  const seen = new Set<string>();
 
   if (version === 3 && raw.owners && typeof raw.owners === "object") {
     for (const [email, value] of Object.entries(raw.owners as Record<string, unknown>)) {
       const ownerEmail = normalizeAquecedorOwnerEmail(email);
       if (!ownerEmail) continue;
+      seen.add(ownerEmail);
       const row = (value || {}) as Record<string, unknown>;
       const desired =
         typeof row.desired === "boolean" ? row.desired : row.desired === true ? true : null;
       const snapshot = parseOwnerSnapshot(row.snapshot);
-      loadOwnerFromPersisted(ownerEmail, desired, snapshot);
+      if (desired === true) snapshot.running = true;
+      mergeOwnerFromPersisted(ownerEmail, desired, snapshot);
+      // Contador de instâncias sobrevive a restart: usa o resumo persistido se for mais novo.
+      const persistedSummary = parseConnectedSummary(row.connectedSummary);
+      if (persistedSummary) {
+        const motor = getAquecedorOwnerMotor(ownerEmail);
+        if (persistedSummary.at > motor.connectedSummary.at) {
+          motor.connectedSummary = persistedSummary;
+        }
+      }
     }
-    return;
-  }
-
-  if (version === 1 || version === 2) {
+  } else if (version === 1 || version === 2) {
     const desired =
       typeof raw.aquecedorRuntimeDesired === "boolean" ? raw.aquecedorRuntimeDesired : null;
     const ownerEmail = normalizeAquecedorOwnerEmail(
       typeof raw.aquecedorOwnerEmail === "string" ? raw.aquecedorOwnerEmail : null,
     );
     const snapshot = parseOwnerSnapshot(raw.aquecedorRuntimeSnapshot);
-    if (version === 1) {
+    if (version === 1 || desired === true) {
       snapshot.running = desired === true;
     }
     if (ownerEmail) {
-      loadOwnerFromPersisted(ownerEmail, desired, snapshot);
+      seen.add(ownerEmail);
+      mergeOwnerFromPersisted(ownerEmail, desired, snapshot);
     }
+  }
+
+  // Proprietários só em memória e ausentes do disco: se desired!=true, libera timer.
+  for (const [email, motor] of ownerMotors.entries()) {
+    if (seen.has(email)) continue;
+    if (motor.desired === true) continue;
+    stopAquecedorOwnerMotorLocal(email);
   }
 }
 
@@ -272,12 +347,19 @@ export async function reloadAquecedorOwnerMotorsFromDisk(force = false): Promise
 }
 
 async function writeAllOwnerMotorsToDisk(): Promise<void> {
-  const owners: Record<string, { desired: boolean | null; snapshot: AquecedorRuntimePersistedSnapshot }> =
-    {};
+  const owners: Record<
+    string,
+    {
+      desired: boolean | null;
+      snapshot: AquecedorRuntimePersistedSnapshot;
+      connectedSummary: AquecedorConnectedSummary | null;
+    }
+  > = {};
   for (const [email, motor] of ownerMotors.entries()) {
     owners[email] = {
       desired: motor.desired,
       snapshot: buildPersistedSnapshotFromMotor(motor),
+      connectedSummary: motor.connectedSummary.at > 0 ? motor.connectedSummary : null,
     };
   }
   const savedAtMs = Date.now();
@@ -291,6 +373,63 @@ async function writeAllOwnerMotorsToDisk(): Promise<void> {
   await fs.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
   await fs.rename(tmp, RUNTIME_INTENT_FILE);
   persistedSavedAtMs = savedAtMs;
+}
+
+async function writeDesiredOwnersFile(): Promise<void> {
+  const desired: Record<string, true> = {};
+  for (const [email, motor] of ownerMotors.entries()) {
+    if (motor.desired === true) desired[email] = true;
+  }
+  const payload = {
+    version: 1 as const,
+    savedAt: new Date().toISOString(),
+    desired,
+  };
+  await fs.mkdir(path.dirname(DESIRED_OWNERS_FILE), { recursive: true });
+  const tmp = `${DESIRED_OWNERS_FILE}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
+  await fs.rename(tmp, DESIRED_OWNERS_FILE);
+}
+
+/**
+ * Restaura desired=true a partir do arquivo dedicado (após restart/redeploy).
+ * Garante que um snapshot de ciclo corrompido/incompleto não apague a intenção do usuário.
+ */
+export async function loadAndApplyDurableDesiredOwners(): Promise<string[]> {
+  const restored: string[] = [];
+  try {
+    const rawText = await fs.readFile(DESIRED_OWNERS_FILE, "utf-8");
+    const parsed = JSON.parse(rawText) as {
+      desired?: Record<string, unknown>;
+    };
+    const map = parsed?.desired && typeof parsed.desired === "object" ? parsed.desired : {};
+    for (const [email, value] of Object.entries(map)) {
+      if (value !== true) continue;
+      const ownerEmail = normalizeAquecedorOwnerEmail(email);
+      if (!ownerEmail) continue;
+      const motor = getAquecedorOwnerMotor(ownerEmail);
+      if (motor.desired === true) {
+        restored.push(ownerEmail);
+        continue;
+      }
+      motor.desired = true;
+      motor.snapshot.running = true;
+      motor.runtime.running = true;
+      if (!motor.runtime.lastResult || /parado/i.test(motor.runtime.lastResult)) {
+        motor.runtime.lastResult = "Aquecedor retomado após restart do servidor.";
+      }
+      restored.push(ownerEmail);
+      console.log(`[Runtime] desired durável: restaurado ${ownerEmail} = ligado.`);
+    }
+  } catch {
+    /* arquivo ausente na primeira execução */
+  }
+  return restored;
+}
+
+export async function flushAquecedorOwnerMotorsToDisk(): Promise<void> {
+  await writeAllOwnerMotorsToDisk();
+  await writeDesiredOwnersFile();
 }
 
 export async function persistAquecedorOwnerSnapshot(
@@ -314,7 +453,11 @@ export async function persistAquecedorOwnerIntent(
     workerHeartbeatAt: desired ? new Date().toISOString() : null,
     isProcessing: desired ? motor.runtime.isProcessing : false,
   });
+  if (!desired) {
+    motor.runtime.nextAllowedAt = null;
+  }
   await writeAllOwnerMotorsToDisk();
+  await writeDesiredOwnersFile();
   console.log(
     `[Runtime] runtime-intent: aquecedor ${ownerEmail} desejado = ${desired ? "ligado" : "desligado"}.`,
   );
@@ -344,7 +487,9 @@ export function buildAquecedorOwnerStatusPayload(ownerEmail: string) {
   const motor = getAquecedorOwnerMotor(ownerEmail);
   const desiredRunning = motor.desired === true;
   const workerActive = isWorkerLeaseValid(motor.snapshot);
-  const running = desiredRunning && (motor.snapshot.running === true || workerActive);
+  const running =
+    desiredRunning &&
+    (motor.runtime.running === true || motor.snapshot.running === true || workerActive);
   const summary = motor.connectedSummary;
   return {
     ...motor.snapshot,

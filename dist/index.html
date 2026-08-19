@@ -41,7 +41,6 @@
         var DEPLOY_WATCH_MS = 8000;
         var STABLE_PROBES_REQUIRED = 3;
         var STABLE_COMPLETE_MS = 500;
-        var FALSE_ALARM_MS = 45000;
         var FORCE_COMPLETE_MS = 90000;
         var pollTimer = null;
         var pollStartedAt = 0;
@@ -93,24 +92,31 @@
           }
         }
 
+        /** Único sinal de processo: Redeploy/SIGTERM do waba_disparador. */
         function isDeployShutdownSignal(payload) {
           return Boolean(payload && payload.shuttingDown === true);
         }
 
+        /**
+         * CRÍTICO: modal SOMENTE para Deploy/Redeploy do waba_disparador.
+         * 502/504/rede/heal NÃO disparam o modal.
+         */
         function shouldTriggerDeployRecoveryFromHttp(status, payload) {
-          if (status !== 503) return false;
-          return isDeployShutdownSignal(payload);
+          return status === 503 && isDeployShutdownSignal(payload);
         }
 
         async function shouldTriggerDeployRecoveryFromResponse(response) {
-          if (!response) return false;
-          if (response.status !== 503) return false;
+          if (!response || response.status !== 503) return false;
           try {
             var payload = await response.clone().json();
             return isDeployShutdownSignal(payload);
           } catch (_) {
             return false;
           }
+        }
+
+        function isGatewayStatus(status) {
+          return status === 502 || status === 503 || status === 504;
         }
 
         function purgeDeployServiceWorkerCache() {
@@ -321,10 +327,6 @@
           baselineServerBootId = "";
         }
 
-        function isGatewayStatus(status) {
-          return status === 502 || status === 503 || status === 504;
-        }
-
         async function probeHealthDetailed() {
           try {
             var response = await fetch(resolveHealthUrl(), {
@@ -338,18 +340,15 @@
               data = null;
             }
             applyDeployResilienceFromHealth(data);
-            if (shouldTriggerDeployRecoveryFromHttp(response.status, data)) {
-              return {
-                stable: false,
-                deploySignal: true,
-                reason: "shutdown",
-              };
-            }
-            if (isGatewayStatus(response.status)) {
-              return { stable: false, deploySignal: false, reason: "gateway_without_deploy_signal" };
-            }
-            if (isDeployShutdownSignal(data)) {
+
+            // Deploy/Redeploy real: processo sinaliza shuttingDown.
+            if (isDeployShutdownSignal(data) || shouldTriggerDeployRecoveryFromHttp(response.status, data)) {
               return { stable: false, deploySignal: true, reason: "shutdown" };
+            }
+
+            // 502/504/rede/heal: instável, mas NÃO abre modal de atualização.
+            if (isGatewayStatus(response.status)) {
+              return { stable: false, deploySignal: false, reason: "gateway" };
             }
             if (data && data.maintenanceMode) {
               return { stable: false, deploySignal: false, reason: "maintenance" };
@@ -357,6 +356,7 @@
             if (!response.ok || !data || data.ok !== true) {
               return { stable: false, deploySignal: false, reason: "unhealthy" };
             }
+
             try {
               var readyRes = await fetch(resolveReadyUrl(), {
                 cache: "no-store",
@@ -368,12 +368,16 @@
               } catch (_) {
                 readyData = null;
               }
-              if (!readyRes.ok || !readyData || readyData.ready !== true || readyData.shuttingDown) {
-                return { stable: false, deploySignal: Boolean(readyData && readyData.shuttingDown), reason: "not_ready" };
+              if (readyData && readyData.shuttingDown === true) {
+                return { stable: false, deploySignal: true, reason: "shutdown" };
+              }
+              if (!readyRes.ok || !readyData || readyData.ready !== true) {
+                return { stable: false, deploySignal: false, reason: "not_ready" };
               }
             } catch (_) {
               return { stable: false, deploySignal: false, reason: "ready_unreachable" };
             }
+
             return {
               stable: true,
               deploySignal: false,
@@ -434,8 +438,15 @@
           }, POLL_MS);
         }
 
-        function startDeployRecovery(force) {
+        function startDeployRecovery(force, reason) {
           if (!isDeployResilienceEnabled()) return;
+          // Só inicia por Deploy/Redeploy autenticado (shutdown ou drift de marker).
+          var allowed =
+            force === true ||
+            reason === "shutdown" ||
+            reason === "marker_drift" ||
+            sawDeploySignal === true;
+          if (!allowed) return;
           if (isRegisterWizardBlockingDeploy()) {
             try {
               sessionStorage.setItem("waba.deployReloadPending", "1");
@@ -454,11 +465,11 @@
           if (isRegisterWizardBlockingDeploy()) return;
           var probe = await probeHealthDetailed();
           if (probe.deploySignal) {
-            startDeployRecovery(false);
+            startDeployRecovery(false, "shutdown");
             return;
           }
           if (probe.stable && hasDeployMarkerDrift(probe)) {
-            startDeployRecovery(true);
+            startDeployRecovery(true, "marker_drift");
             return;
           }
           rememberDeployBaseline(probe);
@@ -513,7 +524,7 @@
             if (!isDeployResilienceEnabled()) return;
             rememberDeployBaseline(probe);
             if (probe.deploySignal) {
-              startDeployRecovery(false);
+              startDeployRecovery(false, "shutdown");
               return;
             }
             scheduleDeployBackgroundWatch();
@@ -1676,7 +1687,15 @@
         border-left: 2px solid rgba(110, 255, 200, 0.5);
       }
 
-      .summary-card:nth-child(2) {
+      .summary-card:nth-child(4) {
+        border-left: 2px solid rgba(248, 113, 113, 0.55);
+      }
+
+      .summary-card.summary-card-preparing {
+        border-left: 2px solid rgba(251, 191, 36, 0.55);
+      }
+
+      .summary-card.summary-card-restriction {
         border-left: 2px solid rgba(248, 113, 113, 0.55);
       }
 
@@ -1692,7 +1711,15 @@
         letter-spacing: -0.02em;
       }
 
-      .summary-card:nth-child(2) .summary-value {
+      .summary-card:nth-child(4) .summary-value {
+        color: #fca5a5;
+      }
+
+      .summary-card.summary-card-preparing .summary-value {
+        color: #fbbf24;
+      }
+
+      .summary-card.summary-card-restriction .summary-value {
         color: #fca5a5;
       }
 
@@ -7586,7 +7613,8 @@
         background: rgba(46, 228, 160, 0.12);
       }
 
-      .instances-chip.active[data-status="preparing"] {
+      .instances-chip.active[data-status="preparing"],
+      .instances-chip.active[data-status="restriction"] {
         border-color: rgba(251, 191, 36, 0.55);
         color: #fbbf24;
         background: rgba(251, 191, 36, 0.12);
@@ -8191,10 +8219,6 @@
         cursor: not-allowed;
       }
 
-      #admin-subscriber-resend-overlay .admin-subscriber-resend-password {
-        margin-top: 12px;
-      }
-
       .admin-subscribers-table tbody tr.admin-subscribers-row-clickable:hover td {
         background: rgba(59, 130, 246, 0.1);
       }
@@ -8378,14 +8402,30 @@
         color: #fbbf24;
       }
 
-      .status-text.status-with-countdown {
-        display: inline-flex;
-        align-items: baseline;
-        flex-wrap: wrap;
-        gap: 0.4em;
+      .status-text.wa-restriction {
+        color: #fbbf24;
+        text-transform: none;
+        font-size: 0.9975rem;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        line-height: 1.2;
       }
 
-      .preparing-countdown {
+      .status-text.wa-restriction > span:first-child {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35em;
+      }
+
+      .status-text.status-with-countdown {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45em;
+      }
+
+      .preparing-countdown,
+      .wa-restriction-countdown {
         display: inline-block;
         font-size: 0.9em;
         font-weight: 600;
@@ -8396,6 +8436,29 @@
         border-radius: 4px;
         background: rgba(251, 191, 36, 0.12);
         border: 1px solid rgba(251, 191, 36, 0.22);
+      }
+
+      .status-wa-icon {
+        display: inline-flex;
+        width: 0.95em;
+        height: 0.95em;
+        margin-right: 0.28em;
+        vertical-align: -0.12em;
+        color: #25d366;
+        flex-shrink: 0;
+      }
+
+      .status-text.wa-restriction .status-wa-icon {
+        width: 1.2555em;
+        height: 1.2555em;
+        margin-right: 0;
+        vertical-align: middle;
+      }
+
+      .status-wa-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
 
       .status-text.restricted-wait {
@@ -8755,6 +8818,13 @@
       .reg-wizard-stepper .reg-step.done .reg-step-num {
         background: rgba(22, 101, 52, 0.55);
         color: #dcfce7;
+        font-size: 0;
+      }
+
+      .reg-wizard-stepper .reg-step.done .reg-step-num::before {
+        content: "✓";
+        font-size: 0.85rem;
+        line-height: 1;
       }
 
       .reg-wizard-body {
@@ -10036,6 +10106,119 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+
+      .aquecedor-network-health {
+        margin-top: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: rgba(2, 6, 23, 0.35);
+        padding: 8px 10px;
+      }
+
+      .aquecedor-network-health-summary {
+        cursor: pointer;
+        color: #e2e8f0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        list-style: none;
+      }
+
+      .aquecedor-network-health-summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .aquecedor-network-health-body {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .aquecedor-network-health-cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .aquecedor-network-health-card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 8px;
+        padding: 8px;
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .aquecedor-network-health-card .label {
+        color: #94a3b8;
+        font-size: 0.72rem;
+      }
+
+      .aquecedor-network-health-card .value {
+        color: #e2e8f0;
+        font-size: 1rem;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+
+      .aquecedor-network-health-table {
+        overflow: auto;
+        max-height: 220px;
+      }
+
+      .aquecedor-network-health-table table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+      }
+
+      .aquecedor-network-health-table th,
+      .aquecedor-network-health-table td {
+        text-align: left;
+        padding: 4px 6px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        color: #cbd5e1;
+      }
+
+      .aquecedor-network-health-table th {
+        color: #94a3b8;
+        font-weight: 600;
+      }
+
+      .aquecedor-network-health-matrix {
+        overflow: auto;
+        max-height: 280px;
+      }
+
+      .aquecedor-network-health-matrix table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: collapse;
+        font-size: 0.72rem;
+      }
+
+      .aquecedor-network-health-matrix th,
+      .aquecedor-network-health-matrix td {
+        padding: 3px 6px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        text-align: center;
+        color: #cbd5e1;
+      }
+
+      .aquecedor-network-health-matrix th {
+        color: #94a3b8;
+        background: rgba(15, 23, 42, 0.55);
+      }
+
+      .aquecedor-network-health-history {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        max-height: 160px;
+        overflow: auto;
+      }
+
+      .aquecedor-network-health-history .hist-item {
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
       }
 
       .aquecedor-envio-item {
@@ -16258,6 +16441,16 @@
                   </div>
                   <div class="summary-sub">Instâncias Conectadas</div>
                 </div>
+                <div class="summary-card summary-card-preparing">
+                  <div class="summary-label">Instâncias Preparando</div>
+                  <div class="summary-value" id="instances-preparing-tab">—</div>
+                  <div class="summary-sub">Fase de 6 horas</div>
+                </div>
+                <div class="summary-card summary-card-restriction">
+                  <div class="summary-label">Restrição Temporária</div>
+                  <div class="summary-value" id="instances-restriction-tab">—</div>
+                  <div class="summary-sub">WhatsApp · até 3 horas</div>
+                </div>
                 <div class="summary-card">
                   <div class="summary-label">Instâncias desconectadas</div>
                   <div class="summary-value" id="instances-disconnected-tab">
@@ -16319,6 +16512,9 @@
                   </button>
                   <button class="instances-chip" type="button" data-status="preparing">
                     Preparando
+                  </button>
+                  <button class="instances-chip" type="button" data-status="restriction">
+                    Restrição
                   </button>
                   <button class="instances-chip" type="button" data-status="closed">
                     Desconectados
@@ -16542,6 +16738,17 @@
                   <div id="aquecedor-envios-list" class="aquecedor-envios-list">
                     <div class="muted">Carregando envios...</div>
                   </div>
+                  <details id="aquecedor-network-health" class="aquecedor-network-health" open>
+                    <summary class="aquecedor-network-health-summary">Saúde da rede</summary>
+                    <div class="aquecedor-network-health-body">
+                      <div id="aquecedor-network-health-cards" class="aquecedor-network-health-cards">
+                        <div class="muted">Carregue os envios para ver o equilíbrio dos pares.</div>
+                      </div>
+                      <div id="aquecedor-network-health-matrix" class="aquecedor-network-health-matrix"></div>
+                      <div id="aquecedor-network-health-table" class="aquecedor-network-health-table"></div>
+                      <div id="aquecedor-network-health-history" class="aquecedor-network-health-history"></div>
+                    </div>
+                  </details>
                 </div>
               </div>
             </section>
@@ -19743,7 +19950,7 @@
               <div class="reg-instruction-card">
                 <ol>
                   <li>No outro WhatsApp, abra o chat com <span class="reg-instruction-highlight" id="register-inbound-number">—</span></li>
-                  <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span></li>
+                  <li>Envie exatamente: <span class="reg-instruction-highlight" id="register-inbound-keyword">CONFIRMAR</span> <span class="muted">(também aceita CONFIRMA)</span></li>
                   <li>O sistema detecta a mensagem automaticamente — não é preciso confirmar aqui</li>
                   <li>Aguarde a resposta automática: <em>Validação WABA concluída…</em></li>
                 </ol>
@@ -20111,18 +20318,8 @@
       >
         <div class="confirm-title" id="admin-subscriber-resend-title">Reenviar boas-vindas</div>
         <div class="confirm-text">
-          Informe a senha de acesso para reenviar e-mail e WhatsApp para
-          <strong id="admin-subscriber-resend-email-display" class="admin-subscriber-delete-email"></strong>.
-        </div>
-        <div class="aquecedor-field admin-subscriber-resend-password">
-          <label for="admin-subscriber-resend-password">Senha de acesso</label>
-          <input
-            id="admin-subscriber-resend-password"
-            type="password"
-            minlength="6"
-            autocomplete="new-password"
-            placeholder="Mínimo 6 caracteres"
-          />
+          Reenviar e-mail e WhatsApp de boas-vindas para
+          <strong id="admin-subscriber-resend-email-display" class="admin-subscriber-delete-email"></strong>?
         </div>
         <div class="confirm-actions">
           <button id="admin-subscriber-resend-cancel-btn" class="instance-action-btn" type="button">
@@ -21000,8 +21197,14 @@
                 )
               )
             : "";
-          applyInstancesPayload(payload, { render: false });
+          applyInstancesPayload(payload, {
+            render: activeTab === "instancias",
+          });
           await loadInstanceUsageConfig();
+          if (activeTab === "instancias") {
+            renderInstancesList();
+            updateInstancesIndicators();
+          }
         } catch (error) {
           if (!instancesData?.items?.length) {
             instancesLoadError =
@@ -22536,19 +22739,17 @@
               if (postDeployReload) {
                 document.body.classList.add("waba-auth-checking");
                 const resilience = window.wabaDeployResilience;
+                // Só retoma o modal se já viemos de um reload pós-deploy (flag explícita).
                 if (
                   resilience &&
                   typeof resilience.isEnabled === "function" &&
-                  resilience.isEnabled()
+                  resilience.isEnabled() &&
+                  typeof resilience.show === "function"
                 ) {
-                  if (typeof resilience.startDeployRecovery === "function") {
-                    resilience.startDeployRecovery(false);
-                  } else if (typeof resilience.show === "function") {
-                    resilience.show(
-                      "Finalizando a atualização. Sua sessão será restaurada em instantes.",
-                      "stabilizing"
-                    );
-                  }
+                  resilience.show(
+                    "Finalizando a atualização. Sua sessão será restaurada em instantes.",
+                    "stabilizing"
+                  );
                 }
               }
               await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
@@ -24730,11 +24931,8 @@
         if (!hasMasterAccess() || !subscriberId) return;
         adminSubscriberResendId = String(subscriberId);
         const emailEl = document.getElementById("admin-subscriber-resend-email-display");
-        const passwordInput = document.getElementById("admin-subscriber-resend-password");
         if (emailEl) emailEl.textContent = String(email || "").trim() || "—";
-        if (passwordInput) passwordInput.value = "";
         openDisparosOverlay("admin-subscriber-resend-overlay");
-        window.setTimeout(() => passwordInput?.focus(), 0);
       }
 
       function closeAdminSubscriberResendModal() {
@@ -24950,20 +25148,9 @@
         bindAdminSubscriberDetailMaskedInputs();
       }
 
-      async function resendAdminSubscriberWelcome(subscriberId, password) {
+      async function resendAdminSubscriberWelcome(subscriberId) {
         const targetId = String(subscriberId || adminSubscriberResendId || "").trim();
         if (!hasMasterAccess() || !targetId) return;
-        const pwd = String(
-          password ?? document.getElementById("admin-subscriber-resend-password")?.value ?? ""
-        ).trim();
-        if (pwd.length < 6) {
-          showToast(
-            "Informe a senha (mín. 6 caracteres) para reenviar e-mail e WhatsApp de boas-vindas.",
-            "warning",
-            6000
-          );
-          return;
-        }
         const btn = document.getElementById("admin-subscriber-resend-confirm-btn");
         if (btn) {
           btn.disabled = true;
@@ -24976,7 +25163,7 @@
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password: pwd }),
+              body: "{}",
             },
             120000
           );
@@ -30974,12 +31161,6 @@
             closeAdminSubscriberResendModal();
           }
         });
-        document.getElementById("admin-subscriber-resend-password")?.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void confirmResendAdminSubscriberWelcome();
-          }
-        });
         document.getElementById("admin-subscriber-delete-cancel-btn")?.addEventListener("click", () => {
           closeAdminSubscriberDeleteModal();
         });
@@ -36401,7 +36582,8 @@
       let registerInboundUiPhase = "instructions";
       let registerInboundReceiveConfirmed = false;
       let registerInboundProgressTimers = [];
-      const REGISTER_INBOUND_POLL_MS = 300;
+      // 2s: evita thrash de scroll/animação e alinha ao worker de validação.
+      const REGISTER_INBOUND_POLL_MS = 2000;
       const REGISTER_INBOUND_MAX_POLL_FAILS = 6;
       const REGISTER_INBOUND_PROGRESS_LINES = [
         { atMs: 0, text: "Detectando CONFIRMAR automaticamente (webhook + consulta a cada 2s)" },
@@ -37427,6 +37609,9 @@
       let aquecedorExpedienteBatches = [];
       let instanceUsageByName = {};
       let preparingCountdownTimer = null;
+      let waRestrictionCountdownTimer = null;
+      let waRestrictionRecheckTimer = null;
+      const WA_RESTRICTION_RECHECK_MS = 60 * 60 * 1000;
       let disparosConfigCache = null;
       let disparosAlternativaThrottleCache = null;
       let spreadsheetRowsCache = [];
@@ -38240,6 +38425,76 @@
         }
       }
 
+      function formatAquecedorDateTimeBr(value) {
+        const d = value instanceof Date ? value : new Date(value);
+        if (!Number.isFinite(d.getTime())) return "";
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        const ss = String(d.getSeconds()).padStart(2, "0");
+        return `${dd}/${mm}/${yyyy} - ${hh}:${mi}:${ss}`;
+      }
+
+      /** Próximo envio com data completa (evita parecer “amanhã” só com HH:mm). */
+      function formatAquecedorNextSendLabel(status) {
+        const nowMs = Date.now();
+        const running =
+          status?.running === true || status?.desiredRunning === true;
+        const nextAllowedMs = status?.nextAllowedAt
+          ? new Date(status.nextAllowedAt).getTime()
+          : NaN;
+        const nextWindowMs = status?.nextWindowOpenAt
+          ? new Date(status.nextWindowOpenAt).getTime()
+          : NaN;
+        let targetMs = NaN;
+        if (status?.windowOpen === false && Number.isFinite(nextWindowMs) && nextWindowMs > nowMs) {
+          targetMs = nextWindowMs;
+        } else if (Number.isFinite(nextAllowedMs) && nextAllowedMs > nowMs) {
+          targetMs = nextAllowedMs;
+        } else if (status?.windowOpen === false && Number.isFinite(nextWindowMs)) {
+          targetMs = nextWindowMs;
+        } else if (Number.isFinite(nextAllowedMs)) {
+          targetMs = nextAllowedMs;
+        }
+        if (Number.isFinite(targetMs) && targetMs > nowMs) {
+          return formatAquecedorDateTimeBr(targetMs);
+        }
+        if (status?.isProcessing === true) return "agora";
+        if (running) return "imediato";
+        return "sem agendamento";
+      }
+
+      /**
+       * Estado claro do aquecedor (não reutilizar lastResult técnico).
+       * Aquecedor processando | Aquecedor em pausa | Aquecedor parado | Aquecedor ativo
+       */
+      function resolveAquecedorPhaseLabel(status) {
+        const running =
+          status?.running === true || status?.desiredRunning === true;
+        if (status?.isProcessing === true) return "Aquecedor processando";
+        if (!running) return "Aquecedor parado";
+        if (status?.windowOpen === false) return "Aquecedor em pausa";
+        const nextMs = status?.nextAllowedAt
+          ? new Date(status.nextAllowedAt).getTime()
+          : NaN;
+        if (Number.isFinite(nextMs) && nextMs > Date.now()) {
+          return "Aquecedor em pausa";
+        }
+        return "Aquecedor ativo";
+      }
+
+      function buildAquecedorRuntimeStatusLine(status) {
+        const running = status?.running === true;
+        const desiredRunning = status?.desiredRunning === true;
+        const motorLabel = running ? "ativo" : desiredRunning ? "retomando" : "parado";
+        const processing = status?.isProcessing === true ? "sim" : "não";
+        const nextLabel = formatAquecedorNextSendLabel(status);
+        const phaseLabel = resolveAquecedorPhaseLabel(status);
+        return `Motor: ${motorLabel} | processamento: ${processing} | próximo: ${nextLabel} | ${phaseLabel}`;
+      }
+
       async function syncAquecedorRuntimeUi(options = {}) {
         const autoResume = options.autoResume !== false;
         const label = document.getElementById("aquecedor-runtime-label");
@@ -38247,7 +38502,11 @@
           if (aquecedorRuntimeUiPin && Date.now() < aquecedorRuntimeUiPin.until) {
             const pinned = applyAquecedorRuntimeUiPin(aquecedorRuntimeStatusCache || {});
             if (label) {
-              label.textContent = `Motor: ativo | sincronizando status…${reason ? ` (${reason})` : ""}`;
+              label.textContent = `${buildAquecedorRuntimeStatusLine({
+                ...pinned,
+                running: true,
+                desiredRunning: true,
+              })} · sincronizando${reason ? ` (${reason})` : ""}`;
             }
             renderAquecedorRuntimeHero(pinned);
             renderAquecedorRuntimeProgress();
@@ -38257,9 +38516,9 @@
           const cached = aquecedorRuntimeStatusCache;
           if (cached && (cached.running === true || cached.desiredRunning === true)) {
             if (label) {
-              label.textContent = `Motor: ${
-                cached.running ? "ativo" : "retomando"
-              } | atualizando status…${reason ? ` (${reason})` : ""}`;
+              label.textContent = `${buildAquecedorRuntimeStatusLine(cached)} · atualizando${
+                reason ? ` (${reason})` : ""
+              }`;
             }
             renderAquecedorRuntimeHero(cached);
             renderAquecedorRuntimeProgress();
@@ -38324,19 +38583,12 @@
 
           aquecedorRuntimeStatusCache = data || null;
           clearAquecedorRuntimeUiPinIfConfirmed(data);
-          const isProcessing = data?.isProcessing === true;
           const motorRunning = running || desiredRunning;
           if (motorRunning) {
             showAquecedorStartStopButtons();
           }
-          const nextAllowedAt = data?.nextAllowedAt
-            ? new Date(data.nextAllowedAt).toLocaleTimeString("pt-BR")
-            : "sem espera";
-          const lastResult = String(data?.lastResult || "sem histórico");
           if (label) {
-            label.textContent = `Motor: ${
-              running ? "ativo" : desiredRunning ? "retomando" : "parado"
-            } | processamento: ${isProcessing ? "sim" : "não"} | próximo: ${nextAllowedAt} | ${lastResult}`;
+            label.textContent = buildAquecedorRuntimeStatusLine(data || {});
           }
           updateAquecedorStartStopVisibility(motorRunning, data);
           renderAquecedorRuntimeHero(data);
@@ -38510,19 +38762,25 @@
             countEl.textContent = "";
           }
         }
+        const phaseLabel = resolveAquecedorPhaseLabel(status);
         if (processing) {
           hero.classList.add("processing");
-          titleEl.textContent = "Aquecedor processando agora";
+          titleEl.textContent = phaseLabel;
           subEl.textContent = lastResult || "Enviando/avaliando próximo ciclo...";
           syncAquecedorStopButtonLabel(status);
           return;
         }
         if (running) {
           hero.classList.add("active");
-          titleEl.textContent =
-            status?.windowOpen === false ? "Aquecedor em pausa (expediente)" : "Aquecedor ativo";
+          titleEl.textContent = phaseLabel;
           if (status?.windowOpen === false) {
             subEl.textContent = buildAquecedorExpedienteHeroSub(status);
+          } else if (phaseLabel === "Aquecedor em pausa") {
+            const nextLabel = formatAquecedorNextSendLabel(status);
+            subEl.textContent =
+              nextLabel && nextLabel !== "imediato" && nextLabel !== "agora"
+                ? `Aguardando intervalo. Próximo envio: ${nextLabel}.`
+                : lastResult || "Aguardando intervalo entre envios.";
           } else {
             const parsed = splitAquecedorLastResultMessage(lastResult);
             subEl.textContent =
@@ -38531,7 +38789,7 @@
           syncAquecedorStopButtonLabel(status);
           return;
         }
-        titleEl.textContent = "Aquecedor parado";
+        titleEl.textContent = phaseLabel;
         subEl.textContent = lastResult || 'Clique em "Iniciar Aquecedor" para iniciar os ciclos automáticos.';
       }
 
@@ -38598,6 +38856,129 @@
         });
       }
 
+      async function loadAquecedorNetworkHealth() {
+        const cards = document.getElementById("aquecedor-network-health-cards");
+        const table = document.getElementById("aquecedor-network-health-table");
+        const matrixEl = document.getElementById("aquecedor-network-health-matrix");
+        const historyEl = document.getElementById("aquecedor-network-health-history");
+        if (!cards || !table) return;
+        try {
+          const response = await fetchWithTimeout(
+            "/aquecedor/network-health?_=" + Date.now(),
+            {},
+            15000
+          );
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            cards.innerHTML = `<div class="muted">${escapeAdminHtml(
+              err?.error || "Falha ao carregar saúde da rede."
+            )}</div>`;
+            table.innerHTML = "";
+            if (matrixEl) matrixEl.innerHTML = "";
+            if (historyEl) historyEl.innerHTML = "";
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          const reciprocity = Number(data?.reciprocityPercent ?? 0);
+          const unbalanced = Number(data?.unbalancedPairCount ?? 0);
+          const coverage = Number(data?.networkCoveragePercent ?? 0);
+          const spread = Number(data?.pairUsageSpread ?? 0);
+          const std = Number(data?.pairUsageStdDev ?? 0);
+          const hub = Array.isArray(data?.mostActivePhones) ? data.mostActivePhones[0] : null;
+          cards.innerHTML = [
+            ["Reciprocidade", `${reciprocity.toFixed(1)}%`],
+            ["Cobertura rede", `${coverage.toFixed(1)}%`],
+            ["Pares desbalanceados", String(unbalanced)],
+            ["Spread uso pares", String(spread)],
+            ["Desvio padrão pares", String(std)],
+            [
+              "Mais ativo",
+              hub
+                ? `${hub.phone} (${hub.sentToday}/${hub.receivedToday})`
+                : "—",
+            ],
+          ]
+            .map(
+              ([label, value]) =>
+                `<div class="aquecedor-network-health-card"><div class="label">${escapeAdminHtml(
+                  label
+                )}</div><div class="value">${escapeAdminHtml(value)}</div></div>`
+            )
+            .join("");
+
+          if (matrixEl) {
+            const matrix = data?.relationshipMatrix;
+            const labels = Array.isArray(matrix?.labels) ? matrix.labels : [];
+            const cells = Array.isArray(matrix?.cells) ? matrix.cells : [];
+            if (labels.length >= 2) {
+              const head = `<tr><th></th>${labels
+                .map((l) => `<th>${escapeAdminHtml(String(l))}</th>`)
+                .join("")}</tr>`;
+              const body = labels
+                .map((rowLabel, i) => {
+                  const row = Array.isArray(cells[i]) ? cells[i] : [];
+                  return `<tr><th>${escapeAdminHtml(String(rowLabel))}</th>${labels
+                    .map((_, j) => {
+                      const v = row[j];
+                      return `<td>${v == null ? "—" : escapeAdminHtml(String(v))}</td>`;
+                    })
+                    .join("")}</tr>`;
+                })
+                .join("");
+              matrixEl.innerHTML = `<div class="label" style="margin-bottom:6px;color:#94a3b8;font-size:0.72rem">Matriz de relacionamento (total por par)</div><table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+            } else {
+              matrixEl.innerHTML = "";
+            }
+          }
+
+          const least = Array.isArray(data?.leastUsedPairs) ? data.leastUsedPairs.slice(0, 8) : [];
+          const most = Array.isArray(data?.mostUsedPairs) ? data.mostUsedPairs.slice(0, 8) : [];
+          const ranking = Array.isArray(data?.balanceRanking) ? data.balanceRanking.slice(0, 8) : [];
+          const renderPairRows = (rows, title) => {
+            if (!rows.length) return "";
+            return `<div style="margin-bottom:8px"><div class="label" style="color:#94a3b8;font-size:0.72rem;margin-bottom:4px">${escapeAdminHtml(
+              title
+            )}</div><table><thead><tr><th>Par</th><th>Total</th><th>Saldo</th></tr></thead><tbody>${rows
+              .map((row) => {
+                const pair = `${row.a} ↔ ${row.b}`;
+                const saldo = Number(row.balance) || 0;
+                const saldoTxt = saldo > 0 ? `+${saldo}` : String(saldo);
+                return `<tr><td>${escapeAdminHtml(pair)}</td><td>${escapeAdminHtml(
+                  String(row.totalMessages ?? 0)
+                )}</td><td>${escapeAdminHtml(saldoTxt)}</td></tr>`;
+              })
+              .join("")}</tbody></table></div>`;
+          };
+          table.innerHTML =
+            renderPairRows(least, "Pares menos utilizados") +
+            renderPairRows(most, "Pares mais utilizados") +
+            renderPairRows(ranking, "Ranking de saldo");
+
+          if (historyEl) {
+            const hist = Array.isArray(data?.selectionHistory) ? data.selectionHistory.slice(0, 12) : [];
+            if (!hist.length) {
+              historyEl.innerHTML = '<div class="muted">Sem histórico de seleções ainda.</div>';
+            } else {
+              historyEl.innerHTML = `<div class="label" style="margin-bottom:4px;color:#94a3b8">Últimas seleções do algoritmo</div>${hist
+                .map((h) => {
+                  const when = String(h.at || "").replace("T", " ").slice(0, 19);
+                  return `<div class="hist-item"><strong>${escapeAdminHtml(
+                    `${h.origem} → ${h.destino}`
+                  )}</strong> · score ${escapeAdminHtml(String(Math.round(h.score || 0)))}<br/><span>${escapeAdminHtml(
+                    h.reason || ""
+                  )}</span><br/><span style="opacity:0.7">${escapeAdminHtml(when)}</span></div>`;
+                })
+                .join("")}`;
+            }
+          }
+        } catch {
+          cards.innerHTML = '<div class="muted">Falha ao carregar saúde da rede.</div>';
+          table.innerHTML = "";
+          if (matrixEl) matrixEl.innerHTML = "";
+          if (historyEl) historyEl.innerHTML = "";
+        }
+      }
+
       async function loadAquecedorEnvios() {
         const container = document.getElementById("aquecedor-envios-list");
         if (!container) return;
@@ -38626,6 +39007,7 @@
           const data = await response.json().catch(() => ({}));
           const items = Array.isArray(data?.items) ? data.items : [];
           syncAquecedorChatVisualizer(items);
+          void loadAquecedorNetworkHealth();
           if (!items.length) {
             const hint = String(data?.hint || "").trim();
             aquecedorEnviosLastItems = [];
@@ -42252,7 +42634,7 @@
             : `Ação iniciada: ${action}.`;
         addAquecedorCommandLog(actionStartLabel);
         try {
-          const runOnceTimeout = action === "runOnce" ? 90000 : 12000;
+          const runOnceTimeout = action === "runOnce" ? 180000 : 12000;
           const response = await fetchWithTimeout(
             url,
             {
@@ -42292,17 +42674,20 @@
           if (action === "runOnce") {
             const statusPayload = data?.status || {};
             const lastResult = String(statusPayload?.lastResult || data?.message || "").trim();
+            const desiredRunning =
+              statusPayload?.desiredRunning === true ||
+              aquecedorRuntimeStatusCache?.desiredRunning === true;
             aquecedorRuntimeStatusCache = {
               ...(aquecedorRuntimeStatusCache || {}),
               ...statusPayload,
-              running: false,
-              desiredRunning: false,
+              running: desiredRunning ? statusPayload?.running !== false : false,
+              desiredRunning,
               isProcessing: false,
               lastResult: lastResult || aquecedorRuntimeStatusCache?.lastResult,
             };
             renderAquecedorRuntimeHero(aquecedorRuntimeStatusCache);
             renderAquecedorRuntimeProgress();
-            updateAquecedorStartStopVisibility(false, aquecedorRuntimeStatusCache);
+            updateAquecedorStartStopVisibility(desiredRunning, aquecedorRuntimeStatusCache);
             if (lastResult) {
               addAquecedorCommandLog("Resultado: " + lastResult);
             } else {
@@ -42854,27 +43239,10 @@
           }, timeoutMs);
 
           fetch(url, { credentials: "same-origin", ...options })
-            .then(async (res) => {
+            .then((res) => {
               clearTimeout(timer);
-              const path = String(url || "");
-              const resilience = window.wabaDeployResilience;
-              const skipDeployRecovery =
-                /\/admin\/push\//.test(path) ||
-                /\/push\/alerts/.test(path) ||
-                /\/instancias\//.test(path);
-              if (
-                !skipDeployRecovery &&
-                resilience &&
-                typeof resilience.isEnabled === "function" &&
-                resilience.isEnabled() &&
-                !/\/health(\?|$)/.test(path) &&
-                !/\/ready(\?|$)/.test(path) &&
-                typeof resilience.shouldTriggerDeployRecoveryFromResponse === "function" &&
-                typeof resilience.startDeployRecovery === "function"
-              ) {
-                const shouldStart = await resilience.shouldTriggerDeployRecoveryFromResponse(res);
-                if (shouldStart) resilience.startDeployRecovery(false);
-              }
+              // Modal de atualização NÃO é disparado por 502/API — só via /health
+              // (shuttingDown) ou drift de deployMarker no watcher de background.
               resolve(res);
             })
             .catch((err) => {
@@ -43327,9 +43695,12 @@
           ? instancesData.items
           : [];
         const normalizedItems = items.map((inst, idx) => {
-          const statusRaw = String(inst?.connectionStatus ?? "");
+          const statusRaw = String(
+            inst?.liveConnectionStatus || inst?.connectionStatus || "",
+          );
           const statusLc = statusRaw.toLowerCase();
-          const isOpen = statusLc.includes("open");
+          // Só "open" conta como conectado — connecting/close oscilam na EVO após device_removed.
+          const isOpen = statusLc === "open";
 
           const candidateInstance =
             inst?.name ??
@@ -43344,7 +43715,12 @@
               : String(candidateInstance);
 
           const numberCandidate =
-            inst?.number ?? inst?.phone ?? inst?.owner ?? inst?.ownerNumber ?? "";
+            inst?.number ??
+            inst?.phone ??
+            inst?.owner ??
+            inst?.ownerNumber ??
+            inst?.ownerJid ??
+            "";
           const normalizedNumberRaw = String(numberCandidate || "").trim();
           const normalizedNumberKey = normalizePhoneKey(normalizedNumberRaw);
           const displayNumber = normalizedNumberKey || normalizedNumberRaw || "—";
@@ -43409,6 +43785,10 @@
             createdAt: String(inst?.createdAt || "").trim(),
             updatedAt: String(inst?.updatedAt || inst?.avatarVersion || "").trim(),
             isOpen,
+            connectionStatus: statusRaw,
+            liveConnectionStatus: String(inst?.liveConnectionStatus || statusRaw || ""),
+            waRestrictionUntil: inst?.waRestrictionUntil || null,
+            waRestrictionDetectedAt: inst?.waRestrictionDetectedAt || null,
             statusLabel: isOpen ? "conectado" : "desconectado",
           };
         });
@@ -43491,8 +43871,12 @@
 
       function updateInstancesIndicators() {
         const base = buildOrderedInstancesBase();
-        const ativas = base.filter((i) => i.isOpen).length;
-        const desconectadas = base.filter((i) => !i.isOpen).length;
+        // Mesma regra dos filtros da lista (não usar só isOpen — Preparando/Restrição
+        // podem estar "open" na EVO e não ser "conectado" na UI).
+        const ativas = base.filter((i) => isInstanceConnectedFilter(i)).length;
+        const desconectadas = base.filter((i) => isInstanceDisconnectedFilter(i)).length;
+        const preparando = base.filter((i) => isInstancePreparing(i)).length;
+        const restricao = base.filter((i) => isInstanceWaRestricted(i)).length;
         const total = base.length;
 
         const instAtivasEl = document.getElementById("instances-active");
@@ -43507,11 +43891,15 @@
         const instAtivasTabEl = document.getElementById("instances-active-tab");
         const instDescTabEl = document.getElementById("instances-disconnected-tab");
         const instTotalTabEl = document.getElementById("instances-total-tab");
+        const instPrepTabEl = document.getElementById("instances-preparing-tab");
+        const instRestTabEl = document.getElementById("instances-restriction-tab");
         if (instAtivasTabEl && instDescTabEl && instTotalTabEl) {
           instAtivasTabEl.textContent = String(ativas);
           instDescTabEl.textContent = String(desconectadas);
           instTotalTabEl.textContent = `Total: ${total}`;
         }
+        if (instPrepTabEl) instPrepTabEl.textContent = String(preparando);
+        if (instRestTabEl) instRestTabEl.textContent = String(restricao);
 
         updateDashboardWarmthIndicators(base);
 
@@ -43565,7 +43953,20 @@
         return `${m}m ${String(s).padStart(2, "0")}s`;
       }
 
+      const WA_STATUS_ICON_SVG =
+        '<svg class="status-wa-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.73 14.87L2 22l5.28-1.24A10 10 0 1 0 12 2zm0 18.18a8.16 8.16 0 0 1-4.16-1.14l-.3-.18-3.13.74.75-3.05-.2-.31A8.18 8.18 0 1 1 12 20.18zm4.49-6.14c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1-.36-1.9-1.16-.7-.62-1.18-1.38-1.32-1.62-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.42-.54-.43h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.68 2.56 4.06 3.58.56.24 1 .38 1.34.48.56.18 1.08.16 1.48.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"/></svg>';
+
       function buildInstanceStatusHtml(statusLabel, statusClass, promoteAt) {
+        if (statusLabel === "Restrição") {
+          if (promoteAt) {
+            const text = formatPreparingCountdown(promoteAt);
+            const countdownHtml = `<span class="wa-restriction-countdown" data-restrict-until="${escapeAdminHtml(
+              String(promoteAt),
+            )}" title="Contagem regressiva da restrição WhatsApp (3h)">${text}</span>`;
+            return `<span class="status-text ${statusClass} status-with-countdown"><span>${WA_STATUS_ICON_SVG}Restrição</span>${countdownHtml}</span>`;
+          }
+          return `<span class="status-text ${statusClass}"><span>${WA_STATUS_ICON_SVG}Restrição</span></span>`;
+        }
         let countdownHtml = "";
         if (statusLabel === "Preparando" && promoteAt) {
           const text = formatPreparingCountdown(promoteAt);
@@ -43594,9 +43995,42 @@
         }
       }
 
+      function tickWaRestrictionCountdowns() {
+        const nodes = document.querySelectorAll(".wa-restriction-countdown[data-restrict-until]");
+        if (!nodes.length) return;
+        nodes.forEach((node) => {
+          const iso = node.getAttribute("data-restrict-until");
+          node.textContent = formatPreparingCountdown(iso);
+        });
+      }
+
       function ensurePreparingCountdownTimer() {
         if (preparingCountdownTimer) return;
         preparingCountdownTimer = setInterval(tickPreparingCountdowns, 1000);
+      }
+
+      function ensureWaRestrictionCountdownTimer() {
+        if (waRestrictionCountdownTimer) return;
+        waRestrictionCountdownTimer = setInterval(tickWaRestrictionCountdowns, 1000);
+      }
+
+      async function recheckWaRestrictionsFromServer() {
+        try {
+          await loadInstancesForInstanciasTab({ fullRefresh: true });
+        } catch {
+          /* ignore */
+        }
+      }
+
+      function ensureWaRestrictionRecheckTimer() {
+        if (waRestrictionRecheckTimer) return;
+        waRestrictionRecheckTimer = setInterval(() => {
+          const hasRestriction = Object.values(instanceUsageByName || {}).some(
+            (row) => row && row.waRestrictionActive && row.waRestrictionUntil,
+          );
+          if (!hasRestriction) return;
+          void recheckWaRestrictionsFromServer();
+        }, WA_RESTRICTION_RECHECK_MS);
       }
 
       function getInstanceUsage(instanceName) {
@@ -43609,6 +44043,9 @@
           aquecedorStatusLabel: current?.aquecedorStatusLabel || null,
           aquecedorPhase: current?.aquecedorPhase || null,
           aquecedorPromoteAt: current?.aquecedorPromoteAt || null,
+          waRestrictionUntil: current?.waRestrictionUntil || null,
+          waRestrictionDetectedAt: current?.waRestrictionDetectedAt || null,
+          waRestrictionActive: current?.waRestrictionActive === true,
           warmthLevel: Number.isFinite(Number(current?.warmthLevel))
             ? Math.max(0, Math.min(3, Number(current.warmthLevel)))
             : 0,
@@ -43628,6 +44065,10 @@
 
       function resolveInstanceAquecedorStatusLabel(inst) {
         const usage = getInstanceUsage(inst.instanceName);
+        // Só restrição explícita (store). connecting EVO ≠ ban/restrição WA.
+        if (usage.waRestrictionActive && usage.waRestrictionUntil) {
+          return "Restrição";
+        }
         if (usage.useAquecedor && usage.aquecedorStatusLabel) {
           return usage.aquecedorStatusLabel;
         }
@@ -43645,6 +44086,10 @@
         return resolveInstanceAquecedorStatusLabel(inst) === "Preparando";
       }
 
+      function isInstanceWaRestricted(inst) {
+        return resolveInstanceAquecedorStatusLabel(inst) === "Restrição";
+      }
+
       function isInstanceConnectedFilter(inst) {
         return resolveInstanceAquecedorStatusLabel(inst) === "conectado";
       }
@@ -43655,6 +44100,7 @@
 
       function resolveInstanceStatusClass(inst, statusLabel) {
         if (statusLabel === "6 horas de espera") return "disconnected restricted-wait";
+        if (statusLabel === "Restrição") return "processing preparing wa-restriction";
         if (statusLabel === "Preparando") return "processing preparing";
         return inst.isOpen ? "connected" : "disconnected";
       }
@@ -43677,6 +44123,9 @@
               aquecedorStatusLabel: row?.aquecedorStatusLabel || null,
               aquecedorPhase: row?.aquecedorPhase || null,
               aquecedorPromoteAt: row?.aquecedorPromoteAt || null,
+              waRestrictionUntil: row?.waRestrictionUntil || null,
+              waRestrictionDetectedAt: row?.waRestrictionDetectedAt || null,
+              waRestrictionActive: row?.waRestrictionActive === true,
               warmthLevel: Number.isFinite(Number(row?.warmthLevel))
                 ? Math.max(0, Math.min(3, Number(row.warmthLevel)))
                 : 0,
@@ -43791,6 +44240,8 @@
           filtered = filtered.filter((i) => isInstanceDisconnectedFilter(i));
         } else if (instancesStatusFilter === "preparing") {
           filtered = filtered.filter((i) => isInstancePreparing(i));
+        } else if (instancesStatusFilter === "restriction") {
+          filtered = filtered.filter((i) => isInstanceWaRestricted(i));
         }
 
         if (instancesSearchTerm) {
@@ -43857,6 +44308,13 @@
         const tbody = table.querySelector("tbody");
         filtered.forEach((inst) => {
           const usage = getInstanceUsage(inst.instanceName);
+          if (inst.waRestrictionUntil && !usage.waRestrictionUntil) {
+            usage.waRestrictionUntil = String(inst.waRestrictionUntil);
+            usage.waRestrictionDetectedAt = inst.waRestrictionDetectedAt
+              ? String(inst.waRestrictionDetectedAt)
+              : null;
+            usage.waRestrictionActive = true;
+          }
           const isSafeNumber = !usage.useAquecedor && !usage.useDisparador;
           const tr = document.createElement("tr");
           const safeProfilePicUrl = sanitizeInstanceProfilePicUrl(inst.profilePicUrl);
@@ -43874,14 +44332,29 @@
             : buildInstanceAvatarFallbackMarkup();
 
           const isDisconnected = !inst.isOpen;
-          const refreshClass = isDisconnected
-            ? "instance-action-btn btn-refresh enabled"
-            : "instance-action-btn btn-refresh disabled";
-          const qrcodeClass = isDisconnected
-            ? "instance-action-btn btn-qrcode enabled"
-            : "instance-action-btn btn-qrcode disabled";
-          const deleteClass = "instance-action-btn btn-delete enabled";
-          const safeClass = `instance-action-btn btn-safe enabled${isSafeNumber ? " active" : ""}`;
+          const isDeleting = instancesDeleting.has(
+            String(inst.instanceName || "").trim().toLowerCase()
+          );
+          const isWaRestricted = !isDeleting && isInstanceWaRestricted(inst);
+          // Restrição WhatsApp (connecting) NÃO bloqueia Atualizar/QR — é justamente quando precisa reconectar.
+          const actionsLocked = isDeleting || isWaRestricted;
+          const reconnectLocked = isDeleting;
+          const refreshClass = reconnectLocked
+            ? "instance-action-btn btn-refresh disabled"
+            : isDisconnected || isWaRestricted
+              ? "instance-action-btn btn-refresh enabled"
+              : "instance-action-btn btn-refresh disabled";
+          const qrcodeClass = reconnectLocked
+            ? "instance-action-btn btn-qrcode disabled"
+            : isDisconnected || isWaRestricted
+              ? "instance-action-btn btn-qrcode enabled"
+              : "instance-action-btn btn-qrcode disabled";
+          const deleteClass = actionsLocked
+            ? "instance-action-btn btn-delete disabled"
+            : "instance-action-btn btn-delete enabled";
+          const safeClass = `instance-action-btn btn-safe ${
+            actionsLocked ? "disabled" : "enabled"
+          }${isSafeNumber && !actionsLocked ? " active" : ""}`;
           const isInlineWhatsappNameEditing =
             inlineWhatsappNameEditingInstance === inst.instanceName;
           const whatsappNameCell = isInlineWhatsappNameEditing
@@ -43890,7 +44363,9 @@
                 <button type="button" class="instance-inline-icon save whatsapp-name-inline-save-btn" data-instance="${inst.instanceName}" title="Salvar Nome (WhatsApp)">✓</button>
               </div>`
             : `<div class="instance-inline-wrap">
-                <button type="button" class="instance-inline-icon whatsapp-name-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar Nome (WhatsApp)">✎</button>
+                <button type="button" class="instance-inline-icon whatsapp-name-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar Nome (WhatsApp)" ${
+                  actionsLocked ? "disabled" : ""
+                }>✎</button>
                 <span>${inst.displayName || "—"}</span>
               </div>`;
           const isInlineEditing = inlineRenameEditingInstance === inst.instanceName;
@@ -43900,18 +44375,22 @@
                 <button type="button" class="instance-inline-icon save instance-inline-save-btn" data-instance="${inst.instanceName}" title="Salvar">✓</button>
               </div>`
             : `<div class="instance-inline-wrap">
-                <button type="button" class="instance-inline-icon instance-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar nome">✎</button>
+                <button type="button" class="instance-inline-icon instance-inline-edit-btn" data-instance="${inst.instanceName}" title="Editar nome" ${
+                  actionsLocked ? "disabled" : ""
+                }>✎</button>
                 <span>${inst.instanceLabel || inst.instanceName}</span>
               </div>`;
 
-          const isDeleting = instancesDeleting.has(
-            String(inst.instanceName || "").trim().toLowerCase()
-          );
           const statusLabel = isDeleting ? "Excluindo…" : resolveInstanceAquecedorStatusLabel(inst);
           const statusClass = isDeleting ? "disconnected" : resolveInstanceStatusClass(inst, statusLabel);
+          const statusCountdownAt =
+            statusLabel === "Restrição"
+              ? usage.waRestrictionUntil ||
+                (inst.waRestrictionUntil ? String(inst.waRestrictionUntil) : "")
+              : usage.aquecedorPromoteAt;
           const statusHtml = isDeleting
             ? `<span class="status-text ${statusClass}">${statusLabel}</span>`
-            : buildInstanceStatusHtml(statusLabel, statusClass, usage.aquecedorPromoteAt);
+            : buildInstanceStatusHtml(statusLabel, statusClass, statusCountdownAt);
           if (isDeleting) tr.classList.add("instance-row-deleting");
 
           const actionsHtml = isDeleting
@@ -43921,16 +44400,24 @@
               </div>`
             : `<div class="instance-actions">
                 <button class="${refreshClass}" type="button" data-action="refresh" data-instance="${inst.instanceName}" data-enabled="${
-                  isDisconnected ? "1" : "0"
-                }" data-number="${inst.originalNumber || ""}">
+                  !reconnectLocked && (isDisconnected || isWaRestricted) ? "1" : "0"
+                }" data-number="${inst.originalNumber || ""}" ${
+                  reconnectLocked || !(isDisconnected || isWaRestricted) ? "disabled" : ""
+                }>
                   Atualizar</button>
                 <button class="${qrcodeClass}" type="button" data-action="qrcode" data-instance="${inst.instanceName}" data-enabled="${
-                  isDisconnected ? "1" : "0"
-                }" data-number="${inst.originalNumber || ""}">QRCode</button>
-                <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="1">
+                  !reconnectLocked && (isDisconnected || isWaRestricted) ? "1" : "0"
+                }" data-number="${inst.originalNumber || ""}" ${
+                  reconnectLocked || !(isDisconnected || isWaRestricted) ? "disabled" : ""
+                }>QRCode</button>
+                <button class="${safeClass}" type="button" data-action="safe-number" data-instance="${inst.instanceName}" data-enabled="${
+                  actionsLocked ? "0" : "1"
+                }" ${actionsLocked ? "disabled" : ""}>
                   Número Seguro
                 </button>
-                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-instance-label="${String(inst.instanceLabel || inst.instanceName || "").replace(/"/g, "&quot;")}" data-enabled="1">Deletar</button>
+                <button class="${deleteClass}" type="button" data-action="delete" data-instance="${inst.instanceName}" data-instance-label="${String(inst.instanceLabel || inst.instanceName || "").replace(/"/g, "&quot;")}" data-enabled="${
+                  actionsLocked ? "0" : "1"
+                }" ${actionsLocked ? "disabled" : ""}>Deletar</button>
               </div>`;
 
           tr.innerHTML = `
@@ -43943,19 +44430,19 @@
             <td title="Enviadas: ${inst.aquecedorMessagesSent.toLocaleString("pt-BR")} · Recebidas: ${inst.aquecedorMessagesReceived.toLocaleString("pt-BR")} (aquecedor)">${inst.messages.toLocaleString("pt-BR")}</td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
-                <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+                <input type="checkbox" class="instance-role-toggle" data-role="aquecedor" data-instance="${inst.instanceName}" ${usage.useAquecedor ? "checked" : ""} ${actionsLocked ? "disabled" : ""} />
               </label>
             </td>
             <td>
               <label class="aquecedor-toggle" style="margin:0;">
-                <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+                <input type="checkbox" class="instance-role-toggle" data-role="disparador" data-instance="${inst.instanceName}" ${usage.useDisparador ? "checked" : ""} ${actionsLocked ? "disabled" : ""} />
               </label>
             </td>
             ${
               showFazendaColumn
                 ? `<td>
               <label class="aquecedor-toggle" style="margin:0;">
-                <input type="checkbox" class="instance-role-toggle" data-role="fazenda" data-instance="${inst.instanceName}" ${usage.useFazenda ? "checked" : ""} ${isDeleting ? "disabled" : ""} />
+                <input type="checkbox" class="instance-role-toggle" data-role="fazenda" data-instance="${inst.instanceName}" ${usage.useFazenda ? "checked" : ""} ${actionsLocked ? "disabled" : ""} />
               </label>
             </td>`
                 : ""
@@ -44035,6 +44522,10 @@
         container.appendChild(table);
         if (document.querySelector(".preparing-countdown[data-promote-at]")) {
           ensurePreparingCountdownTimer();
+        }
+        if (document.querySelector(".wa-restriction-countdown[data-restrict-until]")) {
+          ensureWaRestrictionCountdownTimer();
+          ensureWaRestrictionRecheckTimer();
         }
       }
 
@@ -44440,8 +44931,12 @@
         await startRegisterInboundValidation(instanceName, { optionalMode: true });
       }
 
-      function setRegisterWizardStep(step) {
+      function setRegisterWizardStep(step, options = {}) {
         const n = Math.max(1, Math.min(4, Number(step) || 1));
+        // Anti-flicker: depois do QR (passo 3+), nunca regredir para o passo 2.
+        if (!options.force && registerWizardStep >= 3 && n < 3 && registerWizardStep < 4) {
+          return;
+        }
         registerWizardStep = n;
         document.querySelectorAll("#register-wizard-stepper .reg-step").forEach((el) => {
           const s = Number(el.getAttribute("data-step") || 0);
@@ -44527,6 +45022,8 @@
         ) {
           phase = "verify-receive";
         }
+        const prevPhase = registerInboundUiPhase;
+        const phaseChanged = prevPhase !== phase || options.force === true;
         registerInboundUiPhase = phase;
         const progress = document.getElementById("register-inbound-progress");
         if (progress) progress.setAttribute("data-phase", phase);
@@ -44552,6 +45049,8 @@
           setRegisterInboundActionButtons({ retry: false, skip: false });
         }
 
+        // Só rolar na troca de fase — poll a cada tick causava o card verde sumir/voltar.
+        if (!phaseChanged) return;
         if (phase === "instructions") {
           scrollRegisterWizardPaneToTop();
         } else {
@@ -44586,7 +45085,7 @@
           refreshQrBtn.hidden = true;
         }
         resetRegisterInboundPanel();
-        setRegisterWizardStep(startAtQr && instanceName ? 2 : 1);
+        setRegisterWizardStep(startAtQr && instanceName ? 2 : 1, { force: true });
         if (instanceName) beginRegisterWizardHide(instanceName);
         overlay.classList.add("open");
         overlay.setAttribute("aria-hidden", "false");
@@ -44622,7 +45121,7 @@
         const revealOnClose = registerWizardValidationComplete;
         registerWizardHideInstanceName = "";
         registerWizardValidationComplete = false;
-        setRegisterWizardStep(1);
+        setRegisterWizardStep(1, { force: true });
         resetRegisterInboundPanel();
         if (hadHiddenInstance && revealOnClose) {
           void carregar();
@@ -44664,14 +45163,25 @@
       function formatRegisterInboundPhone(raw) {
         const digits = String(raw || "").replace(/\D/g, "");
         if (!digits) return "";
-        if (digits.length >= 12 && digits.startsWith("55")) {
-          const ddd = digits.slice(2, 4);
-          const rest = digits.slice(4);
+        let national = digits;
+        while (national.startsWith("55") && national.length > 11) {
+          national = national.slice(2);
+        }
+        if (national.length >= 10 && national.length <= 11 && !digits.startsWith("55")) {
+          national = national;
+        } else if (digits.startsWith("55") && digits.length >= 12) {
+          national = digits.slice(2);
+        }
+        if (digits.startsWith("55") || (national.length >= 10 && national.length <= 11)) {
+          const full = digits.startsWith("55") ? digits : `55${national}`;
+          const ddd = full.slice(2, 4);
+          let rest = full.slice(4);
+          // Exibir sempre com 9º dígito móvel BR (555182001261 → +55 51 98200-1261).
+          if (rest.length === 8) {
+            rest = `9${rest}`;
+          }
           if (rest.length === 9) {
             return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
-          }
-          if (rest.length === 8) {
-            return `+55 ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
           }
           if (rest.length > 4) {
             return `+55 ${ddd} ${rest.slice(0, rest.length - 4)}-${rest.slice(-4)}`;
@@ -44779,8 +45289,15 @@
       }
 
       function enterRegisterInboundVerifyReceive(detailText) {
+        // Foco na recepção: o check de “conectado” (QR) não deve competir com o card azul.
+        showRegisterInboundEvoConnectedBanner(false);
+        const receiveRow = document.getElementById("register-inbound-receive-row");
+        const wasHidden =
+          !receiveRow ||
+          receiveRow.hidden ||
+          receiveRow.classList.contains("is-hidden");
         setRegisterInboundPhase("verify-receive");
-        setInboundCheckVisible("register-inbound-receive-row", true, true);
+        setInboundCheckVisible("register-inbound-receive-row", true, wasHidden);
         const custom = String(detailText || "").trim();
         const isProgressDetail =
           !custom ||
@@ -44795,7 +45312,9 @@
             "register-inbound-receive-detail",
             REGISTER_INBOUND_PROGRESS_LINES[0].text
           );
-          startRegisterInboundProgressMessages();
+          if (wasHidden || registerInboundProgressTimers.length === 0) {
+            startRegisterInboundProgressMessages();
+          }
         } else {
           clearRegisterInboundProgressMessages();
           updateRegisterInboundRow(
@@ -44997,15 +45516,23 @@
 
         if (!receiveDone) {
           if (phase === "verify-receive") {
-            setInboundCheckVisible("register-inbound-receive-row", true, true);
-            updateRegisterInboundRow(
-              "register-inbound-receive-row",
-              "register-inbound-receive-result",
-              null,
-              "register-inbound-receive-detail",
-              REGISTER_INBOUND_PROGRESS_LINES[0].text
-            );
-            startRegisterInboundProgressMessages();
+            showRegisterInboundEvoConnectedBanner(false);
+            const receiveRow = document.getElementById("register-inbound-receive-row");
+            const wasHidden =
+              !receiveRow ||
+              receiveRow.hidden ||
+              receiveRow.classList.contains("is-hidden");
+            setInboundCheckVisible("register-inbound-receive-row", true, wasHidden);
+            if (wasHidden) {
+              updateRegisterInboundRow(
+                "register-inbound-receive-row",
+                "register-inbound-receive-result",
+                null,
+                "register-inbound-receive-detail",
+                REGISTER_INBOUND_PROGRESS_LINES[0].text
+              );
+              startRegisterInboundProgressMessages();
+            }
             setInboundCheckVisible("register-inbound-send-row", false, false);
           } else {
             setInboundCheckVisible("register-inbound-receive-row", false, false);
@@ -45152,7 +45679,8 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 number: formNumber || registerConnectedInstanceNumber,
-                forceRestart: Boolean(registerInboundValidationId),
+                // Sempre sessão nova — senão retry reaproveita validação com CONFIRMAR antigo.
+                forceRestart: true,
               }),
             },
             60000
@@ -45215,11 +45743,24 @@
 
             if (!pollRes.ok) {
               registerInboundPollFailCount += 1;
-              if (pollRes.status === 404 && registerInboundPollFailCount >= 2) {
+              if (pollRes.status === 404 && registerInboundPollFailCount >= 3) {
+                // Não reiniciar em loop — isso escondia/reexibia o card verde a cada ciclo.
                 clearRegisterInboundTimers();
                 registerInboundValidationId = "";
                 registerInboundStartInFlight = false;
-                void startRegisterInboundValidation(instanceName);
+                const receiveDetail = document.getElementById("register-inbound-receive-detail");
+                if (receiveDetail) {
+                  receiveDetail.textContent =
+                    "Sessão de validação expirada no servidor. Clique em «Tentar validação novamente».";
+                }
+                updateRegisterInboundRow(
+                  "register-inbound-receive-row",
+                  "register-inbound-receive-result",
+                  false,
+                  "register-inbound-receive-detail",
+                  "Sessão de validação expirada no servidor. Clique em «Tentar validação novamente»."
+                );
+                setRegisterInboundActionButtons({ retry: true, skip: false });
                 return;
               }
               if (registerInboundPollFailCount >= REGISTER_INBOUND_MAX_POLL_FAILS) {
@@ -45243,9 +45784,7 @@
             }
           } catch {
             registerInboundPollFailCount += 1;
-            if (registerInboundUiPhase === "verify-receive") {
-              enterRegisterInboundVerifyReceive();
-            }
+            // Não reentrar na UI a cada falha transitória (causava animação em loop).
           }
         }, REGISTER_INBOUND_POLL_MS);
       }
@@ -45535,7 +46074,9 @@
           clearInterval(registerConnectPollTimer);
           registerConnectPollTimer = null;
         }
-        setRegisterWizardStep(2);
+        if (registerWizardStep < 3) {
+          setRegisterWizardStep(2);
+        }
         registerConnectPollStartedAt = Date.now();
         registerConnectConnectingNotified = false;
         setRegisterConnectStatus("loading", "Aguardando leitura do QR Code…");
@@ -45703,6 +46244,18 @@
         );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
+          const alreadyConnected =
+            response.status === 409 &&
+            /j[aá]\s+est[aá]\s+conectada/i.test(String(data?.error || data?.detail || ""));
+          if (alreadyConnected) {
+            return {
+              ok: true,
+              alreadyConnected: true,
+              message:
+                data?.error ||
+                "Esta instância já está conectada no sistema WABA - Drax.",
+            };
+          }
           const err = new Error(
             data?.error ||
               data?.detail ||
@@ -45725,6 +46278,9 @@
         }
         const msg = String(error.message || "").trim();
         const detail = String(error.detail || "").trim();
+        if (/failed to fetch|networkerror|load failed|fetch failed|econnreset|socket hang up/i.test(msg)) {
+          return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
+        }
         if (msg && msg !== "Falha ao gerar QRCode." && !/^\s*\{/.test(msg)) {
           return msg;
         }
@@ -45805,6 +46361,16 @@
             token,
             number,
           });
+          if (data?.alreadyConnected) {
+            const okMsg =
+              "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
+            setRegisterConnectStatus("success", okMsg);
+            markRegisterWizardValidationComplete();
+            await loadInstancesForInstanciasTab({ fullRefresh: true });
+            setRegisterWizardStep(4);
+            return;
+          }
           if (!data?.qrCode && !resolveQrImageSrcFromPayload(data)) {
             const warnMsg =
               "QRCode solicitado, mas a O sistema WABA - Drax não retornou imagem nesta resposta.";
@@ -45833,8 +46399,9 @@
       async function callInstanceAction(action, instanceName, number = "") {
         try {
           if (!instanceName) return;
+          // QR/Atualizar: nunca bloquear por tag Restrição (connecting) — usuário precisa do QR.
 
-          if (action === "qrcode") {
+          if (action === "qrcode" || action === "refresh") {
             openRegisterModal(instanceName, number);
             await refreshQrCodeInRegisterModal();
             return;
@@ -45842,9 +46409,7 @@
 
           let url = "";
           let method = "POST";
-          if (action === "refresh") {
-            url = `/instancias/${encodeURIComponent(instanceName)}/atualizar`;
-          } else if (action === "delete") {
+          if (action === "delete") {
             url = `/instancias/${encodeURIComponent(instanceName)}`;
             method = "DELETE";
           } else {
@@ -45858,7 +46423,7 @@
           const response = await fetchWithTimeout(
             url,
             { method, headers: { "Content-Type": "application/json" } },
-            action === "delete" ? 60000 : 12000
+            60000
           );
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -45869,7 +46434,12 @@
           showToast(data?.message || "Ação executada com sucesso.", "success");
           await carregar();
         } catch (error) {
-          showToast("Erro ao executar ação da instância.", "error");
+          const raw = String(error?.message || error || "");
+          if (/failed to fetch|networkerror|load failed|timeout/i.test(raw)) {
+            showToast("Erro de conexão com o servidor. Tente novamente em alguns segundos.", "error");
+          } else {
+            showToast("Erro ao executar ação da instância.", "error");
+          }
         } finally {
           if (action === "delete") {
             markInstanceDeleting(instanceName, false);
@@ -45965,6 +46535,17 @@
             token,
             number,
           });
+
+          if (data?.alreadyConnected) {
+            const okMsg =
+              "WhatsApp já está conectado no sistema WABA - Drax. Atualizando a lista…";
+            qrPreview.innerHTML = `<span class="muted">${escapeAdminHtml(okMsg)}</span>`;
+            setRegisterConnectStatus("success", okMsg);
+            markRegisterWizardValidationComplete();
+            await loadInstancesForInstanciasTab({ fullRefresh: true });
+            setRegisterWizardStep(4);
+            return;
+          }
 
           const imgSrc = resolveQrImageSrcFromPayload(data);
           if (!imgSrc) {
@@ -48342,7 +48923,7 @@
         const instanceName = btn.getAttribute("data-instance") || "";
         const number = btn.getAttribute("data-number") || "";
         if (action === "refresh") {
-          openRegisterModal(instanceName, number);
+          void callInstanceAction("refresh", instanceName, number);
           return;
         }
         if (action === "safe-number") {

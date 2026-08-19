@@ -25,6 +25,8 @@ import {
   listAquecedorOwnerEmails,
   listAquecedorOwnersWithDesiredRunning,
   loadAquecedorOwnerRuntimeIntents,
+  loadAndApplyDurableDesiredOwners,
+  flushAquecedorOwnerMotorsToDisk,
   normalizeAquecedorOwnerEmail,
   persistAquecedorOwnerIntent,
   persistAquecedorOwnerSnapshot,
@@ -43,6 +45,18 @@ import {
   resolveShellCacheKey,
   type WabaUiProfile,
 } from "./base-path";
+import {
+  bootstrapOwnerGraphFromEvents,
+  ensureCompletePairGraph,
+  getOwnerConversationGraph,
+  recordDirectedSend,
+  recordPairSelection,
+} from "./aquecedor/conversation-graph.service";
+import {
+  buildSelectionRecord,
+  pickNextDirectedExchange,
+} from "./aquecedor/pair-orchestrator.service";
+import { buildNetworkHealthReport } from "./aquecedor/network-health.service";
 import { resolveWabaContainerServiceId } from "./waba-container-service";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
 import { resolveWabaRequestAuth } from "./auth/waba-request-auth";
@@ -60,6 +74,9 @@ import {
 import { wabaInstanceOwnershipService } from "./instances/waba-instance-ownership.service";
 import { resolveEvoInstanceKey } from "./instances/evo-instance-key";
 import {
+  brazilWhatsAppNumbersMatch,
+  canonicalizeBrazilWhatsAppNumber,
+  expandBrazilWhatsAppNumberVariants,
   extractPhoneFromEvoListItem,
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
@@ -73,6 +90,13 @@ import {
   pickEvoConnectionState,
   resolveEvoLiveConnectionSnapshots,
 } from "./instances/evo-connection-state.service";
+import {
+  getWhatsappConnectingRestrictionMap,
+  purgeAutomaticWhatsappConnectingRestrictions,
+  recheckWhatsappConnectingRestrictions,
+  syncWhatsappConnectingRestriction,
+  WA_CONNECTING_RECHECK_MS,
+} from "./instances/whatsapp-connecting-restriction.service";
 import { runEvoIntegrationProbe } from "./services/evo-integration-probe.service";
 import { registerWabaBillingRoutes } from "./billing/waba-billing.routes";
 import { configureWabaFazendaPool, wabaFazendaPoolService } from "./instances/waba-fazenda-pool.service";
@@ -137,6 +161,7 @@ import {
   filterAquecedorCycleConnected,
   canAquecedorInstanceSendToday,
   filterInstancesLifecycleReady,
+  findAquecedorLifecycleRow,
   getAquecedorLifecycleStatusMap,
   markAquecedorInstanceRestricted,
   recordAquecedorInstanceDailySend,
@@ -539,6 +564,7 @@ app.get("/health", (_req, res) => {
     containerService: resolveWabaContainerServiceId(),
     backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
     aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
+    aquecedorDesiredOwners: listAquecedorOwnersWithDesiredRunning().length,
     evoApiBase: describeEvoApiBaseForOps(EVO_API_BASE),
     evoTlsInsecure: isEvoTlsInsecure(),
     evoHttpTimeoutMs: defaultEvoHttpTimeoutMs(),
@@ -1304,6 +1330,17 @@ function buildAquecedorPairContext(
 }
 
 const AQUECEDOR_PAIR_SENDER_LOOKBACK = 500;
+/**
+ * Janela dos contadores de equidade. Sem ela, histórico antigo (semanas) pune pares
+ * veteranos para sempre: soma↔walkup tinha 281 trocas acumuladas e nunca mais era
+ * escolhido — o ciclo degenerava para um "hub" (todos falam só com uma instância).
+ */
+const AQUECEDOR_TURN_EQUITY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * Par sem troca há mais que isso: o turno do par reinicia (qualquer lado pode iniciar).
+ * Evita par congelado quando o "devedor" da resposta nunca vence a equidade.
+ */
+const AQUECEDOR_PAIR_TURN_STALE_MS = 6 * 60 * 60 * 1000;
 
 function buildAquecedorInstanceCanonicalMap(
   connected: Array<{ instancia: string }>,
@@ -1374,10 +1411,13 @@ function resolveAquecedorInstanceByNumber(
   if (!normalized) return "";
   const direct = numberToInstance.get(normalized);
   if (direct) return direct;
-  const suffix = normalized.replace(/\D/g, "").slice(-10);
-  if (suffix.length < 10) return "";
+  const canon = canonicalizeBrazilWhatsAppNumber(normalized);
+  if (canon) {
+    const byCanon = numberToInstance.get(canon);
+    if (byCanon) return byCanon;
+  }
   for (const [stored, inst] of numberToInstance.entries()) {
-    if (stored.replace(/\D/g, "").slice(-10) === suffix) return inst;
+    if (brazilWhatsAppNumbersMatch(stored, normalized)) return inst;
   }
   return "";
 }
@@ -1518,12 +1558,15 @@ type AquecedorTurnManager = {
   getDestReceiveCount: (destinoRaw: string) => number;
   getUndirectedPairSendTotal: (instA: string, instB: string) => number;
   getTotalDirectedSendCount: () => number;
+  /** Par (chave indireta) do evento mais recente — usado para rodízio de conversas. */
+  getLastEventPairKey: () => string | null;
   scoreEquityCombination: (
     origemRaw: string,
     destinoRaw: string,
     comboIndex: number,
     startIndex: number,
     equityBaseline: {
+      minPairTotal: number;
       minDirected: number;
       minOriginSend: number;
       minDestReceive: number;
@@ -1549,6 +1592,9 @@ async function loadAquecedorTurnManager(
   const pairLastSender = new Map<string, string>();
   const pairStates = new Map<string, AquecedorPairConversationState>();
   const directedSendCounts = new Map<string, number>();
+  const pairLastEventAtMs = new Map<string, number>();
+  const equityWindowStartMs = Date.now() - AQUECEDOR_TURN_EQUITY_WINDOW_MS;
+  const pairTurnStaleBeforeMs = Date.now() - AQUECEDOR_PAIR_TURN_STALE_MS;
 
   const ensureStats = (canonical: string): AquecedorInstanceTurnStats => {
     const key = canonical.toLowerCase();
@@ -1578,26 +1624,49 @@ async function loadAquecedorTurnManager(
   };
 
   for (const ev of events) {
+    const evAtMs = new Date(ev.at).getTime();
+    const withinEquityWindow = Number.isFinite(evAtMs) && evAtMs >= equityWindowStartMs;
     const fromStats = ensureStats(ev.fromInst);
     const toStats = ensureStats(ev.toInst);
-    fromStats.sendCount += 1;
-    toStats.receiveCount += 1;
+    // Contadores de equidade só na janela recente — histórico antigo não pune o par para sempre.
+    if (withinEquityWindow) {
+      fromStats.sendCount += 1;
+      toStats.receiveCount += 1;
+      const directedKey = buildAquecedorDirectedKey(ev.fromInst, ev.toInst);
+      directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
+    }
     fromStats.lastSentAt = ev.at;
     toStats.lastReceivedAt = ev.at;
     toStats.lastReceivedFrom = ev.fromInst;
     fromStats.outboundSinceInbound += 1;
     toStats.outboundSinceInbound = 0;
     pairLastSender.set(buildAquecedorPairKey(ev.fromInst, ev.toInst), ev.fromInst);
-    const directedKey = buildAquecedorDirectedKey(ev.fromInst, ev.toInst);
-    directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
 
     const pairKey = buildAquecedorPairKey(ev.fromInst, ev.toInst);
+    if (Number.isFinite(evAtMs)) pairLastEventAtMs.set(pairKey, evAtMs);
     const pairState = ensurePairState(pairKey);
     pairState.exchangeCount += 1;
     if (pairState.pendingReplyFrom?.toLowerCase() === ev.fromInst.toLowerCase()) {
       pairState.pendingReplyFrom = null;
     } else {
       pairState.pendingReplyFrom = ev.toInst;
+    }
+  }
+
+  // Par parado há muito tempo: turno reinicia (qualquer lado pode abrir a conversa).
+  // Sem isso, "soma enviou por último em 08/07" bloqueava soma→walkup indefinidamente.
+  for (const [pairKey, lastAtMs] of pairLastEventAtMs) {
+    if (lastAtMs >= pairTurnStaleBeforeMs) continue;
+    pairLastSender.delete(pairKey);
+    const pairState = pairStates.get(pairKey);
+    if (pairState) pairState.pendingReplyFrom = null;
+  }
+
+  // Instância sem enviar há muito tempo também não fica presa aguardando inbound antigo.
+  for (const stats of instanceStats.values()) {
+    const lastSentMs = stats.lastSentAt ? new Date(stats.lastSentAt).getTime() : Number.NaN;
+    if (Number.isFinite(lastSentMs) && lastSentMs < pairTurnStaleBeforeMs) {
+      stats.outboundSinceInbound = 0;
     }
   }
 
@@ -1659,12 +1728,19 @@ async function loadAquecedorTurnManager(
     return `${origem} não pode enviar para ${destino} no turno atual.`;
   };
 
+  const lastEvent = events.length ? events[events.length - 1] : null;
+  const lastEventPairKey = lastEvent
+    ? buildAquecedorPairKey(lastEvent.fromInst, lastEvent.toInst)
+    : null;
+  const getLastEventPairKey = (): string | null => lastEventPairKey;
+
   const scoreEquityCombination = (
     origemRaw: string,
     destinoRaw: string,
     comboIndex: number,
     startIndex: number,
     equityBaseline: {
+      minPairTotal: number;
       minDirected: number;
       minOriginSend: number;
       minDestReceive: number;
@@ -1674,21 +1750,46 @@ async function loadAquecedorTurnManager(
     const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
     const directedKey = buildAquecedorDirectedKey(origem, destino);
     const directed = directedSendCounts.get(directedKey) ?? 0;
+    const pairTotal = getUndirectedPairSendTotal(origem, destino);
     const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
+    const oRecv = instanceStats.get(origem.toLowerCase())?.receiveCount ?? 0;
     const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
+    const dSend = instanceStats.get(destino.toLowerCase())?.sendCount ?? 0;
+    const replyDue = owesPairReply(origemRaw, destinoRaw);
 
-    let score = (directed - equityBaseline.minDirected) * 1_000_000_000_000;
-    score += (oSend - equityBaseline.minOriginSend) * 1_000_000_000;
-    score += (dRecv - equityBaseline.minDestReceive) * 1_000_000;
+    let score = 0;
+    // Rodízio de conversas: o par que acabou de trocar cede a vez — EXCETO se a resposta
+    // do turno ainda está pendente (senão o destinatário nunca devolve e só recebe).
+    if (
+      lastEventPairKey &&
+      buildAquecedorPairKey(origem, destino) === lastEventPairKey &&
+      !replyDue
+    ) {
+      score += 1e18;
+    }
+    // Completar o turno do par tem prioridade absoluta sobre rodízio/volume.
+    if (replyDue) {
+      score -= 2e18;
+    }
+    // Primário: rodízio LRU por par — quem trocou há MAIS tempo vai primeiro.
+    // Garante que todos os pares circulem continuamente (frequências iguais →
+    // enviados/recebidos convergem), sem pausar um par por horas para "compensar".
+    const pairLastAtMs = pairLastEventAtMs.get(buildAquecedorPairKey(origem, destino)) ?? 0;
+    const recencyMinutes = Math.max(0, (pairLastAtMs - equityWindowStartMs) / 60_000);
+    score += recencyMinutes * 1_000_000_000_000;
+    // Equidade por volume do par na janela — desempate.
+    score += (pairTotal - equityBaseline.minPairTotal) * 1_000_000_000;
+    score += (directed - equityBaseline.minDirected) * 1_000_000;
+    score += (oSend - equityBaseline.minOriginSend) * 1_000;
+    score += (dRecv - equityBaseline.minDestReceive) * 100;
+    // Quem recebe muito e envia pouco deve ser origem; quem já está saturado de inbox
+    // deve deixar de ser destino preferencial (ex.: 6011 só recebendo).
+    score += (oSend - oRecv) * 50_000_000;
+    score += (dRecv - dSend) * 10_000_000;
 
     const recentIdx = recentDirectedEdges.indexOf(directedKey);
     if (recentIdx >= 0) {
-      score += (recentIdx + 1) * 10_000;
-    }
-
-    // Resposta pendente só desempata — não monopoliza o ciclo (equidade primeiro).
-    if (owesPairReply(origemRaw, destinoRaw)) {
-      score -= 500;
+      score += (recentIdx + 1) * 10;
     }
 
     const rotation = ((comboIndex - startIndex) % 1000 + 1000) % 1000;
@@ -1734,6 +1835,7 @@ async function loadAquecedorTurnManager(
     getDestReceiveCount,
     getUndirectedPairSendTotal,
     getTotalDirectedSendCount,
+    getLastEventPairKey,
     scoreEquityCombination,
   };
 }
@@ -1749,76 +1851,77 @@ async function canAquecedorOrigemSendDirected(
   return turn.canSendDirected(instanciaOrigem, instanciaDestino);
 }
 
+async function ensureAquecedorOwnerConversationGraph(
+  ownerEmail: string,
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  connected: Array<{ instancia: string; numero: string }>,
+): Promise<Awaited<ReturnType<typeof getOwnerConversationGraph>>> {
+  const aliasesMap = await loadInstanceAliasesMap();
+  const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
+  const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+  const instanceNames = connected.map((item) =>
+    resolveAquecedorCanonicalInstance(item.instancia, canonicalMap),
+  );
+  const existing = await getOwnerConversationGraph(ownerEmail);
+  if (!existing.bootstrapped) {
+    const events = await loadAquecedorExchangeEvents(
+      supabase,
+      connected,
+      canonicalMap,
+      numberToInstance,
+    );
+    await bootstrapOwnerGraphFromEvents(ownerEmail, events, {
+      instanceNames,
+    });
+  } else {
+    await ensureCompletePairGraph(ownerEmail, instanceNames);
+  }
+  return getOwnerConversationGraph(ownerEmail);
+}
+
 async function pickAquecedorCombinationAsync<T extends { instancia_origem: string; instancia_destino: string }>(
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
   connected: Array<{ instancia: string; numero: string }>,
   combinations: T[],
   startIndex: number,
-): Promise<{ chosen: T; index: number } | null> {
-  if (!combinations.length) return null;
-  const manager = await loadAquecedorTurnManager(supabase, connected);
-  let eligible: Array<{ combo: T; index: number }> = [];
+  ownerEmail?: string,
+): Promise<{
+  chosen: T;
+  index: number;
+  pickMeta: NonNullable<ReturnType<typeof pickNextDirectedExchange>>;
+} | null> {
+  if (!combinations.length || connected.length < 2) return null;
+  const owner = normalizeAquecedorOwnerEmail(ownerEmail || "") || "default";
+  const graph = await ensureAquecedorOwnerConversationGraph(owner, supabase, connected);
+  const aliasesMapForPick = await loadInstanceAliasesMap();
+  const canonicalMapForPick = buildAquecedorInstanceCanonicalMap(connected, aliasesMapForPick);
+  const eligibleNames = connected.map((item) =>
+    resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick),
+  );
+  const pick = pickNextDirectedExchange(graph, eligibleNames, { startIndex });
+  if (!pick) return null;
 
+  const origemLc = pick.origem.toLowerCase();
+  const destinoLc = pick.destino.toLowerCase();
   for (let index = 0; index < combinations.length; index += 1) {
     const combo = combinations[index];
-    if (!manager.canSendDirected(combo.instancia_origem, combo.instancia_destino)) continue;
-    eligible.push({ combo, index });
-  }
-
-  if (!eligible.length) return null;
-
-  const instanceCount = Math.max(2, connected.length);
-  const maxUndirectedPairShare = Math.max(0.5, 2 / instanceCount);
-  const totalDirectedSends = manager.getTotalDirectedSendCount();
-  if (totalDirectedSends >= instanceCount) {
-    const nonSaturated = eligible.filter(({ combo }) => {
-      const pairTotal = manager.getUndirectedPairSendTotal(
-        combo.instancia_origem,
-        combo.instancia_destino,
-      );
-      return pairTotal / totalDirectedSends <= maxUndirectedPairShare;
-    });
-    if (nonSaturated.length) {
-      eligible = nonSaturated;
+    if (
+      String(combo.instancia_origem || "").trim().toLowerCase() === origemLc &&
+      String(combo.instancia_destino || "").trim().toLowerCase() === destinoLc
+    ) {
+      return { chosen: combo, index, pickMeta: pick };
     }
   }
 
-  let minDirected = Number.POSITIVE_INFINITY;
-  let minOriginSend = Number.POSITIVE_INFINITY;
-  let minDestReceive = Number.POSITIVE_INFINITY;
-  for (const { combo } of eligible) {
-    minDirected = Math.min(
-      minDirected,
-      manager.getDirectedSendCount(combo.instancia_origem, combo.instancia_destino),
-    );
-    minOriginSend = Math.min(minOriginSend, manager.getOriginSendCount(combo.instancia_origem));
-    minDestReceive = Math.min(minDestReceive, manager.getDestReceiveCount(combo.instancia_destino));
+  for (let index = 0; index < combinations.length; index += 1) {
+    const combo = combinations[index];
+    const o = resolveAquecedorCanonicalInstance(combo.instancia_origem, canonicalMapForPick);
+    const d = resolveAquecedorCanonicalInstance(combo.instancia_destino, canonicalMapForPick);
+    if (o.toLowerCase() === origemLc && d.toLowerCase() === destinoLc) {
+      return { chosen: combo, index, pickMeta: pick };
+    }
   }
-  if (!Number.isFinite(minDirected)) minDirected = 0;
-  if (!Number.isFinite(minOriginSend)) minOriginSend = 0;
-  if (!Number.isFinite(minDestReceive)) minDestReceive = 0;
-
-  const equityBaseline = { minDirected, minOriginSend, minDestReceive };
-  const scored: Array<{ combo: T; index: number; score: number }> = eligible.map(
-    ({ combo, index }) => ({
-      combo,
-      index,
-      score: manager.scoreEquityCombination(
-        combo.instancia_origem,
-        combo.instancia_destino,
-        index,
-        startIndex,
-        equityBaseline,
-      ),
-    }),
-  );
-
-  scored.sort((a, b) => a.score - b.score);
-  const bestScore = scored[0].score;
-  const ties = scored.filter((item) => item.score === bestScore);
-  const base = ((startIndex % ties.length) + ties.length) % ties.length;
-  const picked = ties[base];
-  return { chosen: picked.combo, index: picked.index };
+  return null;
 }
 
 async function loadRecentAquecedorPairLastSenders(
@@ -2979,19 +3082,26 @@ async function syncAquecedorWorkerLeadership(): Promise<void> {
     }
 
     if (shouldProcessLeadOwnerMotor(motor)) {
+      // desired=true basta: retoma timer mesmo sem sessão HTTP (logout não pode parar envios).
+      motor.snapshot.running = true;
       if (!motor.runtime.running) {
-        applyPersistedSnapshotToMotor(motor, motor.snapshot);
+        applyPersistedSnapshotToMotor(motor, {
+          ...motor.snapshot,
+          running: true,
+        });
       }
       startAquecedorRuntimeLocal(ownerEmail);
       motor.snapshot.workerId = getAquecedorWorkerId();
       motor.snapshot.workerHeartbeatAt = new Date().toISOString();
       await persistAquecedorOwnerSnapshot(ownerEmail, {
+        running: true,
         workerId: motor.snapshot.workerId,
         workerHeartbeatAt: motor.snapshot.workerHeartbeatAt,
       });
       continue;
     }
 
+    // Outro worker tem lease válido — só pausa timer local; não grava desired=false.
     applyPersistedSnapshotToMotor(motor, motor.snapshot);
     stopAquecedorOwnerMotorLocal(ownerEmail);
   }
@@ -3149,7 +3259,10 @@ async function saveAquecedorConfigRecord(
   return "local";
 }
 
-async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<void> {
+async function ensureAquecedorInstanceRegistered(
+  instanceName: string,
+  options?: { forceNewIntegration?: boolean },
+): Promise<void> {
   try {
     const name = String(instanceName || "").trim();
     if (!name) return;
@@ -3168,6 +3281,20 @@ async function ensureAquecedorInstanceRegistered(instanceName: string): Promise<
       (row) => String(row?.name || "").trim().toLowerCase() === name.toLowerCase(),
     );
     const preparingSince = cacheRow?.createdAt ? String(cacheRow.createdAt) : null;
+    const forceNew = options?.forceNewIntegration === true;
+    if (forceNew) {
+      // Data desta integração = agora (evita createdAt EVO legado promover Preparando na hora).
+      await registerAquecedorInstancePreparing(name, new Date().toISOString());
+      return;
+    }
+    // Sem createdAt (create EVO ainda pendente): não grandfather como active.
+    if (!preparingSince) {
+      const existing = await findAquecedorLifecycleRow(name);
+      if (existing) {
+        await registerAquecedorInstancePreparing(name);
+      }
+      return;
+    }
     await registerAquecedorInstancePreparing(name, preparingSince);
   } catch (error) {
     console.warn("[Aquecedor] ensureAquecedorInstanceRegistered:", error);
@@ -3204,7 +3331,7 @@ async function syncAquecedorConnectedInstances(
     await persistInstanceUsage(toRegister);
     for (const row of toRegister) {
       if (row.useAquecedor) {
-        await registerAquecedorInstancePreparing(row.instanceName);
+        await registerAquecedorInstancePreparing(row.instanceName, new Date().toISOString());
       }
     }
   }
@@ -3901,7 +4028,8 @@ async function runAquecedorCycleTestBatch(
   connected: Array<{ instancia: string; numero: string }>,
   cicloGlobal: number,
   supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
-  _config: AquecedorConfig
+  _config: AquecedorConfig,
+  ownerEmail: string,
 ) {
   const combinations: Array<{
     instancia_origem: string;
@@ -3923,6 +4051,7 @@ async function runAquecedorCycleTestBatch(
     connected,
     combinations,
     cicloGlobal,
+    ownerEmail,
   );
   const chosen = picked?.chosen ?? combinations[0] ?? null;
   const proximo = picked ? picked.index + 1 : 1;
@@ -3945,11 +4074,17 @@ async function runAquecedorCycleTestBatch(
   const texto = appendAquecedorDeliveryTag("Mensagem de teste do aquecedor.", deliveryTag);
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
   const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
+  if (!numero || numero.length < 10) {
+    aquecedorCycleRuntime().lastResult = `Ciclo teste abortado: destino ${chosen.instancia_destino} sem número WhatsApp válido.`;
+    return;
+  }
+  // Evolution 2.3.x exige `text` na raiz (textMessage sozinho → 400).
   const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
     ? { number: numero, textMessage: { text: texto } }
-    : { number: numero, text: texto, textMessage: { text: texto } };
+    : { number: numero, text: texto };
   const sendStartedAtMs = Date.now();
-  const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
+  // Envio teste: 2 tentativas (UI ~3 min); ciclo automático mantém retry mais longo.
+  const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
   const origemConnected = connected.find(
     (item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase(),
   );
@@ -3962,6 +4097,10 @@ async function runAquecedorCycleTestBatch(
         instanciaOrigem: chosen.instancia_origem,
         numeroDestino: numero,
         sendStartedAtMs,
+        maxAttempts: 6,
+        attemptIntervalMs: 2000,
+        skipInitialDelay: false,
+        relaxTimestampOnLastAttempt: true,
       },
     );
     if (!deliveryCheck.ok) {
@@ -3971,7 +4110,7 @@ async function runAquecedorCycleTestBatch(
         instance: chosen.instancia_destino,
         numeroLen: numero.length,
       };
-      aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário.`;
+      aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} NÃO confirmado no WhatsApp. ${deliveryCheck.detail.slice(0, 180)}`;
     } else {
       await (supabase.from("logs_envios" as any) as any).insert({
         instancia_origem: chosen.instancia_origem,
@@ -3982,6 +4121,11 @@ async function runAquecedorCycleTestBatch(
         instanciaOrigem: chosen.instancia_origem,
         instanciaDestino: chosen.instancia_destino,
         status: "Envio com Sucesso",
+      });
+      await recordDirectedSend({
+        ownerEmail,
+        fromInst: chosen.instancia_origem,
+        toInst: chosen.instancia_destino,
       });
       aquecedorCycleRuntime().lastEvoError = null;
       aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
@@ -4024,11 +4168,30 @@ function deferAquecedorRetryOrWindow(
   aquecedorCycleRuntime().lastResult = retryReason;
 }
 
+async function waitAquecedorCycleIdle(ownerEmail: string, maxWaitMs = 45_000): Promise<boolean> {
+  const motor = getAquecedorOwnerMotor(ownerEmail);
+  const started = Date.now();
+  while (motor.runtime.isProcessing) {
+    if (Date.now() - started >= maxWaitMs) return false;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  return true;
+}
+
 async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
   const motor = getAquecedorOwnerMotor(ownerEmail);
   aquecedorCycleMotor = motor;
   const runtime = motor.runtime;
-  if (runtime.isProcessing) return;
+  if (runtime.isProcessing) {
+    if (!forceTest) return;
+    // Envio teste não pode abortar em silêncio enquanto o ciclo automático roda.
+    const idle = await waitAquecedorCycleIdle(ownerEmail, 45_000);
+    if (!idle || runtime.isProcessing) {
+      runtime.lastResult =
+        "Envio teste aguardou o ciclo atual terminar, mas o motor ainda está processando. Tente novamente em instantes.";
+      return;
+    }
+  }
   runtime.isProcessing = true;
   runtime.lastRunAt = new Date().toISOString();
 
@@ -4053,11 +4216,14 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     for (const item of connectedAll) {
       await registerAquecedorInstancePreparing(item.instancia);
     }
-    const connected = await filterAquecedorCycleConnected(connectedAll);
-    updateAquecedorOwnerConnectedSummary(ownerEmail, connected, connectedAll);
+    const connectedActive = await filterAquecedorCycleConnected(connectedAll);
+    // Envio teste usa instâncias live-open do escopo (inclui Preparando).
+    // O filtro active vale só para o ciclo automático (anti-restrição WhatsApp).
+    const connected = forceTest ? connectedAll : connectedActive;
+    updateAquecedorOwnerConnectedSummary(ownerEmail, connectedActive, connectedAll);
 
     const preparingCount = motor.connectedSummary.preparingCount;
-    if (preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
+    if (!forceTest && preparingCount > 0 && connected.length < 2 && connectedAll.length >= 2) {
       runtime.lastResult = `${preparingCount} instância(s) em preparação (6h desde a integração). Aquecedor ativo em ${connected.length}.`;
       return;
     }
@@ -4128,7 +4294,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
 
     const cicloGlobal = getAquecedorOwnerCicloGlobal(motor);
     if (forceTest) {
-      await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config);
+      await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config, ownerEmail);
       return;
     }
 
@@ -4137,13 +4303,14 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       connected,
       combinations,
       cicloGlobal,
+      ownerEmail,
     );
     if (!picked) {
       deferAquecedorRetryOrWindow(
         config,
         nowSp,
         30,
-        "Aguardando turno: cada instância só envia após receber (A→B, depois B→A). Nenhum par elegível agora.",
+        "Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).",
       );
       return;
     }
@@ -4272,7 +4439,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
     const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
       ? { number: numero, textMessage: { text: textoEnvio } }
-      : { number: numero, text: textoEnvio, textMessage: { text: textoEnvio } };
+      : { number: numero, text: textoEnvio };
     const sendStartedAtMs = Date.now();
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
 
@@ -4362,12 +4529,25 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
       ownerEmail,
     });
     await recordAquecedorInstanceDailySend(chosen.instancia_origem);
+    await recordDirectedSend({
+      ownerEmail,
+      fromInst: chosen.instancia_origem,
+      toInst: chosen.instancia_destino,
+      at: new Date().toISOString(),
+    });
+    if (picked.pickMeta) {
+      await recordPairSelection({
+        ownerEmail,
+        record: buildSelectionRecord(picked.pickMeta),
+      });
+    }
 
     const nextPick = await pickAquecedorCombinationAsync(
       supabase,
       connected,
       combinations,
       proximo,
+      ownerEmail,
     );
     await ensureAquecedorPendingMessage(
       nextPick ? buildAquecedorPairContext(nextPick.chosen, connected) : null,
@@ -4385,7 +4565,9 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     const waitSeconds =
       Math.floor(Math.random() * (waitMax - waitMin + 1)) + waitMin;
     aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + waitSeconds * 1000).toISOString();
-    aquecedorCycleRuntime().lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado. Próximo ciclo em ~${waitSeconds}s.${
+    aquecedorCycleRuntime().lastResult = `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} realizado${
+      picked.pickMeta?.reason ? ` [${picked.pickMeta.reason}]` : ""
+    }. Próximo ciclo em ~${waitSeconds}s.${
       preparingCount > 0
         ? ` ${preparingCount} instância(s) em preparação (6h): ${motor.connectedSummary.preparingNames.join(", ")}.`
         : ""
@@ -4398,6 +4580,7 @@ async function runAquecedorCycle(ownerEmail: string, forceTest = false) {
     runtime.isProcessing = false;
     if (shouldProcessLeadOwnerMotor(motor)) {
       void persistAquecedorOwnerSnapshot(ownerEmail, {
+        running: true,
         workerId: getAquecedorWorkerId(),
         workerHeartbeatAt: new Date().toISOString(),
       });
@@ -5140,6 +5323,7 @@ app.get("/instancias/uso-config", async (req, res) => {
       }
     }
     const lifecycleMap = await getAquecedorLifecycleStatusMap();
+    const waRestrictionMap = await getWhatsappConnectingRestrictionMap();
     const warmthMap = await getAquecedorWarmthMapForInstances(
       Array.from(usageMap.keys()),
       getSupabaseClient()
@@ -5159,6 +5343,7 @@ app.get("/instancias/uso-config", async (req, res) => {
           lifecycleMap[instanceName.toLowerCase()] ??
           (await getAquecedorLifecycleStatusForInstance(instanceName));
         const warmth = warmthMap[instanceName.toLowerCase()];
+        const waRestriction = waRestrictionMap[instanceName.toLowerCase()];
         return {
           instanceName,
           ...cfg,
@@ -5166,6 +5351,9 @@ app.get("/instancias/uso-config", async (req, res) => {
           aquecedorStatusLabel: lifecycle?.statusLabel ?? null,
           aquecedorRestrictedUntil: lifecycle?.restrictedUntil ?? null,
           aquecedorPromoteAt: lifecycle?.promoteAt ?? null,
+          waRestrictionUntil: waRestriction?.restrictedUntil ?? null,
+          waRestrictionDetectedAt: waRestriction?.detectedAt ?? null,
+          waRestrictionActive: waRestriction?.active === true,
           warmthLevel: warmth?.level ?? 0,
           warmthLabel: warmth?.label ?? "Não aquecido",
         };
@@ -5174,6 +5362,242 @@ app.get("/instancias/uso-config", async (req, res) => {
     return res.json({ items });
   } catch (error) {
     return res.status(500).json({ error: "Erro ao buscar configuração de uso das instâncias." });
+  }
+});
+
+/**
+ * Integração Soma CRM — lista instâncias do aquecedor do owner configurado
+ * (padrão: mozart.pmo@gmail.com). Auth: header X-Soma-Waba-Key = SOMA_WABA_INTEGRATION_KEY.
+ */
+app.get("/integrations/soma/aquecedor-instances", async (req, res) => {
+  try {
+    const expected = String(process.env.SOMA_WABA_INTEGRATION_KEY || "").trim();
+    if (!expected) {
+      return res.status(503).json({
+        ok: false,
+        error: "SOMA_WABA_INTEGRATION_KEY não configurada no WABA.",
+      });
+    }
+    const provided = String(req.headers["x-soma-waba-key"] || "").trim();
+    if (!provided || provided !== expected) {
+      return res.status(401).json({ ok: false, error: "Não autorizado." });
+    }
+
+    const ownerEmail = String(
+      process.env.SOMA_WABA_OWNER_EMAIL || "mozart.pmo@gmail.com",
+    )
+      .trim()
+      .toLowerCase();
+    if (!ownerEmail.includes("@")) {
+      return res.status(500).json({ ok: false, error: "SOMA_WABA_OWNER_EMAIL inválido." });
+    }
+
+    const auth = { email: ownerEmail, role: "subscriber" as const };
+    const snapshot = await buildInstancesSnapshotForAuth(auth);
+    const aquecedorNames = await listAquecedorScopedInstanceNames(ownerEmail);
+    const aquecedorSet = new Set(aquecedorNames.map((n) => n.toLowerCase()));
+    const warmthMap = await getAquecedorWarmthMapForInstances(
+      aquecedorNames,
+      getSupabaseClient(),
+    );
+
+    const items = (snapshot.items || [])
+      .filter((row: any) => aquecedorSet.has(String(row?.name || "").toLowerCase()))
+      .map((row: any) => {
+        const instanceName = String(row?.name || "").trim();
+        const warmth = warmthMap[instanceName.toLowerCase()];
+        return {
+          instanceName,
+          number: String(row?.number || "").trim(),
+          whatsappName: String(row?.displayName || row?.whatsappNameOverride || instanceName).trim(),
+          instanceAlias: String(row?.instanceAlias || "").trim(),
+          contacts: Number(row?.contacts) || 0,
+          messages: Number(row?.messages) || 0,
+          profilePicUrl: String(row?.profilePicUrl || "").trim(),
+          avatarVersion: String(row?.avatarVersion || "").trim(),
+          connectionStatus: String(row?.connectionStatus || "unknown"),
+          warmthLevel: warmth?.level ?? 0,
+          warmthLabel: warmth?.label ?? "Não aquecido",
+        };
+      });
+
+    return res.status(200).json({
+      ok: true,
+      ownerEmail,
+      total: items.length,
+      cacheUpdatedAt: snapshot.cacheUpdatedAt || "",
+      items,
+    });
+  } catch (error) {
+    console.error("GET /integrations/soma/aquecedor-instances", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Falha ao listar instâncias do aquecedor para o Soma.",
+    });
+  }
+});
+
+/**
+ * Integração Soma CRM — cria campanha API Alternativa no owner configurado
+ * (padrão mozart.pmo@gmail.com). Auth: X-Soma-Waba-Key.
+ * Body JSON: name, plannedSendCount, config fields, optional numbers[].
+ */
+app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
+  try {
+    const expected = String(process.env.SOMA_WABA_INTEGRATION_KEY || "").trim();
+    if (!expected) {
+      return res.status(503).json({
+        ok: false,
+        error: "SOMA_WABA_INTEGRATION_KEY não configurada no WABA.",
+      });
+    }
+    const provided = String(req.headers["x-soma-waba-key"] || "").trim();
+    if (!provided || provided !== expected) {
+      return res.status(401).json({ ok: false, error: "Não autorizado." });
+    }
+
+    const ownerEmail = String(
+      process.env.SOMA_WABA_OWNER_EMAIL || "mozart.pmo@gmail.com",
+    )
+      .trim()
+      .toLowerCase();
+    if (!ownerEmail.includes("@")) {
+      return res.status(500).json({ ok: false, error: "SOMA_WABA_OWNER_EMAIL inválido." });
+    }
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const name = String(body.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ ok: false, error: "Nome da campanha é obrigatório." });
+    }
+
+    const plannedSendCount = Math.max(0, Math.floor(Number(body.plannedSendCount) || 0));
+    const numbersRaw = Array.isArray(body.numbers) ? body.numbers : [];
+    const bucket = numbersRaw
+      .map((n: unknown) => normalizeCampaignPhone(String(n || "")))
+      .filter((n: string) => n.length >= 12);
+    const extracted = deduplicateCampaignDestinationPhones(bucket);
+    let numbers = extracted.phones;
+
+    const configSnapshot = parseDisparosConfig({
+      delayMinSeconds: body.delayMinSeconds,
+      delayMaxSeconds: body.delayMaxSeconds,
+      startHour: body.startHour,
+      endHour: body.endHour,
+      messageMode: body.messageMode === "fixed" ? "fixed" : "ai",
+      aiBriefing: body.aiBriefing,
+      aiTone: body.aiTone,
+      aiCta: body.aiCta,
+      fixedMessage: body.fixedMessage,
+      linkDestinationMode: body.linkDestinationMode === "url" ? "url" : "whatsapp",
+      whatsappTargetNumber: body.whatsappTargetNumber,
+      responseUrl: body.responseUrl,
+      shortenerProvider: "waba",
+      selectedDisparadorInstances: Array.isArray(body.selectedDisparadorInstances)
+        ? body.selectedDisparadorInstances
+        : [],
+    });
+
+    const campaignInstances = (configSnapshot.selectedDisparadorInstances || [])
+      .map((n) => String(n || "").trim())
+      .filter(Boolean);
+    if (!campaignInstances.length) {
+      return res.status(400).json({
+        ok: false,
+        error: "Selecione ao menos uma instância conectada para o disparo.",
+      });
+    }
+
+    if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
+      numbers = numbers.slice(0, plannedSendCount);
+    }
+
+    if (await shouldApplyAlternativaDispatchProfile(ownerEmail)) {
+      try {
+        await assertAlternativaDispatchReady(ownerEmail);
+      } catch (err: any) {
+        return res.status(400).json({
+          ok: false,
+          error: err?.message || "Requisitos da API Alternativa não atendidos.",
+        });
+      }
+      Object.assign(configSnapshot, applyAlternativaDispatchProfile(configSnapshot));
+    }
+
+    const now = new Date().toISOString();
+    const campaignId = crypto.randomUUID();
+    const totalNumbers = numbers.length > 0 ? numbers.length : plannedSendCount;
+    const campaign: DisparosCampaign = {
+      id: campaignId,
+      name,
+      createdAt: now,
+      status: "paused",
+      totalNumbers,
+      sentCount: 0,
+      ownerEmail,
+      configSnapshot,
+    };
+    const leads: DisparosCampaignLead[] = numbers.map((phone) => ({
+      id: crypto.randomUUID(),
+      campaignId,
+      phone,
+      status: "pending" as const,
+      createdAt: now,
+      sentAt: null,
+    }));
+
+    disparosCampaignsMemory.unshift(campaign);
+    if (leads.length) disparosCampaignLeadsMemory.unshift(...leads);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any).insert({
+          id: campaign.id,
+          campaign_name: campaign.name,
+          status: campaign.status,
+          total_numbers: campaign.totalNumbers,
+          sent_count: campaign.sentCount,
+          config_snapshot: campaign.configSnapshot,
+          created_at: campaign.createdAt,
+        });
+        if (leads.length) {
+          await (supabase.from("disparos_campaign_leads" as any) as any).insert(
+            leads.map((lead) => ({
+              id: lead.id,
+              campaign_id: lead.campaignId,
+              phone: lead.phone,
+              status: lead.status,
+              created_at: lead.createdAt,
+              sent_at: lead.sentAt,
+            })),
+          );
+        }
+      } catch (dbErr) {
+        console.error("[Soma] Falha ao gravar campanha no Supabase:", dbErr);
+      }
+    }
+
+    queuePersistDisparosLocalState();
+
+    return res.status(200).json({
+      ok: true,
+      id: campaignId,
+      campaign: { id: campaignId, name, status: "paused", totalNumbers },
+      message:
+        numbers.length > 0
+          ? "Campanha criada no WABA (pausada). Ative no painel API Alternativa para enviar."
+          : "Campanha criada no WABA (pausada) sem leads ainda. Os números do público do funil podem ser sincronizados na execução.",
+      ownerEmail,
+      leadsCount: numbers.length,
+      plannedSendCount: totalNumbers,
+    });
+  } catch (error) {
+    console.error("POST /integrations/soma/alternativa-campaigns", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Falha ao criar campanha Alternativa para o Soma.",
+    });
   }
 });
 
@@ -5211,7 +5635,9 @@ app.post("/instancias/uso-config", async (req, res) => {
     for (const row of sanitized) {
       if (row.useAquecedor !== false) {
         const prev = getInstanceUsageFromMap(usageMapBefore, row.instanceName);
-        if (!prev || prev.useAquecedor === false) {
+        if (!prev) {
+          await registerAquecedorInstancePreparing(row.instanceName, new Date().toISOString());
+        } else if (prev.useAquecedor === false) {
           await registerAquecedorInstancePreparing(row.instanceName);
         }
       }
@@ -5380,11 +5806,21 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
   if (!validationId) {
     return res.status(400).json({ error: "validationId é obrigatório." });
   }
-  const status = getInboundValidationStatus(validationId);
-  if (!status) {
-    return res.status(404).json({ error: "Validação não encontrada ou expirada." });
+  try {
+    // Poll da UI dispara busca CONFIRMAR + envio da resposta (não só leitura passiva).
+    const status = await refreshInboundValidation(validationId, { aggressive: false });
+    if (!status) {
+      return res.status(404).json({ error: "Validação não encontrada ou expirada." });
+    }
+    return res.json({ ok: true, ...status });
+  } catch (error: any) {
+    console.error("GET /instancias/validacao-inbound/:validationId", error);
+    const status = getInboundValidationStatus(validationId);
+    if (!status) {
+      return res.status(404).json({ error: "Validação não encontrada ou expirada." });
+    }
+    return res.json({ ok: true, ...status });
   }
-  return res.json({ ok: true, ...status });
 });
 
 app.post("/instancias/validacao-inbound/:validationId/confirmar-envio", async (req, res) => {
@@ -5423,19 +5859,11 @@ function buildTemplateUrl(template: string, instanceName: string) {
 }
 
 function normalizeWhatsAppNumber(num: string): string {
-  const raw = String(num || "").trim();
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return raw;
-  if (digits.length >= 12 && digits.startsWith("55")) return digits;
-  if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
-    return "55" + digits;
-  }
-  return digits;
+  return normalizeEvoWhatsAppNumber(num);
 }
 
 function normalizeCampaignPhone(input: string): string {
-  const normalized = normalizeWhatsAppNumber(String(input || ""));
-  return String(normalized || "").replace(/\D/g, "");
+  return canonicalizeBrazilWhatsAppNumber(String(input || ""));
 }
 
 /** Uma linha de contato → um destino: remove duplicatas pelo telefone normalizado (55…). */
@@ -6353,6 +6781,7 @@ async function resolveInstanceDeletionKeys(instanceName: string): Promise<string
       const keyDigits = String(registeredKey || "").replace(/\D/g, "");
       if (!keyDigits || keyDigits.length < 8) continue;
       const matched =
+        brazilWhatsAppNumbersMatch(keyDigits, queryDigits) ||
         keyDigits === queryDigits ||
         keyDigits.endsWith(queryDigits.slice(-8)) ||
         queryDigits.endsWith(keyDigits.slice(-8));
@@ -6367,9 +6796,9 @@ async function resolveInstanceNamesByPhone(phone: string): Promise<string[]> {
   const query = String(phone || "").replace(/\D/g, "");
   if (query.length < 8) return [];
   const names = new Set<string>();
-  if (query) names.add(query);
-  if (query.startsWith("55") && query.length > 2) names.add(query.slice(2));
-  if (!query.startsWith("55") && query.length >= 10) names.add(`55${query}`);
+  for (const variant of expandBrazilWhatsAppNumberVariants(query)) {
+    names.add(variant);
+  }
 
   const evoList = await fetchEvoInstancesList();
   if (evoList.ok) {
@@ -6378,43 +6807,16 @@ async function resolveInstanceNamesByPhone(phone: string): Promise<string[]> {
       const number =
         extractPhoneFromEvoListItem(inst)?.phone || extractInstanceNumber(inst);
       if (!instanceName || !number) continue;
-      const instanceDigits = String(number).replace(/\D/g, "");
-      const queryVariants = new Set([query, query.slice(-11), query.slice(-10), query.slice(-8)]);
-      const instanceVariants = new Set([
-        instanceDigits,
-        instanceDigits.slice(-11),
-        instanceDigits.slice(-10),
-        instanceDigits.slice(-8),
-      ]);
-      let match = false;
-      for (const q of queryVariants) {
-        if (!q) continue;
-        for (const i of instanceVariants) {
-          if (!i) continue;
-          if (q === i || q.endsWith(i) || i.endsWith(q)) {
-            match = true;
-            break;
-          }
-        }
-        if (match) break;
-      }
-      if (match) names.add(instanceName);
+      if (brazilWhatsAppNumbersMatch(number, query)) names.add(instanceName);
     }
   }
 
   for (const key of await wabaInstanceOwnershipService.listAllRegisteredInstanceNames()) {
     const keyDigits = String(key || "").replace(/\D/g, "");
     if (!keyDigits || keyDigits.length < 8) continue;
-    const queryVariants = [query, query.slice(-11), query.slice(-10), query.slice(-8)];
-    const matched = queryVariants.some(
-      (q) =>
-        q &&
-        (keyDigits === q ||
-          keyDigits.endsWith(q.slice(-8)) ||
-          q.endsWith(keyDigits.slice(-8)) ||
-          key.toLowerCase().includes(q.slice(-8))),
-    );
-    if (matched) names.add(key);
+    if (brazilWhatsAppNumbersMatch(keyDigits, query) || key.toLowerCase().includes(query.slice(-8))) {
+      names.add(key);
+    }
   }
 
   return Array.from(names).filter(Boolean);
@@ -6598,13 +7000,42 @@ async function enrichInstanceItemsWithLiveConnection(
     items.map(async (row) => {
       const name = String(row?.name || "").trim();
       if (!name) return row;
+
       const liveState = await fetchEvoInstanceLiveState(name, { fresh: true });
-      if (!liveState) return row;
-      return {
-        ...row,
-        connectionStatus: liveState,
-        liveConnectionStatus: liveState,
-      };
+      const next: Record<string, unknown> = { ...row };
+
+      if (liveState) {
+        next.connectionStatus = liveState;
+        next.liveConnectionStatus = liveState;
+        const restriction = await syncWhatsappConnectingRestriction(name, liveState);
+        next.waRestrictionUntil = restriction?.restrictedUntil || null;
+        next.waRestrictionDetectedAt = restriction?.detectedAt || null;
+      } else {
+        // Sem live: não manter "open" fantasma do cache (causa oscilação conectado/desconectado).
+        const cached = String(row.connectionStatus || "").trim().toLowerCase();
+        if (cached === "open" || cached.includes("open")) {
+          next.connectionStatus = "unknown";
+          next.liveConnectionStatus = "unknown";
+        }
+      }
+
+      // Número: EVO costuma ter number=null e ownerJid preenchido (ex.: 1261 pós device_removed).
+      const currentNumber = String(next.number || "").trim();
+      if (!currentNumber) {
+        const fromFields = extractInstanceNumber(next);
+        if (fromFields) {
+          next.number = fromFields.includes("@") ? fromFields.split("@")[0] : fromFields;
+        } else {
+          try {
+            const resolved = await resolveEvoInstancePhone(name);
+            if (resolved) next.number = resolved;
+          } catch {
+            /* opcional */
+          }
+        }
+      }
+
+      return next;
     }),
   );
 }
@@ -6658,14 +7089,55 @@ async function buildInstancesSnapshotForAuth(
     };
   });
 
-  const ativas = items.filter((row) =>
+  const liveItems = await enrichInstanceItemsWithLiveConnection(
+    items as Array<Record<string, unknown>>,
+  );
+
+  const ativas = liveItems.filter((row) =>
     String(row?.connectionStatus || "").toLowerCase() === "open",
   ).length;
 
   const enrichedItems = await attachAquecedorMessageStatsToInstanceItems(
-    items as Array<Record<string, unknown>>,
+    liveItems,
     auth.email || "",
   );
+
+  // Atualiza connectionStatus + number das instâncias do dono (não apaga o restante do cache).
+  if (cache?.items?.length) {
+    const liveByName = new Map(
+      enrichedItems.map((row) => [
+        String(row?.name || "").trim().toLowerCase(),
+        {
+          status: String(row?.connectionStatus || "").trim().toLowerCase(),
+          number: String(row?.number || "").trim(),
+        },
+      ]),
+    );
+    let cacheDirty = false;
+    const nextCacheItems = cache.items.map((row) => {
+      const key = String(row?.name || "").trim().toLowerCase();
+      const live = liveByName.get(key);
+      if (!live || !key) return row;
+      let changed = false;
+      let next = row;
+      if (
+        live.status &&
+        String(row?.connectionStatus || "").trim().toLowerCase() !== live.status
+      ) {
+        next = { ...next, connectionStatus: live.status };
+        changed = true;
+      }
+      if (live.number && !String(row?.number || "").trim()) {
+        next = { ...next, number: live.number };
+        changed = true;
+      }
+      if (changed) cacheDirty = true;
+      return next;
+    });
+    if (cacheDirty) {
+      void saveEvoInstancesCache(nextCacheItems);
+    }
+  }
 
   return {
     total: enrichedItems.length,
@@ -6673,7 +7145,7 @@ async function buildInstancesSnapshotForAuth(
     desconectadas: enrichedItems.length - ativas,
     items: enrichedItems,
     fromCache: true,
-    cacheUpdatedAt: String(cache?.updatedAt || ""),
+    cacheUpdatedAt: String(cache?.updatedAt || new Date().toISOString()),
   };
 }
 
@@ -6933,10 +7405,34 @@ function collectEvoChatMessageTexts(node: unknown, out: string[], depth = 0): vo
   }
 }
 
+function aquecedorTextMatchesNeedle(
+  text: string,
+  needle: string,
+  requireTokenBoundary: boolean,
+): boolean {
+  const lowered = String(text || "").toLowerCase();
+  const token = String(needle || "").trim().toLowerCase();
+  if (!lowered || !token) return false;
+  if (!requireTokenBoundary || token.length > 24) {
+    return lowered.includes(token);
+  }
+  // Tag curta (ex.: 6 chars): exige token isolado — evita match em prefixo reutilizado.
+  if (lowered === token || lowered.endsWith(` ${token}`) || lowered.endsWith(token)) {
+    return true;
+  }
+  return new RegExp(`(?:^|\\s)${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`, "i").test(
+    lowered,
+  );
+}
+
 function evoPayloadIncludesNeedle(
   node: unknown,
   needles: string[],
-  options?: { minTimestampMs?: number; fromMe?: boolean | null },
+  options?: {
+    minTimestampMs?: number;
+    fromMe?: boolean | null;
+    requireTokenBoundary?: boolean;
+  },
   depth = 0,
 ): boolean {
   if (depth > 14 || node == null) return false;
@@ -6958,10 +7454,12 @@ function evoPayloadIncludesNeedle(
     const fromMeOk =
       options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
     if (tsOk && fromMeOk) {
-      const matched = texts.some((text) => {
-        const lowered = text.toLowerCase();
-        return normalizedNeedles.some((needle) => lowered.includes(needle));
-      });
+      const requireTokenBoundary = options?.requireTokenBoundary === true;
+      const matched = texts.some((text) =>
+        normalizedNeedles.some((needle) =>
+          aquecedorTextMatchesNeedle(text, needle, requireTokenBoundary),
+        ),
+      );
       if (matched) return true;
     }
   }
@@ -6993,13 +7491,13 @@ async function probeAquecedorDeliveryViaFindMessages(
     for (const remoteJid of remoteJids) {
       const whereKey: Record<string, unknown> = { remoteJid };
       if (fromMe != null) whereKey.fromMe = fromMe;
+      // Nunca consultar findMessages sem remoteJid: histórico global + texto
+      // repetido do aquecedor gera falso «Envio com Sucesso».
       const bodies: Array<Record<string, unknown>> = [
         { where: { key: whereKey }, limit: 50 },
         { where: { key: { remoteJid } }, limit: 50 },
         { where: { key: { remoteJid } }, take: 50 },
         { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
-        { limit: 80 },
-        {},
       ];
       for (const body of bodies) {
         const result = await callEvoAction(url, "POST", body, {
@@ -7007,7 +7505,13 @@ async function probeAquecedorDeliveryViaFindMessages(
           retries: 1,
         });
         if (!result.ok) continue;
-        if (evoPayloadIncludesNeedle(result.json, needles, { minTimestampMs, fromMe })) {
+        if (
+          evoPayloadIncludesNeedle(result.json, needles, {
+            minTimestampMs,
+            fromMe,
+            requireTokenBoundary: true,
+          })
+        ) {
           return true;
         }
       }
@@ -7040,11 +7544,19 @@ async function verifyAquecedorMessageDelivered(
 
   const marker = extractAquecedorMessageMarker(messageText);
   const fullText = String(messageText || "").trim().toLowerCase();
+  // Só a tag única (ou texto completo com a tag). Nunca o prefixo sem tag:
+  // mensagens do aquecedor se repetem e o histórico EVO gerava falso sucesso.
   const needles = new Set<string>();
-  if (marker) needles.add(marker);
-  if (fullText.length >= 6) needles.add(fullText);
-  if (fullText.length >= 12) needles.add(fullText.slice(0, 48));
+  const markerLooksUnique = Boolean(marker && /^[a-z0-9]{5,8}$/i.test(marker) && fullText.endsWith(marker));
+  if (markerLooksUnique) {
+    needles.add(marker);
+  } else if (fullText.length >= 6) {
+    needles.add(fullText);
+  }
   const needleList = Array.from(needles);
+  if (!needleList.length) {
+    return { ok: false, detail: "Sem marcador único para conferir entrega no WhatsApp." };
+  }
   const timestampGraceMs = options?.timestampGraceMs ?? 5000;
   const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
   const maxAttempts = Math.max(3, options?.maxAttempts ?? 12);
@@ -7052,45 +7564,57 @@ async function verifyAquecedorMessageDelivered(
   const skipInitialDelay = options?.skipInitialDelay === true;
   const relaxTimestampOnLastAttempt = options?.relaxTimestampOnLastAttempt === true;
   const destinoCandidates = await resolveEvoInstanceNameCandidates(destino);
+  const origem = String(options?.instanciaOrigem || "").trim();
+  const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
+  const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
+  const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
 
   if (!skipInitialDelay) {
     await sleepMs(3000);
   }
 
+  let sawDestino = false;
+  let sawOrigem = false;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (attempt > 1) await sleepMs(attemptIntervalMs);
     const tsFilter =
       relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
-    const foundOnDestino = await probeAquecedorDeliveryViaFindMessages(
-      destinoCandidates,
-      remoteJids,
-      needleList,
-      tsFilter,
-      false,
-    );
-    if (foundOnDestino) {
+    if (!sawDestino) {
+      sawDestino = await probeAquecedorDeliveryViaFindMessages(
+        destinoCandidates,
+        remoteJids,
+        needleList,
+        tsFilter,
+        false,
+      );
+    }
+    if (!sawOrigem && origemCandidates.length && destJids.length) {
+      sawOrigem = await probeAquecedorDeliveryViaFindMessages(
+        origemCandidates,
+        destJids,
+        needleList,
+        tsFilter,
+        true,
+      );
+    }
+    // Entrega real: tag na origem (fromMe) E no destino (recebida).
+    if (sawDestino && sawOrigem) {
       return { ok: true, detail: "" };
     }
   }
 
-  const origem = String(options?.instanciaOrigem || "").trim();
-  const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
-  if (origem && numeroDestino) {
-    const origemCandidates = await resolveEvoInstanceNameCandidates(origem);
-    const destJids = buildAquecedorRemoteJidCandidates(numeroDestino);
-    const foundOnOrigem = await probeAquecedorDeliveryViaFindMessages(
-      origemCandidates,
-      destJids,
-      needleList,
-      minTimestampMs,
-      true,
-    );
-    if (foundOnOrigem) {
-      return {
-        ok: false,
-        detail: `Mensagem apareceu só na origem (${origem}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
-      };
-    }
+  if (sawOrigem && !sawDestino) {
+    return {
+      ok: false,
+      detail: `Mensagem apareceu só na origem (${origem || "origem"}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
+    };
+  }
+  if (sawDestino && !sawOrigem) {
+    return {
+      ok: false,
+      detail: `Marcador apareceu no destino sem prova na origem (${origem || "origem"}) — possível histórico EVO; não confirmo envio real.`,
+    };
   }
 
   return {
@@ -7892,6 +8416,9 @@ async function runRegistrarQrcode(
   }
 
   if (qrFromCreate) {
+    if (instanceWasNew) {
+      await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+    }
     return {
       ok: true,
       message: createWarning
@@ -7902,13 +8429,28 @@ async function runRegistrarQrcode(
     };
   }
 
-  const shouldPrepareSession = !instanceWasNew || !createOk;
-  const qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
-    timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 60000),
-    retries: 3,
-    prepareSession: shouldPrepareSession,
+  // Doc EVO: GET /instance/connect já devolve QR em close/connecting.
+  // logout+restart antes costuma travar/timeout e derruba sessão connecting válida.
+  // https://doc.evolution-api.com/v2/api-reference/instance-controller/instance-connect
+  let qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+    timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 45000),
+    retries: 2,
+    prepareSession: false,
   });
+  if (!qrFetch.ok && (!instanceWasNew || !createOk)) {
+    console.warn(
+      `[QR] ${name}: connect direto falhou (HTTP ${qrFetch.lastQrStatus}); tentando logout+restart.`,
+    );
+    qrFetch = await fetchInstanceQrCodeFromEvo(name, number, {
+      timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 60000),
+      retries: 3,
+      prepareSession: true,
+    });
+  }
   if (qrFetch.ok) {
+    if (instanceWasNew) {
+      await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+    }
     return {
       ok: true,
       message: createWarning
@@ -7941,6 +8483,7 @@ async function runRegistrarQrcode(
       }
     }
     if (retryQrFromCreate) {
+      await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
       return {
         ok: true,
         message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
@@ -7956,6 +8499,7 @@ async function runRegistrarQrcode(
         extended: true,
       });
       if (qrRetry.ok) {
+        await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
         return {
           ok: true,
           message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
@@ -8004,7 +8548,8 @@ async function fetchInstanceQrCodeFromEvo(
 > {
   const timeoutMs = options.timeoutMs ?? defaultEvoHttpTimeoutMs();
   const retries = options.retries ?? 3;
-  if (options.prepareSession !== false) {
+  // prepareSession só sob demanda explícita (após falha do connect direto).
+  if (options.prepareSession === true) {
     await prepareEvoInstanceForQrConnect(instanceName);
   }
 
@@ -8097,7 +8642,16 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
 
     const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
 
-    const qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number);
+    let qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
+      prepareSession: false,
+    });
+    if (!qrFetch.ok) {
+      qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
+        prepareSession: true,
+        timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 60000),
+        retries: 3,
+      });
+    }
     if (!qrFetch.ok) {
       return res.status(502).json({
         error: describeEvoQrFailure(0, qrFetch.lastQrStatus, "", qrFetch.lastQrDetail),
@@ -8571,12 +9125,39 @@ app.get("/aquecedor/status", async (req, res) => {
       return res.status(401).json({ error: "Sessão sem e-mail válido para consultar o Aquecedor." });
     }
     await reloadAquecedorOwnerMotorsFromDisk();
+    const motor = getAquecedorOwnerMotor(ownerEmail);
+    // Contador de instâncias: refresca se nunca houve ciclo neste boot (summary.at=0)
+    // ou se o resumo persistido está velho (>2 min). Evita "instâncias: …" na UI.
+    const summaryAgeMs = motor.connectedSummary.at > 0 ? Date.now() - motor.connectedSummary.at : Number.POSITIVE_INFINITY;
+    if (motor.desired === true && summaryAgeMs > 120_000) {
+      try {
+        const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
+        const connectedActive = await filterAquecedorCycleConnected(resolved.connected);
+        updateAquecedorOwnerConnectedSummary(ownerEmail, connectedActive, resolved.connected);
+        void persistAquecedorOwnerSnapshot(ownerEmail);
+      } catch (refreshErr) {
+        console.warn(
+          "[Aquecedor] falha ao refrescar contagem de instâncias no status:",
+          refreshErr instanceof Error ? refreshErr.message : refreshErr,
+        );
+      }
+    }
     const config = await loadAquecedorEffectiveConfig();
     const nowSp = nowInSaoPaulo();
     const windowOpen = isAquecedorWindowOpen(config, nowSp);
     const nextWindowOpenAt = windowOpen ? null : nextAquecedorWindowOpenAt(config, nowSp);
+    const live = buildLiveAquecedorOwnerStatusPayload(ownerEmail);
+    // Não expor nextAllowedAt no passado (ex.: 16:02 preso) — UI mostra "imediato".
+    const nextMs = live.nextAllowedAt ? new Date(String(live.nextAllowedAt)).getTime() : NaN;
+    if (Number.isFinite(nextMs) && nextMs <= Date.now()) {
+      live.nextAllowedAt = null;
+      if (motor.runtime.nextAllowedAt) {
+        motor.runtime.nextAllowedAt = null;
+        void persistAquecedorOwnerSnapshot(ownerEmail, { nextAllowedAt: null });
+      }
+    }
     return res.json({
-      ...buildLiveAquecedorOwnerStatusPayload(ownerEmail),
+      ...live,
       windowOpen,
       nextWindowOpenAt: nextWindowOpenAt ? nextWindowOpenAt.toISOString() : null,
       nextWindowOpenBr: nextWindowOpenAt ? formatDateBr(nextWindowOpenAt.toISOString()) : null,
@@ -8589,6 +9170,40 @@ app.get("/aquecedor/status", async (req, res) => {
       ...(ownerEmail ? buildLiveAquecedorOwnerStatusPayload(ownerEmail) : {}),
       statusReadError: true,
       statusReadMessage: "Falha ao ler estado persistido; exibindo último snapshot conhecido.",
+    });
+  }
+});
+
+app.get("/aquecedor/network-health", async (req, res) => {
+  if (rejectAquecedorWithoutEntitlement(req, res)) return;
+  try {
+    const auth = resolveWabaRequestAuth(req);
+    const ownerEmail = normalizeAquecedorOwnerEmail(auth.email);
+    if (!ownerEmail) {
+      return res.status(401).json({ error: "Sessão sem e-mail válido." });
+    }
+    const supabase = getSupabaseClient();
+    const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
+    const connectedActive = await filterAquecedorCycleConnected(resolved.connected);
+    const connected = connectedActive.length >= 2 ? connectedActive : resolved.connected;
+    if (supabase && connected.length >= 2) {
+      await ensureAquecedorOwnerConversationGraph(ownerEmail, supabase, connected);
+    } else if (connected.length >= 2) {
+      await ensureCompletePairGraph(
+        ownerEmail,
+        connected.map((item) => item.instancia),
+      );
+    }
+    const graph = await getOwnerConversationGraph(ownerEmail);
+    const report = buildNetworkHealthReport(ownerEmail, graph, {
+      instanceNames: connected.map((item) => item.instancia),
+    });
+    return res.json({ ok: true, ...report });
+  } catch (error) {
+    console.error("[Aquecedor] GET /aquecedor/network-health", error);
+    return res.status(500).json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Falha ao montar saúde da rede.",
     });
   }
 });
@@ -8760,6 +9375,7 @@ app.get("/aquecedor/envios", async (req, res) => {
               connected,
               combinations,
               cicloGlobal,
+              ownerEmail || undefined,
             );
             if (picked) {
               origem = picked.chosen.instancia_origem;
@@ -8890,9 +9506,21 @@ app.post("/aquecedor/start", async (req, res) => {
     return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
   }
   await persistAquecedorOwnerIntent(ownerEmail, true);
-  startAquecedorRuntimeLocal(ownerEmail);
   const motor = getAquecedorOwnerMotor(ownerEmail);
+  // Limpa nextAllowedAt velho (ex.: 16:02 no passado) para o status não mentir.
+  const nextMs = motor.runtime.nextAllowedAt
+    ? new Date(motor.runtime.nextAllowedAt).getTime()
+    : NaN;
+  if (!Number.isFinite(nextMs) || nextMs <= Date.now()) {
+    motor.runtime.nextAllowedAt = null;
+  }
   motor.runtime.lastResult = "Aquecedor iniciado.";
+  startAquecedorRuntimeLocal(ownerEmail);
+  void persistAquecedorOwnerSnapshot(ownerEmail, {
+    running: true,
+    nextAllowedAt: motor.runtime.nextAllowedAt,
+    lastResult: motor.runtime.lastResult,
+  });
   void appendAquecedorCommandLog("Aquecedor iniciado.", ownerEmail);
   return res.json({
     ok: true,
@@ -8901,6 +9529,7 @@ app.post("/aquecedor/start", async (req, res) => {
       ...buildLiveAquecedorOwnerStatusPayload(ownerEmail),
       running: true,
       desiredRunning: true,
+      nextAllowedAt: motor.runtime.nextAllowedAt,
       lastResult: motor.runtime.lastResult,
     },
     desiredRunning: true,
@@ -8952,8 +9581,14 @@ app.post("/aquecedor/run-once", async (req, res) => {
     return res.status(401).json({ error: "Sessão sem e-mail válido para vincular o Aquecedor." });
   }
   await runAquecedorCycle(ownerEmail, true);
-  stopAquecedorOwnerMotorLocal(ownerEmail);
   const motor = getAquecedorOwnerMotor(ownerEmail);
+  const desiredRunning = motor.desired === true;
+  // Envio teste não pode desligar o motor: se estava desejado ligado, retoma o timer.
+  if (desiredRunning && ENABLE_AQUECEDOR_PROCESSING) {
+    startAquecedorRuntimeLocal(ownerEmail);
+  } else {
+    stopAquecedorOwnerMotorLocal(ownerEmail);
+  }
   const status = buildLiveAquecedorOwnerStatusPayload(ownerEmail);
   const lastResult = String(motor.runtime.lastResult || "").trim();
   const ok =
@@ -8968,8 +9603,8 @@ app.post("/aquecedor/run-once", async (req, res) => {
     message: lastResult || "Ciclo de teste executado.",
     status: {
       ...status,
-      running: false,
-      desiredRunning: motor.desired === true,
+      running: desiredRunning ? true : false,
+      desiredRunning,
       isProcessing: false,
       lastResult: lastResult || status.lastResult,
     },
@@ -9164,7 +9799,13 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
                 numero_whatsapp: combo.numero_whatsapp,
               }));
               const picked = await withAquecedorTimeout(
-                pickAquecedorCombinationAsync(supabase, connected, comboRows, cicloGlobal),
+                pickAquecedorCombinationAsync(
+                  supabase,
+                  connected,
+                  comboRows,
+                  cicloGlobal,
+                  ownerEmail,
+                ),
                 4000,
                 null,
               );
@@ -12289,12 +12930,25 @@ const httpServer = app.listen(PORT, () => {
     );
 
     const desiredOwners = await loadAquecedorOwnerRuntimeIntents();
+    const restoredDesired = await loadAndApplyDurableDesiredOwners();
     if (ENABLE_AQUECEDOR_PROCESSING && !MAINTENANCE_MODE) {
-      const activeOwners = desiredOwners.filter((row) => row.desired === true);
+      const activeOwners = listAquecedorOwnersWithDesiredRunning();
       if (activeOwners.length) {
         await syncAquecedorWorkerLeadership();
         console.log(
-          `[Aquecedor] retomado após restart para ${activeOwners.length} proprietário(s) (runtime-intent v3).`,
+          `[Aquecedor] retomado após restart para ${activeOwners.length} proprietário(s) (runtime-intent + desired durável${
+            restoredDesired.length ? `; restaurados=${restoredDesired.join(",")}` : ""
+          }).`,
+        );
+        for (const email of activeOwners) {
+          void appendAquecedorCommandLog(
+            "Aquecedor retomado automaticamente após restart do servidor.",
+            email,
+          );
+        }
+      } else if (desiredOwners.length) {
+        console.log(
+          `[Aquecedor] ${desiredOwners.length} proprietário(s) no runtime-intent, nenhum com desired=true.`,
         );
       }
     }
@@ -12322,6 +12976,33 @@ const httpServer = app.listen(PORT, () => {
       `[Aquecedor] promoção Preparando→ativo a cada ${Math.round(AQUECEDOR_PREPARE_PROMOTE_MS / 1000)}s (independente do motor ligado)`,
     );
 
+    void purgeAutomaticWhatsappConnectingRestrictions()
+      .then((cleared: string[]) => {
+        if (cleared.length) {
+          console.warn(
+            `[WA-Restrição] purge automático (connecting≠restrição): ${cleared.join(", ")}`,
+          );
+        }
+      })
+      .catch((err: unknown) => console.error("[WA-Restrição] purge automático:", err));
+    setInterval(() => {
+      recheckWhatsappConnectingRestrictions()
+        .then((result: { cleared: string[] }) => {
+          if (result.cleared.length) {
+            console.log(
+              `[WA-Restrição] liberada(s) após recheck 60min: ${result.cleared.join(", ")}`,
+            );
+          }
+        })
+        .catch((err: unknown) => console.error("[WA-Restrição] recheck 60min:", err));
+    }, WA_CONNECTING_RECHECK_MS);
+    void recheckWhatsappConnectingRestrictions().catch((err: unknown) =>
+      console.error("[WA-Restrição] recheck inicial:", err),
+    );
+    console.log(
+      `[WA-Restrição] só tags explícitas; connecting EVO não gera Restrição`,
+    );
+
     if (ENABLE_BACKGROUND_PROCESSING && !MAINTENANCE_MODE) {
       if (WABA_ENV === "v01") {
         console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");
@@ -12344,5 +13025,12 @@ const httpServer = app.listen(PORT, () => {
   })();
 });
 
-registerWabaGracefulShutdown(httpServer);
+registerWabaGracefulShutdown(httpServer, async () => {
+  try {
+    await flushAquecedorOwnerMotorsToDisk();
+    console.log("[shutdown] aquecedor desired/runtime-intent persistido.");
+  } catch (err) {
+    console.error("[shutdown] falha ao persistir aquecedor:", err);
+  }
+});
 

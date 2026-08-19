@@ -1,3 +1,8 @@
+## 2026-08-19 12:55 — V02: sync push trabalho pendente local
+- Pull origin/v02 + merge stash (aquecedor, inbound, WA restrição connecting, admin snapshot).
+- Marker `DEPLOY-2026-08-19-v02-pending-sync`
+- LOG: doc/LOG-2026-08-19__125500__v02-pending-sync-push.md
+
 ## 2026-08-11 14:35 — Motivo real da pausa de campanha
 - `runtimeStage.detail` deixa de ser genérico («Pausa Manual») e informa saúde/créditos/ativação
 - Campo `pauseReason` na memória local; tick/créditos/parar-envios gravam o motivo

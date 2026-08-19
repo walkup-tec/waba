@@ -20,12 +20,74 @@ const EVO_INSTANCES_URL =
 export function normalizeEvoWhatsAppNumber(num: string): string {
   const digits = String(num || "").replace(/\D/g, "");
   if (!digits) return "";
-  if (digits.length >= 12 && digits.startsWith("55")) return digits;
-  if (digits.length >= 10 && digits.length <= 11 && /^[1-9]\d/.test(digits)) {
-    return `55${digits}`;
+  let national = digits;
+  while (national.startsWith("55") && national.length > 11) {
+    national = national.slice(2);
   }
+  if (national.length >= 10 && national.length <= 11 && /^[1-9]\d/.test(national)) {
+    return `55${national}`;
+  }
+  if (digits.length >= 12 && digits.startsWith("55")) return digits;
   return digits;
 }
+
+/**
+ * Variantes BR com/sem o 9º dígito móvel (ex.: 5182001261 ↔ 51982001261)
+ * e com/sem DDI 55. Usar em match/lookup — nunca assumir um único formato.
+ */
+export function expandBrazilWhatsAppNumberVariants(raw: string): string[] {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return [];
+  const variants = new Set<string>();
+  const add = (value: string) => {
+    const d = String(value || "").replace(/\D/g, "");
+    if (!d) return;
+    variants.add(d);
+    if (d.startsWith("55") && d.length > 2) variants.add(d.slice(2));
+    else if (!d.startsWith("55") && d.length >= 10 && d.length <= 11) variants.add(`55${d}`);
+  };
+
+  add(digits);
+  let national = digits;
+  while (national.startsWith("55") && national.length > 11) {
+    national = national.slice(2);
+  }
+  add(national);
+
+  if (national.length === 11 && national.charAt(2) === "9") {
+    const withoutNine = `${national.slice(0, 2)}${national.slice(3)}`;
+    add(withoutNine);
+  } else if (national.length === 10 && /^[1-9]\d/.test(national)) {
+    const withNine = `${national.slice(0, 2)}9${national.slice(2)}`;
+    add(withNine);
+  }
+
+  return [...variants];
+}
+
+/** Chave estável para dedupe: 55 + DDD + 8 dígitos (sem o 9 móvel, quando aplicável). */
+export function canonicalizeBrazilWhatsAppNumber(raw: string): string {
+  const variants = expandBrazilWhatsAppNumberVariants(raw);
+  const tenNational = variants.find((v) => !v.startsWith("55") && v.length === 10);
+  if (tenNational) return `55${tenNational}`;
+  const twelve = variants.find((v) => v.startsWith("55") && v.length === 12);
+  if (twelve) return twelve;
+  const elevenNational = variants.find(
+    (v) => !v.startsWith("55") && v.length === 11 && v.charAt(2) === "9",
+  );
+  if (elevenNational) {
+    return `55${elevenNational.slice(0, 2)}${elevenNational.slice(3)}`;
+  }
+  return normalizeEvoWhatsAppNumber(raw);
+}
+
+export function brazilWhatsAppNumbersMatch(a: string, b: string): boolean {
+  const left = expandBrazilWhatsAppNumberVariants(a);
+  if (!left.length) return false;
+  const right = new Set(expandBrazilWhatsAppNumberVariants(b));
+  return left.some((item) => right.has(item));
+}
+
 
 function pickPhoneFromRecord(rec: Record<string, unknown>): string {
   const raw =

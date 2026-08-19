@@ -2,6 +2,8 @@ import crypto from "crypto";
 import { defaultEvoSendTextTimeoutMs, evoHttpRequest } from "./evo-http.client";
 import { waitForEvoInstanceLiveOpen } from "./instances/evo-connection-state.service";
 import {
+  canonicalizeBrazilWhatsAppNumber,
+  expandBrazilWhatsAppNumberVariants,
   normalizeEvoWhatsAppNumber,
   resolveEvoInstancePhone,
 } from "./instances/evo-instance-phone.service";
@@ -87,11 +89,18 @@ type ReceivePollCache = {
 type ValidationRecord = InboundValidationStatus & {
   replyMarker: string;
   referenceJid: string | null;
+  /** JID exato do chat onde chegou o CONFIRMAR (prova da resposta deve ser neste chat). */
+  inboundChatJid: string | null;
   inboundReceivedAt: number | null;
   validationStartedAtMs: number;
+  /** Maior timestamp de CONFIRMAR já existente na EVO ao iniciar — ignora histórico. */
+  keywordHighWaterMarkMs: number;
   userConfirmedSentAt: number | null;
   sendAttempted: boolean;
   sendHttpOk: boolean;
+  sendAttemptedAtMs: number | null;
+  /** Quantas vezes já tentamos sendText (HTTP OK sem prova → retry com variantes). */
+  sendRetryCount: number;
   sendDetail: string;
   cancelled: boolean;
   replyFollowUpScheduled: boolean;
@@ -167,11 +176,17 @@ function normalizeWhatsAppNumber(num: string): string {
 }
 
 function formatPhoneHint(num: string): string {
-  const digits = normalizeWhatsAppNumber(num);
+  const digits = canonicalizeBrazilWhatsAppNumber(num) || normalizeWhatsAppNumber(num);
   if (!digits) return "";
   if (digits.length >= 12 && digits.startsWith("55")) {
     const ddd = digits.slice(2, 4);
     const rest = digits.slice(4);
+    // Preferir exibição com 9 móvel quando o nacional tem 8 dígitos (formato comum no BR).
+    const displayRest =
+      rest.length === 8 ? `9${rest.slice(0, 4)}-${rest.slice(4)}` : null;
+    if (displayRest) {
+      return `+55 ${ddd} ${displayRest}`;
+    }
     if (rest.length === 9) {
       return `+55 ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
     }
@@ -224,10 +239,73 @@ function buildTemplateUrl(template: string, instanceName: string): string {
 }
 
 function resolveSendTarget(referenceJid: string | null, referenceNumber: string | null): string {
+  const candidates = buildSendNumberCandidates(referenceJid, referenceNumber);
+  return candidates[0] || "";
+}
+
+/** Destinos possíveis para sendText (nunca @lid; tenta 9º dígito BR e JID telefone). */
+function buildSendNumberCandidates(
+  referenceJid: string | null,
+  referenceNumber: string | null,
+  preferredExact?: string | null,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const value = String(raw || "").trim();
+    if (!value || isLidJid(value) || seen.has(value)) return;
+    seen.add(value);
+    out.push(value);
+  };
+
+  // Prioridade: exatamente o chat/número do CONFIRMAR (evita enviar para variante com/sem 9).
+  const preferred = String(preferredExact || "").trim();
+  if (preferred) {
+    if (preferred.includes("@") && isPhoneWhatsAppJid(preferred) && !isLidJid(preferred)) {
+      add(preferred);
+      add(normalizeWhatsAppNumber(preferred.split("@")[0] || ""));
+    } else if (!preferred.includes("@")) {
+      const digits = normalizeWhatsAppNumber(preferred);
+      if (digits) {
+        add(digits);
+        add(`${digits}@s.whatsapp.net`);
+      }
+    }
+  }
+
   const jid = String(referenceJid || "").trim();
-  if (jid.includes("@")) return jid;
-  const digits = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
-  return digits;
+  const fromNumber = normalizeWhatsAppNumber(String(referenceNumber || "").trim());
+  const fromJidUser = jid.includes("@")
+    ? normalizeWhatsAppNumber(jid.split("@")[0] || "")
+    : normalizeWhatsAppNumber(jid);
+
+  const seedDigits = [fromNumber, fromJidUser].filter(Boolean);
+  for (const seed of seedDigits) {
+    for (const variant of expandBrazilWhatsAppNumberVariants(seed)) {
+      const normalized = normalizeWhatsAppNumber(variant);
+      if (normalized.length >= 12 && normalized.startsWith("55")) add(normalized);
+    }
+  }
+
+  if (isPhoneWhatsAppJid(jid) && !isLidJid(jid)) add(jid);
+
+  // Último recurso: dígitos curtos (Evolution às vezes aceita sem DDI).
+  for (const seed of seedDigits) {
+    for (const variant of expandBrazilWhatsAppNumberVariants(seed)) {
+      const digits = String(variant || "").replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) add(digits);
+    }
+  }
+
+  return out;
+}
+
+function isPhoneWhatsAppJid(jid: string): boolean {
+  return /@s\.whatsapp\.net$/i.test(String(jid || "").trim());
+}
+
+function isLidJid(jid: string): boolean {
+  return /@lid$/i.test(String(jid || "").trim());
 }
 
 function collectMessageTexts(node: unknown, out: string[], depth = 0): void {
@@ -270,14 +348,28 @@ function normalizeKeywordText(text: string): string {
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+/** Aceita CONFIRMAR e variantes comuns (CONFIRMA / confirmar / confirma). */
+function keywordMatchNeedles(keyword: string): string[] {
+  const primary = normalizeKeywordText(keyword);
+  if (!primary) return [];
+  const needles = new Set<string>([primary]);
+  if (primary === "confirmar" || primary.startsWith("confirma")) {
+    needles.add("confirmar");
+    needles.add("confirma");
+  }
+  return [...needles];
+}
+
 function textMatchesKeyword(texts: string[], keyword: string): boolean {
-  const needle = normalizeKeywordText(keyword);
-  if (!needle) return false;
+  const needles = keywordMatchNeedles(keyword);
+  if (!needles.length) return false;
   return texts.some((t) => {
     const normalized = normalizeKeywordText(t);
     if (!normalized) return false;
-    if (normalized === needle) return true;
-    if (normalized.includes(needle) && normalized.length <= needle.length + 12) return true;
+    for (const needle of needles) {
+      if (normalized === needle) return true;
+      if (normalized.includes(needle) && normalized.length <= needle.length + 12) return true;
+    }
     return false;
   });
 }
@@ -389,12 +481,7 @@ async function finalizeExpiredAsync(record: ValidationRecord): Promise<void> {
 
   if (record.receiveTest.success === null) {
     try {
-      const hit = await resolveInboundHit(
-        record.instanceName,
-        record.keyword,
-        record.validationStartedAtMs,
-        { aggressive: true, deep: true },
-      );
+      const hit = await resolveInboundHit(record, { deep: true });
       if (hit) {
         markInboundReceived(record, hit, "expire-rescan");
         await runValidationFollowUp(record);
@@ -495,25 +582,27 @@ type InboundHitSearchOptions = {
   requireTimestamp?: boolean;
 };
 
-const INBOUND_KEYWORD_GRACE_MS = Math.max(
+/** Folga só para skew de relógio — NÃO reaproveitar CONFIRMAR de tentativas anteriores. */
+const INBOUND_CLOCK_SKEW_MS = Math.max(
   0,
-  Math.min(60_000, Number(process.env.INBOUND_VALIDATION_KEYWORD_GRACE_MS || 15_000) || 15_000),
+  Math.min(5_000, Number(process.env.INBOUND_VALIDATION_CLOCK_SKEW_MS || 2_000) || 2_000),
 );
 
-function inboundKeywordMinTimestampMs(
-  validationStartedAtMs: number,
-  aggressive = false,
-): number {
-  const grace = aggressive ? Math.max(INBOUND_KEYWORD_GRACE_MS, 60_000) : INBOUND_KEYWORD_GRACE_MS;
-  return validationStartedAtMs - grace;
+function inboundAcceptMinTimestampMs(record: {
+  validationStartedAtMs: number;
+  keywordHighWaterMarkMs: number;
+}): number {
+  const afterStart = record.validationStartedAtMs - INBOUND_CLOCK_SKEW_MS;
+  const afterHistory = (record.keywordHighWaterMarkMs || 0) + 1;
+  return Math.max(afterStart, afterHistory);
 }
 
-function inboundKeywordSearchOptions(
-  validationStartedAtMs: number,
-  aggressive = false,
-): InboundHitSearchOptions {
+function inboundKeywordSearchOptions(record: {
+  validationStartedAtMs: number;
+  keywordHighWaterMarkMs: number;
+}): InboundHitSearchOptions {
   return {
-    minTimestampMs: inboundKeywordMinTimestampMs(validationStartedAtMs, aggressive),
+    minTimestampMs: inboundAcceptMinTimestampMs(record),
     requireTimestamp: true,
   };
 }
@@ -581,9 +670,13 @@ function walkInboundHits(
     if (textMatchesKeyword(texts, keyword)) {
       const remoteJid = extractRemoteJid(obj) || findJidInSubtree(obj);
       if (remoteJid) {
+        const key = obj.key as Record<string, unknown> | undefined;
+        const altDigits = jidToNumber(
+          String(key?.remoteJidAlt || obj.remoteJidAlt || key?.remoteJid || ""),
+        );
         const hit: InboundHit = {
           remoteJid,
-          referenceNumber: jidToNumber(remoteJid),
+          referenceNumber: altDigits || jidToNumber(remoteJid),
           texts,
           messageTimestampMs: extractMessageTimestampMs(obj),
         };
@@ -619,19 +712,21 @@ function extractFromMe(node: Record<string, unknown>): boolean | null {
 function extractRemoteJid(node: Record<string, unknown>): string {
   const key = node.key as Record<string, unknown> | undefined;
   const candidates = [
-    key?.remoteJid,
     key?.remoteJidAlt,
-    node.remoteJid,
+    key?.remoteJid,
     node.remoteJidAlt,
+    node.remoteJid,
     node.chatId,
     key?.participant,
     node.participant,
-  ];
-  for (const c of candidates) {
-    const s = String(c || "").trim();
-    if (s && !s.includes("@g.us")) return s;
-  }
-  return "";
+  ]
+    .map((value) => String(value || "").trim())
+    .filter((s) => s && !s.includes("@g.us"));
+  const phoneJid = candidates.find((jid) => isPhoneWhatsAppJid(jid) && !isLidJid(jid));
+  if (phoneJid) return phoneJid;
+  const nonLid = candidates.find((jid) => !isLidJid(jid));
+  if (nonLid) return nonLid;
+  return candidates[0] || "";
 }
 
 function buildFindMessagesUrls(instanceName: string): string[] {
@@ -808,30 +903,80 @@ type ResolveInboundHitOptions = {
 };
 
 async function resolveInboundHit(
-  instanceName: string,
-  keyword: string,
-  validationStartedAtMs: number,
+  record: Pick<
+    ValidationRecord,
+    "instanceName" | "keyword" | "validationStartedAtMs" | "keywordHighWaterMarkMs"
+  >,
   options: ResolveInboundHitOptions | boolean = false,
 ): Promise<InboundHit | null> {
   const opts: ResolveInboundHitOptions =
     typeof options === "boolean" ? { aggressive: options, deep: options } : options;
-  const aggressive = opts.aggressive === true;
-  const deep = opts.deep === true || aggressive;
-  const searchOpts = inboundKeywordSearchOptions(validationStartedAtMs, aggressive);
+  const deep = opts.deep === true || opts.aggressive === true;
+  const searchOpts = inboundKeywordSearchOptions(record);
 
   const [fastMsgHit, fastChatsHit] = await Promise.all([
-    findInboundViaApiFast(instanceName, keyword, searchOpts),
-    findInboundViaChatsLastMessage(instanceName, keyword, searchOpts),
+    findInboundViaApiFast(record.instanceName, record.keyword, searchOpts),
+    findInboundViaChatsLastMessage(record.instanceName, record.keyword, searchOpts),
   ]);
   if (fastMsgHit) return fastMsgHit;
   if (fastChatsHit) return fastChatsHit;
 
   if (!deep) return null;
 
-  const viaChats = await findInboundViaRecentChats(instanceName, keyword, searchOpts);
+  const viaChats = await findInboundViaRecentChats(
+    record.instanceName,
+    record.keyword,
+    searchOpts,
+  );
   if (viaChats) return viaChats;
 
-  return findInboundViaApiExtended(instanceName, keyword, searchOpts);
+  return findInboundViaApiExtended(record.instanceName, record.keyword, searchOpts);
+}
+
+/** Maior timestamp de CONFIRMAR já na EVO — usado como marca d'água anti-histórico. */
+async function captureKeywordHighWaterMark(
+  instanceName: string,
+  keyword: string,
+): Promise<number> {
+  let maxTs = 0;
+  const collectMax = (payload: unknown) => {
+    const hits: InboundHit[] = [];
+    walkInboundHits(payload, hits, keyword, { requireTimestamp: true }, 0);
+    for (const hit of hits) {
+      const ts = hit.messageTimestampMs;
+      if (ts != null && ts > maxTs) maxTs = ts;
+    }
+  };
+
+  try {
+    const [msgRes, chatsRes] = await Promise.all([
+      callEvo(
+        buildFindMessagesUrls(instanceName)[0],
+        "POST",
+        { limit: 100 },
+        { timeoutMs: FIND_MESSAGES_TIMEOUT_MS },
+      ),
+      callEvo(
+        buildFindChatsUrls(instanceName)[0],
+        "POST",
+        { limit: 40 },
+        { timeoutMs: FIND_MESSAGES_TIMEOUT_MS },
+      ),
+    ]);
+    if (msgRes.ok) {
+      const records = extractEvoMessageRecords(msgRes.json);
+      collectMax(records.length ? records : msgRes.json);
+    }
+    if (chatsRes.ok) {
+      const chats = extractFindChatsRecords(chatsRes.json);
+      for (const chat of chats) {
+        if (chat.lastMessage) collectMax(chat.lastMessage);
+      }
+    }
+  } catch {
+    /* watermark 0 = só filtro por validationStartedAt */
+  }
+  return maxTs;
 }
 
 function extractEvoMessageRecords(payload: unknown): unknown[] {
@@ -848,18 +993,38 @@ function extractEvoMessageRecords(payload: unknown): unknown[] {
 async function findReplyInChat(
   instanceName: string,
   referenceJid: string,
-  replyMarker: string
+  replyMarker: string,
+  referenceNumber?: string | null,
+  minTimestampMs?: number,
 ): Promise<boolean> {
-  const remoteJid = referenceJid.includes("@") ? referenceJid : `${referenceJid}@s.whatsapp.net`;
-  const digits = normalizeWhatsAppNumber(referenceJid.split("@")[0] || referenceJid);
-  const bodies: Record<string, unknown>[] = [
-    { where: { key: { remoteJid } }, limit: 40 },
-    { where: { key: { remoteJid } }, take: 40 },
-    { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 40 },
-    { where: { key: { fromMe: false } }, limit: 60 },
-    { limit: 80 },
-    {},
-  ];
+  const marker = String(replyMarker || "").trim().toLowerCase();
+  if (!marker) return false;
+
+  const remoteCandidates = new Set<string>();
+  const jid = String(referenceJid || "").trim();
+  if (jid.includes("@") && !isLidJid(jid)) {
+    remoteCandidates.add(jid);
+    remoteCandidates.add(jid.replace(/@s\.whatsapp\.net$/i, ""));
+  }
+  for (const candidate of buildSendNumberCandidates(referenceJid, referenceNumber || null, jid)) {
+    const digits = normalizeWhatsAppNumber(
+      candidate.includes("@") ? candidate.split("@")[0] : candidate,
+    );
+    if (!digits) continue;
+    remoteCandidates.add(digits);
+    remoteCandidates.add(`${digits}@s.whatsapp.net`);
+  }
+
+  if (!remoteCandidates.size) return false;
+
+  // SOMENTE o chat do CONFIRMAR — busca global fromMe gerava falso OK em outro JID (9º dígito).
+  const bodies: Record<string, unknown>[] = [];
+  for (const remoteJid of remoteCandidates) {
+    bodies.push({ where: { key: { remoteJid, fromMe: true } }, limit: 40 });
+    bodies.push({ where: { key: { remoteJid } }, limit: 40 });
+    bodies.push({ where: { key: { remoteJid } }, take: 40 });
+  }
+
   for (const url of buildFindMessagesUrls(instanceName)) {
     for (const body of bodies) {
       const result = await callEvo(url, "POST", body);
@@ -867,11 +1032,18 @@ async function findReplyInChat(
       const records = extractEvoMessageRecords(result.json);
       const nodes = records.length ? records : [result.json];
       for (const node of nodes) {
+        if (!node || typeof node !== "object") continue;
+        const obj = node as Record<string, unknown>;
+        const fromMe = extractFromMe(obj);
+        if (fromMe !== true) continue;
+        const ts = extractMessageTimestampMs(obj);
+        if (minTimestampMs != null) {
+          if (ts == null || ts < minTimestampMs) continue;
+        }
         const texts: string[] = [];
         collectMessageTexts(node, texts);
-        const needle = replyMarker.toLowerCase();
-        if (texts.some((t) => t.toLowerCase().includes(needle))) return true;
-        if (digits && texts.some((t) => t.toLowerCase().includes("validação waba"))) return true;
+        // SOMENTE o marker desta validação — nunca “Validação WABA” genérica (histórico EVO).
+        if (texts.some((t) => t.toLowerCase().includes(marker))) return true;
       }
     }
   }
@@ -884,10 +1056,34 @@ function invalidateValidationPollCache(record: ValidationRecord): void {
 
 function markInboundReceived(record: ValidationRecord, hit: InboundHit, via: string): void {
   if (record.receiveTest.success === true) return;
+  const minTs = inboundAcceptMinTimestampMs(record);
+  if (hit.messageTimestampMs == null || hit.messageTimestampMs < minTs) {
+    console.info(
+      "[validacao-inbound] ignore stale CONFIRMAR",
+      record.instanceName,
+      `ts=${hit.messageTimestampMs}`,
+      `min=${minTs}`,
+      `via=${via}`,
+    );
+    return;
+  }
   invalidateValidationPollCache(record);
-  record.referenceJid = hit.remoteJid;
-  record.referenceNumber = hit.referenceNumber;
-  record.inboundReceivedAt = hit.messageTimestampMs ?? Date.now();
+  // Preferir telefone (remoteJidAlt) — @lid faz sendText falhar/silenciar no chat do usuário.
+  const phoneDigits = normalizeWhatsAppNumber(hit.referenceNumber || "");
+  const phoneJid =
+    phoneDigits.length >= 12 ? `${phoneDigits}@s.whatsapp.net` : "";
+  const inboundJid = String(hit.remoteJid || "").trim();
+  record.referenceNumber = phoneDigits || hit.referenceNumber;
+  record.inboundChatJid =
+    phoneJid ||
+    (isPhoneWhatsAppJid(inboundJid) && !isLidJid(inboundJid) ? inboundJid : "") ||
+    inboundJid ||
+    null;
+  record.referenceJid =
+    phoneJid ||
+    (isPhoneWhatsAppJid(inboundJid) && !isLidJid(inboundJid) ? inboundJid : inboundJid) ||
+    null;
+  record.inboundReceivedAt = hit.messageTimestampMs;
   record.phase = "confirm_received";
   record.receiveTest = {
     success: true,
@@ -913,12 +1109,14 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
     record.sendAttempted &&
     record.sendHttpOk &&
     record.sendTest.success !== true &&
-    record.referenceJid
+    (record.inboundChatJid || record.referenceJid)
   ) {
     const found = await findReplyInChat(
       record.instanceName,
-      record.referenceJid,
-      record.replyMarker
+      record.inboundChatJid || record.referenceJid || "",
+      record.replyMarker,
+      record.referenceNumber,
+      (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS,
     );
     if (found) {
       record.sendTest = {
@@ -933,20 +1131,49 @@ async function runValidationFollowUp(record: ValidationRecord): Promise<void> {
 async function sendContextualReply(record: ValidationRecord): Promise<void> {
   if (record.cancelled || record.finished || record.sendAttempted) return;
 
+  const open = await ensureValidationInstanceOpen(record);
+  if (!open) {
+    record.sendAttempted = true;
+    record.sendAttemptedAtMs = Date.now();
+    record.sendHttpOk = false;
+    record.sendDetail = "Instância não está open para enviar a resposta.";
+    record.sendTest = {
+      success: false,
+      detail:
+        "A instância não ficou conectada a tempo para enviar «Validação WABA concluída». Escaneie o QR de novo ou use Atualizar.",
+    };
+    tryFinalize(record);
+    return;
+  }
+
   const convKey = conversationReplyKey(record);
   if (convKey) {
     const lastSentAt = recentReplyByConversation.get(convKey);
     if (lastSentAt != null && Date.now() - lastSentAt < REPLY_DEDUPE_MS) {
-      record.phase = "reply_sent";
-      record.sendAttempted = true;
-      record.sendHttpOk = true;
-      record.sendDetail = "dedupe";
-      record.sendTest = {
-        success: true,
-        detail: "Resposta já enviada nesta conversa (validação única).",
-      };
-      tryFinalize(record);
-      return;
+      const proofJid = record.inboundChatJid || record.referenceJid;
+      const found =
+        proofJid &&
+        (await findReplyInChat(
+          record.instanceName,
+          proofJid,
+          record.replyMarker,
+          record.referenceNumber,
+          record.validationStartedAtMs - INBOUND_CLOCK_SKEW_MS,
+        ));
+      if (found) {
+        record.phase = "reply_sent";
+        record.sendAttempted = true;
+        record.sendAttemptedAtMs = Date.now();
+        record.sendHttpOk = true;
+        record.sendDetail = "dedupe";
+        record.sendTest = {
+          success: true,
+          detail: "Resposta já enviada nesta conversa (validação única).",
+        };
+        tryFinalize(record);
+        return;
+      }
+      // Dedupe sem prova no histórico — tentar enviar de novo (evita modal “ok” sem mensagem).
     }
     if (replyInFlight.has(convKey)) return;
     replyInFlight.add(convKey);
@@ -954,59 +1181,146 @@ async function sendContextualReply(record: ValidationRecord): Promise<void> {
 
   record.phase = "reply_sent";
   record.sendAttempted = true;
+  record.sendAttemptedAtMs = Date.now();
+  record.sendRetryCount = Math.max(0, Number(record.sendRetryCount) || 0) + 1;
   const text = `Validação WABA concluída. ${record.replyMarker}`;
   const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, record.instanceName);
-  const numero = resolveSendTarget(record.referenceJid, record.referenceNumber);
-  if (!numero) {
+  const preferred =
+    record.inboundChatJid ||
+    record.referenceJid ||
+    record.referenceNumber ||
+    "";
+  // 1ª tentativa: só o chat do CONFIRMAR. Retry: variantes BR (com/sem 9º dígito).
+  const candidatesRaw =
+    record.sendRetryCount <= 1
+      ? buildSendNumberCandidates(null, null, preferred)
+      : buildSendNumberCandidates(
+          record.referenceJid,
+          record.referenceNumber,
+          preferred,
+        );
+  const selfDigits = normalizeWhatsAppNumber(record.instanceNumber || "");
+  const candidates = candidatesRaw.filter((numero) => {
+    const digits = normalizeWhatsAppNumber(
+      numero.includes("@") ? numero.split("@")[0] || "" : numero,
+    );
+    if (!digits || digits.length < 10) return false;
+    // Nunca enviar a resposta para o próprio número integrado.
+    if (selfDigits && digits === selfDigits) return false;
+    if (selfDigits) {
+      const selfVariants = new Set(
+        expandBrazilWhatsAppNumberVariants(selfDigits).map((v) =>
+          normalizeWhatsAppNumber(v),
+        ),
+      );
+      if (selfVariants.has(digits)) return false;
+    }
+    return true;
+  });
+  if (!candidates.length || candidates.every((c) => isLidJid(c))) {
     if (convKey) replyInFlight.delete(convKey);
     record.sendHttpOk = false;
     record.sendDetail = "Destino da resposta não identificado.";
     record.sendTest = {
       success: false,
-      detail: "Não foi possível identificar o chat do outro WhatsApp para responder.",
+      detail:
+        "Não foi possível identificar o número do outro WhatsApp para responder (JID @lid sem telefone).",
     };
     tryFinalize(record);
     return;
   }
-  const sendBody: Record<string, unknown> = EVO_SEND_TEXT_V1
-    ? { number: numero, textMessage: { text } }
-    : { number: numero, text, textMessage: { text } };
+
+  let lastDetail = "";
+  let anyHttpOk = false;
+  const replyMinTs =
+    (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS;
+  const proofChatJid = record.inboundChatJid || record.referenceJid || preferred;
   try {
-    const result = await callEvo(sendUrl, "POST", sendBody);
-    record.sendHttpOk = result.ok;
-    if (!result.ok) {
-      const detail =
-        (result.json as Record<string, unknown> | null)?.message ||
-        (result.json as Record<string, unknown> | null)?.error ||
-        result.body.slice(0, 180) ||
-        `HTTP ${result.status}`;
-      record.sendDetail = String(detail);
-      const restricted = isLikelyWhatsAppRestriction(record.sendDetail, result.status);
-      const technical = isSendFailureTechnical(record.sendDetail, result.status);
-      if (!restricted && (technical || record.receiveTest.success === true)) {
-        record.sendTest = {
-          success: true,
-          detail: technical
-            ? "Recepção confirmada. Resposta automática indisponível (sistema WABA - Drax lento/timeout) — integração liberada."
-            : "Recepção confirmada. Resposta automática não enviada — integração liberada.",
-        };
-        tryFinalize(record);
-        return;
+    for (const numero of candidates) {
+      if (record.cancelled || record.finished) return;
+      const sendBody: Record<string, unknown> = EVO_SEND_TEXT_V1
+        ? { number: numero, textMessage: { text } }
+        : { number: numero, text, textMessage: { text } };
+      const result = await callEvo(sendUrl, "POST", sendBody);
+      if (!result.ok) {
+        const detail =
+          (result.json as Record<string, unknown> | null)?.message ||
+          (result.json as Record<string, unknown> | null)?.error ||
+          result.body.slice(0, 180) ||
+          `HTTP ${result.status}`;
+        lastDetail = String(detail);
+        // Tentar próximo formato (ex.: com/sem 9º dígito).
+        continue;
       }
+      anyHttpOk = true;
+      record.sendHttpOk = true;
+      record.sendDetail = `sendText OK → ${numero}`;
+      console.info(
+        "[validacao-inbound] sendText OK",
+        record.instanceName,
+        `→ ${numero}`,
+        `proof=${proofChatJid}`,
+        `try=${record.sendRetryCount}`,
+      );
+      // NÃO marcar success só com HTTP — Evolution pode aceitar e a mensagem não aparecer no chat.
       record.sendTest = {
-        success: false,
-        detail: restricted
-          ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
-          : `Falha técnica ao responder: ${record.sendDetail}`,
+        success: null,
+        detail: "Resposta enviada; confirmando no histórico da conversa…",
       };
-      tryFinalize(record);
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1400));
+        const found = await findReplyInChat(
+          record.instanceName,
+          proofChatJid || numero,
+          record.replyMarker,
+          record.referenceNumber || numero,
+          replyMinTs,
+        );
+        if (found) {
+          if (convKey) recentReplyByConversation.set(convKey, Date.now());
+          record.sendTest = {
+            success: true,
+            detail: "Resposta confirmada no histórico da conversa.",
+          };
+          tryFinalize(record);
+          return;
+        }
+      }
+      // HTTP OK sem prova neste chat — tenta próximo candidato (variante BR).
+      lastDetail = `HTTP OK sem mensagem no chat do CONFIRMAR (destino ${numero})`;
+      console.warn(
+        "[validacao-inbound] send sem prova no chat",
+        record.instanceName,
+        numero,
+        `proof=${proofChatJid}`,
+      );
+    }
+
+    if (anyHttpOk) {
+      // Deixa success=null para o worker continuar buscando; não fecha o modal como “ok”.
+      record.sendHttpOk = true;
+      record.sendDetail = lastDetail || "sendText OK sem prova no chat";
+      record.sendTest = {
+        success: null,
+        detail:
+          "A API aceitou o envio, mas a mensagem ainda não apareceu no chat do CONFIRMAR. Aguarde ou reenvie CONFIRMAR.",
+      };
+      // Libera 1 retry com variantes BR se a 1ª tentativa foi só o JID preferido.
+      if (record.sendRetryCount < 2) {
+        record.sendAttempted = false;
+      }
       return;
     }
-    if (convKey) recentReplyByConversation.set(convKey, Date.now());
-    record.sendDetail = "sendText OK";
+
+    record.sendHttpOk = false;
+    record.sendDetail = lastDetail || "Falha em todos os destinos";
+    const restricted = isLikelyWhatsAppRestriction(record.sendDetail);
     record.sendTest = {
-      success: true,
-      detail: "Resposta enviada na mesma conversa (após mensagem recebida).",
+      success: false,
+      detail: restricted
+        ? `O sistema WABA - Drax recusou a resposta: ${record.sendDetail}`
+        : `Falha ao enviar resposta automática: ${record.sendDetail}`,
     };
     tryFinalize(record);
   } finally {
@@ -1047,10 +1361,7 @@ async function pollReceiveIfDue(record: ValidationRecord): Promise<void> {
   record.pollTick += 1;
   const deep = record.pollTick % INBOUND_DEEP_SCAN_EVERY_TICKS === 0;
   const useMessages = record.pollTick % 2 === 1;
-  const searchOpts = inboundKeywordSearchOptions(
-    record.validationStartedAtMs,
-    false,
-  );
+  const searchOpts = inboundKeywordSearchOptions(record);
 
   try {
     let hit: InboundHit | null = null;
@@ -1101,12 +1412,14 @@ async function processValidationRecordInWorker(record: ValidationRecord): Promis
     record.sendAttempted &&
     record.sendHttpOk &&
     record.sendTest.success !== true &&
-    record.referenceJid
+    (record.inboundChatJid || record.referenceJid)
   ) {
     const found = await findReplyInChat(
       record.instanceName,
-      record.referenceJid,
+      record.inboundChatJid || record.referenceJid || "",
       record.replyMarker,
+      record.referenceNumber,
+      (record.sendAttemptedAtMs || record.validationStartedAtMs) - INBOUND_CLOCK_SKEW_MS,
     );
     if (found) {
       record.sendTest = {
@@ -1181,15 +1494,9 @@ export async function refreshInboundValidation(
     try {
       await pollReceiveIfDue(record);
       if (!record.receiveTest.success && (opts.aggressive || opts.deep)) {
-        const hit = await resolveInboundHit(
-          record.instanceName,
-          record.keyword,
-          record.validationStartedAtMs,
-          {
-            aggressive: opts.aggressive === true,
-            deep: opts.deep === true || opts.aggressive === true,
-          },
-        );
+        const hit = await resolveInboundHit(record, {
+          deep: opts.deep === true || opts.aggressive === true,
+        });
         if (hit) {
           markInboundReceived(
             record,
@@ -1211,16 +1518,17 @@ export async function refreshInboundValidation(
 function findInboundInWebhookChunk(
   chunk: unknown,
   keyword: string,
-  validationStartedAtMs: number,
+  record: Pick<ValidationRecord, "validationStartedAtMs" | "keywordHighWaterMarkMs">,
 ): InboundHit | null {
-  const strictOpts = inboundKeywordSearchOptions(validationStartedAtMs, false);
+  const strictOpts = inboundKeywordSearchOptions(record);
   const strictHit = findInboundInPayload(chunk, keyword, strictOpts);
   if (strictHit) return strictHit;
 
+  // Webhook ao vivo sem timestamp: só aceita se cair DEPOIS do start (não reusa histórico).
   const liveHit = findInboundInPayload(chunk, keyword, { requireTimestamp: false });
   if (!liveHit) return null;
   const ts = liveHit.messageTimestampMs ?? Date.now();
-  const minTs = validationStartedAtMs - INBOUND_KEYWORD_GRACE_MS;
+  const minTs = inboundAcceptMinTimestampMs(record);
   if (ts < minTs) return null;
   liveHit.messageTimestampMs = ts;
   return liveHit;
@@ -1243,7 +1551,7 @@ export function handleInboundValidationWebhook(body: unknown): void {
     if (instanceName && instanceName !== record.instanceName) continue;
     let matched = false;
     for (const chunk of chunks) {
-      const hit = findInboundInWebhookChunk(chunk, record.keyword, record.validationStartedAtMs);
+      const hit = findInboundInWebhookChunk(chunk, record.keyword, record);
       if (!hit) continue;
       invalidateValidationPollCache(record);
       markInboundReceived(record, hit, "webhook");
@@ -1328,12 +1636,33 @@ export async function startInboundValidation(input: {
     }
   }
   stopValidationsForInstance(connected.instancia);
+  // Limpa dedupe de reply da instância — senão retry reaproveita sessão anterior.
+  const dedupePrefix = `${connected.instancia}:`;
+  for (const key of [...recentReplyByConversation.keys()]) {
+    if (key.startsWith(dedupePrefix)) recentReplyByConversation.delete(key);
+  }
+  replyInFlight.forEach((key) => {
+    if (String(key).startsWith(dedupePrefix)) replyInFlight.delete(key);
+  });
 
   const validationId = crypto.randomUUID();
   const replyMarker = `WABA-VAL:${validationId.slice(0, 8)}`;
   const keyword = INBOUND_VALIDATION_KEYWORD;
+  // Marca d'água: histórico EVO + instante do start → só CONFIRMAR NOVO após o início.
+  const capturedWaterMarkMs = await captureKeywordHighWaterMark(
+    connected.instancia,
+    keyword,
+  );
   const validationStartedAtMs = Date.now();
+  const keywordHighWaterMarkMs = Math.max(capturedWaterMarkMs, validationStartedAtMs);
   const startedAt = new Date(validationStartedAtMs).toISOString();
+  console.info(
+    "[validacao-inbound] start",
+    connected.instancia,
+    `id=${validationId.slice(0, 8)}`,
+    `watermark=${new Date(keywordHighWaterMarkMs).toISOString()}`,
+    `captured=${capturedWaterMarkMs ? new Date(capturedWaterMarkMs).toISOString() : "0"}`,
+  );
   const phoneLabel = formatPhoneHint(connected.numero);
   const receiveWaitDetail = phoneLabel
     ? `Envie "${keyword}" de outro WhatsApp para ${phoneLabel}. O sistema detecta automaticamente.`
@@ -1360,12 +1689,16 @@ export async function startInboundValidation(input: {
     restrictionSuspected: false,
     referenceNumber: null,
     referenceJid: null,
+    inboundChatJid: null,
     inboundReceivedAt: null,
     validationStartedAtMs,
+    keywordHighWaterMarkMs,
     userConfirmedSentAt: null,
     webhookConfigured,
     sendAttempted: false,
     sendHttpOk: false,
+    sendAttemptedAtMs: null,
+    sendRetryCount: 0,
     sendDetail: "",
     cancelled: false,
     replyFollowUpScheduled: false,

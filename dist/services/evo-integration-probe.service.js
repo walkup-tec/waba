@@ -22,9 +22,10 @@ function parseEvoInstancesList(raw) {
     return raw ? [raw] : [];
 }
 function buildSendTextBody(numero, text) {
+    // Evolution 2.3.x: `text` na raiz é obrigatório; textMessage sozinho → 400.
     return EVO_SEND_TEXT_V1
         ? { number: numero, textMessage: { text } }
-        : { number: numero, text, textMessage: { text } };
+        : { number: numero, text };
 }
 function isSendAccepted(json, body) {
     const rawBody = String(body || "").trim();

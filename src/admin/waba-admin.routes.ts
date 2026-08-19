@@ -33,6 +33,7 @@ import {
 } from "../monitoring/uptime-monitor-diagnostics.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaAdminInstancesService } from "./waba-admin-instances.service";
+import { buildWabaDataSnapshot } from "./waba-admin-data-snapshot.service";
 import { VpsCpuMonitorService } from "../infra/vps-cpu-monitor.service";
 import { systemConnectionLogService } from "../monitoring/system-connection-log.service";
 import { SYSTEM_LOG_MOTIVOS } from "../monitoring/system-connection-log.types";
@@ -968,6 +969,18 @@ export const registerWabaAdminRoutes = (app: Express) => {
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Não foi possível verificar alerta CPU.",
+      });
+    }
+  });
+
+  /** Espelho de /app/data → V02 local (somente master). Sem .env/segredos. */
+  app.get("/admin/infra/data-snapshot", (req, res) => {
+    if (!rejectNonMaster(req, res)) return;
+    try {
+      return res.status(200).json(buildWabaDataSnapshot());
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Não foi possível gerar o snapshot de dados.",
       });
     }
   });

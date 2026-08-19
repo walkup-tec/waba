@@ -53,9 +53,10 @@ function parseEvoInstancesList(raw: unknown): unknown[] {
 }
 
 function buildSendTextBody(numero: string, text: string): Record<string, unknown> {
+  // Evolution 2.3.x: `text` na raiz é obrigatório; textMessage sozinho → 400.
   return EVO_SEND_TEXT_V1
     ? { number: numero, textMessage: { text } }
-    : { number: numero, text, textMessage: { text } };
+    : { number: numero, text };
 }
 
 function isSendAccepted(json: unknown, body: string): boolean {
