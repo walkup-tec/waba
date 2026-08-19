@@ -23482,6 +23482,40 @@
       const deviceCloudWindowState = new Map();
       const DEVICE_CLOUD_LAYOUT_KEY = "waba-device-cloud-layout-v2";
 
+      function getDeviceCloudRegisteredPhone(deviceId) {
+        const id = String(deviceId || "");
+        if (!id) return "";
+        const warmSt = getDeviceCloudWarmState(id);
+        const cached = normalizeDeviceCloudPhoneDigits(warmSt.phoneDigits);
+        if (cached) return cached;
+        const layout = loadDeviceCloudLayout();
+        const phones = layout.phones && typeof layout.phones === "object" ? layout.phones : {};
+        const stored = normalizeDeviceCloudPhoneDigits(phones[id]);
+        if (stored) warmSt.phoneDigits = stored;
+        return stored;
+      }
+
+      function setDeviceCloudRegisteredPhone(deviceId, rawDigits) {
+        const id = String(deviceId || "");
+        const digits = normalizeDeviceCloudPhoneDigits(rawDigits);
+        if (!id || !digits) return;
+        getDeviceCloudWarmState(id).phoneDigits = digits;
+        const layout = loadDeviceCloudLayout();
+        layout.phones = layout.phones && typeof layout.phones === "object" ? layout.phones : {};
+        layout.phones[id] = digits;
+        saveDeviceCloudLayout(layout);
+        const input = getDeviceCloudWin(id)?.querySelector(".device-cloud-phone-input");
+        if (input) input.value = digits;
+      }
+
+      function restoreDeviceCloudPhoneField(deviceId) {
+        const digits = getDeviceCloudRegisteredPhone(deviceId);
+        if (!digits) return;
+        const input = getDeviceCloudWin(deviceId)?.querySelector(".device-cloud-phone-input");
+        if (!input) return;
+        if (!normalizeDeviceCloudPhoneDigits(input.value)) input.value = digits;
+      }
+
       function deviceCloudState(id) {
         const key = String(id || "");
         if (!deviceCloudWindowState.has(key)) {
@@ -23970,6 +24004,7 @@
           setDeviceCloudMsg("Avançando no WhatsApp…");
           await advanceDeviceCloudAfterPhoneNumber(deviceId);
           await refreshDeviceCloudScreen(deviceId);
+          setDeviceCloudRegisteredPhone(deviceId, digits);
           setDeviceCloudWarmTab(deviceId, { visible: true, phase: "idle" });
           setDeviceCloudMsg("Número cadastrado. Clique em «Adicionar ao Aquecedor» para integrar.");
         } catch (err) {
@@ -24202,6 +24237,7 @@
             busy: false,
             startedAt: 0,
             tabPhase: "idle",
+            phoneDigits: "",
           };
         }
         return deviceCloudWarmById[id];
@@ -24529,13 +24565,17 @@
         const fallbackName = normalizeInstanceRegisterName(`device-${id.slice(0, 8)}`);
         const instanceName = rawName || fallbackName;
 
-        const phoneDigits = normalizeDeviceCloudPhoneDigits(phoneInput && phoneInput.value);
+        const phoneDigits =
+          getDeviceCloudRegisteredPhone(id) ||
+          normalizeDeviceCloudPhoneDigits(phoneInput && phoneInput.value);
         const evoNumber = formatDeviceCloudEvoNumber(phoneDigits);
         if (!evoNumber || evoNumber.length < 12) {
-          setDeviceCloudMsg("Informe o número do WhatsApp (DDD + número) antes de aquecer.");
-          phoneInput?.focus();
+          setDeviceCloudMsg(
+            "Cadastre o número no WhatsApp deste dispositivo (botão Digitar) antes de integrar ao aquecedor.",
+          );
           return;
         }
+        setDeviceCloudRegisteredPhone(id, phoneDigits);
 
         warmSt.busy = true;
         warmSt.instanceName = instanceName;
@@ -24801,6 +24841,7 @@
           );
         }
         ensureDeviceCloudWarmTabVisible(deviceId);
+        restoreDeviceCloudPhoneField(deviceId);
       }
 
       function displayDeviceCloudName(name) {
@@ -24897,6 +24938,7 @@
         }, 1600);
         adaptDeviceCloudStageLayout();
         ensureDeviceCloudWarmTabVisible(deviceId);
+        restoreDeviceCloudPhoneField(deviceId);
         if (options.launch !== false) void launchDeviceCloudWhatsApp(deviceId);
       }
 

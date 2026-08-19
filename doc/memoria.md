@@ -1,5 +1,22 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-19 15:18 — Dispositivos: lingueta reutiliza número do Digitar
+
+- `getDeviceCloudRegisteredPhone` / `setDeviceCloudRegisteredPhone` — número salvo por device após **Digitar** (localStorage + memória)
+- Lingueta **Adicionar ao Aquecedor** não pede número novamente; fix sintaxe `displayDeviceCloudName`
+- Marker `DEPLOY-2026-08-19-device-cloud-lingueta-usa-numero-device` — redeploy Easypanel pendente
+- LOG: doc/LOG-2026-08-19__151800__device-cloud-lingueta-usa-numero-device.md
+- Palavras-chave: getDeviceCloudRegisteredPhone, layout.phones, Digitar, warmDeviceCloudInstance
+
+## 2026-08-19 14:02 — Dispositivos: lingueta Aquecedor + dist sincronizado
+- Lingueta **Adicionar ao Aquecedor** substitui botão Aquecer; sem Início no footer
+- Estados: idle / busy / done; pulso menu Instâncias após integração
+- Copy sem EVO/Evolution; device → dispositivo
+- Produção servia UI antiga: faltava `dist/index.html` (Docker COPY dist)
+- Marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab` — redeploy Easypanel pendente
+- LOGs: doc/LOG-2026-08-19__132000__device-cloud-lingueta-aquecedor.md, __135200__, __140200__, __134300__
+- Palavras-chave: lingueta, device-cloud-warm-tab, dist/index.html, waba_disparador, easypanel
+
 ## 2026-08-19 12:50 — Capa de boas-vindas não saía no sendMedia
 - Texto chegava; JPEG não. Capa lia só `cwd` (20s, sem URL)
 - Agora: `__dirname` + `/app/media` no Docker + timeout 60s + URL pública
