@@ -16,6 +16,7 @@ Somente regras permanentes. Sem detalhes de implementação.
 - Fila de origem: `51981077770` → `51997462102` → `51981082477`. Ausente/desconectado usa o **próximo**. Se a fila falhar, usa qualquer instância Evolution `open`.
 - Envia no JID canônico confirmado pela Evolution (`exists:true`), não só no número digitado.
 - Só conta entregue com ACK de aparelho (`DELIVERY_ACK` / `READ` / `PLAYED`). Retry em background até sucesso.
+- O texto não usa traços de caixa (`━`): no iPhone eles cortam a bolha. A arte de boas-vindas é imagem JPEG, não preview de link.
 
 ### Reenvio de boas-vindas (assinante)
 

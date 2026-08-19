@@ -24,6 +24,14 @@ const resolveSendTextUrlTemplate = (): string => {
   ).trim();
 };
 
+const resolveSendMediaUrlTemplate = (): string => {
+  const base = resolvePrimaryEvoApiBase();
+  return (
+    process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${base}/message/sendMedia/{instance}`
+  ).trim();
+};
+
+
 const isSendTextV1 = (): boolean => {
   const raw = String(process.env.EVO_SEND_TEXT_V1 ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true";
@@ -111,6 +119,8 @@ export async function sendEvoTextAlert(input: {
   text: string;
   timeoutMs?: number;
   retries?: number;
+  /** Evolution: false evita card OG/vídeo no WhatsApp. Omitido = padrão do servidor. */
+  linkPreview?: boolean;
 }): Promise<SendEvoTextAlertResult> {
   const instanceName = String(input.instanceName || "").trim();
   const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
@@ -130,6 +140,9 @@ export async function sendEvoTextAlert(input: {
   const body: Record<string, unknown> = isSendTextV1()
     ? { number: targetNumber, textMessage: { text } }
     : { number: targetNumber, text, textMessage: { text } };
+  if (typeof input.linkPreview === "boolean") {
+    body.linkPreview = input.linkPreview;
+  }
 
   const timeoutMs =
     typeof input.timeoutMs === "number" && input.timeoutMs >= 10_000
@@ -188,3 +201,66 @@ export async function sendEvoTextAlert(input: {
 
   return toSendResult(false, String(detail).slice(0, 300), result.status, result.json);
 }
+
+export async function sendEvoImageAlert(input: {
+  instanceName: string;
+  targetNumber: string;
+  mediaBase64: string;
+  mimetype?: string;
+  fileName?: string;
+  caption?: string;
+  timeoutMs?: number;
+}): Promise<SendEvoTextAlertResult> {
+  const instanceName = String(input.instanceName || "").trim();
+  const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
+  const mediaBase64 = String(input.mediaBase64 || "").replace(/\s+/g, "");
+  const mimetype = String(input.mimetype || "image/jpeg").trim() || "image/jpeg";
+  const fileName = String(input.fileName || "boas-vindas.jpg").trim() || "boas-vindas.jpg";
+
+  if (!instanceName) {
+    return { ok: false, detail: "Instância EVO não informada.", status: 0 };
+  }
+  if (!targetNumber) {
+    return { ok: false, detail: "Número de destino inválido.", status: 0 };
+  }
+  if (!mediaBase64) {
+    return { ok: false, detail: "Imagem de capa vazia.", status: 0 };
+  }
+
+  const url = buildTemplateUrl(resolveSendMediaUrlTemplate(), instanceName);
+  const body: Record<string, unknown> = {
+    number: targetNumber,
+    mediatype: "image",
+    mimetype,
+    caption: String(input.caption || "").trim(),
+    fileName,
+    media: `data:${mimetype};base64,${mediaBase64}`,
+  };
+
+  const timeoutMs =
+    typeof input.timeoutMs === "number" && input.timeoutMs >= 10_000
+      ? Math.round(input.timeoutMs)
+      : 20_000;
+
+  const result = await evoHttpRequestWithBaseFailover(url, "POST", {
+    apiKey: resolveEvoApiKey(),
+    body,
+    timeoutMs,
+    retries: 1,
+  });
+
+  const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
+  if (accepted) {
+    return toSendResult(true, "sendMedia OK.", result.status, result.json);
+  }
+
+  const detail =
+    result.error ||
+    result.body ||
+    (result.json && typeof result.json === "object"
+      ? String((result.json as Record<string, unknown>).message ?? "")
+      : "") ||
+    "Falha no envio de imagem via Evolution.";
+  return toSendResult(false, String(detail).slice(0, 300), result.status, result.json);
+}
+

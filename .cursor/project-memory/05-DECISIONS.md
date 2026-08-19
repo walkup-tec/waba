@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-19 — Boas-vindas WhatsApp sem preview OG (texto + JPEG)
+
+- **Decisão:** O texto de boas-vindas usa traço ASCII (`----`) e `linkPreview: false`. A arte BEM-VINDO vai como `sendMedia` JPEG após o ACK, não como card Open Graph do site.
+- **Motivo:** No iOS, `━` (U+2501) impede a quebra de linha e corta o texto; dois `https` + preview da Evolution geram card de “vídeo” + miniatura borrada.
+- **Impacto:** Marker `DEPLOY-2026-08-19-091200-welcome-layout-ios`. Credenciais continuam no `sendText`.
+
 ### 2026-08-19 — Boas-vindas WhatsApp obrigatória na fila completa
 
 - **Decisão:** Cadastro/reenvio não pode desistir no número eleito. Percorre a fila 77770 → walkup → 2477; depois qualquer EVO `open`. Envia o JID `exists:true`. Retry em background até ACK de aparelho.

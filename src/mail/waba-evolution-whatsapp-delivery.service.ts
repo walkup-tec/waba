@@ -5,7 +5,7 @@ import {
   isEvoLiveStateOpen,
 } from "../instances/evo-connection-state.service";
 import { expandBrazilWhatsAppNumberVariants } from "../instances/evo-instance-phone.service";
-import { sendEvoTextAlert } from "../monitoring/evo-text-alert.client";
+import { sendEvoImageAlert, sendEvoTextAlert } from "../monitoring/evo-text-alert.client";
 import {
   resolveConnectedEvoInstanceByPhoneHint,
   resolveConnectedEvoOutboundInstance,
@@ -21,6 +21,7 @@ import type {
   WabaWhatsAppDeliveryResult,
   WabaWhatsAppDeliveryStatus,
 } from "./waba-welcome-whatsapp.service";
+import { readWelcomeCoverJpegBase64, WELCOME_COVER_FILE_NAME } from "./waba-welcome-cover";
 
 export type { WabaWhatsAppDeliveryResult, WabaWhatsAppDeliveryStatus };
 
@@ -249,6 +250,34 @@ type TrySendViaSlotOutcome = {
   result: WabaWhatsAppDeliveryResult | null;
 };
 
+const sendWelcomeCoverBestEffort = async (
+  instanceName: string,
+  targetNumber: string,
+  logLabel: string,
+): Promise<void> => {
+  const mediaBase64 = readWelcomeCoverJpegBase64();
+  if (!mediaBase64) {
+    console.warn(`[whatsapp] ${logLabel}: capa ${WELCOME_COVER_FILE_NAME} ausente — texto já entregue.`);
+    return;
+  }
+  const cover = await sendEvoImageAlert({
+    instanceName,
+    targetNumber,
+    mediaBase64,
+    mimetype: "image/jpeg",
+    fileName: WELCOME_COVER_FILE_NAME,
+  });
+  if (cover.ok) {
+    console.log(`[whatsapp] ${logLabel}: capa JPEG enviada via ${instanceName}.`);
+    return;
+  }
+  console.warn(
+    `[whatsapp] ${logLabel}: capa JPEG falhou via ${instanceName} (texto já entregue):`,
+    String(cover.detail || "").slice(0, 220),
+  );
+};
+
+
 const trySendViaSlot = async (input: {
   slot: EvoSendSlot;
   targetWhatsapp: string;
@@ -257,6 +286,8 @@ const trySendViaSlot = async (input: {
   timeoutMs: number;
   logLabel?: string;
   ignoreAquecedorLifecycle?: boolean;
+  linkPreview?: boolean;
+  sendWelcomeCover?: boolean;
 }): Promise<TrySendViaSlotOutcome> => {
   const { slot, targetWhatsapp, text, recipientLabel, timeoutMs } = input;
   const liveState = await fetchEvoInstanceLiveState(slot.instanceName, { fresh: true });
@@ -285,6 +316,7 @@ const trySendViaSlot = async (input: {
       text,
       timeoutMs,
       retries: 2,
+      linkPreview: input.linkPreview,
     });
 
     if (!result.ok) {
@@ -316,6 +348,9 @@ const trySendViaSlot = async (input: {
       console.log(
         `[whatsapp] entregue no aparelho para ${destination} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`,
       );
+      if (input.sendWelcomeCover) {
+        await sendWelcomeCoverBestEffort(slot.instanceName, destination, input.logLabel || "whatsapp");
+      }
       return {
         result: { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName },
       };
@@ -340,6 +375,10 @@ export type WabaEvolutionWhatsAppDeliveryInput = {
    * Percorre a fila inteira e, se preciso, qualquer instância open.
    */
   ignoreAquecedorLifecycle?: boolean;
+  /** Evolution sendText. false nas boas-vindas para não gerar card OG/vídeo. */
+  linkPreview?: boolean;
+  /** Após ACK do texto, envia JPEG de capa (não bloqueia o status sent). */
+  sendWelcomeCover?: boolean;
 };
 
 type BackgroundRetryState = {
@@ -413,6 +452,8 @@ const runWabaEvolutionWhatsAppDelivery = async (
         timeoutMs,
         logLabel,
         ignoreAquecedorLifecycle,
+        linkPreview: input.linkPreview,
+        sendWelcomeCover: input.sendWelcomeCover,
       });
       const outcome = sendOutcome.result;
       if (outcome?.status === "sent") return outcome;

@@ -76,7 +76,19 @@ const staticChecks = [
   },
   {
     name: "deploy marker inclui welcome",
-    pass: /welcome|boas-vindas|canonical|fila/i.test(marker),
+    pass: /welcome|boas-vindas|canonical|fila|layout/i.test(marker),
+  },
+  {
+    name: "template sem traço U+2501 (corta texto no iOS)",
+    pass: !welcome.includes("━") && welcome.includes("WELCOME_TEXT_SEPARATOR"),
+  },
+  {
+    name: "boas-vindas desliga linkPreview",
+    pass: welcome.includes("linkPreview: false") && delivery.includes("linkPreview: input.linkPreview"),
+  },
+  {
+    name: "capa JPEG via sendMedia após ACK",
+    pass: welcome.includes("sendWelcomeCover: true") && delivery.includes("sendWelcomeCoverBestEffort"),
   },
 ];
 

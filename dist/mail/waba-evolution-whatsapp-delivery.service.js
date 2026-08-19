@@ -10,6 +10,7 @@ const waba_push_community_service_1 = require("../push/waba-push-community.servi
 const aquecedor_instance_lifecycle_service_1 = require("../services/aquecedor-instance-lifecycle.service");
 const waba_evolution_delivery_ack_1 = require("./waba-evolution-delivery-ack");
 const waba_whatsapp_exists_number_1 = require("./waba-whatsapp-exists-number");
+const waba_welcome_cover_1 = require("./waba-welcome-cover");
 /** Sequência padrão Evolution para todos os envios WhatsApp do WABA. */
 exports.DEFAULT_WABA_WHATSAPP_PHONE_HINTS = ["51981077770", "51997462102", "51981082477"];
 const resolveWabaWhatsAppPhoneHints = () => {
@@ -199,6 +200,25 @@ const resolveCanonicalDestinationNumber = async (instanceName, rawNumber) => {
         return "";
     }
 };
+const sendWelcomeCoverBestEffort = async (instanceName, targetNumber, logLabel) => {
+    const mediaBase64 = (0, waba_welcome_cover_1.readWelcomeCoverJpegBase64)();
+    if (!mediaBase64) {
+        console.warn(`[whatsapp] ${logLabel}: capa ${waba_welcome_cover_1.WELCOME_COVER_FILE_NAME} ausente — texto já entregue.`);
+        return;
+    }
+    const cover = await (0, evo_text_alert_client_1.sendEvoImageAlert)({
+        instanceName,
+        targetNumber,
+        mediaBase64,
+        mimetype: "image/jpeg",
+        fileName: waba_welcome_cover_1.WELCOME_COVER_FILE_NAME,
+    });
+    if (cover.ok) {
+        console.log(`[whatsapp] ${logLabel}: capa JPEG enviada via ${instanceName}.`);
+        return;
+    }
+    console.warn(`[whatsapp] ${logLabel}: capa JPEG falhou via ${instanceName} (texto já entregue):`, String(cover.detail || "").slice(0, 220));
+};
 const trySendViaSlot = async (input) => {
     const { slot, targetWhatsapp, text, recipientLabel, timeoutMs } = input;
     const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(slot.instanceName, { fresh: true });
@@ -222,6 +242,7 @@ const trySendViaSlot = async (input) => {
             text,
             timeoutMs,
             retries: 2,
+            linkPreview: input.linkPreview,
         });
         if (!result.ok) {
             const detail = String(result.detail || "Falha no envio via Evolution.").slice(0, 300);
@@ -245,6 +266,9 @@ const trySendViaSlot = async (input) => {
         });
         if (ack.outcome === "delivered") {
             console.log(`[whatsapp] entregue no aparelho para ${destination} (${recipientLabel}) via ${slot.instanceName} (${slot.phoneHint}) ack=${ack.status}.`);
+            if (input.sendWelcomeCover) {
+                await sendWelcomeCoverBestEffort(slot.instanceName, destination, input.logLabel || "whatsapp");
+            }
             return {
                 result: { status: "sent", message: "WhatsApp enviado.", instanceName: slot.instanceName },
             };
@@ -309,6 +333,8 @@ const runWabaEvolutionWhatsAppDelivery = async (input, options) => {
                 timeoutMs,
                 logLabel,
                 ignoreAquecedorLifecycle,
+                linkPreview: input.linkPreview,
+                sendWelcomeCover: input.sendWelcomeCover,
             });
             const outcome = sendOutcome.result;
             if (outcome?.status === "sent")

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-19 09:12 — Layout boas-vindas iPhone (corte + preview OG)
+- Causa: traço `━` (U+2501) + `linkPreview` da Evolution nos dois https
+- Texto ASCII + `linkPreview: false`; capa JPEG via sendMedia após ACK
+- Marker `DEPLOY-2026-08-19-091200-welcome-layout-ios`
+- LOG: doc/LOG-2026-08-19__091200__welcome-layout-ios.md
+
 ## 2026-08-19 08:09 — Boas-vindas WhatsApp obrigatória (fila + JID canônico)
 - Não trava mais no eleito `drax`; percorre 77770 → walkup → 2477 e qualquer EVO open
 - Envia o JID `exists:true`; retry em background até ACK de aparelho
