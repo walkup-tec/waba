@@ -6155,7 +6155,8 @@
         left: 0;
         top: 0;
         z-index: 2;
-        width: max-content;
+        box-sizing: border-box;
+        width: var(--dc-screen-width, 329px);
         max-width: 100%;
         --dc-screen-width: 329px;
         background: var(--bg-card, #0f172a);
@@ -17491,6 +17492,21 @@
                     </button>
                   </div>
                   <div class="device-cloud-window-actions">
+                    <button
+                      type="button"
+                      id="device-cloud-warm-btn"
+                      class="device-cloud-warm-btn instance-action-btn btn-qrcode enabled"
+                      title="Aquecer"
+                      aria-label="Aquecer"
+                    >
+                      <span class="waba-aquecedor-label waba-aquecedor-label--inline">
+                        <svg class="flame-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                          <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                        </svg>
+                        <span class="waba-aquecedor-label-text">Aquecer</span>
+                      </span>
+                    </button>
                     <button type="button" class="device-cloud-restart-btn instance-action-btn btn-refresh enabled">Reiniciar</button>
                     <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
@@ -24023,7 +24039,7 @@
 
         if (bar && stage) {
           bar.addEventListener("pointerdown", (e) => {
-            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-restart-btn, .device-cloud-rename-btn, .device-cloud-window-title-input")) return;
+            if (e.target.closest(".device-cloud-delete-btn, .device-cloud-restart-btn, .device-cloud-warm-btn, .device-cloud-rename-btn, .device-cloud-window-title-input")) return;
             e.preventDefault();
             focusDeviceCloudWindow(deviceId);
             try {
