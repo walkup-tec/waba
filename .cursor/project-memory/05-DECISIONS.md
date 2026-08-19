@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-19 — Boas-vindas WhatsApp obrigatória na fila completa
+
+- **Decisão:** Cadastro/reenvio não pode desistir no número eleito. Percorre a fila 77770 → walkup → 2477; depois qualquer EVO `open`. Envia o JID `exists:true`. Retry em background até ACK de aparelho.
+- **Motivo:** Com `drax` `close`, o reenvio mostrava sucesso e a mensagem não chegava (Nara / Carlos Cesar).
+- **Impacto:** Marker `DEPLOY-2026-08-19-080900-welcome-must-arrive`. Sem lock `welcomeRetryPrimaryOnly`.
+
 ### 2026-08-14 — Mínimo de crédito da API Alternativa = R$ 200
 
 - **Decisão:** Checkout PIX da API Alternativa aceita a partir de R$ 200,00; Oficial permanece R$ 300,00.

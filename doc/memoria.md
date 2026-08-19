@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-19 08:09 — Boas-vindas WhatsApp obrigatória (fila + JID canônico)
+- Não trava mais no eleito `drax`; percorre 77770 → walkup → 2477 e qualquer EVO open
+- Envia o JID `exists:true`; retry em background até ACK de aparelho
+- Marker `DEPLOY-2026-08-19-080900-welcome-must-arrive`
+- LOG: doc/LOG-2026-08-19__080900__welcome-must-arrive.md
+
 ## 2026-08-18 14:15 — Aquecedor: ERROR outbound antigo não expulsa + purge 6635
 - Classificador passou a ignorar `fromMe` com mais de 12h; ERROR recente continua `broken`
 - Produção: instância EVO `6635` e cadastro do chip 5181076635 removidos; `walkup`/`1261`/`9224` intactos

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Valida regras de boas-vindas antes de deploy:
- * - Sempre tenta número eleito (1º hint) mesmo em pausa humana/Preparando
- * - Failover secundário/terciário se eleito desconectado
- * - Após 3 ACK ERROR no eleito, failover para próximo número
- * - ignoreAquecedorLifecycle ligado no serviço de boas-vindas
+ * Valida regras de boas-vindas:
+ * - Fila 77770 → 7462102 → 82477; ausente usa o próximo
+ * - ignoreAquecedorLifecycle
+ * - JID canônico (exists:true)
+ * - Fallback qualquer EVO open se a fila falhar
+ * - Retry em background até entregar
  *
  * Uso: node scripts/verify-welcome-routing-rules.cjs
- * Opcional live EVO: EVO_API_URL=... node scripts/verify-welcome-routing-rules.cjs
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -31,7 +31,9 @@ function ok(msg) {
 
 const delivery = read("src/mail/waba-evolution-whatsapp-delivery.service.ts");
 const welcome = read("src/mail/waba-welcome-whatsapp.service.ts");
+const exists = read("src/mail/waba-whatsapp-exists-number.ts");
 const marker = read("src/deploy-marker.ts");
+const rules = read(".cursor/project-memory/02-BUSINESS_RULES.md");
 
 const staticChecks = [
   {
@@ -44,37 +46,37 @@ const staticChecks = [
   },
   {
     name: "boas-vindas chama resolveWelcomeEvoSendSlots",
-    pass: delivery.includes("await resolveWelcomeEvoSendSlots(phoneHintsAll, logLabel"),
+    pass: delivery.includes("await resolveWelcomeEvoSendSlots(phoneHints, logLabel)"),
   },
   {
-    name: "failover quando eleito desconectado",
+    name: "fila completa com fallback qualquer open",
     pass:
-      delivery.includes("desconectado (connectionState=") &&
-      delivery.includes("shouldSkipInstanceForSend(liveState)"),
+      delivery.includes("allowAnyOpenFallback: true") &&
+      delivery.includes("Ausente/desconectado → próximo"),
   },
   {
-    name: "limiar ACK ERROR exportado (padrão 3)",
-    pass:
-      delivery.includes("resolveWelcomeAckFailoverThreshold") &&
-      delivery.includes("WABA_WELCOME_ACK_FAILOVER_AFTER") &&
-      delivery.includes("return 3"),
+    name: "não trava no eleito (sem welcomeRetryPrimaryOnly)",
+    pass: !delivery.includes("welcomeRetryPrimaryOnly"),
   },
   {
-    name: "failover após ACK ERROR no eleito",
+    name: "envia JID canônico exists:true",
     pass:
-      delivery.includes("ACK ERROR no eleito") &&
-      delivery.includes("welcomeFailoverActive") &&
-      delivery.includes("primaryAckErrors"),
+      exists.includes("pickCanonicalWhatsAppNumberFromExistsCheck") &&
+      delivery.includes("whatsappNumbers"),
   },
   {
-    name: "retry background persiste contador ACK ERROR",
+    name: "retry background até sucesso nas boas-vindas",
     pass:
-      delivery.includes("initialPrimaryAckErrors: pending.primaryAckErrors") &&
-      delivery.includes("welcomeFailoverActive: pending.welcomeFailoverActive"),
+      delivery.includes("WABA_WELCOME_BACKGROUND_RETRY_MAX") &&
+      welcome.includes("backgroundRetryKey"),
+  },
+  {
+    name: "regra permanente: boas-vindas obrigatória no WhatsApp",
+    pass: /obrigada a chegar|obrigatória no WhatsApp|sem exceção/i.test(rules),
   },
   {
     name: "deploy marker inclui welcome",
-    pass: /welcome|boas-vindas|eleito|7770|ack-failover/i.test(marker),
+    pass: /welcome|boas-vindas|canonical|fila/i.test(marker),
   },
 ];
 
@@ -84,11 +86,10 @@ for (const c of staticChecks) {
   else fail(c.name);
 }
 
-async function evoRequest(base, apiKey, method, reqPath, body) {
+async function evoRequest(base, apiKey, method, reqPath) {
   const url = `${base.replace(/\/+$/, "")}${reqPath.startsWith("/") ? reqPath : `/${reqPath}`}`;
   const parsed = new URL(url);
   const lib = parsed.protocol === "https:" ? https : http;
-  const payload = body ? JSON.stringify(body) : "";
   return new Promise((resolve) => {
     const req = lib.request(
       {
@@ -96,11 +97,7 @@ async function evoRequest(base, apiKey, method, reqPath, body) {
         port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
         path: `${parsed.pathname}${parsed.search}`,
         method,
-        headers: {
-          apikey: apiKey,
-          "Content-Type": "application/json",
-          ...(payload ? { "Content-Length": String(Buffer.byteLength(payload)) } : {}),
-        },
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
         rejectUnauthorized: false,
         timeout: 20000,
       },
@@ -120,66 +117,57 @@ async function evoRequest(base, apiKey, method, reqPath, body) {
     );
     req.on("timeout", () => req.destroy(new Error("timeout")));
     req.on("error", (err) => resolve({ status: 0, error: err.message }));
-    if (payload) req.write(payload);
     req.end();
   });
 }
 
+function evoName(inst) {
+  const nested = inst && inst.instance && typeof inst.instance === "object" ? inst.instance : inst;
+  return String(nested.instanceName || nested.name || inst.instanceName || inst.name || "").trim();
+}
+
+function evoPhone(inst) {
+  const nested = inst && inst.instance && typeof inst.instance === "object" ? inst.instance : inst;
+  return String(nested.ownerJid || nested.wuid || nested.owner || nested.number || inst.ownerJid || "").replace(
+    /\D/g,
+    "",
+  );
+}
+
+function evoOpen(inst) {
+  const nested = inst && inst.instance && typeof inst.instance === "object" ? inst.instance : inst;
+  const status = String(nested.connectionStatus || nested.status || inst.connectionStatus || "").toLowerCase();
+  return status.includes("open") || status === "connected";
+}
+
 async function liveEvoChecks() {
-  const base =
-    process.env.EVO_API_URL ||
-    "https://walkup-evo-walkup-api.achpyp.easypanel.host";
-  const apiKey = process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11";
-  const primaryHint =
-    process.env.WABA_WHATSAPP_PRIMARY_PHONE ||
-    process.env.WABA_WELCOME_WHATSAPP_PRIMARY_PHONE ||
-    "51981077770";
+  const base = process.env.EVO_API_URL || "";
+  const apiKey = process.env.EVO_API_KEY || "";
+  if (!base || !apiKey) {
+    console.log("\n=== verify-welcome-routing (Evolution live) ===");
+    console.log("skip: EVO_API_URL/EVO_API_KEY ausentes");
+    return;
+  }
 
   console.log("\n=== verify-welcome-routing (Evolution live) ===");
-  console.log("EVO:", base, "| hint:", primaryHint);
-
-  const cs = await evoRequest(
-    base,
-    apiKey,
-    "GET",
-    `/instance/connectionState/${encodeURIComponent("drax-oficial")}`,
-  );
-  let state = String(cs.json?.instance?.state || cs.json?.state || "").toLowerCase();
-  if (state !== "open") {
-    const csAlt = await evoRequest(
-      base,
-      apiKey,
-      "GET",
-      `/instance/connectionState/${encodeURIComponent("drax")}`,
-    );
-    state = String(csAlt.json?.instance?.state || csAlt.json?.state || "").toLowerCase();
-  }
-  if (state === "open") ok("instância 7770 connectionState=open");
-  else fail(`instância 7770 connectionState=${state || "?"}`);
-
   const list = await evoRequest(base, apiKey, "GET", "/instance/fetchInstances");
   if (list.status < 200 || list.status >= 300) {
     fail(`fetchInstances HTTP ${list.status}`);
     return;
   }
-  const rows = Array.isArray(list.json)
-    ? list.json
-    : Array.isArray(list.json?.response)
-      ? list.json.response
-      : [];
-  const hintDigits = String(primaryHint).replace(/\D/g, "");
-  const match = rows.find((row) => {
-    const num = String(row?.ownerJid || row?.number || row?.owner || "")
-      .replace(/\D/g, "")
-      .replace(/@.*/, "");
-    const name = String(row?.name || row?.instanceName || "").toLowerCase();
-    return num.endsWith(hintDigits.slice(-8)) || name === "drax-oficial";
-  });
-  if (match) {
-    ok(`instância eleita encontrada no catálogo: ${match.name || match.instanceName || "drax-oficial"}`);
-  } else {
-    fail("instância do hint primário não encontrada no fetchInstances");
+  const rows = Array.isArray(list.json) ? list.json : [];
+  const hints = ["51981077770", "51997462102", "51981082477"];
+  const openInQueue = [];
+  for (const hint of hints) {
+    const tail = hint.slice(-8);
+    const hit = rows.find((row) => {
+      const phone = evoPhone(row);
+      return phone.endsWith(tail) || phone.endsWith(hint);
+    });
+    if (hit && evoOpen(hit)) openInQueue.push(`${hint}→${evoName(hit)}`);
   }
+  if (openInQueue.length) ok(`fila tem open: ${openInQueue.join(", ")}`);
+  else fail("nenhum número da fila 77770→7462102→82477 está open");
 }
 
 (async () => {

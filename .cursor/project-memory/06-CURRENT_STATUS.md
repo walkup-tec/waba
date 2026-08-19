@@ -10,6 +10,7 @@ Não usar como histórico de desenvolvimento.
 - Knowledge Base em `.cursor/knowledge/`
 - Memória do projeto em `.cursor/project-memory/`
 - Reenvio de boas-vindas sem pedir senha (fonte + `dist/` em `master`)
+- Boas-vindas WhatsApp obrigatória: fila completa + JID canônico + retry até ACK de aparelho
 - Exclusão de owners internos das métricas Admin / Financeiro / Disparos (`2ca2404`)
 - Verificação de entrega do aquecedor com ACK de aparelho anti-`@lid` (`2556946`)
 - Campanhas de bônus de envio excluídas do split de pagamento (creditFunding + settle skip + backfill da fila)
@@ -23,6 +24,7 @@ Não usar como histórico de desenvolvimento.
 ## Pendências relevantes
 
 - Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
+- Após deploy `DEPLOY-2026-08-19-080900-welcome-must-arrive`: reenviar boas-vindas de Nara e Carlos Cesar e confirmar ACK no aparelho
 - **Redeploy EasyPanel** para marker `DEPLOY-2026-08-13-device-cloud-tab-show` (fix aba Dispositivos vazia) + `DEVICE_CLOUD_PUBLIC_URL` / `DEVICE_CLOUD_SSO_SECRET`
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
 - Provisionar host Linux+KVM para `REDROID_MODE=docker`

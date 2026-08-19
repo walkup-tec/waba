@@ -30,6 +30,8 @@ Sessão WABA (cookie) para master/staff/assinante; rotas admin restritas a maste
 ### Boas-vindas assinante
 
 - Cadastro ou `POST /admin/subscribers/:id/resend-welcome` → e-mail + WhatsApp.
+- WhatsApp **obrigatório**: fila `51981077770` → `51997462102` → `51981082477`; ausente usa o próximo; se a fila falhar, qualquer EVO `open`.
+- Destino = JID canônico (`POST /chat/whatsappNumbers/{instance}`, `exists:true`).
 - Reenvio **sem** body de senha.
 
 ### Aquecedor — confirmação de entrega
