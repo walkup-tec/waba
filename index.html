@@ -6214,13 +6214,32 @@
         pointer-events: none;
       }
 
-      /* Ajuste específico do botão "Aquecer" no Device Cloud */
+      /* Botão "Aquecer" — estilo Aquecedor (fundo escuro + borda cobre) */
+      .device-cloud-warm-btn.instance-action-btn.enabled {
+        background: #231f20;
+        border: 1px solid #d68d54;
+        border-radius: 10px;
+        color: #ffffff;
+        padding: 6px 12px;
+        box-shadow: none;
+      }
+
+      .device-cloud-warm-btn.instance-action-btn.enabled:hover {
+        background: #2c2728;
+        border-color: #e09a62;
+      }
+
       .device-cloud-warm-btn .waba-aquecedor-label {
-        gap: 4px;
+        gap: 6px;
       }
 
       .device-cloud-warm-btn .waba-aquecedor-label-text {
-        color: #fb923c;
+        color: #ffffff;
+        font-weight: 700;
+      }
+
+      .device-cloud-warm-btn .flame-icon {
+        color: #ffa500;
       }
 
       .device-cloud-window {
@@ -17567,7 +17586,7 @@
                   <div class="device-cloud-window-actions">
                     <button
                       type="button"
-                      class="device-cloud-warm-btn instance-action-btn btn-qrcode enabled"
+                      class="device-cloud-warm-btn instance-action-btn enabled"
                       title="Integrar no aquecedor (Evolution)"
                       aria-label="Aquecer"
                     >

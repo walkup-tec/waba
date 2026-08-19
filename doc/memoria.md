@@ -3242,3 +3242,8 @@ Palavras-chave para buscar:
 - Marker `DEPLOY-2026-08-19-device-cloud-aquecer-integracao-enxuta`
 - LOG: doc/LOG-2026-08-19__114500__device-cloud-aquecer-integracao-enxuta.md
 - Keywords: device-cloud aquecer, pairing-code, sem-confirmar, integracao-enxuta
+
+## 2026-08-19 12:45 — Device Cloud: estilo botão Aquecer = Aquecedor
+- Fundo `#231f20`, borda `#d68d54`, texto branco, chama `#ffa500`; sem `btn-qrcode`.
+- Marker `DEPLOY-2026-08-19-device-cloud-aquecer-btn-estilo`
+- LOG: doc/LOG-2026-08-19__124500__device-cloud-aquecer-btn-estilo-aquecedor.md
