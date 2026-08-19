@@ -6211,14 +6211,28 @@
 
       .device-cloud-warm-slot {
         position: relative;
-        padding-top: 34px;
+      }
+
+      .device-cloud-tab-slot {
+        display: none;
+        justify-content: center;
+        align-items: flex-end;
+        padding: 0 8px 4px;
+      }
+
+      .device-cloud-tab-slot.has-warm-tab {
+        display: flex;
+      }
+
+      .device-cloud-screen-slot {
+        position: relative;
       }
 
       .device-cloud-warm-tab {
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translateX(-50%);
+        position: relative;
+        top: auto;
+        left: auto;
+        transform: none;
         z-index: 3;
         display: inline-flex;
         align-items: center;
@@ -6226,10 +6240,11 @@
         gap: 8px;
         min-height: 34px;
         padding: 7px 18px 9px;
-        border: none;
+        border: 1px solid rgba(251, 146, 60, 0.38);
+        border-bottom: none;
         border-radius: 10px 10px 0 0;
-        background: linear-gradient(180deg, #e07a52 0%, #b8432f 55%, #9a3528 100%);
-        color: #ffffff;
+        background: linear-gradient(145deg, rgba(84, 32, 8, 0.92), rgba(52, 22, 6, 0.88));
+        color: #f8fafc;
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.01em;
@@ -6237,6 +6252,12 @@
         box-shadow: 0 -3px 14px rgba(0, 0, 0, 0.28);
         white-space: nowrap;
         user-select: none;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+
+      .device-cloud-warm-tab:hover:not(.is-busy):not(.is-done) {
+        background: linear-gradient(145deg, rgba(109, 54, 27, 0.96), rgba(84, 32, 8, 0.92));
+        border-color: rgba(251, 146, 60, 0.52);
       }
 
       .device-cloud-warm-tab[hidden] {
@@ -6247,12 +6268,14 @@
       .device-cloud-warm-tab.is-done {
         cursor: default;
         pointer-events: none;
-        opacity: 0.96;
+        background: linear-gradient(145deg, rgba(84, 32, 8, 0.88), rgba(52, 22, 6, 0.84));
+        border-color: rgba(251, 146, 60, 0.34);
       }
 
       .device-cloud-warm-tab .device-cloud-warm-tab-icon {
         width: 14px;
         height: 14px;
+        color: #fb923c;
         stroke: currentColor;
         fill: none;
         stroke-width: 2;
@@ -6272,9 +6295,14 @@
         transition: border-color 0.2s ease, background 0.2s ease;
       }
 
-      .device-cloud-phone-shell.has-warm-tab {
-        border-color: rgba(34, 211, 238, 0.55);
-        background: rgba(15, 23, 42, 0.72);
+      .device-cloud-screen-slot.has-warm-tab {
+        border: 1px solid rgba(251, 146, 60, 0.38);
+        border-radius: 12px;
+        background: rgba(52, 22, 6, 0.12);
+      }
+
+      .device-cloud-screen-slot.has-warm-tab .device-cloud-screen {
+        border-radius: 11px 11px 0 0;
       }
 
       @keyframes instancias-menu-pulse {
@@ -17625,6 +17653,21 @@
             <div id="device-cloud-stage"></div>
             <template id="device-cloud-window-template">
               <div class="device-cloud-window" hidden>
+                <div class="device-cloud-tab-slot">
+                  <button
+                    type="button"
+                    class="device-cloud-warm-tab"
+                    hidden
+                    title="Integrar no aquecedor"
+                    aria-label="Adicionar ao Aquecedor"
+                  >
+                    <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                    <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
+                  </button>
+                </div>
                 <div class="device-cloud-window-bar">
                   <div class="device-cloud-window-identity">
                     <span class="device-cloud-window-title">Celular</span>
@@ -17643,7 +17686,22 @@
                     <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
                 </div>
-                <img class="device-cloud-screen" alt="Tela do Android" title="Clique na tela e digite com o teclado do computador" draggable="false" tabindex="0" />
+                <div class="device-cloud-screen-slot">
+                  <button
+                    type="button"
+                    class="device-cloud-warm-tab"
+                    hidden
+                    title="Integrar no aquecedor"
+                    aria-label="Adicionar ao Aquecedor"
+                  >
+                    <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                    </svg>
+                    <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
+                  </button>
+                  <img class="device-cloud-screen" alt="Tela do Android" title="Clique na tela e digite com o teclado do computador" draggable="false" tabindex="0" />
+                </div>
                 <div class="device-cloud-media-bar">
                   <span class="device-cloud-wa-brand" aria-hidden="true">
                     <svg class="device-cloud-wa-icon" viewBox="0 0 24 24" width="16" height="16" focusable="false">
@@ -17670,19 +17728,6 @@
                   </label>
                 </div>
                 <div class="device-cloud-warm-slot">
-                  <button
-                    type="button"
-                    class="device-cloud-warm-tab"
-                    hidden
-                    title="Integrar no aquecedor"
-                    aria-label="Adicionar ao Aquecedor"
-                  >
-                    <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
-                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
-                    </svg>
-                    <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
-                  </button>
                   <div class="device-cloud-phone-shell">
                     <div class="device-cloud-phone-bar">
                       <input
@@ -24158,18 +24203,18 @@
         const win = getDeviceCloudWin(deviceId);
         if (!win) return;
         const tab = win.querySelector(".device-cloud-warm-tab");
-        const shell = win.querySelector(".device-cloud-phone-shell");
+        const screenSlot = win.querySelector(".device-cloud-screen-slot");
         const textEl = win.querySelector(".device-cloud-warm-tab-text");
         if (!tab) return;
         const warmSt = getDeviceCloudWarmState(deviceId);
 
         if (patch.visible === true) {
           tab.hidden = false;
-          shell?.classList.add("has-warm-tab");
+          screenSlot?.classList.add("has-warm-tab");
         }
         if (patch.visible === false) {
           tab.hidden = true;
-          shell?.classList.remove("has-warm-tab");
+          screenSlot?.classList.remove("has-warm-tab");
         }
 
         if (patch.phase) {
