@@ -23508,8 +23508,135 @@
         const layout = loadDeviceCloudLayout();
         const phones = layout.phones && typeof layout.phones === "object" ? layout.phones : {};
         const stored = normalizeDeviceCloudPhoneDigits(phones[id]);
-        if (stored) warmSt.phoneDigits = stored;
-        return stored;
+        if (stored) {
+          warmSt.phoneDigits = stored;
+          return stored;
+        }
+        const win = getDeviceCloudWin(id);
+        const titleEl = win?.querySelector(".device-cloud-window-title");
+        const deviceLabel = displayDeviceCloudName(titleEl && titleEl.textContent);
+        const instanceName =
+          normalizeInstanceRegisterName(deviceLabel) ||
+          normalizeInstanceRegisterName(`device-${id.slice(0, 8)}`);
+        const byName = getDeviceCloudPhoneByInstanceName(instanceName);
+        if (byName) {
+          warmSt.phoneDigits = byName;
+          return byName;
+        }
+        return "";
+      }
+
+      function getDeviceCloudPhoneByInstanceName(instanceName) {
+        const key = normalizeInstanceRegisterName(instanceName);
+        if (!key) return "";
+        const layout = loadDeviceCloudLayout();
+        const byName =
+          layout.phonesByName && typeof layout.phonesByName === "object" ? layout.phonesByName : {};
+        return normalizeDeviceCloudPhoneDigits(byName[key]);
+      }
+
+      function setDeviceCloudPhoneByInstanceName(instanceName, rawDigits) {
+        const key = normalizeInstanceRegisterName(instanceName);
+        const digits = normalizeDeviceCloudPhoneDigits(rawDigits);
+        if (!key || !digits) return;
+        const layout = loadDeviceCloudLayout();
+        layout.phonesByName =
+          layout.phonesByName && typeof layout.phonesByName === "object" ? layout.phonesByName : {};
+        layout.phonesByName[key] = digits;
+        saveDeviceCloudLayout(layout);
+      }
+
+      function extractPhoneDigitsFromInstanceRow(inst) {
+        if (!inst || typeof inst !== "object") return "";
+        const raw =
+          inst.number ??
+          inst.phone ??
+          inst.ownerNumber ??
+          inst.owner ??
+          inst.ownerJid ??
+          inst.originalNumber ??
+          "";
+        const base = String(raw || "").trim().split("@")[0];
+        return normalizeDeviceCloudPhoneDigits(base);
+      }
+
+      function lookupDeviceCloudInstancePhone(instanceName, deviceLabel) {
+        const items = Array.isArray(instancesData?.items) ? instancesData.items : [];
+        const nameNeedle = String(instanceName || "").trim().toLowerCase();
+        const labelNeedle = String(deviceLabel || "").trim().toLowerCase();
+        if (!items.length || (!nameNeedle && !labelNeedle)) return "";
+
+        const row = items.find((inst) => {
+          const name = String(inst?.name || inst?.instanceName || "")
+            .trim()
+            .toLowerCase();
+          const alias = String(inst?.instanceAlias || inst?.alias || "")
+            .trim()
+            .toLowerCase();
+          const display = String(inst?.displayName || inst?.displayNumber || "")
+            .trim()
+            .toLowerCase();
+          if (nameNeedle && name === nameNeedle) return true;
+          if (!labelNeedle) return false;
+          return alias === labelNeedle || display === labelNeedle || name === labelNeedle;
+        });
+        return extractPhoneDigitsFromInstanceRow(row);
+      }
+
+      async function fetchDeviceCloudInstancePhoneFromApi(instanceName) {
+        const name = String(instanceName || "").trim();
+        if (!name) return "";
+        try {
+          const response = await fetchWithTimeout(
+            `/instancias/${encodeURIComponent(name)}/status-conexao`,
+            { credentials: "same-origin" },
+            10000,
+          );
+          if (!response.ok) return "";
+          const payload = await response.json().catch(() => ({}));
+          return normalizeDeviceCloudPhoneDigits(payload?.instanceNumber || "");
+        } catch {
+          return "";
+        }
+      }
+
+      async function resolveDeviceCloudWarmPhone(deviceId, instanceName, deviceLabel, phoneInput) {
+        const persist = (digits) => {
+          const normalized = normalizeDeviceCloudPhoneDigits(digits);
+          if (!normalized) return "";
+          setDeviceCloudRegisteredPhone(deviceId, normalized);
+          setDeviceCloudPhoneByInstanceName(instanceName, normalized);
+          return normalized;
+        };
+
+        let digits = getDeviceCloudRegisteredPhone(deviceId);
+        if (digits) return digits;
+
+        digits = normalizeDeviceCloudPhoneDigits(phoneInput && phoneInput.value);
+        if (digits) return persist(digits);
+
+        digits = getDeviceCloudPhoneByInstanceName(instanceName);
+        if (digits) return persist(digits);
+
+        digits = lookupDeviceCloudInstancePhone(instanceName, deviceLabel);
+        if (digits) return persist(digits);
+
+        if (!instancesData?.items?.length) {
+          try {
+            hydrateInstancesFromLocalCache();
+            const snapshot = await fetchInstancesSnapshot();
+            applyInstancesPayload(snapshot, { render: false });
+          } catch {
+            /* mantém cache parcial */
+          }
+          digits = lookupDeviceCloudInstancePhone(instanceName, deviceLabel);
+          if (digits) return persist(digits);
+        }
+
+        digits = await fetchDeviceCloudInstancePhoneFromApi(instanceName);
+        if (digits) return persist(digits);
+
+        return "";
       }
 
       function setDeviceCloudRegisteredPhone(deviceId, rawDigits) {
@@ -23526,11 +23653,22 @@
       }
 
       function restoreDeviceCloudPhoneField(deviceId) {
-        const digits = getDeviceCloudRegisteredPhone(deviceId);
+        const win = getDeviceCloudWin(deviceId);
+        const input = win?.querySelector(".device-cloud-phone-input");
+        if (!input || normalizeDeviceCloudPhoneDigits(input.value)) return;
+
+        const titleEl = win?.querySelector(".device-cloud-window-title");
+        const deviceLabel = displayDeviceCloudName(titleEl && titleEl.textContent);
+        const instanceName =
+          normalizeInstanceRegisterName(deviceLabel) ||
+          normalizeInstanceRegisterName(`device-${String(deviceId || "").slice(0, 8)}`);
+
+        let digits =
+          getDeviceCloudRegisteredPhone(deviceId) ||
+          getDeviceCloudPhoneByInstanceName(instanceName) ||
+          lookupDeviceCloudInstancePhone(instanceName, deviceLabel);
         if (!digits) return;
-        const input = getDeviceCloudWin(deviceId)?.querySelector(".device-cloud-phone-input");
-        if (!input) return;
-        if (!normalizeDeviceCloudPhoneDigits(input.value)) input.value = digits;
+        setDeviceCloudRegisteredPhone(deviceId, digits);
       }
 
       function deviceCloudState(id) {
@@ -24023,6 +24161,12 @@
           await advanceDeviceCloudAfterPhoneNumber(deviceId);
           await refreshDeviceCloudScreen(deviceId);
           setDeviceCloudRegisteredPhone(deviceId, digits);
+          const titleEl = getDeviceCloudWin(deviceId)?.querySelector(".device-cloud-window-title");
+          const deviceLabel = displayDeviceCloudName(titleEl && titleEl.textContent);
+          const instanceName =
+            normalizeInstanceRegisterName(deviceLabel) ||
+            normalizeInstanceRegisterName(`device-${deviceId.slice(0, 8)}`);
+          setDeviceCloudPhoneByInstanceName(instanceName, digits);
           setDeviceCloudWarmTab(deviceId, { visible: true, phase: "idle" });
           setDeviceCloudMsg("Número cadastrado. Clique em «Adicionar ao Aquecedor» para integrar.");
         } catch (err) {
@@ -24585,17 +24729,20 @@
         const fallbackName = normalizeInstanceRegisterName(`device-${id.slice(0, 8)}`);
         const instanceName = rawName || fallbackName;
 
-        const phoneDigits =
-          getDeviceCloudRegisteredPhone(id) ||
-          normalizeDeviceCloudPhoneDigits(phoneInput && phoneInput.value);
+        setDeviceCloudMsg("Localizando número do dispositivo…");
+        const phoneDigits = await resolveDeviceCloudWarmPhone(
+          id,
+          instanceName,
+          deviceLabel,
+          phoneInput,
+        );
         const evoNumber = formatDeviceCloudEvoNumber(phoneDigits);
         if (!evoNumber || evoNumber.length < 12) {
           setDeviceCloudMsg(
-            "Cadastre o número no WhatsApp deste dispositivo (botão Digitar) antes de integrar ao aquecedor.",
+            "Não encontramos o número deste dispositivo. Confira em Instâncias ou use Digitar para cadastrar no WhatsApp.",
           );
           return;
         }
-        setDeviceCloudRegisteredPhone(id, phoneDigits);
 
         warmSt.busy = true;
         warmSt.instanceName = instanceName;
