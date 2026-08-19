@@ -6133,7 +6133,7 @@
         min-height: 420px;
         margin-top: 16px;
         overflow: auto;
-        padding: 4px 2px 16px;
+        padding: 8px 2px 16px;
       }
 
       .device-cloud-toolbar {
@@ -6214,50 +6214,76 @@
       }
 
       .device-cloud-tab-slot {
-        display: none;
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translate(-50%, -100%);
+        z-index: 3;
+        display: flex;
         justify-content: center;
-        align-items: flex-end;
-        padding: 0 8px 4px;
+        pointer-events: none;
       }
 
-      .device-cloud-tab-slot.has-warm-tab {
-        display: flex;
+      .device-cloud-tab-slot.is-hidden {
+        display: none;
+      }
+
+      .device-cloud-tab-slot .device-cloud-warm-tab {
+        pointer-events: auto;
+      }
+
+      .device-cloud-chrome {
+        position: relative;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 12px;
+        background: var(--bg-card, #0f172a);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+        margin-top: 18px;
+        overflow: visible;
+      }
+
+      .device-cloud-chrome.has-warm-tab {
+        border-color: rgba(0, 139, 163, 0.72);
       }
 
       .device-cloud-screen-slot {
         position: relative;
+        overflow: hidden;
+        margin-top: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 12px;
+        background: #000;
+      }
+
+      .device-cloud-screen-slot .device-cloud-screen {
+        border-radius: 0;
       }
 
       .device-cloud-warm-tab {
         position: relative;
-        top: auto;
-        left: auto;
-        transform: none;
         z-index: 3;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        min-height: 34px;
-        padding: 7px 18px 9px;
-        border: 1px solid rgba(251, 146, 60, 0.38);
-        border-bottom: none;
+        min-height: 36px;
+        padding: 8px 18px 10px;
+        border: none;
         border-radius: 10px 10px 0 0;
-        background: linear-gradient(145deg, rgba(84, 32, 8, 0.92), rgba(52, 22, 6, 0.88));
-        color: #f8fafc;
+        background: linear-gradient(180deg, #c04a35 0%, #a53821 52%, #8f2f1c 100%);
+        color: #ffffff;
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.01em;
         cursor: pointer;
-        box-shadow: 0 -3px 14px rgba(0, 0, 0, 0.28);
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.32);
         white-space: nowrap;
         user-select: none;
-        transition: background 0.15s ease, border-color 0.15s ease;
+        transition: background 0.15s ease, filter 0.15s ease;
       }
 
       .device-cloud-warm-tab:hover:not(.is-busy):not(.is-done) {
-        background: linear-gradient(145deg, rgba(109, 54, 27, 0.96), rgba(84, 32, 8, 0.92));
-        border-color: rgba(251, 146, 60, 0.52);
+        filter: brightness(1.06);
       }
 
       .device-cloud-warm-tab[hidden] {
@@ -6268,14 +6294,13 @@
       .device-cloud-warm-tab.is-done {
         cursor: default;
         pointer-events: none;
-        background: linear-gradient(145deg, rgba(84, 32, 8, 0.88), rgba(52, 22, 6, 0.84));
-        border-color: rgba(251, 146, 60, 0.34);
+        filter: brightness(0.94);
       }
 
       .device-cloud-warm-tab .device-cloud-warm-tab-icon {
         width: 14px;
         height: 14px;
-        color: #fb923c;
+        color: #ffffff;
         stroke: currentColor;
         fill: none;
         stroke-width: 2;
@@ -6293,16 +6318,6 @@
         background: transparent;
         overflow: hidden;
         transition: border-color 0.2s ease, background 0.2s ease;
-      }
-
-      .device-cloud-screen-slot.has-warm-tab {
-        border: 1px solid rgba(251, 146, 60, 0.38);
-        border-radius: 12px;
-        background: rgba(52, 22, 6, 0.12);
-      }
-
-      .device-cloud-screen-slot.has-warm-tab .device-cloud-screen {
-        border-radius: 11px 11px 0 0;
       }
 
       @keyframes instancias-menu-pulse {
@@ -6335,17 +6350,21 @@
         width: var(--dc-screen-width, 329px);
         max-width: 100%;
         --dc-screen-width: 329px;
-        background: var(--bg-card, #0f172a);
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        border-radius: 16px;
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
-        transition: width 0.2s ease, box-shadow 0.15s ease;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+        transition: width 0.2s ease;
       }
 
       .device-cloud-window.is-focused {
         z-index: 12;
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.48);
-        border-color: rgba(96, 165, 250, 0.45);
+      }
+
+      .device-cloud-window.is-focused .device-cloud-chrome {
+        border-color: rgba(96, 165, 250, 0.55);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
       }
 
       .device-cloud-window[hidden] {
@@ -6361,7 +6380,7 @@
         cursor: grab;
         user-select: none;
         touch-action: none;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
       }
 
       .device-cloud-window-bar:active {
@@ -17653,22 +17672,22 @@
             <div id="device-cloud-stage"></div>
             <template id="device-cloud-window-template">
               <div class="device-cloud-window" hidden>
-                <div class="device-cloud-tab-slot">
-                  <button
-                    type="button"
-                    class="device-cloud-warm-tab"
-                    hidden
-                    title="Integrar no aquecedor"
-                    aria-label="Adicionar ao Aquecedor"
-                  >
-                    <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
-                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
-                    </svg>
-                    <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
-                  </button>
-                </div>
-                <div class="device-cloud-window-bar">
+                <div class="device-cloud-chrome">
+                  <div class="device-cloud-tab-slot">
+                    <button
+                      type="button"
+                      class="device-cloud-warm-tab"
+                      title="Integrar no aquecedor"
+                      aria-label="Adicionar ao Aquecedor"
+                    >
+                      <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
+                        <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
+                      </svg>
+                      <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
+                    </button>
+                  </div>
+                  <div class="device-cloud-window-bar">
                   <div class="device-cloud-window-identity">
                     <span class="device-cloud-window-title">Celular</span>
                     <input class="device-cloud-window-title-input" type="text" maxlength="40" hidden />
@@ -17686,20 +17705,8 @@
                     <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
                 </div>
+                </div>
                 <div class="device-cloud-screen-slot">
-                  <button
-                    type="button"
-                    class="device-cloud-warm-tab"
-                    hidden
-                    title="Integrar no aquecedor"
-                    aria-label="Adicionar ao Aquecedor"
-                  >
-                    <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.7.9-3.2 2.2-4.7"></path>
-                      <path d="M12 11c1.4 1.4 2.2 2.5 2.2 4a2.2 2.2 0 1 1-4.4 0c0-1 .5-2 2.2-4z"></path>
-                    </svg>
-                    <span class="device-cloud-warm-tab-text">Adicionar ao Aquecedor</span>
-                  </button>
                   <img class="device-cloud-screen" alt="Tela do Android" title="Clique na tela e digite com o teclado do computador" draggable="false" tabindex="0" />
                 </div>
                 <div class="device-cloud-media-bar">
@@ -24202,19 +24209,22 @@
       function setDeviceCloudWarmTab(deviceId, patch = {}) {
         const win = getDeviceCloudWin(deviceId);
         if (!win) return;
-        const tab = win.querySelector(".device-cloud-warm-tab");
-        const screenSlot = win.querySelector(".device-cloud-screen-slot");
-        const textEl = win.querySelector(".device-cloud-warm-tab-text");
-        if (!tab) return;
+        const tab = win.querySelector(".device-cloud-tab-slot .device-cloud-warm-tab");
+        const tabSlot = win.querySelector(".device-cloud-tab-slot");
+        const chrome = win.querySelector(".device-cloud-chrome");
+        const textEl = tab?.querySelector(".device-cloud-warm-tab-text");
+        if (!tab || !tabSlot || !chrome) return;
         const warmSt = getDeviceCloudWarmState(deviceId);
 
         if (patch.visible === true) {
           tab.hidden = false;
-          screenSlot?.classList.add("has-warm-tab");
+          tabSlot.classList.remove("is-hidden");
+          chrome.classList.add("has-warm-tab");
         }
         if (patch.visible === false) {
           tab.hidden = true;
-          screenSlot?.classList.remove("has-warm-tab");
+          tabSlot.classList.add("is-hidden");
+          chrome.classList.remove("has-warm-tab");
         }
 
         if (patch.phase) {
@@ -24233,10 +24243,12 @@
 
       function ensureDeviceCloudWarmTabVisible(deviceId) {
         const warmSt = getDeviceCloudWarmState(deviceId);
-        if (warmSt.tabPhase === "done") return;
         setDeviceCloudWarmTab(deviceId, {
           visible: true,
-          phase: warmSt.tabPhase === "busy" ? "busy" : "idle",
+          phase:
+            warmSt.tabPhase === "busy" || warmSt.tabPhase === "done"
+              ? warmSt.tabPhase
+              : "idle",
         });
       }
 
@@ -24638,7 +24650,7 @@
           e.stopPropagation();
           void removeDeviceCloudFromBoard(deviceId);
         });
-        win.querySelector(".device-cloud-warm-tab")?.addEventListener("click", (e) => {
+        win.querySelector(".device-cloud-tab-slot .device-cloud-warm-tab")?.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
           const warmSt = getDeviceCloudWarmState(deviceId);
