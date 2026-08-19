@@ -3263,3 +3263,8 @@ Palavras-chave para buscar:
 - Substitui botão Aquecer na barra; lingueta após cadastrar número; estados idle/busy/done; pulso menu Instâncias.
 - LOG: doc/LOG-2026-08-19__132000__device-cloud-lingueta-aquecedor.md
 - Keywords: device-cloud lingueta, instancias-menu-pulse, aguarde um instante
+
+## 2026-08-19 13:43 — Device Cloud: copy sem EVO + dispositivo
+- UI Dispositivos: remove Evolution/EVO dos textos; device → dispositivo; Device Cloud → Dispositivos nas mensagens.
+- LOG: doc/LOG-2026-08-19__134300__device-cloud-copy-sem-evo-dispositivo.md
+- Keywords: device-cloud copy, dispositivo, sem-evo

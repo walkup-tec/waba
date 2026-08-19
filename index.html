@@ -17676,7 +17676,7 @@
                     type="button"
                     class="device-cloud-warm-tab"
                     hidden
-                    title="Integrar no aquecedor (Evolution)"
+                    title="Integrar no aquecedor"
                     aria-label="Adicionar ao Aquecedor"
                   >
                     <svg class="device-cloud-warm-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -17704,7 +17704,7 @@
                       </div>
                       <div class="device-cloud-warm-qr" hidden></div>
                       <p class="device-cloud-warm-hint muted">
-                        No WhatsApp deste device: menu (⋮) → Aparelhos conectados → Conectar aparelho → Vincular com número de telefone → digite o código acima.
+                        No WhatsApp deste dispositivo: menu (⋮) → Aparelhos conectados → Conectar aparelho → Vincular com número de telefone → digite o código acima.
                         Integração enxuta: sem etapa CONFIRMAR.
                       </p>
                       <div class="device-cloud-warm-actions">
@@ -24305,7 +24305,7 @@
           const qrWrap = panel.querySelector(".device-cloud-warm-qr");
           if (qrWrap) {
             qrWrap.hidden = false;
-            qrWrap.innerHTML = `<img src="${escapeAdminHtml(patch.qrSrc)}" alt="QR Code Evolution" />`;
+            qrWrap.innerHTML = `<img src="${escapeAdminHtml(patch.qrSrc)}" alt="QR Code de vinculação" />`;
           }
         }
         const retryBtn = panel.querySelector(".device-cloud-warm-retry");
@@ -24358,7 +24358,7 @@
           setDeviceCloudWarmTab(deviceId, { phase: "done" });
           pulseInstanciasMenuForNewIntegration();
           setDeviceCloudMsg(`Instância ${name} conectada e habilitada no aquecedor.`);
-          showToast(`Device integrado: ${label || name}`, "success");
+          showToast(`Dispositivo integrado: ${label || name}`, "success");
         } catch (err) {
           const msg = err?.message || String(err);
           setDeviceCloudWarmPanel(deviceId, {
@@ -24408,7 +24408,7 @@
             if (isConnecting && !isOpen && !connectingNotified) {
               connectingNotified = true;
               setDeviceCloudWarmPanel(deviceId, {
-                status: "Código aceito. Finalizando conexão Evolution…",
+                status: "Código aceito. Finalizando conexão…",
               });
             }
             if (!isOpen) return;
@@ -24470,12 +24470,12 @@
         setDeviceCloudWarmTab(id, { phase: "busy" });
         setDeviceCloudWarmPanel(id, {
           visible: true,
-          status: "Criando instância Evolution e gerando código de vinculação…",
+          status: "Criando instância e gerando código de vinculação…",
           pairingCode: "",
           qrSrc: null,
           showRetry: false,
         });
-        setDeviceCloudMsg("Integrando device no aquecedor…");
+        setDeviceCloudMsg("Integrando dispositivo no aquecedor…");
 
         try {
           const data = await submitAndPollRegistrarQrcode({
@@ -24494,15 +24494,15 @@
 
           if (!pairingCode && !qrSrc) {
             throw new Error(
-              "Evolution não retornou código de vinculação. Tente de novo em alguns segundos.",
+              "O sistema não retornou código de vinculação. Tente de novo em alguns segundos.",
             );
           }
 
           setDeviceCloudWarmPanel(id, {
             visible: true,
             status: pairingCode
-              ? "Digite o código no WhatsApp deste device (Aparelhos conectados)."
-              : "Escaneie o QR no WhatsApp deste device (Aparelhos conectados).",
+              ? "Digite o código no WhatsApp deste dispositivo (Aparelhos conectados)."
+              : "Escaneie o QR no WhatsApp deste dispositivo (Aparelhos conectados).",
             pairingCode: pairingCode || "",
             qrSrc: qrSrc || null,
             showRetry: true,
@@ -24873,13 +24873,13 @@
         });
         const boot = await bootRes.json().catch(() => ({}));
         if (!bootRes.ok) {
-          setDeviceCloudMsg(String(boot.error || "Não foi possível abrir o Device Cloud."));
+          setDeviceCloudMsg(String(boot.error || "Não foi possível abrir Dispositivos."));
           return false;
         }
         deviceCloudApiUrl = String(boot.apiUrl || "").replace(/\/$/, "");
         const ssoToken = String(boot.ssoToken || "").trim();
         if (!deviceCloudApiUrl || !ssoToken) {
-          setDeviceCloudMsg("Device Cloud não configurado.");
+          setDeviceCloudMsg("Dispositivos não configurado.");
           return false;
         }
         const ssoRes = await fetch(deviceCloudApiUrl + "/auth/sso", {
@@ -24889,7 +24889,7 @@
         });
         const sso = await ssoRes.json().catch(() => ({}));
         if (!ssoRes.ok || !sso.accessToken) {
-          setDeviceCloudMsg("Acesso ao Device Cloud recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
+          setDeviceCloudMsg("Acesso a Dispositivos recusado. Confira DEVICE_CLOUD_SSO_SECRET no EasyPanel.");
           return false;
         }
         deviceCloudAccessToken = String(sso.accessToken);
@@ -25027,7 +25027,7 @@
 
       async function addDeviceCloudDevice(forceCreate) {
         if (!canAccessDeviceCloudMenu()) {
-          setDeviceCloudMsg("Sem permissão para Device Cloud.");
+          setDeviceCloudMsg("Sem permissão para Dispositivos.");
           return;
         }
         const busyBtn = document.getElementById("device-cloud-add-btn");
@@ -51535,7 +51535,7 @@
             data?.error ||
               data?.detail ||
               (response.status === 502
-                ? "Sistema WABA - Drax indisponível. Verifique EVO_API_URL no servidor."
+                ? "Sistema WABA - Drax indisponível. Verifique a configuração do servidor."
                 : "Falha ao solicitar QRCode."),
           );
           if (data?.detail) err.detail = data.detail;
@@ -51565,7 +51565,7 @@
           return "Erro de conexão com o servidor. Aguarde alguns segundos e use «Atualizar QR» novamente.";
         }
         if (/integrationSession|prisma/i.test(`${msg}\n${detail}`)) {
-          return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL da EVO.";
+          return "Sistema WABA - Drax com erro interno no banco (Prisma/integrationSession). Reinicie o serviço no Easypanel e confira o PostgreSQL.";
         }
         if (/"count"\s*:\s*0/.test(detail)) {
           return "O sistema WABA - Drax não retornou QRCode (count:0). Aguarde alguns segundos e use «Atualizar QR». Se persistir, reinicie o serviço no Easypanel.";
@@ -51600,7 +51600,7 @@
           return firstLine.slice(0, 400);
         }
         if (!opaque && msg) return msg;
-        return "Falha ao gerar QRCode. Tente um nome novo e «Atualizar QR». Se repetir, a Evolution pode estar com sessão presa — avise para reiniciar o serviço EVO.";
+        return "Falha ao gerar QRCode. Tente um nome novo e «Atualizar QR». Se repetir, o serviço de conexão pode estar com sessão presa — avise o suporte para reiniciar.";
       }
 
       async function refreshQrCodeInRegisterModal() {
