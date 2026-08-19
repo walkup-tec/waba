@@ -3230,3 +3230,8 @@ Palavras-chave para buscar:
 
 
 - 2026-07-21: Heal Sinal Verde isolado — NÃO chama restore-backends; strip atômico + path unit no main.yaml; rollback se WABA cair. Scripts: heal-sinal-verde-pos-redeploy-vps.sh. Buscar: sinal-verde isolado, strip seguro, anti 404 traefik.
+
+## 2026-08-19 11:21 — Device Cloud: ícone e laranja do Aquecer
+- Fix: override CSS em `#device-cloud-warm-btn` reduz gap do ícone e aplica `#fb923c` no texto.
+- Marker `DEPLOY-2026-08-19-device-cloud-warm-btn-icon-orange`
+- LOG: doc/LOG-2026-08-19__112149__device-cloud-warm-btn-icon-orange-fix.md
