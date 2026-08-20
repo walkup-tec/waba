@@ -1,5 +1,13 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 06:38 — Dispositivos: pairingCode automático sem QR
+
+- Lingueta **Adicionar ao Aquecedor**: abre tela de vinculação no device → EVO gera `pairingCode` → sistema digita no WhatsApp
+- Removido QR imagem / instrução manual no painel sob o device
+- Marker `DEPLOY-2026-08-20-device-cloud-pairing-auto-insert`
+- LOG: doc/LOG-2026-08-20__063800__device-cloud-pairing-auto-insert.md
+- Palavras-chave: pairingCode, typeDeviceCloudPairingCodeOnDevice, sem-qr
+
 ## 2026-08-19 15:18 — Dispositivos: lingueta reutiliza número do Digitar
 
 - `getDeviceCloudRegisteredPhone` / `setDeviceCloudRegisteredPhone` — número salvo por device após **Digitar** (localStorage + memória)

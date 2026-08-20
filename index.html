@@ -17774,15 +17774,6 @@
                     </div>
                     <div class="device-cloud-warm-panel" hidden>
                       <div class="device-cloud-warm-status">Pronto para integrar.</div>
-                      <div class="device-cloud-warm-pairing" hidden>
-                        <div class="device-cloud-warm-pairing-label">Código de vinculação</div>
-                        <div class="device-cloud-warm-pairing-code"></div>
-                      </div>
-                      <div class="device-cloud-warm-qr" hidden></div>
-                      <p class="device-cloud-warm-hint muted">
-                        No WhatsApp deste dispositivo: menu (⋮) → Aparelhos conectados → Conectar aparelho → Vincular com número de telefone → digite o código acima.
-                        Integração enxuta: sem etapa CONFIRMAR.
-                      </p>
                       <div class="device-cloud-warm-actions">
                         <button type="button" class="device-cloud-warm-cancel instance-action-btn enabled">Cancelar</button>
                         <button type="button" class="device-cloud-warm-retry instance-action-btn btn-refresh enabled" hidden>
@@ -24589,13 +24580,6 @@
         return visit(data);
       }
 
-      function resolveQrImageSrcForDeviceWarm(data) {
-        const pairing = extractPairingCodeFromPayload(data);
-        const img = resolveQrImageSrcFromPayload(data);
-        if (img && pairing && img.length < 120) return "";
-        return img;
-      }
-
       function setDeviceCloudWarmPanel(deviceId, patch = {}) {
         const win = getDeviceCloudWin(deviceId);
         if (!win) return;
@@ -24607,36 +24591,61 @@
           const statusEl = panel.querySelector(".device-cloud-warm-status");
           if (statusEl) statusEl.textContent = patch.status;
         }
-        if (typeof patch.pairingCode === "string") {
-          const wrap = panel.querySelector(".device-cloud-warm-pairing");
-          const codeEl = panel.querySelector(".device-cloud-warm-pairing-code");
-          if (wrap && codeEl) {
-            if (patch.pairingCode) {
-              wrap.hidden = false;
-              codeEl.textContent = patch.pairingCode;
-            } else {
-              wrap.hidden = true;
-              codeEl.textContent = "";
-            }
-          }
-        }
-        if (patch.qrSrc === null) {
-          const qrWrap = panel.querySelector(".device-cloud-warm-qr");
-          if (qrWrap) {
-            qrWrap.hidden = true;
-            qrWrap.innerHTML = "";
-          }
-        } else if (typeof patch.qrSrc === "string" && patch.qrSrc) {
-          const qrWrap = panel.querySelector(".device-cloud-warm-qr");
-          if (qrWrap) {
-            qrWrap.hidden = false;
-            qrWrap.innerHTML = `<img src="${escapeAdminHtml(patch.qrSrc)}" alt="QR Code de vinculação" />`;
-          }
-        }
         const retryBtn = panel.querySelector(".device-cloud-warm-retry");
         if (retryBtn && typeof patch.showRetry === "boolean") {
           retryBtn.hidden = !patch.showRetry;
         }
+      }
+
+      function normalizeDeviceCloudPairingCode(raw) {
+        const cleaned = String(raw || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "");
+        if (cleaned.length === 8) {
+          return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`;
+        }
+        return String(raw || "")
+          .trim()
+          .toUpperCase();
+      }
+
+      /**
+       * Abre a tela de código de vinculação no WhatsApp Business (720×1280).
+       * Fluxo: menu → Aparelhos conectados → Conectar aparelho → Vincular com número.
+       */
+      async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
+        await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
+        await sleepDeviceCloud(900);
+        // Menu ⋮ (canto superior direito)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 668, y: 118 }, { skipRefresh: true });
+        await sleepDeviceCloud(700);
+        // Aparelhos conectados (item típico do menu)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 520 }, { skipRefresh: true });
+        await sleepDeviceCloud(1100);
+        // Conectar um aparelho
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1180 }, { skipRefresh: true });
+        await sleepDeviceCloud(900);
+        // Vincular com número de telefone
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 980 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+      }
+
+      /** Foca a primeira caixa do código e digita o pairingCode no device. */
+      async function typeDeviceCloudPairingCodeOnDevice(deviceId, pairingCode) {
+        const formatted = normalizeDeviceCloudPairingCode(pairingCode);
+        const typeable = formatted.replace(/-/g, "");
+        if (typeable.length < 8) {
+          throw new Error("Código de vinculação inválido retornado pelo sistema.");
+        }
+
+        // Primeira caixa do código (tela de vinculação por número)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 140, y: 360 }, { skipRefresh: true });
+        await sleepDeviceCloud(450);
+
+        await sendDeviceCloudInput(deviceId, "text", { text: typeable }, { skipRefresh: true });
+        await sleepDeviceCloud(600);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
       }
 
       async function finishDeviceCloudWarmIntegration(deviceId, instanceName, deviceLabel) {
@@ -24676,8 +24685,6 @@
 
           setDeviceCloudWarmPanel(deviceId, {
             visible: false,
-            pairingCode: "",
-            qrSrc: null,
             showRetry: false,
           });
           setDeviceCloudWarmTab(deviceId, { phase: "done" });
@@ -24761,8 +24768,6 @@
         }
         setDeviceCloudWarmPanel(deviceId, {
           visible: false,
-          pairingCode: "",
-          qrSrc: null,
           showRetry: false,
         });
       }
@@ -24802,14 +24807,21 @@
         setDeviceCloudWarmTab(id, { phase: "busy" });
         setDeviceCloudWarmPanel(id, {
           visible: true,
-          status: "Criando instância e gerando código de vinculação…",
-          pairingCode: "",
-          qrSrc: null,
+          status: "Abrindo tela de vinculação no WhatsApp do dispositivo…",
           showRetry: false,
         });
-        setDeviceCloudMsg("Integrando dispositivo no aquecedor…");
+        setDeviceCloudMsg("Preparando vinculação no dispositivo…");
 
         try {
+          await openDeviceCloudWhatsAppPairingCodeScreen(id);
+
+          setDeviceCloudWarmPanel(id, {
+            visible: true,
+            status: "Gerando código de vinculação…",
+            showRetry: false,
+          });
+          setDeviceCloudMsg("Integrando dispositivo no aquecedor…");
+
           const data = await submitAndPollRegistrarQrcode({
             name: instanceName,
             token: generateTokenLike(),
@@ -24822,24 +24834,28 @@
           }
 
           const pairingCode = extractPairingCodeFromPayload(data);
-          const qrSrc = resolveQrImageSrcForDeviceWarm(data);
-
-          if (!pairingCode && !qrSrc) {
+          if (!pairingCode) {
             throw new Error(
-              "O sistema não retornou código de vinculação. Tente de novo em alguns segundos.",
+              "O sistema não retornou o código de vinculação. Tente de novo em alguns segundos.",
             );
           }
 
           setDeviceCloudWarmPanel(id, {
             visible: true,
-            status: pairingCode
-              ? "Digite o código no WhatsApp deste dispositivo (Aparelhos conectados)."
-              : "Escaneie o QR no WhatsApp deste dispositivo (Aparelhos conectados).",
-            pairingCode: pairingCode || "",
-            qrSrc: qrSrc || null,
+            status: "Inserindo código de vinculação no WhatsApp do dispositivo…",
+            showRetry: false,
+          });
+          setDeviceCloudMsg("Inserindo código no dispositivo…");
+
+          await typeDeviceCloudPairingCodeOnDevice(id, pairingCode);
+
+          setDeviceCloudWarmPanel(id, {
+            visible: true,
+            status: "Código inserido. Finalizando conexão…",
             showRetry: true,
           });
           setDeviceCloudWarmTab(id, { phase: "busy" });
+          setDeviceCloudMsg("Aguardando conexão da instância…");
 
           startDeviceCloudWarmConnectPolling(id, instanceName, deviceLabel);
         } catch (error) {
@@ -24848,8 +24864,6 @@
           setDeviceCloudWarmPanel(id, {
             visible: true,
             status: errMsg,
-            pairingCode: "",
-            qrSrc: null,
             showRetry: true,
           });
           setDeviceCloudWarmTab(id, { phase: "idle" });
