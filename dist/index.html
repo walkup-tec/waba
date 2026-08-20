@@ -24721,31 +24721,128 @@
       }
 
       /**
-       * Abre a tela de código de vinculação no WhatsApp Business (720×1280).
-       * Evita a barra inferior (Conversas/Comunidades/…). Usa Perfil → Aparelhos conectados.
+       * Classifica a tela do device (720×1280) por amostragem de cor.
+       * Evita digitar pairingCode no Chrome/Google quando a nav falhou.
+       * @returns {"whatsapp"|"browser"|"unknown"}
        */
-      async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
-        await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
-        await sleepDeviceCloud(1000);
-        // Volta para Conversas se estiver em outra aba (tap na 1ª aba inferior, sem atingir Comunidades)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 90, y: 1235 }, { skipRefresh: true });
-        await sleepDeviceCloud(700);
-        // Avatar / perfil (canto superior esquerdo) → Configurações
-        await sendDeviceCloudInput(deviceId, "tap", { x: 78, y: 108 }, { skipRefresh: true });
-        await sleepDeviceCloud(1100);
-        // Item «Aparelhos conectados» na lista de configurações
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 820 }, { skipRefresh: true });
-        await sleepDeviceCloud(1100);
-        // «Conectar um aparelho»
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1120 }, { skipRefresh: true });
-        await sleepDeviceCloud(1000);
-        // «Vincular com número de telefone»
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 720 }, { skipRefresh: true });
-        await sleepDeviceCloud(1200);
-        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+      async function classifyDeviceCloudScreen(deviceId) {
+        try {
+          const res = await fetch(
+            "/device-cloud/device/" + encodeURIComponent(deviceId) + "/screenshot?t=" + Date.now(),
+            { credentials: "same-origin" },
+          );
+          if (!res.ok) return "unknown";
+          const blob = await res.blob();
+          const bitmap = await createImageBitmap(blob);
+          const canvas = document.createElement("canvas");
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx) return "unknown";
+          ctx.drawImage(bitmap, 0, 0);
+          const w = bitmap.width;
+          const h = bitmap.height;
+          const sample = (x0, y0, x1, y1, pred) => {
+            const width = Math.max(1, x1 - x0);
+            const height = Math.max(1, y1 - y0);
+            const { data } = ctx.getImageData(x0, y0, width, height);
+            let hit = 0;
+            let n = 0;
+            const step = 16 * 4;
+            for (let i = 0; i < data.length; i += step) {
+              n += 1;
+              if (pred(data[i], data[i + 1], data[i + 2])) hit += 1;
+            }
+            return n ? hit / n : 0;
+          };
+          const waGreenTop = sample(
+            Math.floor(w * 0.05),
+            Math.floor(h * 0.06),
+            Math.floor(w * 0.95),
+            Math.floor(h * 0.16),
+            (r, g, b) => g > r + 18 && g > 55 && r < 110 && b < 140,
+          );
+          const lightBottom = sample(
+            Math.floor(w * 0.08),
+            Math.floor(h * 0.68),
+            Math.floor(w * 0.92),
+            Math.floor(h * 0.96),
+            (r, g, b) => r > 185 && g > 185 && b > 185,
+          );
+          if (lightBottom > 0.42 && waGreenTop < 0.18) return "browser";
+          if (waGreenTop > 0.18) return "whatsapp";
+          return "unknown";
+        } catch {
+          return "unknown";
+        }
       }
 
-      /** Foca a primeira caixa do código e digita o pairingCode no device. */
+      /** Garante WhatsApp Business em foco (sai do Chrome/launcher). */
+      async function ensureDeviceCloudWhatsAppForeground(deviceId) {
+        await sendDeviceCloudInput(deviceId, "key", { key: "home" }, { skipRefresh: true });
+        await sleepDeviceCloud(450);
+        await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
+        await sleepDeviceCloud(1600);
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const kind = await classifyDeviceCloudScreen(deviceId);
+          if (kind === "whatsapp") return;
+          await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
+          await sleepDeviceCloud(450);
+          await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
+          await sleepDeviceCloud(1400);
+        }
+        const finalKind = await classifyDeviceCloudScreen(deviceId);
+        if (finalKind === "browser") {
+          throw new Error(
+            "O celular abriu o navegador em vez do WhatsApp. Toque em Abrir e tente de novo.",
+          );
+        }
+      }
+
+      /**
+       * Caminho oficial Meta (Android): More (⋮) → Linked devices → Link a device
+       * → Link with phone number.
+       * Docs: https://faq.whatsapp.com/1317564962315842/?cms_platform=android
+       * Coordenadas calibradas Redroid 720×1280 (WA Business PT-BR).
+       */
+      async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
+        await ensureDeviceCloudWhatsAppForeground(deviceId);
+
+        // 1) Menu More (três pontos) — canto superior direito da toolbar
+        await sendDeviceCloudInput(deviceId, "tap", { x: 668, y: 102 }, { skipRefresh: true });
+        await sleepDeviceCloud(1000);
+
+        // 2) «Aparelhos conectados» — duas linhas do overflow (layout WA varia)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 368 }, { skipRefresh: true });
+        await sleepDeviceCloud(1100);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 448 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+
+        let kind = await classifyDeviceCloudScreen(deviceId);
+        if (kind === "browser") {
+          throw new Error("Saiu do WhatsApp ao abrir o menu. Use Abrir e tente Inserir código.");
+        }
+
+        // 3) «Conectar um aparelho» / «Conectar dispositivo» (botão inferior)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1145 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+
+        // 4) «Vincular / Conectar com número de telefone» (texto sob o QR)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 755 }, { skipRefresh: true });
+        await sleepDeviceCloud(600);
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 690 }, { skipRefresh: true });
+        await sleepDeviceCloud(1200);
+
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        kind = await classifyDeviceCloudScreen(deviceId);
+        if (kind === "browser") {
+          throw new Error(
+            "Não chegou em Aparelhos conectados (abriu o navegador). Use Abrir WhatsApp e «Inserir código».",
+          );
+        }
+      }
+
+      /** Foca a primeira caixa do código e digita o pairingCode — só se não estiver no browser. */
       async function typeDeviceCloudPairingCodeOnDevice(deviceId, pairingCode) {
         const formatted = normalizeDeviceCloudPairingCode(pairingCode);
         const typeable = formatted.replace(/-/g, "");
@@ -24753,13 +24850,27 @@
           throw new Error("Código de vinculação inválido retornado pelo sistema.");
         }
 
-        // Primeira caixa do código (tela de vinculação por número)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 140, y: 360 }, { skipRefresh: true });
-        await sleepDeviceCloud(450);
+        const kind = await classifyDeviceCloudScreen(deviceId);
+        if (kind === "browser") {
+          throw new Error(
+            "Tela errada (navegador). Abra o WhatsApp → Aparelhos conectados → Vincular com número e use «Inserir código».",
+          );
+        }
+
+        // Primeira caixa do código (tela «Insira o código»)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 180, y: 420 }, { skipRefresh: true });
+        await sleepDeviceCloud(500);
 
         await sendDeviceCloudInput(deviceId, "text", { text: typeable }, { skipRefresh: true });
-        await sleepDeviceCloud(600);
+        await sleepDeviceCloud(700);
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
+
+        const after = await classifyDeviceCloudScreen(deviceId);
+        if (after === "browser") {
+          throw new Error(
+            "O código foi para o navegador. Volte ao WhatsApp na tela de código e use «Inserir código».",
+          );
+        }
       }
 
       async function finishDeviceCloudWarmIntegration(deviceId, instanceName, deviceLabel) {
