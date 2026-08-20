@@ -11,11 +11,20 @@
 ## Processo de deploy (produção)
 
 1. Implementar em `src/` e/ou `index.html`.
-2. **Obrigatório:** `npm run build` (gera/atualiza `dist/`, inclusive `dist/index.html`).
+2. **Obrigatório:** `npm run build` (gera/atualiza `dist/`, inclusive `dist/index.html` e `dist/deploy-marker.js`).
 3. Commit em `master` incluindo o `dist/` necessário.
 4. Push `origin master`.
 5. Redeploy EasyPanel do serviço `waba_disparador`.
 6. Validar `GET /health` (deploy marker) e hard refresh no browser.
+
+## FTP vs EasyPanel (UI principal)
+
+| Canal | O que atualiza | Não atualiza |
+|-------|----------------|--------------|
+| GitHub Actions **Deploy FTP (bundle)** | Bundle FTP / artefatos do workflow | Container Easypanel `waba_disparador` |
+| Push `master` + **Redeploy EasyPanel** | Imagem Docker que serve `https://waba.draxsistemas.com.br/` | — |
+
+A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em `index.html` na raiz sem `npm run build` + commit de `dist/` **não** reflete em produção — mesmo com push em `master`.
 
 ## Docker / EasyPanel
 
@@ -23,6 +32,7 @@
 - Dockerfile: `COPY dist ./dist` — **não** roda `npm run build` na imagem.
 - Consequência: mudança só na raiz/`src/` **não** aparece em produção sem `dist/` commitado.
 - Comentário no Dockerfile: rodar build e commitar `dist/` antes do push.
+- Incidente recorrente: `index.html` (raiz) atualizado, `dist/index.html` desatualizado → UI antiga em produção (LOG `doc/LOG-2026-08-19__140200__device-cloud-dist-index-desatualizado-fix.md`).
 
 ## Variáveis importantes
 
@@ -44,10 +54,11 @@
 
 | Marker | Tema |
 |--------|------|
+| `DEPLOY-2026-08-19-device-cloud-lingueta-tab` | Dispositivos: lingueta Aquecedor, sem Aquecer/Início |
+| `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia` | Boas-vindas: capa JPEG via sendMedia |
+| `DEPLOY-2026-08-19-080900-welcome-must-arrive` | Boas-vindas obrigatória: fila + JID canônico |
 | `DEPLOY-2026-08-03-aquecedor-delivery-ack-lid` | Aquecedor: confirmação via DELIVERY_ACK / anti-`@lid` |
 | `DEPLOY-2026-08-03-excluir-owners-metricas-split` | Excluir owners internos de métricas/split |
-| `DEPLOY-2026-08-02-atribuir-campanha-operacional` | Atribuir campanha a operacional |
-| `DEPLOY-2026-07-30-resend-welcome-sem-senha` | Reenvio boas-vindas sem senha |
 
 ## Rollback
 

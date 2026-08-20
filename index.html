@@ -6134,10 +6134,12 @@
 
       #device-cloud-stage {
         position: relative;
+        /* Altura definitiva do stage fica para depois (footer/espaço vertical).
+           Por enquanto: sem barra de rolagem colada ao device. */
         min-height: 420px;
         margin-top: 16px;
-        overflow: auto;
-        padding: 12px 2px 16px;
+        overflow: visible;
+        padding: 12px 2px 24px;
       }
 
       .device-cloud-toolbar {
@@ -6154,20 +6156,19 @@
         font-size: 13px;
       }
 
+      /* Painel legado sob o device — desativado (status/CTAs no warm-rail do topo) */
       .device-cloud-warm-panel {
-        padding: 10px 12px 12px;
-        border-top: 1px solid rgba(148, 163, 184, 0.18);
-        font-size: 12px;
-      }
-
-      .device-cloud-warm-panel[hidden] {
         display: none !important;
       }
 
       .device-cloud-warm-status {
-        margin-bottom: 8px;
-        color: var(--text-secondary, #94a3b8);
-        line-height: 1.4;
+        margin: 0;
+        flex: 1 1 120px;
+        min-width: 0;
+        color: #fdba74;
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1.3;
       }
 
       .device-cloud-warm-pairing {
@@ -6209,8 +6210,17 @@
 
       .device-cloud-warm-actions {
         display: flex;
-        gap: 8px;
+        gap: 6px;
         flex-wrap: wrap;
+        align-items: center;
+        flex: 0 0 auto;
+      }
+
+      .device-cloud-warm-cancel,
+      .device-cloud-warm-retry {
+        font-size: 0.68rem !important;
+        padding: 5px 10px !important;
+        min-height: 0 !important;
       }
 
       .device-cloud-warm-slot {
@@ -6220,11 +6230,11 @@
       .device-cloud-tab-slot {
         position: absolute;
         top: 0;
-        left: 50%;
-        transform: translateX(-50%);
+        left: 10px;
+        transform: none;
         z-index: 6;
         display: flex;
-        justify-content: center;
+        justify-content: flex-start;
         pointer-events: none;
       }
 
@@ -6238,6 +6248,8 @@
 
       .device-cloud-chrome {
         position: relative;
+        display: flex;
+        flex-direction: column;
         border: 1px solid rgba(148, 163, 184, 0.28);
         border-radius: 12px;
         background: var(--bg-card, #0f172a);
@@ -6249,6 +6261,29 @@
         border-color: rgba(251, 146, 60, 0.38);
         background: linear-gradient(145deg, rgba(84, 32, 8, 0.22), rgba(52, 22, 6, 0.18)),
           var(--bg-card, #0f172a);
+      }
+
+      /* Faixa unificada no topo: status + Cancelar/Inserir (não cobre a tela Android) */
+      .device-cloud-warm-rail {
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+        margin: 0;
+        padding: 6px 10px 8px;
+        border-top: 1px solid rgba(253, 186, 116, 0.22);
+        background: linear-gradient(180deg, rgba(124, 45, 18, 0.55) 0%, rgba(67, 20, 7, 0.72) 100%);
+      }
+
+      .device-cloud-window.is-warming .device-cloud-warm-rail {
+        display: flex !important;
+      }
+
+      .device-cloud-warm-rail-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
       }
 
       .device-cloud-screen-slot {
@@ -6264,28 +6299,29 @@
         border-radius: 0;
       }
 
+      /* Lingueta compacta: 1 linha — status longo vai para o warm-rail */
       .device-cloud-warm-tab {
         position: relative;
         z-index: 7;
         display: inline-flex;
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row;
+        align-items: center;
         justify-content: center;
-        gap: 2px;
-        min-height: 36px;
-        max-width: min(100%, 280px);
-        padding: 7px 14px 8px;
+        gap: 0;
+        min-height: 30px;
+        max-width: min(100%, 220px);
+        padding: 5px 12px 6px;
         border: 1px solid rgba(251, 146, 60, 0.38);
         border-bottom: none;
         border-radius: 10px 10px 0 0;
         background: linear-gradient(145deg, rgba(84, 32, 8, 0.92), rgba(52, 22, 6, 0.88));
         color: #f8fafc;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.01em;
         cursor: pointer;
         box-shadow: none;
-        white-space: normal;
+        white-space: nowrap;
         user-select: none;
         transition: background 0.15s ease, border-color 0.15s ease;
       }
@@ -6293,7 +6329,7 @@
       .device-cloud-warm-tab-main {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         white-space: nowrap;
       }
 
@@ -6314,8 +6350,8 @@
       }
 
       .device-cloud-warm-tab .device-cloud-warm-tab-icon {
-        width: 14px;
-        height: 14px;
+        width: 13px;
+        height: 13px;
         color: #fb923c;
         stroke: currentColor;
         fill: none;
@@ -6329,19 +6365,7 @@
       }
 
       .device-cloud-warm-tab-sub {
-        display: none;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        font-size: 10px;
-        font-weight: 500;
-        line-height: 1.25;
-        color: rgba(253, 230, 138, 0.92);
-        white-space: normal;
-      }
-
-      .device-cloud-warm-tab.has-sub .device-cloud-warm-tab-sub {
-        display: block;
+        display: none !important;
       }
 
       .device-cloud-phone-shell {
@@ -6382,6 +6406,7 @@
         width: var(--dc-screen-width, 329px);
         max-width: 100%;
         --dc-screen-width: 329px;
+        /* Lingueta compacta (1 linha) — não cresce sobre o device */
         --dc-warm-tab-reserve: 0px;
         padding-top: var(--dc-warm-tab-reserve);
         background: transparent;
@@ -6393,7 +6418,8 @@
       }
 
       .device-cloud-window.has-warm-tab {
-        --dc-warm-tab-reserve: 58px;
+        /* Reserva só para lingueta de 1 linha — não cobrir o device */
+        --dc-warm-tab-reserve: 34px;
       }
 
       .device-cloud-window.has-warm-tab .device-cloud-chrome {
@@ -17759,6 +17785,17 @@
                     <button type="button" class="device-cloud-delete-btn instance-action-btn btn-delete enabled">Excluir</button>
                   </div>
                 </div>
+                  <div class="device-cloud-warm-rail" hidden>
+                    <div class="device-cloud-warm-rail-row">
+                      <p class="device-cloud-warm-status" aria-live="polite"></p>
+                      <div class="device-cloud-warm-actions">
+                        <button type="button" class="device-cloud-warm-cancel instance-action-btn enabled">Cancelar</button>
+                        <button type="button" class="device-cloud-warm-retry instance-action-btn btn-refresh enabled" hidden>
+                          Inserir código
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="device-cloud-screen-slot">
                   <img class="device-cloud-screen" alt="Tela do Android" title="Clique na tela e digite com o teclado do computador" draggable="false" tabindex="0" />
@@ -17800,14 +17837,7 @@
                       />
                       <button type="button" class="device-cloud-phone-submit instance-action-btn btn-qrcode enabled">Digitar</button>
                     </div>
-                    <div class="device-cloud-warm-panel" hidden>
-                      <div class="device-cloud-warm-actions">
-                        <button type="button" class="device-cloud-warm-cancel instance-action-btn enabled">Cancelar</button>
-                        <button type="button" class="device-cloud-warm-retry instance-action-btn btn-refresh enabled" hidden>
-                          Inserir código no device
-                        </button>
-                      </div>
-                    </div>
+                    <div class="device-cloud-warm-panel" hidden aria-hidden="true"></div>
                   </div>
                 </div>
               </div>
@@ -24493,7 +24523,6 @@
         const tabSlot = win.querySelector(".device-cloud-tab-slot");
         const chrome = win.querySelector(".device-cloud-chrome");
         const textEl = tab?.querySelector(".device-cloud-warm-tab-text");
-        const subEl = tab?.querySelector(".device-cloud-warm-tab-sub");
         if (!tab || !tabSlot || !chrome) return;
         const warmSt = getDeviceCloudWarmState(deviceId);
 
@@ -24508,6 +24537,7 @@
           tabSlot.classList.add("is-hidden");
           chrome.classList.remove("has-warm-tab");
           win.classList.remove("has-warm-tab");
+          win.classList.remove("is-warming");
         }
 
         if (patch.phase) {
@@ -24522,18 +24552,29 @@
         if (typeof patch.text === "string" && textEl) {
           textEl.textContent = patch.text;
         }
-        if (typeof patch.sub === "string" && subEl) {
-          const sub = String(patch.sub || "").trim();
-          warmSt.tabSub = sub;
-          if (sub) {
-            subEl.hidden = false;
-            subEl.textContent = sub;
-            tab.classList.add("has-sub");
-          } else {
-            subEl.hidden = true;
-            subEl.textContent = "";
-            tab.classList.remove("has-sub");
-          }
+        // Subtexto fica no warm-rail (topo), não na lingueta
+        if (typeof patch.sub === "string") {
+          warmSt.tabSub = String(patch.sub || "").trim();
+          const statusEl = win.querySelector(".device-cloud-warm-rail .device-cloud-warm-status");
+          if (statusEl) statusEl.textContent = warmSt.tabSub;
+        }
+        syncDeviceCloudWarmRailVisibility(deviceId);
+      }
+
+      function syncDeviceCloudWarmRailVisibility(deviceId) {
+        const win = getDeviceCloudWin(deviceId);
+        if (!win) return;
+        const warmSt = getDeviceCloudWarmState(deviceId);
+        const rail = win.querySelector(".device-cloud-warm-rail");
+        const show =
+          warmSt.busy ||
+          warmSt.awaitingManualPairingInsert ||
+          warmSt.tabPhase === "busy" ||
+          Boolean(String(warmSt.tabSub || "").trim());
+        win.classList.toggle("is-warming", show && warmSt.tabPhase !== "done");
+        if (rail) {
+          if (show && warmSt.tabPhase !== "done") rail.hidden = false;
+          else if (!show || warmSt.tabPhase === "done") rail.hidden = true;
         }
       }
 
@@ -24547,21 +24588,30 @@
           setDeviceCloudWarmPanel(deviceId, {
             visible: true,
             showRetry: opts.showRetry !== false,
-            retryLabel: opts.retryLabel || "Inserir código no device",
+            retryLabel: opts.retryLabel || "Inserir código",
           });
         } else if (opts.hideActions) {
-          setDeviceCloudWarmPanel(deviceId, { visible: false, showRetry: false });
+          setDeviceCloudWarmPanel(deviceId, {
+            visible: true,
+            showRetry: false,
+          });
         }
+        syncDeviceCloudWarmRailVisibility(deviceId);
       }
 
       function setDeviceCloudWarmPanel(deviceId, patch = {}) {
         const win = getDeviceCloudWin(deviceId);
         if (!win) return;
-        const panel = win.querySelector(".device-cloud-warm-panel");
-        if (!panel) return;
-        if (patch.visible === true) panel.hidden = false;
-        if (patch.visible === false) panel.hidden = true;
-        const retryBtn = panel.querySelector(".device-cloud-warm-retry");
+        const rail = win.querySelector(".device-cloud-warm-rail");
+        const retryBtn = win.querySelector(".device-cloud-warm-retry");
+        if (patch.visible === true) {
+          if (rail) rail.hidden = false;
+          win.classList.add("is-warming");
+        }
+        if (patch.visible === false) {
+          if (rail) rail.hidden = true;
+          win.classList.remove("is-warming");
+        }
         if (retryBtn && typeof patch.showRetry === "boolean") {
           retryBtn.hidden = !patch.showRetry;
         }
@@ -24804,10 +24854,16 @@
 
             if (isConnecting && !isOpen && !connectingNotified) {
               connectingNotified = true;
-              setDeviceCloudWarmStatus(deviceId, "Código aceito. Finalizando conexão…", {
-                phase: "busy",
-                hideActions: true,
-              });
+              setDeviceCloudWarmStatus(
+                deviceId,
+                "WhatsApp em conexão… Se aparecer erro no aparelho, use «Inserir código».",
+                {
+                  phase: "busy",
+                  showActions: true,
+                  showRetry: true,
+                  retryLabel: "Inserir código",
+                },
+              );
             }
             if (!isOpen) return;
 
@@ -24832,6 +24888,7 @@
         warmSt.busy = false;
         warmSt.pendingPairingCode = "";
         warmSt.awaitingManualPairingInsert = false;
+        warmSt.tabSub = "";
         if (warmSt.tabPhase !== "done") {
           setDeviceCloudWarmTab(deviceId, { phase: "idle", sub: "" });
         }
@@ -24839,6 +24896,7 @@
           visible: false,
           showRetry: false,
         });
+        syncDeviceCloudWarmRailVisibility(deviceId);
       }
 
       async function insertPendingDeviceCloudPairingCode(deviceId) {
@@ -24855,13 +24913,20 @@
         }
         warmSt.busy = true;
         warmSt.awaitingManualPairingInsert = false;
-        setDeviceCloudWarmStatus(id, "Inserindo código no WhatsApp do dispositivo…", {
-          phase: "busy",
-          hideActions: true,
-        });
+        const codeLabel = normalizeDeviceCloudPairingCode(pairingCode);
+        setDeviceCloudWarmStatus(
+          id,
+          `Código ${codeLabel}. Abrindo Aparelhos conectados → Vincular com número…`,
+          { phase: "busy", hideActions: true },
+        );
         try {
+          await openDeviceCloudWhatsAppPairingCodeScreen(id);
+          setDeviceCloudWarmStatus(id, `Digitando ${codeLabel} no WhatsApp…`, {
+            phase: "busy",
+            hideActions: true,
+          });
           await typeDeviceCloudPairingCodeOnDevice(id, pairingCode);
-          setDeviceCloudWarmStatus(id, "Código inserido. Finalizando conexão…", {
+          setDeviceCloudWarmStatus(id, "Código enviado. Aguardando conexão no WhatsApp…", {
             phase: "busy",
             hideActions: true,
           });
@@ -24873,7 +24938,7 @@
           setDeviceCloudWarmStatus(id, errMsg, {
             phase: "busy",
             showActions: true,
-            retryLabel: "Inserir código no device",
+            retryLabel: "Inserir código",
           });
         }
       }
@@ -24941,19 +25006,10 @@
             );
           }
 
-          // Passo guiado: não navega/digita automaticamente (evita Google/Comunidades).
           warmSt.pendingPairingCode = pairingCode;
-          warmSt.awaitingManualPairingInsert = true;
           warmSt.busy = true;
-          setDeviceCloudWarmStatus(
-            id,
-            `Código ${normalizeDeviceCloudPairingCode(pairingCode)}. No WhatsApp: Aparelhos conectados → Vincular com número → depois «Inserir código».`,
-            {
-              phase: "busy",
-              showActions: true,
-              retryLabel: "Inserir código no device",
-            },
-          );
+          // Automático: Aparelhos conectados → Vincular com número → digitar código
+          await insertPendingDeviceCloudPairingCode(id);
         } catch (error) {
           warmSt.busy = false;
           warmSt.awaitingManualPairingInsert = false;

@@ -72,6 +72,14 @@ Campanhas geradas com crédito de **Bônus de envio** (admin) **não** entram no
 - Unicidade do fornecedor: `e-mail + apiKind + segment`.
 - Segmento do fornecedor no split é escolhido no formulário (Bets/Outros), não apenas herdado do cadastro de usuário.
 
+### Dispositivos — integração com o Aquecedor (lingueta)
+
+- Após cadastrar o número WhatsApp no dispositivo virtual, o usuário vê a lingueta **«Adicionar ao Aquecedor»** — a integração **não** inicia automaticamente.
+- Um clique na lingueta dispara a integração (instância + aquecedor) **sem** etapa CONFIRMAR nem botão **Aquecer** na barra.
+- Durante a integração: lingueta **«Aguarde um instante...»** (não clicável).
+- Após a instância aparecer em **Instâncias**: lingueta **«Integração Finalizada»** e menu **Instâncias** pulsa até o usuário abrir essa aba.
+- Textos visíveis ao usuário no fluxo Dispositivos **não** mencionam EVO/Evolution; preferir **dispositivo** em vez de *device*.
+
 ### Ambientes
 
 - Publicação permitida apenas em **Produção** (`master`).

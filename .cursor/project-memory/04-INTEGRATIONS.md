@@ -38,3 +38,11 @@ Sessão WABA (cookie) para master/staff/assinante; rotas admin restritas a maste
 
 - Após `sendText`: tag única + `findMessages`/`findChats` no destino; fallback `DELIVERY_ACK`/`READ`/`PLAYED` via `findStatusMessage`.
 - Helpers: `src/aquecedor/delivery-verify.helpers.ts`.
+
+### Dispositivos (Device Cloud) → Aquecedor
+
+- Menu WABA **Dispositivos** abre SSO/launcher para o dispositivo virtual (repo `drax-device-cloud`).
+- Fluxo de integração: usuário cadastra número no WhatsApp do dispositivo → lingueta **«Adicionar ao Aquecedor»** → backend WABA cria/liga instância Evolution e registra no aquecedor (sem CONFIRMAR manual).
+- UI: estados da lingueta (`idle` / `busy` / `done`); pulso em **Instâncias** após sucesso.
+- Copy de usuário sem EVO/Evolution; mensagens usam **dispositivo**.
+- Envs: `DEVICE_CLOUD_PUBLIC_URL`, `DEVICE_CLOUD_SSO_SECRET` (gate master em produção).

@@ -16,6 +16,11 @@ Não usar como histórico de desenvolvimento.
 - Verificação de entrega do aquecedor com ACK de aparelho anti-`@lid` (`2556946`)
 - Campanhas de bônus de envio excluídas do split de pagamento (creditFunding + settle skip + backfill da fila)
 - Operacional com múltiplos tipos de disparo + fornecedor duplicável por plano no Financeiro
+- Dispositivos (Device Cloud): lingueta **«Adicionar ao Aquecedor»** após cadastro de número no WhatsApp do dispositivo virtual
+- Integração aquecedor via lingueta (sem botão **Aquecer** na barra nem etapa CONFIRMAR); estados `idle` / `busy` / `done`
+- Conclusão da integração: lingueta **«Integração Finalizada»** + pulso no menu **Instâncias** até o usuário abrir a aba
+- Copy do fluxo Dispositivos sem menções visíveis a EVO/Evolution; **device** → **dispositivo** nas mensagens ao usuário
+- Botão **Início** removido do footer do dispositivo virtual
 
 ## Funcionalidades em andamento
 
@@ -24,8 +29,9 @@ Não usar como histórico de desenvolvimento.
 
 ## Pendências relevantes
 
-- Após cada mudança de UI/runtime: garantir `dist/` atualizado no `master` antes do Redeploy EasyPanel
+- **Redeploy EasyPanel** `waba_disparador` para marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab` (código e `dist/` já em `master`; produção ainda pode servir marker antigo até redeploy)
+- Após redeploy: validar `/health`, lingueta visível, ausência de `device-cloud-warm-btn` / **Início** / **Aquecer** no HTML servido
+- Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
-- **Redeploy EasyPanel** para marker `DEPLOY-2026-08-13-device-cloud-tab-show` (fix aba Dispositivos vazia) + `DEVICE_CLOUD_PUBLIC_URL` / `DEVICE_CLOUD_SSO_SECRET`
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
 - Provisionar host Linux+KVM para `REDROID_MODE=docker`

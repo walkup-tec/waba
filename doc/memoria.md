@@ -1,5 +1,13 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 07:35 — Dispositivos: warm-rail no topo + auto Vincular
+
+- Lingueta compacta (1 linha); status + Cancelar/Inserir na faixa do chrome (não cobre o device / não fica embaixo)
+- Auto: Aparelhos conectados → Vincular com número → digitar pairingCode
+- Stage: sem `overflow: auto` (sem scrollbar ao lado do device); altura/footer definitivo **adiado** até fechar o fluxo
+- Marker `DEPLOY-2026-08-20-device-cloud-warm-rail-topo`
+- LOG: doc/LOG-2026-08-20__073500__device-cloud-warm-rail-topo.md
+
 ## 2026-08-20 07:15 — Dispositivos: status na lingueta + inserção guiada
 
 - Status do aquecimento na lingueta (subtexto); rodapé sem mensagens de progresso

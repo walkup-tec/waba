@@ -4,6 +4,18 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-19 — Dispositivos: lingueta em vez de botão Aquecer
+
+- **Decisão:** Substituir o botão **Aquecer** na barra do dispositivo virtual por lingueta **«Adicionar ao Aquecedor»** acima da área do telefone. Integração só no clique; sem etapa CONFIRMAR. Ao concluir: **«Integração Finalizada»** + pulso no menu **Instâncias**.
+- **Motivo:** UX mais clara pós-cadastro de número; evitar disparo acidental de integração.
+- **Impacto:** Removidos `device-cloud-warm-btn` e botão **Início**; marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab`.
+
+### 2026-08-19 — Copy Dispositivos sem EVO/Evolution
+
+- **Decisão:** Textos visíveis do fluxo Dispositivos não mencionam EVO/Evolution; **device** → **dispositivo** nas mensagens ao usuário. Identificadores de código (`device-cloud-*`, rotas API) permanecem inalterados.
+- **Motivo:** Linguagem orientada ao usuário final, não ao stack interno.
+- **Impacto:** Toasts, hints e status da lingueta; commits `504e8ca` + `dist/` sincronizado.
+
 ### 2026-08-19 — Boas-vindas WhatsApp sem preview OG (texto + JPEG)
 
 - **Decisão:** O texto de boas-vindas usa traço ASCII (`----`) e `linkPreview: false`. A arte BEM-VINDO vai como `sendMedia` JPEG após o ACK, não como card Open Graph do site.
