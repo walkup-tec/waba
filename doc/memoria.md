@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 07:15 — Dispositivos: status na lingueta + inserção guiada
+
+- Status do aquecimento na lingueta (subtexto); rodapé sem mensagens de progresso
+- Auto-nav/digitação pausados; botão «Inserir código no device» após pairingCode
+- Marker `DEPLOY-2026-08-20-device-cloud-lingueta-status-guiado`
+- LOG: doc/LOG-2026-08-20__071500__device-cloud-lingueta-status-guiado.md
+
 ## 2026-08-20 06:55 — Dispositivos: pairingCode + sem abrir Comunidades
 
 - Causa: backend não propagava `pairingCode`; toque y=1180 abria aba Comunidades
