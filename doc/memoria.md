@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 08:10 — Dispositivos: não fechar WA no open (sem BACK em unknown)
+
+- Causa: BACK quando classify=unknown fechava o WhatsApp na abertura → travava em Conversas com msg falsa de browser
+- Fix: esperar/settle; BACK só se browser confirmado; seguir menu mesmo em unknown fraco
+- Marker `DEPLOY-2026-08-20-device-cloud-wa-open-wait-no-back`
+- LOG: doc/LOG-2026-08-20__081000__device-cloud-wa-open-wait-no-back.md
+
 ## 2026-08-20 07:55 — Dispositivos: menu ⋮ → Aparelhos (assertivo)
 
 - Causa: nav por Perfil + digitação sem gate → Chrome recebia o pairingCode

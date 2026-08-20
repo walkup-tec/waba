@@ -24722,7 +24722,6 @@
 
       /**
        * Classifica a tela do device (720×1280) por amostragem de cor.
-       * Evita digitar pairingCode no Chrome/Google quando a nav falhou.
        * @returns {"whatsapp"|"browser"|"unknown"}
        */
       async function classifyDeviceCloudScreen(deviceId) {
@@ -24755,48 +24754,86 @@
             }
             return n ? hit / n : 0;
           };
+          // Toolbar WA Business (teal/verde)
           const waGreenTop = sample(
             Math.floor(w * 0.05),
-            Math.floor(h * 0.06),
+            Math.floor(h * 0.05),
             Math.floor(w * 0.95),
-            Math.floor(h * 0.16),
-            (r, g, b) => g > r + 18 && g > 55 && r < 110 && b < 140,
+            Math.floor(h * 0.15),
+            (r, g, b) => g > r + 15 && g > 50 && r < 120 && b < 160,
           );
-          const lightBottom = sample(
-            Math.floor(w * 0.08),
-            Math.floor(h * 0.68),
-            Math.floor(w * 0.92),
-            Math.floor(h * 0.96),
-            (r, g, b) => r > 185 && g > 185 && b > 185,
+          // Teclado Chrome costuma ser cinza claro na faixa inferior
+          const lightKeyboard = sample(
+            Math.floor(w * 0.1),
+            Math.floor(h * 0.72),
+            Math.floor(w * 0.9),
+            Math.floor(h * 0.98),
+            (r, g, b) => r > 190 && g > 190 && b > 190 && Math.abs(r - g) < 18,
           );
-          if (lightBottom > 0.42 && waGreenTop < 0.18) return "browser";
-          if (waGreenTop > 0.18) return "whatsapp";
+          if (waGreenTop > 0.14) return "whatsapp";
+          // Só browser se NÃO há verde WA e o teclado claro domina
+          if (waGreenTop < 0.08 && lightKeyboard > 0.5) return "browser";
           return "unknown";
         } catch {
           return "unknown";
         }
       }
 
-      /** Garante WhatsApp Business em foco (sai do Chrome/launcher). */
+      /**
+       * Espera o WhatsApp Business ficar em foco sem matá-lo no meio da abertura.
+       * BACK só quando a tela é browser de verdade (nunca em "unknown"/carregando).
+       */
       async function ensureDeviceCloudWhatsAppForeground(deviceId) {
         await sendDeviceCloudInput(deviceId, "key", { key: "home" }, { skipRefresh: true });
-        await sleepDeviceCloud(450);
-        await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
-        await sleepDeviceCloud(1600);
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const kind = await classifyDeviceCloudScreen(deviceId);
-          if (kind === "whatsapp") return;
-          await sendDeviceCloudInput(deviceId, "key", { key: "back" }, { skipRefresh: true });
-          await sleepDeviceCloud(450);
+        await sleepDeviceCloud(400);
+
+        let browserStreak = 0;
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          if (attempt > 0) {
+            await dismissDeviceCloudWhatsAppCrash(deviceId).catch(() => {});
+          }
           await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
-          await sleepDeviceCloud(1400);
+          // App costuma crashar/reabrir — dar tempo antes de classificar
+          await sleepDeviceCloud(attempt === 0 ? 2800 : 2200);
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+
+          let kind = "unknown";
+          for (let poll = 0; poll < 4; poll += 1) {
+            kind = await classifyDeviceCloudScreen(deviceId);
+            if (kind === "whatsapp") return;
+            if (kind === "browser") break;
+            await sleepDeviceCloud(700);
+          }
+
+          if (kind === "whatsapp") return;
+
+          if (kind === "browser") {
+            browserStreak += 1;
+            if (browserStreak >= 2) {
+              throw new Error(
+                "O celular está no navegador. Toque em Abrir WhatsApp e depois em «Inserir código».",
+              );
+            }
+            // Sai do Chrome sem spamar BACK no WhatsApp
+            await sendDeviceCloudInput(deviceId, "key", { key: "home" }, { skipRefresh: true });
+            await sleepDeviceCloud(500);
+            continue;
+          }
+
+          // unknown = ainda carregando / crash dialog — NÃO dar BACK (fecha o WA)
+          browserStreak = 0;
+          await dismissDeviceCloudWhatsAppCrash(deviceId).catch(() => {});
+          await sleepDeviceCloud(900);
         }
+
         const finalKind = await classifyDeviceCloudScreen(deviceId);
+        if (finalKind === "whatsapp") return;
         if (finalKind === "browser") {
           throw new Error(
-            "O celular abriu o navegador em vez do WhatsApp. Toque em Abrir e tente de novo.",
+            "O celular está no navegador. Toque em Abrir WhatsApp e depois em «Inserir código».",
           );
         }
+        // Prossegue mesmo em unknown: Conversas pode ter sido detectada fraca; o menu ⋮ só existe no WA
       }
 
       /**
@@ -24807,16 +24844,17 @@
        */
       async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
         await ensureDeviceCloudWhatsAppForeground(deviceId);
+        await sleepDeviceCloud(600);
 
         // 1) Menu More (três pontos) — canto superior direito da toolbar
         await sendDeviceCloudInput(deviceId, "tap", { x: 668, y: 102 }, { skipRefresh: true });
-        await sleepDeviceCloud(1000);
+        await sleepDeviceCloud(1100);
 
         // 2) «Aparelhos conectados» — duas linhas do overflow (layout WA varia)
         await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 368 }, { skipRefresh: true });
         await sleepDeviceCloud(1100);
         await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 448 }, { skipRefresh: true });
-        await sleepDeviceCloud(1200);
+        await sleepDeviceCloud(1300);
 
         let kind = await classifyDeviceCloudScreen(deviceId);
         if (kind === "browser") {
@@ -24825,19 +24863,19 @@
 
         // 3) «Conectar um aparelho» / «Conectar dispositivo» (botão inferior)
         await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1145 }, { skipRefresh: true });
-        await sleepDeviceCloud(1200);
+        await sleepDeviceCloud(1300);
 
         // 4) «Vincular / Conectar com número de telefone» (texto sob o QR)
         await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 755 }, { skipRefresh: true });
         await sleepDeviceCloud(600);
         await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 690 }, { skipRefresh: true });
-        await sleepDeviceCloud(1200);
+        await sleepDeviceCloud(1300);
 
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
         kind = await classifyDeviceCloudScreen(deviceId);
         if (kind === "browser") {
           throw new Error(
-            "Não chegou em Aparelhos conectados (abriu o navegador). Use Abrir WhatsApp e «Inserir código».",
+            "Não chegou em Aparelhos conectados. Use Abrir WhatsApp e «Inserir código».",
           );
         }
       }
@@ -25027,7 +25065,7 @@
         const codeLabel = normalizeDeviceCloudPairingCode(pairingCode);
         setDeviceCloudWarmStatus(
           id,
-          `Código ${codeLabel}. Abrindo Aparelhos conectados → Vincular com número…`,
+          `Código ${codeLabel}. Abrindo WhatsApp e Aparelhos conectados…`,
           { phase: "busy", hideActions: true },
         );
         try {
