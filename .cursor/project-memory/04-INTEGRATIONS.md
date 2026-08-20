@@ -39,6 +39,13 @@ Sessão WABA (cookie) para master/staff/assinante; rotas admin restritas a maste
 - Após `sendText`: tag única + `findMessages`/`findChats` no destino; fallback `DELIVERY_ACK`/`READ`/`PLAYED` via `findStatusMessage`.
 - Helpers: `src/aquecedor/delivery-verify.helpers.ts`.
 
+### Campanha Alternativa — botão URL (Evolution)
+
+- Envio: `POST /message/sendButtons/{instance}` com `type: "url"`, `linkPreview: false`.
+- Texto da campanha em `description`; URL só no botão. Sem `ensureMessageContainsLink`.
+- Doc: https://docs.evolutionfoundation.com.br/evolution-api/send-buttons
+- Evolution 2.3.x envolve CTA em `viewOnceMessage` + `nativeFlow` / `cta_url` — isso não é falha; fallback texto+URL gera o card “Share on WhatsApp”.
+
 ### Dispositivos (Device Cloud) → Aquecedor
 
 - Menu WABA **Dispositivos** abre SSO/launcher para o dispositivo virtual (repo `drax-device-cloud`).

@@ -54,6 +54,8 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
+| `DEPLOY-2026-08-20-alternativa-url-button` | Alternativa: sendButtons sem URL/preview no texto |
+| `DEPLOY-2026-08-20-warmth-chip-lookup` | Foguinhos Quente por chip (soma-9224) |
 | `DEPLOY-2026-08-19-device-cloud-lingueta-tab` | Dispositivos: lingueta Aquecedor, sem Aquecer/Início |
 | `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia` | Boas-vindas: capa JPEG via sendMedia |
 | `DEPLOY-2026-08-19-080900-welcome-must-arrive` | Boas-vindas obrigatória: fila + JID canônico |

@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 17:19 — Alternativa: botão URL sem texto+link
+
+- Produção enviava fallback com URL + preview WhatsApp; ghost `viewOnce` forçava isso
+- sendButtons com `linkPreview: false`; se falhar, só texto sem URL
+- Marker `DEPLOY-2026-08-20-alternativa-url-button`
+- LOG: doc/LOG-2026-08-20__171900__fix-alternativa-botao-sem-link.md
+
 ## 2026-08-20 16:48 — Foguinhos Quente por chip (soma-9224)
 
 - Status conectado + 3 fogos cinza: `uso-config` lento (warmth de todas as instâncias) e rename `9224`→`soma-9224`

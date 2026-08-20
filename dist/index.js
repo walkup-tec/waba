@@ -6996,6 +6996,7 @@ function stripUrlsFromMessageText(message) {
     return String(message || "")
         .replace(/https?:\/\/[^\s)]+/gi, "")
         .replace(/\bwa\.me\/[^\s)]+/gi, "")
+        .replace(/^[ \t]*(mais informa[cç][oõ]es|acesse aqui|veja mais|saiba mais|clique aqui)\s*:?[ \t]*$/gim, "")
         .replace(/[ \t]+\n/g, "\n")
         .replace(/\n{3,}/g, "\n\n")
         .replace(/[ \t]{2,}/g, " ")
@@ -7041,7 +7042,16 @@ function ensureMessageContainsLink(message, link, cta) {
 }
 function isGhostButtonsPayload(raw) {
     try {
-        return JSON.stringify(raw ?? "").includes("viewOnceMessage");
+        const serialized = JSON.stringify(raw ?? "");
+        if (!serialized.includes("viewOnceMessage"))
+            return false;
+        // Evolution 2.3.x envolve CTA nativo em viewOnce + nativeFlow — não é fantasma.
+        if (serialized.includes("nativeFlowMessage") ||
+            serialized.includes("interactiveMessage") ||
+            serialized.includes("cta_url")) {
+            return false;
+        }
+        return true;
     }
     catch {
         return false;
@@ -7061,47 +7071,62 @@ function splitMessageForUrlButton(fullText) {
 async function sendEvoAlternativaUrlButtonMessage(input) {
     const instanceName = String(input.instanceName || "").trim();
     const number = String(input.number || "").replace(/\D/g, "");
-    const fullText = prepareOutboundWhatsAppText(String(input.messageText || "").trim()) || "Olá!";
+    const fullText = prepareOutboundWhatsAppText(String(input.messageText || "").trim(), { stripUrls: true }) ||
+        "Olá!";
     const buttonLabel = normalizeButtonDisplayText(input.buttonLabel);
     const buttonUrl = String(input.buttonUrl || "").trim();
     if (!instanceName || !number || !buttonUrl) {
         return { ok: false, status: 0, body: "Dados insuficientes para sendButtons." };
     }
     // Evolution sendButtons: `title` rende em negrito no WhatsApp — mensagem vai só em description.
+    // Sem footer vazio e sem URL no texto: o destino do CTA é só o botão.
     // @see Evolution API POST /message/sendButtons/{instance}
     const { title, description } = splitMessageForUrlButton(fullText);
-    const payload = {
-        number,
-        title,
-        description,
-        footer: "",
-        buttons: [
-            {
-                type: "url",
-                displayText: buttonLabel,
-                url: buttonUrl,
-            },
-        ],
-    };
+    const buttons = [
+        {
+            type: "url",
+            displayText: buttonLabel,
+            url: buttonUrl,
+        },
+    ];
     const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
-    const result = await callEvoAction(url, "POST", payload, {
+    const postButtons = (payload) => callEvoAction(url, "POST", payload, {
         timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
         retries: 1,
     });
-    if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
+    const interpret = (result) => {
+        if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
+            return {
+                ok: false,
+                status: result.status,
+                body: "Evolution retornou botões fantasma (viewOnce).",
+                json: result.json,
+            };
+        }
         return {
-            ok: false,
+            ok: result.ok,
             status: result.status,
-            body: "Evolution retornou botões fantasma (viewOnce).",
+            body: String(result.body || result.error || ""),
             json: result.json,
         };
-    }
-    return {
-        ok: result.ok,
-        status: result.status,
-        body: String(result.body || result.error || ""),
-        json: result.json,
     };
+    const first = await postButtons({
+        number,
+        title,
+        description,
+        buttons,
+        linkPreview: false,
+    });
+    if (first.ok)
+        return interpret(first);
+    const retryTitle = description.split("\n")[0]?.trim().slice(0, 60) || " ";
+    return interpret(await postButtons({
+        number,
+        title: retryTitle,
+        description,
+        buttons,
+        linkPreview: false,
+    }));
 }
 async function generateShortUrlForDisparos(longUrl, publicBaseHints) {
     const baseUrl = String(longUrl || "").trim();
@@ -11350,8 +11375,8 @@ async function processOneCampaignDispatch(campaignId) {
         let lastSendJson = null;
         const sendCampaignTextMessage = async (text) => {
             const sendBody = EVO_SEND_TEXT_V1
-                ? { number: numero, textMessage: { text } }
-                : { number: numero, text, textMessage: { text } };
+                ? { number: numero, textMessage: { text }, linkPreview: false }
+                : { number: numero, text, textMessage: { text }, linkPreview: false };
             const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
             if (!sendResult.ok) {
                 console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
@@ -11393,27 +11418,18 @@ async function processOneCampaignDispatch(campaignId) {
             });
             if (buttonResult.ok) {
                 usedUrlButton = true;
-                deliveredText = outbound.text;
+                deliveredText =
+                    prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
                 lastSendJson = buttonResult.json;
             }
-            else if (isGhostButtonsPayload(buttonResult.json ?? buttonResult.body)) {
-                // Fantasma: não marcar sent. Tenta texto+link e confere ACK.
-                console.warn("[Campanha Alternativa] sendButtons fantasma; fallback texto+link:", String(buttonResult.body || "").slice(0, 160));
-                deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-                usedUrlButton = false;
-                if (!(await sendCampaignTextMessage(deliveredText))) {
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-                    return;
-                }
-            }
             else {
-                console.warn("[Campanha Alternativa] sendButtons falhou; fallback texto+link:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
-                deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-                usedUrlButton = false;
-                if (!(await sendCampaignTextMessage(deliveredText))) {
+                console.warn("[Campanha Alternativa] sendButtons falhou; envia só texto, sem URL:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
+                const textOnly = prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+                if (!(await sendCampaignTextMessage(textOnly))) {
                     scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
                     return;
                 }
+                deliveredText = textOnly;
             }
         }
         else {
@@ -11423,17 +11439,6 @@ async function processOneCampaignDispatch(campaignId) {
             }
         }
         let ackStatus = await confirmCampaignSendAck();
-        if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackStatus) && usedUrlButton && buttonUrl) {
-            // Botão aceito pela API mas WhatsApp devolveu ERROR — tenta texto+link uma vez.
-            console.warn(`[Campanha] ACK=${ackStatus} no botão; tentando fallback texto+link:`, lead.phone);
-            deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-            usedUrlButton = false;
-            if (!(await sendCampaignTextMessage(deliveredText))) {
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-                return;
-            }
-            ackStatus = await confirmCampaignSendAck();
-        }
         if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackStatus)) {
             console.error(`[Campanha] ACK=${ackStatus} — não marcar sent (EVO HTTP ok, WhatsApp rejeitou):`, instancePick.instancia, lead.phone);
             await persistLeadFailed(lead, "send_error");

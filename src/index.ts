@@ -8487,6 +8487,10 @@ function stripUrlsFromMessageText(message: string): string {
   return String(message || "")
     .replace(/https?:\/\/[^\s)]+/gi, "")
     .replace(/\bwa\.me\/[^\s)]+/gi, "")
+    .replace(
+      /^[ \t]*(mais informa[cç][oõ]es|acesse aqui|veja mais|saiba mais|clique aqui)\s*:?[ \t]*$/gim,
+      "",
+    )
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
@@ -8536,7 +8540,17 @@ function ensureMessageContainsLink(message: string, link: string, cta: string) {
 
 function isGhostButtonsPayload(raw: unknown): boolean {
   try {
-    return JSON.stringify(raw ?? "").includes("viewOnceMessage");
+    const serialized = JSON.stringify(raw ?? "");
+    if (!serialized.includes("viewOnceMessage")) return false;
+    // Evolution 2.3.x envolve CTA nativo em viewOnce + nativeFlow — não é fantasma.
+    if (
+      serialized.includes("nativeFlowMessage") ||
+      serialized.includes("interactiveMessage") ||
+      serialized.includes("cta_url")
+    ) {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -8564,47 +8578,64 @@ async function sendEvoAlternativaUrlButtonMessage(input: {
   const instanceName = String(input.instanceName || "").trim();
   const number = String(input.number || "").replace(/\D/g, "");
   const fullText =
-    prepareOutboundWhatsAppText(String(input.messageText || "").trim()) || "Olá!";
+    prepareOutboundWhatsAppText(String(input.messageText || "").trim(), { stripUrls: true }) ||
+    "Olá!";
   const buttonLabel = normalizeButtonDisplayText(input.buttonLabel);
   const buttonUrl = String(input.buttonUrl || "").trim();
   if (!instanceName || !number || !buttonUrl) {
     return { ok: false, status: 0, body: "Dados insuficientes para sendButtons." };
   }
   // Evolution sendButtons: `title` rende em negrito no WhatsApp — mensagem vai só em description.
+  // Sem footer vazio e sem URL no texto: o destino do CTA é só o botão.
   // @see Evolution API POST /message/sendButtons/{instance}
   const { title, description } = splitMessageForUrlButton(fullText);
-  const payload = {
+  const buttons = [
+    {
+      type: "url" as const,
+      displayText: buttonLabel,
+      url: buttonUrl,
+    },
+  ];
+  const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
+  const postButtons = (payload: Record<string, unknown>) =>
+    callEvoAction(url, "POST", payload, {
+      timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 30_000),
+      retries: 1,
+    });
+  const interpret = (result: Awaited<ReturnType<typeof callEvoAction>>) => {
+    if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
+      return {
+        ok: false as const,
+        status: result.status,
+        body: "Evolution retornou botões fantasma (viewOnce).",
+        json: result.json,
+      };
+    }
+    return {
+      ok: result.ok,
+      status: result.status,
+      body: String(result.body || result.error || ""),
+      json: result.json,
+    };
+  };
+  const first = await postButtons({
     number,
     title,
     description,
-    footer: "",
-    buttons: [
-      {
-        type: "url",
-        displayText: buttonLabel,
-        url: buttonUrl,
-      },
-    ],
-  };
-  const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
-  const result = await callEvoAction(url, "POST", payload, {
-    timeoutMs: Math.max(defaultEvoHttpTimeoutMs(), 30_000),
-    retries: 1,
+    buttons,
+    linkPreview: false,
   });
-  if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
-    return {
-      ok: false,
-      status: result.status,
-      body: "Evolution retornou botões fantasma (viewOnce).",
-      json: result.json,
-    };
-  }
-  return {
-    ok: result.ok,
-    status: result.status,
-    body: String(result.body || result.error || ""),
-    json: result.json,
-  };
+  if (first.ok) return interpret(first);
+  const retryTitle = description.split("\n")[0]?.trim().slice(0, 60) || " ";
+  return interpret(
+    await postButtons({
+      number,
+      title: retryTitle,
+      description,
+      buttons,
+      linkPreview: false,
+    }),
+  );
 }
 
 async function generateShortUrlForDisparos(
@@ -13279,8 +13310,8 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const sendCampaignTextMessage = async (text: string): Promise<boolean> => {
       const sendBody: Record<string, any> = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text } }
-        : { number: numero, text, textMessage: { text } };
+        ? { number: numero, textMessage: { text }, linkPreview: false }
+        : { number: numero, text, textMessage: { text }, linkPreview: false };
       const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
       if (!sendResult.ok) {
         console.error(
@@ -13339,32 +13370,22 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       });
       if (buttonResult.ok) {
         usedUrlButton = true;
-        deliveredText = outbound.text;
+        deliveredText =
+          prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
         lastSendJson = buttonResult.json;
-      } else if (isGhostButtonsPayload(buttonResult.json ?? buttonResult.body)) {
-        // Fantasma: não marcar sent. Tenta texto+link e confere ACK.
-        console.warn(
-          "[Campanha Alternativa] sendButtons fantasma; fallback texto+link:",
-          String(buttonResult.body || "").slice(0, 160),
-        );
-        deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-        usedUrlButton = false;
-        if (!(await sendCampaignTextMessage(deliveredText))) {
-          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-          return;
-        }
       } else {
         console.warn(
-          "[Campanha Alternativa] sendButtons falhou; fallback texto+link:",
+          "[Campanha Alternativa] sendButtons falhou; envia só texto, sem URL:",
           buttonResult.status,
           String(buttonResult.body || "").slice(0, 180),
         );
-        deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-        usedUrlButton = false;
-        if (!(await sendCampaignTextMessage(deliveredText))) {
+        const textOnly =
+          prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+        if (!(await sendCampaignTextMessage(textOnly))) {
           scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
           return;
         }
+        deliveredText = textOnly;
       }
     } else {
       if (!(await sendCampaignTextMessage(outbound.text))) {
@@ -13374,20 +13395,6 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     }
 
     let ackStatus = await confirmCampaignSendAck();
-    if (isEvoAckFailure(ackStatus) && usedUrlButton && buttonUrl) {
-      // Botão aceito pela API mas WhatsApp devolveu ERROR — tenta texto+link uma vez.
-      console.warn(
-        `[Campanha] ACK=${ackStatus} no botão; tentando fallback texto+link:`,
-        lead.phone,
-      );
-      deliveredText = ensureMessageContainsLink(outbound.text, buttonUrl, buttonLabel);
-      usedUrlButton = false;
-      if (!(await sendCampaignTextMessage(deliveredText))) {
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
-      }
-      ackStatus = await confirmCampaignSendAck();
-    }
     if (isEvoAckFailure(ackStatus)) {
       console.error(
         `[Campanha] ACK=${ackStatus} — não marcar sent (EVO HTTP ok, WhatsApp rejeitou):`,

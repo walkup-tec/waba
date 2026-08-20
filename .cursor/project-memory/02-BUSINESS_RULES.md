@@ -25,6 +25,16 @@ Somente regras permanentes. Sem detalhes de implementação.
 - A senha em plaintext **não** é armazenada; no reenvio a mensagem usa fallback orientando a senha do cadastro / “Esqueci a senha”.
 - Canais do reenvio: e-mail + WhatsApp (Evolution), pelos canais já configurados para boas-vindas.
 
+### Campanha Alternativa — formato da mensagem (API Alternativa)
+
+Ordem obrigatória no WhatsApp:
+
+1. Imagem da campanha (1080×1080)
+2. Texto da campanha **sem URL** e **sem preview** de link
+3. Botão nativo com a URL curta (destino só no botão)
+
+Proibido: card de preview antes do texto; “Mais informações: https://…” no corpo.
+
 ### Campanha Alternativa — troca de bloqueados
 
 - Números bloqueados/offline aparecem em vermelho na campanha.

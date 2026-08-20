@@ -21,6 +21,7 @@ Não usar como histórico de desenvolvimento.
 - Conclusão da integração: lingueta **«Integração Finalizada»** + pulso no menu **Instâncias** até o usuário abrir a aba
 - Copy do fluxo Dispositivos sem menções visíveis a EVO/Evolution; **device** → **dispositivo** nas mensagens ao usuário
 - Botão **Início** removido do footer do dispositivo virtual
+- Campanha API Alternativa: imagem → texto sem URL → botão nativo (`DEPLOY-2026-08-20-alternativa-url-button`)
 
 ## Funcionalidades em andamento
 
