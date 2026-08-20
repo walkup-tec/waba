@@ -7042,16 +7042,9 @@ function ensureMessageContainsLink(message, link, cta) {
 }
 function isGhostButtonsPayload(raw) {
     try {
-        const serialized = JSON.stringify(raw ?? "");
-        if (!serialized.includes("viewOnceMessage"))
-            return false;
-        // Evolution 2.3.x envolve CTA nativo em viewOnce + nativeFlow — não é fantasma.
-        if (serialized.includes("nativeFlowMessage") ||
-            serialized.includes("interactiveMessage") ||
-            serialized.includes("cta_url")) {
-            return false;
-        }
-        return true;
+        // Evolution 2.3.x envolve o CTA em viewOnce — no WhatsApp isso não aparece como
+        // texto+botão visível. Tratar como falha para enviar o texto em seguida.
+        return JSON.stringify(raw ?? "").includes("viewOnceMessage");
     }
     catch {
         return false;
@@ -11361,11 +11354,14 @@ async function processOneCampaignDispatch(campaignId) {
                 requireDeviceDelivery: true,
             });
             console.info(`[Campanha] ACK imagem slot=${imageMeta.slot + 1} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`);
-            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(mediaAck.status) || !(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
-                console.error("[Campanha] Imagem sem confirmação de entrega no destino — texto não enviado:", mediaAck.status, lead.phone);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(mediaAck.status)) {
+                console.error("[Campanha] ACK da imagem = ERROR — texto não enviado:", mediaAck.status, lead.phone);
                 await persistLeadFailed(lead, "send_error");
                 scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
                 return;
+            }
+            if (!(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
+                console.warn("[Campanha] ACK imagem ainda não é DELIVERY_ACK; segue texto/botão (sendMedia HTTP ok):", mediaAck.status, lead.phone);
             }
             await sleepCampaignMs(800);
         }
@@ -11421,17 +11417,21 @@ async function processOneCampaignDispatch(campaignId) {
                 buttonLabel,
                 buttonUrl,
             });
-            if (buttonResult.ok) {
+            const ghost = isGhostButtonsPayload(buttonResult.json ?? buttonResult.body);
+            if (buttonResult.ok && !ghost) {
                 usedUrlButton = true;
                 deliveredText =
                     prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
                 lastSendJson = buttonResult.json;
             }
             else {
-                console.warn("[Campanha Alternativa] sendButtons falhou; reagenda o lead — não envia texto sem botão:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
-                lead.status = "pending";
-                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-                return;
+                console.warn("[Campanha Alternativa] sendButtons indisponível; envia texto sem URL (imagem já foi):", buttonResult.status, ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180));
+                const textOnly = prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+                if (!(await sendCampaignTextMessage(textOnly))) {
+                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                    return;
+                }
+                deliveredText = textOnly;
             }
         }
         else {

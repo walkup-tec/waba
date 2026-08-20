@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 18:43 — Alternativa: texto após imagem (viewOnce)
+
+- sendButtons em viewOnce era tratado como sucesso e o lead pending não mandava texto
+- Marker `DEPLOY-2026-08-20-alternativa-image-then-text`
+- LOG: doc/LOG-2026-08-20__184300__fix-alternativa-so-imagem.md
+
 ## 2026-08-20 18:06 — Alternativa: não mexer proxy no meio do disparo
 
 - Redeploy zerava `ready` em memória → prepare fazia proxy/set + restart e derrubava o pareamento
