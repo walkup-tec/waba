@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-20 — Campanha Alternativa: não alterar proxy/sessão no meio do disparo
+
+- **Decisão:** Com a instância `open`, o motor de envio não chama `proxy/set`, restart nem disable. Se a flag `ready` sumir (Redeploy), só marca pronta. Pausa por “saiu de open” não desliga a Proxy.
+- **Motivo:** `proxy/set` e restart com sessão aberta geram conflict/`device_removed` e perdem o pareamento.
+- **Impacto:** Marker `DEPLOY-2026-08-20-alternativa-no-proxy-mid-send`.
+
 ### 2026-08-20 — Campanha Alternativa: payload sendButtons do 11/08
 
 - **Decisão:** `POST /message/sendButtons` usa `title` visível (1º bloco/linha) + `description` + `footer: ""` + botão `type: url`. Sem fallback texto+URL. Sem `title` ZWSP.

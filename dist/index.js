@@ -11094,10 +11094,11 @@ async function pauseCampaignDueToProxyPrepareFailure(campaignId, reason, options
         : `Pausa automática: ${detail}`;
     console.warn(`[Campanha] ${campaignId} pausada (proxy/sessão): ${campaign.pauseReason}`);
     const offlineName = String(options?.instanceName || "").trim();
-    if (offlineName) {
+    const disableProxy = options?.disableProxy === true;
+    if (disableProxy && offlineName) {
         queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, [], [offlineName]);
     }
-    else if ((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
+    else if (disableProxy && (0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
         try {
             const evoRows = await fetchEvoInstanceTagRows();
             queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows);
@@ -11300,16 +11301,17 @@ async function processOneCampaignDispatch(campaignId) {
         }
         const proxyCfg = (0, proxy_brasil_config_1.loadProxyBrasilConfig)();
         if (proxyCfg?.enabled && !(0, evo_instance_proxy_service_1.isProxyBrasilSessionReadyForSend)(instancePick.instancia)) {
-            const prep = await (0, evo_instance_proxy_service_1.prepareProxyBrasilSessionForCampaignSend)(instancePick.instancia, {
-                callEvoAction,
-                evoApiBase: EVO_API_BASE,
-                ...getProxyBrasilCampaignPrepareDeps(),
-            });
-            if (!prep.ok) {
-                console.warn(`[Campanha] Instância ${instancePick.instancia} sem Proxy Brasil pronta (${prep.reason || "falha"}).`);
-                await pauseCampaignDueToProxyPrepareFailure(campaignId, prep.needsProxyPairing
-                    ? `Instância ${instancePick.instancia}: ligue a Proxy e reconecte o QR com Proxy Campanha.`
-                    : `Instância ${instancePick.instancia} sem Proxy Brasil (${prep.reason || "não pronta"}).`, { instanceName: instancePick.instancia });
+            const liveForReady = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
+            if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveForReady)) {
+                // Memória de "ready" some no Redeploy. Não chamar proxy/set nem restart no meio do disparo.
+                (0, evo_instance_proxy_service_1.markProxyBrasilSessionReadyForSend)(instancePick.instancia, {
+                    state: liveForReady,
+                    reason: "open no disparo — sem proxy/set",
+                });
+            }
+            else {
+                console.warn(`[Campanha] Instância ${instancePick.instancia} sem sessão open (state=${liveForReady || "desconhecido"}). Sem proxy/set no disparo.`);
+                await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`, { instanceName: instancePick.instancia, disableProxy: false });
                 lead.status = "pending";
                 return;
             }
@@ -11327,7 +11329,7 @@ async function processOneCampaignDispatch(campaignId) {
         if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(instanceLiveState)) {
             console.error("[Campanha] Instância não open no sistema WABA - Drax (connectionState):", instancePick.instancia, instanceLiveState || "desconhecido");
             // Nunca rollback/restart no meio do disparo — gera conflict/device_removed e perde o número.
-            await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`, { instanceName: instancePick.instancia });
+            await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`, { instanceName: instancePick.instancia, disableProxy: false });
             lead.status = "pending";
             return;
         }

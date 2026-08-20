@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 18:06 — Alternativa: não mexer proxy no meio do disparo
+
+- Redeploy zerava `ready` em memória → prepare fazia proxy/set + restart e derrubava o pareamento
+- Marker `DEPLOY-2026-08-20-alternativa-no-proxy-mid-send`
+- LOG: doc/LOG-2026-08-20__180600__fix-alternativa-pareamento-mid-send.md
+
 ## 2026-08-20 17:32 — Restaurar botão URL (payload 11/08)
 
 - Causa: `title` ZWSP (`30004a3`) + fallback texto+link em `viewOnce`

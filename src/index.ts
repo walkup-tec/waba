@@ -230,12 +230,12 @@ import {
   prepareProxyBrasilSessionsForCampaign,
   campaignStatusHoldsProxyBrasil,
   instanceNamesToReleaseAfterCampaignEnd,
-  prepareProxyBrasilSessionForCampaignSend,
   queueApplyProxyBrasilToInstances,
   queueConfirmProxyFindForInstanceNames,
   queueDisableProxyBrasilOnInstances,
   queueSyncProxyBrasilForCampaignSelection,
   refreshConfirmedProxyFindForNames,
+  markProxyBrasilSessionReadyForSend,
 } from "./proxy/evo-instance-proxy.service";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -12946,7 +12946,7 @@ function scheduleCampaignProxyPrepareRetry(campaignId: string, waitMs = 15_000) 
 async function pauseCampaignDueToProxyPrepareFailure(
   campaignId: string,
   reason: string,
-  options?: { instanceName?: string }
+  options?: { instanceName?: string; disableProxy?: boolean }
 ): Promise<void> {
   const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
   if (!campaign || campaign.status !== "running") return;
@@ -12959,9 +12959,10 @@ async function pauseCampaignDueToProxyPrepareFailure(
     : `Pausa automática: ${detail}`;
   console.warn(`[Campanha] ${campaignId} pausada (proxy/sessão): ${campaign.pauseReason}`);
   const offlineName = String(options?.instanceName || "").trim();
-  if (offlineName) {
+  const disableProxy = options?.disableProxy === true;
+  if (disableProxy && offlineName) {
     queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, [], [offlineName]);
-  } else if (loadProxyBrasilConfig()?.enabled) {
+  } else if (disableProxy && loadProxyBrasilConfig()?.enabled) {
     try {
       const evoRows = await fetchEvoInstanceTagRows();
       queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows);
@@ -13195,24 +13196,21 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const proxyCfg = loadProxyBrasilConfig();
     if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
-      const prep = await prepareProxyBrasilSessionForCampaignSend(
-        instancePick.instancia,
-        {
-          callEvoAction,
-          evoApiBase: EVO_API_BASE,
-          ...getProxyBrasilCampaignPrepareDeps(),
-        },
-      );
-      if (!prep.ok) {
+      const liveForReady = await fetchEvoInstanceLiveState(instancePick.instancia);
+      if (isEvoLiveStateOpen(liveForReady)) {
+        // Memória de "ready" some no Redeploy. Não chamar proxy/set nem restart no meio do disparo.
+        markProxyBrasilSessionReadyForSend(instancePick.instancia, {
+          state: liveForReady,
+          reason: "open no disparo — sem proxy/set",
+        });
+      } else {
         console.warn(
-          `[Campanha] Instância ${instancePick.instancia} sem Proxy Brasil pronta (${prep.reason || "falha"}).`,
+          `[Campanha] Instância ${instancePick.instancia} sem sessão open (state=${liveForReady || "desconhecido"}). Sem proxy/set no disparo.`,
         );
         await pauseCampaignDueToProxyPrepareFailure(
           campaignId,
-          prep.needsProxyPairing
-            ? `Instância ${instancePick.instancia}: ligue a Proxy e reconecte o QR com Proxy Campanha.`
-            : `Instância ${instancePick.instancia} sem Proxy Brasil (${prep.reason || "não pronta"}).`,
-          { instanceName: instancePick.instancia },
+          `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
+          { instanceName: instancePick.instancia, disableProxy: false },
         );
         lead.status = "pending";
         return;
@@ -13239,7 +13237,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
       await pauseCampaignDueToProxyPrepareFailure(
         campaignId,
         `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`,
-        { instanceName: instancePick.instancia },
+        { instanceName: instancePick.instancia, disableProxy: false },
       );
       lead.status = "pending";
       return;
