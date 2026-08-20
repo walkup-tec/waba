@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-20 — Campanha Alternativa: payload sendButtons do 11/08
+
+- **Decisão:** `POST /message/sendButtons` usa `title` visível (1º bloco/linha) + `description` + `footer: ""` + botão `type: url`. Sem fallback texto+URL. Sem `title` ZWSP.
+- **Motivo:** Esse payload (`4a72c1d`) gerou o botão nativo na campanha de 11/08. Title invisível (`30004a3`) + fallback em `viewOnce` (`0bc5eee`) geraram o card “Share on WhatsApp”.
+- **Impacto:** Marker `DEPLOY-2026-08-20-alternativa-button-restore`.
+
 ### 2026-08-19 — Dispositivos: lingueta em vez de botão Aquecer
 
 - **Decisão:** Substituir o botão **Aquecer** na barra do dispositivo virtual por lingueta **«Adicionar ao Aquecedor»** acima da área do telefone. Integração só no clique; sem etapa CONFIRMAR. Ao concluir: **«Integração Finalizada»** + pulso no menu **Instâncias**.

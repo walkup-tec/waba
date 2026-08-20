@@ -7058,14 +7058,33 @@ function isGhostButtonsPayload(raw) {
     }
 }
 /**
- * No WhatsApp, o campo `title` do sendButtons aparece em negrito.
- * Por isso a mensagem completa vai só em `description`; o title fica neutro.
+ * Payload que funcionou na campanha de 11/08 (commit 4a72c1d):
+ * title = 1º bloco/linha visível; description = restante.
+ * Title invisível (ZWSP) foi regressão: Evolution deixa de montar o botão nativo.
+ * @see https://docs.evolutionfoundation.com.br/evolution-api/send-buttons
  */
 function splitMessageForUrlButton(fullText) {
     const text = String(fullText || "").trim() || "Olá!";
+    const blocks = text.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+    if (blocks.length >= 2) {
+        return {
+            title: blocks[0].slice(0, 60),
+            description: blocks.slice(1).join("\n\n").slice(0, 1024) || blocks[0],
+        };
+    }
+    const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length >= 2 && lines[0].length <= 60) {
+        return {
+            title: lines[0],
+            description: lines.slice(1).join("\n").slice(0, 1024) || lines[0],
+        };
+    }
+    if (text.length <= 60) {
+        return { title: text, description: text };
+    }
     return {
-        title: "\u200b",
-        description: text.slice(0, 1024),
+        title: text.slice(0, 60).trim(),
+        description: text.slice(60).trim() || text,
     };
 }
 async function sendEvoAlternativaUrlButtonMessage(input) {
@@ -7078,55 +7097,39 @@ async function sendEvoAlternativaUrlButtonMessage(input) {
     if (!instanceName || !number || !buttonUrl) {
         return { ok: false, status: 0, body: "Dados insuficientes para sendButtons." };
     }
-    // Evolution sendButtons: `title` rende em negrito no WhatsApp — mensagem vai só em description.
-    // Sem footer vazio e sem URL no texto: o destino do CTA é só o botão.
-    // @see Evolution API POST /message/sendButtons/{instance}
     const { title, description } = splitMessageForUrlButton(fullText);
-    const buttons = [
-        {
-            type: "url",
-            displayText: buttonLabel,
-            url: buttonUrl,
-        },
-    ];
-    const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
-    const postButtons = (payload) => callEvoAction(url, "POST", payload, {
-        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
-        retries: 1,
-    });
-    const interpret = (result) => {
-        if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
-            return {
-                ok: false,
-                status: result.status,
-                body: "Evolution retornou botões fantasma (viewOnce).",
-                json: result.json,
-            };
-        }
-        return {
-            ok: result.ok,
-            status: result.status,
-            body: String(result.body || result.error || ""),
-            json: result.json,
-        };
-    };
-    const first = await postButtons({
+    const payload = {
         number,
         title,
         description,
-        buttons,
-        linkPreview: false,
+        footer: "",
+        buttons: [
+            {
+                type: "url",
+                displayText: buttonLabel,
+                url: buttonUrl,
+            },
+        ],
+    };
+    const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
+    const result = await callEvoAction(url, "POST", payload, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
+        retries: 1,
     });
-    if (first.ok)
-        return interpret(first);
-    const retryTitle = description.split("\n")[0]?.trim().slice(0, 60) || " ";
-    return interpret(await postButtons({
-        number,
-        title: retryTitle,
-        description,
-        buttons,
-        linkPreview: false,
-    }));
+    if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
+        return {
+            ok: false,
+            status: result.status,
+            body: "Evolution retornou botões fantasma (viewOnce).",
+            json: result.json,
+        };
+    }
+    return {
+        ok: result.ok,
+        status: result.status,
+        body: String(result.body || result.error || ""),
+        json: result.json,
+    };
 }
 async function generateShortUrlForDisparos(longUrl, publicBaseHints) {
     const baseUrl = String(longUrl || "").trim();
@@ -11423,13 +11426,10 @@ async function processOneCampaignDispatch(campaignId) {
                 lastSendJson = buttonResult.json;
             }
             else {
-                console.warn("[Campanha Alternativa] sendButtons falhou; envia só texto, sem URL:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
-                const textOnly = prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
-                if (!(await sendCampaignTextMessage(textOnly))) {
-                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-                    return;
-                }
-                deliveredText = textOnly;
+                console.warn("[Campanha Alternativa] sendButtons falhou; reagenda o lead — não envia texto sem botão:", buttonResult.status, String(buttonResult.body || "").slice(0, 180));
+                lead.status = "pending";
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
             }
         }
         else {

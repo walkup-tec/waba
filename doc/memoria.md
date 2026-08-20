@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 17:32 — Restaurar botão URL (payload 11/08)
+
+- Causa: `title` ZWSP (`30004a3`) + fallback texto+link em `viewOnce`
+- Restaurado payload `4a72c1d` (title real + footer vazio); sem fallback com URL
+- Marker `DEPLOY-2026-08-20-alternativa-button-restore`
+- LOG: doc/LOG-2026-08-20__173200__restore-alternativa-botao-1108.md
+
 ## 2026-08-20 17:19 — Alternativa: botão URL sem texto+link
 
 - Produção enviava fallback com URL + preview WhatsApp; ghost `viewOnce` forçava isso
