@@ -24611,22 +24611,25 @@
 
       /**
        * Abre a tela de código de vinculação no WhatsApp Business (720×1280).
-       * Fluxo: menu → Aparelhos conectados → Conectar aparelho → Vincular com número.
+       * Evita a barra inferior (Conversas/Comunidades/…). Usa Perfil → Aparelhos conectados.
        */
       async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
         await launchDeviceCloudWhatsApp(deviceId).catch(() => {});
-        await sleepDeviceCloud(900);
-        // Menu ⋮ (canto superior direito)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 668, y: 118 }, { skipRefresh: true });
+        await sleepDeviceCloud(1000);
+        // Volta para Conversas se estiver em outra aba (tap na 1ª aba inferior, sem atingir Comunidades)
+        await sendDeviceCloudInput(deviceId, "tap", { x: 90, y: 1235 }, { skipRefresh: true });
         await sleepDeviceCloud(700);
-        // Aparelhos conectados (item típico do menu)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 520 }, { skipRefresh: true });
+        // Avatar / perfil (canto superior esquerdo) → Configurações
+        await sendDeviceCloudInput(deviceId, "tap", { x: 78, y: 108 }, { skipRefresh: true });
         await sleepDeviceCloud(1100);
-        // Conectar um aparelho
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1180 }, { skipRefresh: true });
-        await sleepDeviceCloud(900);
-        // Vincular com número de telefone
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 980 }, { skipRefresh: true });
+        // Item «Aparelhos conectados» na lista de configurações
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 820 }, { skipRefresh: true });
+        await sleepDeviceCloud(1100);
+        // «Conectar um aparelho»
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1120 }, { skipRefresh: true });
+        await sleepDeviceCloud(1000);
+        // «Vincular com número de telefone»
+        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 720 }, { skipRefresh: true });
         await sleepDeviceCloud(1200);
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
       }
@@ -51825,6 +51828,7 @@
                 ok: true,
                 message: payload.message,
                 qrCode: payload.qrCode,
+                pairingCode: payload.pairingCode || null,
                 warning: payload.warning,
               };
             }

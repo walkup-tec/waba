@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-20 06:55 — Dispositivos: pairingCode + sem abrir Comunidades
+
+- Causa: backend não propagava `pairingCode`; toque y=1180 abria aba Comunidades
+- Fix: extract/job/poll com pairingCode; navegação via Perfil → Aparelhos conectados
+- Marker `DEPLOY-2026-08-20-device-cloud-pairingcode-fix`
+- LOG: doc/LOG-2026-08-20__065500__device-cloud-pairingcode-comunidades-fix.md
+
 ## 2026-08-20 06:38 — Dispositivos: pairingCode automático sem QR
 
 - Lingueta **Adicionar ao Aquecedor**: abre tela de vinculação no device → EVO gera `pairingCode` → sistema digita no WhatsApp

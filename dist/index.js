@@ -7511,6 +7511,61 @@ function tryExtractQrCode(payload) {
     };
     return visit(payload);
 }
+function tryExtractPairingCode(payload) {
+    const normalizePairing = (value, keyHint = "") => {
+        const raw = String(value || "").trim();
+        if (!raw)
+            return null;
+        const key = String(keyHint || "").toLowerCase();
+        if (key === "code" && (raw.includes("@") || raw.includes(",")))
+            return null;
+        if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(raw))
+            return raw.toUpperCase();
+        if (/^[A-Z0-9]{8}$/i.test(raw)) {
+            return `${raw.slice(0, 4).toUpperCase()}-${raw.slice(4).toUpperCase()}`;
+        }
+        if ((key === "pairingcode" || key === "pairing_code" || key === "pairingCode") &&
+            /^[A-Z0-9-]{6,12}$/i.test(raw)) {
+            return raw.toUpperCase();
+        }
+        return null;
+    };
+    const visit = (node, depth = 0, keyHint = "") => {
+        if (depth > 6 || node == null)
+            return null;
+        if (typeof node === "string" || typeof node === "number") {
+            return normalizePairing(node, keyHint);
+        }
+        if (Array.isArray(node)) {
+            for (const item of node) {
+                const found = visit(item, depth + 1, keyHint);
+                if (found)
+                    return found;
+            }
+            return null;
+        }
+        if (typeof node !== "object")
+            return null;
+        const obj = node;
+        const priorityKeys = ["pairingCode", "pairingcode", "pairing_code", "code"];
+        for (const key of priorityKeys) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                const found = visit(obj[key], depth + 1, key);
+                if (found)
+                    return found;
+            }
+        }
+        for (const [key, value] of Object.entries(obj)) {
+            if (!/pairing|code/i.test(key))
+                continue;
+            const found = visit(value, depth + 1, key);
+            if (found)
+                return found;
+        }
+        return null;
+    };
+    return visit(payload);
+}
 function isIgnorableEvoQrFetchError(status, detail) {
     const text = String(detail || "").toLowerCase();
     if (status === 404 && text.includes("/instance/qrcode/"))
@@ -7747,6 +7802,7 @@ async function runRegistrarQrcode(input) {
     let lastCreateStatus = 0;
     let lastCreateDetail = "";
     let qrFromCreate = null;
+    let pairingFromCreate = null;
     let instanceWasNew = false;
     async function tryCreateOnce() {
         for (const createUrl of createUrls) {
@@ -7761,12 +7817,16 @@ async function runRegistrarQrcode(input) {
                 instanceWasNew = true;
                 qrFromCreate =
                     tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                pairingFromCreate =
+                    tryExtractPairingCode(createResult.json) || tryExtractPairingCode(createResult.body);
                 return;
             }
             if (createResult.status === 409) {
                 createOk = true;
                 qrFromCreate =
                     tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                pairingFromCreate =
+                    tryExtractPairingCode(createResult.json) || tryExtractPairingCode(createResult.body);
                 return;
             }
         }
@@ -7774,12 +7834,13 @@ async function runRegistrarQrcode(input) {
     await tryCreateOnce();
     // Instância já existia (409) e está desconectada: limpa sessão Baileys na EVO e recria o mesmo nome.
     // Não remove ownership/lifecycle/aquecimento no WABA.
-    if (createOk && !instanceWasNew && !qrFromCreate) {
+    if (createOk && !instanceWasNew && !qrFromCreate && !pairingFromCreate) {
         await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
         createOk = false;
         lastCreateStatus = 0;
         lastCreateDetail = "";
         qrFromCreate = null;
+        pairingFromCreate = null;
         instanceWasNew = false;
         await tryCreateOnce();
     }
@@ -7800,7 +7861,8 @@ async function runRegistrarQrcode(input) {
             /* */
         }
     }
-    if (qrFromCreate) {
+    // Com número, o fluxo Device Cloud precisa do pairingCode — não retornar só com imagem QR.
+    if ((qrFromCreate || pairingFromCreate) && (pairingFromCreate || !number)) {
         if (instanceWasNew) {
             await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
         }
@@ -7810,7 +7872,8 @@ async function runRegistrarQrcode(input) {
                 ? "QRCode gerado com sucesso para a instância existente."
                 : "Dados salvos e QRCode gerado com sucesso.",
             warning: createWarning,
-            qrCode: qrFromCreate,
+            qrCode: qrFromCreate || "",
+            pairingCode: pairingFromCreate,
         };
     }
     // Doc EVO: GET /instance/connect já devolve QR em close/connecting.
@@ -7839,7 +7902,8 @@ async function runRegistrarQrcode(input) {
                 ? "QRCode gerado com sucesso para a instância existente."
                 : "Dados salvos e QRCode gerado com sucesso.",
             warning: createWarning,
-            qrCode: qrFetch.qrCode,
+            qrCode: qrFetch.qrCode || "",
+            pairingCode: qrFetch.pairingCode || null,
             providerResponse: qrFetch.providerResponse,
         };
     }
@@ -7849,6 +7913,7 @@ async function runRegistrarQrcode(input) {
         let retryCreateStatus = 0;
         let retryCreateDetail = "";
         let retryQrFromCreate = null;
+        let retryPairingFromCreate = null;
         for (const createUrl of createUrls) {
             const createResult = await callEvoAction(createUrl, "POST", createPayload, {
                 timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
@@ -7860,16 +7925,19 @@ async function runRegistrarQrcode(input) {
                 retryCreateOk = true;
                 retryQrFromCreate =
                     tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                retryPairingFromCreate =
+                    tryExtractPairingCode(createResult.json) || tryExtractPairingCode(createResult.body);
                 break;
             }
         }
-        if (retryQrFromCreate) {
+        if (retryQrFromCreate || retryPairingFromCreate) {
             await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
             return {
                 ok: true,
                 message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
                 warning: createWarning,
-                qrCode: retryQrFromCreate,
+                qrCode: retryQrFromCreate || "",
+                pairingCode: retryPairingFromCreate,
             };
         }
         if (retryCreateOk) {
@@ -7885,7 +7953,8 @@ async function runRegistrarQrcode(input) {
                     ok: true,
                     message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
                     warning: createWarning,
-                    qrCode: qrRetry.qrCode,
+                    qrCode: qrRetry.qrCode || "",
+                    pairingCode: qrRetry.pairingCode || null,
                     providerResponse: qrRetry.providerResponse,
                 };
             }
@@ -7942,11 +8011,19 @@ async function fetchInstanceQrCodeFromEvo(instanceName, number = "", options = {
             if (!result.ok)
                 continue;
             const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
-            if (qrCode) {
-                const normalized = qrCode.startsWith("data:image") || qrCode.startsWith("http")
-                    ? qrCode
-                    : `data:image/png;base64,${qrCode.replace(/\s+/g, "")}`;
-                return { ok: true, qrCode: normalized, providerResponse: result.json ?? null };
+            const pairingCode = tryExtractPairingCode(result.json) || tryExtractPairingCode(result.body);
+            if (qrCode || pairingCode) {
+                const normalized = qrCode
+                    ? qrCode.startsWith("data:image") || qrCode.startsWith("http")
+                        ? qrCode
+                        : `data:image/png;base64,${qrCode.replace(/\s+/g, "")}`
+                    : "";
+                return {
+                    ok: true,
+                    qrCode: normalized,
+                    pairingCode: pairingCode || null,
+                    providerResponse: result.json ?? null,
+                };
             }
         }
     }
@@ -8167,6 +8244,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                         updatedAt,
                         message: result.message,
                         qrCode: result.qrCode,
+                        pairingCode: result.pairingCode ?? null,
                         warning: result.warning ?? null,
                     });
                     return;
