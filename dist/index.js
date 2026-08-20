@@ -4574,18 +4574,18 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
 app.get("/instancias/uso-config", async (req, res) => {
     try {
         const usageMap = await loadInstanceUsageMap();
-        for (const [instanceName, cfg] of usageMap.entries()) {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
+        const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+        const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()));
+        for (const [instanceName, cfg] of filteredEntries) {
             if (cfg.useAquecedor !== false) {
                 await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(instanceName);
             }
         }
         const lifecycleMap = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusMap)();
         const waRestrictionMap = await (0, whatsapp_connecting_restriction_service_1.getWhatsappConnectingRestrictionMap)();
-        const warmthMap = await (0, aquecedor_instance_warmth_service_1.getAquecedorWarmthMapForInstances)(Array.from(usageMap.keys()), getSupabaseClient());
-        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
-        const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
-        const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()));
+        const warmthMap = await (0, aquecedor_instance_warmth_service_1.getAquecedorWarmthMapForInstances)(filteredEntries.map(([instanceName]) => instanceName), getSupabaseClient());
         const items = await Promise.all(filteredEntries.map(async ([instanceName, cfg]) => {
             const lifecycle = lifecycleMap[instanceName.toLowerCase()] ??
                 (await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(instanceName));

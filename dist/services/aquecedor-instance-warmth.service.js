@@ -90,7 +90,8 @@ function frequentReplies(replyRate, receives7d) {
  */
 function computeInstanceWarmthLevel(params) {
     const { phase, activatedAt, ageDays, avgDailySends, replyRate, sends7d, receives7d, lifetimeSent, lifetimeRecv, } = params;
-    if (phase === "preparing" || phase === "restricted_wait" || !activatedAt || ageDays < 1) {
+    // Preparando não zera foguinho: rename/re-QR (ex.: soma-9224) herda o calor do chip.
+    if (phase === "restricted_wait" || !activatedAt || ageDays < 1) {
         return {
             level: 0,
             label: WARMTH_LABELS[0],
@@ -349,6 +350,20 @@ function foldStatsToCanonical(aliasMap, raw) {
     }
     return out;
 }
+async function pickLifecycleFromAliases(names) {
+    const rows = (await Promise.all(names.map((name) => (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleRow)(name)))).filter((row) => Boolean(row));
+    if (!rows.length)
+        return null;
+    const active = rows.filter((row) => row.phase === "active" && row.activatedAt);
+    const pool = active.length ? active : rows;
+    return pool.reduce((best, row) => {
+        if (!best?.activatedAt)
+            return row;
+        if (!row.activatedAt)
+            return best;
+        return row.activatedAt < best.activatedAt ? row : best;
+    });
+}
 function foldEarliestToCanonical(aliasMap, raw) {
     const out = new Map();
     for (const [canonical, aliases] of aliasMap) {
@@ -462,8 +477,9 @@ async function getAquecedorWarmthMapForInstances(instanceNames, supabase) {
     const requested = Array.from(new Set(instanceNames.map((n) => String(n || "").trim()).filter(Boolean)));
     let exchangeMap = new Map();
     let earliestMap = new Map();
+    let aliasMap = new Map();
     if (supabase && requested.length) {
-        const aliasMap = await loadChipAliasMap(supabase, requested);
+        aliasMap = await loadChipAliasMap(supabase, requested);
         const expanded = expandAliasNames(aliasMap);
         const [rawExchange, rawEarliest] = await Promise.all([
             loadExchangeStatsMap(supabase, expanded),
@@ -478,7 +494,8 @@ async function getAquecedorWarmthMapForInstances(instanceNames, supabase) {
     }
     await Promise.all(requested.map(async (name) => {
         const key = normalizeKey(name);
-        const row = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleRow)(name);
+        const aliases = aliasMap.get(key) || [key];
+        const row = await pickLifecycleFromAliases(aliases);
         const computed = computeWarmthFromLifecycleRow(row, exchangeMap.get(key), earliestMap.get(key) || null);
         out[key] = applyWarmthOverride(computed, overrides, name);
     }));

@@ -5729,17 +5729,6 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
 app.get("/instancias/uso-config", async (req, res) => {
   try {
     const usageMap = await loadInstanceUsageMap();
-    for (const [instanceName, cfg] of usageMap.entries()) {
-      if (cfg.useAquecedor !== false) {
-        await registerAquecedorInstancePreparing(instanceName);
-      }
-    }
-    const lifecycleMap = await getAquecedorLifecycleStatusMap();
-    const waRestrictionMap = await getWhatsappConnectingRestrictionMap();
-    const warmthMap = await getAquecedorWarmthMapForInstances(
-      Array.from(usageMap.keys()),
-      getSupabaseClient()
-    );
     const auth = resolveWabaRequestAuth(req);
     const allowed = await wabaInstanceOwnershipService.filterInstanceNamesForAuth(
       auth,
@@ -5748,6 +5737,17 @@ app.get("/instancias/uso-config", async (req, res) => {
     const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
     const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) =>
       allowedLower.has(String(instanceName).toLowerCase()),
+    );
+    for (const [instanceName, cfg] of filteredEntries) {
+      if (cfg.useAquecedor !== false) {
+        await registerAquecedorInstancePreparing(instanceName);
+      }
+    }
+    const lifecycleMap = await getAquecedorLifecycleStatusMap();
+    const waRestrictionMap = await getWhatsappConnectingRestrictionMap();
+    const warmthMap = await getAquecedorWarmthMapForInstances(
+      filteredEntries.map(([instanceName]) => instanceName),
+      getSupabaseClient()
     );
     const items = await Promise.all(
       filteredEntries.map(async ([instanceName, cfg]) => {

@@ -135,7 +135,8 @@ export function computeInstanceWarmthLevel(params: WarmthComputeParams): Instanc
     lifetimeSent,
     lifetimeRecv,
   } = params;
-  if (phase === "preparing" || phase === "restricted_wait" || !activatedAt || ageDays < 1) {
+  // Preparando não zera foguinho: rename/re-QR (ex.: soma-9224) herda o calor do chip.
+  if (phase === "restricted_wait" || !activatedAt || ageDays < 1) {
     return {
       level: 0,
       label: WARMTH_LABELS[0],
@@ -403,6 +404,22 @@ function foldStatsToCanonical(
   return out;
 }
 
+async function pickLifecycleFromAliases(
+  names: string[],
+): Promise<Awaited<ReturnType<typeof getAquecedorLifecycleRow>>> {
+  const rows = (
+    await Promise.all(names.map((name) => getAquecedorLifecycleRow(name)))
+  ).filter((row): row is NonNullable<typeof row> => Boolean(row));
+  if (!rows.length) return null;
+  const active = rows.filter((row) => row.phase === "active" && row.activatedAt);
+  const pool = active.length ? active : rows;
+  return pool.reduce((best, row) => {
+    if (!best?.activatedAt) return row;
+    if (!row.activatedAt) return best;
+    return row.activatedAt < best.activatedAt ? row : best;
+  });
+}
+
 function foldEarliestToCanonical(
   aliasMap: Map<string, string[]>,
   raw: Map<string, string>,
@@ -543,9 +560,10 @@ export async function getAquecedorWarmthMapForInstances(
   );
   let exchangeMap = new Map<string, ExchangeStats>();
   let earliestMap = new Map<string, string>();
+  let aliasMap = new Map<string, string[]>();
 
   if (supabase && requested.length) {
-    const aliasMap = await loadChipAliasMap(supabase, requested);
+    aliasMap = await loadChipAliasMap(supabase, requested);
     const expanded = expandAliasNames(aliasMap);
     const [rawExchange, rawEarliest] = await Promise.all([
       loadExchangeStatsMap(supabase, expanded),
@@ -564,7 +582,8 @@ export async function getAquecedorWarmthMapForInstances(
   await Promise.all(
     requested.map(async (name) => {
       const key = normalizeKey(name);
-      const row = await getAquecedorLifecycleRow(name);
+      const aliases = aliasMap.get(key) || [key];
+      const row = await pickLifecycleFromAliases(aliases);
       const computed = computeWarmthFromLifecycleRow(
         row,
         exchangeMap.get(key),

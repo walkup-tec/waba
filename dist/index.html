@@ -49943,9 +49943,27 @@
         }, WA_RESTRICTION_RECHECK_MS);
       }
 
+      function findInstanceUsageRow(instanceName) {
+        const key = String(instanceName || "").trim();
+        if (!key) return undefined;
+        if (instanceUsageByName[key]) return instanceUsageByName[key];
+        const lower = key.toLowerCase();
+        const entries = Object.entries(instanceUsageByName || {});
+        const exact = entries.find(([name]) => String(name).toLowerCase() === lower);
+        if (exact) return exact[1];
+        const digits = key.replace(/\D/g, "");
+        if (digits.length < 4) return undefined;
+        const suffix = digits.slice(-4);
+        const suffixHits = entries.filter(([name]) => {
+          const other = String(name).replace(/\D/g, "");
+          return other.length >= 4 && other.slice(-4) === suffix;
+        });
+        return suffixHits.length === 1 ? suffixHits[0][1] : undefined;
+      }
+
       function getInstanceUsage(instanceName) {
         const key = String(instanceName || "").trim();
-        const current = instanceUsageByName[key];
+        const current = findInstanceUsageRow(key);
         return {
           useAquecedor: current ? current.useAquecedor !== false : true,
           useDisparador: current ? current.useDisparador !== false : true,
@@ -50023,7 +50041,7 @@
 
       async function loadInstanceUsageConfig() {
         try {
-          const response = await fetchWithTimeout("/instancias/uso-config", {}, 10000);
+          const response = await fetchWithTimeout("/instancias/uso-config", {}, 25000);
           if (!response.ok) return;
           const payload = await response.json().catch(() => ({}));
           const items = Array.isArray(payload?.items) ? payload.items : [];
