@@ -3415,3 +3415,5 @@ Palavras-chave para buscar:
 - Keywords: dist/index.html, easypanel, waba_disparador, deploy-marker
 
 - 2026-08-21: fix CNAE modal Playwright (Leads PJ) — keywords: cnae, casadosdados, modal, leads-cnpj. LOG: LOG--leads-cnae-modal-playwright.md
+
+- 2026-08-21: Leads PJ produção = Xvfb+headed (paridade V02). Keywords: xvfb, headless, casadosdados.

@@ -41,16 +41,48 @@ const waba_leads_cnpj_repository_1 = require("./waba-leads-cnpj.repository");
 const PORTAL_LOGIN_URL = process.env.CASADOSDADOS_LOGIN_URL || "https://portal.casadosdados.com.br/entrar";
 const PORTAL_SEARCH_URL = process.env.CASADOSDADOS_SEARCH_URL ||
     "https://portal.casadosdados.com.br/plataforma/pesquisa";
-async function waitPastCloudflare(page, timeoutMs = 45000) {
+async function isCloudflareInterstitial(page) {
     const title = await page.title().catch(() => "");
-    if (!/um momento|just a moment/i.test(title))
+    if (/um momento|just a moment/i.test(title))
+        return true;
+    const url = typeof page.url === "function" ? String(page.url() || "") : "";
+    if (/__cf_chl|cf-challenge|cdn-cgi\/challenge/i.test(url))
+        return true;
+    const hint = await page
+        .evaluate(() => {
+        const text = String(document.body?.innerText || "").slice(0, 800).toLowerCase();
+        return (text.includes("cloudflare") ||
+            text.includes("verificação de segurança") ||
+            text.includes("checking your browser") ||
+            text.includes("just a moment"));
+    })
+        .catch(() => false);
+    return Boolean(hint);
+}
+/**
+ * Anti-bot do portal (título "Um momento…" / "Just a moment…").
+ * Em headless costuma NÃO limpar; com janela (V02) ou Xvfb+headed limpa em <2s.
+ */
+async function waitPastCloudflare(page, options) {
+    const timeoutMs = Math.max(5000, Math.round(Number(options?.timeoutMs ?? (Number(process.env.CASADOSDADOS_CF_WAIT_MS || 90000) || 90000))));
+    const stage = options?.stage || "portal";
+    if (!(await isCloudflareInterstitial(page)))
         return;
-    await page
+    options?.onProgress?.(`Abrindo Portal: verificação anti-bot em andamento (${stage}) — aguardando liberação…`);
+    const cleared = await page
         .waitForFunction(() => !/um momento|just a moment/i.test(document.title), {
         timeout: timeoutMs,
     })
-        .catch(() => null);
+        .then(() => true)
+        .catch(() => false);
     await page.waitForTimeout(800);
+    if (cleared && !(await isCloudflareInterstitial(page)))
+        return;
+    const title = await page.title().catch(() => "");
+    const url = typeof page.url === "function" ? page.url() : "";
+    throw new Error(`Portal Casa dos Dados bloqueou o robô (anti-bot / "Um momento…"). ` +
+        `No V02 funciona com janela visível; no Docker use Xvfb + Chromium headed (entrypoint). ` +
+        `stage=${stage}; title=${title || "(vazio)"}; url=${String(url).slice(0, 160)}`);
 }
 /**
  * Evita "Navigation … is interrupted by another navigation" (ex.: pós-login
@@ -156,6 +188,14 @@ page, email, password) {
         .catch(() => null);
     await page.waitForLoadState("domcontentloaded").catch(() => null);
     await page.waitForTimeout(400);
+    const afterUrl = String(page.url?.() || "");
+    if (/\/entrar\/?$/i.test(new URL(afterUrl || "https://portal.casadosdados.com.br/entrar").pathname)) {
+        const tip = await page
+            .evaluate(() => String(document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 220))
+            .catch(() => "");
+        throw new Error(`Login Casa dos Dados: ainda em /entrar após Acessar (url=${afterUrl}). ` +
+            `Confira CASADOSDADOS_EMAIL/PASSWORD no ambiente. Detalhe: ${tip || "(sem texto)"}`);
+    }
 }
 function readCasaDosDadosCredentials() {
     const email = String(process.env.CASADOSDADOS_EMAIL || "").trim();
@@ -581,8 +621,24 @@ function parseResultTotalFromText(text) {
     }
     return null;
 }
-/** Headless=1 esconde a janela. Em V01/V02, sem env → janela visível para acompanhar o robô. */
+/**
+ * Headless Chromium puro é bloqueado pelo anti-bot do portal.
+ * V02: janela visível (HEADLESS=0 ou default em v01/v02).
+ * Produção Docker: Xvfb define DISPLAY → usamos headed virtual (igual V02).
+ * Só força headless real com CASADOSDADOS_TRUE_HEADLESS=1 (diagnóstico).
+ */
 function resolveCasaDosDadosHeadless() {
+    const trueHeadless = String(process.env.CASADOSDADOS_TRUE_HEADLESS ?? "")
+        .trim()
+        .toLowerCase();
+    if (trueHeadless === "1" || trueHeadless === "true" || trueHeadless === "yes") {
+        return true;
+    }
+    const hasDisplay = Boolean(String(process.env.DISPLAY || "").trim());
+    if (hasDisplay) {
+        // Com Xvfb (:99) ou monitor local — mesma condição do V02 que passa no portal.
+        return false;
+    }
     const raw = String(process.env.CASADOSDADOS_HEADLESS ?? "").trim().toLowerCase();
     if (raw === "1" || raw === "true" || raw === "yes")
         return true;
@@ -648,8 +704,10 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         ? 0
         : Math.max(0, Math.round(Number(process.env.CASADOSDADOS_SLOWMO_MS || 40) || 0));
     onProgress?.(headless
-        ? "Abrindo Portal: iniciando navegador (headless)…"
-        : "Abrindo Portal: abrindo janela do Casa dos Dados (visível)…");
+        ? "Abrindo Portal: iniciando navegador (headless real)…"
+        : String(process.env.DISPLAY || "").trim()
+            ? "Abrindo Portal: abrindo Casa dos Dados (janela virtual Xvfb, como V02)…"
+            : "Abrindo Portal: abrindo janela do Casa dos Dados (visível)…");
     let browser;
     try {
         browser = await playwright.chromium.launch({
@@ -689,13 +747,13 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             ? "Abrindo Portal: autenticando no Casa dos Dados…"
             : "Abrindo Portal: janela aberta — autenticando no Casa dos Dados…");
         await gotoWithRetry(page, PORTAL_LOGIN_URL, { waitUntil: "domcontentloaded" });
-        await waitPastCloudflare(page);
+        await waitPastCloudflare(page, { onProgress, stage: "login" });
         // Portal real: /entrar → input[name=email] + input[name=senha] + botão "Acessar"
         await loginCasaDosDadosPortal(page, email, password);
-        await waitPastCloudflare(page);
+        await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
         onProgress?.("Pesquisando: abrindo tela de pesquisa…");
         await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-        await waitPastCloudflare(page);
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
         await page.waitForTimeout(1500);
         onProgress?.("Pesquisando: aplicando filtros (CNAE, situação, celular)…");
         await applyFilters(page, filters);
