@@ -3432,3 +3432,5 @@ Palavras-chave para buscar:
 - 2026-08-21: Leads PJ produção = Xvfb+headed (paridade V02). Keywords: xvfb, headless, casadosdados.
 
 - 2026-08-21: UI Leads PJ live-pulse (sinal de vida na etapa). Marker leads-pj-live-pulse.
+
+- 2026-08-21: Leads PJ UI maxPages 5/50 → **1000**; backend já pagina; headed 3 págs = 60 CNPJs (8069 no portal). Ver doc/LOG-2026-08-21__185359__fix-leads-pj-max-pages-1000.md

@@ -21067,7 +21067,8 @@
                         </div>
                         <div class="mlc-field mlc-col-3">
                           <label class="field-label" for="mlc-max-pages">Máx. páginas</label>
-                          <input id="mlc-max-pages" class="admin-push-input" type="number" min="1" max="50" value="5" />
+                          <input id="mlc-max-pages" class="admin-push-input" type="number" min="1" max="1000" value="1000" title="Portal Casa dos Dados: até 1000 páginas (~20 mil CNPJs). O robô copia página a página." />
+                          <div class="muted" style="font-size:12px;margin-top:4px">Até 1000 (20 cards/página). Copia página a página.</div>
                         </div>
                         <div class="mlc-field mlc-col-3">
                           <label class="field-label" for="mlc-porte">Porte da empresa</label>
@@ -34454,6 +34455,11 @@
         if (document.getElementById("mlc-sit-nula")?.checked) situacao.push("Nula");
         if (document.getElementById("mlc-sit-suspensa")?.checked) situacao.push("Suspensa");
         const maxPagesRaw = Number(document.getElementById("mlc-max-pages")?.value || 0);
+        // Teto da UI Oruga do portal = 1000; 0 = sem teto manual (ainda limitado pelo portal).
+        const maxPagesClamped =
+          Number.isFinite(maxPagesRaw) && maxPagesRaw > 0
+            ? Math.min(1000, Math.max(1, Math.round(maxPagesRaw)))
+            : 0;
         return {
           cnpj: String(document.getElementById("mlc-cnpj")?.value || "").trim(),
           buscaTextual: String(document.getElementById("mlc-busca")?.value || "").trim(),
@@ -34497,7 +34503,7 @@
             document.getElementById("mlc-excluir-visualizadas")?.checked
           ),
           excluirEmailContab: Boolean(document.getElementById("mlc-excluir-contab")?.checked),
-          maxPages: Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 0,
+          maxPages: maxPagesClamped,
         };
       }
       function renderMarketingLeadsCnpjHistory(items) {

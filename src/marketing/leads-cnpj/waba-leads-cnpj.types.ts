@@ -73,7 +73,10 @@ export type WabaLeadsCnpjFilters = {
   excluirEmpresasVisualizadas?: boolean;
   excluirEmailContab?: boolean;
 
-  /** 0 / omitido = todas as páginas do portal. Valor >0 só para teto manual de teste. */
+  /**
+   * 0 / omitido = todas as páginas até o teto da UI do portal (1000).
+   * 1–1000 = teto manual; o robô copia página a página (20 cards/página).
+   */
   maxPages?: number;
 };
 

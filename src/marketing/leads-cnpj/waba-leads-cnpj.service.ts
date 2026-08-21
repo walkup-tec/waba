@@ -158,9 +158,10 @@ export function parseLeadsCnpjFilters(raw: unknown): WabaLeadsCnpjFilters {
   const tipo = String(input.tipoPesquisa || "Exata").trim();
   const tipoPesquisa = (tipo === "Aproximada" ? "Aproximada" : "Exata") as WabaLeadsCnpjTipoPesquisa;
   const maxPagesRaw = Number(input.maxPages);
-  // 0 / NaN / ausente = sem teto (copia todas as páginas do portal).
+  // 0 / NaN / ausente = sem teto (copia até o teto da UI do portal = 1000).
+  // Valor >0 = teto manual, limitado a 1000 (portal Oruga não navega além).
   const maxPages = Number.isFinite(maxPagesRaw)
-    ? Math.max(0, Math.round(maxPagesRaw))
+    ? Math.max(0, Math.min(1000, Math.round(maxPagesRaw)))
     : 0;
 
   return {
