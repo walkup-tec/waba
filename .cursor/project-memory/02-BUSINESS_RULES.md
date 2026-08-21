@@ -50,8 +50,9 @@ Quando um número **conectar de novo** (QR / pairing):
 ### Campanha Alternativa — troca de bloqueados
 
 - Números bloqueados/offline aparecem em vermelho na campanha.
-- Em «+ Instâncias», cada número conectado adicionado **substitui** um bloqueado (sai da seleção da campanha).
-- A Proxy Brasil é ligada nos novos e desligada nos removidos.
+- Com a campanha **em execução**, se houver instância **conectada** e **habilitada para disparos** fora da seleção, a troca é **automática** (1:1): o desconectado sai, o conectado entra.
+- Nessa troca, a Proxy Brasil **desliga** no número que sai e **liga** no número que entra. Não se desliga Proxy nos números que permanecem na campanha.
+- O botão «+ Instâncias» só aparece quando **não há** instância conectada livre (ou a campanha está pausada à espera do operador). O usuário conecta um número habilitado para disparos e então usa o botão.
 - A tag «Proteção ativa» aparece quando a Proxy está confirmada nas instâncias **conectadas** da campanha.
 
 ### Campanha — disparar se a Evolution está open

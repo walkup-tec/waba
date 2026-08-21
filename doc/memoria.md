@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 18:02 — Troca automática de instância na campanha
+
+- Tick substitui desconectado por conectado habilitado para disparos; Proxy off no que sai / on no que entra.
+- «+ Instâncias» só sem reserva ou campanha pausada.
+- Marker `DEPLOY-2026-08-21-campanha-auto-swap-instancias`
+- LOG: `doc/LOG-2026-08-21__180200__campanha-auto-swap-instancias.md`
+
 ## 2026-08-21 17:20 — Campanha: open na EVO deve disparar
 
 - Pausa automática só com mínimo de connectionState open não confirmado. Retoma sozinha. Pick via live state.

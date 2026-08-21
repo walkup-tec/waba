@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — Campanha: troca automática de instância desconectada
+
+- **Decisão:** Com campanha `running`, o tick substitui cada desconectado por uma instância `open` do dono habilitada para disparos (`useDisparador` + lifecycle). Proxy desliga só no que sai e liga no que entra. «+ Instâncias» só se não houver reserva (ou campanha pausada).
+- **Motivo:** O operador não deve clicar para cada queda; o botão fica para quando ele conectar um número novo.
+- **Impacto:** Marker `DEPLOY-2026-08-21-campanha-auto-swap-instancias`.
+
 ### 2026-08-21 — Campanha dispara se connectionState é open
 
 - **Decisão:** Saúde/pausa da campanha usa `connectionState` dos nomes selecionados. Pause só se o mínimo de `open` não estiver confirmado. Retoma pausa automática quando o mínimo volta. Pick de envio também usa live `open`, não só `fetchInstances`.

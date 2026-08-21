@@ -42176,6 +42176,7 @@
       let disparosHasRunningCampaign = false;
       let disparosCampaignItemsCache = [];
       const disparosCampaignToggleInflight = new Set();
+      const disparosCampaignAddInstInflight = new Set();
       const DISPAROS_CAMPAIGN_LIST_SCOPE = {
         OFICIAL: "oficial-intake",
         ALTERNATIVA: "alternativa-evo",
@@ -47287,11 +47288,16 @@
                     0,
                     Math.floor(Number(health?.disconnectedCount) || 0)
                   );
+                  const spareConnectedForSwap = Math.max(
+                    0,
+                    Math.floor(Number(health?.spareConnectedForSwap) || 0)
+                  );
                   const showAddInstances =
                     !isFinished &&
                     (needsMoreInstancesForMinimum ||
                       shouldPauseByDisconnectedRatio ||
-                      disconnectedCount > 0);
+                      disconnectedCount > 0) &&
+                    (spareConnectedForSwap === 0 || !isRunning);
                   const minConnectedRequired = Math.max(
                     1,
                     Math.floor(Number(health?.minConnectedRequired) || 1)
@@ -47330,13 +47336,25 @@
                       '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
                   }
                   if (shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). Use «+ Instâncias» para trocar os bloqueados (vermelhos) por números conectados.</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). ${
+                      spareConnectedForSwap > 0 && isRunning
+                        ? "A substituição pelos conectados habilitados para disparos é automática (Proxy sai do desconectado e entra no novo)."
+                        : spareConnectedForSwap > 0
+                          ? "Há número conectado livre. Use «+ Instâncias» para adicioná-lo à campanha."
+                          : "Não há instância livre. Conecte um número habilitado para disparos e use «+ Instâncias»."
+                    }</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
                   }
                   if (!needsMoreInstancesForMinimum && disconnectedCount > 0 && !shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). Use «+ Instâncias» para trocar por um conectado (o bloqueado sai da campanha e a Proxy é transferida).</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). ${
+                      spareConnectedForSwap > 0 && isRunning
+                        ? "A substituição por um conectado habilitado para disparos é automática (Proxy sai do desconectado e entra no novo)."
+                        : spareConnectedForSwap > 0
+                          ? "Há número conectado livre. Use «+ Instâncias» para adicioná-lo à campanha."
+                          : "Não há instância livre. Conecte um número habilitado para disparos e use «+ Instâncias»."
+                    }</div>`;
                   }
       
                   const proxyTag =
@@ -47627,15 +47645,33 @@
       async function addInstancesToCampaign(campaignId) {
         const id = String(campaignId || "").trim();
         if (!id) return false;
-        const response = await fetchWithTimeout(
-          `/disparos/campanhas/${encodeURIComponent(id)}/instancias`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ auto: true }),
-          },
-          20000
-        );
+        const url =
+          typeof resolveWabaPublicPath === "function"
+            ? resolveWabaPublicPath(`/disparos/campanhas/${encodeURIComponent(id)}/instancias`)
+            : `/disparos/campanhas/${encodeURIComponent(id)}/instancias`;
+        let response;
+        try {
+          response = await fetchWithTimeout(
+            url,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ auto: true }),
+            },
+            25000
+          );
+        } catch (err) {
+          const timedOut = String(err?.message || "").toLowerCase() === "timeout";
+          showToast(
+            timedOut
+              ? "A troca de instâncias demorou demais. Tente de novo."
+              : String(err?.message || "Não foi possível adicionar instâncias na campanha."),
+            "error",
+            6200
+          );
+          return false;
+        }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           const code = String(data?.code || "").trim();
@@ -47651,7 +47687,7 @@
             goToDisparosBuyNumbersPanel();
             return false;
           }
-          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error");
+          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error", 6200);
           return false;
         }
         const stillNeedsMore = data?.stillNeedsMore === true;
@@ -55502,16 +55538,51 @@
           }
         }
 
+        async function runAddInstancesFromButton(btn) {
+          if (!btn || btn.disabled) return;
+          const id = btn.dataset.campaignId || btn.getAttribute("data-campaign-id");
+          if (!id) return;
+          if (disparosCampaignAddInstInflight.has(id)) return;
+          disparosCampaignAddInstInflight.add(id);
+          const prevLabel = btn.textContent || "+ Instâncias";
+          btn.setAttribute("disabled", "true");
+          btn.setAttribute("aria-busy", "true");
+          btn.style.pointerEvents = "none";
+          btn.textContent = "Trocando…";
+          showToast("Procurando número conectado para substituir o desconectado…", "success", 2800);
+          try {
+            await addInstancesToCampaign(id);
+          } catch (err) {
+            showToast(err?.message || "Não foi possível adicionar instâncias na campanha.", "error", 6200);
+          } finally {
+            btn.textContent = prevLabel;
+            btn.removeAttribute("disabled");
+            btn.removeAttribute("aria-busy");
+            btn.style.pointerEvents = "";
+            disparosCampaignAddInstInflight.delete(id);
+          }
+        }
+
         // pointerdown: 1º clique não é cancelado por blur de outro campo (mesmo padrão do Push).
         disparosListEl.addEventListener(
           "pointerdown",
           (e) => {
-            const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
-            if (!btn || !disparosListEl.contains(btn)) return;
             if (e.button != null && e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            void runCampaignToggleFromButton(btn);
+            const toggleBtn =
+              e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
+            if (toggleBtn && disparosListEl.contains(toggleBtn)) {
+              e.preventDefault();
+              e.stopPropagation();
+              void runCampaignToggleFromButton(toggleBtn);
+              return;
+            }
+            const addInstBtn =
+              e.target && e.target.closest ? e.target.closest(".btn-campaign-add-instances") : null;
+            if (addInstBtn && disparosListEl.contains(addInstBtn)) {
+              e.preventDefault();
+              e.stopPropagation();
+              void runAddInstancesFromButton(addInstBtn);
+            }
           },
           true
         );
@@ -55578,14 +55649,7 @@
           if (addInstBtn && disparosListEl.contains(addInstBtn)) {
             e.preventDefault();
             e.stopPropagation();
-            const id = addInstBtn.dataset.campaignId || addInstBtn.getAttribute("data-campaign-id");
-            if (!id || addInstBtn.disabled) return;
-            addInstBtn.setAttribute("disabled", "true");
-            try {
-              await addInstancesToCampaign(id);
-            } finally {
-              addInstBtn.removeAttribute("disabled");
-            }
+            void runAddInstancesFromButton(addInstBtn);
             return;
           }
           // Toggle Ativar/Pausar: tratado em pointerdown (anti blur / 1º clique).

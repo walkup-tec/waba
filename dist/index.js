@@ -2523,6 +2523,8 @@ async function loadDisparosLocalState() {
     }
 }
 const campaignNextAllowedSendAt = new Map();
+const campaignAutoSwapAtMs = new Map();
+const CAMPAIGN_AUTO_SWAP_COOLDOWN_MS = 45000;
 /** Round-robin de imagens 1080×1080 por campanha (Alternativa). */
 const campaignMessengerImageCursor = new Map();
 /** Evita dois processamentos paralelos da mesma campanha (tick a cada 7s vs typing/IA). */
@@ -5836,6 +5838,68 @@ function mergeCampaignInstancesReplacingBlocked(input) {
     const selected = Array.from(new Set([...kept, ...added]));
     return { selected, added, removedBlocked };
 }
+function campaignOwnerAuth(ownerEmail) {
+    const email = String(ownerEmail || "").trim().toLowerCase();
+    return { email, role: email.includes("@") ? "subscriber" : "guest" };
+}
+async function persistCampaignSelectedInstances(campaign, selected) {
+    campaign.configSnapshot = parseDisparosConfig({
+        ...(campaign.configSnapshot || DISPAROS_DEFAULTS),
+        selectedDisparadorInstances: selected,
+    });
+    const supabase = getSupabaseClient();
+    if (supabase) {
+        try {
+            await supabase.from("disparos_campaigns")
+                .update({ config_snapshot: campaign.configSnapshot })
+                .eq("id", campaign.id);
+        }
+        catch {
+            /* */
+        }
+    }
+    queuePersistDisparosLocalState();
+}
+async function applyCampaignDisconnectedSwap(campaign, incoming, evoRows) {
+    const prevSelected = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
+        ? campaign.configSnapshot.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+        : [];
+    const swapped = mergeCampaignInstancesReplacingBlocked({
+        prevSelected,
+        incoming,
+        evoRows,
+    });
+    if (!swapped.added.length)
+        return swapped;
+    await persistCampaignSelectedInstances(campaign, swapped.selected);
+    if (swapped.added.length) {
+        queueProxyBrasilPrepareForCampaignInstances(swapped.added);
+    }
+    if (swapped.removedBlocked.length) {
+        queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
+    }
+    console.warn(`[Campanha] Troca de instâncias ${campaign.id}: saem ${swapped.removedBlocked.join(", ") || "—"} · entram ${swapped.added.join(", ")}`);
+    return swapped;
+}
+async function tryAutoSwapDisconnectedCampaignInstances(campaign, evoRows) {
+    const health = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
+    if (health.disconnectedCount <= 0) {
+        return { swapped: false, spareCount: 0 };
+    }
+    const lastAt = campaignAutoSwapAtMs.get(campaign.id) || 0;
+    if (Date.now() - lastAt < CAMPAIGN_AUTO_SWAP_COOLDOWN_MS) {
+        return { swapped: false, spareCount: -1 };
+    }
+    const toAdd = Math.max(computeCampaignInstancesToAdd(health), health.disconnectedCount);
+    const auth = campaignOwnerAuth(campaign.ownerEmail);
+    const incoming = await resolveAutoInstancesForCampaign(auth, campaign.configSnapshot, evoRows, toAdd);
+    if (!incoming.length) {
+        return { swapped: false, spareCount: 0 };
+    }
+    campaignAutoSwapAtMs.set(campaign.id, Date.now());
+    const result = await applyCampaignDisconnectedSwap(campaign, incoming, evoRows);
+    return { swapped: result.added.length > 0, spareCount: incoming.length };
+}
 /** Texto exibido na UI para status pausada — prioriza regra de saúde atual. */
 function describeCampaignPauseDetail(instanceHealth, options) {
     const health = instanceHealth;
@@ -5923,6 +5987,9 @@ async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd) 
         const key = name.toLowerCase();
         if (!name || prevSelected.has(key) || !connectedByKey.has(key))
             continue;
+        const usage = resolveUsageFromMap(usageMap, name);
+        if (usage?.useDisparador === false)
+            continue;
         purchasedConnected.push(name);
     }
     const ownedCandidates = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(connectedByKey.values()).map((row) => row.instanceKey));
@@ -5931,7 +5998,7 @@ async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd) 
         if (!key || prevSelected.has(key) || activationKeys.has(key))
             continue;
         const usage = resolveUsageFromMap(usageMap, name);
-        if (usage?.useAquecedor === false)
+        if (usage?.useDisparador === false)
             continue;
         aquecedorConnected.push(String(name).trim());
     }
@@ -11689,7 +11756,11 @@ async function runCampaignDispatchTick() {
     }
     const running = disparosCampaignsMemory.filter((c) => c.status === "running");
     for (const c of running) {
-        const liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+        let liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+        if (getCampaignInstanceHealth(c.configSnapshot, liveRows).disconnectedCount > 0) {
+            await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
+            liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+        }
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum) {
             c.status = "paused";
@@ -11727,7 +11798,11 @@ async function runCampaignDispatchTick() {
     for (const c of disparosCampaignsMemory.filter((row) => row.status === "paused")) {
         if (isOperatorHeldCampaignPause(c.pauseReason))
             continue;
-        const liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+        let liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+        if (getCampaignInstanceHealth(c.configSnapshot, liveRows).disconnectedCount > 0) {
+            await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
+            liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+        }
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum)
             continue;
@@ -12207,6 +12282,7 @@ app.get("/disparos/campanhas", async (req, res) => {
             : []);
         const nowSp = nowInSaoPaulo();
         const liveRowsByCampaignId = new Map();
+        const spareByCampaignId = new Map();
         for (const item of byId.values()) {
             const st = String(item.status || "").toLowerCase();
             const snapshotCfg = configByCampaignId.get(item.id);
@@ -12215,7 +12291,17 @@ app.get("/disparos/campanhas", async (req, res) => {
             const configForTags = useGlobal
                 ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
                 : snapshotCfg;
-            liveRowsByCampaignId.set(item.id, await enrichSelectedCampaignInstancesLive(configForTags, evoRows));
+            const liveRows = await enrichSelectedCampaignInstancesLive(configForTags, evoRows);
+            liveRowsByCampaignId.set(item.id, liveRows);
+            const probeHealth = getCampaignInstanceHealth(configForTags, liveRows);
+            if (probeHealth.disconnectedCount > 0 || probeHealth.needsMoreInstancesForMinimum) {
+                try {
+                    spareByCampaignId.set(item.id, (await resolveAutoInstancesForCampaign(auth, configForTags, liveRows, 20)).length);
+                }
+                catch {
+                    spareByCampaignId.set(item.id, 0);
+                }
+            }
         }
         const proxyBrasilOn = Boolean((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled);
         const proxyKeysByCampaignId = new Map();
@@ -12231,11 +12317,15 @@ app.get("/disparos/campanhas", async (req, res) => {
                 : configByCampaignId.get(item.id);
             const tags = disparadorInstanceTagsForCampaign(configForTags, liveRows);
             const instanceHealth = getCampaignInstanceHealth(configForTags, liveRows);
+            const healthWithSpare = {
+                ...instanceHealth,
+                spareConnectedForSwap: spareByCampaignId.get(item.id) || 0,
+            };
             const disconnectedNames = tags
                 .filter((t) => t.connected !== true)
                 .map((t) => String(t.instanceName || "").trim())
                 .filter(Boolean);
-            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp, instanceHealth, disconnectedNames);
+            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp, healthWithSpare, disconnectedNames);
             const selectedRaw = Array.isArray(configForTags?.selectedDisparadorInstances)
                 ? configForTags.selectedDisparadorInstances
                     .map((n) => String(n || "").trim())
@@ -12258,7 +12348,7 @@ app.get("/disparos/campanhas", async (req, res) => {
                 ...item,
                 disparadorInstances: tags,
                 disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
-                instanceHealth,
+                instanceHealth: healthWithSpare,
                 runtimeStage,
                 proxyProtectionActive,
             };
@@ -12753,21 +12843,28 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         catch {
             evoRows = [];
         }
+        evoRows = await enrichSelectedCampaignInstancesLive(campaign.configSnapshot, evoRows);
         const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
+        const selectedNames = Array.isArray(prev.selectedDisparadorInstances)
+            ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+            : [];
         const healthBefore = getCampaignInstanceHealth(prev, evoRows);
-        const instancesToAdd = computeCampaignInstancesToAdd(healthBefore);
+        const instancesToAdd = Math.max(computeCampaignInstancesToAdd(healthBefore), healthBefore.disconnectedCount);
+        const disconnectedNames = listDisconnectedStoredInstanceNames(selectedNames, evoRows);
         let incoming = [];
         if (auto) {
             if (instancesToAdd <= 0) {
                 return res.status(400).json({
-                    error: "A campanha já possui números conectados suficientes.",
+                    error: "Não há números desconectados nesta campanha e o mínimo já está atendido.",
                     instanceHealth: healthBefore,
                 });
             }
             incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, instancesToAdd);
             if (!incoming.length) {
                 return res.status(409).json({
-                    error: "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
+                    error: disconnectedNames.length
+                        ? `Não há instância conectada livre para substituir ${disconnectedNames.join(", ")}. Conecte um número habilitado para disparos e use «+ Instâncias».`
+                        : "Não há instância conectada livre. Conecte um número habilitado para disparos e use «+ Instâncias».",
                     instanceHealth: healthBefore,
                     code: "buy_numbers_required",
                     needsPurchase: true,
@@ -12781,41 +12878,17 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
                 return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
             }
         }
-        const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
-            ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
-            : [];
-        const swapped = mergeCampaignInstancesReplacingBlocked({
-            prevSelected,
-            incoming,
-            evoRows,
-        });
-        campaign.configSnapshot = parseDisparosConfig({
-            ...prev,
-            selectedDisparadorInstances: swapped.selected,
-        });
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                await supabase.from("disparos_campaigns")
-                    .update({ config_snapshot: campaign.configSnapshot })
-                    .eq("id", id);
-            }
-            catch {
-                /* */
-            }
+        const swapped = await applyCampaignDisconnectedSwap(campaign, incoming, evoRows);
+        if (!swapped.added.length) {
+            return res.status(400).json({
+                error: "Nenhuma instância nova foi adicionada. Verifique se o número está conectado e habilitado para disparos.",
+                instanceHealth: healthBefore,
+            });
         }
-        queuePersistDisparosLocalState();
         const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
-        const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
-        // Proxy: liga nos novos; desliga nos bloqueados removidos da campanha.
-        if (swapped.added.length) {
-            queueProxyBrasilPrepareForCampaignInstances(swapped.added);
-        }
-        if (swapped.removedBlocked.length) {
-            queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
-        }
         const addedCount = swapped.added.length;
         const removedCount = swapped.removedBlocked.length;
+        const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
         const swapNote = removedCount > 0
             ? ` Substituímos ${removedCount} número(s) bloqueado(s)/offline (${swapped.removedBlocked.join(", ")}).`
             : "";
@@ -12832,8 +12905,8 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             needsPurchase: computeCampaignInstancesToAdd(instanceHealth) > 0 &&
                 addedCount < instancesToAdd,
             message: computeCampaignInstancesToAdd(instanceHealth) > 0
-                ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Compre/adicione mais ou reconecte e ative de novo.`
-                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números. Você já pode ativar novamente.`,
+                ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Conecte outro número e use «+ Instâncias».`
+                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números.`,
         });
     }
     catch (error) {

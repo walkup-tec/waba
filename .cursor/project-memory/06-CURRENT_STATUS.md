@@ -24,6 +24,7 @@ Não usar como histórico de desenvolvimento.
 - Campanha API Alternativa: imagem → texto sem URL; pareamento não é derrubado por proxy/set no tick nem ao ativar
 - Reconexão de número: apaga clones/sessão antiga na Evolution; preserva foguinhos e totais de envio
 - Campanha dispara quando a Evolution está `open`; pausa automática de saúde retoma sozinha
+- Campanha em execução: troca automática 1:1 do desconectado por conectado habilitado para disparos (Proxy sai/entra)
 
 ## Funcionalidades em andamento
 
@@ -32,8 +33,7 @@ Não usar como histórico de desenvolvimento.
 
 ## Pendências relevantes
 
-- **Redeploy EasyPanel** `waba_disparador` para marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab` (código e `dist/` já em `master`; produção ainda pode servir marker antigo até redeploy)
-- Após redeploy: validar `/health`, lingueta visível, ausência de `device-cloud-warm-btn` / **Início** / **Aquecer** no HTML servido
+- **Deploy produção:** push `origin/master` + Redeploy EasyPanel `waba_disparador`. Validar `GET /health` = `DEPLOY-2026-08-21-campanha-auto-swap-instancias`
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)
 - Após deploy `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`: reenviar boas-vindas e confirmar JPEG nítido no WhatsApp
 - Hospedar API/web Device Cloud na URL pública (WABA só abre launcher/SSO)
