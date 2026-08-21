@@ -7,6 +7,10 @@ if (-not (Test-Path ".env.v02")) {
   exit 1
 }
 
+# Guarda: Device Cloud nao pode sumir do working tree do V02
+& (Join-Path $PSScriptRoot "check-v02-device-cloud.ps1")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 & (Join-Path $PSScriptRoot "free-port.ps1") -Port 3012
 
 Write-Host "Sincronizando instancias Mozart = Walkup (producao)..." -ForegroundColor DarkGray

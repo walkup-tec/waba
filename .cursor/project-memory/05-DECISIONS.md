@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — Trabalho do V02 é permanente na branch `v02`
+
+- **Decisão:** Tudo feito no ambiente V02 permanece na branch `v02` (commit + push). Antes de `checkout` para outra branch, Device Cloud deve estar presente (`scripts/check-v02-device-cloud.ps1`). `dev:v02` falha se `device-cloud-stage` ou `src/device-cloud` sumirem.
+- **Motivo:** Em 2026-08-21 o menu Dispositivos desapareceu após `checkout master → v02` com `v02` desatualizada (sem Device Cloud).
+- **Impacto:** Merge `master` → `v02` restaurou Device Cloud; regra `.cursor/rules/v02-trabalho-permanente.mdc`; playbook `doc/DEVICE-CLOUD-PAIRING-ETAPAS.md`.
+
 ### 2026-08-21 — Campanha Alternativa: não desligar proxy nem restart com campanha viva
 
 - **Decisão:** O tick não chama `proxy/set` (disable) ao pausar por instâncias offline. Ativar campanha não faz prepare/restart; só marca ready se já estiver `open`.

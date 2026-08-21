@@ -1,0 +1,16 @@
+---
+description: Trabalho no V02 nunca pode desaparecer (Device Cloud incluso)
+alwaysApply: true
+---
+
+# V02 — trabalho permanente
+
+Quando o ambiente ativo for **V02** (`localhost:3012/version-02`, branch `v02`):
+
+1. **Nunca** faça `git checkout` para outra branch (`master`, `v01`, etc.) com alterações locais do V02 sem antes **commit na `v02`** ou stash nomeado explícito.
+2. O menu **Dispositivos** (`device-cloud-stage` em `index.html` + `src/device-cloud/`) é obrigatório na `v02`. Se sumir, a causa típica é checkout para uma árvore antiga sem Device Cloud — restaure via merge `origin/master` → `v02` ou `git checkout origin/master -- index.html src/device-cloud`.
+3. Toda mudança funcional feita no V02 deve ser **commitada na branch `v02`** no mesmo dia (mesmo WIP), e preferencialmente **push** para `origin/v02`, para não depender só do working tree.
+4. Antes de trocar de branch, rode: `powershell -File scripts/check-v02-device-cloud.ps1`
+5. Não use `git reset --hard` na `v02` sem backup de branch (`backup/v02-…`).
+
+Motivo: em 2026-08-21 o Device Cloud desapareceu do V02 após `checkout master → v02` porque a `v02` local estava desatualizada e sem Device Cloud.
