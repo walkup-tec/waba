@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 07:17 — Permanência do pareamento (Seguradoras)
+
+- 11/08: campanha enviava sem desligar proxy. 12/08: tick desligava proxy nos offline; Ativar fazia proxy/set no meio do disparo
+- Marker `DEPLOY-2026-08-21-alternativa-keep-pairing`
+- LOG: doc/LOG-2026-08-21__071700__fix-alternativa-keep-pairing.md
+
 ## 2026-08-20 18:43 — Alternativa: texto após imagem (viewOnce)
 
 - sendButtons em viewOnce era tratado como sucesso e o lead pending não mandava texto

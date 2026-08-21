@@ -21,7 +21,7 @@ Não usar como histórico de desenvolvimento.
 - Conclusão da integração: lingueta **«Integração Finalizada»** + pulso no menu **Instâncias** até o usuário abrir a aba
 - Copy do fluxo Dispositivos sem menções visíveis a EVO/Evolution; **device** → **dispositivo** nas mensagens ao usuário
 - Botão **Início** removido do footer do dispositivo virtual
-- Campanha API Alternativa: imagem → texto sem URL → botão nativo; disparo sem proxy/set no meio do envio
+- Campanha API Alternativa: imagem → texto sem URL; pareamento não é derrubado por proxy/set no tick nem ao ativar
 
 ## Funcionalidades em andamento
 

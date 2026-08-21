@@ -35,6 +35,10 @@ Ordem obrigatória no WhatsApp:
 
 Proibido: card de preview antes do texto; “Mais informações: https://…” no corpo.
 
+### Campanha Alternativa — permanência do pareamento
+
+Com a campanha em execução ou pausada, o WABA **não** desliga Proxy Brasil e **não** faz `proxy/set` nem restart nos números da campanha. Desligar proxy com a sessão ainda pareada derruba a integração (os dois números da Seguradoras). Reconectar é só no Aquecedor, pelo operador.
+
 ### Campanha Alternativa — troca de bloqueados
 
 - Números bloqueados/offline aparecem em vermelho na campanha.

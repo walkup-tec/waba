@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — Campanha Alternativa: não desligar proxy nem restart com campanha viva
+
+- **Decisão:** O tick não chama `proxy/set` (disable) ao pausar por instâncias offline. Ativar campanha não faz prepare/restart; só marca ready se já estiver `open`.
+- **Motivo:** Em 11/08 a integração permanecia. Em 12/08 (`e886279`) o tick passou a desligar proxy nos offline; com 2 números, 50% desconectados desligava os dois → `device_removed`. Ativar (`b694d01`) aplicava proxy em background no meio do disparo.
+- **Impacto:** Marker `DEPLOY-2026-08-21-alternativa-keep-pairing`.
+
 ### 2026-08-20 — Campanha Alternativa: não alterar proxy/sessão no meio do disparo
 
 - **Decisão:** Com a instância `open`, o motor de envio não chama `proxy/set`, restart nem disable. Se a flag `ready` sumir (Redeploy), só marca pronta. Pausa por “saiu de open” não desliga a Proxy.

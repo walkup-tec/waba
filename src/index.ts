@@ -13470,6 +13470,18 @@ async function runCampaignDispatchTick(): Promise<void> {
   }
   const running = disparosCampaignsMemory.filter((c) => c.status === "running");
   for (const c of running) {
+    // Sem lista EVO não dá para saber quem está open — não pausa e não mexe em proxy.
+    if (!evoRows.length) {
+      const snap = c.configSnapshot || DISPAROS_DEFAULTS;
+      const janela = isDisparosWindowOpen(snap, nowSp);
+      if (!janela.aberta) continue;
+      const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
+      if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+        if (!isAlternativaBurstWindowOpen(nowSp)) continue;
+      }
+      await processOneCampaignDispatch(c.id);
+      continue;
+    }
     const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
     if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
       c.status = "paused";
@@ -13477,7 +13489,7 @@ async function runCampaignDispatchTick(): Promise<void> {
         .filter((t) => t.connected !== true)
         .map((t) => t.instanceName);
       c.pauseReason = pauseReasonFromInstanceHealth(health, offline);
-      queueDisableProxyBrasilForDisconnectedCampaignInstances(c, evoRows);
+      // Não desligar Proxy: proxy/set no número ainda pareado gera device_removed (regressão 12/08).
       const supabase = getSupabaseClient();
       if (supabase) {
         try {
@@ -14467,15 +14479,17 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
             .filter(Boolean)
         : [];
       if (selectedForProxy.length && loadProxyBrasilConfig()?.enabled) {
-        const evoKeys = resolveSelectedNamesToEvoKeys(selectedForProxy, evoRows);
-        const namesForProxy = evoKeys.length ? evoKeys : selectedForProxy;
-        // Não espera o prepare (pode levar >60s). O 1º clique precisa ativar na hora.
-        queueApplyProxyBrasilToInstances(
-          namesForProxy,
-          callEvoAction,
-          EVO_API_BASE,
-          getProxyBrasilCampaignPrepareDeps()
-        );
+        // Ativar não faz proxy/set nem restart — isso derruba o pareamento (campanha Seguradoras).
+        // A Proxy já foi ligada na seleção/criação. Só marca ready se a sessão já está open.
+        for (const rawName of selectedForProxy) {
+          const live = await fetchEvoInstanceLiveState(rawName);
+          if (isEvoLiveStateOpen(live)) {
+            markProxyBrasilSessionReadyForSend(rawName, {
+              state: live,
+              reason: "ativar campanha — sessão open, sem proxy/set",
+            });
+          }
+        }
       }
     }
     campaign.status = nextStatus;
