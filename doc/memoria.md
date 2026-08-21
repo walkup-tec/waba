@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 17:20 — Campanha: open na EVO deve disparar
+
+- Pausa automática só com mínimo de connectionState open não confirmado. Retoma sozinha. Pick via live state.
+- Marker `DEPLOY-2026-08-21-campanha-open-deve-enviar`
+- LOG: doc/LOG-2026-08-21__172000__campanha-open-deve-enviar.md
+
 ## 2026-08-21 14:50 — Reconexão: purge EVO (preserva foguinhos e totais)
 
 - Clones do mesmo JID e sessão antiga são apagados na Evolution. Foguinhos e `logs_envios` ficam.

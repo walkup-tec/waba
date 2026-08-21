@@ -23,6 +23,7 @@ Não usar como histórico de desenvolvimento.
 - Botão **Início** removido do footer do dispositivo virtual
 - Campanha API Alternativa: imagem → texto sem URL; pareamento não é derrubado por proxy/set no tick nem ao ativar
 - Reconexão de número: apaga clones/sessão antiga na Evolution; preserva foguinhos e totais de envio
+- Campanha dispara quando a Evolution está `open`; pausa automática de saúde retoma sozinha
 
 ## Funcionalidades em andamento
 

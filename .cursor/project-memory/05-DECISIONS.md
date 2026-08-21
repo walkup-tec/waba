@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — Campanha dispara se connectionState é open
+
+- **Decisão:** Saúde/pausa da campanha usa `connectionState` dos nomes selecionados. Pause só se o mínimo de `open` não estiver confirmado. Retoma pausa automática quando o mínimo volta. Pick de envio também usa live `open`, não só `fetchInstances`.
+- **Motivo:** Seguradoras ficou pausada com `9224`/`drax` `open` na Evolution porque o WABA usava cache/lista vazia e a regra de 50% offline.
+- **Impacto:** Marker `DEPLOY-2026-08-21-campanha-open-deve-enviar`.
+
 ### 2026-08-21 — Reconexão apaga EVO antigo; preserva foguinhos e totais
 
 - **Decisão:** Ao reconectar um número, apagar clones e sessão antiga na Evolution e restos dos clones no WABA. Manter lifecycle (foguinhos) e `logs_envios` (totais). Sem `forceNewIntegration` nessa reconexão.

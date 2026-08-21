@@ -6768,14 +6768,98 @@ async function enrichEvoInstanceTagRowsWithLiveState(
       chunk.map(async (row) => {
         try {
           const live = await fetchEvoInstanceLiveState(row.instanceKey);
+          if (!String(live || "").trim()) return;
           row.connected = isEvoLiveStateOpen(live);
         } catch {
-          row.connected = false;
+          /* probe falhou: não tratar como desconectado */
         }
       })
     );
   }
   return rows;
+}
+
+function selectedDisparadorNamesFromConfig(
+  config: DisparosConfig | undefined | null,
+): string[] {
+  const raw = config?.selectedDisparadorInstances;
+  return Array.isArray(raw)
+    ? raw.map((n) => String(n || "").trim()).filter(Boolean)
+    : [];
+}
+
+function cloneEvoInstanceTagRow(row: EvoInstanceTagRow): EvoInstanceTagRow {
+  return {
+    ...row,
+    nameKeys: new Set(row.nameKeys),
+    digitKeys: new Set(row.digitKeys),
+  };
+}
+
+function syntheticEvoInstanceTagRow(
+  instanceKey: string,
+  displayName: string,
+  connected: boolean,
+): EvoInstanceTagRow {
+  const nameKeys = new Set<string>();
+  addComparableNameKey(nameKeys, instanceKey);
+  addComparableNameKey(nameKeys, displayName);
+  return {
+    instanceKey,
+    displayName,
+    connected,
+    nameKeys,
+    digitKeys: digitKeysFromStoredLabel(displayName),
+  };
+}
+
+/**
+ * Confirma `open` dos nomes da campanha via connectionState, mesmo se fetchInstances/cache
+ * vier vazio. Probe vazio não marca desconectado.
+ */
+async function enrichSelectedCampaignInstancesLive(
+  config: DisparosConfig | undefined | null,
+  evoRows: EvoInstanceTagRow[],
+): Promise<EvoInstanceTagRow[]> {
+  const selected = selectedDisparadorNamesFromConfig(config);
+  const rows = evoRows.map(cloneEvoInstanceTagRow);
+  if (!selected.length) return rows;
+
+  for (const name of selected) {
+    const resolved = resolveStoredNameToEvoTag(name, rows);
+    const key = String(resolved.instanceKey || name).trim();
+    let live = "";
+    try {
+      live = await fetchEvoInstanceLiveState(key, { fresh: true });
+      if (!live && key.toLowerCase() !== name.toLowerCase()) {
+        live = await fetchEvoInstanceLiveState(name, { fresh: true });
+      }
+    } catch {
+      live = "";
+    }
+    if (!String(live || "").trim()) continue;
+    const open = isEvoLiveStateOpen(live);
+    const idx = rows.findIndex(
+      (r) =>
+        r.instanceKey.toLowerCase() === key.toLowerCase() ||
+        r.nameKeys.has(name.toLowerCase()),
+    );
+    if (idx >= 0) {
+      rows[idx].connected = open;
+      continue;
+    }
+    rows.push(syntheticEvoInstanceTagRow(key, resolved.displayName || name, open));
+  }
+  return rows;
+}
+
+function isOperatorHeldCampaignPause(reason?: string): boolean {
+  const t = String(reason || "").toLowerCase();
+  if (!t) return false;
+  if (t.includes("pausada manualmente")) return true;
+  if (t.includes("créditos") || t.includes("creditos")) return true;
+  if (t.includes("envios interrompidos no servidor")) return true;
+  return false;
 }
 
 function digitKeysFromStoredLabel(storedName: string): Set<string> {
@@ -6928,9 +7012,11 @@ function getCampaignInstanceHealth(
   const disconnectedCount = Math.max(0, selectedCount - connectedCount);
   const disconnectedPercent =
     selectedCount > 0 ? Math.round((disconnectedCount / selectedCount) * 100) : 0;
-  const shouldPauseByDisconnectedRatio =
-    selectedCount > 0 && disconnectedCount / selectedCount >= 0.5;
   const minConnectedRequired = DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES;
+  const shouldPauseByDisconnectedRatio =
+    selectedCount > 0 &&
+    disconnectedCount / selectedCount >= 0.5 &&
+    connectedCount < minConnectedRequired;
   const needsMoreInstancesForMinimum = connectedCount < minConnectedRequired;
   const missingConnectedForMinimum = Math.max(0, minConnectedRequired - connectedCount);
   return {
@@ -12735,65 +12821,85 @@ async function pickDisparadorInstanceForConfig(
   config: DisparosConfig,
   opts?: { skipHumanPaused?: boolean },
 ): Promise<{ instancia: string; numero: string } | null> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const selectedList =
+    Array.isArray(config.selectedDisparadorInstances)
+      ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+      : [];
+  if (!selectedList.length) return null;
+
+  let list: any[] = [];
   try {
-    const response = await fetch(EVO_INSTANCES_URL, {
-      headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    const raw = await response.json();
-    const list = Array.isArray(raw)
-      ? raw
-      : Array.isArray(raw?.response)
-        ? raw.response
-        : Array.isArray(raw?.data)
-          ? raw.data
-          : [];
-    const connected = buildConnectedFromEvoResponse(list);
-    const usageMap = await loadInstanceUsageMap();
-    const selectedList =
-      Array.isArray(config.selectedDisparadorInstances)
-        ? config.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
-        : [];
-    if (!selectedList.length) return null;
-    const selectedSet = new Set(selectedList);
-    let eligible = connected.filter((item) => {
-      const usage = usageMap.get(item.instancia);
-      const byUsage = usage ? usage.useDisparador !== false : true;
-      return byUsage && selectedSet.has(item.instancia);
-    });
-    if (opts?.skipHumanPaused && eligible.length) {
-      const filtered: typeof eligible = [];
-      for (const item of eligible) {
-        const life = await getAquecedorLifecycleStatusForInstance(item.instancia);
-        if (life?.phase === "restricted_wait") continue;
-        filtered.push(item);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(EVO_INSTANCES_URL, {
+        headers: { apikey: EVO_API_KEY, "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        const raw = await response.json();
+        list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.response)
+            ? raw.response
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : [];
       }
-      eligible = filtered;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    if (!eligible.length) return null;
-    const maxPerDay = Math.max(
-      1,
-      Number(config.maxPerDayPerInstance) || DISPAROS_DEFAULTS.maxPerDayPerInstance
-    );
-    const dateKey = saoPauloDateKey();
-    const pool = eligible.filter(
-      (item) => getInstanceDailySendCount(item.instancia, dateKey) < maxPerDay
-    );
-    if (!pool.length) return null;
-    const key = "__global_rr__";
-    const cur = campaignDisparadorRoundRobin.get(key) ?? disparosRoundRobinCounter;
-    const idx = cur % pool.length;
-    campaignDisparadorRoundRobin.set(key, cur + 1);
-    disparosRoundRobinCounter = cur + 1;
-    return pool[idx];
   } catch {
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
+    list = [];
   }
+
+  const connected = list.length ? buildConnectedFromEvoResponse(list) : [];
+  const byName = new Map(
+    connected.map((item) => [String(item.instancia || "").trim().toLowerCase(), item]),
+  );
+  const usageMap = await loadInstanceUsageMap();
+  const eligible: Array<{ instancia: string; numero: string }> = [];
+
+  for (const name of selectedList) {
+    const usage = resolveUsageFromMap(usageMap, name);
+    if (usage && usage.useDisparador === false) continue;
+    if (opts?.skipHumanPaused) {
+      const life = await getAquecedorLifecycleStatusForInstance(name);
+      if (life?.phase === "restricted_wait") continue;
+    }
+    const live = await fetchEvoInstanceLiveState(name, { fresh: true });
+    if (!isEvoLiveStateOpen(live)) continue;
+    const fromList = byName.get(name.toLowerCase());
+    let numero = String(fromList?.numero || "").trim();
+    if (!numero) {
+      try {
+        numero = String((await resolveEvoInstancePhone(name)) || "").trim();
+      } catch {
+        numero = "";
+      }
+    }
+    eligible.push({
+      instancia: fromList?.instancia || name,
+      numero,
+    });
+  }
+
+  if (!eligible.length) return null;
+  const maxPerDay = Math.max(
+    1,
+    Number(config.maxPerDayPerInstance) || DISPAROS_DEFAULTS.maxPerDayPerInstance
+  );
+  const dateKey = saoPauloDateKey();
+  const pool = eligible.filter(
+    (item) => getInstanceDailySendCount(item.instancia, dateKey) < maxPerDay
+  );
+  if (!pool.length) return null;
+  const key = "__global_rr__";
+  const cur = campaignDisparadorRoundRobin.get(key) ?? disparosRoundRobinCounter;
+  const idx = cur % pool.length;
+  campaignDisparadorRoundRobin.set(key, cur + 1);
+  disparosRoundRobinCounter = cur + 1;
+  return pool[idx];
 }
 
 async function sendEvoComposingPresenceBeforeText(
@@ -13306,13 +13412,17 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const proxyCfg = loadProxyBrasilConfig();
     if (proxyCfg?.enabled && !isProxyBrasilSessionReadyForSend(instancePick.instancia)) {
-      const liveForReady = await fetchEvoInstanceLiveState(instancePick.instancia);
+      const liveForReady = await fetchEvoInstanceLiveState(instancePick.instancia, { fresh: true });
       if (isEvoLiveStateOpen(liveForReady)) {
         // Memória de "ready" some no Redeploy. Não chamar proxy/set nem restart no meio do disparo.
         markProxyBrasilSessionReadyForSend(instancePick.instancia, {
           state: liveForReady,
           reason: "open no disparo — sem proxy/set",
         });
+      } else if (!String(liveForReady || "").trim()) {
+        console.warn(
+          `[Campanha] Instância ${instancePick.instancia}: connectionState indisponível; segue o disparo sem pausar.`,
+        );
       } else {
         console.warn(
           `[Campanha] Instância ${instancePick.instancia} sem sessão open (state=${liveForReady || "desconhecido"}). Sem proxy/set no disparo.`,
@@ -13588,26 +13698,14 @@ async function runCampaignDispatchTick(): Promise<void> {
   }
   const running = disparosCampaignsMemory.filter((c) => c.status === "running");
   for (const c of running) {
-    // Sem lista EVO não dá para saber quem está open — não pausa e não mexe em proxy.
-    if (!evoRows.length) {
-      const snap = c.configSnapshot || DISPAROS_DEFAULTS;
-      const janela = isDisparosWindowOpen(snap, nowSp);
-      if (!janela.aberta) continue;
-      const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
-      if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
-        if (!isAlternativaBurstWindowOpen(nowSp)) continue;
-      }
-      await processOneCampaignDispatch(c.id);
-      continue;
-    }
-    const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
-    if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
+    const liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+    const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
+    if (health.needsMoreInstancesForMinimum) {
       c.status = "paused";
-      const offline = disparadorInstanceTagsForCampaign(c.configSnapshot, evoRows)
+      const offline = disparadorInstanceTagsForCampaign(c.configSnapshot, liveRows)
         .filter((t) => t.connected !== true)
         .map((t) => t.instanceName);
       c.pauseReason = pauseReasonFromInstanceHealth(health, offline);
-      // Não desligar Proxy: proxy/set no número ainda pareado gera device_removed (regressão 12/08).
       const supabase = getSupabaseClient();
       if (supabase) {
         try {
@@ -13631,6 +13729,37 @@ async function runCampaignDispatchTick(): Promise<void> {
       if (!isAlternativaBurstWindowOpen(nowSp)) {
         continue;
       }
+    }
+    await processOneCampaignDispatch(c.id);
+  }
+
+  for (const c of disparosCampaignsMemory.filter((row) => row.status === "paused")) {
+    if (isOperatorHeldCampaignPause(c.pauseReason)) continue;
+    const liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
+    const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
+    if (health.needsMoreInstancesForMinimum) continue;
+    console.warn(
+      `[Campanha] ${c.id} retomada automaticamente: há número open suficiente para disparar.`,
+    );
+    c.status = "running";
+    c.pauseReason = undefined;
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await (supabase.from("disparos_campaigns" as any) as any)
+          .update({ status: "running" })
+          .eq("id", c.id);
+      } catch {
+        /* */
+      }
+    }
+    queuePersistDisparosLocalState();
+    const snap = c.configSnapshot || DISPAROS_DEFAULTS;
+    const janela = isDisparosWindowOpen(snap, nowSp);
+    if (!janela.aberta) continue;
+    const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
+    if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+      if (!isAlternativaBurstWindowOpen(nowSp)) continue;
     }
     await processOneCampaignDispatch(c.id);
   }
@@ -14155,14 +14284,31 @@ app.get("/disparos/campanhas", async (req, res) => {
     );
     const nowSp = nowInSaoPaulo();
 
+    const liveRowsByCampaignId = new Map<string, EvoInstanceTagRow[]>();
+    for (const item of byId.values()) {
+      const st = String(item.status || "").toLowerCase();
+      const snapshotCfg = configByCampaignId.get(item.id);
+      const snapshotTags = disparadorInstanceTagsForCampaign(snapshotCfg, evoRows);
+      const useGlobal =
+        !snapshotTags.length && st === "running" && globalSelected.length > 0;
+      const configForTags = useGlobal
+        ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
+        : snapshotCfg;
+      liveRowsByCampaignId.set(
+        item.id,
+        await enrichSelectedCampaignInstancesLive(configForTags, evoRows),
+      );
+    }
+
     const proxyBrasilOn = Boolean(loadProxyBrasilConfig()?.enabled);
     const proxyKeysByCampaignId = new Map<string, string[]>();
     const items = Array.from(byId.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((item) => {
+        const liveRows = liveRowsByCampaignId.get(item.id) || evoRows;
         const snapshotTags = disparadorInstanceTagsForCampaign(
           configByCampaignId.get(item.id),
-          evoRows
+          liveRows
         );
         const st = String(item.status || "").toLowerCase();
         const useGlobal =
@@ -14170,10 +14316,8 @@ app.get("/disparos/campanhas", async (req, res) => {
         const configForTags = useGlobal
           ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
           : configByCampaignId.get(item.id);
-        const tags = useGlobal
-          ? disparadorInstanceTagsForCampaign(configForTags, evoRows)
-          : snapshotTags;
-        const instanceHealth = getCampaignInstanceHealth(configForTags, evoRows);
+        const tags = disparadorInstanceTagsForCampaign(configForTags, liveRows);
+        const instanceHealth = getCampaignInstanceHealth(configForTags, liveRows);
         const disconnectedNames = tags
           .filter((t) => t.connected !== true)
           .map((t) => String(t.instanceName || "").trim())
@@ -14190,13 +14334,13 @@ app.get("/disparos/campanhas", async (req, res) => {
               .map((n) => String(n || "").trim())
               .filter(Boolean)
           : [];
-        const evoKeys = resolveSelectedNamesToEvoKeys(selectedRaw, evoRows);
+        const evoKeys = resolveSelectedNamesToEvoKeys(selectedRaw, liveRows);
         const connectedEvoKeys = Array.from(
           new Set(
             tags
               .filter((t) => t.connected === true)
               .map((t) => {
-                const r = resolveStoredNameToEvoTag(t.instanceName, evoRows);
+                const r = resolveStoredNameToEvoTag(t.instanceName, liveRows);
                 return String(r.instanceKey || t.instanceName || "").trim();
               })
               .filter(Boolean),
@@ -14576,6 +14720,7 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
       } catch {
         evoRows = [];
       }
+      evoRows = await enrichSelectedCampaignInstancesLive(campaign.configSnapshot, evoRows);
       const health = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
       if (health.needsMoreInstancesForMinimum) {
         return res.status(409).json({

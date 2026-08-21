@@ -54,6 +54,12 @@ Quando um número **conectar de novo** (QR / pairing):
 - A Proxy Brasil é ligada nos novos e desligada nos removidos.
 - A tag «Proteção ativa» aparece quando a Proxy está confirmada nas instâncias **conectadas** da campanha.
 
+### Campanha — disparar se a Evolution está open
+
+- A campanha **só** pausa automaticamente quando não há o mínimo de números com `connectionState=open` (hoje 1).
+- Se ao menos um número selecionado está `open`, a campanha deve **enviar**. Não pausar por cache vazio, falha de `fetchInstances` nem pela regra antiga de “50% desconectados” quando o mínimo já está cumprido.
+- Pausa automática por saúde **retoma sozinha** quando o mínimo volta a `open`. Pausa manual, créditos esgotados e «parar envios» continuam pausadas.
+
 ### Boas-vindas WhatsApp vs aquecedor
 
 - A mensagem de boas-vindas WhatsApp (cadastro e reenvio) **deve ser enviada** mesmo se a instância de origem estiver em **Preparando** ou **3 horas pausa humana**.
