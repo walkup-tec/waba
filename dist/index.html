@@ -24943,28 +24943,24 @@
       }
 
       /**
-       * Gate etapa-a-etapa (só avance após AVALIE do usuário).
-       * 1 = só abrir WhatsApp (1x) | 2 = menu ⋮ | 3 = Dispositivos conectados
-       * 4 = CONECTAR DISPOSITIVO | 5 = Conectar com número (Insira o código)
-       * 6 = gerar pairingCode + digitar (ver TYPE_CHARS) | >=7 = poll open estável
+       * Fluxo completo de pareamento (coords em % da tela real do device).
+       * 1 = WA | 2 = menu ⋮ | 3 = Dispositivos conectados | 4 = CONECTAR
+       * 5 = Conectar com número | 6 = pairingCode+digitar | >=7 = poll open
        */
-      const DEVICE_CLOUD_PAIRING_NAV_MAX_STEP = 2;
-      /**
-       * true = etapa 6 100% manual (botões: abrir tela → gerar código → você digita → verificar).
-       * Sem nav/gerar/digitar automático.
-       */
+      const DEVICE_CLOUD_PAIRING_NAV_MAX_STEP = 7;
       const DEVICE_CLOUD_PAIRING_FULLY_MANUAL = false;
-      /** Só usado se FULLY_MANUAL=false: 0 = gera+abre e para | 4 = gate H2 | 8 = auto 8 chars */
+      /** Digitar os 8 chars do pairingCode (1 por caixa) via %. */
       const DEVICE_CLOUD_PAIRING_TYPE_CHARS = 8;
 
       /**
-       * Coords de pareamento em % da tela (0–1).
-       * Convertidas para px com a resolução lida do screenshot
-       * (`ensureDeviceCloudScreenMetrics`), não com tamanho fixo do <img> no browser.
+       * Coords em % (0–1). Convertidas com ensureDeviceCloudScreenMetrics
+       * (naturalWidth×Height do screenshot), não com o tamanho do <img> no browser.
+       * dispositivosFallback: 6º item do overflow WA Business (Anúncios…Configurações).
        */
       const DEVICE_CLOUD_PAIRING_PCT = {
         menu: [680 / 720, 104 / 1280],
-        dispositivosFallback: [491 / 720, 704 / 1280],
+        dispositivosFallback: [500 / 720, 560 / 1280],
+        dispositivosFallbackAlt: [500 / 720, 620 / 1280],
         conectar: [360 / 720, 651 / 1280],
         conectarNumero: [360 / 720, 1133 / 1280],
         codeBoxY: 468 / 1280,
@@ -24989,7 +24985,8 @@
       }
 
       /**
-       * Navegação WA Business por etapas — sem ensureDeviceCloudWhatsAppForeground (HOME loop).
+       * Navegação WA Business até «Insira o código» — só % (+ texto no overflow).
+       * Sem ensureDeviceCloudWhatsAppForeground (HOME loop).
        */
       async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
         const id = String(deviceId || "");
@@ -25007,34 +25004,37 @@
         await ensureDeviceCloudScreenMetrics(id).catch(() => {});
         if (maxStep <= 1) return;
 
-        // Etapa 2 — menu ⋮. Etapa 3 resolve o item pelo TEXTO.
-        if (maxStep >= 3) {
-          status('Etapa 3 — Menu ⋮ → «Dispositivos conectados» (por texto)…');
-          try {
-            await tapDeviceCloudOverflowItemByLabel(id, "Dispositivos conectados");
-          } catch (err) {
-            status("Etapa 2/3 — Fallback % menu ⋮ + Dispositivos…");
-            await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
-            await sleepDeviceCloud(2000);
-            await sendDeviceCloudTapPct(
-              deviceId,
-              pct.dispositivosFallback[0],
-              pct.dispositivosFallback[1],
-              { skipRefresh: true },
-            );
-          }
-          await sleepDeviceCloud(1800);
-          await refreshDeviceCloudScreen(deviceId).catch(() => {});
-          if (maxStep <= 3) return;
-        } else {
-          status("Etapa 2 — Abrindo menu ⋮…");
-          await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
-          await sleepDeviceCloud(1500);
-          await refreshDeviceCloudScreen(deviceId).catch(() => {});
-          if (maxStep <= 2) return;
-        }
+        status("Etapa 2 — Abrindo menu ⋮…");
+        await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
+        await sleepDeviceCloud(1600);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        if (maxStep <= 2) return;
 
-        // Etapa 4 — CONECTAR DISPOSITIVO
+        status('Etapa 3 — «Dispositivos conectados»…');
+        let overflowOk = false;
+        try {
+          await tapDeviceCloudOverflowItemByLabel(id, "Dispositivos conectados");
+          overflowOk = true;
+        } catch (err) {
+          status("Etapa 3 — Fallback % (texto indisponível)…");
+          await sendDeviceCloudTapPct(
+            deviceId,
+            pct.dispositivosFallback[0],
+            pct.dispositivosFallback[1],
+            { skipRefresh: true },
+          );
+          await sleepDeviceCloud(900);
+          await sendDeviceCloudTapPct(
+            deviceId,
+            pct.dispositivosFallbackAlt[0],
+            pct.dispositivosFallbackAlt[1],
+            { skipRefresh: true },
+          );
+        }
+        await sleepDeviceCloud(overflowOk ? 1600 : 2000);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        if (maxStep <= 3) return;
+
         status("Etapa 4 — CONECTAR DISPOSITIVO…");
         await sendDeviceCloudTapPct(deviceId, pct.conectar[0], pct.conectar[1], {
           skipRefresh: true,
@@ -25043,7 +25043,6 @@
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
         if (maxStep <= 4) return;
 
-        // Etapa 5 — Conectar com número
         status("Etapa 5 — Conectar com número…");
         await sendDeviceCloudTapPct(deviceId, pct.conectarNumero[0], pct.conectarNumero[1], {
           skipRefresh: true,
@@ -25364,13 +25363,20 @@
           );
           return;
         }
-
-        setDeviceCloudWarmStatus(id, "Gerando código de vinculação…", {
-          phase: "busy",
-          hideActions: true,
-        });
+        if (phoneInput) phoneInput.value = evoNumber;
 
         try {
+          // H3: pairingCode ~1 min — abrir «Insira o código» ANTES de gerar; digitar na hora.
+          setDeviceCloudWarmStatus(id, "Abrindo Insira o código (coords %)…", {
+            phase: "busy",
+            hideActions: true,
+          });
+          await openDeviceCloudWhatsAppPairingCodeScreen(id);
+
+          setDeviceCloudWarmStatus(id, `Gerando código para ${evoNumber}…`, {
+            phase: "busy",
+            hideActions: true,
+          });
           const data = await submitAndPollRegistrarQrcode({
             name: instanceName,
             token: generateTokenLike(),
@@ -25390,9 +25396,17 @@
           }
 
           warmSt.pendingPairingCode = pairingCode;
-          warmSt.busy = true;
-          // Automático: Aparelhos conectados → Vincular com número → digitar código
-          await insertPendingDeviceCloudPairingCode(id);
+          const codeLabel = normalizeDeviceCloudPairingCode(pairingCode);
+          setDeviceCloudWarmStatus(id, `Digitando ${codeLabel} (1 char/caixa)…`, {
+            phase: "busy",
+            hideActions: true,
+          });
+          await typeDeviceCloudPairingCodeOnDevice(id, pairingCode);
+          setDeviceCloudWarmStatus(id, "Código enviado. Aguardando conexão no WhatsApp…", {
+            phase: "busy",
+            hideActions: true,
+          });
+          startDeviceCloudWarmConnectPolling(id, instanceName, deviceLabel);
         } catch (error) {
           warmSt.busy = false;
           warmSt.awaitingManualPairingInsert = false;

@@ -1,18 +1,22 @@
 #!/bin/bash
 # Usage: tap-menu-label.sh "Dispositivos conectados"
-# NÃ£o faz force-stop (isso gerava toques/nav errados no meio do fluxo WABA).
+# SKIP_NAV=1 — só dump+tap (menu ⋮ já aberto pelo WABA via %).
+# Sem force-stop (gerava toques/nav errados no meio do fluxo).
 set -e
 SERIAL="${DEVICE_ADB_SERIAL:-127.0.0.1:5555}"
 LABEL="${1:?label required}"
+SKIP_NAV="${SKIP_NAV:-0}"
 adb connect "$SERIAL" >/dev/null
-adb -s "$SERIAL" shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
-sleep 0.25
-adb -s "$SERIAL" shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
-sleep 0.25
-adb -s "$SERIAL" shell am start -n com.whatsapp.w4b/com.whatsapp.Main >/dev/null 2>&1 || true
-sleep 2.0
-adb -s "$SERIAL" shell input tap 680 104
-sleep 1.8
+if [ "$SKIP_NAV" != "1" ]; then
+  adb -s "$SERIAL" shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+  sleep 0.25
+  adb -s "$SERIAL" shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+  sleep 0.25
+  adb -s "$SERIAL" shell am start -n com.whatsapp.w4b/com.whatsapp.Main >/dev/null 2>&1 || true
+  sleep 2.0
+  adb -s "$SERIAL" shell input tap 680 104
+  sleep 1.8
+fi
 adb -s "$SERIAL" shell uiautomator dump /sdcard/uidump.xml >/dev/null
 adb -s "$SERIAL" pull /sdcard/uidump.xml /tmp/waba-overflow.xml >/dev/null
 export LABEL
