@@ -554,8 +554,9 @@ async function readCnaeSelectedCount(page: PageLike): Promise<number | null> {
 }
 
 /**
- * CNAE 100% via DOM (sem locator.fill/type) — no V02 o headed aguenta fill;
- * no Docker/Xvfb o renderer crasha ("Target crashed") no input type=text.
+ * CNAE só via DOM — sem Playwright locator loops (travavam 2+ min no Docker).
+ * Evidência local: checkbox id = "6619302 - correspondentes…"; label longo do menu
+ * NÃO deve ser clicado (antes batia em "Início Planos Mais…").
  */
 async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
   const code = String(rawCode || "").replace(/\D/g, "");
@@ -563,138 +564,163 @@ async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
 
   await dismissBlockingPortalOverlays(page).catch(() => undefined);
 
-  // 1) Abrir modal/picker
+  // 1) Abrir: label curto OU input type=text da atividade (abre o modal)
   await page.evaluate(() => {
     const visible = (el: Element) => {
       const h = el as HTMLElement;
       const s = window.getComputedStyle(h);
-      return s.display !== "none" && s.visibility !== "hidden" && h.offsetParent !== null;
+      return s.display !== "none" && s.visibility !== "hidden" && (h.offsetParent !== null || s.position === "fixed");
     };
-    const nodes = Array.from(
-      document.querySelectorAll("label, span, p, strong, button, div, a"),
-    );
-    const lab = nodes.find((el) =>
-      /Atividade\s+Principal\s*\(CNAE\)/i.test((el.textContent || "").replace(/\s+/g, " ")),
-    ) as HTMLElement | undefined;
-    if (lab && visible(lab)) lab.click();
-    const following = lab?.closest(".field, .control, .column, form, section")?.querySelector(
-      "input, button, .dropdown, .autocomplete, .taginput, .select",
-    ) as HTMLElement | null;
-    if (following && visible(following)) following.click();
+    const labels = Array.from(document.querySelectorAll("label")).filter((el) => {
+      const t = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      return t.length > 0 && t.length < 80 && /Atividade\s+Principal\s*\(CNAE\)/i.test(t);
+    }) as HTMLLabelElement[];
+    const lab = labels.find(visible);
+    if (lab) lab.click();
+
+    const textOpeners = Array.from(document.querySelectorAll("input")).filter((el) => {
+      const i = el as HTMLInputElement;
+      const ph = String(i.placeholder || "").toLowerCase();
+      return (
+        visible(i) &&
+        i.type === "text" &&
+        /c[oó]digo ou nome da atividade|atividade/.test(ph)
+      );
+    }) as HTMLInputElement[];
+    textOpeners[0]?.click();
   });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(500);
 
-  // Se ainda não abriu, tenta o caminho Playwright só para CLICK (sem fill).
-  const opened = await findCnaeSearchInput(page, 2000);
-  if (!opened) {
-    await tryOpenCnaePicker(page);
+  // 2) Digitar no search (preferir modal / type=search)
+  let typedOk = false;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const typed = await page.evaluate((cnae: string) => {
+      const visible = (el: Element) => {
+        const h = el as HTMLElement;
+        const s = window.getComputedStyle(h);
+        return s.display !== "none" && s.visibility !== "hidden";
+      };
+      const inputs = Array.from(document.querySelectorAll("input")) as HTMLInputElement[];
+      const score = (el: HTMLInputElement) => {
+        const ph = String(el.placeholder || "").toLowerCase();
+        let s = 0;
+        if (el.type === "search") s += 8;
+        if (/atividade|cnae|c[oó]digo/.test(ph)) s += 5;
+        if (el.closest('[role="dialog"], .modal, .o-modal, .modal-card, .modal-content')) s += 10;
+        if (!visible(el)) s -= 20;
+        if (el.type === "text" && !el.closest('[role="dialog"], .modal, .o-modal, .modal-card')) s -= 6;
+        return s;
+      };
+      const ranked = inputs
+        .map((el) => ({ el, s: score(el) }))
+        .filter((x) => x.s >= 8)
+        .sort((a, b) => b.s - a.s);
+      const target = ranked[0]?.el;
+      if (!target) return { ok: false as const };
+      target.focus();
+      const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+      proto?.set?.call(target, "");
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      proto?.set?.call(target, cnae);
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      target.dispatchEvent(
+        new KeyboardEvent("keyup", { bubbles: true, key: cnae.slice(-1) || "0" }),
+      );
+      return { ok: true as const };
+    }, code);
+    if (typed?.ok) {
+      typedOk = true;
+      break;
+    }
+    // Reabre e tenta de novo
+    await page.evaluate(() => {
+      const i = Array.from(document.querySelectorAll("input")).find((el) => {
+        const ph = String((el as HTMLInputElement).placeholder || "").toLowerCase();
+        return (el as HTMLInputElement).type === "text" && /atividade/.test(ph);
+      }) as HTMLInputElement | undefined;
+      i?.click();
+    });
     await page.waitForTimeout(400);
   }
 
-  // 2) Digitar CNAE no search do modal via setter nativo
-  const typed = await page.evaluate((cnae: string) => {
-    const visible = (el: Element) => {
-      const h = el as HTMLElement;
-      const s = window.getComputedStyle(h);
-      return s.display !== "none" && s.visibility !== "hidden";
-    };
-    const inputs = Array.from(document.querySelectorAll("input")) as HTMLInputElement[];
-    const score = (el: HTMLInputElement) => {
-      const ph = String(el.placeholder || "").toLowerCase();
-      let s = 0;
-      if (el.type === "search") s += 5;
-      if (/atividade|cnae|c[oó]digo/.test(ph)) s += 4;
-      if (el.closest('[role="dialog"], .modal, .o-modal, .modal-card')) s += 6;
-      if (/selecionados/i.test(document.body?.innerText || "")) s += 1;
-      if (!visible(el)) s -= 10;
-      return s;
-    };
-    const ranked = inputs
-      .map((el) => ({ el, s: score(el) }))
-      .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s);
-    const target = ranked[0]?.el;
-    if (!target) return { ok: false as const, reason: "no-input" };
-    target.focus();
-    const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
-    proto?.set?.call(target, "");
-    target.dispatchEvent(new Event("input", { bubbles: true }));
-    proto?.set?.call(target, cnae);
-    target.dispatchEvent(new Event("input", { bubbles: true }));
-    target.dispatchEvent(new Event("change", { bubbles: true }));
-    target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: cnae.slice(-1) || "0" }));
-    return { ok: true as const, placeholder: String(target.placeholder || "") };
-  }, code);
-
-  if (!typed || !typed.ok) {
-    const placeholders = await page.evaluate(() =>
-      Array.from(document.querySelectorAll("input[placeholder]"))
-        .slice(0, 20)
-        .map((el) => String((el as HTMLInputElement).placeholder || "").trim())
-        .filter(Boolean),
-    );
-    throw new Error(
-      `CNAE: campo de busca ausente no portal. Código: ${code}. Placeholders: ${
-        placeholders.length ? placeholders.join(" | ") : "(nenhum)"
-      }.`,
-    );
+  if (!typedOk) {
+    throw new Error(`CNAE ${code}: modal de busca não abriu (search ausente).`);
   }
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(700);
 
-  // 3) Marcar opção
-  let marked = await page.evaluate((cnae: string) => {
-    const boxes = Array.from(document.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
-    const box = boxes.find(
-      (b) =>
-        String(b.id || "").includes(cnae) ||
-        String(b.closest("label")?.textContent || "").includes(cnae) ||
-        String(b.parentElement?.textContent || "").includes(cnae),
-    );
-    if (box) {
-      if (!box.checked) box.click();
-      return true;
-    }
-    const line = Array.from(document.querySelectorAll("label, li, div, span, button")).find((n) => {
-      const t = String(n.textContent || "").trim();
-      return new RegExp(`^${cnae}\\b`).test(t) || t.startsWith(cnae + " ") || t.startsWith(cnae + " -");
-    }) as HTMLElement | undefined;
-    if (line) {
-      line.click();
-      return true;
-    }
-    return false;
-  }, code);
-
-  if (!marked) {
-    await page.keyboard.press("Enter").catch(() => undefined);
-    await page.waitForTimeout(400);
+  // 3) Marcar checkbox da linha (id começa com o código)
+  let marked = false;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
     marked = await page.evaluate((cnae: string) => {
-      const boxes = Array.from(document.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
-      const box = boxes.find((b) => String(b.id || "").includes(cnae) || String(b.closest("label")?.textContent || "").includes(cnae));
+      const boxes = Array.from(
+        document.querySelectorAll('input[type="checkbox"]'),
+      ) as HTMLInputElement[];
+      const box = boxes.find(
+        (b) =>
+          String(b.id || "").startsWith(cnae) ||
+          String(b.id || "").includes(cnae) ||
+          String(b.closest("label")?.textContent || "").includes(cnae),
+      );
       if (box) {
         if (!box.checked) box.click();
-        return true;
+        return Boolean(box.checked || true);
       }
       return false;
     }, code);
+    if (marked) break;
+    await page.keyboard.press("Enter").catch(() => undefined);
+    await page.waitForTimeout(350);
   }
 
-  let selectedState = await readCnaeSelectedCount(page);
-  if ((!selectedState || selectedState < 1) && marked) selectedState = 1;
-  if (!selectedState || selectedState < 1) {
-    throw new Error(
-      `CNAE ${code}: opção não marcada após digitar no modal (DOM).`,
-    );
+  if (!marked) {
+    throw new Error(`CNAE ${code}: checkbox da atividade não apareceu após filtrar.`);
   }
 
-  // 4) Fechar
+  // 4) Fechar modal
   await page.evaluate(() => {
     const btn = Array.from(document.querySelectorAll("button")).find((b) =>
       /^(Fechar|Concluir|Aplicar|OK)$/i.test(String(b.textContent || "").trim()),
     ) as HTMLButtonElement | undefined;
     btn?.click();
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(250);
+}
+
+async function selectAtividadePrincipalCnaeWithTimeout(
+  page: PageLike,
+  rawCode: string,
+  onProgress?: CasaDosDadosProgress,
+  timeoutMs = 35000,
+) {
+  const code = String(rawCode || "").replace(/\D/g, "");
+  if (!code) return;
+  let beat: ReturnType<typeof setInterval> | undefined;
+  const started = Date.now();
+  beat = setInterval(() => {
+    const sec = Math.round((Date.now() - started) / 1000);
+    onProgress?.(`Pesquisando: selecionando CNAE ${code}… (${sec}s)`);
+  }, 8000);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      selectAtividadePrincipalCnae(page, code),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `CNAE ${code}: timeout ${Math.round(timeoutMs / 1000)}s ao selecionar no portal.`,
+              ),
+            ),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (beat) clearInterval(beat);
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function setCheckboxByLabel(page: PageLike, label: string, checked: boolean) {
@@ -798,7 +824,12 @@ async function applyFilters(
       ? `selecionando CNAE ${cnaeCode}…`
       : "aplicando filtros (CNAE, situação, celular)…",
   );
-  await selectAtividadePrincipalCnae(page, String(filters.atividadePrincipalCnae || "").trim());
+  await selectAtividadePrincipalCnaeWithTimeout(
+    page,
+    String(filters.atividadePrincipalCnae || "").trim(),
+    onProgress,
+    35000,
+  );
   if (filters.incluirAtividadeSecundaria) {
     await setToggleByLabel(page, "incluir atividade secundária", true);
   }
