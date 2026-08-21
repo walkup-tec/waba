@@ -3562,6 +3562,96 @@
         line-height: 1;
         flex: 0 0 auto;
       }
+      /* Sinal de vida: prova visual de que o processo está evoluindo (sem janela do browser). */
+      .mlc-live {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 2px;
+        min-width: 0;
+      }
+      .mlc-live-pulse {
+        position: relative;
+        height: 3px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(148, 163, 184, 0.18);
+      }
+      .mlc-live-pulse::after {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 38%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, transparent, #fda4af, transparent);
+        animation: mlc-live-sweep 1.4s ease-in-out infinite;
+      }
+      .mlc-live.is-stale .mlc-live-pulse::after {
+        background: linear-gradient(90deg, transparent, #fbbf24, transparent);
+        animation-duration: 2.4s;
+      }
+      .mlc-live.is-dead .mlc-live-pulse::after {
+        animation: none;
+        width: 100%;
+        background: rgba(248, 113, 113, 0.55);
+      }
+      .mlc-live-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        min-width: 0;
+      }
+      .mlc-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.68rem;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+        color: #86efac;
+        flex: 0 0 auto;
+      }
+      .mlc-live.is-stale .mlc-live-badge {
+        color: #fbbf24;
+      }
+      .mlc-live.is-dead .mlc-live-badge {
+        color: #fca5a5;
+      }
+      .mlc-live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 0 0 currentColor;
+        animation: mlc-live-blink 1.2s ease-out infinite;
+        flex: 0 0 auto;
+      }
+      .mlc-live.is-dead .mlc-live-dot {
+        animation: none;
+        opacity: 0.85;
+      }
+      .mlc-live-age {
+        font-size: 0.68rem;
+        color: #94a3b8;
+        flex: 0 0 auto;
+      }
+      .mlc-live-msg {
+        font-size: 0.72rem;
+        line-height: 1.35;
+        color: #cbd5e1;
+        min-width: 0;
+        word-break: break-word;
+      }
+      @keyframes mlc-live-sweep {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(320%); }
+      }
+      @keyframes mlc-live-blink {
+        0% { box-shadow: 0 0 0 0 rgba(134, 239, 172, 0.55); }
+        70% { box-shadow: 0 0 0 6px rgba(134, 239, 172, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(134, 239, 172, 0); }
+      }
       .mlc-spinner {
         width: 14px;
         height: 14px;
@@ -34227,6 +34317,16 @@
         }
         return "abrindo";
       }
+      function formatMarketingLeadsCnpjLiveAge(updatedAt) {
+        const ms = Date.parse(String(updatedAt || ""));
+        if (!Number.isFinite(ms)) return { ageSec: null, label: "sem horário" };
+        const ageSec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+        if (ageSec < 5) return { ageSec, label: "agora" };
+        if (ageSec < 60) return { ageSec, label: "há " + ageSec + "s" };
+        const min = Math.floor(ageSec / 60);
+        if (min < 60) return { ageSec, label: "há " + min + " min" };
+        return { ageSec, label: "há " + Math.floor(min / 60) + " h" };
+      }
       function renderMarketingLeadsCnpjStageCell(item) {
         const status = String(item?.status || "");
         const activeKey = resolveMarketingLeadsCnpjStage(item);
@@ -34252,15 +34352,50 @@
             : "";
           return '<span class="' + cls + '">' + check + escapeAdminHtml(stage.label) + "</span>";
         }).join("");
-        const detail = item?.error
-          ? '<div class="muted" style="font-size:11px;margin-top:2px;color:#fca5a5">' +
-            escapeAdminHtml(String(item.error).slice(0, 160)) +
+        const live = formatMarketingLeadsCnpjLiveAge(item?.updatedAt);
+        let liveState = "";
+        let liveBadge = "Ao vivo";
+        if (busy) {
+          if (live.ageSec == null) {
+            liveState = " is-stale";
+            liveBadge = "Aguardando sinal";
+          } else if (live.ageSec >= 45) {
+            liveState = " is-dead";
+            liveBadge = "Sem evolução";
+          } else if (live.ageSec >= 20) {
+            liveState = " is-stale";
+            liveBadge = "Sinal lento";
+          }
+        }
+        const msgText = failed
+          ? String(item?.error || item?.progressMessage || "").trim()
+          : String(item?.progressMessage || "").trim();
+        const liveBlock = busy
+          ? '<div class="mlc-live' +
+            liveState +
+            '" title="Atualiza a cada ~2s. Verde = processo falando; amarelo/vermelho = mesma etapa sem mudança.">' +
+            '<div class="mlc-live-pulse" aria-hidden="true"></div>' +
+            '<div class="mlc-live-row">' +
+            '<span class="mlc-live-badge"><span class="mlc-live-dot" aria-hidden="true"></span>' +
+            escapeAdminHtml(liveBadge) +
+            "</span>" +
+            '<span class="mlc-live-age">atualizado ' +
+            escapeAdminHtml(live.label) +
+            "</span>" +
+            "</div>" +
+            (msgText
+              ? '<div class="mlc-live-msg">' + escapeAdminHtml(msgText.slice(0, 160)) + "</div>"
+              : "") +
             "</div>"
-          : item?.progressMessage && busy
-            ? '<div class="muted" style="font-size:11px;margin-top:2px">' +
-              escapeAdminHtml(String(item.progressMessage).slice(0, 120)) +
+          : failed && msgText
+            ? '<div class="muted" style="font-size:11px;margin-top:2px;color:#fca5a5">' +
+              escapeAdminHtml(msgText.slice(0, 160)) +
               "</div>"
-            : "";
+            : !busy && item?.progressMessage
+              ? '<div class="muted" style="font-size:11px;margin-top:2px">' +
+                escapeAdminHtml(String(item.progressMessage).slice(0, 120)) +
+                "</div>"
+              : "";
         return (
           '<div class="mlc-stage">' +
           '<div class="mlc-stage-current">' +
@@ -34274,7 +34409,7 @@
           '<div class="mlc-stage-steps" aria-label="Etapas do processo">' +
           pills +
           "</div>" +
-          detail +
+          liveBlock +
           "</div>"
         );
       }

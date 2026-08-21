@@ -544,8 +544,12 @@ async function setToggleByLabel(page, label, enabled) {
     }
     // Se não achou controle visível, não falha a extração inteira.
 }
-async function applyFilters(page, filters) {
+async function applyFilters(page, filters, onProgress) {
+    const step = (label) => {
+        onProgress?.(`Pesquisando: ${label}`);
+    };
     await dismissBlockingPortalOverlays(page);
+    step("aplicando filtros (busca e situação)…");
     await fillByLabel(page, ["cnpj"], String(filters.cnpj || "").trim());
     await fillByLabel(page, ["busca textual"], String(filters.buscaTextual || "").trim());
     await setCheckboxByLabel(page, "razão social", filters.buscaEmRazaoSocial !== false);
@@ -569,10 +573,15 @@ async function applyFilters(page, filters) {
     for (const situacao of ["Ativa", "Baixada", "Inapta", "Nula", "Suspensa"]) {
         await setCheckboxByLabel(page, situacao.toLowerCase(), situacoes.includes(situacao));
     }
+    const cnaeCode = String(filters.atividadePrincipalCnae || "").replace(/\D/g, "");
+    step(cnaeCode
+        ? `selecionando CNAE ${cnaeCode}…`
+        : "aplicando filtros (CNAE, situação, celular)…");
     await selectAtividadePrincipalCnae(page, String(filters.atividadePrincipalCnae || "").trim());
     if (filters.incluirAtividadeSecundaria) {
         await setToggleByLabel(page, "incluir atividade secundária", true);
     }
+    step("aplicando filtros (natureza, UF, contatos)…");
     await fillByLabel(page, ["natureza jurídica", "código ou nome da natureza"], String(filters.naturezaJuridica || "").trim());
     await fillByLabel(page, ["estado (uf)", "estado", "selecione o estado"], String(filters.estadoUf || "").trim());
     await fillByLabel(page, ["município", "municipio", "selecione um município"], String(filters.municipio || "").trim());
@@ -604,6 +613,7 @@ async function applyFilters(page, filters) {
     await setToggleByLabel(page, "com e-mail", Boolean(filters.comEmail));
     await setToggleByLabel(page, "excluir empresas visualizadas", Boolean(filters.excluirEmpresasVisualizadas));
     await setToggleByLabel(page, 'excluir empresas que no e-mail contenham "contab"', Boolean(filters.excluirEmailContab));
+    step("filtros aplicados — pronto para pesquisar…");
 }
 function parseResultTotalFromText(text) {
     const patterns = [
@@ -756,7 +766,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
         await page.waitForTimeout(1500);
         onProgress?.("Pesquisando: aplicando filtros (CNAE, situação, celular)…");
-        await applyFilters(page, filters);
+        await applyFilters(page, filters, onProgress);
         const searchBtn = page
             .locator('button:has-text("Pesquisar"), button:has-text("Buscar"), a:has-text("Pesquisar"), [role="button"]:has-text("Pesquisar")')
             .first();

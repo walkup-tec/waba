@@ -642,8 +642,17 @@ async function setToggleByLabel(page: PageLike, label: string, enabled: boolean)
   // Se não achou controle visível, não falha a extração inteira.
 }
 
-async function applyFilters(page: PageLike, filters: WabaLeadsCnpjFilters) {
+async function applyFilters(
+  page: PageLike,
+  filters: WabaLeadsCnpjFilters,
+  onProgress?: CasaDosDadosProgress,
+) {
+  const step = (label: string) => {
+    onProgress?.(`Pesquisando: ${label}`);
+  };
+
   await dismissBlockingPortalOverlays(page);
+  step("aplicando filtros (busca e situação)…");
   await fillByLabel(page, ["cnpj"], String(filters.cnpj || "").trim());
   await fillByLabel(page, ["busca textual"], String(filters.buscaTextual || "").trim());
 
@@ -673,10 +682,17 @@ async function applyFilters(page: PageLike, filters: WabaLeadsCnpjFilters) {
     await setCheckboxByLabel(page, situacao.toLowerCase(), situacoes.includes(situacao));
   }
 
+  const cnaeCode = String(filters.atividadePrincipalCnae || "").replace(/\D/g, "");
+  step(
+    cnaeCode
+      ? `selecionando CNAE ${cnaeCode}…`
+      : "aplicando filtros (CNAE, situação, celular)…",
+  );
   await selectAtividadePrincipalCnae(page, String(filters.atividadePrincipalCnae || "").trim());
   if (filters.incluirAtividadeSecundaria) {
     await setToggleByLabel(page, "incluir atividade secundária", true);
   }
+  step("aplicando filtros (natureza, UF, contatos)…");
   await fillByLabel(
     page,
     ["natureza jurídica", "código ou nome da natureza"],
@@ -716,6 +732,7 @@ async function applyFilters(page: PageLike, filters: WabaLeadsCnpjFilters) {
   await setToggleByLabel(page, "com e-mail", Boolean(filters.comEmail));
   await setToggleByLabel(page, "excluir empresas visualizadas", Boolean(filters.excluirEmpresasVisualizadas));
   await setToggleByLabel(page, 'excluir empresas que no e-mail contenham "contab"', Boolean(filters.excluirEmailContab));
+  step("filtros aplicados — pronto para pesquisar…");
 }
 
 function parseResultTotalFromText(text: string): number | null {
@@ -898,7 +915,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     await page.waitForTimeout(1500);
 
     onProgress?.("Pesquisando: aplicando filtros (CNAE, situação, celular)…");
-    await applyFilters(page as unknown as PageLike, filters);
+    await applyFilters(page as unknown as PageLike, filters, onProgress);
 
     const searchBtn = page
       .locator(

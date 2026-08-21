@@ -3417,3 +3417,5 @@ Palavras-chave para buscar:
 - 2026-08-21: fix CNAE modal Playwright (Leads PJ) — keywords: cnae, casadosdados, modal, leads-cnpj. LOG: LOG--leads-cnae-modal-playwright.md
 
 - 2026-08-21: Leads PJ produção = Xvfb+headed (paridade V02). Keywords: xvfb, headless, casadosdados.
+
+- 2026-08-21: UI Leads PJ live-pulse (sinal de vida na etapa). Marker leads-pj-live-pulse.
