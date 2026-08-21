@@ -1,5 +1,33 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 17:52 — CHECKPOINT V02 Device Cloud pairing
+
+- Ponto de backup: `doc/CHECKPOINT-2026-08-21__v02-device-cloud-pairing.md`
+- Tag `checkpoint/v02-device-cloud-pairing-2026-08-21` + branch `backup/v02-device-cloud-pairing-checkpoint-20260821`
+- Marker `DEPLOY-2026-08-21-dc-fix-false-browser-pairing-screen`
+- Keywords: checkpoint, v02, device-cloud, pairing, EM-6034, Insira o código
+
+## 2026-08-21 17:48 — «+ Instâncias» na campanha não clicava
+
+- UI: botão usava `click` (Pausar já era `pointerdown`) → 1º clique sumia. Agora `pointerdown` + toast «Trocando…».
+- API: POST `/instancias` não usava `connectionState` live; podia recusar troca com 9224 vermelho na tela.
+- LOG: `doc/LOG-2026-08-21__174800__fix-campanha-botao-instancias.md`
+- Keywords: + Instâncias, pointerdown, campanha, 9224, connectionState
+
+## 2026-08-21 17:46 — Falso «navegador» na tela Insira o código
+
+- Classificador: teclado claro + sem verde WA → browser. Tela de código WA é exatamente isso.
+- Fix: detectar caixas pretas do código; não abortar digitação por classify=browser.
+- Marker `DEPLOY-2026-08-21-dc-fix-false-browser-pairing-screen`
+- LOG: doc/LOG-2026-08-21__174600__fix-false-browser-pairing-screen.md
+
+## 2026-08-21 17:00 — Pareamento: escala pelo tamanho real do device (não zoom)
+
+- Zoom do browser não entra no cálculo. Lê `naturalWidth×Height` do screenshot e escala o mapa 720×1280.
+- Sem ADB overflow/HOME no warm. Marker `DEPLOY-2026-08-21-dc-pairing-scale-from-device-metrics`.
+- LOG: doc/LOG-2026-08-21__170006__device-cloud-pairing-scale-metrics.md
+- Keywords: device-cloud, pairing, scale, naturalWidth, zoom, 720x1280
+
 ## 2026-08-21 10:35 — Alternativa: texto corrido (sem título em negrito)
 
 - Evolution 2.4 envolve `title` em `*...*`. WABA não parte mais o texto em title/description.

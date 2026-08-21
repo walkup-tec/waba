@@ -24827,8 +24827,12 @@
       }
 
       /**
-       * Classifica a tela do device (720×1280) por amostragem de cor.
+       * Classifica a tela do device por amostragem de cor.
        * @returns {"whatsapp"|"browser"|"unknown"}
+       *
+       * CRÍTICO: a tela «Insira o código» (WA Business tema claro) tem barra branca
+       * + teclado QWERTY claro — NÃO é Chrome. Antes era classificada como "browser"
+       * (waGreenTop baixo + lightKeyboard alto) e abortava a digitação do pairingCode.
        */
       async function classifyDeviceCloudScreen(deviceId) {
         try {
@@ -24860,7 +24864,17 @@
             }
             return n ? hit / n : 0;
           };
-          // Toolbar WA Business (teal/verde)
+          // Caixas do código (y≈468/1280): bordas pretas — assinatura da tela «Insira o código».
+          const pairingBoxInk = sample(
+            Math.floor(w * 0.06),
+            Math.floor(h * 0.33),
+            Math.floor(w * 0.94),
+            Math.floor(h * 0.42),
+            (r, g, b) => r < 55 && g < 55 && b < 55,
+          );
+          if (pairingBoxInk > 0.008) return "whatsapp";
+
+          // Toolbar WA Business (teal/verde) nas conversas / menus
           const waGreenTop = sample(
             Math.floor(w * 0.05),
             Math.floor(h * 0.05),
@@ -24868,7 +24882,9 @@
             Math.floor(h * 0.15),
             (r, g, b) => g > r + 15 && g > 50 && r < 120 && b < 160,
           );
-          // Teclado Chrome costuma ser cinza claro na faixa inferior
+          if (waGreenTop > 0.14) return "whatsapp";
+
+          // Chrome: teclado claro + faixa superior cinza de barra de endereço (não branco puro WA)
           const lightKeyboard = sample(
             Math.floor(w * 0.1),
             Math.floor(h * 0.72),
@@ -24876,9 +24892,21 @@
             Math.floor(h * 0.98),
             (r, g, b) => r > 190 && g > 190 && b > 190 && Math.abs(r - g) < 18,
           );
-          if (waGreenTop > 0.14) return "whatsapp";
-          // Só browser se NÃO há verde WA e o teclado claro domina
-          if (waGreenTop < 0.08 && lightKeyboard > 0.5) return "browser";
+          const chromeTopBar = sample(
+            Math.floor(w * 0.08),
+            Math.floor(h * 0.04),
+            Math.floor(w * 0.92),
+            Math.floor(h * 0.12),
+            (r, g, b) => {
+              const avg = (r + g + b) / 3;
+              return avg > 140 && avg < 210 && Math.abs(r - g) < 12 && Math.abs(g - b) < 12;
+            },
+          );
+          // Só browser com evidência de barra Chrome — teclado claro sozinho NÃO basta
+          // (a tela Insira o código também tem teclado claro).
+          if (waGreenTop < 0.05 && lightKeyboard > 0.55 && chromeTopBar > 0.35 && pairingBoxInk < 0.004) {
+            return "browser";
+          }
           return "unknown";
         } catch {
           return "unknown";
@@ -24942,112 +24970,98 @@
         // Prossegue mesmo em unknown: Conversas pode ter sido detectada fraca; o menu ⋮ só existe no WA
       }
 
-      /**
-       * Fluxo completo de pareamento (coords em % da tela real do device).
-       * 1 = WA | 2 = menu ⋮ | 3 = Dispositivos conectados | 4 = CONECTAR
-       * 5 = Conectar com número | 6 = pairingCode+digitar | >=7 = poll open
-       */
-      const DEVICE_CLOUD_PAIRING_NAV_MAX_STEP = 7;
-      const DEVICE_CLOUD_PAIRING_FULLY_MANUAL = false;
-      /** Digitar os 8 chars do pairingCode (1 por caixa) via %. */
-      const DEVICE_CLOUD_PAIRING_TYPE_CHARS = 8;
+      /** Resolução em que o mapa de pareamento foi calibrado (EM-6034 / Redroid). */
+      const DEVICE_CLOUD_PAIRING_REF = { w: 720, h: 1280 };
 
       /**
-       * Coords em % (0–1). Convertidas com ensureDeviceCloudScreenMetrics.
-       * Overflow real (tema claro): Anúncios… Comunidades(4)… Dispositivos conectados(6)…
-       * Y≈560 acerta Comunidades — NÃO usar. Dispositivos ≈ 704/1280.
+       * Mapa calibrado em px na REF 720×1280.
+       * Em runtime: pxReal = pxMap * (larguraDevice/720) e idem para Y.
+       * NÃO usa tamanho/zoom do <img> no navegador — só naturalWidth/Height do screenshot.
        */
-      const DEVICE_CLOUD_PAIRING_PCT = {
-        menu: [680 / 720, 104 / 1280],
-        dispositivosFallback: [500 / 720, 704 / 1280],
-        conectar: [360 / 720, 651 / 1280],
-        conectarNumero: [360 / 720, 1133 / 1280],
-        codeBoxY: 468 / 1280,
-        codeBoxXs: [71, 147, 223, 299, 418, 494, 572, 648].map((x) => x / 720),
+      const DEVICE_CLOUD_PAIRING_MAP = {
+        menu: [680, 104],
+        dispositivos: [491, 704],
+        conectar: [360, 651],
+        conectarNumero: [360, 1133],
+        codeBoxY: 468,
+        codeBoxXs: [71, 147, 223, 299, 418, 494, 572, 648],
       };
 
-      async function tapDeviceCloudOverflowItemByLabel(deviceId, label) {
-        const res = await fetch(
-          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/tap-overflow-item",
-          {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ label: String(label || "") }),
-          },
-        );
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(String(data.error || data.message || "Falha ao tocar item do menu."));
-        }
-        return data;
+      const DEVICE_CLOUD_PAIRING_NAV_MAX_STEP = 7;
+      const DEVICE_CLOUD_PAIRING_FULLY_MANUAL = false;
+      const DEVICE_CLOUD_PAIRING_TYPE_CHARS = 8;
+
+      /** Escala px do mapa 720×1280 → framebuffer real do Android. */
+      function deviceCloudPxFromMapped(xRef, yRef, nw, nh) {
+        const W = Math.max(1, Number(nw) || DEVICE_CLOUD_PAIRING_REF.w);
+        const H = Math.max(1, Number(nh) || DEVICE_CLOUD_PAIRING_REF.h);
+        const sx = W / DEVICE_CLOUD_PAIRING_REF.w;
+        const sy = H / DEVICE_CLOUD_PAIRING_REF.h;
+        return {
+          x: Math.max(0, Math.min(W - 1, Math.round(Number(xRef) * sx))),
+          y: Math.max(0, Math.min(H - 1, Math.round(Number(yRef) * sy))),
+        };
+      }
+
+      async function sendDeviceCloudTapMapped(deviceId, xRef, yRef, opts) {
+        const metrics = await ensureDeviceCloudScreenMetrics(deviceId);
+        const pt = deviceCloudPxFromMapped(xRef, yRef, metrics.w, metrics.h);
+        return sendDeviceCloudInput(deviceId, "tap", pt, opts);
       }
 
       /**
-       * Navegação WA Business até «Insira o código» — % + texto no overflow.
-       * Sem ensureDeviceCloudWhatsAppForeground (HOME loop).
+       * Navegação WA Business até «Insira o código».
+       * Só mapa calibrado + escala pela resolução do screenshot.
+       * Proibido: ADB overflow, HOME/ensureForeground (abre/fecha WA e clica chat).
        */
       async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
         const id = String(deviceId || "");
         const maxStep = Number(DEVICE_CLOUD_PAIRING_NAV_MAX_STEP) || 1;
-        const pct = DEVICE_CLOUD_PAIRING_PCT;
+        const map = DEVICE_CLOUD_PAIRING_MAP;
         const status = (msg) =>
           setDeviceCloudWarmStatus(id, msg, { phase: "busy", hideActions: true });
 
-        status("Lendo resolução da tela do device…");
+        status("Lendo tamanho real do device (screenshot)…");
         const metrics = await ensureDeviceCloudScreenMetrics(id, { force: true });
-        status(`Tela ${metrics.w}×${metrics.h} — abrindo WhatsApp…`);
+        const scaleNote = `${metrics.w}×${metrics.h} (mapa ${DEVICE_CLOUD_PAIRING_REF.w}×${DEVICE_CLOUD_PAIRING_REF.h})`;
+        status(`Device ${scaleNote} — abrindo WhatsApp 1×…`);
         await launchDeviceCloudWhatsApp(id);
         await sleepDeviceCloud(2500);
         await refreshDeviceCloudScreen(id).catch(() => {});
         await ensureDeviceCloudScreenMetrics(id).catch(() => {});
         if (maxStep <= 1) return;
 
-        // Etapa 2–3: preferir ADB por TEXTO «Dispositivos conectados»
-        // (Y fixo em ~560 caía em Comunidades). ADB abre o ⋮ e toca o label certo.
-        if (maxStep >= 3) {
-          status('Etapa 3 — «Dispositivos conectados» (por texto)…');
-          try {
-            await tapDeviceCloudOverflowItemByLabel(id, "Dispositivos conectados");
-          } catch (err) {
-            status("Etapa 2/3 — Menu ⋮ + fallback % (Y=704, não Comunidades)…");
-            await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
-            await sleepDeviceCloud(1800);
-            await sendDeviceCloudTapPct(
-              deviceId,
-              pct.dispositivosFallback[0],
-              pct.dispositivosFallback[1],
-              { skipRefresh: true },
-            );
-          }
-          await sleepDeviceCloud(1800);
-          await refreshDeviceCloudScreen(deviceId).catch(() => {});
-          if (maxStep <= 3) return;
-        } else {
-          status("Etapa 2 — Abrindo menu ⋮…");
-          await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
-          await sleepDeviceCloud(1600);
-          await refreshDeviceCloudScreen(deviceId).catch(() => {});
-          if (maxStep <= 2) return;
-        }
+        status(`Etapa 2 — Menu ⋮ @(${map.menu[0]},${map.menu[1]}) → ${scaleNote}`);
+        await sendDeviceCloudTapMapped(deviceId, map.menu[0], map.menu[1], { skipRefresh: true });
+        await sleepDeviceCloud(1600);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        if (maxStep <= 2) return;
 
-        status("Etapa 4 — CONECTAR DISPOSITIVO…");
-        await sendDeviceCloudTapPct(deviceId, pct.conectar[0], pct.conectar[1], {
+        status(`Etapa 3 — Dispositivos conectados @(${map.dispositivos[0]},${map.dispositivos[1]})`);
+        await sendDeviceCloudTapMapped(deviceId, map.dispositivos[0], map.dispositivos[1], {
+          skipRefresh: true,
+        });
+        await sleepDeviceCloud(1800);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        if (maxStep <= 3) return;
+
+        status(`Etapa 4 — CONECTAR DISPOSITIVO @(${map.conectar[0]},${map.conectar[1]})`);
+        await sendDeviceCloudTapMapped(deviceId, map.conectar[0], map.conectar[1], {
           skipRefresh: true,
         });
         await sleepDeviceCloud(2200);
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
         if (maxStep <= 4) return;
 
-        status("Etapa 5 — Conectar com número…");
-        await sendDeviceCloudTapPct(deviceId, pct.conectarNumero[0], pct.conectarNumero[1], {
+        status(`Etapa 5 — Conectar com número @(${map.conectarNumero[0]},${map.conectarNumero[1]})`);
+        await sendDeviceCloudTapMapped(deviceId, map.conectarNumero[0], map.conectarNumero[1], {
           skipRefresh: true,
         });
         await sleepDeviceCloud(2000);
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
       }
 
-      /** Foca caixas do código e digita pairingCode — 1 char/caixa via %. */
+      /** Foca caixas do código e digita pairingCode — 1 char/caixa, escalado do mapa. */
       async function typeDeviceCloudPairingCodeOnDevice(deviceId, pairingCode) {
         const formatted = normalizeDeviceCloudPairingCode(pairingCode);
         const typeable = formatted.replace(/-/g, "");
@@ -25055,16 +25069,18 @@
           throw new Error("Código de vinculação inválido retornado pelo sistema.");
         }
 
-        const kind = await classifyDeviceCloudScreen(deviceId);
-        if (kind === "browser") {
-          throw new Error(
-            "Tela errada (navegador). Abra o WhatsApp → Aparelhos conectados → Vincular com número e use «Inserir código».",
+        // Não abortar por classify==="browser": a tela «Insira o código» era falso positivo.
+        // Digitar sempre após a navegação mapeada; classificar só para log.
+        const kindBefore = await classifyDeviceCloudScreen(deviceId).catch(() => "unknown");
+        if (kindBefore === "browser") {
+          console.warn(
+            "[DeviceCloud] classify=browser antes de digitar (ignorado — tela de código WA tem teclado claro).",
           );
         }
 
-        const pct = DEVICE_CLOUD_PAIRING_PCT;
-        const boxXs = pct.codeBoxXs;
-        const boxY = pct.codeBoxY;
+        const map = DEVICE_CLOUD_PAIRING_MAP;
+        const boxXs = map.codeBoxXs;
+        const boxY = map.codeBoxY;
         const maxChars = Math.min(
           8,
           Math.max(0, Number(DEVICE_CLOUD_PAIRING_TYPE_CHARS) || 0),
@@ -25074,15 +25090,14 @@
           return;
         }
         const fromIndex = 0;
-        const gateH2 = maxChars < 8 || fromIndex > 0;
 
-        await sendDeviceCloudTapPct(deviceId, boxXs[fromIndex], boxY, { skipRefresh: true });
+        await sendDeviceCloudTapMapped(deviceId, boxXs[fromIndex], boxY, { skipRefresh: true });
         await sleepDeviceCloud(250);
-        await sendDeviceCloudTapPct(deviceId, boxXs[fromIndex], boxY, { skipRefresh: true });
+        await sendDeviceCloudTapMapped(deviceId, boxXs[fromIndex], boxY, { skipRefresh: true });
         await sleepDeviceCloud(300);
 
         for (let i = fromIndex; i < fromIndex + maxChars; i += 1) {
-          await sendDeviceCloudTapPct(deviceId, boxXs[i], boxY, { skipRefresh: true });
+          await sendDeviceCloudTapMapped(deviceId, boxXs[i], boxY, { skipRefresh: true });
           await sleepDeviceCloud(120);
           await sendDeviceCloudInput(
             deviceId,
@@ -25091,18 +25106,8 @@
             { skipRefresh: true },
           );
           await sleepDeviceCloud(100);
-          if (gateH2) {
-            await refreshDeviceCloudScreen(deviceId).catch(() => {});
-          }
         }
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
-
-        const after = await classifyDeviceCloudScreen(deviceId);
-        if (after === "browser") {
-          throw new Error(
-            "O código foi para o navegador. Volte ao WhatsApp na tela de código e use «Inserir código».",
-          );
-        }
       }
 
       async function finishDeviceCloudWarmIntegration(deviceId, instanceName, deviceLabel) {
@@ -25307,6 +25312,19 @@
         warmSt.awaitingManualPairingInsert = false;
         focusDeviceCloudWindow(id);
 
+        // Obrigatório: tamanho real do device (screenshot) ANTES de qualquer toque.
+        // Zoom do navegador NÃO entra no cálculo — só naturalWidth/Height.
+        try {
+          const m0 = await ensureDeviceCloudScreenMetrics(id, { force: true });
+          setDeviceCloudWarmStatus(
+            id,
+            `Tamanho do device: ${m0.w}×${m0.h} (mapa ${DEVICE_CLOUD_PAIRING_REF.w}×${DEVICE_CLOUD_PAIRING_REF.h})`,
+            { phase: "busy", hideActions: true },
+          );
+        } catch (_) {
+          /* openDeviceCloudWhatsAppPairingCodeScreen força de novo */
+        }
+
         // Etapas 1–5: só navegação no celular. Sem número, sem EVO, sem código.
         if (navMax < 6) {
           try {
@@ -25362,22 +25380,20 @@
         if (phoneInput) phoneInput.value = evoNumber;
 
         try {
-          // H3: pairingCode ~1 min — abrir «Insira o código» ANTES de gerar; digitar na hora.
-          setDeviceCloudWarmStatus(id, "Abrindo Insira o código (coords %)…", {
-            phase: "busy",
-            hideActions: true,
-          });
-          await openDeviceCloudWhatsAppPairingCodeScreen(id);
-
-          setDeviceCloudWarmStatus(id, `Gerando código para ${evoNumber}…`, {
-            phase: "busy",
-            hideActions: true,
-          });
-          const data = await submitAndPollRegistrarQrcode({
-            name: instanceName,
-            token: generateTokenLike(),
-            number: evoNumber,
-          });
+          // Soft-reset EVO pode levar ~30–60s. Gerar o código ANTES de abrir «Insira o código»
+          // (TTL ~1 min) — senão a UI fica parada na tela certa enquanto o servidor ainda reseta.
+          const warmProgress = (msg) =>
+            setDeviceCloudWarmStatus(id, msg, { phase: "busy", hideActions: true });
+          warmProgress(`Gerando código para ${evoNumber} (pode levar até ~1 min)…`);
+          const data = await submitAndPollRegistrarQrcode(
+            {
+              name: instanceName,
+              token: generateTokenLike(),
+              number: evoNumber,
+            },
+            120000,
+            warmProgress,
+          );
 
           if (data?.alreadyConnected) {
             await finishDeviceCloudWarmIntegration(id, instanceName, deviceLabel);
@@ -25393,10 +25409,10 @@
 
           warmSt.pendingPairingCode = pairingCode;
           const codeLabel = normalizeDeviceCloudPairingCode(pairingCode);
-          setDeviceCloudWarmStatus(id, `Digitando ${codeLabel} (1 char/caixa)…`, {
-            phase: "busy",
-            hideActions: true,
-          });
+          warmProgress(`Código ${codeLabel} pronto — abrindo Insira o código…`);
+          await openDeviceCloudWhatsAppPairingCodeScreen(id);
+
+          warmProgress(`Digitando ${codeLabel} (1 char/caixa)…`);
           await typeDeviceCloudPairingCodeOnDevice(id, pairingCode);
           setDeviceCloudWarmStatus(id, "Código enviado. Aguardando conexão no WhatsApp…", {
             phase: "busy",
@@ -25407,7 +25423,11 @@
           warmSt.busy = false;
           warmSt.awaitingManualPairingInsert = false;
           warmSt.pendingPairingCode = "";
-          const errMsg = resolveRegistrarQrcodeErrorMessage(error);
+          let errMsg = resolveRegistrarQrcodeErrorMessage(error);
+          if (/Atualizar QR/i.test(errMsg)) {
+            errMsg = errMsg.replace(/use «Atualizar QR» novamente\.?/gi, "use «Tentar de novo».");
+            errMsg = errMsg.replace(/«Atualizar QR»/gi, "«Tentar de novo»");
+          }
           setDeviceCloudWarmStatus(id, errMsg, {
             phase: "idle",
             showActions: true,
@@ -42294,6 +42314,7 @@
       let disparosHasRunningCampaign = false;
       let disparosCampaignItemsCache = [];
       const disparosCampaignToggleInflight = new Set();
+      const disparosCampaignAddInstInflight = new Set();
       const DISPAROS_CAMPAIGN_LIST_SCOPE = {
         OFICIAL: "oficial-intake",
         ALTERNATIVA: "alternativa-evo",
@@ -47745,15 +47766,33 @@
       async function addInstancesToCampaign(campaignId) {
         const id = String(campaignId || "").trim();
         if (!id) return false;
-        const response = await fetchWithTimeout(
-          `/disparos/campanhas/${encodeURIComponent(id)}/instancias`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ auto: true }),
-          },
-          20000
-        );
+        const url =
+          typeof resolveWabaPublicPath === "function"
+            ? resolveWabaPublicPath(`/disparos/campanhas/${encodeURIComponent(id)}/instancias`)
+            : `/disparos/campanhas/${encodeURIComponent(id)}/instancias`;
+        let response;
+        try {
+          response = await fetchWithTimeout(
+            url,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ auto: true }),
+            },
+            25000
+          );
+        } catch (err) {
+          const timedOut = String(err?.message || "").toLowerCase() === "timeout";
+          showToast(
+            timedOut
+              ? "A troca de instâncias demorou demais. Tente de novo."
+              : String(err?.message || "Não foi possível adicionar instâncias na campanha."),
+            "error",
+            6200
+          );
+          return false;
+        }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           const code = String(data?.code || "").trim();
@@ -47769,7 +47808,7 @@
             goToDisparosBuyNumbersPanel();
             return false;
           }
-          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error");
+          showToast(String(data?.error || "Não foi possível adicionar instâncias na campanha."), "error", 6200);
           return false;
         }
         const stillNeedsMore = data?.stillNeedsMore === true;
@@ -52387,11 +52426,25 @@
         return visit(data);
       }
 
-      async function pollRegistrarQrcodeJob(jobId, maxWaitMs = 180000) {
+      async function pollRegistrarQrcodeJob(jobId, maxWaitMs = 180000, onProgress) {
         const started = Date.now();
         const intervalMs = 1000;
         let networkFailures = 0;
+        let lastProgressAt = 0;
         while (Date.now() - started < maxWaitMs) {
+          const elapsedSec = Math.round((Date.now() - started) / 1000);
+          if (typeof onProgress === "function" && Date.now() - lastProgressAt >= 4000) {
+            lastProgressAt = Date.now();
+            try {
+              onProgress(
+                elapsedSec < 20
+                  ? "Preparando sessão no servidor…"
+                  : `Ainda gerando o código… (${elapsedSec}s)`,
+              );
+            } catch {
+              /* ignore */
+            }
+          }
           try {
             const response = await fetchWithTimeout(
               `/instancias/registrar-qrcode/jobs/${encodeURIComponent(jobId)}`,
@@ -52433,7 +52486,14 @@
         throw new Error("timeout");
       }
 
-      async function submitAndPollRegistrarQrcode(body, maxWaitMs = 180000) {
+      async function submitAndPollRegistrarQrcode(body, maxWaitMs = 180000, onProgress) {
+        if (typeof onProgress === "function") {
+          try {
+            onProgress("Solicitando código de vinculação…");
+          } catch {
+            /* ignore */
+          }
+        }
         const response = await fetchWithTimeout(
           "/instancias/registrar-qrcode",
           {
@@ -52471,7 +52531,7 @@
           throw err;
         }
         if (response.status === 202 && data.jobId) {
-          return pollRegistrarQrcodeJob(data.jobId, maxWaitMs);
+          return pollRegistrarQrcodeJob(data.jobId, maxWaitMs, onProgress);
         }
         return data;
       }
@@ -55620,16 +55680,51 @@
           }
         }
 
+        async function runAddInstancesFromButton(btn) {
+          if (!btn || btn.disabled) return;
+          const id = btn.dataset.campaignId || btn.getAttribute("data-campaign-id");
+          if (!id) return;
+          if (disparosCampaignAddInstInflight.has(id)) return;
+          disparosCampaignAddInstInflight.add(id);
+          const prevLabel = btn.textContent || "+ Instâncias";
+          btn.setAttribute("disabled", "true");
+          btn.setAttribute("aria-busy", "true");
+          btn.style.pointerEvents = "none";
+          btn.textContent = "Trocando…";
+          showToast("Procurando número conectado para substituir o desconectado…", "success", 2800);
+          try {
+            await addInstancesToCampaign(id);
+          } catch (err) {
+            showToast(err?.message || "Não foi possível adicionar instâncias na campanha.", "error", 6200);
+          } finally {
+            btn.textContent = prevLabel;
+            btn.removeAttribute("disabled");
+            btn.removeAttribute("aria-busy");
+            btn.style.pointerEvents = "";
+            disparosCampaignAddInstInflight.delete(id);
+          }
+        }
+
         // pointerdown: 1º clique não é cancelado por blur de outro campo (mesmo padrão do Push).
         disparosListEl.addEventListener(
           "pointerdown",
           (e) => {
-            const btn = e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
-            if (!btn || !disparosListEl.contains(btn)) return;
             if (e.button != null && e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            void runCampaignToggleFromButton(btn);
+            const toggleBtn =
+              e.target && e.target.closest ? e.target.closest(".btn-campaign-toggle") : null;
+            if (toggleBtn && disparosListEl.contains(toggleBtn)) {
+              e.preventDefault();
+              e.stopPropagation();
+              void runCampaignToggleFromButton(toggleBtn);
+              return;
+            }
+            const addInstBtn =
+              e.target && e.target.closest ? e.target.closest(".btn-campaign-add-instances") : null;
+            if (addInstBtn && disparosListEl.contains(addInstBtn)) {
+              e.preventDefault();
+              e.stopPropagation();
+              void runAddInstancesFromButton(addInstBtn);
+            }
           },
           true
         );
@@ -55696,14 +55791,7 @@
           if (addInstBtn && disparosListEl.contains(addInstBtn)) {
             e.preventDefault();
             e.stopPropagation();
-            const id = addInstBtn.dataset.campaignId || addInstBtn.getAttribute("data-campaign-id");
-            if (!id || addInstBtn.disabled) return;
-            addInstBtn.setAttribute("disabled", "true");
-            try {
-              await addInstancesToCampaign(id);
-            } finally {
-              addInstBtn.removeAttribute("disabled");
-            }
+            void runAddInstancesFromButton(addInstBtn);
             return;
           }
           // Toggle Ativar/Pausar: tratado em pointerdown (anti blur / 1º clique).

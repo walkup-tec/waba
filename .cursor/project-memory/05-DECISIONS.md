@@ -4,7 +4,20 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — CHECKPOINT V02 Device Cloud pairing (restauração)
+
+- **Decisão:** Congelar o estado funcional do pareamento Device Cloud na `v02` com tag `checkpoint/v02-device-cloud-pairing-2026-08-21`, branch `backup/v02-device-cloud-pairing-checkpoint-20260821` e doc `doc/CHECKPOINT-2026-08-21__v02-device-cloud-pairing.md`.
+- **Motivo:** Trabalho já perdido uma vez por checkout; este é o ponto “antes de perdermos de novo”.
+- **Impacto:** Restaurar sempre pela tag/branch backup; marker `DEPLOY-2026-08-21-dc-fix-false-browser-pairing-screen`.
+
+### 2026-08-21 — Pareamento Device Cloud escala pelo framebuffer, não pelo zoom do browser
+
+- **Decisão:** Antes de «Adicionar ao Aquecedor», ler `naturalWidth×Height` do screenshot do device e escalar o mapa calibrado 720×1280 (`x' = x_ref * W/720`). Proibido usar tamanho CSS/zoom do `<img>` e ADB overflow/HOME no warm (reabre WA e clica errado).
+- **Motivo:** Zoom do navegador mudava o px aparente na UI; toques precisam do tamanho real do framebuffer Android.
+- **Impacto:** `DEVICE_CLOUD_PAIRING_MAP` + `sendDeviceCloudTapMapped`; marker `DEPLOY-2026-08-21-dc-pairing-scale-from-device-metrics`.
+
 ### 2026-08-21 — Trabalho do V02 é permanente na branch `v02`
+
 
 - **Decisão:** Tudo feito no ambiente V02 permanece na branch `v02` (commit + push). Antes de `checkout` para outra branch, Device Cloud deve estar presente (`scripts/check-v02-device-cloud.ps1`). `dev:v02` falha se `device-cloud-stage` ou `src/device-cloud` sumirem.
 - **Motivo:** Em 2026-08-21 o menu Dispositivos desapareceu após `checkout master → v02` com `v02` desatualizada (sem Device Cloud).

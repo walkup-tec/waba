@@ -9200,14 +9200,14 @@ async function resetEvoInstanceForQr(instanceName: string): Promise<void> {
   const enc = encodeURIComponent(String(instanceName || "").trim());
   if (!enc) return;
   await callEvoAction(`${EVO_API_BASE}/instance/logout/${enc}`, "DELETE", undefined, {
-    timeoutMs: 12000,
-    retries: 1,
+    timeoutMs: 10000,
+    retries: 0,
   });
   await callEvoAction(`${EVO_API_BASE}/instance/delete/${enc}`, "DELETE", undefined, {
-    timeoutMs: 15000,
-    retries: 1,
+    timeoutMs: 12000,
+    retries: 0,
   });
-  await sleepMs(2500);
+  await sleepMs(1500);
 }
 
 /** Soft-reset só na Evolution (mesmo nome). Não apaga lifecycle/ownership no WABA. */
@@ -9234,7 +9234,17 @@ async function softResetDisconnectedEvoInstanceForQr(
       ? `[QR] ${name}: soft-reset EVO com Proxy Campanha (logout+delete+recreate) — parear via proxy.`
       : `[QR] ${name}: soft-reset EVO (logout+delete+recreate) — sessão desconectada/corrompida; WABA preservado.`,
   );
-  await resetEvoInstanceForQr(name);
+  // Teto duro: logout/delete lentos na EVO congelavam a UI do Device Cloud por minutos.
+  const SOFT_RESET_BUDGET_MS = 35000;
+  const outcome = await Promise.race([
+    resetEvoInstanceForQr(name).then(() => "done" as const),
+    sleepMs(SOFT_RESET_BUDGET_MS).then(() => "timeout" as const),
+  ]);
+  if (outcome === "timeout") {
+    console.warn(
+      `[QR] ${name}: soft-reset EVO excedeu ${SOFT_RESET_BUDGET_MS}ms — seguindo para create/connect.`,
+    );
+  }
   if (campaignProxy) {
     try {
       await applyProxyBrasilToEvoInstance(name, callEvoAction, EVO_API_BASE);
@@ -14590,14 +14600,50 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
     }
 
     const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
+    const selectedNames = Array.isArray(prev.selectedDisparadorInstances)
+      ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
+      : [];
+    for (const name of selectedNames) {
+      let live = "";
+      try {
+        live = await fetchEvoInstanceLiveState(name, { fresh: true });
+      } catch {
+        live = "";
+      }
+      if (!String(live || "").trim()) continue;
+      const open = isEvoLiveStateOpen(live);
+      const idx = evoRows.findIndex(
+        (r) =>
+          r.instanceKey.toLowerCase() === name.toLowerCase() ||
+          r.nameKeys.has(name.toLowerCase()),
+      );
+      if (idx >= 0) {
+        evoRows[idx].connected = open;
+        continue;
+      }
+      const nameKeys = new Set<string>();
+      addComparableNameKey(nameKeys, name);
+      evoRows.push({
+        instanceKey: name,
+        displayName: name,
+        connected: open,
+        nameKeys,
+        digitKeys: digitKeysFromStoredLabel(name),
+      });
+    }
+
     const healthBefore = getCampaignInstanceHealth(prev, evoRows);
-    const instancesToAdd = computeCampaignInstancesToAdd(healthBefore);
+    const instancesToAdd = Math.max(
+      computeCampaignInstancesToAdd(healthBefore),
+      healthBefore.disconnectedCount,
+    );
+    const disconnectedNames = listDisconnectedStoredInstanceNames(selectedNames, evoRows);
 
     let incoming: string[] = [];
     if (auto) {
       if (instancesToAdd <= 0) {
         return res.status(400).json({
-          error: "A campanha já possui números conectados suficientes.",
+          error: "Não há números desconectados nesta campanha e o mínimo já está atendido.",
           instanceHealth: healthBefore,
         });
       }
@@ -14609,8 +14655,9 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
       );
       if (!incoming.length) {
         return res.status(409).json({
-          error:
-            "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
+          error: disconnectedNames.length
+            ? `Não há outro número conectado livre para substituir ${disconnectedNames.join(", ")}. Compre mais números ou reconecte um chip disponível.`
+            : "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
           instanceHealth: healthBefore,
           code: "buy_numbers_required",
           needsPurchase: true,
