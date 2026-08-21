@@ -297,6 +297,10 @@ async function dismissBlockingPortalOverlays(page) {
         }
     }
 }
+function isChromiumTargetCrash(error) {
+    const msg = error instanceof Error ? error.message : String(error || "");
+    return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
+}
 async function fillByLabel(page, labels, value) {
     if (!value)
         return;
@@ -305,15 +309,50 @@ async function fillByLabel(page, labels, value) {
             .locator(`xpath=//label[contains(${xpathLower()}, '${label.toLowerCase()}')]/following::input[1]`)
             .first();
         if ((await input.count()) > 0) {
-            await input.fill(value);
+            try {
+                await input.click({ timeout: 4000 });
+                await input.fill(value);
+            }
+            catch (error) {
+                if (isChromiumTargetCrash(error))
+                    throw error;
+                await page
+                    .evaluate(({ needle, val }) => {
+                    const labs = Array.from(document.querySelectorAll("label"));
+                    const lab = labs.find((el) => (el.textContent || "").toLowerCase().includes(needle));
+                    const el = lab
+                        ? lab.parentElement?.querySelector("input") ||
+                            lab.nextElementSibling
+                        : null;
+                    const inputEl = el && el.tagName === "INPUT"
+                        ? el
+                        : document.querySelector(`input[placeholder*="${needle}" i]`);
+                    if (!inputEl)
+                        return false;
+                    inputEl.focus();
+                    const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+                    proto?.set?.call(inputEl, val);
+                    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+                    inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+                    return true;
+                }, { needle: label.toLowerCase(), val: value })
+                    .catch(() => false);
+            }
             return;
         }
     }
     const placeholder = page
         .locator(labels.map((label) => `input[placeholder*="${label}" i], input[name*="${label}" i]`).join(", "))
         .first();
-    if ((await placeholder.count()) > 0)
-        await placeholder.fill(value);
+    if ((await placeholder.count()) > 0) {
+        try {
+            await placeholder.fill(value);
+        }
+        catch (error) {
+            if (isChromiumTargetCrash(error))
+                throw error;
+        }
+    }
 }
 /**
  * CNAE no portal = modal multi-select OU autocomplete inline (UI muda com frequência).
@@ -428,85 +467,132 @@ async function readCnaeSelectedCount(page) {
         return m ? Number(m[1]) : null;
     });
 }
-function isChromiumTargetCrash(error) {
-    const msg = error instanceof Error ? error.message : String(error || "");
-    return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
-}
-/** Digita no input do modal sem fill+force no type=text (evita crash do renderer). */
-async function typeCnaeIntoSearch(search, code) {
-    try {
-        await search.click({ timeout: 5000 }).catch(() => search.click({ timeout: 5000, force: true }));
-        await search.press("Control+A").catch(() => undefined);
-        await search.press("Backspace").catch(() => undefined);
-        await search.type(code, { delay: 25 });
-        await search.dispatchEvent("input").catch(() => undefined);
-    }
-    catch (error) {
-        if (isChromiumTargetCrash(error)) {
-            throw new Error(`Chromium caiu ao digitar CNAE ${code} (Target crashed). Sessão será reconectada.`);
-        }
-        // Fallback leve: fill sem force (modal search costuma aceitar).
-        try {
-            await search.fill(code);
-        }
-        catch (inner) {
-            if (isChromiumTargetCrash(inner)) {
-                throw new Error(`Chromium caiu ao preencher CNAE ${code} (Target crashed). Sessão será reconectada.`);
-            }
-            throw inner;
-        }
-    }
-}
+/**
+ * CNAE 100% via DOM (sem locator.fill/type) — no V02 o headed aguenta fill;
+ * no Docker/Xvfb o renderer crasha ("Target crashed") no input type=text.
+ */
 async function selectAtividadePrincipalCnae(page, rawCode) {
     const code = String(rawCode || "").replace(/\D/g, "");
     if (!code)
         return;
     await dismissBlockingPortalOverlays(page).catch(() => undefined);
-    let search = await findCnaeSearchInput(page, 1500);
-    if (!search) {
+    // 1) Abrir modal/picker
+    await page.evaluate(() => {
+        const visible = (el) => {
+            const h = el;
+            const s = window.getComputedStyle(h);
+            return s.display !== "none" && s.visibility !== "hidden" && h.offsetParent !== null;
+        };
+        const nodes = Array.from(document.querySelectorAll("label, span, p, strong, button, div, a"));
+        const lab = nodes.find((el) => /Atividade\s+Principal\s*\(CNAE\)/i.test((el.textContent || "").replace(/\s+/g, " ")));
+        if (lab && visible(lab))
+            lab.click();
+        const following = lab?.closest(".field, .control, .column, form, section")?.querySelector("input, button, .dropdown, .autocomplete, .taginput, .select");
+        if (following && visible(following))
+            following.click();
+    });
+    await page.waitForTimeout(600);
+    // Se ainda não abriu, tenta o caminho Playwright só para CLICK (sem fill).
+    const opened = await findCnaeSearchInput(page, 2000);
+    if (!opened) {
         await tryOpenCnaePicker(page);
-        search = await findCnaeSearchInput(page, 10000);
+        await page.waitForTimeout(400);
     }
-    if (!search) {
-        // Última tentativa: clicar no rótulo e esperar de novo.
-        const label = page.locator('text=/Atividade\\s+Principal\\s*\\(CNAE\\)/i').first();
-        if ((await label.count()) > 0) {
-            await label.click({ force: true }).catch(() => undefined);
-            await page.waitForTimeout(700);
-            search = await findCnaeSearchInput(page, 5000);
-        }
-    }
-    if (!search) {
+    // 2) Digitar CNAE no search do modal via setter nativo
+    const typed = await page.evaluate((cnae) => {
+        const visible = (el) => {
+            const h = el;
+            const s = window.getComputedStyle(h);
+            return s.display !== "none" && s.visibility !== "hidden";
+        };
+        const inputs = Array.from(document.querySelectorAll("input"));
+        const score = (el) => {
+            const ph = String(el.placeholder || "").toLowerCase();
+            let s = 0;
+            if (el.type === "search")
+                s += 5;
+            if (/atividade|cnae|c[oó]digo/.test(ph))
+                s += 4;
+            if (el.closest('[role="dialog"], .modal, .o-modal, .modal-card'))
+                s += 6;
+            if (/selecionados/i.test(document.body?.innerText || ""))
+                s += 1;
+            if (!visible(el))
+                s -= 10;
+            return s;
+        };
+        const ranked = inputs
+            .map((el) => ({ el, s: score(el) }))
+            .filter((x) => x.s > 0)
+            .sort((a, b) => b.s - a.s);
+        const target = ranked[0]?.el;
+        if (!target)
+            return { ok: false, reason: "no-input" };
+        target.focus();
+        const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        proto?.set?.call(target, "");
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+        proto?.set?.call(target, cnae);
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+        target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: cnae.slice(-1) || "0" }));
+        return { ok: true, placeholder: String(target.placeholder || "") };
+    }, code);
+    if (!typed || !typed.ok) {
         const placeholders = await page.evaluate(() => Array.from(document.querySelectorAll("input[placeholder]"))
             .slice(0, 20)
             .map((el) => String(el.placeholder || "").trim())
             .filter(Boolean));
-        throw new Error(`CNAE: modal/campo de atividade ausente. Código pedido: ${code}. Placeholders visíveis: ${placeholders.length ? placeholders.join(" | ") : "(nenhum)"}.`);
+        throw new Error(`CNAE: campo de busca ausente no portal. Código: ${code}. Placeholders: ${placeholders.length ? placeholders.join(" | ") : "(nenhum)"}.`);
     }
-    await typeCnaeIntoSearch(search, code);
-    await page.waitForTimeout(1100);
-    let marked = await markCnaeOption(page, code);
-    let selectedState = await readCnaeSelectedCount(page);
-    if ((!marked || !selectedState || selectedState < 1) && search) {
-        await search.press("Enter").catch(() => undefined);
-        await page.waitForTimeout(500);
-        marked = (await markCnaeOption(page, code)) || marked;
-        selectedState = await readCnaeSelectedCount(page);
-    }
-    // Autocomplete inline: às vezes não há contador "N selecionados", mas a opção foi clicada.
-    if ((!selectedState || selectedState < 1) && marked) {
-        selectedState = 1;
-    }
-    if (!selectedState || selectedState < 1) {
-        throw new Error(`CNAE ${code}: nenhuma opção marcada após digitar. O portal pode ter mudado o modal/autocomplete.`);
-    }
-    const closeBtn = page
-        .locator('button:has-text("Fechar"), button:has-text("Concluir"), button:has-text("Aplicar"), [role="dialog"] button:has-text("OK")')
-        .first();
-    if ((await closeBtn.count()) > 0 && (await closeBtn.isVisible().catch(() => false))) {
-        await closeBtn.click({ timeout: 8000 }).catch(() => undefined);
+    await page.waitForTimeout(900);
+    // 3) Marcar opção
+    let marked = await page.evaluate((cnae) => {
+        const boxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+        const box = boxes.find((b) => String(b.id || "").includes(cnae) ||
+            String(b.closest("label")?.textContent || "").includes(cnae) ||
+            String(b.parentElement?.textContent || "").includes(cnae));
+        if (box) {
+            if (!box.checked)
+                box.click();
+            return true;
+        }
+        const line = Array.from(document.querySelectorAll("label, li, div, span, button")).find((n) => {
+            const t = String(n.textContent || "").trim();
+            return new RegExp(`^${cnae}\\b`).test(t) || t.startsWith(cnae + " ") || t.startsWith(cnae + " -");
+        });
+        if (line) {
+            line.click();
+            return true;
+        }
+        return false;
+    }, code);
+    if (!marked) {
+        await page.keyboard.press("Enter").catch(() => undefined);
         await page.waitForTimeout(400);
+        marked = await page.evaluate((cnae) => {
+            const boxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+            const box = boxes.find((b) => String(b.id || "").includes(cnae) || String(b.closest("label")?.textContent || "").includes(cnae));
+            if (box) {
+                if (!box.checked)
+                    box.click();
+                return true;
+            }
+            return false;
+        }, code);
     }
+    let selectedState = await readCnaeSelectedCount(page);
+    if ((!selectedState || selectedState < 1) && marked)
+        selectedState = 1;
+    if (!selectedState || selectedState < 1) {
+        throw new Error(`CNAE ${code}: opção não marcada após digitar no modal (DOM).`);
+    }
+    // 4) Fechar
+    await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll("button")).find((b) => /^(Fechar|Concluir|Aplicar|OK)$/i.test(String(b.textContent || "").trim()));
+        btn?.click();
+    });
+    await page.waitForTimeout(300);
 }
 async function setCheckboxByLabel(page, label, checked) {
     const needle = label.toLowerCase();
@@ -725,10 +811,13 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     const playwright = await loadPlaywright();
     // 0 / ausente = sem teto: copia todas as páginas até o portal acabar.
     const maxPagesCap = Math.max(0, Math.round(Number(filters.maxPages ?? 0) || 0));
+    const hasXvfb = Boolean(String(process.env.DISPLAY || "").trim());
     const headless = resolveCasaDosDadosHeadless();
+    // Em produção (Xvfb) slowMo alto deixa a coleta “parada”; V02 era rápido com 0–15ms.
+    const slowMoCap = hasXvfb ? 15 : 80;
     const slowMo = headless
         ? 0
-        : Math.max(0, Math.round(Number(process.env.CASADOSDADOS_SLOWMO_MS || 40) || 0));
+        : Math.min(slowMoCap, Math.max(0, Math.round(Number(process.env.CASADOSDADOS_SLOWMO_MS || 0) || 0)));
     onProgress?.(headless
         ? "Abrindo Portal: iniciando navegador (headless real)…"
         : String(process.env.DISPLAY || "").trim()
@@ -736,7 +825,6 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             : "Abrindo Portal: abrindo janela do Casa dos Dados (visível)…");
     let browser;
     try {
-        const hasXvfb = Boolean(String(process.env.DISPLAY || "").trim());
         browser = await playwright.chromium.launch({
             headless,
             slowMo,
@@ -762,7 +850,6 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         throw error;
     }
     try {
-        const hasXvfb = Boolean(String(process.env.DISPLAY || "").trim());
         const context = await browser.newContext({
             locale: "pt-BR",
             // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
