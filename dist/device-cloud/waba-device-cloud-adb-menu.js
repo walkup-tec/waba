@@ -105,7 +105,7 @@ async function tapWhatsAppOverflowItemByLabel(label) {
     await ensureRemoteTapScript();
     const stdout = await runSpawn("ssh", [
         ...sshBaseArgs(),
-        `export DEVICE_ADB_SERIAL=${JSON.stringify(serial)}; export SKIP_NAV=1; bash /tmp/tap-menu-label.sh ${JSON.stringify(wanted)}`,
+        `export DEVICE_ADB_SERIAL=${JSON.stringify(serial)}; export SKIP_NAV=0; bash /tmp/tap-menu-label.sh ${JSON.stringify(wanted)}`,
     ], 60000);
     const m = stdout.match(/TAPPED\s+(\d+)\s+(\d+)/) || stdout.match(/OK\s+(\d+)\s+(\d+)/);
     if (!m) {

@@ -24953,14 +24953,13 @@
       const DEVICE_CLOUD_PAIRING_TYPE_CHARS = 8;
 
       /**
-       * Coords em % (0–1). Convertidas com ensureDeviceCloudScreenMetrics
-       * (naturalWidth×Height do screenshot), não com o tamanho do <img> no browser.
-       * dispositivosFallback: 6º item do overflow WA Business (Anúncios…Configurações).
+       * Coords em % (0–1). Convertidas com ensureDeviceCloudScreenMetrics.
+       * Overflow real (tema claro): Anúncios… Comunidades(4)… Dispositivos conectados(6)…
+       * Y≈560 acerta Comunidades — NÃO usar. Dispositivos ≈ 704/1280.
        */
       const DEVICE_CLOUD_PAIRING_PCT = {
         menu: [680 / 720, 104 / 1280],
-        dispositivosFallback: [500 / 720, 560 / 1280],
-        dispositivosFallbackAlt: [500 / 720, 620 / 1280],
+        dispositivosFallback: [500 / 720, 704 / 1280],
         conectar: [360 / 720, 651 / 1280],
         conectarNumero: [360 / 720, 1133 / 1280],
         codeBoxY: 468 / 1280,
@@ -24985,7 +24984,7 @@
       }
 
       /**
-       * Navegação WA Business até «Insira o código» — só % (+ texto no overflow).
+       * Navegação WA Business até «Insira o código» — % + texto no overflow.
        * Sem ensureDeviceCloudWhatsAppForeground (HOME loop).
        */
       async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
@@ -25004,36 +25003,33 @@
         await ensureDeviceCloudScreenMetrics(id).catch(() => {});
         if (maxStep <= 1) return;
 
-        status("Etapa 2 — Abrindo menu ⋮…");
-        await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
-        await sleepDeviceCloud(1600);
-        await refreshDeviceCloudScreen(deviceId).catch(() => {});
-        if (maxStep <= 2) return;
-
-        status('Etapa 3 — «Dispositivos conectados»…');
-        let overflowOk = false;
-        try {
-          await tapDeviceCloudOverflowItemByLabel(id, "Dispositivos conectados");
-          overflowOk = true;
-        } catch (err) {
-          status("Etapa 3 — Fallback % (texto indisponível)…");
-          await sendDeviceCloudTapPct(
-            deviceId,
-            pct.dispositivosFallback[0],
-            pct.dispositivosFallback[1],
-            { skipRefresh: true },
-          );
-          await sleepDeviceCloud(900);
-          await sendDeviceCloudTapPct(
-            deviceId,
-            pct.dispositivosFallbackAlt[0],
-            pct.dispositivosFallbackAlt[1],
-            { skipRefresh: true },
-          );
+        // Etapa 2–3: preferir ADB por TEXTO «Dispositivos conectados»
+        // (Y fixo em ~560 caía em Comunidades). ADB abre o ⋮ e toca o label certo.
+        if (maxStep >= 3) {
+          status('Etapa 3 — «Dispositivos conectados» (por texto)…');
+          try {
+            await tapDeviceCloudOverflowItemByLabel(id, "Dispositivos conectados");
+          } catch (err) {
+            status("Etapa 2/3 — Menu ⋮ + fallback % (Y=704, não Comunidades)…");
+            await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
+            await sleepDeviceCloud(1800);
+            await sendDeviceCloudTapPct(
+              deviceId,
+              pct.dispositivosFallback[0],
+              pct.dispositivosFallback[1],
+              { skipRefresh: true },
+            );
+          }
+          await sleepDeviceCloud(1800);
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          if (maxStep <= 3) return;
+        } else {
+          status("Etapa 2 — Abrindo menu ⋮…");
+          await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
+          await sleepDeviceCloud(1600);
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          if (maxStep <= 2) return;
         }
-        await sleepDeviceCloud(overflowOk ? 1600 : 2000);
-        await refreshDeviceCloudScreen(deviceId).catch(() => {});
-        if (maxStep <= 3) return;
 
         status("Etapa 4 — CONECTAR DISPOSITIVO…");
         await sendDeviceCloudTapPct(deviceId, pct.conectar[0], pct.conectar[1], {

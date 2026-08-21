@@ -115,7 +115,8 @@ export async function tapWhatsAppOverflowItemByLabel(label: string): Promise<{ x
     "ssh",
     [
       ...sshBaseArgs(),
-      `export DEVICE_ADB_SERIAL=${JSON.stringify(serial)}; export SKIP_NAV=1; bash /tmp/tap-menu-label.sh ${JSON.stringify(wanted)}`,
+      // SKIP_NAV=0: o script abre o ⋮ e toca pelo texto exato (evita % em Comunidades).
+      `export DEVICE_ADB_SERIAL=${JSON.stringify(serial)}; export SKIP_NAV=0; bash /tmp/tap-menu-label.sh ${JSON.stringify(wanted)}`,
     ],
     60000,
   );
