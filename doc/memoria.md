@@ -3407,3 +3407,5 @@ Palavras-chave para buscar:
 - Easypanel serve `dist/`; commits só na raiz não atualizavam UI. Fix: build + commit `dist/index.html` + `dist/deploy-marker.js`.
 - LOG: doc/LOG-2026-08-19__140200__device-cloud-dist-index-desatualizado-fix.md
 - Keywords: dist/index.html, easypanel, waba_disparador, deploy-marker
+
+- 2026-08-21: fix CNAE modal Playwright (Leads PJ) — keywords: cnae, casadosdados, modal, leads-cnpj. LOG: LOG--leads-cnae-modal-playwright.md

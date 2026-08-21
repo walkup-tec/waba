@@ -276,24 +276,69 @@ async function fillByLabel(page, labels, value) {
         await placeholder.fill(value);
 }
 /**
- * CNAE no portal = modal multi-select (evidência Seguro 10–12 + probe DOM):
- * 1) Abrir o modal clicando em Atividade Principal
- * 2) Digitar no input do MODAL — NÃO no autocomplete Oruga da página
- *    - página: input[type=text]#v-*-16 placeholder "Código ou nome da atividade" (coberto → click timeout)
- *    - modal:  input[type=search].input.is-info mesmo placeholder (alvo correto)
- * 3) Marcar o checkbox da linha do código
- * 4) Só então Fechar — Escape / Fechar com 0 selecionados = sem CNAE na pesquisa
+ * CNAE no portal = modal multi-select OU autocomplete inline (UI muda com frequência).
+ * Estratégias:
+ * 1) Abrir modal/dropdown de Atividade Principal
+ * 2) Digitar no input de busca (search no modal, ou text na página)
+ * 3) Marcar checkbox/linha do código
+ * 4) Fechar modal se existir (Fechar/Concluir/Aplicar)
  */
-async function selectAtividadePrincipalCnae(page, rawCode) {
-    const code = String(rawCode || "").replace(/\D/g, "");
-    if (!code)
-        return;
-    // 1) Abre o modal (campo do formulário, não o input interno ainda).
+async function findCnaeSearchInput(page, timeoutMs = 10000) {
+    const candidates = [
+        'input[type="search"][placeholder*="Código ou nome da atividade" i]',
+        'input[type="search"][placeholder*="Codigo ou nome da atividade" i]',
+        'input[type="search"][placeholder*="codigo ou nome da atividade" i]',
+        'input[type="search"][placeholder*="atividade" i]',
+        'input[type="search"][placeholder*="CNAE" i]',
+        'input.input.is-info[placeholder*="atividade" i]',
+        '[role="dialog"] input[type="search"]',
+        '[role="dialog"] input[placeholder*="atividade" i]',
+        '.modal input[type="search"]',
+        '.modal-card input[type="search"]',
+        '.o-modal input[type="search"]',
+        '.dropdown-menu input[type="search"]',
+        'xpath=//*[contains(., "selecionados") or contains(., "Fechar")]//input[@type="search"]',
+        'xpath=//*[contains(@class,"modal") or contains(@class,"dialog") or @role="dialog"]//input[contains(@placeholder,"atividade") or @type="search"]',
+        'input[type="text"][placeholder*="Código ou nome da atividade" i]',
+        'input[type="text"][placeholder*="Codigo ou nome da atividade" i]',
+        'input[type="text"][placeholder*="codigo ou nome da atividade" i]',
+        'input[placeholder*="Código ou nome" i]',
+        'input[placeholder*="Codigo ou nome" i]',
+        'input[placeholder*="atividade" i]',
+    ];
+    const deadline = Date.now() + Math.max(1000, timeoutMs);
+    while (Date.now() < deadline) {
+        for (const sel of candidates) {
+            const loc = page.locator(sel).last();
+            if ((await loc.count()) === 0)
+                continue;
+            if (!(await loc.isVisible().catch(() => false)))
+                continue;
+            return loc;
+        }
+        await page.waitForTimeout(250);
+    }
+    for (const sel of candidates) {
+        const loc = page.locator(sel).last();
+        if ((await loc.count()) > 0)
+            return loc;
+    }
+    return null;
+}
+async function tryOpenCnaePicker(page) {
     const openTriggers = [
         'xpath=//label[contains(normalize-space(.), "Atividade Principal (CNAE)")]/following::*[self::input or self::button or self::div][1]',
-        'xpath=//label[contains(., "Atividade Principal")]/following::div[contains(@class,"control") or contains(@class,"dropdown") or contains(@class,"autocomplete")][1]',
+        'xpath=//label[contains(., "Atividade Principal")]/following::input[1]',
+        'xpath=//label[contains(., "Atividade Principal")]/following::button[1]',
+        'xpath=//label[contains(., "Atividade Principal")]/following::div[contains(@class,"control") or contains(@class,"dropdown") or contains(@class,"autocomplete") or contains(@class,"select") or contains(@class,"taginput")][1]',
+        'xpath=//*[contains(normalize-space(.), "Atividade Principal (CNAE)")]/following::input[1]',
         'label:has-text("Atividade Principal (CNAE)")',
+        'label:has-text("Atividade principal (CNAE)")',
         'text=/Atividade Principal\\s*\\(CNAE\\)/i',
+        'text=/Atividade principal\\s*\\(CNAE\\)/i',
+        'input[placeholder*="Código ou nome da atividade" i]',
+        'input[placeholder*="Codigo ou nome da atividade" i]',
+        'input[placeholder*="atividade" i]',
     ];
     for (const sel of openTriggers) {
         const el = page.locator(sel).first();
@@ -301,57 +346,20 @@ async function selectAtividadePrincipalCnae(page, rawCode) {
             continue;
         if (!(await el.isVisible().catch(() => false)))
             continue;
-        await el.click({ timeout: 8000 }).catch(() => undefined);
-        break;
+        await el.scrollIntoViewIfNeeded().catch(() => undefined);
+        await el.click({ timeout: 8000, force: true }).catch(() => undefined);
+        await page.waitForTimeout(500);
+        const search = await findCnaeSearchInput(page, 2500);
+        if (search)
+            return true;
     }
-    await page.waitForTimeout(700);
-    // 2) Input DENTRO do modal — preferir type=search (probe 2026-08-11).
-    // O type=text com o mesmo placeholder fica sob overlays da página e dá
-    // "…intercepts pointer events" / Timeout 8000ms no click.
-    const modalSearchCandidates = [
-        'input[type="search"][placeholder*="Código ou nome da atividade" i]',
-        'input[type="search"][placeholder*="codigo ou nome da atividade" i]',
-        'input.input.is-info[placeholder*="atividade" i]',
-        'xpath=//*[contains(., "selecionados") or contains(., "Fechar")]//input[@type="search"]',
-        'xpath=//*[contains(@class,"modal") or contains(@class,"dialog") or @role="dialog"]//input[contains(@placeholder,"atividade") or @type="search"]',
-    ];
-    let modalSearch = page.locator(modalSearchCandidates[0]).first();
-    let found = false;
-    for (const sel of modalSearchCandidates) {
-        const loc = page.locator(sel).first();
-        if ((await loc.count()) === 0)
-            continue;
-        if (!(await loc.isVisible().catch(() => false)))
-            continue;
-        modalSearch = loc;
-        found = true;
-        break;
-    }
-    if (!found) {
-        // Fallback: o type=text existe na página mas costuma estar coberto — force evita o timeout.
-        const covered = page
-            .locator('input[placeholder*="Código ou nome da atividade" i], input[placeholder*="codigo ou nome da atividade" i]')
-            .first();
-        if ((await covered.count()) > 0) {
-            modalSearch = covered;
-            found = true;
-        }
-    }
-    if (!found) {
-        throw new Error(`CNAE: modal não abriu (campo "Código ou nome da atividade" ausente). Código pedido: ${code}.`);
-    }
-    // fill com force evita timeout quando um overlay intercepta o click de foco
-    await modalSearch.click({ timeout: 5000, force: true }).catch(() => undefined);
-    await modalSearch.fill("", { force: true });
-    await modalSearch.fill(code, { force: true });
-    await modalSearch.dispatchEvent("input").catch(() => undefined);
-    await page.waitForTimeout(900);
-    // 3) Marca a linha cujo texto começa com o código (ex.: "6622300 - corretores…").
+    return false;
+}
+async function markCnaeOption(page, code) {
     const rowById = page.locator(`input[type="checkbox"][id*="${code}"]`).first();
     const rowByLabel = page
         .locator(`xpath=//label[contains(normalize-space(.), '${code}')]//input[@type='checkbox'] | //li[contains(normalize-space(.), '${code}')]//input[@type='checkbox'] | //div[contains(@class,'checkbox') or contains(@class,'control')][contains(normalize-space(.), '${code}')]//input[@type='checkbox']`)
         .first();
-    let marked = false;
     for (const box of [rowById, rowByLabel]) {
         if ((await box.count()) === 0)
             continue;
@@ -362,46 +370,85 @@ async function selectAtividadePrincipalCnae(page, rawCode) {
                 await box.click({ force: true });
             });
         }
-        marked = true;
-        break;
+        return true;
     }
-    if (!marked) {
-        const line = page.locator(`text=/^\\s*${code}\\b/`).first();
-        if ((await line.count()) > 0) {
-            await line.click({ timeout: 5000 }).catch(() => undefined);
-            marked = true;
-        }
+    const line = page.locator(`text=/^\\s*${code}\\b/`).first();
+    if ((await line.count()) > 0) {
+        await line.click({ timeout: 5000, force: true }).catch(() => undefined);
+        return true;
     }
-    await page.waitForTimeout(400);
-    let selectedState = await page.evaluate(() => {
+    const option = page
+        .locator(`xpath=//*[self::li or self::div or self::button or self::a][contains(normalize-space(.), '${code}')][1]`)
+        .first();
+    if ((await option.count()) > 0 && (await option.isVisible().catch(() => false))) {
+        await option.click({ force: true }).catch(() => undefined);
+        return true;
+    }
+    return false;
+}
+async function readCnaeSelectedCount(page) {
+    return page.evaluate(() => {
         const text = String(document.body?.innerText || "");
         const m = text.match(/(\d+)\s+selecionados?/i);
         return m ? Number(m[1]) : null;
     });
-    if (selectedState === 0 || selectedState == null) {
-        await modalSearch.press("Enter").catch(() => undefined);
-        await page.waitForTimeout(400);
-        const firstFiltered = page
-            .locator(`xpath=//label[contains(., '${code}')] | //*[contains(@id,'${code}')]`)
-            .first();
-        if ((await firstFiltered.count()) > 0) {
-            await firstFiltered.click({ force: true }).catch(() => undefined);
+}
+async function selectAtividadePrincipalCnae(page, rawCode) {
+    const code = String(rawCode || "").replace(/\D/g, "");
+    if (!code)
+        return;
+    await dismissBlockingPortalOverlays(page).catch(() => undefined);
+    let search = await findCnaeSearchInput(page, 1500);
+    if (!search) {
+        await tryOpenCnaePicker(page);
+        search = await findCnaeSearchInput(page, 10000);
+    }
+    if (!search) {
+        // Última tentativa: clicar no rótulo e esperar de novo.
+        const label = page.locator('text=/Atividade\\s+Principal\\s*\\(CNAE\\)/i').first();
+        if ((await label.count()) > 0) {
+            await label.click({ force: true }).catch(() => undefined);
+            await page.waitForTimeout(700);
+            search = await findCnaeSearchInput(page, 5000);
         }
-        selectedState = await page.evaluate(() => {
-            const text = String(document.body?.innerText || "");
-            const m = text.match(/(\d+)\s+selecionados?/i);
-            return m ? Number(m[1]) : null;
-        });
+    }
+    if (!search) {
+        const placeholders = await page.evaluate(() => Array.from(document.querySelectorAll("input[placeholder]"))
+            .slice(0, 20)
+            .map((el) => String(el.placeholder || "").trim())
+            .filter(Boolean));
+        throw new Error(`CNAE: modal/campo de atividade ausente. Código pedido: ${code}. Placeholders visíveis: ${placeholders.length ? placeholders.join(" | ") : "(nenhum)"}.`);
+    }
+    await search.click({ timeout: 5000, force: true }).catch(() => undefined);
+    await search.fill("", { force: true }).catch(() => undefined);
+    await search.fill(code, { force: true });
+    await search.dispatchEvent("input").catch(() => undefined);
+    await search.press("Control+A").catch(() => undefined);
+    await page.waitForTimeout(200);
+    await search.type(code, { delay: 40 }).catch(async () => {
+        await search.fill(code, { force: true });
+    });
+    await page.waitForTimeout(1100);
+    let marked = await markCnaeOption(page, code);
+    let selectedState = await readCnaeSelectedCount(page);
+    if ((!marked || !selectedState || selectedState < 1) && search) {
+        await search.press("Enter").catch(() => undefined);
+        await page.waitForTimeout(500);
+        marked = (await markCnaeOption(page, code)) || marked;
+        selectedState = await readCnaeSelectedCount(page);
+    }
+    // Autocomplete inline: às vezes não há contador "N selecionados", mas a opção foi clicada.
+    if ((!selectedState || selectedState < 1) && marked) {
+        selectedState = 1;
     }
     if (!selectedState || selectedState < 1) {
-        throw new Error(`CNAE ${code}: modal ainda com 0 selecionados após digitar/marcar. O robô precisa marcar o checkbox da linha antes de Fechar.`);
+        throw new Error(`CNAE ${code}: nenhuma opção marcada após digitar. O portal pode ter mudado o modal/autocomplete.`);
     }
-    // 5) Fechar só com seleção feita
     const closeBtn = page
-        .locator('button:has-text("Fechar"), button:has-text("Concluir"), button:has-text("Aplicar")')
+        .locator('button:has-text("Fechar"), button:has-text("Concluir"), button:has-text("Aplicar"), [role="dialog"] button:has-text("OK")')
         .first();
     if ((await closeBtn.count()) > 0 && (await closeBtn.isVisible().catch(() => false))) {
-        await closeBtn.click({ timeout: 8000 });
+        await closeBtn.click({ timeout: 8000 }).catch(() => undefined);
         await page.waitForTimeout(400);
     }
 }

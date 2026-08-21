@@ -34576,8 +34576,14 @@
               payload = {};
             }
             if (!response.ok) {
-              const detail =
-                payload?.error || rawText.slice(0, 240) || "HTTP " + response.status;
+              const raw = String(rawText || "").trim();
+              const looksHtmlNotFound =
+                response.status === 404 ||
+                /^not\s*found$/i.test(raw) ||
+                /page not found|<!doctype html|<html/i.test(raw);
+              const detail = looksHtmlNotFound
+                ? "Rota da API não encontrada (404). Confirme o Redeploy do waba_disparador e tente de novo."
+                : payload?.error || raw.slice(0, 240) || "HTTP " + response.status;
               throw new Error(detail);
             }
             if (feedback) {
