@@ -10,6 +10,10 @@ import {
   resolveDeviceCloudRegisteredPhone,
   saveDeviceCloudRegisteredPhone,
 } from "./waba-device-cloud-phone.service";
+import {
+  isDeviceCloudAdbMenuConfigured,
+  tapWhatsAppOverflowItemByLabel,
+} from "./waba-device-cloud-adb-menu";
 
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 const DEVICE_CLOUD_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
@@ -174,6 +178,32 @@ export function registerDeviceCloudRoutes(app: Express): void {
       return res.json({ ok: true });
     } catch (err) {
       return sendDeviceCloudError(res, err);
+    }
+  });
+
+  /** Resolve item do menu ⋮ pelo texto (uiautomator via SSH no host Redroid). */
+  app.post("/device-cloud/device/:id/tap-overflow-item", async (req: Request, res: Response) => {
+    const user = requireDeviceCloudUser(req, res);
+    if (!user) return;
+    const id = String(req.params.id || "");
+    if (!isDeviceCloudDeviceId(id)) {
+      return res.status(400).json({ error: "Dispositivo inválido." });
+    }
+    if (!isDeviceCloudAdbMenuConfigured()) {
+      return res.status(503).json({
+        error: "ADB menu por texto não configurado (DEVICE_CLOUD_ADB_SSH_*).",
+      });
+    }
+    const label = String(req.body?.label || "").trim();
+    if (!label || label.length > 80) {
+      return res.status(400).json({ error: "Label inválido." });
+    }
+    try {
+      const point = await tapWhatsAppOverflowItemByLabel(label);
+      return res.json({ ok: true, ...point, label });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao tocar item do menu.";
+      return res.status(502).json({ error: msg });
     }
   });
 
