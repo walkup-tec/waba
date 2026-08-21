@@ -1,5 +1,17 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 10:35 — Alternativa: texto corrido (sem título em negrito)
+
+- Evolution 2.4 envolve `title` em `*...*`. WABA não parte mais o texto em title/description.
+- Marker `DEPLOY-2026-08-21-alternativa-body-sem-titulo`
+- LOG: doc/LOG-2026-08-21__103500__fix-alternativa-texto-corrido.md
+
+## 2026-08-21 10:21 — Evolution 2.4.0 no ar + 1 sendButtons
+
+- GET `/`: `version=2.4.0`. sendButtons 201: `interactiveMessage` + `cta_url`, sem `viewOnce`.
+- Conferir no celular do chip **walkup** (5197462102): texto sem URL + botão **Quero saber mais**.
+- LOG: doc/LOG-2026-08-21__100500__pin-evo-2-4-rc2.md
+
 ## 2026-08-21 10:05 — Pin Evolution 2.4.0-rc2 (autorizado)
 
 - Script `scripts/pin-evo-2-4-rc2-vps.sh` + workflow SSH. Rollback se não for 2.4 ou LICENSE_REQUIRED.

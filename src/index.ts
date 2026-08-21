@@ -8549,34 +8549,21 @@ function isGhostButtonsPayload(raw: unknown): boolean {
 }
 
 /**
- * Payload que funcionou na campanha de 11/08 (commit 4a72c1d):
- * title = 1º bloco/linha visível; description = restante.
- * Title invisível (ZWSP) foi regressão: Evolution deixa de montar o botão nativo.
+ * Evolution 2.4 `buttonMessage` monta o corpo como `*${title}*\n\n${description}`
+ * (whatsapp.baileys.service.ts). Title visível vira cabeçalho em negrito;
+ * slice(0,60) parte palavras (ex.: "ambiente").
+ * Title ZWSP: o header não aparece; o texto inteiro vai em description.
+ * Botão nativo vem do array `buttons` (nativeFlow), não do title.
  * @see https://docs.evolutionfoundation.com.br/evolution-api/send-buttons
  */
 function splitMessageForUrlButton(fullText: string): { title: string; description: string } {
   const text = String(fullText || "").trim() || "Olá!";
-  const blocks = text.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
-  if (blocks.length >= 2) {
-    return {
-      title: blocks[0].slice(0, 60),
-      description: blocks.slice(1).join("\n\n").slice(0, 1024) || blocks[0],
-    };
-  }
-  const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length >= 2 && lines[0].length <= 60) {
-    return {
-      title: lines[0],
-      description: lines.slice(1).join("\n").slice(0, 1024) || lines[0],
-    };
-  }
-  if (text.length <= 60) {
-    return { title: text, description: text };
-  }
-  return {
-    title: text.slice(0, 60).trim(),
-    description: text.slice(60).trim() || text,
-  };
+  const maxBody = 1024;
+  const description =
+    text.length <= maxBody
+      ? text
+      : text.slice(0, maxBody).replace(/\s+\S*$/, "").trim() || text.slice(0, maxBody);
+  return { title: "\u200b", description };
 }
 
 async function sendEvoAlternativaUrlButtonMessage(input: {
