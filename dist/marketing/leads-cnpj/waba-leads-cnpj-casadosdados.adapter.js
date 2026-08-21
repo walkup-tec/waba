@@ -634,40 +634,50 @@ async function setCheckboxByLabel(page, label, checked) {
         await box.uncheck();
 }
 /**
- * Filtros rápidos / switches do portal.
- * Evidência Seguro 09: `${text}/following::input[@type=checkbox][1]` resolveu para
- * `<input id="0119908 - cultivo de melancia">` (autocomplete CNAE, invisível) → crash.
- * Regra: só checkbox DENTRO do nó do texto do filtro, e só se visível.
+ * Switches Oruga/Buefy: input[type=checkbox][role=switch] vem ANTES do label
+ * (não dentro). Clique no .switch / label / input — evidência etapa 4b.
  */
 async function setToggleByLabel(page, label, enabled) {
     if (!enabled)
         return;
     await dismissBlockingPortalOverlays(page);
     const needle = label.toLowerCase().replace(/"/g, "");
-    const lower = xpathLower();
-    const textPath = `(//label|//span|//p|//strong|//div[contains(@class,'control') or contains(@class,'field') or contains(@class,'switch') or contains(@class,'checkbox')])[contains(${lower}, '${needle}') and string-length(normalize-space(.)) < 90]`;
-    const checkbox = page.locator(`xpath=${textPath}//input[@type='checkbox']`).first();
-    if ((await checkbox.count()) > 0 && (await checkbox.isVisible().catch(() => false))) {
-        const isChecked = await checkbox.isChecked().catch(() => false);
-        if (!isChecked) {
-            await checkbox.check().catch(async () => {
-                await checkbox.click({ force: true });
-            });
-        }
+    const ok = await page.evaluate(({ needle, want }) => {
+        const labels = Array.from(document.querySelectorAll("label"));
+        const lab = labels.find((el) => {
+            const t = String(el.textContent || "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
+            return t === needle || (t.includes(needle) && t.length < 90);
+        });
+        if (!lab)
+            return false;
+        let box = (lab.previousElementSibling &&
+            lab.previousElementSibling.matches?.('input[type="checkbox"]')
+            ? lab.previousElementSibling
+            : null) ||
+            lab.parentElement?.querySelector('input[type="checkbox"]') ||
+            lab.querySelector('input[type="checkbox"]');
+        if (!box)
+            return false;
+        if (Boolean(box.checked) === want)
+            return true;
+        const control = lab.closest(".switch") || lab.parentElement;
+        (control || lab).click();
+        if (Boolean(box.checked) !== want)
+            box.click();
+        return Boolean(box.checked) === want || true;
+    }, { needle, want: true });
+    if (ok)
         return;
-    }
+    // Fallback Playwright (casos raros)
+    const lower = xpathLower();
+    const textPath = `(//label|//span|//p|//strong|//div[contains(@class,'switch') or contains(@class,'control')])[contains(${lower}, '${needle}') and string-length(normalize-space(.)) < 90]`;
     const labelEl = page.locator(`xpath=${textPath}`).first();
     if ((await labelEl.count()) > 0 && (await labelEl.isVisible().catch(() => false))) {
-        await labelEl.click({ timeout: 8000 });
-        return;
+        await labelEl.click({ timeout: 8000 }).catch(() => undefined);
     }
-    const ownButton = page
-        .locator(`xpath=//button[contains(${lower}, '${needle}') and string-length(normalize-space(.)) < 80 and not(contains(${lower}, 'inserir cnpj'))]`)
-        .first();
-    if ((await ownButton.count()) > 0 && (await ownButton.isVisible().catch(() => false))) {
-        await ownButton.click({ timeout: 8000 });
-    }
-    // Se não achou controle visível, não falha a extração inteira.
 }
 async function applyFilters(page, filters, onProgress) {
     const step = (label) => {
