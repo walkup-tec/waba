@@ -23791,6 +23791,8 @@
             typeTimer: 0,
             skipTypeKey: false,
             pasteAt: 0,
+            screenW: 0,
+            screenH: 0,
           });
         }
         return deviceCloudWindowState.get(key);
@@ -24061,7 +24063,35 @@
           const blob = await res.blob();
           if (st.screenUrl) URL.revokeObjectURL(st.screenUrl);
           st.screenUrl = URL.createObjectURL(blob);
-          img.src = st.screenUrl;
+          await new Promise((resolve, reject) => {
+            const onLoad = () => {
+              cleanup();
+              resolve();
+            };
+            const onErr = () => {
+              cleanup();
+              reject(new Error("Falha ao decodificar screenshot do device."));
+            };
+            const cleanup = () => {
+              img.removeEventListener("load", onLoad);
+              img.removeEventListener("error", onErr);
+            };
+            img.addEventListener("load", onLoad);
+            img.addEventListener("error", onErr);
+            img.src = st.screenUrl;
+          });
+          if (typeof img.decode === "function") {
+            try {
+              await img.decode();
+            } catch {
+              /* ignore */
+            }
+          }
+          const metrics = readDeviceCloudScreenMetricsFromImg(img);
+          if (metrics) {
+            st.screenW = metrics.w;
+            st.screenH = metrics.h;
+          }
         } finally {
           st.screenBusy = false;
         }
@@ -24098,6 +24128,82 @@
         const next = st.inputChain.then(run, run);
         st.inputChain = next.catch(() => {});
         await next;
+      }
+
+      /** Fallback se o screenshot ainda não carregou (Redroid típico). */
+      const DEVICE_CLOUD_REF_W = 720;
+      const DEVICE_CLOUD_REF_H = 1280;
+
+      function clampDeviceCloudUnit(n) {
+        const v = Number(n);
+        if (!Number.isFinite(v)) return 0;
+        return Math.min(1, Math.max(0, v));
+      }
+
+      /** Converte % da tela (0–1) → pixels do framebuffer real do Android. */
+      function deviceCloudPxFromPct(xp, yp, nw, nh) {
+        const W = Math.max(1, Number(nw) || DEVICE_CLOUD_REF_W);
+        const H = Math.max(1, Number(nh) || DEVICE_CLOUD_REF_H);
+        return {
+          x: Math.round(clampDeviceCloudUnit(xp) * (W - 1)),
+          y: Math.round(clampDeviceCloudUnit(yp) * (H - 1)),
+        };
+      }
+
+      function readDeviceCloudScreenMetricsFromImg(img) {
+        const w = Number(img && img.naturalWidth) || 0;
+        const h = Number(img && img.naturalHeight) || 0;
+        if (w < 40 || h < 40) return null;
+        return { w, h };
+      }
+
+      function getDeviceCloudScreenMetrics(deviceId) {
+        const st = deviceCloudState(deviceId);
+        const w = Number(st.screenW) || 0;
+        const h = Number(st.screenH) || 0;
+        if (w >= 40 && h >= 40) return { w, h };
+        return { w: DEVICE_CLOUD_REF_W, h: DEVICE_CLOUD_REF_H };
+      }
+
+      /**
+       * Lê a resolução real via screenshot (naturalWidth/Height) antes dos toques %.
+       * Obrigatório no início do pareamento para proporcionalidade correta.
+       */
+      async function ensureDeviceCloudScreenMetrics(deviceId, opts = {}) {
+        const id = String(deviceId || "");
+        const st = deviceCloudState(id);
+        const force = Boolean(opts && opts.force);
+        const win = getDeviceCloudWin(id);
+        const img = win && win.querySelector(".device-cloud-screen");
+        if (!force) {
+          const cached = readDeviceCloudScreenMetricsFromImg(img);
+          if (cached) {
+            st.screenW = cached.w;
+            st.screenH = cached.h;
+            return cached;
+          }
+          if (st.screenW >= 40 && st.screenH >= 40) {
+            return { w: st.screenW, h: st.screenH };
+          }
+        }
+        await refreshDeviceCloudScreen(id);
+        const after = readDeviceCloudScreenMetricsFromImg(
+          getDeviceCloudWin(id) && getDeviceCloudWin(id).querySelector(".device-cloud-screen"),
+        );
+        if (after) {
+          st.screenW = after.w;
+          st.screenH = after.h;
+          return after;
+        }
+        st.screenW = DEVICE_CLOUD_REF_W;
+        st.screenH = DEVICE_CLOUD_REF_H;
+        return { w: st.screenW, h: st.screenH };
+      }
+
+      async function sendDeviceCloudTapPct(deviceId, xp, yp, opts) {
+        const metrics = await ensureDeviceCloudScreenMetrics(deviceId);
+        const pt = deviceCloudPxFromPct(xp, yp, metrics.w, metrics.h);
+        return sendDeviceCloudInput(deviceId, "tap", pt, opts);
       }
 
       function normalizeDeviceCloudPhoneDigits(raw) {
@@ -24837,50 +24943,116 @@
       }
 
       /**
-       * Caminho oficial Meta (Android): More (⋮) → Linked devices → Link a device
-       * → Link with phone number.
-       * Docs: https://faq.whatsapp.com/1317564962315842/?cms_platform=android
-       * Coordenadas calibradas Redroid 720×1280 (WA Business PT-BR).
+       * Gate etapa-a-etapa (só avance após AVALIE do usuário).
+       * 1 = só abrir WhatsApp (1x) | 2 = menu ⋮ | 3 = Dispositivos conectados
+       * 4 = CONECTAR DISPOSITIVO | 5 = Conectar com número (Insira o código)
+       * 6 = gerar pairingCode + digitar (ver TYPE_CHARS) | >=7 = poll open estável
        */
-      async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
-        await ensureDeviceCloudWhatsAppForeground(deviceId);
-        await sleepDeviceCloud(600);
+      const DEVICE_CLOUD_PAIRING_NAV_MAX_STEP = 2;
+      /**
+       * true = etapa 6 100% manual (botões: abrir tela → gerar código → você digita → verificar).
+       * Sem nav/gerar/digitar automático.
+       */
+      const DEVICE_CLOUD_PAIRING_FULLY_MANUAL = false;
+      /** Só usado se FULLY_MANUAL=false: 0 = gera+abre e para | 4 = gate H2 | 8 = auto 8 chars */
+      const DEVICE_CLOUD_PAIRING_TYPE_CHARS = 8;
 
-        // 1) Menu More (três pontos) — canto superior direito da toolbar
-        await sendDeviceCloudInput(deviceId, "tap", { x: 668, y: 102 }, { skipRefresh: true });
-        await sleepDeviceCloud(1100);
+      /**
+       * Coords de pareamento em % da tela (0–1).
+       * Convertidas para px com a resolução lida do screenshot
+       * (`ensureDeviceCloudScreenMetrics`), não com tamanho fixo do <img> no browser.
+       */
+      const DEVICE_CLOUD_PAIRING_PCT = {
+        menu: [680 / 720, 104 / 1280],
+        dispositivosFallback: [491 / 720, 704 / 1280],
+        conectar: [360 / 720, 651 / 1280],
+        conectarNumero: [360 / 720, 1133 / 1280],
+        codeBoxY: 468 / 1280,
+        codeBoxXs: [71, 147, 223, 299, 418, 494, 572, 648].map((x) => x / 720),
+      };
 
-        // 2) «Aparelhos conectados» — duas linhas do overflow (layout WA varia)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 368 }, { skipRefresh: true });
-        await sleepDeviceCloud(1100);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 420, y: 448 }, { skipRefresh: true });
-        await sleepDeviceCloud(1300);
-
-        let kind = await classifyDeviceCloudScreen(deviceId);
-        if (kind === "browser") {
-          throw new Error("Saiu do WhatsApp ao abrir o menu. Use Abrir e tente Inserir código.");
+      async function tapDeviceCloudOverflowItemByLabel(deviceId, label) {
+        const res = await fetch(
+          "/device-cloud/device/" + encodeURIComponent(deviceId) + "/tap-overflow-item",
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: String(label || "") }),
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(String(data.error || data.message || "Falha ao tocar item do menu."));
         }
-
-        // 3) «Conectar um aparelho» / «Conectar dispositivo» (botão inferior)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 1145 }, { skipRefresh: true });
-        await sleepDeviceCloud(1300);
-
-        // 4) «Vincular / Conectar com número de telefone» (texto sob o QR)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 755 }, { skipRefresh: true });
-        await sleepDeviceCloud(600);
-        await sendDeviceCloudInput(deviceId, "tap", { x: 360, y: 690 }, { skipRefresh: true });
-        await sleepDeviceCloud(1300);
-
-        await refreshDeviceCloudScreen(deviceId).catch(() => {});
-        kind = await classifyDeviceCloudScreen(deviceId);
-        if (kind === "browser") {
-          throw new Error(
-            "Não chegou em Aparelhos conectados. Use Abrir WhatsApp e «Inserir código».",
-          );
-        }
+        return data;
       }
 
-      /** Foca a primeira caixa do código e digita o pairingCode — só se não estiver no browser. */
+      /**
+       * Navegação WA Business por etapas — sem ensureDeviceCloudWhatsAppForeground (HOME loop).
+       */
+      async function openDeviceCloudWhatsAppPairingCodeScreen(deviceId) {
+        const id = String(deviceId || "");
+        const maxStep = Number(DEVICE_CLOUD_PAIRING_NAV_MAX_STEP) || 1;
+        const pct = DEVICE_CLOUD_PAIRING_PCT;
+        const status = (msg) =>
+          setDeviceCloudWarmStatus(id, msg, { phase: "busy", hideActions: true });
+
+        status("Lendo resolução da tela do device…");
+        const metrics = await ensureDeviceCloudScreenMetrics(id, { force: true });
+        status(`Tela ${metrics.w}×${metrics.h} — abrindo WhatsApp…`);
+        await launchDeviceCloudWhatsApp(id);
+        await sleepDeviceCloud(2500);
+        await refreshDeviceCloudScreen(id).catch(() => {});
+        await ensureDeviceCloudScreenMetrics(id).catch(() => {});
+        if (maxStep <= 1) return;
+
+        // Etapa 2 — menu ⋮. Etapa 3 resolve o item pelo TEXTO.
+        if (maxStep >= 3) {
+          status('Etapa 3 — Menu ⋮ → «Dispositivos conectados» (por texto)…');
+          try {
+            await tapDeviceCloudOverflowItemByLabel(id, "Dispositivos conectados");
+          } catch (err) {
+            status("Etapa 2/3 — Fallback % menu ⋮ + Dispositivos…");
+            await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
+            await sleepDeviceCloud(2000);
+            await sendDeviceCloudTapPct(
+              deviceId,
+              pct.dispositivosFallback[0],
+              pct.dispositivosFallback[1],
+              { skipRefresh: true },
+            );
+          }
+          await sleepDeviceCloud(1800);
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          if (maxStep <= 3) return;
+        } else {
+          status("Etapa 2 — Abrindo menu ⋮…");
+          await sendDeviceCloudTapPct(deviceId, pct.menu[0], pct.menu[1], { skipRefresh: true });
+          await sleepDeviceCloud(1500);
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          if (maxStep <= 2) return;
+        }
+
+        // Etapa 4 — CONECTAR DISPOSITIVO
+        status("Etapa 4 — CONECTAR DISPOSITIVO…");
+        await sendDeviceCloudTapPct(deviceId, pct.conectar[0], pct.conectar[1], {
+          skipRefresh: true,
+        });
+        await sleepDeviceCloud(2200);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+        if (maxStep <= 4) return;
+
+        // Etapa 5 — Conectar com número
+        status("Etapa 5 — Conectar com número…");
+        await sendDeviceCloudTapPct(deviceId, pct.conectarNumero[0], pct.conectarNumero[1], {
+          skipRefresh: true,
+        });
+        await sleepDeviceCloud(2000);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+      }
+
+      /** Foca caixas do código e digita pairingCode — 1 char/caixa via %. */
       async function typeDeviceCloudPairingCodeOnDevice(deviceId, pairingCode) {
         const formatted = normalizeDeviceCloudPairingCode(pairingCode);
         const typeable = formatted.replace(/-/g, "");
@@ -24895,12 +25067,39 @@
           );
         }
 
-        // Primeira caixa do código (tela «Insira o código»)
-        await sendDeviceCloudInput(deviceId, "tap", { x: 180, y: 420 }, { skipRefresh: true });
-        await sleepDeviceCloud(500);
+        const pct = DEVICE_CLOUD_PAIRING_PCT;
+        const boxXs = pct.codeBoxXs;
+        const boxY = pct.codeBoxY;
+        const maxChars = Math.min(
+          8,
+          Math.max(0, Number(DEVICE_CLOUD_PAIRING_TYPE_CHARS) || 0),
+        );
+        if (maxChars < 1) {
+          await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          return;
+        }
+        const fromIndex = 0;
+        const gateH2 = maxChars < 8 || fromIndex > 0;
 
-        await sendDeviceCloudInput(deviceId, "text", { text: typeable }, { skipRefresh: true });
-        await sleepDeviceCloud(700);
+        await sendDeviceCloudTapPct(deviceId, boxXs[fromIndex], boxY, { skipRefresh: true });
+        await sleepDeviceCloud(250);
+        await sendDeviceCloudTapPct(deviceId, boxXs[fromIndex], boxY, { skipRefresh: true });
+        await sleepDeviceCloud(300);
+
+        for (let i = fromIndex; i < fromIndex + maxChars; i += 1) {
+          await sendDeviceCloudTapPct(deviceId, boxXs[i], boxY, { skipRefresh: true });
+          await sleepDeviceCloud(120);
+          await sendDeviceCloudInput(
+            deviceId,
+            "text",
+            { text: typeable.charAt(i) },
+            { skipRefresh: true },
+          );
+          await sleepDeviceCloud(100);
+          if (gateH2) {
+            await refreshDeviceCloudScreen(deviceId).catch(() => {});
+          }
+        }
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
 
         const after = await classifyDeviceCloudScreen(deviceId);
@@ -25105,6 +25304,45 @@
         const rawName = normalizeInstanceRegisterName(deviceLabel);
         const fallbackName = normalizeInstanceRegisterName(`device-${id.slice(0, 8)}`);
         const instanceName = rawName || fallbackName;
+        const navMax = Number(DEVICE_CLOUD_PAIRING_NAV_MAX_STEP) || 1;
+
+        warmSt.busy = true;
+        warmSt.instanceName = instanceName;
+        warmSt.pendingPairingCode = "";
+        warmSt.awaitingManualPairingInsert = false;
+        focusDeviceCloudWindow(id);
+
+        // Etapas 1–5: só navegação no celular. Sem número, sem EVO, sem código.
+        if (navMax < 6) {
+          try {
+            setDeviceCloudWarmStatus(id, `Teste etapa ${navMax} — só navegação…`, {
+              phase: "busy",
+              hideActions: true,
+            });
+            await openDeviceCloudWhatsAppPairingCodeScreen(id);
+            warmSt.busy = false;
+            setDeviceCloudWarmStatus(
+              id,
+              `Etapa ${navMax} rodou. Olhe a tela do celular e diga o resultado no chat.`,
+              {
+                phase: "busy",
+                showActions: true,
+                showRetry: true,
+                retryLabel: `Repetir etapa ${navMax}`,
+              },
+            );
+          } catch (error) {
+            warmSt.busy = false;
+            const errMsg = error?.message || String(error);
+            setDeviceCloudWarmStatus(id, errMsg, {
+              phase: "busy",
+              showActions: true,
+              showRetry: true,
+              retryLabel: `Repetir etapa ${navMax}`,
+            });
+          }
+          return;
+        }
 
         setDeviceCloudWarmStatus(id, "Localizando número do dispositivo…", {
           phase: "busy",
@@ -25118,6 +25356,7 @@
         );
         const evoNumber = formatDeviceCloudEvoNumber(phoneDigits);
         if (!evoNumber || evoNumber.length < 12) {
+          warmSt.busy = false;
           setDeviceCloudWarmStatus(
             id,
             "Número não encontrado. Use Digitar ou confira em Instâncias.",
@@ -25126,11 +25365,6 @@
           return;
         }
 
-        warmSt.busy = true;
-        warmSt.instanceName = instanceName;
-        warmSt.pendingPairingCode = "";
-        warmSt.awaitingManualPairingInsert = false;
-        focusDeviceCloudWindow(id);
         setDeviceCloudWarmStatus(id, "Gerando código de vinculação…", {
           phase: "busy",
           hideActions: true,

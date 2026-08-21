@@ -9,6 +9,7 @@ const multer_1 = __importDefault(require("multer"));
 const waba_request_auth_1 = require("../auth/waba-request-auth");
 const waba_device_cloud_service_1 = require("./waba-device-cloud.service");
 const waba_device_cloud_phone_service_1 = require("./waba-device-cloud-phone.service");
+const waba_device_cloud_adb_menu_1 = require("./waba-device-cloud-adb-menu");
 const DEVICE_CLOUD_ALLOWLIST = new Set(["mozart.pmo@gmail.com"]);
 const DEVICE_CLOUD_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 const DEVICE_CLOUD_MEDIA_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -174,6 +175,33 @@ function registerDeviceCloudRoutes(app) {
         }
         catch (err) {
             return sendDeviceCloudError(res, err);
+        }
+    });
+    /** Resolve item do menu ⋮ pelo texto (uiautomator via SSH no host Redroid). */
+    app.post("/device-cloud/device/:id/tap-overflow-item", async (req, res) => {
+        const user = requireDeviceCloudUser(req, res);
+        if (!user)
+            return;
+        const id = String(req.params.id || "");
+        if (!(0, waba_device_cloud_service_1.isDeviceCloudDeviceId)(id)) {
+            return res.status(400).json({ error: "Dispositivo inválido." });
+        }
+        if (!(0, waba_device_cloud_adb_menu_1.isDeviceCloudAdbMenuConfigured)()) {
+            return res.status(503).json({
+                error: "ADB menu por texto não configurado (DEVICE_CLOUD_ADB_SSH_*).",
+            });
+        }
+        const label = String(req.body?.label || "").trim();
+        if (!label || label.length > 80) {
+            return res.status(400).json({ error: "Label inválido." });
+        }
+        try {
+            const point = await (0, waba_device_cloud_adb_menu_1.tapWhatsAppOverflowItemByLabel)(label);
+            return res.json({ ok: true, ...point, label });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : "Falha ao tocar item do menu.";
+            return res.status(502).json({ error: msg });
         }
     });
     app.patch("/device-cloud/device/:id", async (req, res) => {

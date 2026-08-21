@@ -26,7 +26,7 @@ Não usar como histórico de desenvolvimento.
 ## Funcionalidades em andamento
 
 - Operação contínua em produção; locais V02/V03 para desenvolvimento
-- Branch `v02` alinhada com `master` (Device Cloud permanente); pareamento EM-6034 em validação etapa a etapa no V02
+- Branch `v02` com Device Cloud + gates etapa-a-etapa (`MAX_STEP=2`) e coords `%` reaplicados; pareamento EM-6034 em validação
 - DRAX Device Cloud MVP (repo `drax-device-cloud`) — menu WABA pronto; deploy do API/web + worker KVM pendente
 
 ## Pendências relevantes
