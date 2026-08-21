@@ -39,6 +39,14 @@ Proibido: card de preview antes do texto; “Mais informações: https://…” 
 
 Com a campanha em execução ou pausada, o WABA **não** desliga Proxy Brasil e **não** faz `proxy/set` nem restart nos números da campanha. Desligar proxy com a sessão ainda pareada derruba a integração (os dois números da Seguradoras). Reconectar é só no Aquecedor, pelo operador.
 
+### Reconexão do mesmo número
+
+Quando um número **conectar de novo** (QR / pairing):
+
+- Tudo que existia dele na Evolution é apagado (sessão antiga e **clones** com o mesmo JID).
+- Resquícios dos clones no WABA também são removidos.
+- **Exceção:** quantidade de aquecimento (foguinhos) e total de mensagens enviadas do nome canônico.
+
 ### Campanha Alternativa — troca de bloqueados
 
 - Números bloqueados/offline aparecem em vermelho na campanha.

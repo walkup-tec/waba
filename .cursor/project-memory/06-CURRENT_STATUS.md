@@ -22,6 +22,7 @@ Não usar como histórico de desenvolvimento.
 - Copy do fluxo Dispositivos sem menções visíveis a EVO/Evolution; **device** → **dispositivo** nas mensagens ao usuário
 - Botão **Início** removido do footer do dispositivo virtual
 - Campanha API Alternativa: imagem → texto sem URL; pareamento não é derrubado por proxy/set no tick nem ao ativar
+- Reconexão de número: apaga clones/sessão antiga na Evolution; preserva foguinhos e totais de envio
 
 ## Funcionalidades em andamento
 

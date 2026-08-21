@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — Reconexão apaga EVO antigo; preserva foguinhos e totais
+
+- **Decisão:** Ao reconectar um número, apagar clones e sessão antiga na Evolution e restos dos clones no WABA. Manter lifecycle (foguinhos) e `logs_envios` (totais). Sem `forceNewIntegration` nessa reconexão.
+- **Motivo:** Dois Baileys no mesmo JID (ex.: `9224`/`soma-9224`, `drax`/`drax-7770`) derrubam a campanha; lixo antigo na EVO não deve voltar com o pareamento.
+- **Impacto:** `purgeOldEvoSessionsForReconnect` + `POST /instancias/:name/reconnect-purge`. Marker `DEPLOY-2026-08-21-evo-reconnect-purge`.
+
 ### 2026-08-21 — Campanha Alternativa: não desligar proxy nem restart com campanha viva
 
 - **Decisão:** O tick não chama `proxy/set` (disable) ao pausar por instâncias offline. Ativar campanha não faz prepare/restart; só marca ready se já estiver `open`.

@@ -71,6 +71,7 @@ const evo_instance_key_1 = require("./instances/evo-instance-key");
 const evo_instance_phone_service_1 = require("./instances/evo-instance-phone.service");
 const evo_connection_state_service_1 = require("./instances/evo-connection-state.service");
 const whatsapp_connecting_restriction_service_1 = require("./instances/whatsapp-connecting-restriction.service");
+const evo_reconnect_purge_service_1 = require("./instances/evo-reconnect-purge.service");
 const evo_integration_probe_service_1 = require("./services/evo-integration-probe.service");
 const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
@@ -7703,12 +7704,60 @@ async function resetEvoInstanceForQr(instanceName) {
     });
     await sleepMs(2500);
 }
+/**
+ * Reconexão do mesmo WhatsApp: apaga clones EVO e a sessão antiga do nome canônico.
+ * Mantém foguinhos (lifecycle) e totais de envio (logs_envios) do nome canônico.
+ */
+async function purgeOldEvoSessionsForReconnect(input) {
+    const canonicalName = String(input.canonicalName || "").trim();
+    const duplicatesDeleted = [];
+    if (!canonicalName) {
+        return { duplicatesDeleted, canonicalReset: false, phone: "", hadPriorSessions: false };
+    }
+    const listed = await fetchEvoInstancesList();
+    const instances = listed.ok ? listed.instances : [];
+    let phone = (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(String(input.phone || ""));
+    if (!phone) {
+        const self = instances
+            .map((item) => (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(item))
+            .find((row) => row?.instanceName.toLowerCase() === canonicalName.toLowerCase());
+        phone = self?.phone ? (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(self.phone) : "";
+    }
+    const hits = phone ? (0, evo_reconnect_purge_service_1.collectEvoInstancesSharingPhone)(instances, phone) : [];
+    const canonicalExists = instances.some((item) => {
+        const row = (0, evo_instance_phone_service_1.extractPhoneFromEvoListItem)(item);
+        return row?.instanceName.toLowerCase() === canonicalName.toLowerCase();
+    });
+    const hadPriorSessions = hits.length > 0 || canonicalExists;
+    const { duplicates } = (0, evo_reconnect_purge_service_1.splitCanonicalAndDuplicateNames)(hits, canonicalName);
+    for (const extra of duplicates) {
+        console.warn(`[Reconnect] ${canonicalName}: apagando clone EVO ${extra} (mesmo número ${phone || "?"}).`);
+        await tryDeleteEvoInstance(extra);
+        await purgeInstanceLocalState(extra);
+        await (0, aquecedor_instance_lifecycle_service_1.removeAquecedorInstanceLifecycle)(extra);
+        await (0, whatsapp_connecting_restriction_service_1.clearWhatsappConnectingRestriction)(extra);
+        duplicatesDeleted.push(extra);
+    }
+    let canonicalReset = false;
+    if (input.resetCanonical !== false) {
+        await (0, whatsapp_connecting_restriction_service_1.clearWhatsappConnectingRestriction)(canonicalName);
+        (0, evo_connection_state_service_1.invalidateEvoLiveStateCache)(canonicalName);
+        await resetEvoInstanceForQr(canonicalName);
+        canonicalReset = true;
+    }
+    return { duplicatesDeleted, canonicalReset, phone, hadPriorSessions };
+}
 /** Soft-reset só na Evolution (mesmo nome). Não apaga lifecycle/ownership no WABA. */
 async function softResetDisconnectedEvoInstanceForQr(instanceName, opts) {
     const name = String(instanceName || "").trim();
     if (!name)
-        return;
+        return { duplicatesDeleted: [] };
     const campaignProxy = opts?.campaignProxy === true;
+    const purged = await purgeOldEvoSessionsForReconnect({
+        canonicalName: name,
+        phone: opts?.phone,
+        resetCanonical: false,
+    });
     try {
         if (campaignProxy) {
             await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(name, callEvoAction, EVO_API_BASE);
@@ -7721,8 +7770,9 @@ async function softResetDisconnectedEvoInstanceForQr(instanceName, opts) {
         /* best-effort */
     }
     const live = await fetchEvoInstanceConnectionState(name, { fresh: true });
-    if (live.open && !opts?.force && !campaignProxy)
-        return;
+    if (live.open && !opts?.force && !campaignProxy) {
+        return { duplicatesDeleted: purged.duplicatesDeleted };
+    }
     console.warn(campaignProxy
         ? `[QR] ${name}: soft-reset EVO com Proxy Campanha (logout+delete+recreate) — parear via proxy.`
         : `[QR] ${name}: soft-reset EVO (logout+delete+recreate) — sessão desconectada/corrompida; WABA preservado.`);
@@ -7735,6 +7785,7 @@ async function softResetDisconnectedEvoInstanceForQr(instanceName, opts) {
             /* best-effort */
         }
     }
+    return { duplicatesDeleted: purged.duplicatesDeleted };
 }
 const qrRegisterJobs = new Map();
 const qrRegisterRecentFailures = [];
@@ -7768,6 +7819,21 @@ async function runRegistrarQrcode(input) {
         }
         void ensureAquecedorInstanceRegistered(name);
     }
+    const reconnectPurge = await purgeOldEvoSessionsForReconnect({
+        canonicalName: name,
+        phone: number,
+        resetCanonical: false,
+    });
+    const keepWarmthOnReconnect = reconnectPurge.hadPriorSessions === true;
+    const rememberLifecycleAfterQr = async (createdNew) => {
+        if (!createdNew)
+            return;
+        if (keepWarmthOnReconnect) {
+            await ensureAquecedorInstanceRegistered(name);
+            return;
+        }
+        await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+    };
     // Proxy ligado impede pareamento WhatsApp — exceto fluxo «Proxy Campanha».
     const campaignProxy = input.campaignProxy === true;
     try {
@@ -7790,7 +7856,11 @@ async function runRegistrarQrcode(input) {
         };
     }
     if (liveBefore.open && campaignProxy) {
-        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy: true, force: true });
+        await softResetDisconnectedEvoInstanceForQr(name, {
+            campaignProxy: true,
+            force: true,
+            phone: number,
+        });
     }
     const createPayload = {
         instanceName: name,
@@ -7842,7 +7912,7 @@ async function runRegistrarQrcode(input) {
     // Instância já existia (409) e está desconectada: limpa sessão Baileys na EVO e recria o mesmo nome.
     // Não remove ownership/lifecycle/aquecimento no WABA.
     if (createOk && !instanceWasNew && !qrFromCreate && !pairingFromCreate) {
-        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
+        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy, phone: number });
         createOk = false;
         lastCreateStatus = 0;
         lastCreateDetail = "";
@@ -7852,7 +7922,7 @@ async function runRegistrarQrcode(input) {
         await tryCreateOnce();
     }
     else if (!createOk && liveBefore.ok) {
-        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
+        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy, phone: number });
         await tryCreateOnce();
     }
     // Proxy Brasil: no Aquecedor normal fica off; no «Proxy Campanha» permanece on.
@@ -7870,9 +7940,7 @@ async function runRegistrarQrcode(input) {
     }
     // Com número, o fluxo Device Cloud precisa do pairingCode — não retornar só com imagem QR.
     if ((qrFromCreate || pairingFromCreate) && (pairingFromCreate || !number)) {
-        if (instanceWasNew) {
-            await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
-        }
+        await rememberLifecycleAfterQr(instanceWasNew);
         return {
             ok: true,
             message: createWarning
@@ -7900,9 +7968,7 @@ async function runRegistrarQrcode(input) {
         });
     }
     if (qrFetch.ok) {
-        if (instanceWasNew) {
-            await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
-        }
+        await rememberLifecycleAfterQr(instanceWasNew);
         return {
             ok: true,
             message: createWarning
@@ -7938,7 +8004,7 @@ async function runRegistrarQrcode(input) {
             }
         }
         if (retryQrFromCreate || retryPairingFromCreate) {
-            await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+            await rememberLifecycleAfterQr(true);
             return {
                 ok: true,
                 message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
@@ -7955,7 +8021,7 @@ async function runRegistrarQrcode(input) {
                 extended: true,
             });
             if (qrRetry.ok) {
-                await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
+                await rememberLifecycleAfterQr(true);
                 return {
                     ok: true,
                     message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
@@ -8086,6 +8152,7 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
         await softResetDisconnectedEvoInstanceForQr(instanceName, {
             campaignProxy,
             force: campaignProxy,
+            phone: number,
         });
         // Recria o mesmo nome se o soft-reset apagou na EVO.
         await callEvoAction(`${EVO_API_BASE}/instance/create`, "POST", {
@@ -8375,6 +8442,42 @@ app.delete("/instancias/:name", async (req, res) => {
     catch (error) {
         console.error("Erro ao deletar instância:", error);
         return res.status(500).json({ error: "Erro ao deletar instância." });
+    }
+});
+app.post("/instancias/:name/reconnect-purge", async (req, res) => {
+    try {
+        const instanceName = String(req.params.name || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "Nome da instância é obrigatório." });
+        }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
+        const number = String(req.body?.number || req.query.number || "").trim();
+        const purged = await purgeOldEvoSessionsForReconnect({
+            canonicalName: instanceName,
+            phone: number,
+            resetCanonical: true,
+        });
+        await callEvoAction(`${EVO_API_BASE}/instance/create`, "POST", {
+            instanceName,
+            name: instanceName,
+            qrcode: false,
+            integration: "WHATSAPP-BAILEYS",
+            ...(number ? { number } : {}),
+        }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000), retries: 2 });
+        await ensureAquecedorInstanceRegistered(instanceName);
+        return res.json({
+            ok: true,
+            message: "Sessão antiga e clones do número foram apagados na Evolution. Foguinhos e totais de envio foram mantidos.",
+            duplicatesDeleted: purged.duplicatesDeleted,
+            canonicalReset: purged.canonicalReset,
+            phone: purged.phone || number || null,
+            preserved: { warmth: true, messagesSent: true },
+        });
+    }
+    catch (error) {
+        console.error("Erro no reconnect-purge:", error);
+        return res.status(500).json({ error: "Erro ao limpar sessão antiga da instância." });
     }
 });
 app.delete("/admin/instances/:name", async (req, res) => {

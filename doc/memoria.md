@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 14:50 — Reconexão: purge EVO (preserva foguinhos e totais)
+
+- Clones do mesmo JID e sessão antiga são apagados na Evolution. Foguinhos e `logs_envios` ficam.
+- Marker `DEPLOY-2026-08-21-evo-reconnect-purge`
+- LOG: doc/LOG-2026-08-21__145000__evo-reconnect-purge.md
+
 ## 2026-08-21 10:35 — Alternativa: texto corrido (sem título em negrito)
 
 - Evolution 2.4 envolve `title` em `*...*`. WABA não parte mais o texto em title/description.

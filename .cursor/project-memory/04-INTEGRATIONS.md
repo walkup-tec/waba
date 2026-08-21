@@ -53,3 +53,9 @@ Sessão WABA (cookie) para master/staff/assinante; rotas admin restritas a maste
 - UI: estados da lingueta (`idle` / `busy` / `done`); pulso em **Instâncias** após sucesso.
 - Copy de usuário sem EVO/Evolution; mensagens usam **dispositivo**.
 - Envs: `DEVICE_CLOUD_PUBLIC_URL`, `DEVICE_CLOUD_SSO_SECRET` (gate master em produção).
+
+### Reconexão — purge de sessão antiga
+
+- Ao gerar QR / pairing de um número já conhecido: apagar clones EVO do mesmo JID e a sessão antiga do nome canônico (`logout` + `delete` + `create`).
+- Endpoint manual: `POST /instancias/:name/reconnect-purge`.
+- Preserva foguinhos e totais de envio. Sem `sendText` de teste.

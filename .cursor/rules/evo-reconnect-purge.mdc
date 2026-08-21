@@ -1,0 +1,16 @@
+---
+description: Ao reconectar um número, apagar sessão/clones na Evolution e restos no WABA; preservar foguinhos e totais de envio.
+globs: src/index.ts,src/instances/evo-reconnect-purge.service.ts,src/device-cloud/**
+alwaysApply: false
+---
+
+# Reconexão de número — limpeza EVO
+
+Quando um WhatsApp **conectar de novo** (QR / pairing / `reconnect-purge`):
+
+1. Apagar na Evolution **todos os clones** do mesmo número (outras instâncias com o mesmo JID).
+2. Apagar a **sessão antiga** do nome canônico (logout + delete + recreate vazio).
+3. Apagar resquícios no WABA dos clones (aliases, ownership, restrição connecting, cache).
+4. **Preservar** foguinhos (`aquecedor-instance-lifecycle`) e totais de mensagens (`logs_envios` / stats) do nome canônico.
+5. **Não** usar `forceNewIntegration` nessa reconexão (isso zera a idade do aquecimento).
+6. **Não** enviar `sendText` de teste após a limpeza.
