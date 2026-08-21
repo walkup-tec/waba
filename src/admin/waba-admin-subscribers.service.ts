@@ -329,7 +329,7 @@ export class WabaAdminSubscribersService {
     const subscriber = this.subscriberRepository.getById(id);
     if (!subscriber) throw new Error("Assinante não encontrado.");
 
-    // Senha em plaintext não é armazenada — reenvio sem exigir nova senha do master.
+    // Senha em plaintext não é armazenada — reenvio sem exigir senha do master.
     const payload = {
       email: subscriber.email,
       fullName: subscriber.fullName,
@@ -349,6 +349,21 @@ export class WabaAdminSubscribersService {
     ]);
 
     return { email, whatsapp };
+  }
+
+  /** Valida assinante e dispara reenvio em background (ACK WhatsApp não bloqueia o HTTP). */
+  queueSubscriberWelcomeResend(subscriberId: string): { email: string } {
+    const id = String(subscriberId || "").trim();
+    if (!id) throw new Error("Assinante inválido.");
+    const subscriber = this.subscriberRepository.getById(id);
+    if (!subscriber) throw new Error("Assinante não encontrado.");
+
+    void this.resendSubscriberWelcome(id).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[admin] reenvio boas-vindas async falhou (${subscriber.email}):`, message);
+    });
+
+    return { email: subscriber.email };
   }
 
   private listPurchaseHistory(email: string, limit = 50): AdminSubscriberPurchaseHistoryItem[] {

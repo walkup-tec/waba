@@ -14,10 +14,14 @@ export type WabaSystemUser = {
   passwordHash: string;
   whatsapp?: string;
   role: WabaSystemUserRole;
-  /** Operacional: fila de campanhas (API Oficial ou API Alternativa). */
+  /** Operacional: fila de campanhas (API Oficial ou API Alternativa). Legado / primário. */
   operacionalDispatchesApi?: WabaDispatchesApiKind | null;
-  /** Operacional: segmento atendido no painel. */
+  /** Operacional: um ou mais planos atendidos (preferencial). */
+  operacionalDispatchesApis?: WabaDispatchesApiKind[] | null;
+  /** Operacional: segmento atendido no painel. Legado / primário. */
   operacionalSegment?: WabaSystemUserOperacionalSegment | null;
+  /** Operacional: um ou mais segmentos atendidos (preferencial). */
+  operacionalSegments?: WabaSystemUserOperacionalSegment[] | null;
   /** Master: créditos ilimitados para disparos (padrão true). */
   masterUnlimitedCredits?: boolean;
   /** Master: repasse PIX ao fornecedor no split (padrão true). */
@@ -100,7 +104,9 @@ export class WabaSystemUserRepository {
         | "menuPermissions"
         | "whatsapp"
         | "operacionalDispatchesApi"
+        | "operacionalDispatchesApis"
         | "operacionalSegment"
+        | "operacionalSegments"
         | "masterUnlimitedCredits"
         | "masterSplitSuppliers"
         | "masterSplitProfits"

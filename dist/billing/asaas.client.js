@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAsaasTransfer = exports.createAsaasPixTransfer = exports.resolveAsaasPaymentUrl = exports.getAsaasPixQrCode = exports.getAsaasPayment = exports.createAsaasPayment = exports.createAsaasCustomer = exports.asaasRequest = exports.probeAsaasTransferPermission = exports.probeAsaasPaymentApi = exports.usesDedicatedAsaasTransferKey = exports.isAsaasTransferConfigured = exports.isAsaasConfigured = void 0;
+exports.getAsaasTransfer = exports.createAsaasPixTransfer = exports.listAsaasTransfers = exports.resolveAsaasPaymentUrl = exports.getAsaasPixQrCode = exports.getAsaasPayment = exports.createAsaasPayment = exports.createAsaasCustomer = exports.asaasRequest = exports.probeAsaasTransferPermission = exports.probeAsaasPaymentApi = exports.usesDedicatedAsaasTransferKey = exports.isAsaasTransferConfigured = exports.isAsaasConfigured = void 0;
 const DEFAULT_ASAAS_API_BASE_URL = "https://api-sandbox.asaas.com/v3";
 const resolveAsaasApiBaseUrl = () => String(process.env.ASAAS_API_BASE_URL ?? DEFAULT_ASAAS_API_BASE_URL).trim().replace(/\/$/, "");
 const resolveAsaasApiKey = () => String(process.env.ASAAS_API_KEY ?? "").trim();
@@ -187,6 +187,19 @@ const getAsaasPixQrCode = async (paymentId) => {
 exports.getAsaasPixQrCode = getAsaasPixQrCode;
 const resolveAsaasPaymentUrl = (payment) => String(payment.invoiceUrl ?? payment.bankSlipUrl ?? "").trim();
 exports.resolveAsaasPaymentUrl = resolveAsaasPaymentUrl;
+const listAsaasTransfers = async (input) => {
+    const params = new URLSearchParams();
+    const externalReference = String(input?.externalReference ?? "").trim();
+    if (externalReference)
+        params.set("externalReference", externalReference);
+    const offset = Math.max(0, Math.round(Number(input?.offset ?? 0)));
+    const limit = Math.max(1, Math.min(100, Math.round(Number(input?.limit ?? 20))));
+    params.set("offset", String(offset));
+    params.set("limit", String(limit));
+    const query = params.toString();
+    return asaasTransferRequest("GET", `/transfers${query ? `?${query}` : ""}`);
+};
+exports.listAsaasTransfers = listAsaasTransfers;
 const createAsaasPixTransfer = async (input) => {
     return asaasTransferRequest("POST", "/transfers", {
         value: input.value,

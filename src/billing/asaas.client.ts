@@ -278,6 +278,28 @@ export type AsaasTransfer = {
   value?: number;
   failReason?: string;
   transactionReceiptUrl?: string;
+  externalReference?: string;
+};
+
+export type AsaasTransferList = {
+  data?: AsaasTransfer[];
+  totalCount?: number;
+};
+
+export const listAsaasTransfers = async (input?: {
+  externalReference?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<AsaasTransferList> => {
+  const params = new URLSearchParams();
+  const externalReference = String(input?.externalReference ?? "").trim();
+  if (externalReference) params.set("externalReference", externalReference);
+  const offset = Math.max(0, Math.round(Number(input?.offset ?? 0)));
+  const limit = Math.max(1, Math.min(100, Math.round(Number(input?.limit ?? 20))));
+  params.set("offset", String(offset));
+  params.set("limit", String(limit));
+  const query = params.toString();
+  return asaasTransferRequest<AsaasTransferList>("GET", `/transfers${query ? `?${query}` : ""}`);
 };
 
 export const createAsaasPixTransfer = async (input: {

@@ -1,10 +1,17 @@
 /** Regras do motor de envio API Alternativa (números da fazenda). */
 
-export const ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 3;
+/** Sem mínimo operacional de ativados — campanha exige ≥1 instância selecionada. */
+export const ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = 1;
+/** Compra/picker de números (loja): mínimo comercial por pedido. */
 export const ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
 export const ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
-export const DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 4;
+/** Mínimo de números conectados para ativar campanha (era 4; agora 1). */
+export const DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 1;
 export const ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
+
+/** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
+export const ALTERNATIVA_BURST_ON_MINUTES = 60;
+export const ALTERNATIVA_BURST_OFF_MINUTES = 14;
 
 const DEFAULT_WORKING_DAY_KEYS = ["seg", "ter", "qua", "qui", "sex"];
 
@@ -50,19 +57,41 @@ export function getAlternativaDispatchRulesMeta() {
     minPurchaseQuantity: ALTERNATIVA_MIN_PURCHASE_QUANTITY,
     minConnectedForCampaign: DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES,
     maxSendsPerDayPerNumber: ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
+    burstOnMinutes: ALTERNATIVA_BURST_ON_MINUTES,
+    burstOffMinutes: ALTERNATIVA_BURST_OFF_MINUTES,
   };
 }
 
-/** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente. */
+/** Janela liga/pausa humanizada (minutos do dia em SP), independente do expediente. */
+export function isAlternativaBurstWindowOpen(now: Date): boolean {
+  const minutesOfDay = now.getHours() * 60 + now.getMinutes();
+  const cycle = ALTERNATIVA_BURST_ON_MINUTES + ALTERNATIVA_BURST_OFF_MINUTES;
+  if (cycle <= 0) return true;
+  return minutesOfDay % cycle < ALTERNATIVA_BURST_ON_MINUTES;
+}
+
+/** Delay de “digitando…” proporcional ao tamanho da mensagem (1,8s–8s + jitter). */
+export function computeAlternativaTypingDelayMs(messageText: string): number {
+  const len = String(messageText || "").length;
+  const base = Math.min(8000, Math.max(1800, Math.round(len * 45 + 800)));
+  const jitter = Math.floor(Math.random() * 900);
+  return base + jitter;
+}
+
+/** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente.
+ * Intervalo entre envios = metade do pacing “cheio” (ex.: 8–22h → ~72–96s em vez de ~144–192s).
+ */
 export function computeAlternativaThrottle(input: AlternativaThrottleInput): AlternativaThrottle {
   const startHour = Math.max(0, Math.min(23, Math.floor(Number(input.startHour) || 8)));
   const endHour = Math.max(startHour + 1, Math.min(24, Math.floor(Number(input.endHour) || 22)));
   const hoursPerWindow = endHour - startHour;
   const maxPerDay = ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER;
   const maxPerHour = Math.max(1, Math.ceil(maxPerDay / hoursPerWindow));
-  const avgIntervalSec = Math.max(60, Math.floor((hoursPerWindow * 3600) / maxPerDay));
-  const delayMin = Math.max(10, avgIntervalSec - 24);
-  const delayMax = Math.min(3600, avgIntervalSec + 24);
+  const fullAvgIntervalSec = Math.max(60, Math.floor((hoursPerWindow * 3600) / maxPerDay));
+  const avgIntervalSec = Math.max(30, Math.floor(fullAvgIntervalSec / 2));
+  const jitter = Math.max(6, Math.floor(24 / 2));
+  const delayMin = Math.max(10, avgIntervalSec - jitter);
+  const delayMax = Math.min(3600, avgIntervalSec + jitter);
   return {
     delayMinSeconds: delayMin,
     delayMaxSeconds: Math.max(delayMin, delayMax),
@@ -207,7 +236,7 @@ export function estimateAlternativaCampaignDuration(params: {
   }
 
   if (!activatedInstanceCount) {
-    const missing = `Ative ao menos ${ALTERNATIVA_MIN_ACTIVATED_FOR_SEND} números para calcular a projeção.`;
+    const missing = "Selecione ao menos 1 número para calcular a projeção.";
     return {
       plannedSendCount,
       activatedInstanceCount,
@@ -251,10 +280,7 @@ export function estimateAlternativaCampaignDuration(params: {
   };
 }
 
-export function assertAlternativaMinActivated(activatedCount: number): void {
-  if (activatedCount < ALTERNATIVA_MIN_ACTIVATED_FOR_SEND) {
-    throw new Error(
-      `Para disparos pela API Alternativa são necessários ao menos ${ALTERNATIVA_MIN_ACTIVATED_FOR_SEND} números ativados. Você possui ${activatedCount}. Ative mais números em «Comprar números».`
-    );
-  }
+export function assertAlternativaMinActivated(_activatedCount: number): void {
+  // Restrição de mínimo de números ativados removida.
+  // Campanhas exigem apenas ≥1 instância selecionada (validado no create/start).
 }

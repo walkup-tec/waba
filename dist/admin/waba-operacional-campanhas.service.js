@@ -8,11 +8,14 @@ const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_disparos_bonus_service_1 = require("../billing/waba-disparos-bonus.service");
+const waba_campaign_credit_funding_1 = require("../billing/waba-campaign-credit-funding");
 const waba_dispatches_api_kind_1 = require("../disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("../disparos/waba-campaign-spreadsheet.util");
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_operacional_segments_1 = require("../users/waba-operacional-segments");
 const waba_campaign_intake_repository_1 = require("../disparos/waba-campaign-intake.repository");
+const waba_campaign_report_read_overrides_1 = require("../disparos/waba-campaign-report-read-overrides");
 const waba_campaign_intake_status_1 = require("../disparos/waba-campaign-intake-status");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_operacional_segment_rules_1 = require("../services/waba-campaign-operacional-segment-rules");
@@ -103,8 +106,8 @@ class WabaOperacionalCampanhasService {
             return null;
         if (staff.role !== "operacional")
             return null;
-        const apiKind = this.systemUserService.getOperacionalDispatchesApiForEmail(staff.email);
-        return apiKind ?? "unassigned";
+        const apis = this.systemUserService.getOperacionalDispatchesApisForEmail(staff.email);
+        return apis.length ? apis : "unassigned";
     }
     resolveStaffSegmentFilter(staff) {
         if (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email))
@@ -113,8 +116,8 @@ class WabaOperacionalCampanhasService {
             return null;
         if (staff.role !== "operacional")
             return null;
-        const segment = this.systemUserService.getOperacionalSegmentForEmail(staff.email);
-        return segment ?? "unassigned";
+        const segments = this.systemUserService.getOperacionalSegmentsForEmail(staff.email);
+        return segments.length ? segments : "unassigned";
     }
     resolveSubscriberSegmentForIntake(intake) {
         const email = normalizeEmail(intake.ownerEmail);
@@ -127,7 +130,7 @@ class WabaOperacionalCampanhasService {
             return true;
         if (filter === "unassigned")
             return false;
-        return resolveIntakeApiKind(intake, this.orderRepository) === filter;
+        return filter.includes(resolveIntakeApiKind(intake, this.orderRepository));
     }
     matchesStaffSegmentFilter(intake, staff) {
         const filter = this.resolveStaffSegmentFilter(staff);
@@ -159,7 +162,7 @@ class WabaOperacionalCampanhasService {
         }
         return intake;
     }
-    toListItem(intake) {
+    toListItem(intake, staff) {
         const email = normalizeEmail(intake.ownerEmail);
         const subscriber = this.subscriberRepository.getByEmail(email);
         const status = normalizeStoredStatus(intake.status);
@@ -167,6 +170,14 @@ class WabaOperacionalCampanhasService {
         const plannedSendCount = resolvePlannedSendCount(intake);
         const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
         const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+        const assignedOperacionalEmail = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+        const assignedUser = assignedOperacionalEmail
+            ? this.systemUserService.getByEmail(assignedOperacionalEmail)
+            : null;
+        const assignedOperacionalName = String(assignedUser?.fullName || assignedOperacionalEmail || "").trim();
+        const isMaster = Boolean(staff) &&
+            (staff.role === "master" || (0, waba_auth_service_1.isWabaMasterEmail)(staff.email));
+        const canTransferOperacional = isMaster && (status === "generated" || status === "in_progress");
         return {
             id: intake.id,
             subscriberId: subscriber?.id ?? "—",
@@ -189,11 +200,15 @@ class WabaOperacionalCampanhasService {
             bmInoperanteRegistered: Boolean(String(intake.bmInoperanteRegisteredAt || "").trim()),
             isStartOverdue: isCampaignStartOverdue(intake, this.assignmentService),
             startDeadlineAt: resolveCampaignStartDeadlineAt(intake),
+            assignedOperacionalEmail,
+            assignedOperacionalName: assignedOperacionalName || "—",
+            canTransferOperacional,
             createdAt: intake.createdAt,
             createdAtLabel: formatDateLabel(intake.createdAt),
         };
     }
     listCampaigns(staff) {
+        this.intakeRepository.backfillBonusFundingForOpenCampaigns();
         return this.intakeRepository
             .listAll()
             .map((intake) => {
@@ -202,7 +217,7 @@ class WabaOperacionalCampanhasService {
             return this.assignmentService.ensureInitialAssignment(intake);
         })
             .filter((intake) => this.matchesStaffCampaignFilter(intake, staff))
-            .map((intake) => this.toListItem(intake))
+            .map((intake) => this.toListItem(intake, staff))
             .sort((a, b) => {
             if (a.needsConfiguration !== b.needsConfiguration) {
                 return a.needsConfiguration ? -1 : 1;
@@ -214,13 +229,18 @@ class WabaOperacionalCampanhasService {
         const intake = this.intakeRepository.getById(campaignId);
         if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
-        const base = this.toListItem(intake);
+        const base = this.toListItem(intake, staff);
         const plannedSendCount = base.plannedSendCount;
         const trimmedName = intake.spreadsheetTrimmedFileName ||
             `leads-${plannedSendCount}-envios.xlsx`;
+        const whatsappLogoStoredPath = String(intake.whatsappLogoStoredPath ?? "").trim();
+        const hasWhatsappLogo = Boolean(whatsappLogoStoredPath && (0, node_fs_1.existsSync)(whatsappLogoStoredPath));
         return {
             ...base,
             regionDdd: intake.regionDdd,
+            whatsappName: String(intake.whatsappName ?? "").trim(),
+            whatsappLogoFileName: String(intake.whatsappLogoFileName ?? "").trim(),
+            hasWhatsappLogo,
             textOptions: intake.textOptions,
             responseLink: String(intake.responseLink ?? "").trim(),
             imageFileName: intake.imageFileName,
@@ -251,7 +271,7 @@ class WabaOperacionalCampanhasService {
         });
         if (!updated)
             throw new Error("Não foi possível atualizar a campanha.");
-        return this.toListItem(updated);
+        return this.toListItem(updated, staff);
     }
     getCampaignReport(campaignId, staff) {
         const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
@@ -260,7 +280,7 @@ class WabaOperacionalCampanhasService {
             throw new Error("O relatório fica disponível após iniciar a campanha.");
         }
         const totalLeads = resolvePlannedSendCount(intake);
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         return {
             campaignId: intake.id,
             campaignName: intake.campaignName,
@@ -305,9 +325,12 @@ class WabaOperacionalCampanhasService {
             filledByEmail: normalizeEmail(staff.email),
         };
         const bonusShipments = Math.max(0, totalLeads - parsed.sent);
+        const creditFunding = (0, waba_campaign_credit_funding_1.normalizeCampaignCreditFunding)(intake.creditFunding) ??
+            (0, waba_campaign_credit_funding_1.buildLegacyBonusOnlyCreditFunding)(totalLeads);
         const updated = this.intakeRepository.updateById(campaignId, {
             performanceReport,
             status: "completed",
+            creditFunding,
             updatedAt: now,
         });
         if (!updated)
@@ -386,13 +409,31 @@ class WabaOperacionalCampanhasService {
             fileName: intake.imageFileName || node_path_1.default.basename(intake.imageStoredPath),
         };
     }
+    resolveWhatsappLogoDownload(intakeId, staff) {
+        const intake = this.intakeRepository.getById(intakeId);
+        if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
+            return null;
+        const logoPath = String(intake.whatsappLogoStoredPath ?? "").trim();
+        if (!logoPath || !(0, node_fs_1.existsSync)(logoPath)) {
+            return null;
+        }
+        return {
+            filePath: logoPath,
+            fileName: String(intake.whatsappLogoFileName || "").trim() || node_path_1.default.basename(logoPath),
+        };
+    }
     resolveSpreadsheetDownload(intakeId, staff) {
         const intake = this.intakeRepository.getById(intakeId);
         if (!intake || !this.matchesStaffCampaignFilter(intake, staff))
             return null;
         const plannedSendCount = resolvePlannedSendCount(intake);
+        const sourceName = intake.spreadsheetTrimmedFileName ||
+            intake.spreadsheetFileName ||
+            intake.spreadsheetStoredPath ||
+            "";
+        const isTxt = (0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sourceName);
         const trimmedFileName = intake.spreadsheetTrimmedFileName ||
-            `leads-${plannedSendCount}-envios.xlsx`;
+            `leads-${plannedSendCount}-envios.${isTxt ? "txt" : "xlsx"}`;
         if (intake.spreadsheetTrimmedPath && (0, node_fs_1.existsSync)(intake.spreadsheetTrimmedPath)) {
             return {
                 buffer: (0, node_fs_1.readFileSync)(intake.spreadsheetTrimmedPath),
@@ -404,7 +445,7 @@ class WabaOperacionalCampanhasService {
         }
         const originalBuffer = (0, node_fs_1.readFileSync)(intake.spreadsheetStoredPath);
         return {
-            buffer: (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(originalBuffer, plannedSendCount),
+            buffer: (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(originalBuffer, plannedSendCount, intake.spreadsheetFileName || intake.spreadsheetStoredPath),
             fileName: trimmedFileName,
         };
     }
@@ -466,6 +507,43 @@ class WabaOperacionalCampanhasService {
                 "Falha ao enviar e-mail operacional.");
         }
         return result;
+    }
+    async assignCampaignToOperacional(campaignId, operacionalEmail, staff) {
+        if (staff.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(staff.email)) {
+            throw new Error("Somente master pode atribuir campanha a um operacional.");
+        }
+        await this.assignmentService.forceAssignToOperacionalEmail(campaignId, operacionalEmail);
+        const detail = this.getCampaignDetail(campaignId, staff);
+        if (!detail) {
+            throw new Error("Campanha atribuída, mas não foi possível carregar os detalhes.");
+        }
+        return detail;
+    }
+    listTransferOperacionais(campaignId, staff) {
+        if (staff.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(staff.email)) {
+            throw new Error("Somente master pode listar operacionais para transferência.");
+        }
+        const intake = this.getIntakeForStaffOrThrow(campaignId, staff);
+        const status = normalizeStoredStatus(intake.status);
+        if (status !== "generated" && status !== "in_progress") {
+            throw new Error("Somente campanhas em aberto podem ser transferidas.");
+        }
+        const apiKind = resolveIntakeApiKind(intake, this.orderRepository);
+        const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+        const current = normalizeEmail(intake.assignedOperacionalEmail ?? "");
+        return this.systemUserService
+            .listOperacionalUsersForCampaign(apiKind, subscriberSegment)
+            .filter((user) => normalizeEmail(user.email) !== current)
+            .map((user) => {
+            const segments = (0, waba_operacional_segments_1.resolveOperacionalSegments)(user);
+            return {
+                email: normalizeEmail(user.email),
+                fullName: String(user.fullName || user.email).trim() || user.email,
+                segment: segments[0] ?? "outros",
+                segmentLabel: (0, waba_operacional_segments_1.formatOperacionalSegmentsLabel)(segments),
+            };
+        })
+            .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
     }
 }
 exports.WabaOperacionalCampanhasService = WabaOperacionalCampanhasService;

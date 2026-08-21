@@ -1,0 +1,39 @@
+# Pin da imagem Evolution walkup em 2.4.0-rc2 (botão nativo).
+# Secrets: VPS_SSH_PRIVATE_KEY, opcional VPS_HOST
+# Manual: Actions → Pin Evolution 2.4.0-rc2 (SSH) → Run workflow
+
+name: Pin Evolution 2.4.0-rc2 (SSH)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Validar secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY não configurado."
+            exit 1
+          fi
+
+      - name: SSH — pin evoapicloud/evolution-api:2.4.0-rc2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/waba/master/scripts"
+            curl -fsSL "${REPO}/pin-evo-2-4-rc2-vps.sh" -o /tmp/pin-evo-2-4-rc2-vps.sh
+            sed -i 's/\r$//' /tmp/pin-evo-2-4-rc2-vps.sh
+            chmod +x /tmp/pin-evo-2-4-rc2-vps.sh
+            /tmp/pin-evo-2-4-rc2-vps.sh
+            echo "--- GET / ---"
+            curl -fsS --max-time 12 http://127.0.0.1:30181/ || true
+            echo

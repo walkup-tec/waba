@@ -30,6 +30,23 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
         }
         return res.status(200).json({ campaign: detail });
     });
+    app.get("/admin/operacional/campanhas/:id/operacionais-transferencia", (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const items = operacionalCampanhasService.listTransferOperacionais(req.params.id, {
+                email: auth.email,
+                role: auth.role,
+            });
+            return res.status(200).json({ items });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível listar operacionais.";
+            const status = /Somente|não encontrada|não disponível|abertas/i.test(message) ? 400 : 500;
+            return res.status(status).json({ error: message });
+        }
+    });
     app.get("/admin/operacional/campanhas/:id/imagem", (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
@@ -43,6 +60,19 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
         }
         return res.download(download.filePath, download.fileName);
     });
+    app.get("/admin/operacional/campanhas/:id/logo-whatsapp", (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        const download = operacionalCampanhasService.resolveWhatsappLogoDownload(req.params.id, {
+            email: auth.email,
+            role: auth.role,
+        });
+        if (!download) {
+            return res.status(404).json({ error: "Logo do WhatsApp não encontrada." });
+        }
+        return res.download(download.filePath, download.fileName);
+    });
     app.get("/admin/operacional/campanhas/:id/planilha", (req, res) => {
         const auth = rejectOperacionalCampanhasAccess(req, res);
         if (!auth)
@@ -52,9 +82,12 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
             role: auth.role,
         });
         if (!download) {
-            return res.status(404).json({ error: "Planilha de leads não encontrada." });
+            return res.status(404).json({ error: "Arquivo de leads não encontrado." });
         }
-        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        const isTxt = String(download.fileName || "").toLowerCase().endsWith(".txt");
+        res.setHeader("Content-Type", isTxt
+            ? "text/plain; charset=utf-8"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="${download.fileName}"`);
         return res.status(200).send(download.buffer);
     });
@@ -144,6 +177,30 @@ const registerWabaOperacionalCampanhasRoutes = (app) => {
                 : 500;
             if (status >= 500) {
                 console.error("[operacional/campanhas/bm-inoperante] erro:", error);
+            }
+            return res.status(status).json({ error: message });
+        }
+    });
+    app.post("/admin/operacional/campanhas/:id/atribuir", async (req, res) => {
+        const auth = rejectOperacionalCampanhasAccess(req, res);
+        if (!auth)
+            return;
+        try {
+            const body = (req.body ?? {});
+            const campaign = await operacionalCampanhasService.assignCampaignToOperacional(req.params.id, String(body.operacionalEmail ?? body.email ?? ""), { email: auth.email, role: auth.role });
+            return res.status(200).json({
+                ok: true,
+                campaign,
+                message: `Campanha atribuída a ${String(body.operacionalEmail ?? body.email ?? "").trim()}.`,
+            });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "Não foi possível atribuir a campanha.";
+            const status = /não encontrada|não disponível|Somente|Informe|Operacional|segmento|API/i.test(message)
+                ? 400
+                : 500;
+            if (status >= 500) {
+                console.error("[operacional/campanhas/atribuir] erro:", error);
             }
             return res.status(status).json({ error: message });
         }

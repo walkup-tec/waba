@@ -52,8 +52,12 @@ const data_path_1 = require("./data-path");
 const aquecedor_owner_runtime_registry_1 = require("./services/aquecedor-owner-runtime.registry");
 const base_path_1 = require("./base-path");
 const conversation_graph_service_1 = require("./aquecedor/conversation-graph.service");
+const delivery_verify_helpers_1 = require("./aquecedor/delivery-verify.helpers");
+const outbound_ack_health_service_1 = require("./aquecedor/outbound-ack-health.service");
+const delivery_cooldown_service_1 = require("./aquecedor/delivery-cooldown.service");
 const pair_orchestrator_service_1 = require("./aquecedor/pair-orchestrator.service");
 const network_health_service_1 = require("./aquecedor/network-health.service");
+const aquecedor_chip_identity_1 = require("./aquecedor/aquecedor-chip-identity");
 const waba_container_service_1 = require("./waba-container-service");
 const waba_auth_routes_1 = require("./auth/waba-auth.routes");
 const waba_request_auth_1 = require("./auth/waba-request-auth");
@@ -72,7 +76,9 @@ const waba_billing_routes_1 = require("./billing/waba-billing.routes");
 const waba_fazenda_pool_service_1 = require("./instances/waba-fazenda-pool.service");
 const waba_admin_routes_1 = require("./admin/waba-admin.routes");
 const waba_push_routes_1 = require("./push/waba-push.routes");
+const waba_leads_cnpj_routes_1 = require("./marketing/leads-cnpj/waba-leads-cnpj.routes");
 const waba_operacional_campanhas_routes_1 = require("./admin/waba-operacional-campanhas.routes");
+const waba_device_cloud_routes_1 = require("./device-cloud/waba-device-cloud.routes");
 const asaas_integration_monitor_service_1 = require("./monitoring/asaas-integration-monitor.service");
 const uptime_monitor_service_1 = require("./monitoring/uptime-monitor.service");
 const waba_campaign_supplier_assignment_service_1 = require("./services/waba-campaign-supplier-assignment.service");
@@ -86,6 +92,7 @@ const waba_system_user_service_1 = require("./users/waba-system-user.service");
 const waba_campaign_intake_routes_1 = require("./disparos/waba-campaign-intake.routes");
 const waba_dispatches_api_kind_1 = require("./disparos/waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./disparos/waba-campaign-spreadsheet.util");
+const waba_campaign_messenger_images_service_1 = require("./disparos/waba-campaign-messenger-images.service");
 const waba_disparos_credits_service_1 = require("./billing/waba-disparos-credits.service");
 const waba_feature_flags_1 = require("./config/waba-feature-flags");
 const waba_entitlement_routes_1 = require("./entitlements/waba-entitlement.routes");
@@ -100,6 +107,8 @@ const aquecedor_instance_lifecycle_service_1 = require("./services/aquecedor-ins
 const aquecedor_instance_warmth_service_1 = require("./services/aquecedor-instance-warmth.service");
 const aquecedor_instance_message_stats_service_1 = require("./services/aquecedor-instance-message-stats.service");
 const production_data_persistence_service_1 = require("./services/production-data-persistence.service");
+const proxy_brasil_config_1 = require("./proxy/proxy-brasil.config");
+const evo_instance_proxy_service_1 = require("./proxy/evo-instance-proxy.service");
 const deploy_marker_1 = require("./deploy-marker");
 const waba_campaign_intake_constants_1 = require("./disparos/waba-campaign-intake.constants");
 const waba_mail_service_1 = require("./mail/waba-mail.service");
@@ -325,6 +334,18 @@ const uploadCampaignSpreadsheet = (0, multer_1.default)({
         cb(new Error("Envie arquivo Excel (.xlsx ou .xls)."));
     },
 });
+const uploadMessengerImage = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const mime = String(file.mimetype || "").toLowerCase();
+        if (mime === "image/jpeg" || mime === "image/png" || mime === "image/webp") {
+            cb(null, true);
+            return;
+        }
+        cb(new Error("Envie JPEG, PNG ou WebP 1080×1080."));
+    },
+});
 function isDisparosCampaignCreatePost(req) {
     if (req.method !== "POST")
         return false;
@@ -338,6 +359,10 @@ function shouldSkipBodyParserForMultipart(req) {
     const p = String(req.path || "").replace(/\/+$/, "") || "/";
     // Intake do wizard é sempre multipart; não depender só do Content-Type (proxies podem alterá-lo).
     if (p === "/disparos/campanhas/intake")
+        return true;
+    if (p === "/disparos/messenger-images")
+        return true;
+    if (/^\/device-cloud\/device\/[^/]+\/push-media$/.test(p))
         return true;
     const ct = String(req.headers["content-type"] || "");
     if (!ct.includes("multipart/form-data"))
@@ -371,6 +396,8 @@ function isMaintenanceBypassPath(method, reqPath) {
         p === "/ready" ||
         p === "/service/maintenance" ||
         p === "/service/evo-integration-probe" ||
+        p === "/service/evo-qr-create-smoke" ||
+        p === "/service/evo-qr-recent-failures" ||
         p === "/maintenance");
 }
 function isDistStaticAssetPath(reqPath) {
@@ -432,6 +459,7 @@ app.get("/health", (_req, res) => {
         backgroundProcessing: ENABLE_BACKGROUND_PROCESSING,
         aquecedorProcessing: ENABLE_AQUECEDOR_PROCESSING,
         aquecedorDesiredOwners: (0, aquecedor_owner_runtime_registry_1.listAquecedorOwnersWithDesiredRunning)().length,
+        proxyBrasil: (0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()),
         evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
         evoTlsInsecure: (0, evo_http_client_1.isEvoTlsInsecure)(),
         evoHttpTimeoutMs: (0, evo_http_client_1.defaultEvoHttpTimeoutMs)(),
@@ -456,6 +484,53 @@ app.get("/service/evo-integration-probe", async (_req, res) => {
         const msg = error instanceof Error ? error.message : String(error);
         res.status(500).json({ ok: false, error: msg.slice(0, 300) });
     }
+});
+/** Smoke create→extract QR→delete (sem sendText). Diagnóstico do wizard QR. */
+app.get("/service/evo-qr-create-smoke", async (_req, res) => {
+    const name = `qrsmoke-${Date.now().toString(36).slice(-6)}`;
+    const started = Date.now();
+    try {
+        const createPayload = {
+            instanceName: name,
+            name,
+            qrcode: true,
+            integration: "WHATSAPP-BAILEYS",
+        };
+        const createResult = await callEvoAction(`${EVO_API_BASE}/instance/create`, "POST", createPayload, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000), retries: 1 });
+        const qrCode = tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+        const deleteResult = await callEvoAction(`${EVO_API_BASE}/instance/delete/${encodeURIComponent(name)}`, "DELETE", undefined, { timeoutMs: 15000, retries: 1 });
+        const ok = Boolean(createResult.ok && qrCode);
+        res.status(ok ? 200 : 503).json({
+            ok,
+            name,
+            evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
+            createStatus: createResult.status,
+            createOk: createResult.ok,
+            extractOk: Boolean(qrCode),
+            qrLen: qrCode ? String(qrCode).length : 0,
+            deleteStatus: deleteResult.status,
+            durationMs: Date.now() - started,
+            createDetail: String(createResult.body || createResult.error || "").slice(0, 240),
+        });
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        res.status(500).json({
+            ok: false,
+            name,
+            evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
+            durationMs: Date.now() - started,
+            error: msg.slice(0, 400),
+        });
+    }
+});
+app.get("/service/evo-qr-recent-failures", (_req, res) => {
+    res.status(200).json({
+        ok: true,
+        evoApiBase: (0, evo_http_client_1.describeEvoApiBaseForOps)(EVO_API_BASE),
+        count: qrRegisterRecentFailures.length,
+        items: qrRegisterRecentFailures,
+    });
 });
 app.get("/maintenance", (_req, res) => {
     if (!MAINTENANCE_MODE) {
@@ -724,8 +799,8 @@ function parseDisparosConfig(input) {
         provider === "waba"
         ? provider
         : "waba";
-    const mode = String(input?.messageMode || DISPAROS_DEFAULTS.messageMode).toLowerCase();
-    const safeMode = mode === "database" ? "database" : "ai";
+    // Base de mensagens (planilha) removida: campanhas Alternativa usam apenas IA.
+    const safeMode = "ai";
     const selectedRaw = input?.selectedDisparadorInstances ?? input?.selected_disparador_instances;
     const selectedDisparadorInstances = Array.isArray(selectedRaw)
         ? Array.from(new Set(selectedRaw
@@ -762,6 +837,7 @@ function parseDisparosConfig(input) {
         whatsappTargetNumber: normalizeWhatsAppNumber(String(input?.whatsappTargetNumber || "")),
         responseUrl: normalizeDisparosResponseUrl(String(input?.responseUrl || "")),
         selectedDisparadorInstances,
+        messengerImages: (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(input?.messengerImages),
     };
 }
 function normalizeDisparosResponseUrl(raw) {
@@ -849,13 +925,14 @@ function validateRequiredDisparosConfigPayload(input) {
     const linkDestinationError = validateDisparosLinkDestination(input);
     if (linkDestinationError)
         return linkDestinationError;
-    const mode = String(input?.messageMode || "").toLowerCase();
-    if (mode === "ai") {
-        const aiRequired = ["aiTone", "aiCta", "aiAudience", "aiBriefing"];
-        for (const key of aiRequired) {
-            if (!hasValue(key))
-                return `Campo obrigatório ausente no modo IA: ${key}.`;
-        }
+    const aiRequired = ["aiTone", "aiCta", "aiAudience", "aiBriefing"];
+    for (const key of aiRequired) {
+        if (!hasValue(key))
+            return `Campo obrigatório ausente no modo IA: ${key}.`;
+    }
+    const images = (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(input?.messengerImages);
+    if (!(0, waba_campaign_messenger_images_service_1.messengerImagesAreComplete)(images)) {
+        return "Envie as 4 imagens 1080×1080 px na aba Imagem do Mensageiro.";
     }
     return null;
 }
@@ -931,6 +1008,9 @@ const EVO_RENAME_URL_TEMPLATE = process.env.EVO_RENAME_URL_TEMPLATE || `${EVO_AP
 const EVO_CREATE_INSTANCE_URL = process.env.EVO_CREATE_INSTANCE_URL || `${EVO_API_BASE}/instance/create`;
 const EVO_SEND_TEXT_URL_TEMPLATE = process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${EVO_API_BASE}/message/sendText/{instance}`;
 const EVO_SEND_TEXT_V1 = process.env.EVO_SEND_TEXT_V1 === "1" || process.env.EVO_SEND_TEXT_V1 === "true";
+const EVO_SEND_MEDIA_URL_TEMPLATE = process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${EVO_API_BASE}/message/sendMedia/{instance}`;
+/** ~1,2 MB em base64 (4/3) — alinhado ao limite inline do Push/EVO. */
+const CAMPAIGN_MEDIA_INLINE_BASE64_MAX_CHARS = Math.floor(1.2 * 1024 * 1024 * (4 / 3));
 const OPENAI_API_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/responses";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -1084,9 +1164,12 @@ const AQUECEDOR_PAIR_SENDER_LOOKBACK = 500;
 const AQUECEDOR_TURN_EQUITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
  * Par sem troca há mais que isso: o turno do par reinicia (qualquer lado pode iniciar).
- * Evita par congelado quando o "devedor" da resposta nunca vence a equidade.
+ * 90 min (antes 6h): com intervalo 2–4 min, 6h congelava o motor quando o "devedor" saía do ciclo.
  */
-const AQUECEDOR_PAIR_TURN_STALE_MS = 6 * 60 * 60 * 1000;
+const AQUECEDOR_PAIR_TURN_STALE_MS = 90 * 60 * 1000;
+/** Cooldown curto ao falhar open/turno/cota — libera outros pares sem rajada de sendText. */
+const AQUECEDOR_SOFT_DIRECTED_COOLDOWN_MS = 3 * 60 * 1000;
+const AQUECEDOR_PICK_ATTEMPTS_MAX = 12;
 function buildAquecedorInstanceCanonicalMap(connected, aliasesMap) {
     const primaryByLower = new Map();
     for (const item of connected) {
@@ -1162,31 +1245,57 @@ function resolveAquecedorConnectedByName(connected, canonicalMap, name) {
     const target = resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase();
     return (connected.find((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap).toLowerCase() === target) || null);
 }
-async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance) {
+async function loadAquecedorExchangeEvents(supabase, connected, _canonicalMap, _numberToInstance) {
     const events = [];
-    const instanceNames = connected.map((item) => item.instancia).filter(Boolean);
-    if (instanceNames.length < 2)
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+    if (chipIndex.chips.length < 2)
         return events;
-    const connectedCanonical = new Set(instanceNames.map((name) => resolveAquecedorCanonicalInstance(name, canonicalMap).toLowerCase()));
+    const variantToChip = (0, aquecedor_chip_identity_1.buildAquecedorNumberVariantToChipMap)(connected);
+    const nameToChip = new Map(chipIndex.instanceToChip);
+    const chipSet = new Set(chipIndex.chips);
+    try {
+        const { data: controle } = await (supabase
+            .from("controle_instancia")
+            .select("instancia, numero_whatsapp")
+            .limit(500));
+        for (const row of Array.isArray(controle) ? controle : []) {
+            const inst = String(row?.instancia || "").trim();
+            const chip = (0, aquecedor_chip_identity_1.resolveNumberVariantToChip)(String(row?.numero_whatsapp || ""), variantToChip);
+            if (!inst || !chip || !chipSet.has(chip))
+                continue;
+            nameToChip.set(inst.toLowerCase(), chip);
+        }
+    }
+    catch {
+        /* optional */
+    }
+    const resolveNameToChip = (rawName) => {
+        const key = String(rawName || "").trim().toLowerCase();
+        if (!key)
+            return "";
+        return nameToChip.get(key) || "";
+    };
+    const historicalNames = Array.from(new Set([
+        ...connected.map((c) => c.instancia),
+        ...Array.from(nameToChip.keys()),
+    ])).filter(Boolean);
+    if (historicalNames.length < 2)
+        return events;
     try {
         const { data, error } = await (supabase
             .from("aquecedor")
             .select("instancia, numero_destino, sent_at")
             .eq("status", "ENVIADO")
-            .in("instancia", instanceNames)
+            .in("instancia", historicalNames)
             .order("sent_at", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
             for (const row of data) {
-                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia || ""), canonicalMap);
-                const toInst = resolveAquecedorInstanceByNumber(String(row?.numero_destino || ""), numberToInstance);
+                const fromChip = resolveNameToChip(String(row?.instancia || ""));
+                const toChip = (0, aquecedor_chip_identity_1.resolveNumberVariantToChip)(String(row?.numero_destino || ""), variantToChip);
                 const at = String(row?.sent_at || "").trim();
-                if (fromInst &&
-                    toInst &&
-                    at &&
-                    connectedCanonical.has(fromInst.toLowerCase()) &&
-                    connectedCanonical.has(toInst.toLowerCase())) {
-                    events.push({ at, fromInst, toInst });
+                if (fromChip && toChip && at && chipSet.has(fromChip) && chipSet.has(toChip) && fromChip !== toChip) {
+                    events.push({ at, fromInst: fromChip, toInst: toChip });
                 }
             }
         }
@@ -1198,21 +1307,17 @@ async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, nu
         const { data, error } = await (supabase
             .from("logs_envios")
             .select("instancia_origem, instancia_destino, data_envio")
-            .in("instancia_origem", instanceNames)
-            .in("instancia_destino", instanceNames)
+            .in("instancia_origem", historicalNames)
+            .in("instancia_destino", historicalNames)
             .order("data_envio", { ascending: false })
             .limit(AQUECEDOR_PAIR_SENDER_LOOKBACK));
         if (!error && Array.isArray(data)) {
             for (const row of data) {
-                const fromInst = resolveAquecedorCanonicalInstance(String(row?.instancia_origem || ""), canonicalMap);
-                const toInst = resolveAquecedorCanonicalInstance(String(row?.instancia_destino || ""), canonicalMap);
+                const fromChip = resolveNameToChip(String(row?.instancia_origem || ""));
+                const toChip = resolveNameToChip(String(row?.instancia_destino || ""));
                 const at = String(row?.data_envio || "").trim();
-                if (fromInst &&
-                    toInst &&
-                    at &&
-                    connectedCanonical.has(fromInst.toLowerCase()) &&
-                    connectedCanonical.has(toInst.toLowerCase())) {
-                    events.push({ at, fromInst, toInst });
+                if (fromChip && toChip && at && chipSet.has(fromChip) && chipSet.has(toChip) && fromChip !== toChip) {
+                    events.push({ at, fromInst: fromChip, toInst: toChip });
                 }
             }
         }
@@ -1224,7 +1329,7 @@ async function loadAquecedorExchangeEvents(supabase, connected, canonicalMap, nu
     for (const ev of events) {
         const atMs = new Date(ev.at).getTime();
         const bucket = Number.isFinite(atMs) ? Math.floor(atMs / 1000) : ev.at;
-        const key = `${ev.fromInst.toLowerCase()}|${ev.toInst.toLowerCase()}|${bucket}`;
+        const key = `${ev.fromInst}|${ev.toInst}|${bucket}`;
         if (!dedup.has(key))
             dedup.set(key, ev);
     }
@@ -1234,6 +1339,20 @@ async function loadAquecedorTurnManager(supabase, connected) {
     const aliasesMap = await loadInstanceAliasesMap();
     const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
     const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+    const resolveToChip = (raw) => {
+        const fromInstance = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(raw, chipIndex);
+        if (fromInstance)
+            return fromInstance;
+        // Aceita chip já canônico (ex.: chaves internas / cooldowns migrados).
+        const asChip = (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(raw);
+        if (asChip && chipIndex.chipToInstance.has(asChip))
+            return asChip;
+        const key = String(raw || "").trim().toLowerCase();
+        if (key && chipIndex.chipToInstance.has(key))
+            return key;
+        return "";
+    };
     const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
     const instanceStats = new Map();
     const pairLastSender = new Map();
@@ -1251,6 +1370,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
                 lastSentAt: null,
                 lastReceivedAt: null,
                 lastReceivedFrom: null,
+                lastOutboundTo: null,
                 sendCount: 0,
                 receiveCount: 0,
                 outboundSinceInbound: 0,
@@ -1280,6 +1400,7 @@ async function loadAquecedorTurnManager(supabase, connected) {
             directedSendCounts.set(directedKey, (directedSendCounts.get(directedKey) || 0) + 1);
         }
         fromStats.lastSentAt = ev.at;
+        fromStats.lastOutboundTo = ev.toInst;
         toStats.lastReceivedAt = ev.at;
         toStats.lastReceivedFrom = ev.fromInst;
         fromStats.outboundSinceInbound += 1;
@@ -1319,52 +1440,62 @@ async function loadAquecedorTurnManager(supabase, connected) {
         const ev = events[i];
         recentDirectedEdges.push(buildAquecedorDirectedKey(ev.fromInst, ev.toInst));
     }
+    const connectedChips = new Set(chipIndex.chips);
     const owesPairReply = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
+        if (!origem || !destino || origem === destino)
             return false;
         const pairKey = buildAquecedorPairKey(origem, destino);
         const pairState = pairStates.get(pairKey);
-        return pairState?.pendingReplyFrom?.toLowerCase() === origem.toLowerCase();
+        return pairState?.pendingReplyFrom === origem;
     };
     const canSendDirected = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
-        if (!origem || !destino || origem.toLowerCase() === destino.toLowerCase())
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
+        if (!origem || !destino || origem === destino)
             return false;
+        if (!connectedChips.has(origem) || !connectedChips.has(destino)) {
+            return false;
+        }
         const pairKey = buildAquecedorPairKey(origem, destino);
         const lastSender = pairLastSender.get(pairKey);
-        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
+        if (lastSender && lastSender === origem) {
             return false;
         }
         if (owesPairReply(origemRaw, destinoRaw)) {
             return true;
         }
-        const stats = instanceStats.get(origem.toLowerCase());
+        const stats = instanceStats.get(origem);
         if (!stats?.lastSentAt || stats.outboundSinceInbound === 0)
             return true;
+        // Peer do último outbound saiu do ciclo → não congelar a origem para outros pares.
+        const lastTo = stats.lastOutboundTo;
+        if (lastTo && !connectedChips.has(lastTo)) {
+            return true;
+        }
         return false;
     };
     const describeBlockReason = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
+        const label = (chip) => chipIndex.chipToInstance.get(chip) || chip;
         const pairKey = buildAquecedorPairKey(origem, destino);
         const lastSender = pairLastSender.get(pairKey);
-        const stats = instanceStats.get(origem.toLowerCase());
-        if (lastSender && lastSender.toLowerCase() === origem.toLowerCase()) {
-            return `${origem} já enviou para ${destino} e precisa aguardar resposta de ${destino} no par (A→B, depois B→A).`;
+        const stats = instanceStats.get(origem);
+        if (lastSender && lastSender === origem) {
+            return `${label(origem)} já enviou para ${label(destino)} e precisa aguardar resposta de ${label(destino)} no par (A→B, depois B→A).`;
         }
         if (owesPairReply(origemRaw, destinoRaw)) {
-            return `${origem} deve responder ${destino} neste par antes de outras combinações.`;
+            return `${label(origem)} deve responder ${label(destino)} neste par antes de outras combinações.`;
         }
         if (stats && stats.outboundSinceInbound > 0) {
             const esperado = stats.lastReceivedFrom
-                ? ` Responder a ${stats.lastReceivedFrom} libera o turno global.`
+                ? ` Responder a ${label(stats.lastReceivedFrom)} libera o turno global.`
                 : "";
-            return `${origem} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
+            return `${label(origem)} enviou ${stats.outboundSinceInbound} vez(es) sem receber de volta; aguardando mensagem inbound antes de novo envio.${esperado}`;
         }
-        return `${origem} não pode enviar para ${destino} no turno atual.`;
+        return `${label(origem) || origemRaw} não pode enviar para ${label(destino) || destinoRaw} no turno atual.`;
     };
     const lastEvent = events.length ? events[events.length - 1] : null;
     const lastEventPairKey = lastEvent
@@ -1372,15 +1503,15 @@ async function loadAquecedorTurnManager(supabase, connected) {
         : null;
     const getLastEventPairKey = () => lastEventPairKey;
     const scoreEquityCombination = (origemRaw, destinoRaw, comboIndex, startIndex, equityBaseline) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
         const directedKey = buildAquecedorDirectedKey(origem, destino);
         const directed = directedSendCounts.get(directedKey) ?? 0;
         const pairTotal = getUndirectedPairSendTotal(origem, destino);
-        const oSend = instanceStats.get(origem.toLowerCase())?.sendCount ?? 0;
-        const oRecv = instanceStats.get(origem.toLowerCase())?.receiveCount ?? 0;
-        const dRecv = instanceStats.get(destino.toLowerCase())?.receiveCount ?? 0;
-        const dSend = instanceStats.get(destino.toLowerCase())?.sendCount ?? 0;
+        const oSend = instanceStats.get(origem)?.sendCount ?? 0;
+        const oRecv = instanceStats.get(origem)?.receiveCount ?? 0;
+        const dRecv = instanceStats.get(destino)?.receiveCount ?? 0;
+        const dSend = instanceStats.get(destino)?.sendCount ?? 0;
         const replyDue = owesPairReply(origemRaw, destinoRaw);
         let score = 0;
         // Rodízio de conversas: o par que acabou de trocar cede a vez — EXCETO se a resposta
@@ -1418,14 +1549,14 @@ async function loadAquecedorTurnManager(supabase, connected) {
         return score;
     };
     const getDirectedSendCount = (origemRaw, destinoRaw) => {
-        const origem = resolveAquecedorCanonicalInstance(origemRaw, canonicalMap);
-        const destino = resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap);
+        const origem = resolveToChip(origemRaw);
+        const destino = resolveToChip(destinoRaw);
         if (!origem || !destino)
             return 0;
         return directedSendCounts.get(buildAquecedorDirectedKey(origem, destino)) ?? 0;
     };
-    const getOriginSendCount = (origemRaw) => instanceStats.get(resolveAquecedorCanonicalInstance(origemRaw, canonicalMap).toLowerCase())?.sendCount ?? 0;
-    const getDestReceiveCount = (destinoRaw) => instanceStats.get(resolveAquecedorCanonicalInstance(destinoRaw, canonicalMap).toLowerCase())?.receiveCount ?? 0;
+    const getOriginSendCount = (origemRaw) => instanceStats.get(resolveToChip(origemRaw))?.sendCount ?? 0;
+    const getDestReceiveCount = (destinoRaw) => instanceStats.get(resolveToChip(destinoRaw))?.receiveCount ?? 0;
     const getUndirectedPairSendTotal = (instA, instB) => getDirectedSendCount(instA, instB) + getDirectedSendCount(instB, instA);
     const getTotalDirectedSendCount = () => {
         let total = 0;
@@ -1454,47 +1585,78 @@ async function canAquecedorOrigemSendDirected(supabase, connected, instanciaOrig
     return turn.canSendDirected(instanciaOrigem, instanciaDestino);
 }
 async function ensureAquecedorOwnerConversationGraph(ownerEmail, supabase, connected) {
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+    const chipKeys = chipIndex.chips;
+    if (chipKeys.length < 2) {
+        return (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
+    }
     const aliasesMap = await loadInstanceAliasesMap();
     const canonicalMap = buildAquecedorInstanceCanonicalMap(connected, aliasesMap);
     const numberToInstance = buildAquecedorNumberToInstanceMap(connected, canonicalMap);
-    const instanceNames = connected.map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMap));
     const existing = await (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
-    if (!existing.bootstrapped) {
+    const needsChipIdentity = existing.identityMode !== "chip";
+    if (!existing.bootstrapped || needsChipIdentity) {
         const events = await loadAquecedorExchangeEvents(supabase, connected, canonicalMap, numberToInstance);
         await (0, conversation_graph_service_1.bootstrapOwnerGraphFromEvents)(ownerEmail, events, {
-            instanceNames,
+            force: needsChipIdentity,
+            instanceNames: chipKeys,
+            identityMode: "chip",
         });
     }
     else {
-        await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, instanceNames);
+        await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, chipKeys);
     }
     return (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
 }
-async function pickAquecedorCombinationAsync(supabase, connected, combinations, startIndex, ownerEmail) {
+async function pickAquecedorCombinationAsync(supabase, connected, combinations, startIndex, ownerEmail, extraBlockedDirectedKeys) {
     if (!combinations.length || connected.length < 2)
         return null;
     const owner = (0, aquecedor_owner_runtime_registry_1.normalizeAquecedorOwnerEmail)(ownerEmail || "") || "default";
+    const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
     const graph = await ensureAquecedorOwnerConversationGraph(owner, supabase, connected);
-    const aliasesMapForPick = await loadInstanceAliasesMap();
-    const canonicalMapForPick = buildAquecedorInstanceCanonicalMap(connected, aliasesMapForPick);
-    const eligibleNames = connected.map((item) => resolveAquecedorCanonicalInstance(item.instancia, canonicalMapForPick));
-    const pick = (0, pair_orchestrator_service_1.pickNextDirectedExchange)(graph, eligibleNames, { startIndex });
-    if (!pick)
-        return null;
-    const origemLc = pick.origem.toLowerCase();
-    const destinoLc = pick.destino.toLowerCase();
-    for (let index = 0; index < combinations.length; index += 1) {
-        const combo = combinations[index];
-        if (String(combo.instancia_origem || "").trim().toLowerCase() === origemLc &&
-            String(combo.instancia_destino || "").trim().toLowerCase() === destinoLc) {
-            return { chosen: combo, index, pickMeta: pick };
+    const eligibleChips = chipIndex.chips;
+    const turn = await loadAquecedorTurnManager(supabase, connected);
+    const blocked = await (0, delivery_cooldown_service_1.listBlockedDirectedKeys)();
+    if (extraBlockedDirectedKeys?.size) {
+        for (const key of extraBlockedDirectedKeys)
+            blocked.add(key);
+    }
+    for (const combo of combinations) {
+        if (!turn.canSendDirected(combo.instancia_origem, combo.instancia_destino)) {
+            blocked.add((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(combo.instancia_origem, combo.instancia_destino));
         }
     }
+    // Cooldowns legados por nome → também bloquear pelo chip.
+    const blockedForPick = new Set(blocked);
+    for (const key of blocked) {
+        const parts = String(key || "").split("→");
+        if (parts.length !== 2)
+            continue;
+        const oChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(parts[0], chipIndex);
+        const dChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(parts[1], chipIndex);
+        if (oChip && dChip)
+            blockedForPick.add((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(oChip, dChip));
+    }
+    for (const combo of combinations) {
+        const oChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_origem, chipIndex);
+        const dChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_destino, chipIndex);
+        if (oChip &&
+            dChip &&
+            blocked.has((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(combo.instancia_origem, combo.instancia_destino))) {
+            blockedForPick.add((0, delivery_cooldown_service_1.buildDirectedCooldownKey)(oChip, dChip));
+        }
+    }
+    const pick = (0, pair_orchestrator_service_1.pickNextDirectedExchange)(graph, eligibleChips, {
+        startIndex,
+        blockedDirectedKeys: blockedForPick,
+    });
+    if (!pick)
+        return null;
     for (let index = 0; index < combinations.length; index += 1) {
         const combo = combinations[index];
-        const o = resolveAquecedorCanonicalInstance(combo.instancia_origem, canonicalMapForPick);
-        const d = resolveAquecedorCanonicalInstance(combo.instancia_destino, canonicalMapForPick);
-        if (o.toLowerCase() === origemLc && d.toLowerCase() === destinoLc) {
+        const oChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_origem, chipIndex);
+        const dChip = (0, aquecedor_chip_identity_1.resolveAquecedorInstanceToChip)(combo.instancia_destino, chipIndex);
+        if (oChip && dChip && oChip === pick.origem && dChip === pick.destino) {
             return { chosen: combo, index, pickMeta: pick };
         }
     }
@@ -1779,24 +1941,25 @@ async function resolveAquecedorMessageForSend(supabase, pendingId, pendingText, 
         .eq("id", pendingId);
     return mensagem;
 }
-async function releaseStuckAquecedorQueueRows(supabase, scopedInstanceNames) {
+async function releaseStuckAquecedorQueueRows(supabase, _scopedInstanceNames) {
     const cutoff = new Date(Date.now() - AQUECEDOR_QUEUE_STUCK_MS).toISOString();
     const resetPayload = {
         status: "PENDENTE",
         processing_at: null,
         sent_at: null,
     };
-    const scoped = (scopedInstanceNames || []).map((n) => String(n || "").trim()).filter(Boolean);
-    const applyScope = (query) => (scoped.length ? query.in("instancia", scoped) : query);
-    await applyScope(supabase.from("aquecedor")
+    // Sempre libera PROCESSANDO travado em QUALQUER instancia.
+    // Se filtrar só pelo escopo atual, órfãos (ex.: 6973 fora do ciclo) ficam
+    // PROCESSANDO por dias e a UI mostra "há 1600+ min".
+    await supabase.from("aquecedor")
         .update(resetPayload)
         .eq("status", "PROCESSANDO")
-        .lt("processing_at", cutoff));
-    await applyScope(supabase.from("aquecedor")
+        .lt("processing_at", cutoff);
+    await supabase.from("aquecedor")
         .update(resetPayload)
         .eq("status", "PROCESSANDO")
         .is("processing_at", null)
-        .lt("scheduled_at", cutoff));
+        .lt("scheduled_at", cutoff);
 }
 async function fetchProcessableAquecedorPending(supabase, scopedInstanceNames, preferredOrigem) {
     const scoped = scopedInstanceNames.map((n) => String(n || "").trim()).filter(Boolean);
@@ -1898,6 +2061,30 @@ async function ensureAquecedorPendingMessageOnce(pair) {
     }
     const exclude = await buildAquecedorExcludeSet(supabase, pair);
     const mensagem = await pickAquecedorMessageText(supabase, exclude);
+    // Reaproveita órfãos (instancia null) de reverts antigos — evita 2º registro Em Fila.
+    const { data: orphan } = (await (supabase
+        .from("aquecedor")
+        .select("id")
+        .eq("status", "PENDENTE")
+        .is("instancia", null)
+        .order("scheduled_at", { ascending: true, nullsFirst: true })
+        .limit(1)
+        .maybeSingle()));
+    if (orphan?.id) {
+        const { error: claimError } = await supabase.from("aquecedor")
+            .update({
+            mensagem,
+            scheduled_at: now,
+            instancia: origem,
+            numero_destino: null,
+            processing_at: null,
+            sent_at: null,
+        })
+            .eq("id", orphan.id)
+            .eq("status", "PENDENTE");
+        if (!claimError)
+            return { ok: true, pendingId: orphan.id };
+    }
     const { data: inserted, error: insertError } = await supabase.from("aquecedor")
         .insert({
         mensagem,
@@ -2136,7 +2323,7 @@ const DISPAROS_DEFAULTS = {
     messageMode: "ai",
     aiBriefing: "",
     aiTone: "consultivo",
-    aiCta: "Responda no link abaixo",
+    aiCta: "Quero saber mais",
     aiAudience: "CORBAN",
     shortenerProvider: "waba",
     shortenerDomain: "",
@@ -2144,6 +2331,7 @@ const DISPAROS_DEFAULTS = {
     whatsappTargetNumber: "",
     responseUrl: "",
     selectedDisparadorInstances: [],
+    messengerImages: [],
 };
 function isDisparosWindowOpen(config, now) {
     const day = now.getDay();
@@ -2334,6 +2522,11 @@ async function loadDisparosLocalState() {
     }
 }
 const campaignNextAllowedSendAt = new Map();
+/** Round-robin de imagens 1080×1080 por campanha (Alternativa). */
+const campaignMessengerImageCursor = new Map();
+/** Evita dois processamentos paralelos da mesma campanha (tick a cada 7s vs typing/IA). */
+const campaignDispatchBusy = new Set();
+let campaignDispatchTickRunning = false;
 const campaignDisparadorRoundRobin = new Map();
 let disparosRoundRobinCounter = 0;
 const alternativaNumbersService = new waba_alternativa_numbers_service_1.WabaAlternativaNumbersService();
@@ -2598,7 +2791,9 @@ async function ensureAquecedorInstanceRegistered(instanceName, options) {
         const forceNew = options?.forceNewIntegration === true;
         if (forceNew) {
             // Data desta integração = agora (evita createdAt EVO legado promover Preparando na hora).
-            await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, new Date().toISOString());
+            await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(name, new Date().toISOString(), {
+                forceNewIntegration: true,
+            });
             return;
         }
         // Sem createdAt (create EVO ainda pendente): não grandfather como active.
@@ -2635,7 +2830,9 @@ async function syncAquecedorConnectedInstances(supabase, connected) {
         await persistInstanceUsage(toRegister);
         for (const row of toRegister) {
             if (row.useAquecedor) {
-                await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(row.instanceName, new Date().toISOString());
+                await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(row.instanceName, new Date().toISOString(), {
+                    forceNewIntegration: true,
+                });
             }
         }
     }
@@ -2697,8 +2894,11 @@ async function filterAquecedorRowsByEvoLiveOpen(rows) {
     const filtered = [];
     const ghost = [];
     for (const row of rows) {
-        const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia);
-        if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveState)) {
+        let liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia);
+        if (!String(liveState || "").trim()) {
+            liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instancia, { fresh: true });
+        }
+        if ((0, evo_connection_state_service_1.aquecedorLiveStateAllowsConnected)(liveState)) {
             filtered.push(row);
         }
         else {
@@ -2719,11 +2919,12 @@ async function listMergedConnectedEvoInstancesUnscoped() {
     const fromCache = cache?.items?.length ? buildConnectedFromEvoCacheItems(cache.items) : [];
     const merged = mergeAquecedorConnectedRows(fromLive, fromCache);
     const verified = await filterAquecedorRowsByEvoLiveOpen(merged.rows);
+    const deduped = (0, aquecedor_chip_identity_1.dedupeAquecedorConnectedByNumber)(verified.rows);
     const snapshots = evoList.ok && evoList.instances.length
         ? await (0, evo_connection_state_service_1.resolveEvoLiveConnectionSnapshots)(evoList.instances)
         : [];
     return {
-        rows: verified.rows,
+        rows: deduped,
         liveCount: fromLive.length,
         cacheCount: fromCache.length,
         evoOk: evoList.ok,
@@ -2887,6 +3088,7 @@ async function resolveAquecedorConnectedForOwner(ownerEmail) {
         connected = await enrichAquecedorConnectedNumbersFromControleInstancia(supabase, connected, allowed);
         connected = connected.filter((item) => String(item.numero || "").trim());
     }
+    connected = await filterAquecedorConnectedByOutboundHealth(connected);
     const usedCacheSupplement = mergedEvo.evoOk &&
         mergedEvo.usedCacheOnlyForNumbers &&
         connected.length > mergedEvo.liveCount &&
@@ -3275,14 +3477,33 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
     const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
     const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
     if (sendResult.ok) {
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), texto, {
+        let numeroOrigem = resolveAquecedorInstanceDigits(String(origemConnected?.numero || ""));
+        if (!numeroOrigem) {
+            try {
+                numeroOrigem = resolveAquecedorInstanceDigits((await (0, evo_instance_phone_service_1.resolveEvoInstancePhone)(chosen.instancia_origem)) || "");
+            }
+            catch {
+                /* opcional */
+            }
+        }
+        const messageId = extractAquecedorSendMessageId(sendResult.json);
+        const ackProbe = messageId
+            ? await probeAquecedorSendAckStatus(chosen.instancia_origem, messageId, {
+                maxAttempts: 5,
+                intervalMs: 2000,
+            })
+            : { status: "UNKNOWN" };
+        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, numeroOrigem, texto, {
             instanciaOrigem: chosen.instancia_origem,
             numeroDestino: numero,
             sendStartedAtMs,
-            maxAttempts: 6,
-            attemptIntervalMs: 2000,
+            // Janela maior: 2477/@lid costuma indexar findMessages depois do app WhatsApp.
+            maxAttempts: 12,
+            attemptIntervalMs: 2500,
             skipInitialDelay: false,
             relaxTimestampOnLastAttempt: true,
+            ackStatusHint: ackProbe.status,
+            messageId,
         });
         if (!deliveryCheck.ok) {
             aquecedorCycleRuntime().lastEvoError = {
@@ -3306,8 +3527,8 @@ async function runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, _con
             });
             await (0, conversation_graph_service_1.recordDirectedSend)({
                 ownerEmail,
-                fromInst: chosen.instancia_origem,
-                toInst: chosen.instancia_destino,
+                fromInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(connected.find((c) => c.instancia === chosen.instancia_origem)?.numero || "") || chosen.instancia_origem,
+                toInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(chosen.numero_whatsapp || "") || chosen.instancia_destino,
             });
             aquecedorCycleRuntime().lastEvoError = null;
             aquecedorCycleRuntime().lastResult = `Ciclo teste: ${chosen.instancia_origem} → ${chosen.instancia_destino} enviado com sucesso.`;
@@ -3454,62 +3675,95 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             await runAquecedorCycleTestBatch(connected, cicloGlobal, supabase, config, ownerEmail);
             return;
         }
-        const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal, ownerEmail);
-        if (!picked) {
-            deferAquecedorRetryOrWindow(config, nowSp, 30, "Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).");
-            return;
-        }
-        const chosen = picked.chosen;
         const scopedKeys = new Set((await listAquecedorScopedInstanceNames(ownerEmail)).map((name) => name.toLowerCase()));
-        if (!scopedKeys.has(chosen.instancia_origem.toLowerCase()) ||
-            !scopedKeys.has(chosen.instancia_destino.toLowerCase())) {
-            deferAquecedorRetryOrWindow(config, nowSp, 60, `Par ${chosen.instancia_origem} → ${chosen.instancia_destino} fora do escopo do assinante; envio bloqueado.`);
-            return;
-        }
-        const dailyQuota = await (0, aquecedor_instance_lifecycle_service_1.canAquecedorInstanceSendToday)(chosen.instancia_origem);
-        if (!dailyQuota.ok) {
-            deferAquecedorRetryOrWindow(config, nowSp, 300, `${chosen.instancia_origem}: ${dailyQuota.reason}`);
-            return;
-        }
-        const proximo = picked.index + 1;
-        const pairContext = buildAquecedorPairContext(chosen, connected);
-        const ensured = await ensureAquecedorPendingMessage(pairContext);
-        const pendingData = await fetchProcessableAquecedorPending(supabase, scopedInstanceNames, chosen.instancia_origem);
-        if (!pendingData?.id) {
-            const reason = ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
-            if (!ensured.ok && isSupabaseTransientError({ message: reason })) {
-                aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + 60000).toISOString();
-                aquecedorCycleRuntime().lastResult = await describeSupabaseConnectivityFailure();
+        const softSkipDirected = new Set();
+        const maxPickAttempts = Math.min(AQUECEDOR_PICK_ATTEMPTS_MAX, Math.max(1, combinations.length));
+        let picked = null;
+        let chosen = null;
+        let proximo = cicloGlobal + 1;
+        let pairContext = null;
+        let pendingData = null;
+        let texto = "";
+        let lastSoftReason = "";
+        for (let attempt = 0; attempt < maxPickAttempts; attempt += 1) {
+            const candidate = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal + attempt, ownerEmail, softSkipDirected);
+            if (!candidate)
+                break;
+            const dirKey = (0, delivery_cooldown_service_1.buildDirectedCooldownKey)(candidate.chosen.instancia_origem, candidate.chosen.instancia_destino);
+            if (softSkipDirected.has(dirKey))
+                continue;
+            if (!scopedKeys.has(candidate.chosen.instancia_origem.toLowerCase()) ||
+                !scopedKeys.has(candidate.chosen.instancia_destino.toLowerCase())) {
+                softSkipDirected.add(dirKey);
+                lastSoftReason = `Par ${candidate.chosen.instancia_origem} → ${candidate.chosen.instancia_destino} fora do escopo.`;
+                continue;
             }
-            else {
-                aquecedorCycleRuntime().lastResult = ensured.ok
-                    ? "Sem mensagem pendente para envio (fila vazia após preparação)."
-                    : reason;
+            const dailyQuota = await (0, aquecedor_instance_lifecycle_service_1.canAquecedorInstanceSendToday)(candidate.chosen.instancia_origem);
+            if (!dailyQuota.ok) {
+                softSkipDirected.add(dirKey);
+                lastSoftReason = `${candidate.chosen.instancia_origem}: ${dailyQuota.reason}`;
+                continue;
             }
-            return;
+            const turnCheck = await verifyAquecedorConversationTurn(supabase, connected, candidate.chosen.instancia_origem, candidate.chosen.instancia_destino);
+            if (!turnCheck.ok) {
+                softSkipDirected.add(dirKey);
+                lastSoftReason = turnCheck.reason;
+                continue;
+            }
+            if (await hasRecentAquecedorSendBetween(supabase, connected, candidate.chosen.instancia_origem, candidate.chosen.instancia_destino, 90)) {
+                softSkipDirected.add(dirKey);
+                lastSoftReason = `Envio ${candidate.chosen.instancia_origem} → ${candidate.chosen.instancia_destino} ignorado: duplicata recente.`;
+                continue;
+            }
+            const openCheck = await assertAquecedorInstancesOpenForSend(candidate.chosen.instancia_origem, candidate.chosen.instancia_destino);
+            if (!openCheck.ok) {
+                softSkipDirected.add(dirKey);
+                lastSoftReason = openCheck.reason;
+                await (0, delivery_cooldown_service_1.recordDirectedDeliveryFailure)({
+                    origem: candidate.chosen.instancia_origem,
+                    destino: candidate.chosen.instancia_destino,
+                    reason: openCheck.reason,
+                    cooldownMs: AQUECEDOR_SOFT_DIRECTED_COOLDOWN_MS,
+                });
+                continue;
+            }
+            const candidateContext = buildAquecedorPairContext(candidate.chosen, connected);
+            const ensured = await ensureAquecedorPendingMessage(candidateContext);
+            const pending = await fetchProcessableAquecedorPending(supabase, scopedInstanceNames, candidate.chosen.instancia_origem);
+            if (!pending?.id) {
+                softSkipDirected.add(dirKey);
+                lastSoftReason =
+                    ensured.reason || "Falha ao preparar mensagem pendente na fila do aquecedor.";
+                if (!ensured.ok && isSupabaseTransientError({ message: lastSoftReason })) {
+                    aquecedorCycleRuntime().nextAllowedAt = new Date(Date.now() + 60000).toISOString();
+                    aquecedorCycleRuntime().lastResult = await describeSupabaseConnectivityFailure();
+                    return;
+                }
+                continue;
+            }
+            picked = candidate;
+            chosen = candidate.chosen;
+            proximo = candidate.index + 1;
+            pairContext = candidateContext;
+            pendingData = pending;
+            texto = await resolveAquecedorMessageForSend(supabase, pending.id, String(pending.mensagem || ""), candidateContext);
+            break;
         }
-        const texto = await resolveAquecedorMessageForSend(supabase, pendingData.id, String(pendingData.mensagem || ""), pairContext);
-        const turnCheck = await verifyAquecedorConversationTurn(supabase, connected, chosen.instancia_origem, chosen.instancia_destino);
-        if (!turnCheck.ok) {
-            deferAquecedorRetryOrWindow(config, nowSp, 90, turnCheck.reason);
-            return;
-        }
-        if (await hasRecentAquecedorSendBetween(supabase, connected, chosen.instancia_origem, chosen.instancia_destino, 90)) {
-            deferAquecedorRetryOrWindow(config, nowSp, 90, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} ignorado: envio duplicado detectado no mesmo par.`);
-            return;
-        }
-        const turnRecheck = await verifyAquecedorConversationTurn(supabase, connected, chosen.instancia_origem, chosen.instancia_destino);
-        if (!turnRecheck.ok) {
-            deferAquecedorRetryOrWindow(config, nowSp, 90, turnRecheck.reason);
+        if (!picked || !chosen || !pairContext || !pendingData?.id) {
+            const blocked = await (0, delivery_cooldown_service_1.listBlockedDirectedKeys)();
+            const blockedHint = blocked.size
+                ? ` ${blocked.size} direção(ões) em cooldown de entrega.`
+                : "";
+            const skipHint = softSkipDirected.size
+                ? ` ${softSkipDirected.size} direção(ões) ignorada(s) neste ciclo.`
+                : "";
+            deferAquecedorRetryOrWindow(config, nowSp, blocked.size || softSkipDirected.size ? 45 : 30, lastSoftReason
+                ? `${lastSoftReason}${skipHint}${blockedHint}`
+                : `Aguardando equilíbrio de pares: nenhum envio elegível agora (saldo/anti-duplicata).${skipHint}${blockedHint}`);
             return;
         }
         const deliveryTag = buildAquecedorDeliveryTag();
         const textoEnvio = appendAquecedorDeliveryTag(texto, deliveryTag);
-        const openCheck = await assertAquecedorInstancesOpenForSend(chosen.instancia_origem, chosen.instancia_destino);
-        if (!openCheck.ok) {
-            deferAquecedorRetryOrWindow(config, nowSp, 180, openCheck.reason);
-            return;
-        }
         await supabase.from("aquecedor")
             .update({
             status: "PROCESSANDO",
@@ -3520,50 +3774,146 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         })
             .eq("id", pendingData.id);
         const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, chosen.instancia_origem);
-        const numero = resolveAquecedorInstanceDigits(chosen.numero_whatsapp);
-        const sendBody = EVO_SEND_TEXT_V1
-            ? { number: numero, textMessage: { text: textoEnvio } }
-            : { number: numero, text: textoEnvio };
-        const sendStartedAtMs = Date.now();
-        const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 3);
-        if (!sendResult.ok) {
-            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
-            const evoDetail = sendResult.json?.message ||
-                (Array.isArray(sendResult.json?.message) ? sendResult.json.message[0] : null) ||
-                sendResult.json?.error ||
-                (typeof sendResult.json?.detail === "string" ? sendResult.json.detail : null) ||
-                (sendResult.body && sendResult.body.length < 200 ? sendResult.body : null);
-            const detailStr = evoDetail ? String(evoDetail) : String(sendResult.body || "");
-            await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
-            const detail = evoDetail
-                ? ` (${String(evoDetail).slice(0, 120)})`
-                : sendResult.status === 0
-                    ? ` (${String(sendResult.error || sendResult.body || "timeout").slice(0, 120)})`
-                    : "";
-            deferAquecedorRetryOrWindow(config, nowSp, sendResult.status === 0 ? 180 : 120, `Falha no envio via EVO (HTTP ${sendResult.status})${detail}. Mensagem voltou para pendente.`);
+        const numberCandidates = buildAquecedorSendNumberCandidates(chosen.numero_whatsapp);
+        if (!numberCandidates.length) {
+            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+                keepInstancia: chosen.instancia_origem,
+            });
+            await (0, delivery_cooldown_service_1.recordDirectedDeliveryFailure)({
+                origem: chosen.instancia_origem,
+                destino: chosen.instancia_destino,
+                reason: "destino sem número WhatsApp válido",
+                cooldownMs: AQUECEDOR_SOFT_DIRECTED_COOLDOWN_MS,
+            });
+            deferAquecedorRetryOrWindow(config, nowSp, 120, `Destino ${chosen.instancia_destino} sem número WhatsApp válido para envio.`);
+            return;
+        }
+        const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
+        let sendAccepted = false;
+        let deliveryOk = false;
+        let deliveryDetail = "";
+        let lastSendStatus = 0;
+        let lastSendBody = "";
+        let numeroUsado = numberCandidates[0];
+        let sendStartedAtMs = Date.now();
+        let sawOrigemOnly = false;
+        let outboundAckBroken = false;
+        let lastAckStatus = null;
+        const MAX_FAILED_NUMBER_TRIES = 2;
+        let failedNumberTries = 0;
+        // Anti-ban / anti-spam WhatsApp (incidente 2026-07-24):
+        // - No máximo 1 sendText ACEITO por ciclo.
+        // - Variantes só se o envio anterior FALHOU (exists:false), e no máx. 2 falhas.
+        // - Nunca reenviar porque findMessages não confirmou no destino.
+        for (let ni = 0; ni < numberCandidates.length; ni += 1) {
+            if (sendAccepted)
+                break;
+            if (failedNumberTries >= MAX_FAILED_NUMBER_TRIES)
+                break;
+            const numero = numberCandidates[ni];
+            numeroUsado = numero;
+            const sendBody = EVO_SEND_TEXT_V1
+                ? { number: numero, textMessage: { text: textoEnvio } }
+                : { number: numero, text: textoEnvio };
+            sendStartedAtMs = Date.now();
+            const sendResult = await callEvoSendTextWithRetry(sendUrl, sendBody, 2);
+            lastSendStatus = sendResult.status;
+            lastSendBody = String(sendResult.body || "");
+            if (!sendResult.ok) {
+                failedNumberTries += 1;
+                const detailStr = String(sendResult.json?.message ||
+                    sendResult.json?.error ||
+                    sendResult.body ||
+                    "");
+                await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(chosen.instancia_origem, sendResult.status, detailStr);
+                continue;
+            }
+            sendAccepted = true;
+            await supabase.from("aquecedor")
+                .update({
+                numero_destino: numero,
+                mensagem: textoEnvio,
+            })
+                .eq("id", pendingData.id);
+            const messageId = extractAquecedorSendMessageId(sendResult.json);
+            const ackProbe = messageId
+                ? await probeAquecedorSendAckStatus(chosen.instancia_origem, messageId, { maxAttempts: 4, intervalMs: 2000 })
+                : { status: "UNKNOWN" };
+            lastAckStatus = ackProbe.status;
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackProbe.status)) {
+                outboundAckBroken = true;
+                (0, outbound_ack_health_service_1.rememberAquecedorOutboundHealth)(chosen.instancia_origem, "broken", {
+                    sampleSize: 1,
+                    errorCount: 1,
+                });
+                deliveryDetail = (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+                    sawOrigem: true,
+                    sawDestino: false,
+                    origem: chosen.instancia_origem,
+                    destino: chosen.instancia_destino,
+                    ackStatus: ackProbe.status,
+                }).detail;
+                break;
+            }
+            const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), textoEnvio, {
+                instanciaOrigem: chosen.instancia_origem,
+                numeroDestino: numero,
+                sendStartedAtMs,
+                maxAttempts: outboundAckBroken ? 1 : 12,
+                attemptIntervalMs: 3000,
+                relaxTimestampOnLastAttempt: true,
+                ackStatusHint: lastAckStatus,
+                messageId,
+            });
+            deliveryDetail = deliveryCheck.detail;
+            if (deliveryCheck.ok) {
+                deliveryOk = true;
+            }
+            else if (deliveryCheck.sawOrigem && !deliveryCheck.sawDestino) {
+                sawOrigemOnly = true;
+            }
+            break;
+        }
+        if (!sendAccepted) {
+            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+                keepInstancia: chosen.instancia_origem,
+            });
+            deferAquecedorRetryOrWindow(config, nowSp, lastSendStatus === 0 ? 180 : 120, `Falha no envio via EVO (HTTP ${lastSendStatus}). Mensagem voltou para pendente.`);
             aquecedorCycleRuntime().lastEvoError = {
-                status: sendResult.status,
-                body: String(sendResult.body || "").slice(0, 500),
+                status: lastSendStatus,
+                body: lastSendBody.slice(0, 500),
                 instance: chosen.instancia_origem,
-                numeroLen: numero.length,
+                numeroLen: numeroUsado.length,
             };
             console.error("[Aquecedor] sendText falhou:", aquecedorCycleRuntime().lastEvoError);
             return;
         }
-        const origemConnected = connected.find((item) => item.instancia.toLowerCase() === chosen.instancia_origem.toLowerCase());
-        const deliveryCheck = await verifyAquecedorMessageDelivered(chosen.instancia_destino, resolveAquecedorInstanceDigits(String(origemConnected?.numero || "")), textoEnvio, {
-            instanciaOrigem: chosen.instancia_origem,
-            numeroDestino: numero,
-            sendStartedAtMs,
-        });
-        if (!deliveryCheck.ok) {
-            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id);
-            deferAquecedorRetryOrWindow(config, nowSp, 120, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryCheck.detail}`);
+        if (!deliveryOk) {
+            await revertAquecedorPendingAfterFailedSend(supabase, pendingData.id, {
+                keepInstancia: chosen.instancia_origem,
+            });
+            // Outbound ERROR = sessão origem quebrada (não culpar o destino nem rajada).
+            const cooldownMs = outboundAckBroken ? 60 * 60 * 1000 : 15 * 60 * 1000;
+            if (outboundAckBroken) {
+                await (0, aquecedor_instance_lifecycle_service_1.markAquecedorInstanceRestricted)(chosen.instancia_origem, `Aquecedor: outbound MessageUpdate=${lastAckStatus || "ERROR"} — reconecte QR da ${chosen.instancia_origem}.`);
+            }
+            const cooldown = await (0, delivery_cooldown_service_1.recordDirectedDeliveryFailure)({
+                origem: chosen.instancia_origem,
+                destino: chosen.instancia_destino,
+                reason: deliveryDetail || "entrega não confirmada no destinatário",
+                cooldownMs,
+            });
+            const untilBr = formatDateBr(new Date(cooldown.untilMs).toISOString());
+            deferAquecedorRetryOrWindow(config, nowSp, 30, `Envio ${chosen.instancia_origem} → ${chosen.instancia_destino} não confirmado no destinatário. ${deliveryDetail} Par em cooldown até ${untilBr}${outboundAckBroken
+                ? " (outbound ERROR — reconecte QR da origem)"
+                : sawOrigemOnly
+                    ? " (só origem — sem reenvio de variantes)"
+                    : ""}; seguindo para outros pares.`);
             aquecedorCycleRuntime().lastEvoError = {
-                status: sendResult.status,
-                body: deliveryCheck.detail.slice(0, 500),
+                status: lastSendStatus,
+                body: deliveryDetail.slice(0, 500),
                 instance: chosen.instancia_destino,
-                numeroLen: numero.length,
+                numeroLen: numeroUsado.length,
             };
             console.warn("[Aquecedor] entrega não confirmada:", aquecedorCycleRuntime().lastEvoError);
             return;
@@ -3573,6 +3923,7 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
             .update({
             status: "ENVIADO",
             sent_at: new Date().toISOString(),
+            numero_destino: numeroUsado,
         })
             .eq("id", pendingData.id);
         await supabase.from("logs_envios").insert({
@@ -3589,8 +3940,10 @@ async function runAquecedorCycle(ownerEmail, forceTest = false) {
         await (0, aquecedor_instance_lifecycle_service_1.recordAquecedorInstanceDailySend)(chosen.instancia_origem);
         await (0, conversation_graph_service_1.recordDirectedSend)({
             ownerEmail,
-            fromInst: chosen.instancia_origem,
-            toInst: chosen.instancia_destino,
+            fromInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(connected.find((c) => c.instancia === chosen.instancia_origem)?.numero || "") || chosen.instancia_origem,
+            toInst: (0, aquecedor_chip_identity_1.aquecedorChipKeyFromNumber)(connected.find((c) => c.instancia === chosen.instancia_destino)?.numero ||
+                chosen.numero_whatsapp ||
+                "") || chosen.instancia_destino,
             at: new Date().toISOString(),
         });
         if (picked.pickMeta) {
@@ -4221,18 +4574,18 @@ app.post("/instancias/:name/whatsapp-name", async (req, res) => {
 app.get("/instancias/uso-config", async (req, res) => {
     try {
         const usageMap = await loadInstanceUsageMap();
-        for (const [instanceName, cfg] of usageMap.entries()) {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
+        const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
+        const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()));
+        for (const [instanceName, cfg] of filteredEntries) {
             if (cfg.useAquecedor !== false) {
                 await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(instanceName);
             }
         }
         const lifecycleMap = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusMap)();
         const waRestrictionMap = await (0, whatsapp_connecting_restriction_service_1.getWhatsappConnectingRestrictionMap)();
-        const warmthMap = await (0, aquecedor_instance_warmth_service_1.getAquecedorWarmthMapForInstances)(Array.from(usageMap.keys()), getSupabaseClient());
-        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
-        const allowed = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(usageMap.keys()));
-        const allowedLower = new Set(Array.from(allowed).map((n) => n.toLowerCase()));
-        const filteredEntries = Array.from(usageMap.entries()).filter(([instanceName]) => allowedLower.has(String(instanceName).toLowerCase()));
+        const warmthMap = await (0, aquecedor_instance_warmth_service_1.getAquecedorWarmthMapForInstances)(filteredEntries.map(([instanceName]) => instanceName), getSupabaseClient());
         const items = await Promise.all(filteredEntries.map(async ([instanceName, cfg]) => {
             const lifecycle = lifecycleMap[instanceName.toLowerCase()] ??
                 (await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(instanceName));
@@ -4384,6 +4737,15 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
                 error: "Selecione ao menos uma instância conectada para o disparo.",
             });
         }
+        const previousSelected = (await loadDisparosConfigFromDb()).selectedDisparadorInstances || [];
+        (0, evo_instance_proxy_service_1.queueSyncProxyBrasilForCampaignSelection)({
+            selectedInstanceNames: campaignInstances,
+            previouslySelectedInstanceNames: previousSelected,
+            callEvoAction,
+            evoApiBase: EVO_API_BASE,
+            prepareDeps: getProxyBrasilCampaignPrepareDeps(),
+        });
+        // Liga Proxy Brasil nas selecionadas; se a sessão cair, a campanha pede QR com Proxy Campanha.
         if (plannedSendCount > 0 && numbers.length > plannedSendCount) {
             numbers = numbers.slice(0, plannedSendCount);
         }
@@ -4410,6 +4772,7 @@ app.post("/integrations/soma/alternativa-campaigns", async (req, res) => {
             totalNumbers,
             sentCount: 0,
             ownerEmail,
+            pauseReason: "Aguardando ativação. Clique em Ativar campanha para iniciar os disparos.",
             configSnapshot,
         };
         const leads = numbers.map((phone) => ({
@@ -4502,7 +4865,9 @@ app.post("/instancias/uso-config", async (req, res) => {
             if (row.useAquecedor !== false) {
                 const prev = getInstanceUsageFromMap(usageMapBefore, row.instanceName);
                 if (!prev) {
-                    await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(row.instanceName, new Date().toISOString());
+                    await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(row.instanceName, new Date().toISOString(), {
+                        forceNewIntegration: true,
+                    });
                 }
                 else if (prev.useAquecedor === false) {
                     await (0, aquecedor_instance_lifecycle_service_1.registerAquecedorInstancePreparing)(row.instanceName);
@@ -4666,8 +5031,8 @@ app.get("/instancias/validacao-inbound/:validationId", async (req, res) => {
         return res.status(400).json({ error: "validationId é obrigatório." });
     }
     try {
-        // Poll da UI dispara busca CONFIRMAR + envio da resposta (não só leitura passiva).
-        const status = await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, { aggressive: false });
+        // Poll da UI dispara busca CONFIRMAR (fast+deep) + envio da resposta.
+        const status = await (0, instance_inbound_validation_service_1.refreshInboundValidation)(validationId, { deep: true });
         if (!status) {
             return res.status(404).json({ error: "Validação não encontrada ou expirada." });
         }
@@ -4720,10 +5085,27 @@ function buildTemplateUrl(template, instanceName) {
 function normalizeWhatsAppNumber(num) {
     return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(num);
 }
-function normalizeCampaignPhone(input) {
-    return (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(String(input || ""));
+/**
+ * Número para ENVIO em campanha: preferir 55+DDD+9+8 (13 dígitos).
+ * `canonicalizeBrazilWhatsAppNumber` remove o 9º dígito (chave de dedupe) e,
+ * se usado no envio, a mensagem pode ir para JID errado sem chegar no celular.
+ */
+function preferredBrazilWhatsAppSendNumber(raw) {
+    const variants = (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(String(raw || ""));
+    const withNineIntl = variants.find((v) => v.startsWith("55") && v.length === 13 && v.charAt(4) === "9");
+    if (withNineIntl)
+        return withNineIntl;
+    const withNineNational = variants.find((v) => !v.startsWith("55") && v.length === 11 && v.charAt(2) === "9");
+    if (withNineNational)
+        return `55${withNineNational}`;
+    return (0, evo_instance_phone_service_1.normalizeEvoWhatsAppNumber)(String(raw || ""));
 }
-/** Uma linha de contato → um destino: remove duplicatas pelo telefone normalizado (55…). */
+function normalizeCampaignPhone(input) {
+    return preferredBrazilWhatsAppSendNumber(String(input || ""));
+}
+/** Uma linha de contato → um destino *dentro da mesma campanha*.
+ * Telefone repetido em campanhas diferentes continua sendo enviado normalmente
+ * (cada campanha tem sua própria fila de leads). */
 function deduplicateCampaignDestinationPhones(digitCandidates) {
     const seen = new Set();
     const phones = [];
@@ -4732,11 +5114,12 @@ function deduplicateCampaignDestinationPhones(digitCandidates) {
         const digits = normalizeCampaignPhone(String(cand || ""));
         if (digits.length < 12)
             continue;
-        if (seen.has(digits)) {
+        const dedupeKey = (0, evo_instance_phone_service_1.canonicalizeBrazilWhatsAppNumber)(digits) || digits;
+        if (seen.has(dedupeKey)) {
             removedDuplicates += 1;
             continue;
         }
-        seen.add(digits);
+        seen.add(dedupeKey);
         phones.push(digits);
     }
     return { phones, removedDuplicates };
@@ -5130,7 +5513,9 @@ async function fetchEvoInstanceTagRows() {
                 : Array.isArray(raw?.data)
                     ? raw.data
                     : [];
-        return buildEvoInstanceTagRowsFromList(list, whatsappMap, aliasesMap);
+        const rows = buildEvoInstanceTagRowsFromList(list, whatsappMap, aliasesMap);
+        // fetchInstances mente "open" com frequência; tags/saúde usam connectionState real.
+        return enrichEvoInstanceTagRowsWithLiveState(rows);
     }
     catch {
         return [];
@@ -5138,6 +5523,25 @@ async function fetchEvoInstanceTagRows() {
     finally {
         clearTimeout(timeoutId);
     }
+}
+/** Sobrescreve `connected` com /instance/connectionState (fonte de verdade). */
+async function enrichEvoInstanceTagRowsWithLiveState(rows) {
+    if (!rows.length)
+        return rows;
+    const concurrency = 10;
+    for (let i = 0; i < rows.length; i += concurrency) {
+        const chunk = rows.slice(i, i + concurrency);
+        await Promise.all(chunk.map(async (row) => {
+            try {
+                const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.instanceKey);
+                row.connected = (0, evo_connection_state_service_1.isEvoLiveStateOpen)(live);
+            }
+            catch {
+                row.connected = false;
+            }
+        }));
+    }
+    return rows;
 }
 function digitKeysFromStoredLabel(storedName) {
     const out = new Set();
@@ -5156,12 +5560,12 @@ function resolveStoredNameToEvoTag(storedName, rows) {
     const raw = String(storedName || "").trim();
     const rawLc = raw.toLowerCase();
     if (!raw)
-        return { displayName: "", connected: false };
+        return { displayName: "", connected: false, instanceKey: "" };
     if (!rows.length)
-        return { displayName: raw, connected: false };
+        return { displayName: raw, connected: false, instanceKey: raw };
     for (const r of rows) {
         if (r.nameKeys.has(rawLc)) {
-            return { displayName: r.displayName, connected: r.connected };
+            return { displayName: r.displayName, connected: r.connected, instanceKey: r.instanceKey };
         }
     }
     const storedDigitKeys = digitKeysFromStoredLabel(raw);
@@ -5181,13 +5585,28 @@ function resolveStoredNameToEvoTag(storedName, rows) {
     }
     if (digitHits.length === 1) {
         const r = digitHits[0];
-        return { displayName: r.displayName, connected: r.connected };
+        return { displayName: r.displayName, connected: r.connected, instanceKey: r.instanceKey };
     }
     if (digitHits.length > 1) {
         const pick = pickBestDigitHitRow(raw, rawLc, digitHits);
-        return { displayName: pick.displayName, connected: pick.connected };
+        return {
+            displayName: pick.displayName,
+            connected: pick.connected,
+            instanceKey: pick.instanceKey,
+        };
     }
-    return { displayName: raw, connected: false };
+    return { displayName: raw, connected: false, instanceKey: raw };
+}
+function resolveSelectedNamesToEvoKeys(storedNames, evoRows) {
+    const keys = new Set();
+    for (const name of storedNames) {
+        const n = String(name || "").trim();
+        if (!n)
+            continue;
+        const r = resolveStoredNameToEvoTag(n, evoRows);
+        keys.add(r.instanceKey || n);
+    }
+    return Array.from(keys);
 }
 /** Quando várias instâncias compartilham dígitos com o snapshot, prioriza quem «casa» melhor com o texto (ex.: «SOMA - 8927»). */
 function pickBestDigitHitRow(raw, rawLc, digitHits) {
@@ -5276,18 +5695,101 @@ function getCampaignInstanceHealth(config, evoRows) {
         missingConnectedForMinimum,
     };
 }
+/** Quantos números adicionar (com troca 1:1 dos offline) para sair do bloqueio. */
+function computeCampaignInstancesToAdd(health) {
+    const disconnected = Math.max(0, Number(health.disconnectedCount) || 0);
+    const connected = Math.max(0, Number(health.connectedCount) || 0);
+    const selected = Math.max(0, Number(health.selectedCount) || 0);
+    const minReq = Math.max(1, Number(health.minConnectedRequired) || 1);
+    // Cada adição troca 1 offline (selected estável) até acabar a fila de offline.
+    for (let k = 0; k <= disconnected; k += 1) {
+        const nextConnected = connected + k;
+        const nextDisconnected = disconnected - k;
+        const ratioOk = selected === 0 || nextDisconnected / selected < 0.5;
+        const minOk = nextConnected >= minReq;
+        if (ratioOk && minOk)
+            return k;
+    }
+    // Offline esgotados: ainda falta mínimo → só acrescenta.
+    const afterSwapConnected = connected + disconnected;
+    if (afterSwapConnected < minReq) {
+        return disconnected + (minReq - afterSwapConnected);
+    }
+    return Math.max(disconnected, 0);
+}
+/** Nomes do snapshot que estão desconectados/bloqueados (vermelhos). */
+function listDisconnectedStoredInstanceNames(selectedNames, evoRows) {
+    const out = [];
+    for (const name of selectedNames) {
+        const stored = String(name || "").trim();
+        if (!stored)
+            continue;
+        const resolved = resolveStoredNameToEvoTag(stored, evoRows);
+        if (resolved.connected !== true)
+            out.push(stored);
+    }
+    return out;
+}
+/**
+ * Ao acrescentar números, remove a mesma quantidade de bloqueados/offline da seleção
+ * (troca 1:1) para a campanha não ficar parada pelo ratio ≥50%.
+ */
+function mergeCampaignInstancesReplacingBlocked(input) {
+    const prevSelected = input.prevSelected
+        .map((n) => String(n || "").trim())
+        .filter(Boolean);
+    const incoming = input.incoming.map((n) => String(n || "").trim()).filter(Boolean);
+    const prevKeySet = new Set(prevSelected.map((n) => {
+        const r = resolveStoredNameToEvoTag(n, input.evoRows);
+        return String(r.instanceKey || n).trim().toLowerCase();
+    }));
+    const added = [];
+    for (const name of incoming) {
+        const r = resolveStoredNameToEvoTag(name, input.evoRows);
+        const key = String(r.instanceKey || name).trim().toLowerCase();
+        if (!key || prevKeySet.has(key))
+            continue;
+        prevKeySet.add(key);
+        added.push(name);
+    }
+    const disconnected = listDisconnectedStoredInstanceNames(prevSelected, input.evoRows);
+    const removedBlocked = disconnected.slice(0, added.length);
+    const removeSet = new Set(removedBlocked.map((n) => n.toLowerCase()));
+    const kept = prevSelected.filter((n) => !removeSet.has(n.toLowerCase()));
+    const selected = Array.from(new Set([...kept, ...added]));
+    return { selected, added, removedBlocked };
+}
 /** Texto exibido na UI para status pausada — prioriza regra de saúde atual. */
 function describeCampaignPauseDetail(instanceHealth, options) {
     const health = instanceHealth;
     const parts = [];
+    const offlineNames = (options?.disconnectedNames || [])
+        .map((n) => String(n || "").trim())
+        .filter(Boolean);
+    const offlineSuffix = offlineNames.length ? " — offline: " + offlineNames.join(", ") : "";
     if (health?.needsMoreInstancesForMinimum === true) {
-        parts.push(`apenas ${health.connectedCount} de ${Math.max(health.selectedCount, health.connectedCount)} números conectados (mínimo ${health.minConnectedRequired}; faltam ${health.missingConnectedForMinimum})`);
+        parts.push("apenas " +
+            health.connectedCount +
+            " de " +
+            Math.max(health.selectedCount, health.connectedCount) +
+            " números conectados (mínimo " +
+            health.minConnectedRequired +
+            "; faltam " +
+            health.missingConnectedForMinimum +
+            ")" +
+            offlineSuffix);
     }
     if (health?.shouldPauseByDisconnectedRatio === true) {
-        parts.push(`${health.disconnectedPercent}% das instâncias selecionadas estão desconectadas (${health.disconnectedCount} de ${health.selectedCount})`);
+        parts.push(health.disconnectedPercent +
+            "% das instâncias selecionadas estão desconectadas (" +
+            health.disconnectedCount +
+            " de " +
+            health.selectedCount +
+            ")" +
+            offlineSuffix);
     }
     if (parts.length) {
-        return `Pausa automática por saúde: ${parts.join("; ")}.`;
+        return "Pausa automática por saúde: " + parts.join("; ") + ".";
     }
     const stored = String(options?.storedReason || "").trim();
     if (stored)
@@ -5295,10 +5797,11 @@ function describeCampaignPauseDetail(instanceHealth, options) {
     if ((options?.sentCount ?? 0) <= 0) {
         return "Aguardando ativação. Clique em Ativar campanha para iniciar os disparos.";
     }
-    return "Campanha pausada manualmente.";
+    // Sem motivo gravado: NÃO assumir clique em Pausar (pausas automáticas antigas perdiam o reason).
+    return "Campanha pausada automaticamente. Verifique a conexão das instâncias e ative novamente.";
 }
-function pauseReasonFromInstanceHealth(health) {
-    return describeCampaignPauseDetail(health);
+function pauseReasonFromInstanceHealth(health, disconnectedNames) {
+    return describeCampaignPauseDetail(health, { disconnectedNames });
 }
 function resolveUsageFromMap(usageMap, instanceName) {
     const key = String(instanceName || "").trim();
@@ -5691,7 +6194,8 @@ async function purgeInstanceLocalState(instanceName) {
         await persistWhatsappProfileNamesMap(whatsappMap);
     for (const key of purgeKeys) {
         await removeInstanceUsageConfig(key);
-        await (0, aquecedor_instance_lifecycle_service_1.removeAquecedorInstanceLifecycle)(key);
+        // NÃO apagar aquecedor-instance-lifecycle: exclusão/recriação da EVO deve
+        // preservar activatedAt e nível de aquecimento (foguinhos) do mesmo nome.
         await waba_instance_ownership_service_1.wabaInstanceOwnershipService.removeOwner(key);
     }
     await waba_instance_ownership_service_1.wabaInstanceOwnershipService.markInstancesDeleted(purgeKeys);
@@ -5737,9 +6241,19 @@ async function attachAquecedorMessageStatsToInstanceItems(items, ownerEmail) {
     const names = items.map((row) => String(row?.name || "").trim()).filter(Boolean);
     if (!names.length)
         return items;
+    const numberByInstance = new Map();
+    for (const row of items) {
+        const name = String(row?.name || "").trim();
+        if (!name)
+            continue;
+        const number = String(row?.number || row?.numero || "").trim();
+        if (number)
+            numberByInstance.set(name, number);
+    }
     const stats = await (0, aquecedor_instance_message_stats_service_1.getAquecedorMessageStatsForInstances)(names, {
         ownerEmail,
         supabase: getSupabaseClient(),
+        numberByInstance,
     });
     return items.map((row) => {
         const name = String(row?.name || "").trim();
@@ -6020,28 +6534,18 @@ function buildAquecedorRemoteJidCandidates(num) {
         if (d)
             out.add(`${d}@s.whatsapp.net`);
     };
-    add(rawDigits);
+    // Inclui variantes BR com/sem 9º dígito e com/sem DDI 55.
+    for (const variant of (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(rawDigits)) {
+        add(variant);
+    }
     if (rawDigits.length === 10) {
         add(`1${rawDigits}`);
-        add(`55${rawDigits}`);
-    }
-    if (rawDigits.length === 11 && !rawDigits.startsWith("1")) {
-        add(`55${rawDigits}`);
-    }
-    if (rawDigits.startsWith("55") && rawDigits.length > 11) {
-        add(rawDigits.slice(2));
     }
     if (rawDigits.startsWith("1") && rawDigits.length >= 11) {
         add(rawDigits.slice(1));
     }
-    const suffix10 = rawDigits.slice(-10);
-    if (suffix10.length === 10) {
-        add(suffix10);
-        add(`1${suffix10}`);
-        add(`55${suffix10}`);
-    }
     const legacyBr = normalizeWhatsAppNumber(num);
-    if (legacyBr && legacyBr !== rawDigits)
+    if (legacyBr)
         add(legacyBr);
     return Array.from(out);
 }
@@ -6072,130 +6576,17 @@ function appendAquecedorDeliveryTag(text, tag) {
         return base;
     return `${base} ${token}`;
 }
-function extractAquecedorMessageMarker(text) {
-    const value = String(text || "").trim();
-    const suffix = value.match(/\b([a-z0-9]{5,8})\s*$/i);
-    if (suffix?.[1])
-        return suffix[1].toLowerCase();
-    return value.slice(-24).toLowerCase();
-}
-function extractAquecedorMessageTimestampMs(node) {
-    const key = node.key;
-    const raw = key?.messageTimestamp ?? node.messageTimestamp ?? node.timestamp;
-    if (typeof raw === "number" && Number.isFinite(raw)) {
-        return raw > 1000000000000 ? raw : raw * 1000;
-    }
-    if (typeof raw === "string" && raw.trim()) {
-        const parsed = Number(raw);
-        if (Number.isFinite(parsed))
-            return parsed > 1000000000000 ? parsed : parsed * 1000;
-    }
-    return null;
-}
-function extractAquecedorFromMe(node) {
-    const key = node.key;
-    if (typeof key?.fromMe === "boolean")
-        return key.fromMe;
-    if (typeof node.fromMe === "boolean")
-        return node.fromMe;
-    return null;
-}
-function collectEvoChatMessageTexts(node, out, depth = 0) {
-    if (depth > 10 || node == null)
-        return;
-    if (typeof node === "string")
-        return;
-    if (Array.isArray(node)) {
-        for (const item of node)
-            collectEvoChatMessageTexts(item, out, depth + 1);
-        return;
-    }
-    if (typeof node !== "object")
-        return;
-    const obj = node;
-    if (typeof obj.conversation === "string" && obj.conversation.trim()) {
-        out.push(obj.conversation.trim());
-    }
-    const ext = obj.extendedTextMessage;
-    if (typeof ext?.text === "string" && ext.text.trim())
-        out.push(ext.text.trim());
-    if (typeof obj.text === "string" && obj.text.trim())
-        out.push(obj.text.trim());
-    for (const value of Object.values(obj)) {
-        if (value && typeof value === "object")
-            collectEvoChatMessageTexts(value, out, depth + 1);
-    }
-}
-function aquecedorTextMatchesNeedle(text, needle, requireTokenBoundary) {
-    const lowered = String(text || "").toLowerCase();
-    const token = String(needle || "").trim().toLowerCase();
-    if (!lowered || !token)
-        return false;
-    if (!requireTokenBoundary || token.length > 24) {
-        return lowered.includes(token);
-    }
-    // Tag curta (ex.: 6 chars): exige token isolado — evita match em prefixo reutilizado.
-    if (lowered === token || lowered.endsWith(` ${token}`) || lowered.endsWith(token)) {
-        return true;
-    }
-    return new RegExp(`(?:^|\\s)${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`, "i").test(lowered);
-}
-function evoPayloadIncludesNeedle(node, needles, options, depth = 0) {
-    if (depth > 14 || node == null)
-        return false;
-    if (Array.isArray(node)) {
-        return node.some((item) => evoPayloadIncludesNeedle(item, needles, options, depth + 1));
-    }
-    if (typeof node !== "object")
-        return false;
-    const obj = node;
-    const fromMe = extractAquecedorFromMe(obj);
-    const texts = [];
-    collectEvoChatMessageTexts(obj.message ?? obj, texts);
-    const normalizedNeedles = needles
-        .map((needle) => String(needle || "").trim().toLowerCase())
-        .filter(Boolean);
-    if (normalizedNeedles.length && texts.length) {
-        const minTs = options?.minTimestampMs;
-        const ts = extractAquecedorMessageTimestampMs(obj);
-        const tsOk = minTs == null || ts == null || ts >= minTs;
-        const fromMeOk = options?.fromMe == null || fromMe == null || fromMe === options.fromMe;
-        if (tsOk && fromMeOk) {
-            const requireTokenBoundary = options?.requireTokenBoundary === true;
-            const matched = texts.some((text) => normalizedNeedles.some((needle) => aquecedorTextMatchesNeedle(text, needle, requireTokenBoundary)));
-            if (matched)
-                return true;
-        }
-    }
-    for (const value of Object.values(obj)) {
-        if (value && typeof value === "object") {
-            if (evoPayloadIncludesNeedle(value, needles, options, depth + 1))
-                return true;
-        }
-    }
-    return false;
-}
 function evoChatTextsIncludeMarker(node, marker) {
-    return evoChatTextsIncludeNeedle(node, [marker]);
+    return (0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(node, [marker]);
 }
 function evoChatTextsIncludeNeedle(node, needles) {
-    return evoPayloadIncludesNeedle(node, needles);
+    return (0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(node, needles);
 }
 async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJids, needles, minTimestampMs, fromMe = null) {
     for (const instanceName of instanceCandidates) {
         const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(instanceName)}`;
         for (const remoteJid of remoteJids) {
-            const whereKey = { remoteJid };
-            if (fromMe != null)
-                whereKey.fromMe = fromMe;
-            // Nunca consultar findMessages sem remoteJid: histórico global + texto
-            // repetido do aquecedor gera falso «Envio com Sucesso».
-            const bodies = [
-                { where: { key: whereKey }, limit: 50 },
-                { where: { key: { remoteJid } }, limit: 50 },
-                { where: { key: { remoteJid } }, take: 50 },
-                { where: { key: { remoteJid: remoteJid.replace("@s.whatsapp.net", "") } }, limit: 50 },
-            ];
+            const bodies = (0, delivery_verify_helpers_1.buildAquecedorFindMessagesBodies)(remoteJid, fromMe);
             for (const body of bodies) {
                 const result = await callEvoAction(url, "POST", body, {
                     timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 25000),
@@ -6203,9 +6594,35 @@ async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJ
                 });
                 if (!result.ok)
                     continue;
-                if (evoPayloadIncludesNeedle(result.json, needles, {
+                if ((0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(result.json, needles, {
                     minTimestampMs,
                     fromMe,
+                    requireTokenBoundary: true,
+                })) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+async function probeAquecedorDeliveryViaFindChats(instanceCandidates, needles, minTimestampMs) {
+    for (const instanceName of instanceCandidates) {
+        const urls = [
+            `${EVO_API_BASE}/chat/findChats/${encodeURIComponent(instanceName)}`,
+            `${EVO_API_BASE}/chat/findChats`,
+        ];
+        for (const url of urls) {
+            const bodies = [{}, { limit: 40 }, { take: 40 }];
+            for (const body of bodies) {
+                const result = await callEvoAction(url, "POST", body, {
+                    timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000),
+                    retries: 1,
+                });
+                if (!result.ok)
+                    continue;
+                if ((0, delivery_verify_helpers_1.evoPayloadIncludesNeedle)(result.json, needles, {
+                    minTimestampMs,
                     requireTokenBoundary: true,
                 })) {
                     return true;
@@ -6218,28 +6635,26 @@ async function probeAquecedorDeliveryViaFindMessages(instanceCandidates, remoteJ
 async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, messageText, options) {
     const destino = String(instanciaDestino || "").trim();
     const remoteJids = buildAquecedorRemoteJidCandidates(numeroOrigem);
-    if (!destino || !remoteJids.length) {
-        return { ok: false, detail: "Parâmetros inválidos para conferir entrega no destinatário." };
+    if (!destino) {
+        return {
+            ok: false,
+            detail: "Parâmetros inválidos para conferir entrega no destinatário.",
+            sawOrigem: false,
+            sawDestino: false,
+        };
     }
-    const marker = extractAquecedorMessageMarker(messageText);
-    const fullText = String(messageText || "").trim().toLowerCase();
-    // Só a tag única (ou texto completo com a tag). Nunca o prefixo sem tag:
-    // mensagens do aquecedor se repetem e o histórico EVO gerava falso sucesso.
-    const needles = new Set();
-    const markerLooksUnique = Boolean(marker && /^[a-z0-9]{5,8}$/i.test(marker) && fullText.endsWith(marker));
-    if (markerLooksUnique) {
-        needles.add(marker);
-    }
-    else if (fullText.length >= 6) {
-        needles.add(fullText);
-    }
-    const needleList = Array.from(needles);
+    const needleList = (0, delivery_verify_helpers_1.buildAquecedorDeliveryNeedles)(messageText);
     if (!needleList.length) {
-        return { ok: false, detail: "Sem marcador único para conferir entrega no WhatsApp." };
+        return {
+            ok: false,
+            detail: "Sem marcador único para conferir entrega no WhatsApp.",
+            sawOrigem: false,
+            sawDestino: false,
+        };
     }
     const timestampGraceMs = options?.timestampGraceMs ?? 5000;
     const minTimestampMs = (options?.sendStartedAtMs ?? Date.now()) - timestampGraceMs;
-    const maxAttempts = Math.max(3, options?.maxAttempts ?? 12);
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 12);
     const attemptIntervalMs = Math.max(1000, options?.attemptIntervalMs ?? 3000);
     const skipInitialDelay = options?.skipInitialDelay === true;
     const relaxTimestampOnLastAttempt = options?.relaxTimestampOnLastAttempt === true;
@@ -6248,6 +6663,27 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
     const numeroDestino = resolveAquecedorInstanceDigits(String(options?.numeroDestino || ""));
     const origemCandidates = origem ? await resolveEvoInstanceNameCandidates(origem) : [];
     const destJids = numeroDestino ? buildAquecedorRemoteJidCandidates(numeroDestino) : [];
+    let liveAck = options?.ackStatusHint ?? null;
+    const messageId = String(options?.messageId || "").trim();
+    if ((0, delivery_verify_helpers_1.isEvoAckFailure)(liveAck)) {
+        return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+            sawOrigem: true,
+            sawDestino: false,
+            origem,
+            destino,
+            ackStatus: liveAck,
+        });
+    }
+    // DELIVERY_ACK/READ já prova aparelho — evita falso negativo @lid no findMessages.
+    if ((0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck)) {
+        return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+            sawOrigem: true,
+            sawDestino: false,
+            origem,
+            destino,
+            ackStatus: liveAck,
+        });
+    }
     if (!skipInitialDelay) {
         await sleepMs(3000);
     }
@@ -6257,44 +6693,166 @@ async function verifyAquecedorMessageDelivered(instanciaDestino, numeroOrigem, m
         if (attempt > 1)
             await sleepMs(attemptIntervalMs);
         const tsFilter = relaxTimestampOnLastAttempt && attempt === maxAttempts ? undefined : minTimestampMs;
+        if (messageId && origem && !(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck) && !(0, delivery_verify_helpers_1.isEvoAckFailure)(liveAck)) {
+            const refreshed = await probeAquecedorSendAckStatus(origem, messageId, {
+                maxAttempts: 1,
+                intervalMs: 500,
+            });
+            liveAck = refreshed.status;
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(liveAck) || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck)) {
+                return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+                    sawOrigem: sawOrigem || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(liveAck),
+                    sawDestino,
+                    origem,
+                    destino,
+                    ackStatus: liveAck,
+                });
+            }
+        }
         if (!sawDestino) {
             sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids, needleList, tsFilter, false);
+            if (!sawDestino) {
+                // @lid / indexação EVO: marker em mensagens recentes + findChats.lastMessage.
+                sawDestino = await probeAquecedorDeliveryViaFindMessages(destinoCandidates, remoteJids.length ? remoteJids : [""], needleList, tsFilter, null);
+            }
+            if (!sawDestino) {
+                sawDestino = await probeAquecedorDeliveryViaFindChats(destinoCandidates, needleList, tsFilter);
+            }
         }
         if (!sawOrigem && origemCandidates.length && destJids.length) {
             sawOrigem = await probeAquecedorDeliveryViaFindMessages(origemCandidates, destJids, needleList, tsFilter, true);
         }
-        // Entrega real: tag na origem (fromMe) E no destino (recebida).
-        if (sawDestino && sawOrigem) {
-            return { ok: true, detail: "" };
+        // Sucesso prático: tag no destino (chegou no WhatsApp). Não espera origem.
+        if (sawDestino) {
+            return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+                sawOrigem,
+                sawDestino,
+                origem,
+                destino,
+                ackStatus: liveAck,
+            });
         }
     }
-    if (sawOrigem && !sawDestino) {
-        return {
-            ok: false,
-            detail: `Mensagem apareceu só na origem (${origem || "origem"}); destino (${destino}) não recebeu no WhatsApp. Verifique conexão ou restrição do número destino.`,
-        };
-    }
-    if (sawDestino && !sawOrigem) {
-        return {
-            ok: false,
-            detail: `Marcador apareceu no destino sem prova na origem (${origem || "origem"}) — possível histórico EVO; não confirmo envio real.`,
-        };
-    }
-    return {
-        ok: false,
-        detail: "EVO aceitou o envio, mas a mensagem não apareceu no WhatsApp do destinatário (conferência findMessages).",
-    };
+    return (0, delivery_verify_helpers_1.decideAquecedorDeliveryConfirmation)({
+        sawOrigem,
+        sawDestino,
+        origem,
+        destino,
+        ackStatus: liveAck,
+    });
 }
-async function revertAquecedorPendingAfterFailedSend(supabase, pendingId) {
-    await supabase.from("aquecedor")
-        .update({
+function extractAquecedorSendMessageId(json) {
+    if (!json || typeof json !== "object")
+        return "";
+    const root = json;
+    const key = root.key;
+    const id = String(key?.id || root.id || "").trim();
+    return id;
+}
+async function probeAquecedorSendAckStatus(instanceName, messageId, options) {
+    const name = String(instanceName || "").trim();
+    const id = String(messageId || "").trim();
+    if (!name || !id)
+        return { status: "UNKNOWN" };
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 4);
+    const intervalMs = Math.max(500, options?.intervalMs ?? 2000);
+    let last = "UNKNOWN";
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (attempt > 1)
+            await sleepMs(intervalMs);
+        const statusUrl = `${EVO_API_BASE}/chat/findStatusMessage/${encodeURIComponent(name)}`;
+        const statusResult = await callEvoAction(statusUrl, "POST", { where: { id } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 15000), retries: 1 });
+        if (statusResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(statusResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last) || last === "SERVER_ACK" || last === "DELIVERY_ACK" || last === "READ") {
+                return { status: last };
+            }
+        }
+        const msgUrl = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(name)}`;
+        const msgResult = await callEvoAction(msgUrl, "POST", { where: { key: { id } } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000), retries: 1 });
+        if (msgResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(msgResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last) || last === "SERVER_ACK" || last === "DELIVERY_ACK" || last === "READ") {
+                return { status: last };
+            }
+        }
+    }
+    return { status: last };
+}
+async function probeAquecedorInstanceOutboundHealth(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return "unknown";
+    const cached = (0, outbound_ack_health_service_1.getCachedAquecedorOutboundHealth)(name);
+    if (cached)
+        return cached.class;
+    const url = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(name)}`;
+    const result = await callEvoAction(url, "POST", { where: { key: { fromMe: true } }, page: 1, offset: 20 }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000), retries: 1 });
+    if (!result.ok) {
+        (0, outbound_ack_health_service_1.rememberAquecedorOutboundHealth)(name, "unknown");
+        return "unknown";
+    }
+    const evaluated = (0, outbound_ack_health_service_1.evaluateOutboundSamplePayload)(result.json);
+    (0, outbound_ack_health_service_1.rememberAquecedorOutboundHealth)(name, evaluated.class, {
+        sampleSize: evaluated.sampleSize,
+        errorCount: evaluated.errorCount,
+    });
+    return evaluated.class;
+}
+async function filterAquecedorConnectedByOutboundHealth(connected) {
+    if (!connected.length)
+        return connected;
+    const kept = [];
+    const dropped = [];
+    for (const row of connected) {
+        const health = await probeAquecedorInstanceOutboundHealth(row.instancia);
+        if (health === "broken") {
+            dropped.push(row.instancia);
+            continue;
+        }
+        kept.push(row);
+    }
+    if (dropped.length) {
+        console.warn(`[Aquecedor] excluídas do ciclo (outbound MessageUpdate=ERROR): ${dropped.join(", ")}. Reconecte o QR dessas instâncias na EVO.`);
+        aquecedorCycleRuntime().lastResult =
+            `Instâncias com outbound quebrado (open mas MessageUpdate=ERROR) fora do ciclo: ${dropped.join(", ")}. Reconecte o QR na Evolution.`;
+    }
+    return kept;
+}
+function buildAquecedorSendNumberCandidates(raw) {
+    const seed = resolveAquecedorInstanceDigits(raw);
+    if (!seed)
+        return [];
+    const out = [];
+    const seen = new Set();
+    for (const variant of (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(seed)) {
+        const digits = resolveAquecedorInstanceDigits(variant);
+        if (digits.length < 10 || seen.has(digits))
+            continue;
+        seen.add(digits);
+        out.push(digits);
+    }
+    // Preferir DDI+9º dígito (mais longo) primeiro.
+    out.sort((a, b) => b.length - a.length || a.localeCompare(b));
+    return out;
+}
+async function revertAquecedorPendingAfterFailedSend(supabase, pendingId, options) {
+    // Mantém `instancia` quando informado — senão o ensure cria OUTRA linha PENDENTE
+    // (duplicata Em Fila) porque a consulta filtra por instancia=origem.
+    const keepInstancia = String(options?.keepInstancia || "").trim();
+    const payload = {
         status: "PENDENTE",
-        instancia: null,
         numero_destino: null,
         processing_at: null,
         sent_at: null,
-    })
-        .eq("id", pendingId);
+    };
+    if (keepInstancia) {
+        payload.instancia = keepInstancia;
+    }
+    else {
+        payload.instancia = null;
+    }
+    await supabase.from("aquecedor").update(payload).eq("id", pendingId);
 }
 const META_GRAPH_BASE = String(process.env.META_GRAPH_BASE || "https://graph.facebook.com").replace(/\/+$/, "");
 const META_GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v22.0").trim();
@@ -6362,25 +6920,113 @@ function buildDisparosAiPrompt(input) {
     const briefing = String(input.briefing || "").trim();
     const tone = String(input.tone || "consultivo").trim();
     const audience = String(input.audience || "CORBAN").trim();
-    const cta = String(input.cta || "Responda no link abaixo").trim();
+    const cta = String(input.cta || "Quero saber mais").trim();
     const objective = String(input.objective || "gerar mensagem de prospeccao via WhatsApp").trim();
     const accessLink = String(input.accessLink || "").trim();
+    const buttonMode = input.ctaMode === "button";
+    const rules = buttonMode
+        ? [
+            "Regras:",
+            "- Retorne apenas uma mensagem final pronta para envio.",
+            "- Mensagem curta (maximo 280 caracteres).",
+            "- Nao use aspas nem explicacoes extras.",
+            "- Nao inclua links, URLs, wa.me nem 'http' na mensagem.",
+            "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase (ex.: *Vem Card*). Nunca deixe a abertura/saudacao em negrito.",
+            `- O destinatario vera um botao com o texto: "${cta.slice(0, 20)}". Nao mencione 'clique no link'; incentive a acao do botao de forma natural.`,
+        ]
+        : [
+            "Regras:",
+            "- Retorne apenas uma mensagem final pronta para envio.",
+            "- Mensagem curta (maximo 280 caracteres).",
+            "- Nao use aspas nem explicacoes extras.",
+            "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase. Nunca deixe a abertura/saudacao em negrito.",
+            accessLink
+                ? `- Inclua obrigatoriamente este link na mensagem: ${accessLink}`
+                : "- Quando houver link de acesso, inclua-o na mensagem.",
+            `CTA obrigatoria: ${cta}.`,
+        ];
     return [
         "Voce e um copywriter especialista em vendas consultivas via WhatsApp.",
         `Objetivo: ${objective}.`,
         `Publico alvo: ${audience}.`,
         `Tom: ${tone}.`,
-        `CTA obrigatoria: ${cta}.`,
-        "Regras:",
-        "- Retorne apenas uma mensagem final pronta para envio.",
-        "- Mensagem curta (maximo 400 caracteres).",
-        "- Nao use markdown, aspas ou explicacoes extras.",
-        accessLink ? `- Inclua obrigatoriamente este link na mensagem: ${accessLink}` : "- Quando houver link de acesso, inclua-o na mensagem.",
+        ...(buttonMode ? [] : [`CTA obrigatoria: ${cta}.`]),
+        ...rules,
         briefing ? `Contexto adicional:\n${briefing}` : "Contexto adicional: sem observacoes.",
     ].join("\n");
 }
+/** Rótulos permitidos no botão URL das campanhas Alternativa. */
+const ALTERNATIVA_URL_BUTTON_LABELS = [
+    "Quero saber mais",
+    "Mais informações",
+    "Solicitar agora",
+    "Me inscrever",
+    "Comprar agora",
+];
+function normalizeAlternativaUrlButtonLabel(raw, fallback = ALTERNATIVA_URL_BUTTON_LABELS[0]) {
+    const text = String(raw || "").trim();
+    const fold = (s) => s
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    const aliases = {
+        "me increver": "Me inscrever",
+        "me inscrever": "Me inscrever",
+        "mais informacoes": "Mais informações",
+        "mais informações": "Mais informações",
+    };
+    const folded = fold(text);
+    if (aliases[folded])
+        return aliases[folded];
+    const exact = ALTERNATIVA_URL_BUTTON_LABELS.find((opt) => opt === text);
+    if (exact)
+        return exact;
+    const loose = ALTERNATIVA_URL_BUTTON_LABELS.find((opt) => fold(opt) === folded);
+    return loose || fallback;
+}
+/** Rótulo do botão WhatsApp (limite prático ~20 caracteres). */
+function normalizeButtonDisplayText(raw, fallback = ALTERNATIVA_URL_BUTTON_LABELS[0]) {
+    const fromAllowlist = normalizeAlternativaUrlButtonLabel(raw, "");
+    if (fromAllowlist)
+        return fromAllowlist.slice(0, 20);
+    const text = String(raw || "").trim() || fallback;
+    return text.slice(0, 20);
+}
+function stripUrlsFromMessageText(message) {
+    return String(message || "")
+        .replace(/https?:\/\/[^\s)]+/gi, "")
+        .replace(/\bwa\.me\/[^\s)]+/gi, "")
+        .replace(/^[ \t]*(mais informa[cç][oõ]es|acesse aqui|veja mais|saiba mais|clique aqui)\s*:?[ \t]*$/gim, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
+}
+/**
+ * WhatsApp formatação: negrito = *texto* (um par).
+ * GPT/Markdown costuma emitir **texto** — converter antes do envio.
+ * @see https://faq.whatsapp.com/539178204879377
+ */
+function normalizeWhatsAppFormatting(message) {
+    let text = String(message || "");
+    // Colapsa **...** (e ****...****) em *...* sem atravessar quebras de linha.
+    for (let i = 0; i < 6; i++) {
+        const next = text.replace(/\*{2,}([^*\n]+?)\*{2,}/g, "*$1*");
+        if (next === text)
+            break;
+        text = next;
+    }
+    return text;
+}
+function prepareOutboundWhatsAppText(message, opts) {
+    let text = String(message || "");
+    if (opts?.stripUrls) {
+        text = stripUrlsFromMessageText(text) || text;
+    }
+    return normalizeWhatsAppFormatting(text).trim();
+}
 function ensureMessageContainsLink(message, link, cta) {
-    const text = String(message || "").trim();
+    const text = prepareOutboundWhatsAppText(String(message || "").trim());
     const safeLink = String(link || "").trim();
     if (!safeLink)
         return text;
@@ -6393,6 +7039,76 @@ function ensureMessageContainsLink(message, link, cta) {
     const safeCta = String(cta || "Acesse aqui").trim();
     const joiner = text ? "\n\n" : "";
     return `${replaced}${joiner}${safeCta}: ${safeLink}`.trim();
+}
+function isGhostButtonsPayload(raw) {
+    try {
+        // Evolution 2.3.x envolve o CTA em viewOnce — no WhatsApp isso não aparece como
+        // texto+botão visível. Tratar como falha para enviar o texto em seguida.
+        return JSON.stringify(raw ?? "").includes("viewOnceMessage");
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Evolution 2.4 `buttonMessage` monta o corpo como `*${title}*\n\n${description}`
+ * (whatsapp.baileys.service.ts). Title visível vira cabeçalho em negrito;
+ * slice(0,60) parte palavras (ex.: "ambiente").
+ * Title ZWSP: o header não aparece; o texto inteiro vai em description.
+ * Botão nativo vem do array `buttons` (nativeFlow), não do title.
+ * @see https://docs.evolutionfoundation.com.br/evolution-api/send-buttons
+ */
+function splitMessageForUrlButton(fullText) {
+    const text = String(fullText || "").trim() || "Olá!";
+    const maxBody = 1024;
+    const description = text.length <= maxBody
+        ? text
+        : text.slice(0, maxBody).replace(/\s+\S*$/, "").trim() || text.slice(0, maxBody);
+    return { title: "\u200b", description };
+}
+async function sendEvoAlternativaUrlButtonMessage(input) {
+    const instanceName = String(input.instanceName || "").trim();
+    const number = String(input.number || "").replace(/\D/g, "");
+    const fullText = prepareOutboundWhatsAppText(String(input.messageText || "").trim(), { stripUrls: true }) ||
+        "Olá!";
+    const buttonLabel = normalizeButtonDisplayText(input.buttonLabel);
+    const buttonUrl = String(input.buttonUrl || "").trim();
+    if (!instanceName || !number || !buttonUrl) {
+        return { ok: false, status: 0, body: "Dados insuficientes para sendButtons." };
+    }
+    const { title, description } = splitMessageForUrlButton(fullText);
+    const payload = {
+        number,
+        title,
+        description,
+        footer: "",
+        buttons: [
+            {
+                type: "url",
+                displayText: buttonLabel,
+                url: buttonUrl,
+            },
+        ],
+    };
+    const url = `${EVO_API_BASE}/message/sendButtons/${encodeURIComponent(instanceName)}`;
+    const result = await callEvoAction(url, "POST", payload, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
+        retries: 1,
+    });
+    if (result.ok && isGhostButtonsPayload(result.json ?? result.body)) {
+        return {
+            ok: false,
+            status: result.status,
+            body: "Evolution retornou botões fantasma (viewOnce).",
+            json: result.json,
+        };
+    }
+    return {
+        ok: result.ok,
+        status: result.status,
+        body: String(result.body || result.error || ""),
+        json: result.json,
+    };
 }
 async function generateShortUrlForDisparos(longUrl, publicBaseHints) {
     const baseUrl = String(longUrl || "").trim();
@@ -6736,7 +7452,7 @@ function appendAntiRepeatParam(rawUrl, attempt) {
     }
 }
 function tryExtractQrCode(payload) {
-    const normalizeCandidate = (value) => {
+    const normalizeCandidate = (value, keyHint = "") => {
         if (typeof value !== "string")
             return null;
         const raw = value.trim();
@@ -6746,19 +7462,25 @@ function tryExtractQrCode(payload) {
             return raw;
         if (raw.startsWith("http://") || raw.startsWith("https://"))
             return raw;
+        // Preferir base64 puro; NÃO tratar o campo `code` (ex.: "2@…") como imagem.
+        const key = String(keyHint || "").toLowerCase();
+        if (key === "code" || key === "pairingcode" || key === "pairing_code")
+            return null;
+        if (raw.includes("@") || raw.includes(","))
+            return null;
         if (/^[A-Za-z0-9+/=\r\n]+$/.test(raw) && raw.length >= 100)
             return raw;
         return null;
     };
-    const visit = (node, depth = 0) => {
+    const visit = (node, depth = 0, keyHint = "") => {
         if (depth > 6 || node == null)
             return null;
-        const normalizedDirect = normalizeCandidate(node);
+        const normalizedDirect = normalizeCandidate(node, keyHint);
         if (normalizedDirect)
             return normalizedDirect;
         if (Array.isArray(node)) {
             for (const item of node) {
-                const found = visit(item, depth + 1);
+                const found = visit(item, depth + 1, keyHint);
                 if (found)
                     return found;
             }
@@ -6766,20 +7488,21 @@ function tryExtractQrCode(payload) {
         }
         if (typeof node !== "object")
             return null;
+        // base64 antes de code — evita capturar o payload Baileys "2@…" como QR imagem.
         const priorityKeys = [
             "response",
             "qrcode",
             "qrCode",
             "qr",
             "base64",
+            "data",
             "code",
             "pairingCode",
             "pairingcode",
-            "data",
         ];
         for (const key of priorityKeys) {
             if (Object.prototype.hasOwnProperty.call(node, key)) {
-                const found = visit(node[key], depth + 1);
+                const found = visit(node[key], depth + 1, key);
                 if (found)
                     return found;
             }
@@ -6787,7 +7510,62 @@ function tryExtractQrCode(payload) {
         for (const [key, value] of Object.entries(node)) {
             if (!/(qr|qrcode|base64|code|pairing)/i.test(key))
                 continue;
-            const found = visit(value, depth + 1);
+            const found = visit(value, depth + 1, key);
+            if (found)
+                return found;
+        }
+        return null;
+    };
+    return visit(payload);
+}
+function tryExtractPairingCode(payload) {
+    const normalizePairing = (value, keyHint = "") => {
+        const raw = String(value || "").trim();
+        if (!raw)
+            return null;
+        const key = String(keyHint || "").toLowerCase();
+        if (key === "code" && (raw.includes("@") || raw.includes(",")))
+            return null;
+        if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(raw))
+            return raw.toUpperCase();
+        if (/^[A-Z0-9]{8}$/i.test(raw)) {
+            return `${raw.slice(0, 4).toUpperCase()}-${raw.slice(4).toUpperCase()}`;
+        }
+        if ((key === "pairingcode" || key === "pairing_code" || key === "pairingCode") &&
+            /^[A-Z0-9-]{6,12}$/i.test(raw)) {
+            return raw.toUpperCase();
+        }
+        return null;
+    };
+    const visit = (node, depth = 0, keyHint = "") => {
+        if (depth > 6 || node == null)
+            return null;
+        if (typeof node === "string" || typeof node === "number") {
+            return normalizePairing(node, keyHint);
+        }
+        if (Array.isArray(node)) {
+            for (const item of node) {
+                const found = visit(item, depth + 1, keyHint);
+                if (found)
+                    return found;
+            }
+            return null;
+        }
+        if (typeof node !== "object")
+            return null;
+        const obj = node;
+        const priorityKeys = ["pairingCode", "pairingcode", "pairing_code", "code"];
+        for (const key of priorityKeys) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                const found = visit(obj[key], depth + 1, key);
+                if (found)
+                    return found;
+            }
+        }
+        for (const [key, value] of Object.entries(obj)) {
+            if (!/pairing|code/i.test(key))
+                continue;
+            const found = visit(value, depth + 1, key);
             if (found)
                 return found;
         }
@@ -6925,7 +7703,49 @@ async function resetEvoInstanceForQr(instanceName) {
     });
     await sleepMs(2500);
 }
+/** Soft-reset só na Evolution (mesmo nome). Não apaga lifecycle/ownership no WABA. */
+async function softResetDisconnectedEvoInstanceForQr(instanceName, opts) {
+    const name = String(instanceName || "").trim();
+    if (!name)
+        return;
+    const campaignProxy = opts?.campaignProxy === true;
+    try {
+        if (campaignProxy) {
+            await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(name, callEvoAction, EVO_API_BASE);
+        }
+        else {
+            await (0, evo_instance_proxy_service_1.disableProxyBrasilOnEvoInstance)(name, callEvoAction, EVO_API_BASE);
+        }
+    }
+    catch {
+        /* best-effort */
+    }
+    const live = await fetchEvoInstanceConnectionState(name, { fresh: true });
+    if (live.open && !opts?.force && !campaignProxy)
+        return;
+    console.warn(campaignProxy
+        ? `[QR] ${name}: soft-reset EVO com Proxy Campanha (logout+delete+recreate) — parear via proxy.`
+        : `[QR] ${name}: soft-reset EVO (logout+delete+recreate) — sessão desconectada/corrompida; WABA preservado.`);
+    await resetEvoInstanceForQr(name);
+    if (campaignProxy) {
+        try {
+            await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(name, callEvoAction, EVO_API_BASE);
+        }
+        catch {
+            /* best-effort */
+        }
+    }
+}
 const qrRegisterJobs = new Map();
+const qrRegisterRecentFailures = [];
+function rememberQrRegisterFailure(entry) {
+    qrRegisterRecentFailures.unshift({
+        ...entry,
+        at: new Date().toISOString(),
+    });
+    if (qrRegisterRecentFailures.length > 20)
+        qrRegisterRecentFailures.length = 20;
+}
 function pruneQrRegisterJobs() {
     const cutoff = Date.now() - 15 * 60 * 1000;
     for (const [id, job] of qrRegisterJobs) {
@@ -6948,6 +7768,30 @@ async function runRegistrarQrcode(input) {
         }
         void ensureAquecedorInstanceRegistered(name);
     }
+    // Proxy ligado impede pareamento WhatsApp — exceto fluxo «Proxy Campanha».
+    const campaignProxy = input.campaignProxy === true;
+    try {
+        if (campaignProxy) {
+            await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(name, callEvoAction, EVO_API_BASE);
+        }
+        else {
+            await (0, evo_instance_proxy_service_1.disableProxyBrasilOnEvoInstance)(name, callEvoAction, EVO_API_BASE);
+        }
+    }
+    catch (err) {
+        console.warn(`[QR] ${name}: falha ao ${campaignProxy ? "aplicar" : "desligar"} proxy antes do QR:`, err);
+    }
+    const liveBefore = await fetchEvoInstanceConnectionState(name, { fresh: true });
+    if (liveBefore.open && !campaignProxy) {
+        return {
+            ok: false,
+            httpStatus: 409,
+            error: "Esta instância já está conectada no sistema WABA - Drax.",
+        };
+    }
+    if (liveBefore.open && campaignProxy) {
+        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy: true, force: true });
+    }
     const createPayload = {
         instanceName: name,
         name,
@@ -6965,37 +7809,67 @@ async function runRegistrarQrcode(input) {
     let lastCreateStatus = 0;
     let lastCreateDetail = "";
     let qrFromCreate = null;
+    let pairingFromCreate = null;
     let instanceWasNew = false;
-    for (const createUrl of createUrls) {
-        const createResult = await callEvoAction(createUrl, "POST", createPayload, {
-            timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
-            retries: 2,
-        });
-        lastCreateStatus = createResult.status;
-        lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
-        if (createResult.ok) {
-            createOk = true;
-            instanceWasNew = true;
-            qrFromCreate =
-                tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
-            if (qrFromCreate)
-                break;
-            break;
-        }
-        if (createResult.status === 409) {
-            createOk = true;
-            qrFromCreate =
-                tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
-            if (qrFromCreate)
-                break;
-            break;
+    async function tryCreateOnce() {
+        for (const createUrl of createUrls) {
+            const createResult = await callEvoAction(createUrl, "POST", createPayload, {
+                timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
+                retries: 2,
+            });
+            lastCreateStatus = createResult.status;
+            lastCreateDetail = String(createResult.body || createResult.error || "").slice(0, 400);
+            if (createResult.ok) {
+                createOk = true;
+                instanceWasNew = true;
+                qrFromCreate =
+                    tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                pairingFromCreate =
+                    tryExtractPairingCode(createResult.json) || tryExtractPairingCode(createResult.body);
+                return;
+            }
+            if (createResult.status === 409) {
+                createOk = true;
+                qrFromCreate =
+                    tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                pairingFromCreate =
+                    tryExtractPairingCode(createResult.json) || tryExtractPairingCode(createResult.body);
+                return;
+            }
         }
     }
+    await tryCreateOnce();
+    // Instância já existia (409) e está desconectada: limpa sessão Baileys na EVO e recria o mesmo nome.
+    // Não remove ownership/lifecycle/aquecimento no WABA.
+    if (createOk && !instanceWasNew && !qrFromCreate && !pairingFromCreate) {
+        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
+        createOk = false;
+        lastCreateStatus = 0;
+        lastCreateDetail = "";
+        qrFromCreate = null;
+        pairingFromCreate = null;
+        instanceWasNew = false;
+        await tryCreateOnce();
+    }
+    else if (!createOk && liveBefore.ok) {
+        await softResetDisconnectedEvoInstanceForQr(name, { campaignProxy });
+        await tryCreateOnce();
+    }
+    // Proxy Brasil: no Aquecedor normal fica off; no «Proxy Campanha» permanece on.
     let createWarning = null;
     if (!createOk) {
         createWarning = `Não foi possível salvar/atualizar a instância (status ${lastCreateStatus}). Tentando gerar QRCode da instância existente.`;
     }
-    if (qrFromCreate) {
+    else if (campaignProxy) {
+        try {
+            await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(name, callEvoAction, EVO_API_BASE);
+        }
+        catch {
+            /* */
+        }
+    }
+    // Com número, o fluxo Device Cloud precisa do pairingCode — não retornar só com imagem QR.
+    if ((qrFromCreate || pairingFromCreate) && (pairingFromCreate || !number)) {
         if (instanceWasNew) {
             await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
         }
@@ -7005,7 +7879,8 @@ async function runRegistrarQrcode(input) {
                 ? "QRCode gerado com sucesso para a instância existente."
                 : "Dados salvos e QRCode gerado com sucesso.",
             warning: createWarning,
-            qrCode: qrFromCreate,
+            qrCode: qrFromCreate || "",
+            pairingCode: pairingFromCreate,
         };
     }
     // Doc EVO: GET /instance/connect já devolve QR em close/connecting.
@@ -7034,7 +7909,8 @@ async function runRegistrarQrcode(input) {
                 ? "QRCode gerado com sucesso para a instância existente."
                 : "Dados salvos e QRCode gerado com sucesso.",
             warning: createWarning,
-            qrCode: qrFetch.qrCode,
+            qrCode: qrFetch.qrCode || "",
+            pairingCode: qrFetch.pairingCode || null,
             providerResponse: qrFetch.providerResponse,
         };
     }
@@ -7044,6 +7920,7 @@ async function runRegistrarQrcode(input) {
         let retryCreateStatus = 0;
         let retryCreateDetail = "";
         let retryQrFromCreate = null;
+        let retryPairingFromCreate = null;
         for (const createUrl of createUrls) {
             const createResult = await callEvoAction(createUrl, "POST", createPayload, {
                 timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000),
@@ -7055,16 +7932,19 @@ async function runRegistrarQrcode(input) {
                 retryCreateOk = true;
                 retryQrFromCreate =
                     tryExtractQrCode(createResult.json) || tryExtractQrCode(createResult.body);
+                retryPairingFromCreate =
+                    tryExtractPairingCode(createResult.json) || tryExtractPairingCode(createResult.body);
                 break;
             }
         }
-        if (retryQrFromCreate) {
+        if (retryQrFromCreate || retryPairingFromCreate) {
             await ensureAquecedorInstanceRegistered(name, { forceNewIntegration: true });
             return {
                 ok: true,
                 message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
                 warning: createWarning,
-                qrCode: retryQrFromCreate,
+                qrCode: retryQrFromCreate || "",
+                pairingCode: retryPairingFromCreate,
             };
         }
         if (retryCreateOk) {
@@ -7080,7 +7960,8 @@ async function runRegistrarQrcode(input) {
                     ok: true,
                     message: "Instância recriada no sistema WABA - Drax e QRCode gerado com sucesso.",
                     warning: createWarning,
-                    qrCode: qrRetry.qrCode,
+                    qrCode: qrRetry.qrCode || "",
+                    pairingCode: qrRetry.pairingCode || null,
                     providerResponse: qrRetry.providerResponse,
                 };
             }
@@ -7137,11 +8018,19 @@ async function fetchInstanceQrCodeFromEvo(instanceName, number = "", options = {
             if (!result.ok)
                 continue;
             const qrCode = tryExtractQrCode(result.json) || tryExtractQrCode(result.body);
-            if (qrCode) {
-                const normalized = qrCode.startsWith("data:image") || qrCode.startsWith("http")
-                    ? qrCode
-                    : `data:image/png;base64,${qrCode.replace(/\s+/g, "")}`;
-                return { ok: true, qrCode: normalized, providerResponse: result.json ?? null };
+            const pairingCode = tryExtractPairingCode(result.json) || tryExtractPairingCode(result.body);
+            if (qrCode || pairingCode) {
+                const normalized = qrCode
+                    ? qrCode.startsWith("data:image") || qrCode.startsWith("http")
+                        ? qrCode
+                        : `data:image/png;base64,${qrCode.replace(/\s+/g, "")}`
+                    : "";
+                return {
+                    ok: true,
+                    qrCode: normalized,
+                    pairingCode: pairingCode || null,
+                    providerResponse: result.json ?? null,
+                };
             }
         }
     }
@@ -7190,6 +8079,30 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
             });
         }
         const number = typeof req.query.number === "string" ? req.query.number.trim() : "";
+        const campaignProxy = String(req.query.campaignProxy || "").trim() === "1" ||
+            req.body?.campaignProxy === true ||
+            String(req.body?.campaignProxy || "").trim() === "1";
+        // Reconexão: Aquecedor normal tira proxy; Proxy Campanha mantém/liga proxy e força re-pareamento.
+        await softResetDisconnectedEvoInstanceForQr(instanceName, {
+            campaignProxy,
+            force: campaignProxy,
+        });
+        // Recria o mesmo nome se o soft-reset apagou na EVO.
+        await callEvoAction(`${EVO_API_BASE}/instance/create`, "POST", {
+            instanceName,
+            name: instanceName,
+            qrcode: true,
+            integration: "WHATSAPP-BAILEYS",
+            ...(number ? { number } : {}),
+        }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 30000), retries: 2 });
+        if (campaignProxy) {
+            try {
+                await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(instanceName, callEvoAction, EVO_API_BASE);
+            }
+            catch {
+                /* */
+            }
+        }
         let qrFetch = await fetchInstanceQrCodeFromEvo(instanceName, number, {
             prepareSession: false,
         });
@@ -7209,8 +8122,11 @@ app.post("/instancias/:name/qrcode", async (req, res) => {
         }
         return res.json({
             ok: true,
-            message: "QRCode solicitado com sucesso.",
+            message: campaignProxy
+                ? "QRCode solicitado com Proxy Campanha. Escaneie para parear já com proxy."
+                : "QRCode solicitado com sucesso.",
             qrCode: qrFetch.qrCode,
+            campaignProxy,
             providerResponse: qrFetch.providerResponse,
         });
     }
@@ -7239,7 +8155,25 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
             if (!ownerEmail.includes("@")) {
                 return res.status(401).json({ error: "Faça login para registrar uma instância." });
             }
-            const reserve = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, ownerEmail);
+            let reserve;
+            try {
+                reserve = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.claimOnRegister(name, ownerEmail);
+            }
+            catch (claimError) {
+                const detail = claimError instanceof Error
+                    ? claimError.stack || claimError.message
+                    : String(claimError);
+                rememberQrRegisterFailure({
+                    name,
+                    source: "http",
+                    error: "Falha ao reservar nome da instância no armazenamento local.",
+                    detail: detail.slice(0, 800),
+                });
+                return res.status(500).json({
+                    error: "Falha ao reservar nome da instância no armazenamento local.",
+                    detail: detail.slice(0, 800),
+                });
+            }
             if (!reserve.ok) {
                 return res.status(409).json({ error: reserve.error });
             }
@@ -7306,6 +8240,8 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                     number,
                     ownerEmail,
                     ownershipAlreadyClaimed: true,
+                    campaignProxy: req.body?.campaignProxy === true ||
+                        String(req.body?.campaignProxy || "").trim() === "1",
                 });
                 const updatedAt = Date.now();
                 if (result.ok) {
@@ -7315,6 +8251,7 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                         updatedAt,
                         message: result.message,
                         qrCode: result.qrCode,
+                        pairingCode: result.pairingCode ?? null,
                         warning: result.warning ?? null,
                     });
                     return;
@@ -7328,25 +8265,53 @@ app.post("/instancias/registrar-qrcode", async (req, res) => {
                     evoCreateStatus: result.evoCreateStatus,
                     evoQrStatus: result.evoQrStatus,
                 });
+                rememberQrRegisterFailure({
+                    name,
+                    source: "job",
+                    error: String(result.error || "Erro ao gerar QRCode da instância."),
+                    detail: result.detail,
+                    evoCreateStatus: result.evoCreateStatus,
+                    evoQrStatus: result.evoQrStatus,
+                });
             }
             catch (error) {
+                const raw = error instanceof Error
+                    ? error.stack || error.message
+                    : String(error);
+                const summarized = summarizeEvolutionErrorDetail(error instanceof Error ? error.message : String(error), 0);
+                const errorMsg = summarized && summarized.trim()
+                    ? summarized.trim().slice(0, 280)
+                    : "Erro ao gerar QRCode da instância.";
                 qrRegisterJobs.set(jobId, {
                     status: "error",
                     createdAt: now,
                     updatedAt: Date.now(),
-                    error: "Erro ao gerar QRCode da instância.",
-                    detail: error instanceof Error ? error.message : String(error),
+                    error: errorMsg,
+                    detail: String(raw || "").slice(0, 800),
                 });
+                rememberQrRegisterFailure({
+                    name,
+                    source: "job",
+                    error: errorMsg,
+                    detail: String(raw || "").slice(0, 800),
+                });
+                console.error("[QR] registrar-qrcode job falhou:", name, error);
             }
         })();
         return;
     }
     catch (error) {
         console.error("Erro ao registrar instância e gerar QRCode:", error);
-        const detail = error instanceof Error ? error.message : String(error);
+        const detail = error instanceof Error ? error.stack || error.message : String(error);
+        rememberQrRegisterFailure({
+            name: String(req.body?.name || "").trim() || "(sem-nome)",
+            source: "http",
+            error: "Erro ao gerar QRCode da instância.",
+            detail: detail.slice(0, 800),
+        });
         return res.status(500).json({
             error: "Erro ao gerar QRCode da instância.",
-            detail,
+            detail: detail.slice(0, 800),
         });
     }
 });
@@ -7435,6 +8400,86 @@ app.delete("/admin/instances/:name", async (req, res) => {
     catch (error) {
         console.error("Erro ao deletar instância (admin):", error);
         return res.status(500).json({ error: "Erro ao deletar instância." });
+    }
+});
+/** Status público (sem senha) da config Proxy Brasil no processo. */
+app.get("/proxy-brasil/status", (_req, res) => {
+    return res.json((0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()));
+});
+/**
+ * Aplica Proxy Brasil na instância Evolution (teste / número já existente).
+ * Master: qualquer instância. Assinante: só a própria.
+ */
+app.post("/instancias/:name/proxy-brasil", async (req, res) => {
+    try {
+        const instanceName = String(req.params.name || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "Nome da instância é obrigatório." });
+        }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
+        const force = req.body?.force === true || req.body?.force === "1";
+        const result = await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(instanceName, callEvoAction, EVO_API_BASE, { force });
+        if (result.skipped) {
+            return res.status(400).json({
+                ok: false,
+                error: result.reason || "Proxy Brasil não configurado.",
+                proxy: (0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()),
+            });
+        }
+        if (!result.ok) {
+            return res.status(502).json({
+                ok: false,
+                error: result.reason || "Falha ao aplicar proxy na Evolution.",
+                evoStatus: result.status,
+                evoDetail: result.body,
+                host: result.host,
+                port: result.port,
+            });
+        }
+        return res.json({
+            ok: true,
+            message: `Proxy Brasil aplicado em ${instanceName}. Reconecte o QR se a sessão cair.`,
+            host: result.host,
+            port: result.port,
+            evoStatus: result.status,
+        });
+    }
+    catch (error) {
+        console.error("[ProxyBrasil] apply:", error);
+        return res.status(500).json({ error: "Erro ao aplicar Proxy Brasil." });
+    }
+});
+app.post("/admin/instances/:name/proxy-brasil", async (req, res) => {
+    try {
+        const auth = (0, waba_request_auth_1.resolveWabaRequestAuth)(req);
+        if (auth.role !== "master" && !(0, waba_auth_service_1.isWabaMasterEmail)(auth.email)) {
+            return res.status(403).json({ error: "Somente master pode aplicar proxy pelo admin." });
+        }
+        const instanceName = String(req.params.name || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "Nome da instância é obrigatório." });
+        }
+        const result = await (0, evo_instance_proxy_service_1.applyProxyBrasilToEvoInstance)(instanceName, callEvoAction, EVO_API_BASE, { force: true });
+        if (!result.ok) {
+            return res.status(result.skipped ? 400 : 502).json({
+                ok: false,
+                error: result.reason || "Falha ao aplicar proxy.",
+                evoStatus: result.status,
+                evoDetail: result.body,
+            });
+        }
+        return res.json({
+            ok: true,
+            message: `Proxy Brasil aplicado em ${instanceName}.`,
+            host: result.host,
+            port: result.port,
+            appliedBy: auth.email,
+        });
+    }
+    catch (error) {
+        console.error("[ProxyBrasil] admin apply:", error);
+        return res.status(500).json({ error: "Erro ao aplicar Proxy Brasil." });
     }
 });
 app.post("/admin/instances/delete-by-phone", async (req, res) => {
@@ -7687,6 +8732,13 @@ app.get("/aquecedor/network-health", async (req, res) => {
         if (!ownerEmail) {
             return res.status(401).json({ error: "Sessão sem e-mail válido." });
         }
+        // Exclusivo Mozart — nunca expor matriz/saldo da rede a outros usuários.
+        if (ownerEmail !== "mozart.pmo@gmail.com") {
+            return res.status(403).json({
+                ok: false,
+                error: "Saúde da rede disponível apenas para o administrador do sistema.",
+            });
+        }
         const supabase = getSupabaseClient();
         const resolved = await resolveAquecedorConnectedForOwner(ownerEmail);
         const connectedActive = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(resolved.connected);
@@ -7695,12 +8747,23 @@ app.get("/aquecedor/network-health", async (req, res) => {
             await ensureAquecedorOwnerConversationGraph(ownerEmail, supabase, connected);
         }
         else if (connected.length >= 2) {
-            await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, connected.map((item) => item.instancia));
+            const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
+            await (0, conversation_graph_service_1.ensureCompletePairGraph)(ownerEmail, chipIndex.chips);
         }
         const graph = await (0, conversation_graph_service_1.getOwnerConversationGraph)(ownerEmail);
+        const chipIndex = (0, aquecedor_chip_identity_1.buildAquecedorChipIndex)(connected);
         const report = (0, network_health_service_1.buildNetworkHealthReport)(ownerEmail, graph, {
-            instanceNames: connected.map((item) => item.instancia),
+            instanceNames: chipIndex.chips,
         });
+        // Labels amigáveis: chip → nome atual da instância (quando houver).
+        if (report.relationshipMatrix?.labels?.length) {
+            report.relationshipMatrix.labels = report.relationshipMatrix.labels.map((chip) => chipIndex.chipToInstance.get(chip) || chip);
+        }
+        for (const phone of report.phones || []) {
+            const label = chipIndex.chipToInstance.get(String(phone.phone || ""));
+            if (label)
+                phone.phone = label;
+        }
         return res.json({ ok: true, ...report });
     }
     catch (error) {
@@ -7808,60 +8871,9 @@ app.get("/aquecedor/envios", async (req, res) => {
                     .eq("status", "PENDENTE");
             const { count: pendingTotal } = (await pendingCountQuery);
             pendingCount = typeof pendingTotal === "number" ? pendingTotal : 0;
-            const pendingDataQuery = filterQueueByOwner
-                ? supabase
-                    .from("aquecedor")
-                    .select("scheduled_at, instancia, numero_destino")
-                    .eq("status", "PENDENTE")
-                    .in("instancia", scopedTechnicalNames)
-                    .order("scheduled_at", { ascending: true })
-                    .limit(1)
-                    .maybeSingle()
-                : supabase
-                    .from("aquecedor")
-                    .select("scheduled_at, instancia, numero_destino")
-                    .eq("status", "PENDENTE")
-                    .order("scheduled_at", { ascending: true })
-                    .limit(1)
-                    .maybeSingle();
-            const { data: pendingData } = (await pendingDataQuery);
-            if (pendingData) {
-                let origem = String(pendingData?.instancia || "").trim();
-                let destino = "—";
-                const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
-                const numDest = normalizeWhatsAppNumber(String(pendingData?.numero_destino || "").trim());
-                if (numDest) {
-                    destino = numToInst.get(numDest) || "—";
-                }
-                if (!origem || destino === "—") {
-                    const resolvedConnected = await resolveAquecedorConnectedForOwner(ownerEmail);
-                    const connected = await (0, aquecedor_instance_lifecycle_service_1.filterAquecedorCycleConnected)(resolvedConnected.connected);
-                    if (connected.length >= 2) {
-                        const combinations = connected.flatMap((origemItem) => connected
-                            .filter((destinoItem) => destinoItem.instancia !== origemItem.instancia)
-                            .map((destinoItem) => ({
-                            instancia_origem: origemItem.instancia,
-                            instancia_destino: destinoItem.instancia,
-                            numero_whatsapp: destinoItem.numero,
-                        })));
-                        const { data: cicloData } = await (supabase
-                            .from("controle_ciclo")
-                            .select("ciclo_global")
-                            .order("id", { ascending: true })
-                            .limit(1)
-                            .maybeSingle());
-                        const cicloGlobal = typeof cicloData?.ciclo_global === "number"
-                            ? Math.floor(cicloData.ciclo_global)
-                            : 0;
-                        const picked = await pickAquecedorCombinationAsync(supabase, connected, combinations, cicloGlobal, ownerEmail || undefined);
-                        if (picked) {
-                            origem = picked.chosen.instancia_origem;
-                            destino = picked.chosen.instancia_destino;
-                        }
-                    }
-                }
-                pushItem(origem || "—", destino, dataEnvio, "Em Fila");
-            }
+            // Histórico primeiro: listagem não pode depender de EVO/pick (ver LOG-2026-06-19).
+            // PENDENTE legado com numero_destino null entrava em resolveAquecedorConnectedForOwner
+            // + outbound-health + pick e derrubava o endpoint inteiro com 500.
             const logsQuery = filterQueueByOwner
                 ? supabase
                     .from("logs_envios_br")
@@ -7880,6 +8892,41 @@ app.get("/aquecedor/envios", async (req, res) => {
                     const dataEnvio = String(row?.data_envio_br || row?.data_envio || "").trim() || null;
                     pushItem(String(row?.instancia_origem || "").trim() || "—", String(row?.instancia_destino || "").trim() || "—", dataEnvio, "Envio com Sucesso");
                 }
+            }
+            try {
+                const pendingDataQuery = filterQueueByOwner
+                    ? supabase
+                        .from("aquecedor")
+                        .select("scheduled_at, instancia, numero_destino")
+                        .eq("status", "PENDENTE")
+                        .in("instancia", scopedTechnicalNames)
+                        .not("instancia", "is", null)
+                        .order("scheduled_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle()
+                    : supabase
+                        .from("aquecedor")
+                        .select("scheduled_at, instancia, numero_destino")
+                        .eq("status", "PENDENTE")
+                        .not("instancia", "is", null)
+                        .order("scheduled_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                const { data: pendingData } = (await pendingDataQuery);
+                if (pendingData) {
+                    const origem = String(pendingData?.instancia || "").trim();
+                    let destino = "—";
+                    const dataEnvio = String(pendingData?.scheduled_at || "").trim() || null;
+                    const numDest = normalizeWhatsAppNumber(String(pendingData?.numero_destino || "").trim());
+                    if (numDest) {
+                        destino = numToInst.get(numDest) || numDest;
+                    }
+                    // Sem EVO/pick na listagem: destino fica "—" até o motor gravar numero_destino.
+                    pushItem(origem || "—", destino, dataEnvio, "Em Fila");
+                }
+            }
+            catch (pendingErr) {
+                console.warn("[aquecedor/envios] falha ao montar preview PENDENTE (histórico já retornado):", pendingErr instanceof Error ? pendingErr.message : pendingErr);
             }
         }
         const dedup = new Map();
@@ -8136,7 +9183,7 @@ app.get("/aquecedor/fila-localizar", async (req, res) => {
         if (!supabase) {
             return res.status(503).json({ error: "Supabase não configurado." });
         }
-        const now = new Date().toISOString();
+        await releaseStuckAquecedorQueueRows(supabase);
         const { data: pendentes } = await (supabase
             .from("aquecedor")
             .select("id, status, scheduled_at, instancia, numero_destino")
@@ -8963,6 +10010,8 @@ app.post("/disparos/config", async (req, res) => {
             selectedDisparadorInstances: await filterDisparadorInstancesReadyForAuth(auth, config.selectedDisparadorInstances),
         };
         await saveDisparosConfigToDb(config);
+        // Proxy Brasil NÃO aplica aqui (troca de seleção no wizard).
+        // Só no «Gerar Campanha» / add instances — ver queueSyncProxyBrasilForCampaignSelection.
         return res.json({ ok: true, message: "Configuração do Disparador salva.", config });
     }
     catch (error) {
@@ -9047,6 +10096,48 @@ app.post("/disparos/messenger-products", async (req, res) => {
             .status(500)
             .json({ error: "Erro ao gravar produto na biblioteca." });
     }
+});
+app.post("/disparos/messenger-images", (req, res, next) => {
+    uploadMessengerImage.single("image")(req, res, (err) => {
+        if (err) {
+            const limitErr = err instanceof multer_1.default.MulterError && err.code === "LIMIT_FILE_SIZE";
+            return res.status(400).json({
+                error: limitErr
+                    ? "Imagem acima de 5 MB."
+                    : err.message || "Falha no upload da imagem.",
+            });
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file?.buffer?.length) {
+            return res.status(400).json({ error: "Selecione um arquivo de imagem." });
+        }
+        const slot = Math.floor(Number(req.body?.slot ?? req.query?.slot));
+        const saved = (0, waba_campaign_messenger_images_service_1.saveCampaignMessengerImage)({
+            buffer: file.buffer,
+            fileName: file.originalname || "imagem.jpg",
+            mimeType: file.mimetype || "image/jpeg",
+            slot,
+        });
+        return res.json({ ok: true, image: saved });
+    }
+    catch (err) {
+        return res.status(400).json({
+            error: err?.message || "Não foi possível salvar a imagem 1080×1080.",
+        });
+    }
+});
+/** Público para a Evolution baixar mídia (fallback URL; preferimos base64). */
+app.get("/disparos/messenger-images/:id/file", (req, res) => {
+    const file = (0, waba_campaign_messenger_images_service_1.resolveCampaignMessengerImageFile)(String(req.params.id || ""));
+    if (!file)
+        return res.status(404).json({ error: "Imagem não encontrada." });
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.sendFile(file.absolutePath);
 });
 app.get("/disparos/diagnostico", async (req, res) => {
     try {
@@ -9162,7 +10253,7 @@ app.get("/disparos/diagnostico", async (req, res) => {
             if (c.status !== "running")
                 continue;
             const leads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === c.id);
-            const pending = leads.filter((l) => l.status === "pending").length;
+            const pending = leads.filter((l) => l.status === "pending" || l.status === "sending").length;
             const failed = leads.filter((l) => l.status === "failed").length;
             const nextMs = campaignNextAllowedSendAt.get(c.id) || 0;
             const nowMs = Date.now();
@@ -9270,7 +10361,10 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
         const briefing = customBriefing || String(config.aiBriefing || "").trim();
         const tone = String(req.body?.tone || config.aiTone || "consultivo").trim();
         const audience = String(req.body?.audience || config.aiAudience || "CORBAN").trim();
-        const cta = String(req.body?.cta || config.aiCta || "Responda no link abaixo").trim();
+        const buttonMode = String(req.body?.ctaMode || "").toLowerCase() === "button" ||
+            req.body?.buttonMode === true;
+        const cta = String(req.body?.cta || config.aiCta || (buttonMode ? "Quero saber mais" : "Responda no link abaixo")).trim();
+        const buttonLabel = normalizeButtonDisplayText(cta);
         const objective = String(req.body?.objective || "gerar mensagem de prospeccao").trim();
         const linkMode = String(req.body?.linkDestinationMode || config.linkDestinationMode || "whatsapp").toLowerCase() ===
             "url"
@@ -9316,16 +10410,20 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
             briefing,
             tone,
             audience,
-            cta,
+            cta: buttonMode ? buttonLabel : cta,
             objective,
-            accessLink: shortUrl,
+            accessLink: buttonMode ? undefined : shortUrl,
+            ctaMode: buttonMode ? "button" : "link",
         });
         const generated = await callOpenAiGenerateMessage({
             prompt,
             model: String(req.body?.model || OPENAI_MODEL),
             maxOutputTokens: Number(req.body?.maxOutputTokens || 220),
         });
-        const finalMessage = ensureMessageContainsLink(generated.text, shortUrl, cta);
+        const finalMessage = buttonMode
+            ? prepareOutboundWhatsAppText(generated.text, { stripUrls: true }) ||
+                "Olá! Temos uma novidade para você."
+            : ensureMessageContainsLink(generated.text, shortUrl, cta);
         return res.json({
             ok: true,
             message: finalMessage,
@@ -9333,6 +10431,9 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
             latencyMs: generated.latencyMs,
             shortUrl,
             shortenerProvider,
+            ctaMode: buttonMode ? "button" : "link",
+            buttonLabel: buttonMode ? buttonLabel : undefined,
+            buttonUrl: buttonMode ? shortUrl : undefined,
             ...(shortenerWarning ? { shortenerWarning } : {}),
         });
     }
@@ -9477,86 +10578,14 @@ app.get("/disparos/next-instance", async (req, res) => {
     }
 });
 app.get("/disparos/templates", async (_req, res) => {
-    try {
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                const { data } = await (supabase
-                    .from("disparos_message_templates")
-                    .select("id, message_text, alias, segment, source, created_at, active")
-                    .eq("active", true)
-                    .order("created_at", { ascending: false })
-                    .limit(200));
-                if (Array.isArray(data)) {
-                    const items = data.map((row) => ({
-                        id: String(row?.id || ""),
-                        text: String(row?.message_text || ""),
-                        alias: String(row?.alias || ""),
-                        segment: String(row?.segment || ""),
-                        source: row?.source === "manual" ? "manual" : "spreadsheet",
-                        createdAt: String(row?.created_at || ""),
-                        active: row?.active !== false,
-                    }));
-                    return res.json({ items });
-                }
-            }
-            catch {
-                // fallback em memória
-            }
-        }
-        return res.json({ items: disparosTemplatesMemory.slice(0, 200) });
-    }
-    catch {
-        return res.status(500).json({ error: "Erro ao listar templates de mensagem." });
-    }
+    return res.status(410).json({
+        error: "Base de mensagens por planilha foi descontinuada. Use o Mensageiro com IA.",
+    });
 });
-app.post("/disparos/templates/import", async (req, res) => {
-    try {
-        const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-        const mapped = rows
-            .map((row) => ({
-            id: crypto_1.default.randomUUID(),
-            text: String(row?.text || "").trim(),
-            alias: String(row?.alias || "").trim(),
-            segment: String(row?.segment || "").trim(),
-            source: "spreadsheet",
-            createdAt: new Date().toISOString(),
-            active: true,
-        }))
-            .filter((row) => row.text.length > 0);
-        if (!mapped.length) {
-            return res.status(400).json({ error: "Nenhuma mensagem válida encontrada para importar." });
-        }
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                const payload = mapped.map((row) => ({
-                    id: row.id,
-                    message_text: row.text,
-                    alias: row.alias,
-                    segment: row.segment,
-                    source: row.source,
-                    created_at: row.createdAt,
-                    active: row.active,
-                }));
-                await supabase.from("disparos_message_templates").insert(payload);
-            }
-            catch {
-                disparosTemplatesMemory.unshift(...mapped);
-            }
-        }
-        else {
-            disparosTemplatesMemory.unshift(...mapped);
-        }
-        return res.json({
-            ok: true,
-            imported: mapped.length,
-            message: `${mapped.length} mensagem(ns) importada(s) com sucesso.`,
-        });
-    }
-    catch {
-        return res.status(500).json({ error: "Erro ao importar templates de mensagem." });
-    }
+app.post("/disparos/templates/import", async (_req, res) => {
+    return res.status(410).json({
+        error: "Importação de mensagens por planilha foi descontinuada. Use o Mensageiro com IA.",
+    });
 });
 async function hydrateCampaignFromDbIfNeeded(campaignId, options = {}) {
     const existing = disparosCampaignsMemory.find((c) => c.id === campaignId);
@@ -9596,30 +10625,43 @@ async function hydrateCampaignFromDbIfNeeded(campaignId, options = {}) {
             /* coluna ausente */
         }
         let leadRows = [];
-        try {
-            let lr = null;
-            const withMessage = await (supabase
-                .from("disparos_campaign_leads")
-                .select("id, campaign_id, phone, status, created_at, sent_at, short_url, message_text")
-                .eq("campaign_id", campaignId)
-                .limit(100000));
-            if (!withMessage.error && Array.isArray(withMessage.data)) {
-                lr = withMessage.data;
+        if (!options.skipLeads) {
+            try {
+                let lr = null;
+                if (options.lightLeads) {
+                    const light = await (supabase
+                        .from("disparos_campaign_leads")
+                        .select("id, campaign_id, phone, status, created_at, sent_at")
+                        .eq("campaign_id", campaignId)
+                        .limit(100000));
+                    if (!light.error && Array.isArray(light.data))
+                        lr = light.data;
+                }
+                else {
+                    const withMessage = await (supabase
+                        .from("disparos_campaign_leads")
+                        .select("id, campaign_id, phone, status, created_at, sent_at, short_url, message_text")
+                        .eq("campaign_id", campaignId)
+                        .limit(100000));
+                    if (!withMessage.error && Array.isArray(withMessage.data)) {
+                        lr = withMessage.data;
+                    }
+                    else {
+                        const legacy = await (supabase
+                            .from("disparos_campaign_leads")
+                            .select("id, campaign_id, phone, status, created_at, sent_at")
+                            .eq("campaign_id", campaignId)
+                            .limit(100000));
+                        if (!legacy.error && Array.isArray(legacy.data))
+                            lr = legacy.data;
+                    }
+                }
+                if (Array.isArray(lr))
+                    leadRows = lr;
             }
-            else {
-                const legacy = await (supabase
-                    .from("disparos_campaign_leads")
-                    .select("id, campaign_id, phone, status, created_at, sent_at")
-                    .eq("campaign_id", campaignId)
-                    .limit(100000));
-                if (!legacy.error && Array.isArray(legacy.data))
-                    lr = legacy.data;
+            catch (e) {
+                console.error("[Campanha] Falha ao ler leads no hydrate:", campaignId, e);
             }
-            if (Array.isArray(lr))
-                leadRows = lr;
-        }
-        catch (e) {
-            console.error("[Campanha] Falha ao ler leads no hydrate:", campaignId, e);
         }
         if (!row?.id) {
             return existing || null;
@@ -9635,20 +10677,49 @@ async function hydrateCampaignFromDbIfNeeded(campaignId, options = {}) {
             existing.sentCount = Number(row.sent_count ?? existing.sentCount);
             existing.configSnapshot = configSnapshot;
             if (leadRows.length > 0) {
+                const memTerminal = new Map();
+                for (const ml of disparosCampaignLeadsMemory) {
+                    if (ml.campaignId !== campaignId)
+                        continue;
+                    if (ml.status === "sent" || ml.status === "failed") {
+                        memTerminal.set(ml.id, {
+                            status: ml.status,
+                            sentAt: ml.sentAt,
+                            shortUrl: ml.shortUrl,
+                            messageText: ml.messageText,
+                        });
+                    }
+                }
                 removeLeadsForCampaignFromMemory(campaignId);
                 for (const lr of leadRows) {
+                    const idLead = String(lr?.id || crypto_1.default.randomUUID());
                     const st = String(lr?.status || "pending").toLowerCase();
+                    let leadStatus = st === "sent" ? "sent" : st === "failed" ? "failed" : "pending";
+                    let sentAt = lr?.sent_at ? String(lr.sent_at) : null;
+                    let shortUrl = typeof lr?.short_url === "string" ? String(lr.short_url) : undefined;
+                    let messageText = typeof lr?.message_text === "string" ? String(lr.message_text) : undefined;
+                    // Nunca rebaixar sent/failed da memória para pending do DB (persist falho → reenvio).
+                    const terminal = memTerminal.get(idLead);
+                    if (terminal && leadStatus === "pending") {
+                        leadStatus = terminal.status;
+                        sentAt = terminal.sentAt;
+                        shortUrl = terminal.shortUrl ?? shortUrl;
+                        messageText = terminal.messageText ?? messageText;
+                    }
                     disparosCampaignLeadsMemory.push({
-                        id: String(lr?.id || crypto_1.default.randomUUID()),
+                        id: idLead,
                         campaignId: String(lr?.campaign_id || campaignId),
                         phone: String(lr?.phone || ""),
-                        status: st === "sent" ? "sent" : st === "failed" ? "failed" : "pending",
-                        shortUrl: typeof lr?.short_url === "string" ? String(lr.short_url) : undefined,
-                        messageText: typeof lr?.message_text === "string" ? String(lr.message_text) : undefined,
+                        status: leadStatus,
+                        shortUrl,
+                        messageText,
                         createdAt: String(lr?.created_at || new Date().toISOString()),
-                        sentAt: lr?.sent_at ? String(lr.sent_at) : null,
+                        sentAt,
                     });
                 }
+                const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId && l.status === "sent").length;
+                if (sentN > existing.sentCount)
+                    existing.sentCount = sentN;
             }
             if (!options.skipQueueLocalPersist)
                 queuePersistDisparosLocalState();
@@ -9720,7 +10791,7 @@ async function syncDisparosCampaignsFromDbOnStartup() {
         console.error("[Campanhas] startup sync:", e);
     }
 }
-async function pickDisparadorInstanceForConfig(config) {
+async function pickDisparadorInstanceForConfig(config, opts) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
@@ -9746,11 +10817,21 @@ async function pickDisparadorInstanceForConfig(config) {
         if (!selectedList.length)
             return null;
         const selectedSet = new Set(selectedList);
-        const eligible = connected.filter((item) => {
+        let eligible = connected.filter((item) => {
             const usage = usageMap.get(item.instancia);
             const byUsage = usage ? usage.useDisparador !== false : true;
             return byUsage && selectedSet.has(item.instancia);
         });
+        if (opts?.skipHumanPaused && eligible.length) {
+            const filtered = [];
+            for (const item of eligible) {
+                const life = await (0, aquecedor_instance_lifecycle_service_1.getAquecedorLifecycleStatusForInstance)(item.instancia);
+                if (life?.phase === "restricted_wait")
+                    continue;
+                filtered.push(item);
+            }
+            eligible = filtered;
+        }
         if (!eligible.length)
             return null;
         const maxPerDay = Math.max(1, Number(config.maxPerDayPerInstance) || DISPAROS_DEFAULTS.maxPerDayPerInstance);
@@ -9772,106 +10853,130 @@ async function pickDisparadorInstanceForConfig(config) {
         clearTimeout(timeoutId);
     }
 }
-async function composeOutboundMessageForConfig(config) {
-    if (config.messageMode === "database") {
-        let templates = [];
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                const { data } = await (supabase
-                    .from("disparos_message_templates")
-                    .select("id, message_text, alias, segment, source, created_at, active")
-                    .eq("active", true)
-                    .order("created_at", { ascending: false })
-                    .limit(200));
-                if (Array.isArray(data)) {
-                    templates = data.map((row) => ({
-                        id: String(row?.id || ""),
-                        text: String(row?.message_text || ""),
-                        alias: String(row?.alias || ""),
-                        segment: String(row?.segment || ""),
-                        source: row?.source === "manual" ? "manual" : "spreadsheet",
-                        createdAt: String(row?.created_at || ""),
-                        active: row?.active !== false,
-                    }));
-                }
-            }
-            catch {
-                /* */
+async function sendEvoComposingPresenceBeforeText(instanceName, number, typingDelayMs) {
+    const delay = Math.max(1200, Math.min(12000, Math.floor(typingDelayMs)));
+    const body = {
+        number,
+        options: {
+            delay: Math.min(delay, 8000),
+            presence: "composing",
+            number,
+        },
+    };
+    const urls = [
+        `${EVO_API_BASE}/chat/sendPresence/${encodeURIComponent(instanceName)}`,
+        `${EVO_API_BASE}/message/sendPresence/${encodeURIComponent(instanceName)}`,
+    ];
+    let sent = false;
+    for (const url of urls) {
+        try {
+            const result = await callEvoAction(url, "POST", body, {
+                timeoutMs: 12000,
+                retries: 1,
+            });
+            if (result.ok) {
+                sent = true;
+                break;
             }
         }
-        if (!templates.length) {
-            templates = disparosTemplatesMemory.filter((t) => t.active !== false);
+        catch {
+            /* tenta próximo path */
         }
-        const pick = templates[Math.floor(Math.random() * templates.length)];
-        if (!pick?.text?.trim()) {
-            return {
-                text: "Olá! Temos uma informação importante para você. Responda quando puder.",
-                shortUrl: null,
-            };
-        }
-        const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
-        const httpRegex = /https?:\/\/[^\s)]+/gi;
-        let text = pick.text.trim();
-        if (httpRegex.test(text)) {
-            text = text.replace(httpRegex, shortUrl);
-        }
-        else {
-            text = ensureMessageContainsLink(text, shortUrl, String(config.aiCta || "Acesse aqui"));
-        }
-        return { text, shortUrl };
     }
+    if (!sent) {
+        console.warn(`[Campanha Alternativa] sendPresence falhou em ${instanceName}; aplicando só delay humano (${delay}ms).`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay));
+}
+async function composeOutboundMessageForConfig(config, opts) {
+    const buttonMode = opts?.buttonMode === true;
+    const buttonLabel = normalizeButtonDisplayText(String(config.aiCta || "Quero saber mais"));
     const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
     const briefing = String(config.aiBriefing || "");
     const prompt = buildDisparosAiPrompt({
         briefing,
         tone: String(config.aiTone || "consultivo"),
         audience: String(config.aiAudience || "CORBAN"),
-        cta: String(config.aiCta || "Responda no link abaixo"),
+        cta: String(config.aiCta || "Quero saber mais"),
         objective: "gerar mensagem de prospeccao via WhatsApp",
-        accessLink: shortUrl,
+        accessLink: buttonMode ? undefined : shortUrl,
+        ctaMode: buttonMode ? "button" : "link",
     });
     const generated = await callOpenAiGenerateMessage({
         prompt,
         model: OPENAI_MODEL,
         maxOutputTokens: 220,
     });
+    if (buttonMode) {
+        const text = prepareOutboundWhatsAppText(generated.text, { stripUrls: true }) ||
+            "Olá! Temos uma novidade para você.";
+        return { text, shortUrl, buttonLabel };
+    }
     return {
-        text: ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Responda no link abaixo")),
+        text: ensureMessageContainsLink(generated.text, shortUrl, String(config.aiCta || "Quero saber mais")),
         shortUrl,
+        buttonLabel,
     };
 }
 async function persistLeadSentAndCampaignCount(campaignId, leadId, nextSentCount, payload) {
     const supabase = getSupabaseClient();
-    if (!supabase)
-        return;
+    if (!supabase) {
+        queuePersistDisparosLocalState();
+        return true;
+    }
     try {
         const sentAt = new Date().toISOString();
         const shortUrl = String(payload?.shortUrl || "").trim();
         const messageText = String(payload?.messageText || "").trim();
+        let leadPersisted = false;
         try {
-            await supabase.from("disparos_campaign_leads")
+            const full = await supabase.from("disparos_campaign_leads")
                 .update({
                 status: "sent",
                 sent_at: sentAt,
                 short_url: shortUrl || null,
                 message_text: messageText || null,
             })
-                .eq("id", leadId);
+                .eq("id", leadId)
+                .select("id");
+            if (!full?.error)
+                leadPersisted = true;
+            else {
+                console.warn("[Campanha] persist lead sent (full) falhou:", leadId, full.error?.message || full.error);
+            }
         }
-        catch {
-            await supabase.from("disparos_campaign_leads")
+        catch (err) {
+            console.warn("[Campanha] persist lead sent (full) exceção:", leadId, err?.message || err);
+        }
+        if (!leadPersisted) {
+            const legacy = await supabase.from("disparos_campaign_leads")
                 .update({ status: "sent", sent_at: sentAt })
-                .eq("id", leadId);
+                .eq("id", leadId)
+                .select("id");
+            if (!legacy?.error)
+                leadPersisted = true;
+            else {
+                console.error("[Campanha] persist lead sent (legacy) falhou — risco de reenvio:", leadId, legacy.error?.message || legacy.error);
+            }
         }
-        await supabase.from("disparos_campaigns")
+        if (!leadPersisted) {
+            queuePersistDisparosLocalState();
+            return false;
+        }
+        const campUp = await supabase.from("disparos_campaigns")
             .update({ sent_count: nextSentCount })
             .eq("id", campaignId);
+        if (campUp?.error) {
+            console.warn("[Campanha] persist sent_count falhou:", campaignId, campUp.error?.message || campUp.error);
+        }
+        queuePersistDisparosLocalState();
+        return true;
     }
-    catch {
-        /* */
+    catch (err) {
+        console.error("[Campanha] persistLeadSentAndCampaignCount:", err?.message || err);
+        queuePersistDisparosLocalState();
+        return false;
     }
-    queuePersistDisparosLocalState();
 }
 async function persistLeadFailed(lead, kind) {
     lead.status = "failed";
@@ -9891,11 +10996,211 @@ async function persistLeadFailed(lead, kind) {
     }
     queuePersistDisparosLocalState();
 }
+function getProxyBrasilCampaignPrepareDeps() {
+    return {
+        apiKey: EVO_API_KEY,
+        restartInstanceLight: evo_send_recovery_service_1.restartEvoInstanceLight,
+        waitForOpenLenient: evo_connection_state_service_1.waitForEvoInstanceLiveOpenLenient,
+        fetchLiveState: evo_connection_state_service_1.fetchEvoInstanceLiveState,
+        isLiveStateOpen: evo_connection_state_service_1.isEvoLiveStateOpen,
+    };
+}
+function queueProxyBrasilPrepareForCampaignInstances(instanceNames) {
+    (0, evo_instance_proxy_service_1.queueApplyProxyBrasilToInstances)(instanceNames, callEvoAction, EVO_API_BASE, getProxyBrasilCampaignPrepareDeps());
+}
+/** Desliga Proxy Brasil das instâncias offline da campanha (connectionState≠open). */
+function queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, explicitInstanceNames) {
+    if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
+        return;
+    const names = new Set();
+    for (const raw of explicitInstanceNames || []) {
+        const n = String(raw || "").trim();
+        if (n)
+            names.add(n);
+    }
+    // Sem evoRows, tags marcariam tudo como offline (falso) — só usa lista explícita.
+    if (evoRows.length) {
+        const offlineTags = disparadorInstanceTagsForCampaign(campaign.configSnapshot, evoRows).filter((t) => t.connected !== true);
+        for (const t of offlineTags) {
+            const resolved = resolveStoredNameToEvoTag(t.instanceName, evoRows);
+            const key = String(resolved.instanceKey || t.instanceName || "").trim();
+            if (key)
+                names.add(key);
+        }
+    }
+    if (!names.size)
+        return;
+    console.warn("[Campanha] Desligando Proxy Brasil em instância(ões) desconectada(s):", Array.from(names).join(", "));
+    (0, evo_instance_proxy_service_1.queueDisableProxyBrasilOnInstances)(Array.from(names), callEvoAction, EVO_API_BASE);
+}
+async function prepareProxyBrasilForCampaignInstancesNow(instanceNames) {
+    return (0, evo_instance_proxy_service_1.prepareProxyBrasilSessionsForCampaign)(instanceNames, {
+        callEvoAction,
+        evoApiBase: EVO_API_BASE,
+        ...getProxyBrasilCampaignPrepareDeps(),
+    });
+}
+function selectedInstanceNamesFromCampaign(campaign) {
+    const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
+    return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
+}
+function queueReleaseProxyBrasilAfterCampaignEnd(endedCampaign) {
+    if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
+        return;
+    const ending = selectedInstanceNamesFromCampaign(endedCampaign);
+    if (!ending.length)
+        return;
+    const otherLive = disparosCampaignsMemory
+        .filter((c) => c.id !== endedCampaign.id && (0, evo_instance_proxy_service_1.campaignStatusHoldsProxyBrasil)(String(c.status || "")))
+        .flatMap((c) => selectedInstanceNamesFromCampaign(c));
+    const toDisable = (0, evo_instance_proxy_service_1.instanceNamesToReleaseAfterCampaignEnd)(ending, otherLive);
+    if (!toDisable.length)
+        return;
+    (0, evo_instance_proxy_service_1.queueDisableProxyBrasilOnInstances)(toDisable, callEvoAction, EVO_API_BASE);
+}
+function scheduleCampaignProxyPrepareRetry(campaignId, waitMs = 15000) {
+    campaignNextAllowedSendAt.set(campaignId, Date.now() + Math.max(5000, waitMs));
+}
+async function pauseCampaignDueToProxyPrepareFailure(campaignId, reason, options) {
+    const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
+    if (!campaign || campaign.status !== "running")
+        return;
+    campaign.status = "paused";
+    const detail = String(reason || "").trim() ||
+        "Pausa automática: falha de sessão/proxy na instância.";
+    campaign.pauseReason = detail.startsWith("Pausa automática")
+        ? detail
+        : `Pausa automática: ${detail}`;
+    console.warn(`[Campanha] ${campaignId} pausada (proxy/sessão): ${campaign.pauseReason}`);
+    const offlineName = String(options?.instanceName || "").trim();
+    const disableProxy = options?.disableProxy === true;
+    if (disableProxy && offlineName) {
+        queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, [], [offlineName]);
+    }
+    else if (disableProxy && (0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
+        try {
+            const evoRows = await fetchEvoInstanceTagRows();
+            queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows);
+        }
+        catch {
+            /* */
+        }
+    }
+    const supabase = getSupabaseClient();
+    if (supabase) {
+        try {
+            await supabase.from("disparos_campaigns")
+                .update({ status: "paused" })
+                .eq("id", campaignId);
+        }
+        catch {
+            /* */
+        }
+    }
+    queuePersistDisparosLocalState();
+}
 function scheduleNextCampaignDispatchDelay(campaignId, config) {
     const minS = Math.max(10, Number(config.delayMinSeconds) || DISPAROS_DEFAULTS.delayMinSeconds);
     const maxS = Math.max(minS, Number(config.delayMaxSeconds) || DISPAROS_DEFAULTS.delayMaxSeconds);
     const waitSec = minS + Math.random() * (maxS - minS);
     campaignNextAllowedSendAt.set(campaignId, Date.now() + waitSec * 1000);
+}
+function extractCampaignSendMessageId(json) {
+    if (!json || typeof json !== "object")
+        return "";
+    const root = json;
+    const key = root.key;
+    return String(key?.id || root.id || "").trim();
+}
+function sleepCampaignMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+async function probeCampaignMessageAckStatus(instanceName, messageId, options) {
+    const name = String(instanceName || "").trim();
+    const id = String(messageId || "").trim();
+    if (!name || !id)
+        return { status: "UNKNOWN" };
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 8);
+    const intervalMs = Math.max(500, options?.intervalMs ?? 2000);
+    const requireDevice = options?.requireDeviceDelivery === true;
+    let last = "UNKNOWN";
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (attempt > 1)
+            await sleepCampaignMs(intervalMs);
+        const statusUrl = `${EVO_API_BASE}/chat/findStatusMessage/${encodeURIComponent(name)}`;
+        const statusResult = await callEvoAction(statusUrl, "POST", { where: { id } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 15000), retries: 1 });
+        if (statusResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(statusResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last))
+                return { status: last };
+            if (requireDevice) {
+                if ((0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last))
+                    return { status: last };
+            }
+            else if (last === "SERVER_ACK" || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last)) {
+                return { status: last };
+            }
+        }
+        const msgUrl = `${EVO_API_BASE}/chat/findMessages/${encodeURIComponent(name)}`;
+        const msgResult = await callEvoAction(msgUrl, "POST", { where: { key: { id } } }, { timeoutMs: Math.min((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 20000), retries: 1 });
+        if (msgResult.ok) {
+            last = (0, delivery_verify_helpers_1.extractEvoMessageAckStatus)(msgResult.json);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(last))
+                return { status: last };
+            if (requireDevice) {
+                if ((0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last))
+                    return { status: last };
+            }
+            else if (last === "SERVER_ACK" || (0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(last)) {
+                return { status: last };
+            }
+        }
+    }
+    return { status: last };
+}
+function buildCampaignMessengerMediaPublicUrl(imageId) {
+    const base = (0, waba_public_base_url_1.resolveWabaPublicBaseUrl)().replace(/\/+$/, "");
+    const prefix = base_path_1.BASE_PATH ? base_path_1.BASE_PATH.replace(/\/+$/, "") : "";
+    return `${base}${prefix}/disparos/messenger-images/${encodeURIComponent(imageId)}/file`;
+}
+async function sendCampaignMessengerImageToEvo(input) {
+    const mediaData = (0, waba_campaign_messenger_images_service_1.readCampaignMessengerImageBase64)(input.image.id);
+    if (!mediaData) {
+        return { ok: false, json: null, status: 0, body: "Imagem do Mensageiro não encontrada no disco." };
+    }
+    const sendUrl = buildTemplateUrl(EVO_SEND_MEDIA_URL_TEMPLATE, input.instanceName);
+    const baseBody = {
+        number: input.number,
+        mediatype: "image",
+        mimetype: mediaData.mimeType || "image/jpeg",
+        caption: "",
+        fileName: mediaData.fileName || input.image.fileName || "campanha.jpg",
+    };
+    const canInline = mediaData.base64.length > 0 &&
+        mediaData.base64.length <= CAMPAIGN_MEDIA_INLINE_BASE64_MAX_CHARS &&
+        mediaData.sizeBytes <= 1.2 * 1024 * 1024;
+    if (canInline) {
+        const media = `data:${mediaData.mimeType};base64,${mediaData.base64.replace(/\s+/g, "")}`;
+        const result = await callEvoAction(sendUrl, "POST", { ...baseBody, media }, {
+            timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+            retries: 2,
+        });
+        if (result.ok) {
+            return { ok: true, json: result.json, status: result.status, body: String(result.body || "") };
+        }
+        console.warn("[Campanha] sendMedia base64 falhou; tentando URL:", result.status, String(result.body || "").slice(0, 160));
+    }
+    const mediaUrl = buildCampaignMessengerMediaPublicUrl(input.image.id);
+    const result = await callEvoAction(sendUrl, "POST", { ...baseBody, media: mediaUrl }, {
+        timeoutMs: Math.max((0, evo_http_client_1.defaultEvoHttpTimeoutMs)(), 60000),
+        retries: 2,
+    });
+    return {
+        ok: result.ok,
+        json: result.json,
+        status: result.status,
+        body: String(result.body || ""),
+    };
 }
 async function processOneCampaignDispatch(campaignId) {
     const campaign = disparosCampaignsMemory.find((c) => c.id === campaignId);
@@ -9904,99 +11209,276 @@ async function processOneCampaignDispatch(campaignId) {
     const nextAt = campaignNextAllowedSendAt.get(campaignId) || 0;
     if (Date.now() < nextAt)
         return;
-    const lead = disparosCampaignLeadsMemory.find((l) => l.campaignId === campaignId && l.status === "pending");
-    if (!lead) {
-        campaign.status = "finished";
-        const supabase = getSupabaseClient();
-        if (supabase) {
-            try {
-                await supabase.from("disparos_campaigns")
-                    .update({ status: "finished" })
-                    .eq("id", campaignId);
-            }
-            catch {
-                /* */
-            }
-        }
-        queuePersistDisparosLocalState();
+    if (campaignDispatchBusy.has(campaignId))
         return;
-    }
-    let outbound;
+    campaignDispatchBusy.add(campaignId);
     try {
-        outbound = await composeOutboundMessageForConfig(campaign.configSnapshot);
-    }
-    catch (err) {
-        console.error("[Campanha] Falha ao montar mensagem:", err);
-        return;
-    }
-    const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot);
-    if (!instancePick) {
-        console.error("[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo).");
-        return;
-    }
-    const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
-    const numero = normalizeWhatsAppNumber(lead.phone);
-    const digitsCheck = String(numero || "").replace(/\D/g, "");
-    if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
-        await persistLeadFailed(lead, "invalid_phone");
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
-    }
-    const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
-    if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(instanceLiveState)) {
-        console.error("[Campanha] Instância não open no sistema WABA - Drax (connectionState):", instancePick.instancia, instanceLiveState || "desconhecido");
-        await persistLeadFailed(lead, "send_error");
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
-    }
-    const sendBody = EVO_SEND_TEXT_V1
-        ? { number: numero, textMessage: { text: outbound.text } }
-        : { number: numero, text: outbound.text, textMessage: { text: outbound.text } };
-    const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
-    if (!sendResult.ok) {
-        console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
-        const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
-        await persistLeadFailed(lead, failKind);
-        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-        return;
-    }
-    const sentIso = new Date().toISOString();
-    lead.status = "sent";
-    lead.messageText = outbound.text;
-    lead.sentAt = sentIso;
-    lead.shortUrl = outbound.shortUrl || undefined;
-    campaign.sentCount += 1;
-    recordInstanceDailySend(instancePick.instancia);
-    const ownerEmail = String(campaign.ownerEmail || "").trim();
-    if (ownerEmail) {
-        const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
-        if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
-            disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
-            if (!disparosCreditsService.isMasterUnlimited(ownerEmail) &&
-                disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0) {
-                campaign.status = "paused";
-                campaign.pauseReason =
-                    "Pausa automática: créditos de envio esgotados para a API Alternativa.";
-                const supabase = getSupabaseClient();
-                if (supabase) {
-                    try {
-                        await supabase.from("disparos_campaigns")
-                            .update({ status: "paused" })
-                            .eq("id", campaign.id);
-                    }
-                    catch {
-                        /* */
-                    }
+        const ownerEmail = String(campaign.ownerEmail || "").trim().toLowerCase();
+        const isAlternativaMotor = Boolean(ownerEmail) && (await shouldApplyAlternativaDispatchProfile(ownerEmail));
+        const sentPhoneDigits = new Set(disparosCampaignLeadsMemory
+            .filter((l) => l.campaignId === campaignId && l.status === "sent")
+            .map((l) => String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, ""))
+            .filter((d) => d.length >= 10));
+        const lead = disparosCampaignLeadsMemory.find((l) => {
+            if (l.campaignId !== campaignId || l.status !== "pending")
+                return false;
+            const digits = String(normalizeWhatsAppNumber(l.phone) || "").replace(/\D/g, "");
+            if (digits.length >= 10 && sentPhoneDigits.has(digits)) {
+                // Destino já recebeu nesta campanha — nunca reenviar (corrige persist/hydrate).
+                l.status = "sent";
+                if (!l.sentAt)
+                    l.sentAt = new Date().toISOString();
+                return false;
+            }
+            return true;
+        });
+        if (!lead) {
+            const stillSending = disparosCampaignLeadsMemory.some((l) => l.campaignId === campaignId && l.status === "sending");
+            if (stillSending)
+                return;
+            const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId && l.status === "sent").length;
+            if (sentN > campaign.sentCount)
+                campaign.sentCount = sentN;
+            campaign.status = "finished";
+            queueReleaseProxyBrasilAfterCampaignEnd(campaign);
+            const supabase = getSupabaseClient();
+            if (supabase) {
+                try {
+                    await supabase.from("disparos_campaigns")
+                        .update({ status: "finished", sent_count: campaign.sentCount })
+                        .eq("id", campaignId);
                 }
-                queuePersistDisparosLocalState();
+                catch {
+                    /* */
+                }
+            }
+            queuePersistDisparosLocalState();
+            return;
+        }
+        // Reserva imediata: evita tick paralelo reenviar o mesmo lead (IA/typing > 7s).
+        lead.status = "sending";
+        let outbound;
+        try {
+            outbound = await composeOutboundMessageForConfig(campaign.configSnapshot, {
+                buttonMode: isAlternativaMotor,
+            });
+        }
+        catch (err) {
+            console.error("[Campanha] Falha ao montar mensagem:", err);
+            lead.status = "pending";
+            return;
+        }
+        const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
+            skipHumanPaused: isAlternativaMotor,
+        });
+        if (!instancePick) {
+            console.error(isAlternativaMotor
+                ? "[Campanha Alternativa] Nenhuma instância disponível (conectadas, Disparador ativo e fora de pausa humana)."
+                : "[Campanha] Nenhuma instância disponível entre as selecionadas no snapshot da campanha (conectadas + com Disparador ativo).");
+            lead.status = "pending";
+            return;
+        }
+        const proxyCfg = (0, proxy_brasil_config_1.loadProxyBrasilConfig)();
+        if (proxyCfg?.enabled && !(0, evo_instance_proxy_service_1.isProxyBrasilSessionReadyForSend)(instancePick.instancia)) {
+            const liveForReady = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
+            if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(liveForReady)) {
+                // Memória de "ready" some no Redeploy. Não chamar proxy/set nem restart no meio do disparo.
+                (0, evo_instance_proxy_service_1.markProxyBrasilSessionReadyForSend)(instancePick.instancia, {
+                    state: liveForReady,
+                    reason: "open no disparo — sem proxy/set",
+                });
+            }
+            else {
+                console.warn(`[Campanha] Instância ${instancePick.instancia} sem sessão open (state=${liveForReady || "desconhecido"}). Sem proxy/set no disparo.`);
+                await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open (${liveForReady || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`, { instanceName: instancePick.instancia, disableProxy: false });
+                lead.status = "pending";
+                return;
             }
         }
+        const sendUrl = buildTemplateUrl(EVO_SEND_TEXT_URL_TEMPLATE, instancePick.instancia);
+        // Sempre preferir formato com 9º dígito no envio (leads antigos podem estar sem o 9).
+        const numero = preferredBrazilWhatsAppSendNumber(lead.phone) || normalizeWhatsAppNumber(lead.phone);
+        const digitsCheck = String(numero || "").replace(/\D/g, "");
+        if (!isPlausibleBrWhatsappDestinationDigits(digitsCheck)) {
+            await persistLeadFailed(lead, "invalid_phone");
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            return;
+        }
+        const instanceLiveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(instancePick.instancia);
+        if (!(0, evo_connection_state_service_1.isEvoLiveStateOpen)(instanceLiveState)) {
+            console.error("[Campanha] Instância não open no sistema WABA - Drax (connectionState):", instancePick.instancia, instanceLiveState || "desconhecido");
+            // Nunca rollback/restart no meio do disparo — gera conflict/device_removed e perde o número.
+            await pauseCampaignDueToProxyPrepareFailure(campaignId, `Instância ${instancePick.instancia} saiu de open durante o disparo (${instanceLiveState || "desconhecido"}). Reconecte no Aquecedor e ative de novo.`, { instanceName: instancePick.instancia, disableProxy: false });
+            lead.status = "pending";
+            return;
+        }
+        const messengerImages = (0, waba_campaign_messenger_images_service_1.normalizeMessengerImagesConfig)(campaign.configSnapshot.messengerImages);
+        if ((0, waba_campaign_messenger_images_service_1.messengerImagesAreComplete)(messengerImages)) {
+            const imageIdx = (0, waba_campaign_messenger_images_service_1.pickNextMessengerImageIndex)(campaignMessengerImageCursor, campaign.id, messengerImages.length);
+            const imageMeta = messengerImages[imageIdx];
+            const mediaSend = await sendCampaignMessengerImageToEvo({
+                instanceName: instancePick.instancia,
+                number: numero,
+                image: imageMeta,
+            });
+            if (!mediaSend.ok) {
+                console.error("[Campanha] EVO sendMedia falhou:", mediaSend.status, String(mediaSend.body || "").slice(0, 200));
+                await persistLeadFailed(lead, classifyEvoSendFailure(mediaSend.status, mediaSend.body));
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+            const mediaMessageId = extractCampaignSendMessageId(mediaSend.json);
+            if (!mediaMessageId) {
+                console.error("[Campanha] sendMedia sem messageId — não envia texto sem ACK da imagem:", lead.phone);
+                await persistLeadFailed(lead, "send_error");
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+            const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
+                maxAttempts: 10,
+                intervalMs: 2000,
+                requireDeviceDelivery: true,
+            });
+            console.info(`[Campanha] ACK imagem slot=${imageMeta.slot + 1} ${instancePick.instancia} → ${lead.phone} msg=${mediaMessageId} status=${mediaAck.status}`);
+            if ((0, delivery_verify_helpers_1.isEvoAckFailure)(mediaAck.status)) {
+                console.error("[Campanha] ACK da imagem = ERROR — texto não enviado:", mediaAck.status, lead.phone);
+                await persistLeadFailed(lead, "send_error");
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+            if (!(0, delivery_verify_helpers_1.isEvoAckDeviceDelivered)(mediaAck.status)) {
+                console.warn("[Campanha] ACK imagem ainda não é DELIVERY_ACK; segue texto/botão (sendMedia HTTP ok):", mediaAck.status, lead.phone);
+            }
+            await sleepCampaignMs(800);
+        }
+        else {
+            console.warn("[Campanha] Sem 4 imagens 1080×1080 no snapshot — enviando apenas texto:", campaign.id);
+        }
+        const buttonLabel = outbound.buttonLabel ||
+            normalizeButtonDisplayText(String(campaign.configSnapshot.aiCta || "Quero saber mais"));
+        const buttonUrl = String(outbound.shortUrl || "").trim();
+        let deliveredText = outbound.text;
+        let usedUrlButton = false;
+        let lastSendJson = null;
+        const sendCampaignTextMessage = async (text) => {
+            const sendBody = EVO_SEND_TEXT_V1
+                ? { number: numero, textMessage: { text }, linkPreview: false }
+                : { number: numero, text, textMessage: { text }, linkPreview: false };
+            const sendResult = await callEvoAction(sendUrl, "POST", sendBody);
+            if (!sendResult.ok) {
+                console.error("[Campanha] EVO send falhou:", sendResult.status, String(sendResult.body || "").slice(0, 200));
+                if (isAlternativaMotor) {
+                    await (0, aquecedor_instance_lifecycle_service_1.detectAndMarkRestrictionFromSend)(instancePick.instancia, sendResult.status, String(sendResult.body || ""), { force: true });
+                }
+                const failKind = classifyEvoSendFailure(sendResult.status, sendResult.body);
+                await persistLeadFailed(lead, failKind);
+                return false;
+            }
+            lastSendJson = sendResult.json;
+            return true;
+        };
+        /** HTTP 201 da Evolution ≠ entrega. ERROR no MessageUpdate → não marcar sent. */
+        const confirmCampaignSendAck = async () => {
+            const messageId = extractAquecedorSendMessageId(lastSendJson);
+            if (!messageId) {
+                console.warn("[Campanha] Sem messageId no retorno EVO — não foi possível checar ACK:", lead.phone);
+                return "UNKNOWN";
+            }
+            const ackProbe = await probeAquecedorSendAckStatus(instancePick.instancia, messageId, {
+                maxAttempts: 5,
+                intervalMs: 2000,
+            });
+            console.info(`[Campanha] ACK ${instancePick.instancia} → ${lead.phone} msg=${messageId} status=${ackProbe.status}`);
+            return ackProbe.status;
+        };
+        if (isAlternativaMotor) {
+            const typingMs = (0, alternativa_dispatch_rules_1.computeAlternativaTypingDelayMs)(outbound.text);
+            await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
+        }
+        if (isAlternativaMotor && buttonUrl) {
+            const buttonResult = await sendEvoAlternativaUrlButtonMessage({
+                instanceName: instancePick.instancia,
+                number: numero,
+                messageText: outbound.text,
+                buttonLabel,
+                buttonUrl,
+            });
+            const ghost = isGhostButtonsPayload(buttonResult.json ?? buttonResult.body);
+            if (buttonResult.ok && !ghost) {
+                usedUrlButton = true;
+                deliveredText =
+                    prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+                lastSendJson = buttonResult.json;
+            }
+            else {
+                console.warn("[Campanha Alternativa] sendButtons indisponível; envia texto sem URL (imagem já foi):", buttonResult.status, ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180));
+                const textOnly = prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
+                if (!(await sendCampaignTextMessage(textOnly))) {
+                    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                    return;
+                }
+                deliveredText = textOnly;
+            }
+        }
+        else {
+            if (!(await sendCampaignTextMessage(outbound.text))) {
+                scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+                return;
+            }
+        }
+        let ackStatus = await confirmCampaignSendAck();
+        if ((0, delivery_verify_helpers_1.isEvoAckFailure)(ackStatus)) {
+            console.error(`[Campanha] ACK=${ackStatus} — não marcar sent (EVO HTTP ok, WhatsApp rejeitou):`, instancePick.instancia, lead.phone);
+            await persistLeadFailed(lead, "send_error");
+            scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+            return;
+        }
+        const sentIso = new Date().toISOString();
+        lead.status = "sent";
+        lead.messageText = usedUrlButton
+            ? `${deliveredText}\n[Botão: ${buttonLabel}]`
+            : deliveredText;
+        lead.sentAt = sentIso;
+        lead.shortUrl = outbound.shortUrl || undefined;
+        const sentN = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaign.id && l.status === "sent").length;
+        campaign.sentCount = Math.max(campaign.sentCount, sentN);
+        recordInstanceDailySend(instancePick.instancia);
+        if (ownerEmail) {
+            const creditsApiKind = await resolveDispatchCreditsApiKindForOwner(ownerEmail);
+            if (debitsDisparosCreditsPerSuccessfulSend(creditsApiKind)) {
+                disparosCreditsService.recordShipmentConsumed(ownerEmail, 1, creditsApiKind);
+                if (!disparosCreditsService.isMasterUnlimited(ownerEmail) &&
+                    disparosCreditsService.getRemainingShipmentsForApi(ownerEmail, creditsApiKind) <= 0) {
+                    campaign.status = "paused";
+                    campaign.pauseReason =
+                        "Pausa automática: créditos de envio esgotados para a API Alternativa.";
+                    const supabase = getSupabaseClient();
+                    if (supabase) {
+                        try {
+                            await supabase.from("disparos_campaigns")
+                                .update({ status: "paused" })
+                                .eq("id", campaign.id);
+                        }
+                        catch {
+                            /* */
+                        }
+                    }
+                    queuePersistDisparosLocalState();
+                }
+            }
+        }
+        const persisted = await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
+            shortUrl: lead.shortUrl || null,
+            messageText: lead.messageText || null,
+        });
+        if (!persisted) {
+            console.error("[Campanha] Lead marcado sent em memória mas falhou no Supabase — bloqueando reenvio pelo status local:", lead.id, lead.phone);
+        }
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
     }
-    await persistLeadSentAndCampaignCount(campaign.id, lead.id, campaign.sentCount, {
-        shortUrl: lead.shortUrl || null,
-        messageText: lead.messageText || null,
-    });
-    scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+    finally {
+        campaignDispatchBusy.delete(campaignId);
+    }
 }
 async function runCampaignDispatchTick() {
     const nowSp = nowInSaoPaulo();
@@ -10009,10 +11491,28 @@ async function runCampaignDispatchTick() {
     }
     const running = disparosCampaignsMemory.filter((c) => c.status === "running");
     for (const c of running) {
+        // Sem lista EVO não dá para saber quem está open — não pausa e não mexe em proxy.
+        if (!evoRows.length) {
+            const snap = c.configSnapshot || DISPAROS_DEFAULTS;
+            const janela = isDisparosWindowOpen(snap, nowSp);
+            if (!janela.aberta)
+                continue;
+            const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
+            if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+                if (!(0, alternativa_dispatch_rules_1.isAlternativaBurstWindowOpen)(nowSp))
+                    continue;
+            }
+            await processOneCampaignDispatch(c.id);
+            continue;
+        }
         const health = getCampaignInstanceHealth(c.configSnapshot, evoRows);
         if (health.shouldPauseByDisconnectedRatio || health.needsMoreInstancesForMinimum) {
             c.status = "paused";
-            c.pauseReason = pauseReasonFromInstanceHealth(health);
+            const offline = disparadorInstanceTagsForCampaign(c.configSnapshot, evoRows)
+                .filter((t) => t.connected !== true)
+                .map((t) => t.instanceName);
+            c.pauseReason = pauseReasonFromInstanceHealth(health, offline);
+            // Não desligar Proxy: proxy/set no número ainda pareado gera device_removed (regressão 12/08).
             const supabase = getSupabaseClient();
             if (supabase) {
                 try {
@@ -10031,6 +11531,12 @@ async function runCampaignDispatchTick() {
         const janela = isDisparosWindowOpen(snap, nowSp);
         if (!janela.aberta) {
             continue;
+        }
+        const ownerEmail = String(c.ownerEmail || "").trim().toLowerCase();
+        if (ownerEmail && (await shouldApplyAlternativaDispatchProfile(ownerEmail))) {
+            if (!(0, alternativa_dispatch_rules_1.isAlternativaBurstWindowOpen)(nowSp)) {
+                continue;
+            }
         }
         await processOneCampaignDispatch(c.id);
     }
@@ -10074,10 +11580,17 @@ async function stopAllDispatchActivityOnServer(ownerEmail) {
     queuePersistDisparosLocalState();
     return { pausedCampaignIds: Array.from(pausedSet) };
 }
+function countCampaignLeadsSent(campaignId, sentFallback) {
+    const memLeads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId);
+    if (memLeads.length > 0) {
+        return memLeads.filter((l) => l.status === "sent").length;
+    }
+    return Math.max(0, Number(sentFallback || 0));
+}
 function countCampaignLeadsProcessed(campaignId, sentFallback, totalNumbers) {
     const memLeads = disparosCampaignLeadsMemory.filter((l) => l.campaignId === campaignId);
     if (memLeads.length > 0) {
-        return memLeads.filter((l) => l.status !== "pending").length;
+        return memLeads.filter((l) => l.status === "sent" || l.status === "failed").length;
     }
     const sent = Number(sentFallback || 0);
     const cap = Number(totalNumbers || 0);
@@ -10214,6 +11727,17 @@ app.post("/disparos/campanhas", (req, res, next) => {
                 error: "Selecione ao menos uma instância na lista «Números utilizados no disparador» (Seção 1) antes de criar a campanha. Só essas instâncias poderão enviar as mensagens.",
             });
         }
+        const previousSelectedForProxy = (await loadDisparosConfigFromDb()).selectedDisparadorInstances || [];
+        const previousLower = new Set(previousSelectedForProxy.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+        const selectedLower = new Set(campaignInstances.map((n) => n.toLowerCase()));
+        const toDisableProxy = [...previousLower].filter((n) => !selectedLower.has(n));
+        if (toDisableProxy.length) {
+            (0, evo_instance_proxy_service_1.queueDisableProxyBrasilOnInstances)(toDisableProxy, callEvoAction, EVO_API_BASE);
+        }
+        const proxyPrepareResults = (0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled
+            ? await prepareProxyBrasilForCampaignInstancesNow(campaignInstances)
+            : [];
+        const proxyPrepareNotReady = proxyPrepareResults.filter((r) => !r.ok);
         const now = new Date().toISOString();
         const campaignId = crypto_1.default.randomUUID();
         const campaign = {
@@ -10273,11 +11797,21 @@ app.post("/disparos/campanhas", (req, res, next) => {
             : `Quantidade de linhas importadas: ${importedLineCount}. Quantidade de envios: ${numbers.length} envios.`;
         return res.json({
             ok: true,
-            message: "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos." + msgExtra,
+            message: (proxyPrepareNotReady.length
+                ? "Campanha criada (pausada). Para disparar com Proxy Brasil: reconecte as instâncias com QR campaignProxy=1 e depois ative. "
+                : "Campanha criada com sucesso. Ative-a à direita para iniciar os disparos. ") + msgExtra,
             duplicatesRemoved,
             importedLineCount,
             plannedSendCount: numbers.length,
             importSummary,
+            proxyPrepare: {
+                ready: proxyPrepareResults.filter((r) => r.ok).map((r) => r.instanceName),
+                notReady: proxyPrepareNotReady.map((r) => ({
+                    instanceName: r.instanceName,
+                    reason: r.reason,
+                    needsProxyPairing: r.needsProxyPairing === true,
+                })),
+            },
             durability: {
                 /** Sempre que `queuePersistDisparosLocalState` rodou após criar. */
                 localStateFile: true,
@@ -10301,7 +11835,7 @@ app.post("/disparos/campanhas", (req, res, next) => {
 });
 app.get("/disparos/campanhas", async (req, res) => {
     try {
-        const buildCampaignRuntimeStage = (item, configSnapshot, nowSp, instanceHealth) => {
+        const buildCampaignRuntimeStage = (item, configSnapshot, nowSp, instanceHealth, disconnectedNames) => {
             const st = String(item.status || "").toLowerCase();
             if (st === "finished") {
                 return {
@@ -10318,6 +11852,7 @@ app.get("/disparos/campanhas", async (req, res) => {
                     detail: describeCampaignPauseDetail(instanceHealth, {
                         sentCount: Number(item.sentCount || 0),
                         storedReason: item.pauseReason,
+                        disconnectedNames,
                     }),
                     fillPercent: 100,
                 };
@@ -10360,7 +11895,8 @@ app.get("/disparos/campanhas", async (req, res) => {
         const mapRowToItem = (row) => {
             const id = String(row?.id || "");
             const total = Number(row?.total_numbers ?? row?.totalNumbers ?? 0);
-            const sent = Number(row?.sent_count ?? row?.sentCount ?? 0);
+            const sentRaw = Number(row?.sent_count ?? row?.sentCount ?? 0);
+            const sent = countCampaignLeadsSent(id, sentRaw);
             const progressPercent = progressPercentForCampaignListItem(id, total, sent);
             const processedCount = countCampaignLeadsProcessed(id, sent, total);
             const nextAllowedAtMs = campaignNextAllowedSendAt.get(id) || 0;
@@ -10427,7 +11963,7 @@ app.get("/disparos/campanhas", async (req, res) => {
         }
         for (const c of disparosCampaignsMemory) {
             const total = Number(c.totalNumbers || 0);
-            const sent = Number(c.sentCount || 0);
+            const sent = countCampaignLeadsSent(c.id, Number(c.sentCount || 0));
             const progressPercent = progressPercentForCampaignListItem(c.id, total, sent);
             const processedCount = countCampaignLeadsProcessed(c.id, sent, total);
             byId.set(c.id, {
@@ -10453,27 +11989,69 @@ app.get("/disparos/campanhas", async (req, res) => {
             ? globalDisparos.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : []);
         const nowSp = nowInSaoPaulo();
+        const proxyBrasilOn = Boolean((0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled);
+        const proxyKeysByCampaignId = new Map();
         const items = Array.from(byId.values())
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((item) => {
             const snapshotTags = disparadorInstanceTagsForCampaign(configByCampaignId.get(item.id), evoRows);
             const st = String(item.status || "").toLowerCase();
             const useGlobal = !snapshotTags.length && st === "running" && globalSelected.length > 0;
-            const tags = useGlobal
-                ? disparadorInstanceTagsForCampaign({ ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }, evoRows)
-                : snapshotTags;
-            const instanceHealth = getCampaignInstanceHealth(useGlobal
+            const configForTags = useGlobal
                 ? { ...DISPAROS_DEFAULTS, selectedDisparadorInstances: globalSelected }
-                : configByCampaignId.get(item.id), evoRows);
-            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp, instanceHealth);
+                : configByCampaignId.get(item.id);
+            const tags = useGlobal
+                ? disparadorInstanceTagsForCampaign(configForTags, evoRows)
+                : snapshotTags;
+            const instanceHealth = getCampaignInstanceHealth(configForTags, evoRows);
+            const disconnectedNames = tags
+                .filter((t) => t.connected !== true)
+                .map((t) => String(t.instanceName || "").trim())
+                .filter(Boolean);
+            const runtimeStage = buildCampaignRuntimeStage(item, configByCampaignId.get(item.id), nowSp, instanceHealth, disconnectedNames);
+            const selectedRaw = Array.isArray(configForTags?.selectedDisparadorInstances)
+                ? configForTags.selectedDisparadorInstances
+                    .map((n) => String(n || "").trim())
+                    .filter(Boolean)
+                : [];
+            const evoKeys = resolveSelectedNamesToEvoKeys(selectedRaw, evoRows);
+            const connectedEvoKeys = Array.from(new Set(tags
+                .filter((t) => t.connected === true)
+                .map((t) => {
+                const r = resolveStoredNameToEvoTag(t.instanceName, evoRows);
+                return String(r.instanceKey || t.instanceName || "").trim();
+            })
+                .filter(Boolean)));
+            // Chaves para confirmar proxy: só conectadas (offline não pode bloquear a tag).
+            proxyKeysByCampaignId.set(item.id, connectedEvoKeys.length ? connectedEvoKeys : evoKeys);
+            const proxyProtectionActive = proxyBrasilOn &&
+                connectedEvoKeys.length > 0 &&
+                (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(connectedEvoKeys);
             return {
                 ...item,
                 disparadorInstances: tags,
                 disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
                 instanceHealth,
                 runtimeStage,
+                proxyProtectionActive,
             };
         });
+        if (proxyBrasilOn) {
+            const uniqueKeys = Array.from(new Set(Array.from(proxyKeysByCampaignId.values()).flat()));
+            const uncached = uniqueKeys.filter((k) => (0, evo_instance_proxy_service_1.getConfirmedProxyFind)(k) === null);
+            if (uncached.length) {
+                await Promise.race([
+                    (0, evo_instance_proxy_service_1.refreshConfirmedProxyFindForNames)(uncached, callEvoAction, EVO_API_BASE),
+                    new Promise((resolve) => setTimeout(resolve, 2800)),
+                ]);
+                for (const item of items) {
+                    const keys = proxyKeysByCampaignId.get(item.id) || [];
+                    item.proxyProtectionActive =
+                        keys.length > 0 && (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(keys);
+                }
+            }
+            (0, evo_instance_proxy_service_1.queueConfirmProxyFindForInstanceNames)(uniqueKeys, callEvoAction, EVO_API_BASE);
+        }
         return res.json({ items });
     }
     catch {
@@ -10769,7 +12347,18 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
         const nextStatus = ativa ? "running" : "paused";
         let campaign = disparosCampaignsMemory.find((c) => c.id === id);
         if (!campaign) {
-            campaign = (await hydrateCampaignFromDbIfNeeded(id)) || undefined;
+            // lightLeads: Ativar no 1º clique sem baixar message_text de milhares de leads.
+            campaign =
+                (await hydrateCampaignFromDbIfNeeded(id, { lightLeads: true })) || undefined;
+        }
+        else {
+            const hasLeads = disparosCampaignLeadsMemory.some((l) => l.campaignId === id);
+            if (ativa && !hasLeads) {
+                await hydrateCampaignFromDbIfNeeded(id, {
+                    lightLeads: true,
+                    skipQueueLocalPersist: true,
+                });
+            }
         }
         if (!campaign) {
             return res.status(404).json({ error: "Campanha não encontrada." });
@@ -10811,6 +12400,24 @@ app.post("/disparos/campanhas/:id/estado", async (req, res) => {
                     error: "Campanha bloqueada: 50% ou mais das instâncias selecionadas estão desconectadas. Reconecte as instâncias ou use «+ Instâncias».",
                     instanceHealth: health,
                 });
+            }
+            const selectedForProxy = Array.isArray(campaign.configSnapshot?.selectedDisparadorInstances)
+                ? campaign.configSnapshot.selectedDisparadorInstances
+                    .map((n) => String(n || "").trim())
+                    .filter(Boolean)
+                : [];
+            if (selectedForProxy.length && (0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled) {
+                // Ativar não faz proxy/set nem restart — isso derruba o pareamento (campanha Seguradoras).
+                // A Proxy já foi ligada na seleção/criação. Só marca ready se a sessão já está open.
+                for (const rawName of selectedForProxy) {
+                    const live = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(rawName);
+                    if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(live)) {
+                        (0, evo_instance_proxy_service_1.markProxyBrasilSessionReadyForSend)(rawName, {
+                            state: live,
+                            reason: "ativar campanha — sessão open, sem proxy/set",
+                        });
+                    }
+                }
             }
         }
         campaign.status = nextStatus;
@@ -10920,15 +12527,16 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         }
         const prev = campaign.configSnapshot || { ...DISPAROS_DEFAULTS };
         const healthBefore = getCampaignInstanceHealth(prev, evoRows);
+        const instancesToAdd = computeCampaignInstancesToAdd(healthBefore);
         let incoming = [];
         if (auto) {
-            if (!healthBefore.needsMoreInstancesForMinimum) {
+            if (instancesToAdd <= 0) {
                 return res.status(400).json({
                     error: "A campanha já possui números conectados suficientes.",
                     instanceHealth: healthBefore,
                 });
             }
-            incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, healthBefore.missingConnectedForMinimum);
+            incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, instancesToAdd);
             if (!incoming.length) {
                 return res.status(409).json({
                     error: "Não há números disponíveis no aquecedor nem entre os comprados. Compre mais números para continuar a campanha.",
@@ -10948,10 +12556,14 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         const prevSelected = Array.isArray(prev.selectedDisparadorInstances)
             ? prev.selectedDisparadorInstances.map((n) => String(n || "").trim()).filter(Boolean)
             : [];
-        const mergedSelected = Array.from(new Set([...prevSelected, ...incoming]));
+        const swapped = mergeCampaignInstancesReplacingBlocked({
+            prevSelected,
+            incoming,
+            evoRows,
+        });
         campaign.configSnapshot = parseDisparosConfig({
             ...prev,
-            selectedDisparadorInstances: mergedSelected,
+            selectedDisparadorInstances: swapped.selected,
         });
         const supabase = getSupabaseClient();
         if (supabase) {
@@ -10967,18 +12579,33 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
         queuePersistDisparosLocalState();
         const instanceHealth = getCampaignInstanceHealth(campaign.configSnapshot, evoRows);
         const stillNeedsMore = instanceHealth.needsMoreInstancesForMinimum;
+        // Proxy: liga nos novos; desliga nos bloqueados removidos da campanha.
+        if (swapped.added.length) {
+            queueProxyBrasilPrepareForCampaignInstances(swapped.added);
+        }
+        if (swapped.removedBlocked.length) {
+            queueDisableProxyBrasilForDisconnectedCampaignInstances(campaign, evoRows, swapped.removedBlocked);
+        }
+        const addedCount = swapped.added.length;
+        const removedCount = swapped.removedBlocked.length;
+        const swapNote = removedCount > 0
+            ? ` Substituímos ${removedCount} número(s) bloqueado(s)/offline (${swapped.removedBlocked.join(", ")}).`
+            : "";
         return res.json({
             ok: true,
             id,
             auto,
             selectedDisparadorInstances: campaign.configSnapshot.selectedDisparadorInstances,
-            addedCount: Math.max(0, mergedSelected.length - prevSelected.length),
+            addedCount,
+            removedBlockedCount: removedCount,
+            removedBlocked: swapped.removedBlocked,
             instanceHealth,
             stillNeedsMore,
-            needsPurchase: stillNeedsMore && incoming.length < healthBefore.missingConnectedForMinimum,
-            message: stillNeedsMore
-                ? `Adicionamos ${Math.max(0, mergedSelected.length - prevSelected.length)} número(s), mas ainda faltam ${instanceHealth.missingConnectedForMinimum} conectado(s). Compre mais números para concluir a campanha.`
-                : "Instâncias adicionadas à campanha. Você já pode ativar novamente.",
+            needsPurchase: computeCampaignInstancesToAdd(instanceHealth) > 0 &&
+                addedCount < instancesToAdd,
+            message: computeCampaignInstancesToAdd(instanceHealth) > 0
+                ? `Adicionamos ${addedCount} número(s).${swapNote} Ainda há instâncias desconectadas ou abaixo do mínimo. Compre/adicione mais ou reconecte e ative de novo.`
+                : `Instâncias atualizadas (${addedCount} adicionada(s)).${swapNote} Proxy Brasil será ligada nos novos números. Você já pode ativar novamente.`,
         });
     }
     catch (error) {
@@ -11100,6 +12727,7 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
         if (!campaign) {
             return res.status(404).json({ error: "Campanha não encontrada." });
         }
+        queueReleaseProxyBrasilAfterCampaignEnd(campaign);
         const idx = disparosCampaignsMemory.findIndex((c) => c.id === id);
         if (idx !== -1)
             disparosCampaignsMemory.splice(idx, 1);
@@ -11129,8 +12757,10 @@ app.delete("/disparos/campanhas/:id", async (req, res) => {
 (0, waba_campaign_intake_routes_1.registerWabaCampaignIntakeRoutes)(app);
 (0, waba_support_routes_1.registerWabaSupportRoutes)(app);
 (0, waba_push_routes_1.registerWabaPushRoutes)(app);
+(0, waba_leads_cnpj_routes_1.registerWabaLeadsCnpjRoutes)(app);
 (0, waba_admin_routes_1.registerWabaAdminRoutes)(app);
 (0, waba_operacional_campanhas_routes_1.registerWabaOperacionalCampanhasRoutes)(app);
+(0, waba_device_cloud_routes_1.registerDeviceCloudRoutes)(app);
 new waba_system_user_service_1.WabaSystemUserService().ensureBootstrapFromEnvMaster();
 const httpServer = app.listen(PORT, () => {
     const publicRoot = base_path_1.BASE_PATH
@@ -11217,7 +12847,14 @@ const httpServer = app.listen(PORT, () => {
                 console.log("[campanhas] Disparador EVO ativo (ambiente v01 — tick a cada 7s).");
             }
             setInterval(() => {
-                runCampaignDispatchTick().catch((err) => console.error("[Campanhas] tick:", err));
+                if (campaignDispatchTickRunning)
+                    return;
+                campaignDispatchTickRunning = true;
+                runCampaignDispatchTick()
+                    .catch((err) => console.error("[Campanhas] tick:", err))
+                    .finally(() => {
+                    campaignDispatchTickRunning = false;
+                });
             }, 7000);
         }
         else if (!ENABLE_BACKGROUND_PROCESSING) {

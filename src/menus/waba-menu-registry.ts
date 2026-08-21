@@ -37,6 +37,14 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     profile: "all",
   },
   {
+    id: "dispositivos",
+    label: "Dispositivos",
+    tab: "dispositivos",
+    section: "nao-oficial",
+    sectionLabel: SECTION_LABELS["nao-oficial"],
+    profile: "production",
+  },
+  {
     id: "instancias",
     label: "Instâncias",
     tab: "instancias",

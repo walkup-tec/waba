@@ -15,12 +15,14 @@ const waba_subscriber_segment_1 = require("../subscribers/waba-subscriber-segmen
 const waba_campaign_intake_repository_1 = require("./waba-campaign-intake.repository");
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_spreadsheet_util_1 = require("./waba-campaign-spreadsheet.util");
+const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
 const waba_operacional_campaign_notify_service_1 = require("../mail/waba-operacional-campaign-notify.service");
 const waba_campaign_supplier_assignment_service_1 = require("../services/waba-campaign-supplier-assignment.service");
 const waba_disparos_dashboard_service_1 = require("./waba-disparos-dashboard.service");
 const waba_subscriber_repository_1 = require("../subscribers/waba-subscriber.repository");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
 const waba_campaign_intake_idempotency_1 = require("./waba-campaign-intake-idempotency");
+const waba_campaign_intake_constants_1 = require("./waba-campaign-intake.constants");
 const intakeRepository = new waba_campaign_intake_repository_1.WabaCampaignIntakeRepository();
 const disparosCreditsService = new waba_disparos_credits_service_1.WabaDisparosCreditsService();
 const masterPolicyService = new waba_master_disparos_policy_service_1.WabaMasterDisparosPolicyService();
@@ -69,11 +71,18 @@ const resolvePlannedSendCount = (ownerEmail, importedLineCount, requestedSendCou
             error: "Informe a quantidade de envios desejada.",
         };
     }
+    if (requestedSendCount < waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+        return {
+            plannedSendCount: 0,
+            isMaster: unlimitedCredits,
+            error: `A campanha deve ter no mínimo ${waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} envios.`,
+        };
+    }
     if (requestedSendCount > importedLineCount) {
         return {
             plannedSendCount: 0,
             isMaster: unlimitedCredits,
-            error: `A planilha contém apenas ${importedLineCount} linha(s). Reduza a quantidade ou importe mais contatos.`,
+            error: `O arquivo contém apenas ${importedLineCount} linha(s). Reduza a quantidade ou importe mais contatos.`,
         };
     }
     if (unlimitedCredits) {
@@ -248,9 +257,16 @@ const parseTextOptions = (body) => {
         return null;
     return options;
 };
+const parseWhatsappName = (body) => {
+    const name = String(body.whatsappName ?? "").trim();
+    if (name.length < 2 || name.length > 80)
+        return "";
+    return name;
+};
 const handleCampaignIntakeUpload = (req, res, next) => {
     uploadIntake.fields([
         { name: "image", maxCount: 1 },
+        { name: "whatsappLogo", maxCount: 1 },
         { name: "spreadsheet", maxCount: 1 },
     ])(req, res, (err) => {
         if (!err) {
@@ -275,6 +291,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             const clientRequestId = parseClientRequestId(body);
             const campaignName = String(body.campaignName ?? "").trim();
             const regionDdd = normalizeDdd(String(body.regionDdd ?? ""));
+            const whatsappName = parseWhatsappName(body);
             const textOptions = parseTextOptions(body);
             const responseLink = parseResponseLink(body);
             if (campaignName.length < 2) {
@@ -282,6 +299,11 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             }
             if (!regionDdd) {
                 return res.status(400).json({ error: "Informe um DDD válido (2 dígitos)." });
+            }
+            if (!whatsappName) {
+                return res.status(400).json({
+                    error: "Informe o nome no WhatsApp (entre 2 e 80 caracteres).",
+                });
             }
             if (!textOptions) {
                 return res.status(400).json({ error: "Preencha as 3 opções de texto (mínimo 8 caracteres cada)." });
@@ -291,30 +313,45 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             }
             const files = req.files;
             const imageFile = files?.image?.[0];
+            const whatsappLogoFile = files?.whatsappLogo?.[0];
             const spreadsheetFile = files?.spreadsheet?.[0];
             if (!imageFile) {
                 return res.status(400).json({ error: "Envie a imagem da campanha (1080×1080 px)." });
             }
+            if (!whatsappLogoFile) {
+                return res.status(400).json({ error: "Envie a logo do WhatsApp (500×500 px)." });
+            }
             if (!spreadsheetFile) {
-                return res.status(400).json({ error: "Envie a planilha Excel com a lista de leads." });
+                return res.status(400).json({ error: "Envie o arquivo Excel ou TXT com a lista de leads." });
             }
             const imageMime = String(imageFile.mimetype || "").toLowerCase();
             if (!imageMime.startsWith("image/")) {
                 return res.status(400).json({ error: "A imagem deve ser PNG ou JPG." });
             }
+            const logoMime = String(whatsappLogoFile.mimetype || "").toLowerCase();
+            if (!logoMime.startsWith("image/")) {
+                return res.status(400).json({ error: "A logo do WhatsApp deve ser PNG ou JPG." });
+            }
             const sheetName = String(spreadsheetFile.originalname || "").toLowerCase();
-            if (!sheetName.endsWith(".xlsx") && !sheetName.endsWith(".xls")) {
-                return res.status(400).json({ error: "A lista de clientes deve ser um arquivo Excel (.xlsx ou .xls)." });
+            if (!(0, waba_campaign_spreadsheet_util_1.isCampaignLeadsFileName)(sheetName)) {
+                return res.status(400).json({
+                    error: "A lista de clientes deve ser Excel (.xlsx ou .xls) ou TXT (.txt).",
+                });
             }
             let importedLineCount = 0;
             try {
-                importedLineCount = (0, waba_campaign_spreadsheet_util_1.countSpreadsheetImportedRows)(spreadsheetFile.buffer);
+                importedLineCount = (0, waba_campaign_spreadsheet_util_1.countLeadsImportedRows)(spreadsheetFile.buffer, sheetName);
             }
             catch {
-                return res.status(400).json({ error: "Não foi possível ler a planilha Excel." });
+                return res.status(400).json({ error: "Não foi possível ler o arquivo de leads." });
             }
             if (importedLineCount < 1) {
-                return res.status(400).json({ error: "A planilha não contém linhas de leads." });
+                return res.status(400).json({ error: "O arquivo não contém linhas de leads." });
+            }
+            if (importedLineCount < waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT) {
+                return res.status(400).json({
+                    error: `O arquivo precisa ter no mínimo ${waba_campaign_intake_constants_1.WABA_CAMPAIGN_MIN_PLANNED_SEND_COUNT} contatos para gerar a campanha.`,
+                });
             }
             const { apiKind, error: apiKindError } = parseRequestedApiKind(body, auth.email);
             if (apiKindError) {
@@ -328,9 +365,11 @@ const registerWabaCampaignIntakeRoutes = (app) => {
             const submissionFingerprint = (0, waba_campaign_intake_idempotency_1.buildCampaignIntakeSubmissionFingerprint)({
                 campaignName,
                 regionDdd,
+                whatsappName,
                 plannedSendCount,
                 apiKind,
                 imageByteLength: imageFile.buffer.length,
+                whatsappLogoByteLength: whatsappLogoFile.buffer.length,
                 spreadsheetByteLength: spreadsheetFile.buffer.length,
             });
             const duplicateWindowMs = (0, waba_campaign_intake_idempotency_1.resolveCampaignIntakeDuplicateWindowMs)();
@@ -339,10 +378,10 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 : `${auth.email}:fp:${submissionFingerprint}`;
             let trimmedSpreadsheetBuffer;
             try {
-                trimmedSpreadsheetBuffer = (0, waba_campaign_spreadsheet_util_1.trimSpreadsheetBufferToRowCount)(spreadsheetFile.buffer, plannedSendCount);
+                trimmedSpreadsheetBuffer = (0, waba_campaign_spreadsheet_util_1.trimLeadsBufferToRowCount)(spreadsheetFile.buffer, plannedSendCount, sheetName);
             }
             catch {
-                return res.status(400).json({ error: "Não foi possível preparar a planilha para envio." });
+                return res.status(400).json({ error: "Não foi possível preparar o arquivo de leads para envio." });
             }
             const intakeResult = await (0, waba_campaign_intake_idempotency_1.withCampaignIntakeSubmissionLock)(submissionLockKey, async () => {
                 const duplicate = findDuplicateCampaignIntake(auth.email, clientRequestId, submissionFingerprint, duplicateWindowMs);
@@ -353,12 +392,18 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 const intakeId = (0, node_crypto_1.randomUUID)();
                 const storageDir = (0, waba_campaign_intake_repository_1.resolveCampaignIntakeStorageDir)(intakeId);
                 const imageExt = imageMime.includes("png") ? ".png" : ".jpg";
+                const logoExt = logoMime.includes("png") ? ".png" : ".jpg";
                 const imageStoredPath = node_path_1.default.join(storageDir, `campaign-image${imageExt}`);
-                const spreadsheetStoredPath = node_path_1.default.join(storageDir, spreadsheetFile.originalname || "leads.xlsx");
-                const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.xlsx`;
+                const whatsappLogoStoredPath = node_path_1.default.join(storageDir, `whatsapp-logo${logoExt}`);
+                const originalLeadsName = spreadsheetFile.originalname ||
+                    ((0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sheetName) ? "leads.txt" : "leads.xlsx");
+                const spreadsheetStoredPath = node_path_1.default.join(storageDir, originalLeadsName);
+                const trimmedExt = (0, waba_campaign_spreadsheet_util_1.isCampaignLeadsTxtFileName)(sheetName) ? "txt" : "xlsx";
+                const spreadsheetTrimmedFileName = `leads-${plannedSendCount}-envios.${trimmedExt}`;
                 const spreadsheetTrimmedPath = node_path_1.default.join(storageDir, spreadsheetTrimmedFileName);
                 try {
                     (0, node_fs_1.writeFileSync)(imageStoredPath, imageFile.buffer);
+                    (0, node_fs_1.writeFileSync)(whatsappLogoStoredPath, whatsappLogoFile.buffer);
                     (0, node_fs_1.writeFileSync)(spreadsheetStoredPath, spreadsheetFile.buffer);
                     (0, node_fs_1.writeFileSync)(spreadsheetTrimmedPath, trimmedSpreadsheetBuffer);
                 }
@@ -372,11 +417,14 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                     ownerEmail: auth.email,
                     campaignName,
                     regionDdd,
+                    whatsappName,
+                    whatsappLogoFileName: whatsappLogoFile.originalname || `whatsapp-logo${logoExt}`,
+                    whatsappLogoStoredPath,
                     textOptions,
                     responseLink,
                     imageFileName: imageFile.originalname || `campaign-image${imageExt}`,
                     imageStoredPath,
-                    spreadsheetFileName: spreadsheetFile.originalname || "leads.xlsx",
+                    spreadsheetFileName: spreadsheetFile.originalname || originalLeadsName,
                     spreadsheetStoredPath,
                     spreadsheetTrimmedPath,
                     spreadsheetTrimmedFileName,
@@ -389,10 +437,16 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                     createdAt: now,
                     updatedAt: now,
                 });
+                let persisted = intake;
                 if (!isMaster && plannedSendCount > 0) {
-                    disparosCreditsService.recordShipmentConsumed(auth.email, plannedSendCount, apiKind);
+                    const creditFunding = disparosCreditsService.consumeShipments(auth.email, plannedSendCount, apiKind);
+                    persisted =
+                        intakeRepository.updateById(intake.id, {
+                            creditFunding,
+                            updatedAt: new Date().toISOString(),
+                        }) ?? intake;
                 }
-                const finalized = finalizeIntakeAfterCreate(intake);
+                const finalized = finalizeIntakeAfterCreate(persisted);
                 return { deduplicated: false, intake: finalized };
             });
             if (intakeResult.deduplicated) {
@@ -450,7 +504,7 @@ const registerWabaCampaignIntakeRoutes = (app) => {
                 error: "O relatório fica disponível quando a campanha estiver com status Finalizado.",
             });
         }
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const indicators = report
             ? {
                 totalLeads: report.totalLeads,

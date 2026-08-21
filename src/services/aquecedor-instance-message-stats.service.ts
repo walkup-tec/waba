@@ -2,6 +2,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveDataFile } from "../data-path";
+import {
+  aquecedorChipKeyFromNumber,
+  buildAquecedorNumberVariantToChipMap,
+  resolveNumberVariantToChip,
+} from "../aquecedor/aquecedor-chip-identity";
+import { brazilWhatsAppNumbersMatch } from "../instances/evo-instance-phone.service";
 
 const AQUECEDOR_ENVIOS_LOG_FILE = resolveDataFile("aquecedor-envios-log.json");
 const INSTANCE_ALIASES_FILE = resolveDataFile("instance-aliases.json");
@@ -50,45 +56,6 @@ async function loadInstanceAliasesMap(): Promise<Map<string, string>> {
   }
 }
 
-function buildPrimaryResolver(
-  instanceNames: string[],
-  aliasesMap: Map<string, string>,
-): { resolve: (raw: string) => string | null; primaries: string[] } {
-  const primaryByLower = new Map<string, string>();
-  for (const name of instanceNames) {
-    const trimmed = String(name || "").trim();
-    if (!trimmed) continue;
-    primaryByLower.set(trimmed.toLowerCase(), trimmed);
-  }
-  const bind = (raw: string, primary: string) => {
-    const key = String(raw || "").trim();
-    if (!key) return;
-    primaryByLower.set(key.toLowerCase(), primary);
-  };
-  for (const name of instanceNames) {
-    const primary = String(name || "").trim();
-    if (!primary) continue;
-    bind(primary, primary);
-    const alias = aliasesMap.get(primary);
-    if (alias) bind(alias, primary);
-  }
-  for (const [technical, alias] of aliasesMap.entries()) {
-    const primary = primaryByLower.get(normalizeKey(technical));
-    if (primary) bind(alias, primary);
-  }
-  const primaries = Array.from(
-    new Set(instanceNames.map((n) => String(n || "").trim()).filter(Boolean)),
-  );
-  return {
-    primaries,
-    resolve: (raw: string) => {
-      const key = normalizeKey(raw);
-      if (!key) return null;
-      return primaryByLower.get(key) || null;
-    },
-  };
-}
-
 function initStatsMap(primaries: string[]): Map<string, AquecedorInstanceMessageStats> {
   const map = new Map<string, AquecedorInstanceMessageStats>();
   for (const name of primaries) {
@@ -119,11 +86,96 @@ async function readLocalAquecedorEnviosLog(): Promise<LocalEnvioRow[]> {
   }
 }
 
-async function aggregateFromSupabase(
+/**
+ * Constrói nome-de-instância (histórico) → chip, a partir dos números atuais
+ * + controle_instancia + aliases.
+ */
+async function buildHistoricalNameToChipMap(
+  instanceNames: string[],
+  numberByInstance: Map<string, string>,
+  supabase: SupabaseClient | null,
+): Promise<{ nameToChip: Map<string, string>; chipToPrimary: Map<string, string> }> {
+  const connected = instanceNames.map((name) => ({
+    instancia: name,
+    numero: numberByInstance.get(name) || numberByInstance.get(name.toLowerCase()) || "",
+  }));
+  const variantToChip = buildAquecedorNumberVariantToChipMap(
+    connected.filter((c) => c.numero),
+  );
+  const chipToPrimary = new Map<string, string>();
+  const nameToChip = new Map<string, string>();
+
+  for (const name of instanceNames) {
+    const chip = aquecedorChipKeyFromNumber(
+      numberByInstance.get(name) || numberByInstance.get(name.toLowerCase()) || "",
+    );
+    if (!chip) continue;
+    nameToChip.set(name.toLowerCase(), chip);
+    if (!chipToPrimary.has(chip)) chipToPrimary.set(chip, name);
+  }
+
+  const aliasesMap = await loadInstanceAliasesMap();
+  for (const [technical, alias] of aliasesMap.entries()) {
+    const techChip = nameToChip.get(normalizeKey(technical));
+    const aliasChip = nameToChip.get(normalizeKey(alias));
+    const chip = techChip || aliasChip;
+    if (!chip) continue;
+    nameToChip.set(normalizeKey(technical), chip);
+    nameToChip.set(normalizeKey(alias), chip);
+  }
+
+  if (supabase && chipToPrimary.size) {
+    try {
+      const { data } = await supabase
+        .from("controle_instancia")
+        .select("instancia, numero_whatsapp")
+        .limit(500);
+      for (const row of Array.isArray(data) ? data : []) {
+        const inst = String((row as any)?.instancia || "").trim();
+        const chip = resolveNumberVariantToChip(
+          String((row as any)?.numero_whatsapp || ""),
+          variantToChip,
+        );
+        if (!inst || !chip || !chipToPrimary.has(chip)) {
+          // Também aceita match por brazilWhatsAppNumbersMatch contra chips conhecidos
+          const rawChip = aquecedorChipKeyFromNumber(String((row as any)?.numero_whatsapp || ""));
+          let matched = "";
+          for (const known of chipToPrimary.keys()) {
+            if (rawChip && brazilWhatsAppNumbersMatch(known, rawChip)) {
+              matched = known;
+              break;
+            }
+          }
+          if (!matched || !inst) continue;
+          nameToChip.set(inst.toLowerCase(), matched);
+          continue;
+        }
+        nameToChip.set(inst.toLowerCase(), chip);
+      }
+    } catch {
+      /* optional */
+    }
+  }
+
+  return { nameToChip, chipToPrimary };
+}
+
+async function aggregateFromSupabaseByChip(
   supabase: SupabaseClient,
+  nameToChip: Map<string, string>,
+  chipToPrimary: Map<string, string>,
   map: Map<string, AquecedorInstanceMessageStats>,
-  resolve: (raw: string) => string | null,
 ): Promise<void> {
+  const chipStats = new Map<string, AquecedorInstanceMessageStats>();
+  for (const chip of chipToPrimary.keys()) {
+    chipStats.set(chip, { sent: 0, received: 0, total: 0 });
+  }
+  const resolveChip = (rawName: string): string | null => {
+    const key = normalizeKey(rawName);
+    if (!key) return null;
+    return nameToChip.get(key) || null;
+  };
+
   let offset = 0;
   for (let page = 0; page < LOGS_MAX_PAGES; page += 1) {
     const { data, error } = await supabase
@@ -135,31 +187,83 @@ async function aggregateFromSupabase(
     const rows = Array.isArray(data) ? data : [];
     if (!rows.length) break;
     for (const row of rows) {
-      const from = resolve(String(row?.instancia_origem || ""));
-      const to = resolve(String(row?.instancia_destino || ""));
-      if (from) bump(map, from, "sent");
-      if (to) bump(map, to, "received");
+      const fromChip = resolveChip(String(row?.instancia_origem || ""));
+      const toChip = resolveChip(String(row?.instancia_destino || ""));
+      if (fromChip && chipStats.has(fromChip)) {
+        const s = chipStats.get(fromChip)!;
+        s.sent += 1;
+        s.total = s.sent + s.received;
+      }
+      if (toChip && chipStats.has(toChip)) {
+        const s = chipStats.get(toChip)!;
+        s.received += 1;
+        s.total = s.sent + s.received;
+      }
     }
     offset += rows.length;
     if (rows.length < LOGS_PAGE_SIZE) break;
   }
+
+  for (const [chip, stats] of chipStats.entries()) {
+    // Replica o mesmo volume do chip em todas as linhas da UI que apontam para ele
+    // (rename / aliases não fragmentam a leitura).
+    for (const [nameLower, mappedChip] of nameToChip.entries()) {
+      if (mappedChip !== chip) continue;
+      for (const primary of map.keys()) {
+        if (normalizeKey(primary) !== nameLower) continue;
+        const row = map.get(primary);
+        if (!row) continue;
+        row.sent = stats.sent;
+        row.received = stats.received;
+        row.total = stats.total;
+      }
+    }
+  }
 }
 
-function aggregateFromLocalLog(
+function aggregateFromLocalLogByChip(
   rows: LocalEnvioRow[],
+  nameToChip: Map<string, string>,
+  chipToPrimary: Map<string, string>,
   map: Map<string, AquecedorInstanceMessageStats>,
-  resolve: (raw: string) => string | null,
   ownerEmail: string,
 ): void {
   const owner = normalizeEmail(ownerEmail);
+  const chipStats = new Map<string, AquecedorInstanceMessageStats>();
+  for (const chip of chipToPrimary.keys()) {
+    chipStats.set(chip, { sent: 0, received: 0, total: 0 });
+  }
   for (const row of rows) {
     if (String(row?.status || "") !== "Envio com Sucesso") continue;
     const rowOwner = normalizeEmail(String(row?.ownerEmail || ""));
     if (owner && rowOwner && rowOwner !== owner) continue;
-    const from = resolve(String(row?.instanciaOrigem || ""));
-    const to = resolve(String(row?.instanciaDestino || ""));
-    if (from) bump(map, from, "sent");
-    if (to) bump(map, to, "received");
+    const fromChip = nameToChip.get(normalizeKey(String(row?.instanciaOrigem || "")));
+    const toChip = nameToChip.get(normalizeKey(String(row?.instanciaDestino || "")));
+    if (fromChip && chipStats.has(fromChip)) {
+      const s = chipStats.get(fromChip)!;
+      s.sent += 1;
+      s.total = s.sent + s.received;
+    }
+    if (toChip && chipStats.has(toChip)) {
+      const s = chipStats.get(toChip)!;
+      s.received += 1;
+      s.total = s.sent + s.received;
+    }
+  }
+  for (const [chip, stats] of chipStats.entries()) {
+    // Replica o mesmo volume do chip em todas as linhas da UI que apontam para ele
+    // (rename / aliases não fragmentam a leitura).
+    for (const [nameLower, mappedChip] of nameToChip.entries()) {
+      if (mappedChip !== chip) continue;
+      for (const primary of map.keys()) {
+        if (normalizeKey(primary) !== nameLower) continue;
+        const row = map.get(primary);
+        if (!row) continue;
+        row.sent = stats.sent;
+        row.received = stats.received;
+        row.total = stats.total;
+      }
+    }
   }
 }
 
@@ -168,6 +272,8 @@ export async function getAquecedorMessageStatsForInstances(
   options: {
     ownerEmail?: string | null;
     supabase?: SupabaseClient | null;
+    /** numero por nome de instância (UI/lista) — obrigatório para unificar por chip. */
+    numberByInstance?: Map<string, string> | Record<string, string>;
   } = {},
 ): Promise<Map<string, AquecedorInstanceMessageStats>> {
   const primaries = Array.from(
@@ -175,23 +281,42 @@ export async function getAquecedorMessageStatsForInstances(
   );
   if (!primaries.length) return new Map();
 
+  const numberByInstance = new Map<string, string>();
+  if (options.numberByInstance instanceof Map) {
+    for (const [k, v] of options.numberByInstance.entries()) {
+      numberByInstance.set(String(k), String(v || ""));
+      numberByInstance.set(String(k).toLowerCase(), String(v || ""));
+    }
+  } else if (options.numberByInstance && typeof options.numberByInstance === "object") {
+    for (const [k, v] of Object.entries(options.numberByInstance)) {
+      numberByInstance.set(k, String(v || ""));
+      numberByInstance.set(k.toLowerCase(), String(v || ""));
+    }
+  }
+
   const ownerEmail = normalizeEmail(String(options.ownerEmail || ""));
-  const cacheKey = `${ownerEmail}::${primaries.map((n) => n.toLowerCase()).sort().join("|")}`;
+  const cacheKey = `${ownerEmail}::chip::${primaries
+    .map((n) => `${n}:${aquecedorChipKeyFromNumber(numberByInstance.get(n) || "")}`)
+    .sort()
+    .join("|")}`;
   const now = Date.now();
   if (statsCache && statsCacheKey === cacheKey && now - statsCache.at < STATS_CACHE_MS) {
     return new Map(statsCache.map);
   }
 
-  const aliasesMap = await loadInstanceAliasesMap();
-  const { resolve, primaries: resolvedPrimaries } = buildPrimaryResolver(primaries, aliasesMap);
-  const map = initStatsMap(resolvedPrimaries);
-
+  const map = initStatsMap(primaries);
   const supabase = options.supabase ?? null;
-  if (supabase) {
-    await aggregateFromSupabase(supabase, map, resolve);
+  const { nameToChip, chipToPrimary } = await buildHistoricalNameToChipMap(
+    primaries,
+    numberByInstance,
+    supabase,
+  );
+
+  if (supabase && chipToPrimary.size) {
+    await aggregateFromSupabaseByChip(supabase, nameToChip, chipToPrimary, map);
   } else {
     const localRows = await readLocalAquecedorEnviosLog();
-    aggregateFromLocalLog(localRows, map, resolve, ownerEmail);
+    aggregateFromLocalLogByChip(localRows, nameToChip, chipToPrimary, map, ownerEmail);
   }
 
   statsCache = { at: now, map: new Map(map) };

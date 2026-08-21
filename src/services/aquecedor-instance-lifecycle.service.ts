@@ -5,13 +5,23 @@ import { resolveDataFile } from "../data-path";
 const LIFECYCLE_FILE = resolveDataFile("aquecedor-instance-lifecycle.json");
 const EVO_INSTANCES_CACHE_FILE = resolveDataFile("evo-instances-cache.json");
 const INSTANCE_ALIASES_FILE = resolveDataFile("instance-aliases.json");
-const RESTRICTION_WAIT_MS = 6 * 60 * 60 * 1000;
+/** Pausa humana após indício de restrição (antes era 6h). */
+export const AQUECEDOR_HUMAN_PAUSE_MS = 3 * 60 * 60 * 1000;
+const HUMAN_PAUSE_MS = AQUECEDOR_HUMAN_PAUSE_MS;
+/**
+ * Após sair de Preparando, o número tem 6h de envio sem poder entrar em pausa humana.
+ * Só depois dessa janela a pausa de 3h pode ser aplicada.
+ */
+export const AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+const POST_PREPARING_SEND_WINDOW_MS = AQUECEDOR_POST_PREPARING_SEND_WINDOW_MS;
 export const AQUECEDOR_STAGGER_PROMOTE_MS = 6 * 60 * 60 * 1000;
 /** Duração da fase Preparando (6h desde a integração). */
 export const AQUECEDOR_PREPARING_DURATION_MS = AQUECEDOR_STAGGER_PROMOTE_MS;
 const PREPARING_DURATION_MS = AQUECEDOR_PREPARING_DURATION_MS;
 /** Instâncias integradas antes desta data entram direto como ativas (legado). */
 export const AQUECEDOR_LIFECYCLE_GRANDFATHER_CUTOFF_ISO = "2026-06-22T00:00:00.000Z";
+
+export const AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL = "3 horas pausa humana";
 
 export type AquecedorInstancePhase = "preparing" | "active" | "restricted_wait";
 
@@ -158,15 +168,36 @@ function isGrandfatherEligible(createdAt: string | null): boolean {
   return !Number.isFinite(createdMs) || createdMs < cutoffMs;
 }
 
-function shouldRevertGrandfatherToPreparing(
+function applyPreparingPhase(row: AquecedorInstanceLifecycleRow, preparingSince: string): void {
+  row.phase = "preparing";
+  row.preparingSince = preparingSince;
+  row.activatedAt = null;
+}
+
+/**
+ * Reverte active → Preparando só quando o número ainda NÃO tinha ativação real.
+ * Reconexão QR / recreate na EVO atualiza createdAt e NÃO pode zerar aquecimento.
+ */
+function shouldResetActiveToPreparing(
   row: AquecedorInstanceLifecycleRow,
-  createdAt: string | null,
+  integrationAt: string | null,
 ): boolean {
-  if (row.phase !== "active" || row.preparingSince) return false;
-  if (isGrandfatherEligible(createdAt)) return false;
-  const createdMs = new Date(createdAt || 0).getTime();
-  if (!Number.isFinite(createdMs)) return false;
-  return Date.now() - createdMs < PREPARING_DURATION_MS;
+  if (row.phase !== "active") return false;
+  // Já ativado: reconectar preserva idade e nível de aquecimento.
+  if (row.activatedAt) return false;
+  if (!integrationAt || isGrandfatherEligible(integrationAt)) return false;
+  const integMs = new Date(integrationAt).getTime();
+  if (!Number.isFinite(integMs)) return false;
+  return Date.now() - integMs < PREPARING_DURATION_MS;
+}
+
+function maybeResetActiveToPreparing(
+  row: AquecedorInstanceLifecycleRow,
+  integrationAt: string | null,
+): boolean {
+  if (!shouldResetActiveToPreparing(row, integrationAt)) return false;
+  applyPreparingPhase(row, String(integrationAt));
+  return true;
 }
 
 async function reconcileGrandfatheredActiveRow(
@@ -174,12 +205,13 @@ async function reconcileGrandfatheredActiveRow(
   row: AquecedorInstanceLifecycleRow,
 ): Promise<boolean> {
   const createdAt = await readEvoInstanceCreatedAt(instanceName);
-  if (!shouldRevertGrandfatherToPreparing(row, createdAt)) return false;
-  row.phase = "preparing";
-  row.preparingSince = createdAt;
-  row.activatedAt = null;
-  return true;
+  return maybeResetActiveToPreparing(row, createdAt);
 }
+
+export type RegisterAquecedorPreparingOptions = {
+  /** Create/QR de integração nova: força Preparando mesmo se já havia row active. */
+  forceNewIntegration?: boolean;
+};
 
 function defaultStore(): LifecycleStore {
   return {
@@ -321,38 +353,174 @@ export async function removeAquecedorInstanceLifecycle(instanceName: string): Pr
   if (changed) await saveStore(store);
 }
 
+/**
+ * Restaura fase active + activatedAt a partir da primeira atividade histórica
+ * (ex.: após exclusão/recriação que zera o lifecycle). Não sobrescreve número já ativo.
+ */
+export async function restoreAquecedorLifecycleFromHistory(
+  instanceName: string,
+  earliestActivityAt: string | null | undefined,
+): Promise<boolean> {
+  const restored = await restoreAquecedorLifecyclesFromHistoryBatch([
+    { instanceName, earliestActivityAt },
+  ]);
+  return restored > 0;
+}
+
+/**
+ * Restaura várias instâncias numa única leitura/gravação do lifecycle
+ * (evita race de Promise.all sobrescrevendo o JSON).
+ */
+export async function restoreAquecedorLifecyclesFromHistoryBatch(
+  entries: Array<{ instanceName: string; earliestActivityAt?: string | null }>,
+): Promise<number> {
+  const normalized = (Array.isArray(entries) ? entries : [])
+    .map((e) => ({
+      name: String(e?.instanceName || "").trim(),
+      activityAt: String(e?.earliestActivityAt || "").trim(),
+    }))
+    .filter((e) => {
+      if (!e.name || !e.activityAt) return false;
+      const ms = new Date(e.activityAt).getTime();
+      return Number.isFinite(ms) && ms > 0;
+    });
+  if (!normalized.length) return 0;
+
+  const store = await loadStore();
+  let changed = 0;
+
+  for (const { name, activityAt } of normalized) {
+    const activityMs = new Date(activityAt).getTime();
+    const key = normalizeKey(name);
+    const existing = await findAquecedorLifecycleRow(name);
+
+    if (existing) {
+      refreshRestrictionPhase(existing.row);
+      const alreadyWarm =
+        Boolean(existing.row.activatedAt) &&
+        (existing.row.phase === "active" || existing.row.phase === "restricted_wait");
+      if (alreadyWarm) {
+        // Rename/recreate não pode “rejuvenescer” o chip: preserva a 1ª atividade conhecida.
+        const prevMs = existing.row.activatedAt
+          ? new Date(existing.row.activatedAt).getTime()
+          : Number.POSITIVE_INFINITY;
+        if (Number.isFinite(activityMs) && activityMs < prevMs) {
+          existing.row.activatedAt = new Date(activityMs).toISOString();
+          existing.row.dailyCap = computeDailyCapForInstance(name, existing.row.activatedAt);
+          if (existing.key !== key) {
+            delete store.instances[existing.key];
+          }
+          store.instances[key] = existing.row;
+          changed += 1;
+        }
+        continue;
+      }
+
+      existing.row.phase = "active";
+      existing.row.preparingSince = null;
+      existing.row.activatedAt = new Date(activityMs).toISOString();
+      existing.row.dailyCap = computeDailyCapForInstance(name, existing.row.activatedAt);
+      if (existing.key !== key) {
+        delete store.instances[existing.key];
+      }
+      store.instances[key] = existing.row;
+      changed += 1;
+      continue;
+    }
+
+    const row = emptyRow("active");
+    row.preparingSince = null;
+    row.activatedAt = new Date(activityMs).toISOString();
+    row.dailyCap = computeDailyCapForInstance(name, row.activatedAt);
+    store.instances[key] = row;
+    changed += 1;
+  }
+
+  if (changed) await saveStore(store);
+  return changed;
+}
+
 export async function registerAquecedorInstancePreparing(
   instanceName: string,
   preparingSince?: string | null,
+  options?: RegisterAquecedorPreparingOptions,
 ): Promise<void> {
   const name = String(instanceName || "").trim();
   if (!name) return;
   const store = await loadStore();
   const key = normalizeKey(name);
+  const evoCreatedAt = await readEvoInstanceCreatedAt(name);
+  const explicitSince = String(preparingSince || "").trim() || null;
+  const forceNew = options?.forceNewIntegration === true;
+  const integrationAt =
+    explicitSince || evoCreatedAt || (forceNew ? new Date().toISOString() : null);
+
   const existing = await findAquecedorLifecycleRow(name);
+
+  if (forceNew) {
+    // Sempre 6h a partir DESTA integração — não reutilizar createdAt EVO antigo
+    // (nome curto tipo "1261" pode ter createdAt de criação anterior → promove/some na hora).
+    const since = new Date().toISOString();
+    const aliasesMap = await loadAliasesMap();
+    for (const aliasKey of collectInstanceNameKeys(name, aliasesMap)) {
+      if (aliasKey !== key && store.instances[aliasKey]) {
+        delete store.instances[aliasKey];
+      }
+    }
+    if (existing) {
+      refreshRestrictionPhase(existing.row);
+      // Reconexão / re-QR de número já aquecido: NÃO zerar activatedAt nem voltar a Preparando.
+      // Isso preserva idade, foguinhos e a contagem histórica usada no aquecimento.
+      const alreadyActivated =
+        Boolean(existing.row.activatedAt) ||
+        existing.row.phase === "active" ||
+        existing.row.phase === "restricted_wait";
+      if (alreadyActivated) {
+        if (existing.key !== key) {
+          delete store.instances[existing.key];
+          store.instances[key] = existing.row;
+          await saveStore(store);
+        }
+        return;
+      }
+      // Já tinha row mas sem ativação (ex.: recreate após purge antigo): mantém preparing só se
+      // não houver histórico — restore via warmth/history cuida do restante.
+      applyPreparingPhase(existing.row, since);
+      // Regrava sob a chave canônica atual
+      if (existing.key !== key) {
+        delete store.instances[existing.key];
+        store.instances[key] = existing.row;
+      }
+      await saveStore(store);
+      return;
+    }
+    store.instances[key] = emptyRow("preparing", since);
+    await saveStore(store);
+    return;
+  }
+
   if (existing) {
     refreshRestrictionPhase(existing.row);
     if (existing.row.phase === "restricted_wait") return;
-    if (existing.row.phase === "active") {
-      if (await reconcileGrandfatheredActiveRow(name, existing.row)) {
+    if (existing.row.phase === "preparing") {
+      if (!existing.row.preparingSince && integrationAt) {
+        existing.row.preparingSince = integrationAt;
         await saveStore(store);
       }
       return;
     }
+    if (maybeResetActiveToPreparing(existing.row, integrationAt || evoCreatedAt)) {
+      await saveStore(store);
+    }
     return;
   }
-  const createdAt =
-    preparingSince ||
-    (await readEvoInstanceCreatedAt(name)) ||
-    null;
-  if (isGrandfatherEligible(createdAt)) {
+
+  // Sem row: sem data de integração → legado (grandfather). Com data pós-cutoff → Preparando.
+  if (!integrationAt || isGrandfatherEligible(integrationAt)) {
     await grandfatherAquecedorInstanceActive(name);
     return;
   }
-  store.instances[key] = emptyRow(
-    "preparing",
-    createdAt || new Date().toISOString(),
-  );
+  store.instances[key] = emptyRow("preparing", integrationAt);
   await saveStore(store);
 }
 
@@ -369,24 +537,61 @@ export async function grandfatherAquecedorInstanceActive(instanceName: string): 
   await saveStore(store);
 }
 
+export function isWithinPostPreparingSendWindow(
+  row: Pick<AquecedorInstanceLifecycleRow, "phase" | "activatedAt"> | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!row) return false;
+  if (row.phase === "preparing") return true;
+  const activatedMs = row.activatedAt ? new Date(row.activatedAt).getTime() : NaN;
+  if (!Number.isFinite(activatedMs) || activatedMs <= 0) return false;
+  return nowMs < activatedMs + POST_PREPARING_SEND_WINDOW_MS;
+}
+
+/** true = pode aplicar pausa humana de 3h. */
+export function canApplyAquecedorHumanPause(
+  row: Pick<AquecedorInstanceLifecycleRow, "phase" | "activatedAt"> | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!row) return true;
+  if (row.phase === "preparing") return false;
+  return !isWithinPostPreparingSendWindow(row, nowMs);
+}
+
 export async function markAquecedorInstanceRestricted(
   instanceName: string,
   detail: string,
-): Promise<void> {
+  opts?: { force?: boolean },
+): Promise<boolean> {
   const name = String(instanceName || "").trim();
-  if (!name) return;
+  if (!name) return false;
   const store = await loadStore();
-  const key = normalizeKey(name);
-  const row = store.instances[key] || emptyRow("active");
-  const until = new Date(Date.now() + RESTRICTION_WAIT_MS).toISOString();
+  const found = await findAquecedorLifecycleRow(name);
+  const key = found?.key ?? normalizeKey(name);
+  const row = found?.row || store.instances[key] || emptyRow("active");
+  refreshRestrictionPhase(row);
+
+  if (!opts?.force && !canApplyAquecedorHumanPause(row)) {
+    const activatedLabel = row.activatedAt || "—";
+    console.info(
+      `[Aquecedor] pausa humana ignorada em ${name}: ainda na janela de 6h de envio pós-Preparando (activatedAt=${activatedLabel}).`,
+    );
+    return false;
+  }
+
+  const until = new Date(Date.now() + HUMAN_PAUSE_MS).toISOString();
   row.phase = "restricted_wait";
   row.restrictedUntil = until;
-  row.restrictedReason = String(detail || "Restrição temporária WhatsApp.").slice(0, 240);
+  row.restrictedReason = String(detail || "Pausa humana (suspeita de restrição WhatsApp).").slice(
+    0,
+    240,
+  );
   store.instances[key] = row;
   await saveStore(store);
   console.warn(
-    `[Aquecedor] instância ${name} em espera de 6h por restrição: ${row.restrictedReason}`,
+    `[Aquecedor] ${name} em «${AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL}»: ${row.restrictedReason}`,
   );
+  return true;
 }
 
 export async function syncAquecedorPreparingPromotions(): Promise<string[]> {
@@ -452,7 +657,7 @@ export function formatAquecedorLifecycleStatusLabel(
   if (row.phase === "preparing") return "Preparando";
   if (row.phase === "restricted_wait" && row.restrictedUntil) {
     const remainingMs = new Date(row.restrictedUntil).getTime() - Date.now();
-    if (remainingMs > 0) return "6 horas de espera";
+    if (remainingMs > 0) return AQUECEDOR_HUMAN_PAUSE_STATUS_LABEL;
     return null;
   }
   return null;
@@ -567,7 +772,7 @@ export async function canAquecedorInstanceSendToday(instanceName: string): Promi
       reason:
         row.phase === "preparing"
           ? "Instância em preparação."
-          : "Instância em espera por restrição (6h).",
+          : "Instância em 3 horas pausa humana.",
       dailyCap: 0,
       dailyCount: 0,
     };
@@ -607,8 +812,8 @@ export async function detectAndMarkRestrictionFromSend(
   instanceName: string,
   status: number,
   body: string,
+  opts?: { force?: boolean },
 ): Promise<boolean> {
   if (!isLikelyWhatsAppRestriction(body, status)) return false;
-  await markAquecedorInstanceRestricted(instanceName, body.slice(0, 200));
-  return true;
+  return markAquecedorInstanceRestricted(instanceName, body.slice(0, 200), opts);
 }

@@ -1,5 +1,5 @@
 "use strict";
+/** Validar em GET /health apos redeploy do servico waba_disparador (Easypanel). */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WABA_DEPLOY_MARKER = void 0;
-// Gerado/atualizado no deploy. N�o editar manualmente sem necessidade.
-exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-19-v02-pending-sync";
+exports.WABA_DEPLOY_MARKER = "DEPLOY-2026-08-21-leads-cnae-modal-fix";

@@ -1,8 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isEvoLiveStateOpen = isEvoLiveStateOpen;
+exports.aquecedorLiveStateAllowsConnected = aquecedorLiveStateAllowsConnected;
 exports.isEvoConnectionInProgress = isEvoConnectionInProgress;
 exports.waitForEvoInstanceLiveOpen = waitForEvoInstanceLiveOpen;
+exports.waitForEvoInstanceLiveOpenLenient = waitForEvoInstanceLiveOpenLenient;
 exports.pickEvoConnectionState = pickEvoConnectionState;
 exports.fetchEvoInstanceLiveState = fetchEvoInstanceLiveState;
 exports.invalidateEvoLiveStateCache = invalidateEvoLiveStateCache;
@@ -17,6 +19,17 @@ const LIVE_STATE_TTL_MS = Math.max(2000, Math.min(120000, Number(process.env.EVO
 let liveStateCache = new Map();
 function isEvoLiveStateOpen(state) {
     return String(state || "").trim().toLowerCase() === "open";
+}
+/**
+ * fetchInstances já marcou a linha como open. Só descarta quando o
+ * connectionState vier explícito e diferente de open (close/connecting).
+ * Estado vazio (timeout/404) não é ghost.
+ */
+function aquecedorLiveStateAllowsConnected(liveState) {
+    const state = String(liveState || "").trim().toLowerCase();
+    if (!state)
+        return true;
+    return isEvoLiveStateOpen(state);
 }
 function isEvoConnectionInProgress(state) {
     const s = String(state || "").trim().toLowerCase();
@@ -36,6 +49,27 @@ async function waitForEvoInstanceLiveOpen(instanceName, options) {
         }
         if (lastState === "close") {
             return { open: false, state: lastState };
+        }
+        await sleep(pollMs);
+    }
+    invalidateEvoLiveStateCache(instanceName);
+    lastState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+    return { open: isEvoLiveStateOpen(lastState), state: lastState };
+}
+/**
+ * Após proxy/set + restart a sessão pode piscar close/connecting antes de voltar open.
+ * Não aborta no primeiro close — espera até open ou timeout.
+ */
+async function waitForEvoInstanceLiveOpenLenient(instanceName, options) {
+    const maxWaitMs = Math.max(10000, Math.min(180000, options?.maxWaitMs ?? 90000));
+    const pollMs = Math.max(500, Math.min(5000, options?.pollMs ?? 1500));
+    const deadline = Date.now() + maxWaitMs;
+    let lastState = "";
+    while (Date.now() < deadline) {
+        invalidateEvoLiveStateCache(instanceName);
+        lastState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+        if (isEvoLiveStateOpen(lastState)) {
+            return { open: true, state: lastState };
         }
         await sleep(pollMs);
     }

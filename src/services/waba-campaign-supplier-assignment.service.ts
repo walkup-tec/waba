@@ -14,6 +14,11 @@ import { WabaSubscriberRepository } from "../subscribers/waba-subscriber.reposit
 import type { WabaSubscriberSegment } from "../subscribers/waba-subscriber-segment";
 import { WabaSystemUserService } from "../users/waba-system-user.service";
 import {
+  formatOperacionalDispatchesApisLabel,
+  operacionalServesDispatchesApi,
+  resolveOperacionalDispatchesApis,
+} from "../users/waba-operacional-dispatches-apis";
+import {
   operacionalCanServeSubscriberCampaign,
 } from "./waba-campaign-operacional-segment-rules";
 import { scheduleOperacionalStaffNotifyOnCampaignAssigned } from "../mail/waba-operacional-campaign-notify.service";
@@ -77,8 +82,8 @@ export class WabaCampaignSupplierAssignmentService {
       if (!operacional || operacional.role !== "operacional") continue;
       const apiKind = this.resolveIntakeApiKind(intake);
       const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-      if (operacional.operacionalDispatchesApi !== apiKind) continue;
-      if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+      if (!operacionalServesDispatchesApi(operacional, apiKind)) continue;
+      if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
         continue;
       }
       return supplier;
@@ -112,7 +117,7 @@ export class WabaCampaignSupplierAssignmentService {
       throw new Error("Fornecedor sem usuário operacional válido.");
     }
     const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
-    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional.operacionalSegment)) {
+    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
       throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
     }
     const name = String(operacional?.fullName || supplier.name || operacionalEmail).trim();
@@ -128,6 +133,7 @@ export class WabaCampaignSupplierAssignmentService {
       updatedAt: now,
     });
     if (!updated) throw new Error("Não foi possível atribuir a campanha.");
+    this.splitService.syncCampaignSupplierSettlementForIntake(updated);
     return updated;
   }
 
@@ -242,6 +248,84 @@ export class WabaCampaignSupplierAssignmentService {
     const assigned = normalizeEmail(intake.assignedOperacionalEmail ?? "");
     if (!assigned) return true;
     return assigned === normalizeEmail(staffEmail);
+  }
+
+  /**
+   * Atribuição forçada pelo master (ignora histórico de tentativas).
+   * Reinicia o prazo de 30h via assignedAt.
+   */
+  async forceAssignToOperacionalEmail(
+    intakeId: string,
+    operacionalEmailRaw: string,
+  ): Promise<WabaCampaignIntake> {
+    const intake = this.intakeRepository.getById(intakeId);
+    if (!intake) throw new Error("Campanha não encontrada.");
+    if (intake.status !== "generated" && intake.status !== "in_progress") {
+      throw new Error("Somente campanhas em aberto podem ser transferidas de operacional.");
+    }
+
+    const operacionalEmail = normalizeEmail(operacionalEmailRaw);
+    if (!operacionalEmail.includes("@")) {
+      throw new Error("Informe o e-mail do operacional.");
+    }
+
+    const operacional = this.systemUserService.getByEmail(operacionalEmail);
+    if (!operacional || operacional.role !== "operacional") {
+      throw new Error("Usuário operacional não encontrado.");
+    }
+
+    const apiKind = this.resolveIntakeApiKind(intake);
+    if (!operacionalServesDispatchesApi(operacional, apiKind)) {
+      throw new Error(
+        `Operacional não atende API ${apiKind} (configurado: ${formatOperacionalDispatchesApisLabel(resolveOperacionalDispatchesApis(operacional))}).`,
+      );
+    }
+
+    const subscriberSegment = this.resolveSubscriberSegmentForIntake(intake);
+    if (!operacionalCanServeSubscriberCampaign(subscriberSegment, operacional)) {
+      throw new Error("Operacional não pode atender campanhas deste segmento de assinante.");
+    }
+
+    const supplierSegment = subscriberSegment === "bets" ? "bets" : "outros";
+    const config = this.splitService.getConfig();
+    const suppliers = Array.isArray(config.suppliers) ? config.suppliers : [];
+    let supplier =
+      suppliers.find(
+        (row) =>
+          normalizeEmail(row.systemUserEmail) === operacionalEmail &&
+          row.apiKind === apiKind &&
+          (row.segment || "outros") === supplierSegment,
+      ) ??
+      suppliers.find(
+        (row) =>
+          normalizeEmail(row.systemUserEmail) === operacionalEmail && row.apiKind === apiKind,
+      ) ??
+      null;
+
+    if (!supplier) {
+      supplier = {
+        id: `manual-${operacionalEmail.replace(/[^a-z0-9]+/gi, "-")}-${apiKind}-${supplierSegment}`,
+        name: String(operacional.fullName || operacionalEmail).trim(),
+        apiKind,
+        systemUserEmail: operacionalEmail,
+        segment: supplierSegment,
+        priority: 1,
+        costPerShipmentCents: 0,
+        pixKey: "",
+        active: true,
+      };
+    }
+
+    const updated = this.assignToSupplier(intake, supplier, "manual_master");
+    const now = new Date().toISOString();
+    const cleared = this.intakeRepository.updateById(updated.id, {
+      bmInoperanteRegisteredAt: undefined,
+      masterOverdueAlertSentAt: undefined,
+      updatedAt: now,
+    });
+    const finalIntake = cleared ?? updated;
+    scheduleOperacionalStaffNotifyOnCampaignAssigned(finalIntake);
+    return this.intakeRepository.getById(finalIntake.id) ?? finalIntake;
   }
 }
 

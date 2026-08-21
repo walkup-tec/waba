@@ -9,6 +9,7 @@ const waba_financeiro_split_service_1 = require("../billing/waba-financeiro-spli
 const waba_billing_order_repository_1 = require("../billing/waba-billing-order.repository");
 const waba_billing_service_1 = require("../billing/waba-billing.service");
 const waba_system_user_service_1 = require("../users/waba-system-user.service");
+const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
 const maskApiBaseUrl = (raw) => {
     const value = String(raw || "").trim().replace(/\/$/, "");
     if (!value)
@@ -107,16 +108,31 @@ class WabaAdminFinanceiroService {
             if (!email || seen.has(email))
                 continue;
             seen.add(email);
-            const apiKind = user.operacionalDispatchesApi ?? null;
-            const segment = user.operacionalSegment === "bets" ? "bets" : "outros";
+            const apiKinds = Array.isArray(user.operacionalDispatchesApis)
+                ? user.operacionalDispatchesApis
+                : user.operacionalDispatchesApi
+                    ? [user.operacionalDispatchesApi]
+                    : [];
+            const apiKind = apiKinds[0] ?? null;
+            const segmentsRaw = Array.isArray(user.operacionalSegments)
+                ? user.operacionalSegments
+                : user.operacionalSegment
+                    ? [user.operacionalSegment]
+                    : ["outros"];
+            const segments = segmentsRaw
+                .map((item) => (item === "bets" ? "bets" : "outros"))
+                .filter((item, index, arr) => arr.indexOf(item) === index);
+            const segment = segments[0] === "bets" ? "bets" : "outros";
             items.push({
                 id: user.id,
                 fullName: String(user.fullName || email).trim() || email,
                 email,
                 apiKind,
+                apiKinds,
                 segment,
-                segmentLabel: segment === "bets" ? "Bets" : "Outros",
-                apiKindLabel: apiKind === "alternativa" ? "API Alternativa" : apiKind === "oficial" ? "API Oficial" : "—",
+                segments,
+                segmentLabel: String(user.operacionalSegmentLabel || (segment === "bets" ? "Bets" : "Outros")),
+                apiKindLabel: String(user.operacionalDispatchesApiLabel || "—"),
             });
         }
         return items.sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
@@ -171,7 +187,9 @@ class WabaAdminFinanceiroService {
     listDisparosOrdersSorted() {
         return this.orderRepository
             .list()
-            .filter((order) => order.product === "waba-disparos" && order.grantSource !== "admin-bonus-envios")
+            .filter((order) => order.product === "waba-disparos" &&
+            order.grantSource !== "admin-bonus-envios" &&
+            !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(order.ownerEmail))
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     }
     listOrders(params) {
@@ -197,6 +215,18 @@ class WabaAdminFinanceiroService {
         const asaasApiBaseUrl = String(process.env.ASAAS_API_BASE_URL ?? "").trim();
         const webhookTokenConfigured = Boolean(String(process.env.ASAAS_WEBHOOK_ACCESS_TOKEN ?? "").trim());
         const transferProbe = await (0, asaas_client_1.probeAsaasTransferPermission)();
+        const purge = this.splitService.purgeExcludedOwnerSettlements();
+        if (purge.removed > 0) {
+            console.warn(`[Financeiro] removidos ${purge.removed} settlement(s) de owners excluídos das métricas/split`);
+        }
+        const purgeBonus = this.splitService.purgeBonusOnlyCampaignSettlements();
+        if (purgeBonus.removed > 0) {
+            console.warn(`[Financeiro] removidos ${purgeBonus.removed} settlement(s) de campanhas 100% bônus de envio`);
+        }
+        const syncedSuppliers = this.splitService.syncDeferredSupplierSettlementsFromOpenCampaigns();
+        if (syncedSuppliers > 0) {
+            console.info(`[Financeiro] ${syncedSuppliers} split(s) de pedido alinhado(s) ao operacional da campanha vigente`);
+        }
         const orders = this.listDisparosOrdersSorted();
         await this.splitService.syncSettlementTransferStatuses(100);
         let pendingCount = 0;

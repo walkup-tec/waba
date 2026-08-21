@@ -14,6 +14,13 @@ Em produção, o container serve o conteúdo de `dist/` (incluindo `dist/index.h
 2. Dispara e-mail + WhatsApp de boas-vindas (Evolution).
 3. Reenvio pelo Admin não exige senha; mensagem usa fallback de senha do cadastro.
 
+### Dispositivos (Device Cloud) → Aquecedor
+
+1. Master abre menu **Dispositivos** → SSO para dispositivo virtual.
+2. Usuário cadastra número no WhatsApp do Android virtual.
+3. Lingueta **Adicionar ao Aquecedor** → backend integra instância + aquecedor (sem CONFIRMAR).
+4. Conclusão: lingueta **Integração Finalizada** + pulso em **Instâncias**.
+
 ## Organização dos módulos
 
 - Código de domínio e rotas em `src/`

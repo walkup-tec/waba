@@ -219,6 +219,10 @@ export class WabaFinanceiroSplitSettlementRepository {
     return this.readStore().settlements.find((item) => item.id === normalized) ?? null;
   }
 
+  listAll(): FinanceiroSplitSettlement[] {
+    return this.readStore().settlements.slice();
+  }
+
   getByOrderId(orderId: string): FinanceiroSplitSettlement | null {
     const normalized = String(orderId ?? "").trim();
     if (!normalized) return null;
@@ -255,5 +259,53 @@ export class WabaFinanceiroSplitSettlementRepository {
     store.settlements[index] = record;
     this.writeStore(store);
     return record;
+  }
+
+  /** Remove settlements cujo ownerEmail está na lista (normalizado). */
+  deleteByOwnerEmails(ownerEmails: string[]): { removed: number; ids: string[] } {
+    const excluded = new Set(
+      ownerEmails.map((email) => String(email || "").trim().toLowerCase()).filter(Boolean),
+    );
+    if (!excluded.size) return { removed: 0, ids: [] };
+
+    const store = this.readStore();
+    const ids: string[] = [];
+    const kept: FinanceiroSplitSettlement[] = [];
+    for (const settlement of store.settlements) {
+      const owner = String(settlement.ownerEmail || "")
+        .trim()
+        .toLowerCase();
+      if (owner && excluded.has(owner)) {
+        ids.push(settlement.id);
+        continue;
+      }
+      kept.push(settlement);
+    }
+    if (ids.length === 0) return { removed: 0, ids: [] };
+    this.writeStore({ version: 1, settlements: kept });
+    return { removed: ids.length, ids };
+  }
+
+  /** Remove settlements cujo orderId está na lista. */
+  deleteByOrderIds(orderIds: string[]): { removed: number; ids: string[] } {
+    const targets = new Set(
+      orderIds.map((id) => String(id || "").trim()).filter(Boolean),
+    );
+    if (!targets.size) return { removed: 0, ids: [] };
+
+    const store = this.readStore();
+    const ids: string[] = [];
+    const kept: FinanceiroSplitSettlement[] = [];
+    for (const settlement of store.settlements) {
+      const orderId = String(settlement.orderId || "").trim();
+      if (orderId && targets.has(orderId)) {
+        ids.push(settlement.id);
+        continue;
+      }
+      kept.push(settlement);
+    }
+    if (ids.length === 0) return { removed: 0, ids: [] };
+    this.writeStore({ version: 1, settlements: kept });
+    return { removed: ids.length, ids };
   }
 }

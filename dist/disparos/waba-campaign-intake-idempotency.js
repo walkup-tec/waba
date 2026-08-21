@@ -28,9 +28,11 @@ const buildCampaignIntakeSubmissionFingerprint = (input) => {
     const parts = [
         String(input.campaignName || "").trim().toLowerCase(),
         String(input.regionDdd || "").trim(),
+        String(input.whatsappName || "").trim().toLowerCase(),
         String(Math.max(0, Math.round(Number(input.plannedSendCount || 0)))),
         String(input.apiKind || "").trim().toLowerCase(),
         String(Math.max(0, Math.round(Number(input.imageByteLength || 0)))),
+        String(Math.max(0, Math.round(Number(input.whatsappLogoByteLength || 0)))),
         String(Math.max(0, Math.round(Number(input.spreadsheetByteLength || 0)))),
     ];
     return parts.join("|");

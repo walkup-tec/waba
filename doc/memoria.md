@@ -1,13 +1,868 @@
-## 2026-08-19 12:55 — V02: sync push trabalho pendente local
-- Pull origin/v02 + merge stash (aquecedor, inbound, WA restrição connecting, admin snapshot).
-- Marker `DEPLOY-2026-08-19-v02-pending-sync`
-- LOG: doc/LOG-2026-08-19__125500__v02-pending-sync-push.md
+Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
+
+## 2026-08-21 10:35 — Alternativa: texto corrido (sem título em negrito)
+
+- Evolution 2.4 envolve `title` em `*...*`. WABA não parte mais o texto em title/description.
+- Marker `DEPLOY-2026-08-21-alternativa-body-sem-titulo`
+- LOG: doc/LOG-2026-08-21__103500__fix-alternativa-texto-corrido.md
+
+## 2026-08-21 10:21 — Evolution 2.4.0 no ar + 1 sendButtons
+
+- GET `/`: `version=2.4.0`. sendButtons 201: `interactiveMessage` + `cta_url`, sem `viewOnce`.
+- Conferir no celular do chip **walkup** (5197462102): texto sem URL + botão **Quero saber mais**.
+- LOG: doc/LOG-2026-08-21__100500__pin-evo-2-4-rc2.md
+
+## 2026-08-21 10:05 — Pin Evolution 2.4.0-rc2 (autorizado)
+
+- Script `scripts/pin-evo-2-4-rc2-vps.sh` + workflow SSH. Rollback se não for 2.4 ou LICENSE_REQUIRED.
+- LOG: doc/LOG-2026-08-21__100500__pin-evo-2-4-rc2.md
+
+## 2026-08-21 10:00 — EVO 2.4.0-rc2 (semana 11/08) revertida para 2.3.7
+
+- 20/08 11:07: imagem `evoapicloud/evolution-api:2.4.0-rc2` (Baileys 7.0.0-rc.9) — a que renderiza botão.
+- 20/08 11:16: Redeploy/update Easypanel trocou para `:latest` = API 2.3.7. GET `/` em 21/08 ainda 2.3.7.
+- LOG: doc/LOG-2026-08-21__100000__evo-2-4-rc2-revertida-para-2-3-7.md
+
+## 2026-08-21 09:55 — Botão nativo Alternativa: estudo EVO/WhatsApp (sem patch WABA)
+
+- Evolution 2.3.7 (produção) envolve `sendButtons` em `viewOnceMessage`; o WhatsApp não desenha o botão. O WABA não controla esse wrapper.
+- Fix do vendor: Evolution **2.4.0-rc** (remove viewOnce + `native_flow`) ou PR #2651. Cloud API oficial tem `cta_url` (outro canal).
+- Patch local que tratava viewOnce+nativeFlow como sucesso foi revertido (regressão 20/08: só imagem).
+- LOG: doc/LOG-2026-08-21__095500__estudo-evo-wa-botao-nativo.md
+
+## 2026-08-21 07:17 — Permanência do pareamento (Seguradoras)
+
+- 11/08: campanha enviava sem desligar proxy. 12/08: tick desligava proxy nos offline; Ativar fazia proxy/set no meio do disparo
+- Marker `DEPLOY-2026-08-21-alternativa-keep-pairing`
+- LOG: doc/LOG-2026-08-21__071700__fix-alternativa-keep-pairing.md
+
+## 2026-08-20 18:43 — Alternativa: texto após imagem (viewOnce)
+
+- sendButtons em viewOnce era tratado como sucesso e o lead pending não mandava texto
+- Marker `DEPLOY-2026-08-20-alternativa-image-then-text`
+- LOG: doc/LOG-2026-08-20__184300__fix-alternativa-so-imagem.md
+
+## 2026-08-20 18:06 — Alternativa: não mexer proxy no meio do disparo
+
+- Redeploy zerava `ready` em memória → prepare fazia proxy/set + restart e derrubava o pareamento
+- Marker `DEPLOY-2026-08-20-alternativa-no-proxy-mid-send`
+- LOG: doc/LOG-2026-08-20__180600__fix-alternativa-pareamento-mid-send.md
+
+## 2026-08-20 17:32 — Restaurar botão URL (payload 11/08)
+
+- Causa: `title` ZWSP (`30004a3`) + fallback texto+link em `viewOnce`
+- Restaurado payload `4a72c1d` (title real + footer vazio); sem fallback com URL
+- Marker `DEPLOY-2026-08-20-alternativa-button-restore`
+- LOG: doc/LOG-2026-08-20__173200__restore-alternativa-botao-1108.md
+
+## 2026-08-20 17:19 — Alternativa: botão URL sem texto+link
+
+- Produção enviava fallback com URL + preview WhatsApp; ghost `viewOnce` forçava isso
+- sendButtons com `linkPreview: false`; se falhar, só texto sem URL
+- Marker `DEPLOY-2026-08-20-alternativa-url-button`
+- LOG: doc/LOG-2026-08-20__171900__fix-alternativa-botao-sem-link.md
+
+## 2026-08-20 16:48 — Foguinhos Quente por chip (soma-9224)
+
+- Status conectado + 3 fogos cinza: `uso-config` lento (warmth de todas as instâncias) e rename `9224`→`soma-9224`
+- Marker `DEPLOY-2026-08-20-warmth-chip-lookup`
+- LOG: doc/LOG-2026-08-20__164800__fix-foguinhos-warmth-chip.md
+
+## 2026-08-20 08:10 — Dispositivos: não fechar WA no open (sem BACK em unknown)
+
+- Causa: BACK quando classify=unknown fechava o WhatsApp na abertura → travava em Conversas com msg falsa de browser
+- Fix: esperar/settle; BACK só se browser confirmado; seguir menu mesmo em unknown fraco
+- Marker `DEPLOY-2026-08-20-device-cloud-wa-open-wait-no-back`
+- LOG: doc/LOG-2026-08-20__081000__device-cloud-wa-open-wait-no-back.md
+
+## 2026-08-20 07:55 — Dispositivos: menu ⋮ → Aparelhos (assertivo)
+
+- Causa: nav por Perfil + digitação sem gate → Chrome recebia o pairingCode
+- Fix: caminho oficial Meta (⋮ → Aparelhos → Conectar → Vincular nº) + classifyScreen + não digitar no browser
+- Marker `DEPLOY-2026-08-20-device-cloud-menu-aparelhos-assertivo`
+- LOG: doc/LOG-2026-08-20__075500__device-cloud-menu-aparelhos-assertivo.md
+
+## 2026-08-20 07:35 — Dispositivos: warm-rail no topo + auto Vincular
+
+- Lingueta compacta (1 linha); status + Cancelar/Inserir na faixa do chrome (não cobre o device / não fica embaixo)
+- Auto: Aparelhos conectados → Vincular com número → digitar pairingCode
+- Stage: sem `overflow: auto` (sem scrollbar ao lado do device); altura/footer definitivo **adiado** até fechar o fluxo
+- Marker `DEPLOY-2026-08-20-device-cloud-warm-rail-topo`
+- LOG: doc/LOG-2026-08-20__073500__device-cloud-warm-rail-topo.md
+
+## 2026-08-20 07:15 — Dispositivos: status na lingueta + inserção guiada
+
+- Status do aquecimento na lingueta (subtexto); rodapé sem mensagens de progresso
+- Auto-nav/digitação pausados; botão «Inserir código no device» após pairingCode
+- Marker `DEPLOY-2026-08-20-device-cloud-lingueta-status-guiado`
+- LOG: doc/LOG-2026-08-20__071500__device-cloud-lingueta-status-guiado.md
+
+## 2026-08-20 06:55 — Dispositivos: pairingCode + sem abrir Comunidades
+
+- Causa: backend não propagava `pairingCode`; toque y=1180 abria aba Comunidades
+- Fix: extract/job/poll com pairingCode; navegação via Perfil → Aparelhos conectados
+- Marker `DEPLOY-2026-08-20-device-cloud-pairingcode-fix`
+- LOG: doc/LOG-2026-08-20__065500__device-cloud-pairingcode-comunidades-fix.md
+
+## 2026-08-20 06:38 — Dispositivos: pairingCode automático sem QR
+
+- Lingueta **Adicionar ao Aquecedor**: abre tela de vinculação no device → EVO gera `pairingCode` → sistema digita no WhatsApp
+- Removido QR imagem / instrução manual no painel sob o device
+- Marker `DEPLOY-2026-08-20-device-cloud-pairing-auto-insert`
+- LOG: doc/LOG-2026-08-20__063800__device-cloud-pairing-auto-insert.md
+- Palavras-chave: pairingCode, typeDeviceCloudPairingCodeOnDevice, sem-qr
+
+## 2026-08-19 15:18 — Dispositivos: lingueta reutiliza número do Digitar
+
+- `getDeviceCloudRegisteredPhone` / `setDeviceCloudRegisteredPhone` — número salvo por device após **Digitar** (localStorage + memória)
+- Lingueta **Adicionar ao Aquecedor** não pede número novamente; fix sintaxe `displayDeviceCloudName`
+- Marker `DEPLOY-2026-08-19-device-cloud-lingueta-usa-numero-device` — redeploy Easypanel pendente
+- LOG: doc/LOG-2026-08-19__151800__device-cloud-lingueta-usa-numero-device.md
+- Palavras-chave: getDeviceCloudRegisteredPhone, layout.phones, Digitar, warmDeviceCloudInstance
+
+## 2026-08-19 14:02 — Dispositivos: lingueta Aquecedor + dist sincronizado
+- Lingueta **Adicionar ao Aquecedor** substitui botão Aquecer; sem Início no footer
+- Estados: idle / busy / done; pulso menu Instâncias após integração
+- Copy sem EVO/Evolution; device → dispositivo
+- Produção servia UI antiga: faltava `dist/index.html` (Docker COPY dist)
+- Marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab` — redeploy Easypanel pendente
+- LOGs: doc/LOG-2026-08-19__132000__device-cloud-lingueta-aquecedor.md, __135200__, __140200__, __134300__
+- Palavras-chave: lingueta, device-cloud-warm-tab, dist/index.html, waba_disparador, easypanel
+
+## 2026-08-19 12:50 — Capa de boas-vindas não saía no sendMedia
+- Texto chegava; JPEG não. Capa lia só `cwd` (20s, sem URL)
+- Agora: `__dirname` + `/app/media` no Docker + timeout 60s + URL pública
+- Marker `DEPLOY-2026-08-19-125000-welcome-cover-sendmedia`
+- LOG: doc/LOG-2026-08-19__125000__welcome-cover-sendmedia.md
+
+## 2026-08-19 09:12 — Layout boas-vindas iPhone (corte + preview OG)
+- Causa: traço `━` (U+2501) + `linkPreview` da Evolution nos dois https
+- Texto ASCII + `linkPreview: false`; capa JPEG via sendMedia após ACK
+- Marker `DEPLOY-2026-08-19-091200-welcome-layout-ios`
+- LOG: doc/LOG-2026-08-19__091200__welcome-layout-ios.md
+
+## 2026-08-19 08:09 — Boas-vindas WhatsApp obrigatória (fila + JID canônico)
+- Não trava mais no eleito `drax`; percorre 77770 → walkup → 2477 e qualquer EVO open
+- Envia o JID `exists:true`; retry em background até ACK de aparelho
+- Marker `DEPLOY-2026-08-19-080900-welcome-must-arrive`
+- LOG: doc/LOG-2026-08-19__080900__welcome-must-arrive.md
+
+## 2026-08-18 14:15 — Aquecedor: ERROR outbound antigo não expulsa + purge 6635
+- Classificador passou a ignorar `fromMe` com mais de 12h; ERROR recente continua `broken`
+- Produção: instância EVO `6635` e cadastro do chip 5181076635 removidos; `walkup`/`1261`/`9224` intactos
+- Marker `DEPLOY-2026-08-18-141500-aquecedor-outbound-recency`
+- LOG: doc/LOG-2026-08-18__141500__aquecedor-outbound-recency-purge-6635.md
+
+## 2026-08-18 13:30 — Device Cloud: capa não aparecia na galeria
+- Nest JSON do Device Cloud era 100 KB; a capa em base64 não chegava no Android
+- Arquivo JPEG com nome .png; WhatsApp galeria lê Pictures, não só Download
+- Marker `DEPLOY-2026-08-18-133000-device-cloud-capa-gallery`
+- LOG: doc/LOG-2026-08-18__133000__device-cloud-capa-gallery.md
+
+## 2026-08-18 13:12 — Device Cloud: colar Ctrl+V no campo focado
+- Copiar no PC (Ctrl+C) e colar na tela do celular (Ctrl+V)
+- Marker `DEPLOY-2026-08-18-131200-device-cloud-paste` (HTML `deviceCloudLocalClipboard`)
+- LOG: doc/LOG-2026-08-18__131200__device-cloud-paste-clipboard.md
+
+## 2026-08-18 13:02 — Device Cloud: teclado do computador
+- Clique na tela (borda verde) e digite no PC; Backspace apaga (DEL), não volta
+- Marker `DEPLOY-2026-08-18-130200-device-cloud-local-kbd` (HTML `deviceCloudLocalKeyboard`)
+- LOG: doc/LOG-2026-08-18__130200__device-cloud-local-keyboard.md
+
+## 2026-08-18 12:41 — Device Cloud: sem botão Voltar na barra
+- Toque na tela já volta no WhatsApp; o chrome Voltar apertava o layout
+- Removidos botão, CSS `.device-cloud-key-back` e handler `key: back`
+- Marker `DEPLOY-2026-08-18-124100-device-cloud-no-voltar` (HTML `deviceCloudNoChromeVoltar`)
+- LOG: doc/LOG-2026-08-18__123500__device-cloud-remove-voltar-btn.md
+
+## 2026-08-18 12:21 — Aquecedor: pool com connectionState vazio + chip duplicado
+- `6635` (Mozart / 5181076635) fora do ciclo automático; teste manual 1261→6635 chegou
+- Empty `connectionState` era ghost; índice de chip ficava com a primeira instância (`6035`)
+- Marker `DEPLOY-2026-08-18-aquecedor-pool-live-open`
+- LOG: doc/LOG-2026-08-18__122100__fix-aquecedor-pool-live-open.md
+
+## 2026-08-18 12:00 — Device Cloud: roda do mouse na lista de horários
+- Giro curto era swipe pequeno / palco `overflow:auto`; lista não andava
+- Fix: swipe de página 320 ms na faixa da lista; capture na janela do celular
+- Marker `DEPLOY-2026-08-18-device-cloud-wheel-list`
+- LOG: doc/LOG-2026-08-18__120000__device-cloud-wheel-hours-list.md
+
+## 2026-08-18 11:42 — Device Cloud: clique WABA não tocava o Android
+- Causa: `tryVirtTap` no API AWS considerava sucesso o `ddc-virt-tap` em `/dev/input/event4`, que não move o Compose; o `adb shell input tap` era pulado. `keyevent BACK` (botão Voltar da barra) não usava virt-touch e funcionava.
+- Fix: desligar virt-touch no tap/swipe (`adb.client.ts` + `dist`); `systemctl restart ddc-api`.
+- Validado na aba Dispositivos: tap Avançar perfil→categoria; pointer no Voltar do WA categoria→perfil.
+- LOG: doc/LOG-2026-08-18__114200__device-cloud-virt-tap-noop.md
+
+## 2026-08-18 10:52 — Device Cloud: scroll do mouse na tela
+- Roda do mouse vira swipe no Android; a página WABA não rola
+- Marker `DEPLOY-2026-08-18-device-cloud-wheel-scroll`
+- LOG: doc/LOG-2026-08-18__105200__device-cloud-wheel-scroll.md
+
+## 2026-08-18 10:48 — Device Cloud: clique na tela virava swipe
+- Causa: slop de 24px na imagem ~329px; Compose rolava em vez de clicar
+- Fix: tap vs swipe por duração/distância; botões Voltar/Início na barra
+- Marker `DEPLOY-2026-08-18-device-cloud-tap-not-swipe`
+- LOG: doc/LOG-2026-08-18__104800__device-cloud-tap-not-swipe.md
+
+## 2026-08-18 10:12 — Device Cloud: Abrir enviava HOME e fechava o WA
+- Causa: `dismissDeviceCloudWhatsAppCrash` com `key: home` 700ms após launch
+- Git/produção já estavam alinhados (rename-pencil); não havia deploy pendente
+- Marker `DEPLOY-2026-08-18-device-cloud-no-home-after-launch`
+- LOG: doc/LOG-2026-08-18__101200__device-cloud-home-fecha-wa.md
+
+## 2026-08-18 10:25 — Device Cloud: cliques lentos + WhatsApp fecha
+- Causa: crash JNI Kaleidoscope (ARM64 no x86) + toque esperava screenshot 1s poll
+- Fix: toque sem esperar tela; fila input; poll 1,6s; launch force-stop+am start
+- Marker `DEPLOY-2026-08-18-device-cloud-input-snappy`
+- LOG: doc/LOG-2026-08-18__102500__device-cloud-lag-wa-crash.md
+
+## 2026-08-17 19:45 — Device Cloud: upload imagens locais (PC → Download Android)
+- WABA: multer + FormData push-media; skip body parser multipart
+- Device Cloud: endpoint push-file (adb push + media scan) — commit cb12758
+- Produção: redeploy Easypanel device-cloud-api + WABA pendente
+- LOG: doc/LOG-2026-08-17__194500__device-cloud-upload-local-files.md
+
+## 2026-08-17 18:55 — Device Cloud: Abrir WhatsApp fallback + upload perfil/capa
+- Causa: API launch 502; WA Business em crash loop no Android teste 1
+- Fix WABA: fallback launcher; botão Reiniciar; UI upload JPG/PNG/WebP (proxy push-file)
+- Upload depende de `POST /devices/:id/push-file` no Device Cloud AWS (501 até lá)
+- Marker `DEPLOY-2026-08-17-device-cloud-abrir-wa-upload`
+- LOG: doc/LOG-2026-08-17__185500__fix-device-cloud-abrir-wa-upload.md
+
+## 2026-08-17 16:05 — Device Cloud: Play SMS bloqueava o Avançar
+- Causa: Play Services sem permissão de SMS; WhatsApp voltava à tela do número
+- Fix: Avançar 690/1100 + Continuar 520,768; se o heads-up do Play aparecer, conceder SMS e repetir
+- Validado no Android teste 1: tela **Confirmar seu número** (SMS 6 dígitos)
+- Marker `DEPLOY-2026-08-17-device-cloud-gms-sms-avancar`
+- LOG: doc/LOG-2026-08-17__160500__fix-device-cloud-gms-sms-avancar.md
+
+## 2026-08-17 15:36 — Device Cloud: Digitar não acrescenta 03
+- Causa: Avançar/Continuar com teclado aberto acertavam teclas 0 e 3
+- Fix: toque em Avançar y=690 (pad aberto) e depois y=1100 (pad fechado)
+- Marker `DEPLOY-2026-08-17-device-cloud-digitar-sem-03`
+- LOG: doc/LOG-2026-08-17__153600__fix-device-cloud-digitar-03.md
+
+## 2026-08-17 15:28 — Financeiro: comprovante do fornecedor na linha do pedido + PIX por entregues
+- Causa: finalizar campanha criava `campaign-supplier:` e pagava `sent`
+- Fix: anexar comprovante na linha original; valor = entregues (cap enviados/planejado/crédito pago)
+- Marker `DEPLOY-2026-08-17-financeiro-split-fornecedor-entregues`
+- LOG: doc/LOG-2026-08-17__152800__fix-financeiro-split-fornecedor-entregues.md
+
+## 2026-08-17 15:12 — Avançar Device Cloud validado (360,1100)
+- Back + swipe no Play quebravam o fluxo; Avançar era y=1060 (acima do botão)
+- Toque real `360,1100` abriu o diálogo Continuar
+- Marker `DEPLOY-2026-08-17-device-cloud-avancar-1100`
+- LOG: doc/LOG-2026-08-17__181200__device-cloud-avancar-coords-validadas.md
+
+## 2026-08-17 14:53 — Isolamento Device Cloud WABA vs SaaS
+- Publicação futura: `https://devices.draxsistemas.com.br/`
+- WABA não lista devices `SAAS ·` / `DRAX-DEVICES ·`; criações WABA usam `WABA ·`
+- Tenant SSO separado fica para o SaaS; até lá o filtro de nome vale no WABA
+- LOG: doc/LOG-2026-08-17__175300__device-cloud-isolamento-waba-saas.md
+
+## 2026-08-17 14:46 — Digitar já toca Avançar/Continuar
+- Play Services heads-up desviava o toque; teclado some e o Device avança sozinho
+- Marker `DEPLOY-2026-08-17-device-cloud-avancar`
+- LOG: doc/LOG-2026-08-17__174600__device-cloud-avancar-apos-digitar.md
+
+## 2026-08-17 14:26 — Digitar Device Cloud: laterais do teclado
+- `51982006034` virava `5820-00-4`: toques X=120/600 erravam 1,3,4,6,7,9
+- Não é split de DDD; coords internas + delay 280ms
+- Marker `DEPLOY-2026-08-17-device-cloud-dialpad-laterais`
+- LOG: doc/LOG-2026-08-17__172600__device-cloud-dialpad-laterais.md
+
+## 2026-08-17 14:14 — Lidos no relatório via código (480 / 518)
+- SQUARE RESIDENCIAL → 480; 6 DE AGOSTO → 518 (14/08/2026)
+- Override só na leitura do relatório/dashboard; JSON de produção intacto
+- Marker `DEPLOY-2026-08-17-lidos-relatorio-480-518`
+- LOG: doc/LOG-2026-08-17__171400__lidos-relatorio-override-codigo.md
+
+## 2026-08-17 14:11 — Relatório 6 DE AGOSTO: Lidos = 518
+- Campanha 14/08/2026 15:54 (nome corrigido; pedido anterior citava SQUARE RESIDENCIAL)
+- Patch via Actions SSH: `performanceReport.read = 518`
+- LOG: doc/LOG-2026-08-17__171100__6-de-agosto-lidos-518.md
+
+## 2026-08-17 14:08 — Relatório SQUARE RESIDENCIAL: Lidos = 480
+- Campanha 14/08/2026 15:54; relatório finalizado é somente leitura na UI
+- Patch em produção via Actions SSH em `waba-campaign-intakes.json` (`performanceReport.read`)
+- LOG: doc/LOG-2026-08-17__170800__square-residencial-lidos-480.md
+
+## 2026-08-17 13:28 — Marker redeploy Device Cloud (dialpad)
+- Marker `DEPLOY-2026-08-17-1628-device-cloud-dialpad` (`src` + `dist`)
+- Serve para validar `/health` após o próximo Redeploy (evitar archive GitHub 429: usar fonte Git/clone)
+- LOG: doc/LOG-2026-08-17__162800__deploy-marker-device-cloud-redeploy.md
+
+## 2026-08-17 10:27 — Campanhas: relatório visível com saldo zerado
+- Assinante sem créditos continua vendo lista e relatórios (API Oficial e Alternativa)
+- Alerta de créditos só na criação de nova campanha (card compacto, sem overlay na tela inteira)
+- Gate usa saldo da API da aba atual (`oficial` / `alternativa`)
+- Marker `DEPLOY-2026-08-17-campanhas-relatorio-saldo-zero`
+- LOG: doc/LOG-2026-08-17__094600__campanhas-relatorio-sem-creditos-view.md
+
+## 2026-08-17 07:30 — Dispositivos flutuantes na aba
+- Celular permanece na aba Dispositivos, arrastável, sem sobrepor outros menus
+- Excluir tira da tela (não destrói o Redroid)
+- Marker `DEPLOY-2026-08-17-dispositivos-flutuante`
+- LOG: doc/LOG-2026-08-17__073000__ui-dispositivos-flutuante.md
+
+## 2026-08-14 18:15 — Dispositivos: tela do celular e toque real
+- Removidos Voltar/Início/Avançar, DDI, Digitar e o guia; tela 253×460 → 329×598 (+30%)
+- Clique no WhatsApp exigia uinput (`ddc-virt-tap`); `adb input tap` não chega nos widgets
+- Marker `DEPLOY-2026-08-14-dispositivos-tela-celular`
+- LOG: doc/LOG-2026-08-14__181500__fix-dispositivos-tela-celular.md
+
+## 2026-08-14 14:55 — Mínimo API Alternativa R$ 200
+- Checkout PIX deixava de aceitar o pacote de R$ 200 (mínimo global era R$ 300)
+- Marker `DEPLOY-2026-08-14-min-credito-alternativa-200`
+- LOG: doc/LOG-2026-08-14__fix-min-credito-alternativa-200.md
+
+## 2026-08-14 14:45 — Gerar PIX do checkout de créditos
+- Clique no botão era engolido (z-index/FAB) ou o botão ficava disabled sem aviso
+- Marker `DEPLOY-2026-08-14-gerar-pix-click`
+- LOG: doc/LOG-2026-08-14__fix-gerar-pix-click.md
+
+## 2026-08-14 14:15 — Dispositivos: fluxo WhatsApp habitual
+- SMS só após Avançar/confirmar no app; dígitos um a um; abre WA Business
+- Marker `DEPLOY-2026-08-14-device-cloud-wa-natural`
+- LOG: doc/LOG-2026-08-14__ui-device-cloud-wa-natural.md
+
+## 2026-08-14 14:05 — Dispositivos: tela +20%
+- Wrap 420px → 504px; screenshot max-height 72vh → 86vh
+- Marker `DEPLOY-2026-08-14-device-cloud-screen-20`
+- LOG: doc/LOG-2026-08-14__ui-device-cloud-screen-20.md
+
+## 2026-08-14 13:55 — Dispositivos: inputs no tema escuro
+- Nome e número WhatsApp usam tokens `--bg-card-alt` / `--text` (sem fundo branco)
+- Marker `DEPLOY-2026-08-14-device-cloud-inputs-dark`
+- LOG: doc/LOG-2026-08-14__ui-device-cloud-inputs-dark.md
+
+## 2026-08-14 13:40 — Split do pedido segue o operacional da campanha vigente
+- Cancelar/gerar outra campanha atualiza fornecedor/PIX no Financeiro (não só no campaign-supplier)
+- Overview sincroniza linhas skipped/pending | `npm run verify:campaign-transfer-split-pix`
+- Marker `DEPLOY-2026-08-14-split-supplier-elected-sync`
+- LOG: doc/LOG-2026-08-14__fix-split-pedido-operador-eleito.md
+
+## 2026-08-14 12:05 — Split PIX ao transferir campanha entre operacionais
+- Repasse fornecedor usa operador eleito (e-mail + plano + segmento), não só assignedSupplierId
+- Sync settlement pending/failed ao transferir | `npm run verify:campaign-transfer-split-pix`
+- Marker `DEPLOY-2026-08-14-campaign-transfer-split-pix`
+- LOG: doc/LOG-2026-08-14__fix-campaign-transfer-split-pix.md
+
+## 2026-08-14 11:50 — Financeiro: Walkup PIX pago não aparecia falha
+- Causa: externalReference > 100 chars no retry Asaas; sync não reconciliava DONE
+- Fix refs compactas + sync failed/processing | `npm run verify:split-external-ref`
+- LOG: doc/LOG-2026-08-14__fix-split-pix-walkup-false-failed.md
+
+## 2026-08-14 11:45 — Boas-vindas: failover após 3 ACK ERROR no 7770
+- Após 3 ACK ERROR no eleito → secundário/terciário; retry background mantém contador
+- `npm run verify:welcome-routing` | marker `DEPLOY-2026-08-14-welcome-ack-failover-3`
+- LOG: doc/LOG-2026-08-14__welcome-ack-failover-3.md
+
+## 2026-08-14 11:25 — Fornecedores: persistência ordem prioridade
+- Swap automático ao mudar prioridade (evita 400 por duplicata no PUT split-config)
+- `npm run verify:supplier-priority` | marker `DEPLOY-2026-08-14-supplier-priority-persist`
+- LOG: doc/LOG-2026-08-14__fix-supplier-priority-persist.md
+
+## 2026-08-14 11:15 — Marker Criar Dispositivo
+- Marker: DEPLOY-2026-08-14-criar-dispositivo
+- Shell cache SW v4 para a aba nova aparecer após Redeploy
+
+## 2026-08-14 10:55 — Deploy bundle boas-vindas + verify script
+- Marker: DEPLOY-2026-08-14-welcome-eleito-pausa-failover-offline
+- `npm run verify:welcome-routing`
+
+## 2026-08-14 10:40 — Dispositivos: um botão + tela Android
+- WABA faz SSO e proxy no backend; aba só tem Criar Dispositivo
+- Marker: DEPLOY-2026-08-14-device-cloud-one-button
+- LOG: doc/LOG-2026-08-14__104000__dispositivos-um-botao-tela-android.md
+
+## 2026-08-14 10:12 — Dispositivos abre Device Cloud Web
+- Iframe automático + fallback api-devices → devices
+- Marker: DEPLOY-2026-08-14-device-cloud-web-iframe
+- LOG: doc/LOG-2026-08-14__101200__waba-dispositivos-iframe-web.md
+
+## 2026-08-14 09:58 — Boas-vindas: failover só se eleito desconectado
+- Pausa humana mantém 5181077770; secundário só se primário offline
+- Marker: DEPLOY-2026-08-14-welcome-failover-if-disconnected
+
+## 2026-08-14 09:55 — Boas-vindas só pelo número eleito (sem failover)
+- Pausa humana/Preparando não troca para 5197462102; repete no 5181077770
+- Marker: DEPLOY-2026-08-14-welcome-primary-only-no-failover
+- LOG: doc/LOG-2026-08-14__095500__welcome-primary-only-no-failover.md
+
+## 2026-08-14 09:45 — Modal reenviar boas-vindas async (202)
+- Endpoint responde 202 imediatamente; envio e ACK em background
+- Marker: DEPLOY-2026-08-14-resend-welcome-async-ui
+- LOG: doc/LOG-2026-08-14__094500__fix-resend-welcome-modal-async.md
+
+## 2026-08-14 08:15 — Boas-vindas WhatsApp: ACK + failover
+- sendText HTTP 2xx não basta; exige DELIVERY_ACK/READ/PLAYED; ERROR tenta próxima instância
+- Marker: DEPLOY-2026-08-14-welcome-whatsapp-ack-failover
+- LOG: doc/LOG-2026-08-14__081500__welcome-whatsapp-ack-failover.md
+
+## 2026-08-13 08:49 — Fix aba Dispositivos vazia
+- `setActiveTab` não exibia `#tab-dispositivos` (ficava `tab-hidden`)
+- Marker: DEPLOY-2026-08-13-device-cloud-tab-show
+- LOG: doc/LOG-2026-08-13__084958__fix-dispositivos-tab-show.md
+
+## 2026-08-12 16:30 — DRAX Device Cloud MVP + menu Dispositivos
+- Novo repo `drax-device-cloud` (Nest/Next/Redroid); WABA menu Aquecedor→Dispositivos (production + mozart.pmo)
+- SSO `POST /device-cloud/sso`; marker DEPLOY-2026-08-12-device-cloud-menu-sso
+- LOG: doc/LOG-2026-08-12__163000__device-cloud-mvp-menu-sso.md
+
+## 2026-08-12 15:00 — + Instâncias troca bloqueados + Proteção ativa
+- Ao adicionar número, remove 1 offline/bloqueado (1:1); Proxy nos novos / off nos removidos
+- Tag «Proteção ativa» baseada só nas instâncias conectadas com proxy confirmada
+- Marker: DEPLOY-2026-08-12-swap-blocked-proxy-tag
+- LOG: doc/LOG-2026-08-12__150000__swap-blocked-instancias-proxy-tag.md
+
+## 2026-08-12 14:01 — Boas-vindas ignora Preparando/pausa humana + retry
+- `ignoreAquecedorLifecycle` + `backgroundRetryKey` nas boas-vindas (assinante/equipe)
+- Fallback qualquer EVO open se hints offline; aquecedor/campanha continuam filtrando lifecycle
+- Marker: DEPLOY-2026-08-12-welcome-bypass-lifecycle
+- LOG: doc/LOG-2026-08-12__140130__welcome-bypass-lifecycle-retry.md
+- Palavras-chave: `boas-vindas`, `ignoreAquecedorLifecycle`, `pausa humana`, `preparando`
+
+## 2026-08-12 11:00 — Proxy off no offline + botão + Instâncias
+- Desliga Proxy ao detectar instância offline (pausa saúde/sessão)
+- UI mostra «+ Instâncias» com qualquer desconectado; auto-add cura ratio ≥50%
+- Novas instâncias: Proxy ligada via prepare já existente
+- Marker: DEPLOY-2026-08-12-proxy-offline-add-instancias
+- LOG: doc/LOG-2026-08-12__110000__proxy-offline-add-instancias.md
+
+## 2026-08-12 10:52 — Motivo real da pausa + tags live (connectionState)
+- Tags de campanha usam connectionState (não fetchInstances mentiroso)
+- pauseReason gravado em pausa proxy/sessão; fallback deixa de dizer «manual»
+- Marker: DEPLOY-2026-08-12-pausa-motivo-tags-live
+- LOG: doc/LOG-2026-08-12__105200__pausa-motivo-tags-live.md
+
+## 2026-08-11 16:21 — Ativar campanha no 1º clique + anti duplo clique
+- Hydrate leve (`lightLeads`) no `POST .../estado`; timeout UI 60s
+- Toggle em `pointerdown` + lock (`toggleBusy` / inflight / disabled)
+- Marker: DEPLOY-2026-08-11-ativar-campanha-primeiro-clique
+- LOG: doc/LOG-2026-08-11__162100__ativar-campanha-primeiro-clique.md
 
 ## 2026-08-11 14:35 — Motivo real da pausa de campanha
 - `runtimeStage.detail` deixa de ser genérico («Pausa Manual») e informa saúde/créditos/ativação
 - Campo `pauseReason` na memória local; tick/créditos/parar-envios gravam o motivo
 - LOG: doc/LOG-2026-08-11__143500__campanha-motivo-real-pausa.md
 
+## 2026-08-11 13:10 — Limite mensagem IA 280 caracteres
+- Prompt do Mensageiro: máximo 280 (antes 400)
+- Marker: DEPLOY-2026-08-11-mensagem-ia-280
+- LOG: doc/LOG-2026-08-11__131000__limite-mensagem-ia-280.md
+
+## 2026-08-11 10:08 — Proteção ativa + ativar no 1º clique
+- Tag no card só com Proxy confirmada (`/proxy/find` ou set recente)
+- Ativar não espera prepare; prepare em background
+- Marker: DEPLOY-2026-08-11-protecao-ativa-ativar-1-clique
+- LOG: doc/LOG-2026-08-11__100800__protecao-ativa-ativar-1-clique.md
+
+## 2026-08-11 09:38 — Campanha Alternativa: Proxy obrigatória
+- Liga Proxy ao selecionar/ativar; desliga no finished/exclusão se ninguém mais segura o número
+- Marker: DEPLOY-2026-08-11-campanha-proxy-obrigatoria
+- LOG: doc/LOG-2026-08-11__093800__campanha-proxy-obrigatoria.md
+
+## 2026-08-10 21:05 — Aquecedor: warmth por chip + identidade chip
+- Warmth: aliases/idade/volume vitalício por número; sem teto punitivo; pisos lifetime
+- Envio/grafo/turnos já por chip (`identityMode=chip`)
+- Marker: DEPLOY-2026-08-10-aquecedor-warmth-por-chip
+- LOG: doc/LOG-2026-08-10__210500__aquecedor-warmth-por-chip.md
+- Palavras-chave: warmth, foguinhos, chip, 6973, 2477
+
+## 2026-08-10 20:51 — Aquecedor: identidade por número do chip
+- Regra: lógica de envio/grafo/turnos/stats usam chip canônico, não nome da instância
+- Migração `identityMode=chip`; turn manager alinhado aos eventos por chip
+- Marker: DEPLOY-2026-08-10-aquecedor-identidade-chip
+- LOG: doc/LOG-2026-08-10__205115__aquecedor-identidade-chip.md
+- Palavras-chave: aquecedor, chip, identidade, rename, conversation-graph
+
+## 2026-08-10 20:36 — Aquecedor: justiça de volume entre números
+- Causa: ping-pong A↔B dominava; participação por número era fraca (só “hoje”)
+- Fix: peso vitalício + não forçar resposta em par quente se há números frios
+- Marker: DEPLOY-2026-08-10-aquecedor-justica-volume-numeros
+- LOG: doc/LOG-2026-08-10__203641__aquecedor-justica-volume-numeros.md
+
+## 2026-08-10 18:45 — Mensageiro abas Imagem + variação 1080×1080
+- 4 imagens obrigatórias; round-robin; envio imagem → ACK → texto; sendMedia base64-first
+- LOG: doc/LOG-2026-08-10__184500__mensageiro-abas-imagem-1080-variacao.md
+- Palavras-chave: mensageiro, imagem, 1080, sendMedia, messengerImages
+
+## 2026-08-10 18:11 — Remover base de mensagens (planilha) no Mensageiro
+- messageMode sempre IA; /disparos/templates* → 410; UI planilha de mensagens removida
+- LOG: doc/LOG-2026-08-10__181124__remove-base-mensagens-planilha-alternativa.md
+- Palavras-chave: base de mensagens, planilha, messageMode, templates/import
+
+## 2026-08-10 15:56 — Resumo Enviados = sentCount das campanhas
+- Bug: Resumo só somava campanhas completed/finished (pausada ficava 0)
+- Fix: somar sentCount de todas; API conta leads sent em memória
+- LOG: doc/LOG-2026-08-10__155612__fix-resumo-enviados-campanha.md
+
+## 2026-08-10 15:45 — Dashboard Disparos: indicadores por API Oficial e Alternativa
+- Contagem/Distribuicao/Taxas separados por API; saldo no resumo por byApi
+- LOG: doc/LOG-2026-08-10__154500__dashboard-disparos-indicadores-por-api.md
+## 2026-08-10 15:14 — Campanha Oficial: WhatsApp + leads Excel/TXT + min 1000
+- Wizard: Seu WhatsApp (DDD, nome, logo 500x500); leads Excel/TXT; minimo 1000 envios
+- Operacional: secao WhatsApp + download logo; intake API v5
+- LOGs: doc/LOG-2026-08-10__150332__campanha-oficial-whatsapp-nome-logo.md ; doc/LOG-2026-08-10__151424__campanha-leads-excel-txt-min-1000.md
+## 2026-07-26 10:18 — Aquecedor motor unlock (volume vs intervalo)
+- Soft-skip de direções mortas no ciclo; stale par 90min; peer offline libera origem
+- Testes: scripts/test-aquecedor-motor-unlock.mjs (+ deadlock + pausa humana)
+- Marker: DEPLOY-2026-07-26-aquecedor-motor-unlock
+- LOG: doc/LOG-2026-07-26__101800__aquecedor-motor-unlock.md
+
+## 2026-07-25 19:05 — Aquecedor: pausa humana 3h (imune 6h pós-Preparando)
+- Pausa 6h→3h; rótulo «3 horas pausa humana»
+- Não aplica nas primeiras 6h após sair de Preparando (activatedAt)
+- Teste: scripts/test-aquecedor-human-pause-window.mjs
+- Marker: DEPLOY-2026-07-25-pausa-humana-3h
+- LOG: doc/LOG-2026-07-25__190500__aquecedor-pausa-humana-3h.md
+
+## 2026-07-25 11:45 — CONFIRMAR Passo 3: watermark stale
+- Bug: max(captured, now) + minTs staleava CONFIRMAR já enviado
+- Fix: graça 180s pré-start; poll paralelo findMessages∥findChats; GET deep
+- Teste: scripts/test-inbound-confirm-watermark.mjs OK
+- Marker: DEPLOY-2026-07-25-confirmar-prestart-grace
+- LOG: doc/LOG-2026-07-25__114500__confirmar-prestart-grace.md
+
+## 2026-07-25 11:15 — QR: EACCES instance-owners (não é EVO)
+- recent-failures: EACCES open /app/data/instance-owners.json (purge docker cp root)
+- Doc EVO create/connect OK; smoke create+QR OK; falha antes da EVO
+- Fix writeJsonFileResilient + chown no purge + heal-waba-data-permissions
+- Teste local OK (EPERM → unlink+replace)
+- Marker: DEPLOY-2026-07-25-owners-eacces-resilient-write
+- LOG: doc/LOG-2026-07-25__111500__owners-eacces-resilient-write.md
+
+## 2026-07-25 10:50 — QR «EVO_API_URL» é falso positivo
+- Smoke create+extract OK no container; URL já é 172.17.0.1:30181
+- UI descartava detail; agora trace em /service/evo-qr-recent-failures
+- Marker: DEPLOY-2026-07-25-qrcode-failure-trace
+- LOG: doc/LOG-2026-07-25__105000__qrcode-evo-url-falso-positivo.md
+
+## 2026-07-25 10:25 — QR ainda falha (marker OK): smoke + detail UI
+- EVO create OK fora; WABA marker tombstone no ar; texto genérico = catch do job
+- Fix: UI/detail + GET /service/evo-qr-create-smoke + marker smoke-detail
+- LOG: doc/LOG-2026-07-25__102500__qrcode-smoke-detail.md
+
+## 2026-07-25 10:02 — QRCode falha pós-purge (extract + tombstone)
+- EVO create OK; painel falhava: `code` Baileys vs base64 + tombstone deletedInstances
+- Fix tryExtractQrCode + clearDeletedMark no claimOnRegister + UI detalhe
+- Marker: DEPLOY-2026-07-25-qrcode-extract-tombstone — Redeploy Node
+- LOG: doc/LOG-2026-07-25__100200__qrcode-extract-tombstone-fix.md
+
+## 2026-07-25 10:00 — Purge Mozart + deploy deadlock unlock
+- Push `767ec28` marker pair-deadlock-unlock
+- Script/workflow: purge-mozart-owner-reset (protege walkup + soma-crm)
+- LOG: doc/LOG-2026-07-25__100000__purge-mozart-owner-reset.md
+
+## 2026-07-25 09:50 — Aquecedor: deadlock saldo/anti-duplicata (print)
+- Motor ativo + “nenhum envio elegível” = pick null por |saldo|=1 + lastDirection curativo
+- Fix getPairDirectionAllowed: repetir sentido só se reduzir desequilíbrio
+- Marker: DEPLOY-2026-07-25-aquecedor-pair-deadlock-unlock
+- LOG: doc/LOG-2026-07-25__095000__aquecedor-pair-deadlock-unlock.md
+
+## 2026-07-25 09:45 — Aquecedor ~10× abaixo do esperado (pós 16:51)
+- Só 3 ENVIADO desde 24/07 16:51; 0 após 16:55 (ainda expediente) e 0 no sáb de manhã
+- Esperado ~21–63 no trecho aberto; pool: 5 healthy open vs 5 broken ERROR + 8927 close
+- Causas: outbound quebrado + silêncio do motor (desired/lifecycle/defer) — não só wait 5–15min
+- LOG: doc/LOG-2026-07-25__094500__aquecedor-volume-10x-abaixo.md
+
+## 2026-07-24 13:15 — Aquecedor: Em Fila some = outbound MessageUpdate=ERROR
+- Teste 1× 1321→walkup: HTTP 201 + tag só na origem + MessageUpdate=ERROR (walkup OK)
+- Quebradas 100% ERROR: 1321, 1261, 6011, 6635 | saudáveis: walkup, 1321-01, soma…
+- Código: filtra outbound quebrado + poll findStatusMessage; não culpar destino
+- Marker: DEPLOY-2026-07-24-aquecedor-outbound-ack-error — precisa push + Redeploy Node
+- LOG: doc/LOG-2026-07-24__131500__aquecedor-outbound-messageupdate-error.md
+
+## 2026-07-24 12:06 — Aquecedor: conversa pares + sucesso no destino
+- Sucesso = tag no DESTINO; findChats fallback; B→A prioriza após A→B
+- Anti-spam 1 send/ciclo + cooldown 15min mantidos
+- Marker: DEPLOY-2026-07-24-aquecedor-conversa-pares-destino — Redeploy Node
+- LOG: doc/LOG-2026-07-24__120600__aquecedor-conversa-pares-destino.md
+
+## 2026-07-24 11:46 — Análise: por que o aquecedor quebrou esta semana
+- Números novos + verify mais rígido (24/07) + variantes; malha antiga na prática funcionava
+- Não enquadrar o modo antigo como “só mentia” — incidente jun/20 foi pontual
+- LOG: doc/LOG-2026-07-24__114600__analise-aquecedor-quebra-semana.md
+
+## 2026-07-24 11:18 — Anti-spam sendText (ban WhatsApp)
+- Incidente: rajada de probes (~5 sendText/6 min) → block
+- Aquecedor: 1 send aceito/ciclo; sem reenvio por variante; cooldown 15min se falha de entrega
+- Rule: .cursor/rules/anti-spam-whatsapp-sendtext.mdc
+- Marker: DEPLOY-2026-07-24-aquecedor-anti-spam-sendtext — Redeploy Node
+- LOG: doc/LOG-2026-07-24__111800__anti-spam-sendtext-ban.md
+
+## 2026-07-24 10:55 — Aquecedor: libera PROCESSANDO órfão global
+- Bug: stuck release só no escopo → 6973 ficava PROCESSANDO 1600+ min
+- Falha 6635→8918 = entrega real só na origem (não falso sucesso)
+- Marker: DEPLOY-2026-07-24-aquecedor-release-stuck-global — Redeploy Node
+- LOG: doc/LOG-2026-07-24__105500__aquecedor-release-stuck-global.md
+
+## 2026-07-24 10:41 — Aquecedor: cooldown de par 15 min
+- Era 45 min após falha de confirmação de entrega; agora 15 min
+- Marker: DEPLOY-2026-07-24-aquecedor-cooldown-15min — Redeploy Node
+- LOG: doc/LOG-2026-07-24__104100__aquecedor-cooldown-15min.md
+
+## 2026-07-24 10:25 — Saúde da rede só Mozart
+- UI + API `/aquecedor/network-health` exclusivos para `mozart.pmo@gmail.com` (403 para demais)
+- Marker: DEPLOY-2026-07-24-saude-rede-so-mozart — Redeploy Node
+- Keywords: `Saúde da rede`, `mozart.pmo`, `network-health`
+
+## 2026-07-24 10:15 — Aquecedor: entrega variantes + cooldown + anti-duplicata
+- Revert mantém instancia; órfãos reclamados; cooldown 15min (era 45); variantes BR no send/findMessages
+- Marker: DEPLOY-2026-07-24-aquecedor-entrega-variantes-cooldown — Redeploy Node
+- LOG: doc/LOG-2026-07-24__101500__aquecedor-entrega-variantes-cooldown.md
+
+## 2026-07-24 08:55 — Aquecedor: falso Envio com Sucesso
+- Causa: findMessages global + match de prefixo de frases repetidas; teste gravava sucesso sem prova
+- Fix: só tag única; JID obrigatório; origem+destino; teste sem sucesso falso
+- Marker: DEPLOY-2026-07-24-aquecedor-falso-sucesso-entrega — Redeploy Node
+- LOG: doc/LOG-2026-07-24__085500__aquecedor-falso-sucesso-entrega.md
+
+## 2026-07-24 08:00 — Aquecedor: rotatividade inteligente de pares
+- RelationshipManager: volume entre pares + anti-repetição + cobertura
+- Dashboard: matriz NxN, spread/desvio, histórico com motivo do score
+- Marker: DEPLOY-2026-07-24-aquecedor-rotatividade-pares — Redeploy Node
+- LOG: doc/LOG-2026-07-24__080000__aquecedor-rotatividade-pares.md
+
+## 2026-07-24 07:50 — Motor aquecedor orientado a pares
+- Grafo persistente + orchestrator (saldo, anti-duplicata, distribuição)
+- GET /aquecedor/network-health + UI «Saúde da rede»
+- Marker: DEPLOY-2026-07-24-aquecedor-motor-pares-grafo — Redeploy Node
+- LOG: doc/LOG-2026-07-24__075000__aquecedor-motor-pares-grafo.md
+
+## 2026-07-24 07:32 — Modal validação: loop card verde + reply
+- UI: poll 2s, sem scroll/animação a cada tick; sem auto-restart 404; esconde banner verde na recepção
+- Backend: GET refresh; send preferido + retry; não enviar ao próprio número
+- Marker: DEPLOY-2026-07-24-validacao-ui-loop-reply-retry — Redeploy Node
+- LOG: doc/LOG-2026-07-24__073200__fix-validacao-ui-loop-reply.md
+
+## 2026-07-23 13:56 — Card ativas alinhado ao filtro Conectados
+- Causa: card usava `isOpen` (incluía Preparando/Restrição abertas); filtro usa label `conectado`
+- Fix: `updateInstancesIndicators` usa `isInstanceConnectedFilter` / `isInstanceDisconnectedFilter`
+- LOG: doc/LOG-2026-07-23__135600__fix-card-ativas-vs-filtro-conectados.md
+
+## 2026-07-23 10:20 — Purge 555182001261/1261 na EVO
+- EVO: zero hits; connectionState/delete 1261 → 404 (já removida)
+- Script VPS limpa data WABA: scripts/purge-wa-number-1261-vps.sh
+- LOG: doc/LOG-2026-07-23__102000__purge-evo-555182001261-1261.md
+
+## 2026-07-23 08:15 — 1261: oscilação + número via ownerJid
+- EVO: close vs connecting + device_removed; number null / ownerJid ok
+- Fix UI+enrich; marker DEPLOY-2026-07-23-1261-numero-status-estavel — Redeploy
+- LOG: doc/LOG-2026-07-23__081500__1261-oscilacao-numero-ownerjid.md
+
+## 2026-07-23 08:00 — Validação reply no mesmo chat do CONFIRMAR
+- sendText prioriza JID do CONFIRMAR; prova só nesse chat (sem fromMe global)
+- Marker: DEPLOY-2026-07-23-validacao-reply-mesmo-chat — Redeploy Node
+- LOG: doc/LOG-2026-07-23__080000__validacao-reply-mesmo-chat.md
+
+## 2026-07-23 07:52 — UI Restrição: ícone −7% / fonte −5%
+- Ícone 1.35em→1.2555em; fonte 1.05rem→0.9975rem
+
+## 2026-07-23 07:50 — Restrição: connecting ≠ ban (6973 falso positivo)
+- 5181076973/6973 em connecting EVO não é restrição WA; purge tags automáticas
+- Marker: DEPLOY-2026-07-23-restricao-nao-por-connecting — Redeploy Node
+- LOG: doc/LOG-2026-07-23__075000__restricao-nao-por-connecting-6973.md
+
+## 2026-07-23 07:45 — QR/Atualizar: connect-first (sem logout prévio)
+- Causa: logout+restart antes do connect → timeout/Failed to fetch; EVO connect já devolve QR
+- UI: botões liberados em Restrição; Atualizar também gera QR
+- Marker: DEPLOY-2026-07-23-qrcode-connect-first-no-logout — exige Redeploy Node
+- LOG: doc/LOG-2026-07-23__074500__qrcode-connect-first-sem-logout.md
+
+## 2026-07-23 07:33 — Card Restrição com cores de Desconectados
+- Borda/valor do summary-card-restriction: vermelho `#fca5a5` / `rgba(248,113,113)`
+- Preparando permanece amarelo
+- LOG: doc/LOG-2026-07-23__073300__ui-card-restricao-cores-desconectados.md
+
+## 2026-07-23 07:31 — UI Restrição: fonte/ícone + "Restrição"
+- `text-transform: none` no `.wa-restriction`; fonte 1.05rem; ícone 1.35em
+- LOG: doc/LOG-2026-07-23__073100__ui-restricao-fonte-icone-maiuscula.md
+
+## 2026-07-22 16:03 — Validação 1261 v2 forceRestart + watermark=now
+- Retry reaproveitava sessão; watermark agora = max(histórico, start); UI forceRestart sempre; telefone com 9
+- Marker: DEPLOY-2026-07-22-validacao-1261-force-restart-v2 — exige Redeploy
+- LOG: doc/LOG-2026-07-22__160300__validacao-1261-force-restart-v2.md
+
+## 2026-07-22 15:58 — Heal login v6 supervisor (anti-502 permanente)
+- Bursts escalonados + flock wait + supervisor 20s revive unidades + cura HTTPS
+- Actions/Guardião assert supervisor; Rule atualizada
+- LOG: doc/LOG-2026-07-22__155800__heal-login-v6-supervisor-anti-502.md
+
+## 2026-07-22 15:50 — Modal atualização só em Deploy/Redeploy
+- Removido 502/rede/fetch como gatilho; só shuttingDown + drift deployMarker
+- LOG: doc/LOG-2026-07-22__155000__modal-atualizacao-somente-deploy.md
+
+## 2026-07-22 15:41 — Validação 1261 anti-histórico EVO (definitivo)
+- EVO 1261: 11 Confirmar + 2 replies antigas; falso ok por match genérico “Validação WABA”
+- Fix: watermark no start; prova só com WABA-VAL desta sessão; anti-flicker etapa 2
+- Teste offline PASS no dump real; marker DEPLOY-2026-07-22-validacao-anti-historico-evo
+- LOG: doc/LOG-2026-07-22__154100__validacao-1261-anti-historico-evo.md
+
+## 2026-07-22 14:08 — Validação 1261: prova no chat + Redeploy
+- Causa: FTP não reinicia Node (marker antigo no /health); success falso só com HTTP 201
+- Fix: sendText com variantes BR; sucesso só com mensagem no chat; marker novo
+- Obrigatório: Redeploy disparador + heal se 502; validar marker no /health
+- LOG: doc/LOG-2026-07-22__140800__validacao-1261-prova-chat-redeploy.md
+
+## 2026-07-22 13:45 — Aquecedor pares + validação 1261
+- Fix: replyDue prioridade absoluta (6011 só recebia); send validação sem sucesso falso; Preparando com since=now
+- LOG: doc/LOG-2026-07-22__134500__aquecedor-pares-validacao-1261.md
+
+## 2026-07-22 13:31 — Heal login v5 confirmado ACTIVE no VPS
+- install + burst OK rodada 1; watch+timer `active`; https:200
+- Watch reagiu a vários `service update waba_waba_disparador` (~16:27–16:28 UTC)
+- LOG anterior: doc/LOG-2026-07-22__133000__502-persiste-heal-inativo.md
+
+## 2026-07-22 13:30 — 502 persiste pós-FTP (heal VPS)
+- FTP não cura :30180; install+burst obrigatório; watch/timer devem ser active
+- LOG: doc/LOG-2026-07-22__133000__502-persiste-heal-inativo.md
+
+## 2026-07-22 13:15 — Normalizar 9º dígito móvel BR
+- 5182001261 ≡ 51982001261; expand/canonicalize/match no backend
+- LOG: doc/LOG-2026-07-22__131500__normalize-9-digito-br.md
+
+## 2026-07-22 13:00 — Validação aceita CONFIRMA
+- Match estrito CONFIRMAR falhava com «Confirma»; aliases + UI; número real 5182001261
+- LOG: doc/LOG-2026-07-22__130000__validacao-aceita-confirma.md
+
+## 2026-07-22 12:45 — Contingência anti-502 (heal+modal)
+- Causa: Guardião baixava heals sem `install` → watch morto; overlay ignorava 502
+- Fix: Guardião install heals; heal v5; UI 502→modal+reload; Actions assert active
+- VPS: reinstall heal-waba-login AGORA
+- LOG: doc/LOG-2026-07-22__124500__contingencia-anti-502-heal-modal.md
+
+## 2026-07-22 12:39 — 502 pós-Redeploy (heal login)
+- waba.draxsistemas Bad Gateway após Redeploy; causa :30180; burst heal-waba-login
+- LOG: doc/LOG-2026-07-22__123900__502-pos-redeploy-heal-login.md
+
+## 2026-07-22 12:28 — Fix Preparando na integração
+- Create/QR força Preparando; sem createdAt não grandfather; reconcile active→preparing se EVO recente/recriada
+- Contagem Preparando e exclusão do ciclo aquecedor voltam a bater
+- LOG: doc/LOG-2026-07-22__122800__fix-preparando-integracao.md
+
+## 2026-07-22 11:35 — Indicadores Preparando + Restrição Temporária
+- Aba Instâncias: 2 cards no topo (contagens); chip filtro Restrição; sync dist
+- LOG: doc/LOG-2026-07-22__113500__indicadores-preparando-restricao.md
+
+## 2026-07-22 11:30 — Tag UI Restrição (connecting + 3h)
+- Tag estilo Preparando: ícone WA + Restrição + countdown 3h; ações off; recheck 60min limpa se sair de connecting
+- Store: whatsapp-connecting-restriction.json; enrich live + uso-config
+- LOG: doc/LOG-2026-07-22__113000__tag-restricao-connecting-3h.md
+
+## 2026-07-21 21:20 — Heal login v4 (anti-queda pós-redeploy)
+- Timer 10s, burst 2s, probe 172.17.0.1, watch 1s; nunca disable login-heal; redeploy só se necessário
+- VPS: reinstall obrigatório `heal-waba-login-vps.sh install`
+- LOG: doc/LOG-2026-07-21__212000__heal-login-v4-anti-queda.md
+
+## 2026-07-21 20:52 — Lista «desconectado» com QR «já conectada» (1261)
+- EVO open de verdade; lista lia cache sem live enrich; background refresh sem re-render
+- Fix snapshot live + 409 como sucesso + re-render; número real WA: 5182001261 (não 51982001261)
+- LOG: doc/LOG-2026-07-21__205200__fix-lista-desconectado-ja-conectada-1261.md
+
+## 2026-07-21 20:45 — Restart EVO destravou QR (create/connect)
+- UI «Verifique EVO_API_URL» era falso positivo (502); create/connect travavam na Evolution
+- Fix: `docker service update --force walkup_evo-walkup-api` (aprovado)
+- Validação: create 201 ~5s com QR; não usar `127.0.0.1:30181` no host (hairpin) — preferir `172.17.0.1:30181`
+- LOG: doc/LOG-2026-07-21__204500__evo-restart-destravou-qr-create.md
+
+## 2026-07-21 16:18 — Guardião ATIVO (repair) no VPS; writers desligados
+- Corrupção recorrente do main.yaml: culpado final = `sinal-verde-main-yaml.path` (path unit strip a cada write)
+- Desligados: overlay-guards SV/Soma, heal-sinal-verde, soma-gestao-heal, traefik-permanent-*, waba-traefik-autoheal, waba-login-heal v2 antiga
+- Guardião repair: strip 12 chaves SV/Soma OK; probes 200/200/200/307/200; state `clean`
+- NÃO religar writers antigos; heals só nas versões guardian (publish-only)
+- LOG: doc/LOG-2026-07-21__161800__guardiao-ativo-repair-writers-desligados.md
+
+## 2026-07-21 13:54 — Guardião de Sistemas Traefik criado
+- Um único writer transacional do `main.yaml`; sem HUP/force/timers concorrentes
+- Strip condicionado a YAML isolado válido; Host/entryPoints/backends por allowlist
+- Backup + escrita atômica + probes + rollback automático
+- Registry: WABA 30180/30210/30211, Walkup 30181, SV e Soma isolados
+- Heals WABA agora são publish-only e solicitam reparo ao Guardião
+- Rules: projeto + global Cursor
+- Testes: 3 unitários OK; Python/Shell/JSON válidos
+- Ainda não instalado no VPS: publicar → `install-audit` → revisar → `activate`
+- LOG: `doc/LOG-2026-07-21__135400__create-guardiao-sistemas-traefik.md`
+
+## 2026-07-20 20:21 — Soma CRM isolado CONCLUÍDO no VPS
+- `soma-crm.yaml` criado; 6 chaves Soma stripped do `main.yaml`
+- Validação: disparos/bet/health **200** | SV **307** | soma **307** / health **200** | main limpo
+- Guard `soma-crm-overlay-guard` timer+watch ativos
+- Hosts: `app.somaconecta.com.br` + easypanel.host + backend `:30300`
+- Keywords: `soma-crm.yaml`, `30300`, `app.somaconecta.com.br`
+
+## 2026-07-20 20:20 — Traefik split Soma CRM (`soma-crm.yaml`)
+- Isola `app.somaconecta.com.br` em `soma-crm.yaml` (backend `:30300`); strip do `main.yaml`
+- Scripts: `fix-soma-crm-isolated-yaml-vps.sh`, `soma-crm-overlay-guard-vps.sh`, paste Hostinger
+- Rule: `soma-crm-heal-pos-redeploy.mdc` + UCP Traefik
+- LOG: `doc/LOG-2026-07-20__202000__traefik-split-soma-crm.yaml.md`
+- Keywords: `soma-crm.yaml`, `30300`, `app.somaconecta.com.br`, `SOMA-EASYPANEL-REWRITE`
+
+## 2026-07-20 20:15 — Traefik split WABA/SV CONCLUÍDO no VPS
+- MODE=directory já existia (`/data/config` + watch)
+- `sinal-verde.yaml` isolado (http.routers); 6 chaves SV removidas do `main.yaml`
+- Validação: disparos/bet/health **200** | SV **307** | `main: limpo SV`
+- Guard v4 ativo (`sinal-verde-overlay-guard` timer+watch) — só edita `sinal-verde.yaml`
+- Scripts: `fix-sinal-verde-isolated-yaml-vps.sh` v2, split v3
+- LOG: `doc/LOG-2026-07-20__200023__traefik-split-sinal-verde-waba.md`
+- Keywords: `traefik-split`, `sinal-verde.yaml`, `http.routers`, `30310`
+
+## 2026-07-20 20:00 — Traefik split: WABA vs Sinal Verde
+- `sinal-verde.yaml` isolado; scripts SV **não** editam `main.yaml` (só strip se Easypanel recriar)
+- Scripts: `traefik-inspect-file-provider-vps.sh`, `traefik-split-sinal-verde-yaml-vps.sh`, fix v5, guard v4
+- Workflow: `.github/workflows/traefik-split-sinal-verde.yml`
+- Rules: `sinal-verde-heal-pos-redeploy.mdc` + `ucp-traefik-static-dynamic.mdc`
+- LOG: `doc/LOG-2026-07-20__200023__traefik-split-sinal-verde-waba.md`
+- Keywords: `traefik-split`, `sinal-verde.yaml`, `file-provider-directory`, `30310`
+
+## 2026-07-21 12:45 — Auto-heal permanente ATIVO (bets + paginadevendas)
+- VPS: `waba-paginadevendas-heal-watch/.timer` + `waba-bets-heal-watch/.timer` = **active**
+- Script bets publicado (`2959bf3`) — antes 404 no raw; HUP removido do script
+- Redeploy agora se cura sozinho (~20–60s); os 3 sites 200
+- LOG: doc/LOG-2026-07-21__124500__install-heal-bets-paginadevendas-permanente.md
+
+## 2026-07-21 12:30 — Remover LOGO 1–6 wabadisparos
+- `pv-waba-disparador` `SocialProof`: removidos placeholders LOGO 1–6
+- Redeploy Easypanel `waba_paginadevendas` para publicar
+- LOG: doc/LOG-2026-07-21__123000__remove-logo-placeholders-wabadisparos.md
+
+## 2026-07-20 19:51 — Landings restauradas (502→200)
+- bet + wabadisparos + health = **200** (validado de fora)
+- Restore Hostinger: publish :30210/:30211 + bak/backends (script emergency-restore-landings-502)
+
+## 2026-07-20 19:46 — Landings 502 (bet + disparos) — restore emergencial
+- Público: bet + wabadisparos **502** bad-gateway; login health **200**
+- Script: `scripts/emergency-restore-landings-502-vps.sh` (Hostinger — sem SSH local)
+- Prefer bak: `main.yaml.bak-restore-easypanel-backends-2026-07-10-v2-20260719-234729`
+- LOG: doc/LOG-2026-07-20__194600__emergency-restore-landings-502.md
+
+## 2026-07-20 19:10 — Push UI bet + logo wabadisparos
+- betwaba-connect `main` `6d6c624` — hero padding
+- pv-waba-disparador `main` `d117da1` — logo +15%
+- Redeploy Easypanel: `waba_bets_pv` + `waba_paginadevendas` (+ heals :30211/:30210 se 502)
+
+## 2026-07-20 19:00 — UI bet margin + logo wabadisparos +15%
+- bet: `D:\betwaba-connect` hero `pt-8 sm:pt-12 md:pt-14` (era pt-16/24/32)
+- disparos: `D:\pv-waba-disparador` Logo nav `h-[2.9756rem]` (+15% vs 2.5875rem)
+- Falta: redeploy Easypanel `waba_bets_pv` + `waba_paginadevendas`
+- LOG: doc/LOG-2026-07-20__190000__ui-bet-margin-wabadisparos-logo.md
+
+## 2026-07-20 18:48 — traefik-agent global (qualquer projeto Cursor)
+- Skill: `C:\Users\Usuario\.cursor\skills\traefik-agent\` (`@traefik-agent`)
+- Rule user alwaysApply: `C:\Users\Usuario\.cursor\rules\traefik-agent.mdc`
+- WABA `AGENTS.md` aponta para o global; `traefik-incident-specialist` = legado
+- Base: REGISTRY + crawler sob `E:\01A-Drax-Servidor\Waba` (quando existir)
+- LOG: doc/LOG-2026-07-20__184800__create-traefik-agent-global.md
+
+## 2026-07-19 17:47 — Soma → campanha API Alternativa
+- POST /integrations/soma/alternativa-campaigns (X-Soma-Waba-Key, owner mozart)
+- Campanha criada pausada; auth bypass igual ao aquecedor
+- LOG: doc/LOG-2026-07-19__174734__soma-alternativa-campaigns-api.md
+
+## 2026-07-19 11:10 — Endpoint Soma aquecedor-instances
+- GET /integrations/soma/aquecedor-instances + SOMA_WABA_INTEGRATION_KEY / owner mozart.pmo@gmail.com
+- LOG: doc/LOG-2026-07-19__111015__soma-aquecedor-instances-endpoint.md
 # MemÃ³ria Consolidada do Projeto
 
 Este arquivo Ã© atualizado a cada tarefa executada.
@@ -29,6 +884,92 @@ Como usar:
 - **Não fazer:** push em `master`, redeploy produção ou alterações em `waba_disparador` sem aviso do usuário
 
 ## Última atualização
+
+## 2026-07-18 — Produção → localhost V02
+- `.env.v02` sync de `E:\Waba` + aquecedor/background OFF
+- Export SSH via Actions (`export-triggers`) + apply tarball em `data/v02`
+- Endpoint `GET /admin/infra/data-snapshot` (fallback HTTP)
+- Ver `doc/LOG-2026-07-18__181500__producao-para-localhost-v02.md`
+- Keywords: `producao`, `localhost v02`, `data-snapshot`, `export-triggers`
+
+## 2026-07-17 — Aquecedor: equidade contínua por rodízio LRU
+- Causa: compensar apenas o menor volume fazia um par monopolizar o ciclo até alcançar os demais
+- Fix: priorizar o par há mais tempo sem troca; impedir repetição imediata; volume e direção como desempates
+- Validação real: enviados/recebidos atuais próximos (`Soma 40/38`, `Walkup 38/40`, `Drax 39/39`) e projeção com 2 envios em cada uma das 6 direções nos próximos 12 ciclos
+- Marker: `DEPLOY-2026-07-17-aquecedor-rodizio-pares-lru`
+- Ver `doc/LOG-2026-07-17__120500__aquecedor-rodizio-pares-lru.md`
+- Keywords: `equidade contínua`, `rodízio LRU`, `pares`, `starvation`, `Drax`, `Walkup`, `Soma`
+
+## 2026-07-17 — Aquecedor: Soma fora do ciclo + contador “…”
+- Causa: equidade usava histórico eterno (281 trocas soma↔walkup) → score punia o par; turno do par nunca expirava
+- Fix: janela equidade 24h + turno stale 6h; persistir `connectedSummary`; refresh no GET `/aquecedor/status`
+- Marker: `DEPLOY-2026-07-17-aquecedor-equidade-janela-24h`
+- Ver `doc/LOG-2026-07-17__101400__aquecedor-equidade-pares-soma.md`
+- Keywords: `pares`, `equidade`, `soma`, `walkup`, `1321-01`, `instâncias: …`
+
+## 2026-07-17 — Easypanel verde/amarelo pós-redeploy
+- Boot 07:45:24; `/health` 200 estável; flapping = 503 no SIGTERM + Traefik
+- Após verde: Iniciar Aquecedor (`aquecedorDesiredOwners=0`)
+- Ver `doc/LOG-2026-07-17__074500__easypanel-verde-amarelo-pos-redeploy.md`
+
+## 2026-07-17 — Aquecedor parou após redeploy 20:58
+- Causa: `serverBootId` mro66ke4 = restart 16/07 20:58:25 BRT (Redeploy) no meio do ciclo; desired não sobreviveu
+- Fix: `aquecedor-desired-owners.json` + restore no boot + flush no SIGTERM
+- Marker: `DEPLOY-2026-07-17-aquecedor-desired-sobrevive-redeploy`
+- Ver `doc/LOG-2026-07-17__073500__aquecedor-parou-apos-redeploy.md`
+- Keywords: `redeploy`, `desired`, `serverBootId`, `20:58`
+
+**2026-07-17 — Soma gestao Traefik:** reincidência 404/502 pós-redeploy = overlay + Host slash + publish :30300. REGISTRY `SOMA-EASYPANEL-REWRITE`. Heal: `soma-master/scripts/heal-soma-gestao-vps.sh`. Sem force Traefik.
+
+
+## 2026-07-16 — Soma SIGTERM (proxy port ≠ Nitro)
+- SSH local bloqueado (`Permission denied`); sem `docker service inspect`.
+- Causa: app escuta **3000**; Domínio Easypanel/Traefik ainda em **80** → health falha → SIGTERM.
+- Probes: `soma-promotora-app…/api/health` **502**; `app.somaconecta` **404**; WABA Traefik OK.
+- Fix painel: Domínios → proxy **3000** + `/api/health`; sem force Traefik.
+- LOG: `doc/LOG-2026-07-16__203800__soma-sigterm-proxy-port-mismatch.md`
+- Keywords: `soma-promotora`, `SIGTERM`, `PORT=80`, `proxy 3000`, `Nitro`, `502`
+
+## 2026-07-16 — Aquecedor dist UI + nextAllowedAt
+- Causa: Easypanel usa `dist/` do Git; UI nova só estava na raiz
+- Fix: commit `dist/index.html` + limpar nextAllowedAt passado no status/start
+- Marker: `DEPLOY-2026-07-16-aquecedor-dist-ui-nextallowed`
+- Ver `doc/LOG-2026-07-16__202800__aquecedor-dist-ui-nextallowed-fix.md`
+- Keywords: `dist`, `nextAllowedAt`, `16:02`, `Easypanel`
+
+## 2026-07-16 — Aquecedor status linha clara
+- `próximo` com data completa `dd/mm/aaaa - hh:mm:ss`
+- Fase: processando | em pausa | parado | ativo (não mais lastResult cru)
+- Marker: `DEPLOY-2026-07-16-aquecedor-status-linha-clara`
+- Ver `doc/LOG-2026-07-16__195500__aquecedor-status-linha-clara.md`
+- Keywords: `aquecedor`, `status`, `próximo`, `em pausa`
+
+## 2026-07-16 — Aquecedor Envio teste EVO
+- Fix: teste usa live-open (não só active/Preparando); não mata motor; EVO `text` raiz; sucesso se HTTP aceito
+- Validado: sendText soma-crm→walkup 201 + `/service/evo-integration-probe` ok
+- Marker: `DEPLOY-2026-07-16-aquecedor-envio-teste-evo-fix`
+- Ver `doc/LOG-2026-07-16__160500__aquecedor-envio-teste-evo-fix.md`
+- Keywords: `aquecedor`, `envio-teste`, `run-once`, `sendText`, `evo`
+
+## 2026-07-16 — Aquecedor continua após logout
+- Pasta canônica: `H:\Meu Drive\Drive Profissional\Waba` (mais nova que backup `D:\Waba`)
+- Bug: motor parava após deslogar; UI só retomava com sessão
+- Fix: `desired=true` basta para liderar/persistir `running`; reload merge sem matar timer
+- Marker: `DEPLOY-2026-07-16-aquecedor-continua-apos-logout`
+- Ver `doc/LOG-2026-07-16__154958__aquecedor-continua-apos-logout.md`
+- Keywords: `aquecedor`, `logout`, `desired`, `runtime-intent`, `daemon`
+
+## 2026-07-16 — Sinal Verde: publicação guiada passo a passo
+- Easypanel **verde**; domínio ainda **Parked Hostinger** (DNS, não app)
+- Etapa: corrigir NS/A para IP real da VPS do Easypanel
+- Keywords: `sinal-verde`, `parked`, `dns`, `hostinger`, `easypanel-verde`
+
+## 2026-07-16 — Sinal Verde: DNS + publicação Easypanel (início)
+- Domínio: `acesso-sinalverde.com` → A `@` = `2.57.91.91` (resolução OK; www via CNAME)
+- Projeto Easypanel: `sinal-verde` (VPS **não** é o WABA `72.60.51.127`)
+- Próximo: confirmar IP da VPS = `2.57.91.91` → adicionar domínio no serviço do app
+- Ver `doc/LOG-2026-07-16__143000__sinal-verde-dns-easypanel-inicio.md`
+- Keywords: `sinal-verde`, `acesso-sinalverde.com`, `easypanel`, `dns`, `2.57.91.91`
 
 ## 2026-07-14 — Deploy prod cupons lista única
 - Marker: `DEPLOY-2026-07-14-cupons-lista-unica-filtro`
@@ -2409,3 +3350,62 @@ Palavras-chave para buscar:
 ## 2026-07-14 — Heal permanente paginadevendas
 - Watch+timer `waba-paginadevendas-heal-*` — impede 502/bad-gateway pós-redeploy.
 - Install: `heal-paginadevendas-pos-redeploy-vps.sh install` (VPS uma vez).
+
+## 2026-07-14 — Regra comandos locais
+- Regra global: executar comandos locais no terminal; não só listar para o usuário.
+
+
+## 2026-07-17 07:39 — Estudo Traefik WABA → Soma
+- Ultima estabilidade Traefik = **anti-thrash 2026-07-10** (separar healers; nao segundo Traefik).
+- Camadas OK: bootstrap + 443-watchdog + entrypoint-guard; heals por app sem force.
+- Soma: manter `heal-soma-gestao-vps.sh` no mesmo padrao; evitar thrash Easypanel.
+- LOG: `LOG--traefik-anti-thrash-para-soma.md`
+- Keywords: TRAEFIK-THRASH-443, anti-thrash, Soma heal 45s
+
+
+
+- 2026-07-21: Heal Sinal Verde isolado — NÃO chama restore-backends; strip atômico + path unit no main.yaml; rollback se WABA cair. Scripts: heal-sinal-verde-pos-redeploy-vps.sh. Buscar: sinal-verde isolado, strip seguro, anti 404 traefik.
+
+## 2026-08-19 11:21 — Device Cloud: ícone e laranja do Aquecer
+- Fix: override CSS em `#device-cloud-warm-btn` reduz gap do ícone e aplica `#fb923c` no texto.
+- Marker `DEPLOY-2026-08-19-device-cloud-warm-btn-icon-orange`
+- LOG: doc/LOG-2026-08-19__112149__device-cloud-warm-btn-icon-orange-fix.md
+
+## 2026-08-19 11:45 — Device Cloud: Aquecer integra EVO sem CONFIRMAR
+- Fluxo enxuto: `registrar-qrcode` + pairing code + poll `status-conexao`; pula `validacao-inbound`.
+- Alias do device + `uso-config` aquecedor; refresh Instâncias.
+- Marker `DEPLOY-2026-08-19-device-cloud-aquecer-integracao-enxuta`
+- LOG: doc/LOG-2026-08-19__114500__device-cloud-aquecer-integracao-enxuta.md
+- Keywords: device-cloud aquecer, pairing-code, sem-confirmar, integracao-enxuta
+
+## 2026-08-19 12:45 — Device Cloud: estilo botão Aquecer = Aquecedor
+- Fundo `#231f20`, borda `#d68d54`, texto branco, chama `#ffa500`; sem `btn-qrcode`.
+- Marker `DEPLOY-2026-08-19-device-cloud-aquecer-btn-estilo`
+- LOG: doc/LOG-2026-08-19__124500__device-cloud-aquecer-btn-estilo-aquecedor.md
+
+## 2026-08-19 13:05 — Device Cloud: Aquecer = menu lateral Aquecedor (correção)
+- CSS espelha `#tab-btn-aquecedor.active`: `rgba(251,146,60,0.14)` fundo, borda `0.66`, texto `#f8fafc`, chama `#fb923c`.
+- LOG: doc/LOG-2026-08-19__130500__device-cloud-aquecer-btn-menu-lateral.md
+- Keywords: device-cloud aquecer, tab-btn-aquecedor, menu-section-accent-rgb
+
+## 2026-08-19 13:20 — Device Cloud: lingueta Adicionar ao Aquecedor
+- Substitui botão Aquecer na barra; lingueta após cadastrar número; estados idle/busy/done; pulso menu Instâncias.
+- LOG: doc/LOG-2026-08-19__132000__device-cloud-lingueta-aquecedor.md
+- Keywords: device-cloud lingueta, instancias-menu-pulse, aguarde um instante
+
+## 2026-08-19 13:43 — Device Cloud: copy sem EVO + dispositivo
+- UI Dispositivos: remove Evolution/EVO dos textos; device → dispositivo; Device Cloud → Dispositivos nas mensagens.
+- LOG: doc/LOG-2026-08-19__134300__device-cloud-copy-sem-evo-dispositivo.md
+- Keywords: device-cloud copy, dispositivo, sem-evo
+
+## 2026-08-19 13:52 — Device Cloud: lingueta visível + sem Início
+- Lingueta aparece ao abrir device; remove botão Início; marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab`.
+- LOG: doc/LOG-2026-08-19__135200__device-cloud-lingueta-visible-sem-inicio.md
+- Keywords: lingueta visivel, sem-inicio, deploy-marker
+
+## 2026-08-19 14:02 — Device Cloud: dist/index.html desatualizado (produção)
+- Easypanel serve `dist/`; commits só na raiz não atualizavam UI. Fix: build + commit `dist/index.html` + `dist/deploy-marker.js`.
+- LOG: doc/LOG-2026-08-19__140200__device-cloud-dist-index-desatualizado-fix.md
+- Keywords: dist/index.html, easypanel, waba_disparador, deploy-marker
+
+- 2026-08-21: fix CNAE modal Playwright (Leads PJ) — keywords: cnae, casadosdados, modal, leads-cnpj. LOG: LOG--leads-cnae-modal-playwright.md

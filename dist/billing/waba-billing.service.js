@@ -26,9 +26,17 @@ const isPaidAsaasStatus = (status) => {
     const normalized = String(status ?? "").trim().toUpperCase();
     return normalized === "RECEIVED" || normalized === "CONFIRMED" || normalized === "RECEIVED_IN_CASH";
 };
-const resolveMinCreditCents = () => {
-    const raw = Number(process.env.WABA_DISPAROS_MIN_CREDIT_CENTS ?? 30000);
-    return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 30000;
+const DEFAULT_MIN_CREDIT_CENTS_OFICIAL = 30000;
+const DEFAULT_MIN_CREDIT_CENTS_ALTERNATIVA = 20000;
+const parsePositiveCentsEnv = (raw, fallback) => {
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
+};
+const resolveMinCreditCents = (apiKind = "oficial") => {
+    if (apiKind === "alternativa") {
+        return parsePositiveCentsEnv(process.env.WABA_DISPAROS_MIN_CREDIT_CENTS_ALTERNATIVA ?? DEFAULT_MIN_CREDIT_CENTS_ALTERNATIVA, DEFAULT_MIN_CREDIT_CENTS_ALTERNATIVA);
+    }
+    return parsePositiveCentsEnv(process.env.WABA_DISPAROS_MIN_CREDIT_CENTS ?? DEFAULT_MIN_CREDIT_CENTS_OFICIAL, DEFAULT_MIN_CREDIT_CENTS_OFICIAL);
 };
 /** Tabela de venda API Oficial (envios × valor total em centavos). */
 const DISPAROS_OFICIAL_SALE_PACKAGES = [
@@ -112,11 +120,15 @@ class WabaBillingService {
         return settled;
     }
     getDisparosConfig() {
+        const minCreditCentsOficial = resolveMinCreditCents("oficial");
+        const minCreditCentsAlternativa = resolveMinCreditCents("alternativa");
         return {
             product: asaas_identifiers_1.WABA_ASAAS_PRODUCT,
             paymentConfigured: (0, asaas_client_1.isAsaasConfigured)(),
-            minCreditCents: resolveMinCreditCents(),
-            minCreditLabel: centsToCurrency(resolveMinCreditCents()).toFixed(2).replace(".", ","),
+            minCreditCents: minCreditCentsOficial,
+            minCreditLabel: centsToCurrency(minCreditCentsOficial).toFixed(2).replace(".", ","),
+            minCreditCentsAlternativa,
+            minCreditLabelAlternativa: centsToCurrency(minCreditCentsAlternativa).toFixed(2).replace(".", ","),
             asaasOrderPrefix: "waba:",
         };
     }
@@ -203,7 +215,7 @@ class WabaBillingService {
             throw new Error("Informe CPF ou CNPJ válido.");
         }
         const whatsapp = (0, phone_1.formatBrazilMobileForAsaas)(String(input.whatsapp ?? ""));
-        const minCreditCents = resolveMinCreditCents();
+        const minCreditCents = resolveMinCreditCents(apiKind);
         const shipmentCount = Math.round(Number(input.shipmentCount ?? 0));
         const listValueCentsFromPackage = shipmentCount > 0 ? resolveListValueCentsForPackage(apiKind, shipmentCount, segment) : null;
         let listValueCents = listValueCentsFromPackage ?? Math.round(Number(input.valueCents ?? minCreditCents));

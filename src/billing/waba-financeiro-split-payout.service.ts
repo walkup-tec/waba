@@ -1,9 +1,16 @@
-import { buildWabaAsaasExternalReference } from "./asaas-identifiers";
+import {
+  baseSplitLineExternalReference,
+  buildLegacySplitLineAsaasExternalReference,
+  buildSplitLineAsaasExternalReference,
+  buildWabaAsaasExternalReference,
+  splitLineExternalReferencesMatch,
+} from "./asaas-identifiers";
 import {
   createAsaasPixTransfer,
   getAsaasTransfer,
   isAsaasConfigured,
   isAsaasTransferConfigured,
+  listAsaasTransfers,
 } from "./asaas.client";
 import { normalizePixKeyForAsaas, resolveAsaasPixKeyType } from "./asaas-pix-key";
 import {
@@ -71,10 +78,177 @@ export class WabaFinanceiroSplitPayoutService {
     return isAsaasTransferConfigured();
   }
 
-  private buildLineExternalReference(settlement: FinanceiroSplitSettlement, line: SplitSettlementLine): string {
-    return buildWabaAsaasExternalReference(
-      `split:${settlement.orderId}:${line.lineKind}:${line.participantId}`,
+  private buildLineExternalReference(
+    settlement: FinanceiroSplitSettlement,
+    line: SplitSettlementLine,
+    retryAttempt = 0,
+  ): string {
+    return buildSplitLineAsaasExternalReference({
+      orderId: settlement.orderId,
+      lineKind: line.lineKind,
+      participantId: line.participantId,
+      retryAttempt,
+    });
+  }
+
+  private countLineRetryAttempts(line: SplitSettlementLine): number {
+    const ref = String(line.payoutExternalReference || "");
+    const legacyRetries = (ref.match(/:retry:/g) || []).length;
+    const compactMatch = ref.match(/:r(\d+)$/);
+    if (compactMatch) {
+      return Math.max(legacyRetries, Math.round(Number(compactMatch[1] ?? 0)));
+    }
+    return legacyRetries;
+  }
+
+  private candidateExternalReferences(
+    settlement: FinanceiroSplitSettlement,
+    line: SplitSettlementLine,
+  ): string[] {
+    const refs = new Set<string>();
+    const stored = String(line.payoutExternalReference || "").trim();
+    if (stored) {
+      refs.add(stored);
+      refs.add(baseSplitLineExternalReference(stored));
+    }
+    refs.add(
+      buildSplitLineAsaasExternalReference({
+        orderId: settlement.orderId,
+        lineKind: line.lineKind,
+        participantId: line.participantId,
+      }),
     );
+    refs.add(
+      buildLegacySplitLineAsaasExternalReference({
+        orderId: settlement.orderId,
+        lineKind: line.lineKind,
+        participantId: line.participantId,
+      }),
+    );
+    refs.add(
+      buildWabaAsaasExternalReference(
+        `split:${settlement.orderId}:${line.lineKind}:${line.participantId}`,
+      ),
+    );
+    return [...refs].filter(Boolean);
+  }
+
+  private pickBestAsaasTransfer(
+    transfers: Array<{ id?: string; status?: string; failReason?: string; transactionReceiptUrl?: string }>,
+  ): { id?: string; status?: string; failReason?: string; transactionReceiptUrl?: string } | null {
+    if (!transfers.length) return null;
+    const paid = transfers.find((item) => isPaidTransferStatus(item.status));
+    if (paid) return paid;
+    const processing = transfers.find((item) => isProcessingTransferStatus(item.status));
+    if (processing) return processing;
+    return transfers[0] ?? null;
+  }
+
+  private filterTransfersForLine(
+    settlement: FinanceiroSplitSettlement,
+    line: SplitSettlementLine,
+    transfers: Array<{
+      id?: string;
+      status?: string;
+      failReason?: string;
+      transactionReceiptUrl?: string;
+      externalReference?: string;
+      value?: number;
+    }>,
+  ): Array<{
+    id?: string;
+    status?: string;
+    failReason?: string;
+    transactionReceiptUrl?: string;
+  }> {
+    const candidates = this.candidateExternalReferences(settlement, line);
+    const expectedValue = centsToCurrency(line.amountCents);
+    return transfers.filter((transfer) => {
+      const ref = String(transfer.externalReference || "").trim();
+      if (!ref) return false;
+      const refMatches = candidates.some((candidate) =>
+        splitLineExternalReferencesMatch(candidate, ref),
+      );
+      if (!refMatches) return false;
+      const value = Number(transfer.value ?? 0);
+      if (line.amountCents > 0 && Number.isFinite(value) && Math.abs(value - expectedValue) > 0.01) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  private async findAsaasTransferForLine(
+    settlement: FinanceiroSplitSettlement,
+    line: SplitSettlementLine,
+  ): Promise<{ id?: string; status?: string; failReason?: string; transactionReceiptUrl?: string } | null> {
+    const seenIds = new Set<string>();
+    const collected: Array<{
+      id?: string;
+      status?: string;
+      failReason?: string;
+      transactionReceiptUrl?: string;
+    }> = [];
+
+    for (const externalReference of this.candidateExternalReferences(settlement, line)) {
+      try {
+        const listed = await listAsaasTransfers({ externalReference, limit: 20 });
+        const raw = Array.isArray(listed.data) ? listed.data : [];
+        const transfers = this.filterTransfersForLine(settlement, line, raw);
+        for (const transfer of transfers) {
+          const id = String(transfer.id || "").trim();
+          if (!id || seenIds.has(id)) continue;
+          seenIds.add(id);
+          collected.push(transfer);
+        }
+      } catch (error) {
+        console.warn(
+          `[SplitPayout] list transfers ref=${externalReference.slice(0, 48)}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    return this.pickBestAsaasTransfer(collected);
+  }
+
+  private async reconcileLineFromAsaas(
+    settlement: FinanceiroSplitSettlement,
+    line: SplitSettlementLine,
+  ): Promise<SplitSettlementLine> {
+    if (line.payoutStatus === "paid" || line.payoutStatus === "skipped") return line;
+
+    if (line.asaasTransferId) {
+      try {
+        const transfer = await getAsaasTransfer(line.asaasTransferId);
+        return this.applyTransferResult(line, transfer);
+      } catch (error) {
+        console.warn(
+          `[SplitPayout] reconcile transfer ${line.asaasTransferId}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    const recoveredId = extractAsaasTransferIdFromFailureReason(line.failureReason || "");
+    if (recoveredId) {
+      try {
+        const transfer = await getAsaasTransfer(recoveredId);
+        return this.applyTransferResult(line, transfer);
+      } catch (error) {
+        console.warn(
+          `[SplitPayout] reconcile recovered transfer ${recoveredId}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    const listed = await this.findAsaasTransferForLine(settlement, line);
+    if (listed?.id) {
+      return this.applyTransferResult(line, listed);
+    }
+
+    return line;
   }
 
   private applyTransferResult(
@@ -238,46 +412,110 @@ export class WabaFinanceiroSplitPayoutService {
     return this.finalizeSettlementRecord(working);
   }
 
-  /** Consulta Asaas e atualiza linhas em processamento — sem reenviar PIX nem retentar falhas. */
-  async syncProcessingTransfersForSettlement(
+  async executeSingleLine(
+    settlement: FinanceiroSplitSettlement,
+    participantId: string,
+  ): Promise<FinanceiroSplitSettlement> {
+    const index = settlement.lines.findIndex(
+      (line) => String(line.participantId) === String(participantId),
+    );
+    if (index < 0) return settlement;
+
+    const line = settlement.lines[index];
+    if (line.lineKind === "cet" || line.payoutStatus === "paid" || line.payoutStatus === "skipped") {
+      return settlement;
+    }
+    if (!this.isPayoutEnabled()) return settlement;
+    if (!this.isTransferApiConfigured()) {
+      const reason =
+        "Repasse PIX indisponível: configure ASAAS_TRANSFER_API_KEY com permissão de saque no Asaas.";
+      const lines = settlement.lines.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, payoutStatus: "failed" as const, failureReason: reason }
+          : item,
+      );
+      return this.finalizeSettlementRecord({ ...settlement, lines });
+    }
+
+    const working = { ...settlement, lines: settlement.lines.map((item) => ({ ...item })) };
+    const current = working.lines[index];
+
+    if (current.payoutStatus === "processing" && current.asaasTransferId) {
+      try {
+        const transfer = await getAsaasTransfer(current.asaasTransferId);
+        working.lines[index] = this.applyTransferResult(current, transfer);
+      } catch (error) {
+        console.warn(
+          `[SplitPayout] consulta transfer ${current.asaasTransferId} indisponível:`,
+          error instanceof Error ? error.message : error,
+        );
+        working.lines[index] = { ...current, payoutStatus: "processing", failureReason: undefined };
+      }
+      return this.finalizeSettlementRecord(working);
+    }
+
+    working.lines[index] = await this.payoutLine(working, current);
+    return this.finalizeSettlementRecord(working);
+  }
+
+  /** Consulta Asaas e atualiza linhas pendentes/falhas — sem reenviar PIX. */
+  async syncSettlementLinesForSettlement(
     settlement: FinanceiroSplitSettlement,
   ): Promise<FinanceiroSplitSettlement> {
     if (!this.isTransferApiConfigured()) return settlement;
 
-    const hasProcessing = settlement.lines.some(
-      (line) => line.payoutStatus === "processing" && line.asaasTransferId,
-    );
-    if (!hasProcessing) return settlement;
-
     let working = { ...settlement, lines: settlement.lines.map((line) => ({ ...line })) };
+    let changed = false;
+
     for (const [index, line] of working.lines.entries()) {
-      if (line.payoutStatus !== "processing" || !line.asaasTransferId) continue;
-      try {
-        const transfer = await getAsaasTransfer(line.asaasTransferId);
-        working.lines[index] = this.applyTransferResult(line, transfer);
-      } catch (error) {
-        console.warn(
-          `[SplitPayout] sync transfer ${line.asaasTransferId}:`,
-          error instanceof Error ? error.message : error,
-        );
+      if (line.lineKind === "cet" || line.payoutStatus === "paid" || line.payoutStatus === "skipped") {
+        continue;
+      }
+      const needsSync =
+        (line.payoutStatus === "processing" && Boolean(line.asaasTransferId)) ||
+        line.payoutStatus === "failed" ||
+        (line.payoutStatus === "processing" && !line.asaasTransferId);
+      if (!needsSync) continue;
+
+      const before = JSON.stringify(line);
+      const synced = await this.reconcileLineFromAsaas(working, line);
+      if (JSON.stringify(synced) !== before) {
+        working.lines[index] = synced;
+        changed = true;
       }
     }
 
-    return this.finalizeSettlementRecord(working);
+    return changed ? this.finalizeSettlementRecord(working) : settlement;
+  }
+
+  async syncProcessingTransfersForSettlement(
+    settlement: FinanceiroSplitSettlement,
+  ): Promise<FinanceiroSplitSettlement> {
+    return this.syncSettlementLinesForSettlement(settlement);
   }
 
   async syncProcessingTransfers(limit = 100): Promise<number> {
     const cap = Math.max(1, Math.min(500, Math.floor(limit)));
     const candidates = this.settlementRepository
-      .list(cap)
+      .list(cap * 3)
       .filter((item) =>
-        item.lines.some((line) => line.payoutStatus === "processing" && line.asaasTransferId),
-      );
+        item.lines.some(
+          (line) =>
+            line.lineKind !== "cet" &&
+            line.payoutStatus !== "paid" &&
+            line.payoutStatus !== "skipped" &&
+            (line.asaasTransferId ||
+              line.payoutExternalReference ||
+              line.payoutStatus === "failed" ||
+              line.payoutStatus === "processing"),
+        ),
+      )
+      .slice(0, cap);
 
     let synced = 0;
     for (const settlement of candidates) {
       const before = JSON.stringify(settlement.lines);
-      const updated = await this.syncProcessingTransfersForSettlement(settlement);
+      const updated = await this.syncSettlementLinesForSettlement(settlement);
       if (JSON.stringify(updated.lines) !== before) synced += 1;
     }
     return synced;
@@ -304,6 +542,13 @@ export class WabaFinanceiroSplitPayoutService {
     }
 
     const working = { ...current, lines: current.lines.map((item) => ({ ...item })) };
+
+    const reconciled = await this.reconcileLineFromAsaas(working, line);
+    if (reconciled.payoutStatus === "paid" || reconciled.payoutStatus === "processing") {
+      working.lines[index] = reconciled;
+      return this.finalizeSettlementRecord(working);
+    }
+    line = reconciled;
 
     const syncTransferById = async (transferId: string): Promise<SplitSettlementLine | null> => {
       try {
@@ -341,12 +586,12 @@ export class WabaFinanceiroSplitPayoutService {
       }
     }
 
-    const baseRef = line.payoutExternalReference || this.buildLineExternalReference(working, line);
+    const nextAttempt = this.countLineRetryAttempts(line) + 1;
     const retryLine: SplitSettlementLine = {
       ...line,
       payoutStatus: "pending",
       asaasTransferId: undefined,
-      payoutExternalReference: `${baseRef}:retry:${Date.now()}`,
+      payoutExternalReference: this.buildLineExternalReference(working, line, nextAttempt),
       failureReason: undefined,
     };
     working.lines[index] = await this.payoutLine(working, retryLine);

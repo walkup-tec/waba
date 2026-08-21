@@ -19,6 +19,26 @@ Formato de entrada:
 
 ---
 
+## ID: EASYPANEL-CROSS-PROJECT-REWRITE
+- **Sintoma:** Após deploy de um projeto (ex.: Sinal Verde), outros hosts no Traefik compartilhado retornam 404/502/000.
+- **Evidência:** Easypanel recria chaves de YAML isolado no `main.yaml`; Host com `/`, entryPoints `web/websecure`, backend overlay; vários guards/heals escrevendo e enviando HUP.
+- **Causa raiz:** `main.yaml` compartilhado regenerado + rotas duplicadas entre arquivos + múltiplos writers concorrentes.
+- **Fix definitivo:** um único `guardiao-sistemas-traefik.service`, registry allowlist, strip condicionado a YAML isolado válido, candidate/backup/escrita atômica/probes/rollback; sem HUP/force.
+- **Prevenção:** `.cursor/rules/guardiao-sistemas-traefik.mdc`; heals de app são publish-only; instalar primeiro em `audit`.
+- **Fontes:** https://doc.traefik.io/traefik/getting-started/configuration-overview/ · https://doc.traefik.io/traefik/reference/install-configuration/providers/others/file/
+- **Primeiro visto:** 2026-07-20
+- **Reincidências:** 2026-07-21 (deploy SV → WABA 000/404)
+
+## ID: SOMA-EASYPANEL-REWRITE
+- **Sintoma:** `app.somaconecta.com.br` 404 JSON `api/errors/not-found`; `soma-promotora-app*.easypanel.host` 502; WABA no mesmo Traefik OK
+- **Evidência:** `main.yaml` com `Host(\`app.somaconecta.com.br/\`)` (barra no Host); services `http://soma-promotora_gestao-interno:3000/` (overlay); local `:30300/api/health` 200 após publish; `Endpoint=null` pós-redeploy
+- **Causa raiz:** Redeploy Easypanel reescreve routing dinâmica — overlay DNS inalcançável do Traefik + Host inválido com `/`; publish host some (padrão BACKEND-OVERLAY-502 + LOGIN-30180-PUBLISH)
+- **Fix definitivo:** publish `:30300→3000` + backends `http://172.17.0.1:30300/` + Host sem barra; **sem** force Traefik (hot-reload file provider)
+- **Prevenção:** `soma-master/scripts/heal-soma-gestao-vps.sh` install (watch docker events + timer 45s) — espelha `heal-waba-login-vps.sh`; Domínios Easypanel porta **3000** sem `/` no hostname
+- **Fontes:** https://doc.traefik.io/traefik/getting-started/configuration-overview/ · REGISTRY BACKEND-OVERLAY-502 · LOGIN-30180-PUBLISH · ucp-traefik-static-dynamic
+- **Primeiro visto:** 2026-07-16
+- **Reincidências:** 2026-07-17 (404 pós-redeploy)
+
 ## ID: EP-WEBSECURE
 - **Sintoma:** Host custom (ex.: `bet.waba.info`) retorna 404 SPA; outro domínio no mesmo Traefik OK
 - **Evidência:** `main.yaml` com `entryPoints: ["web"]` / `["websecure"]`; env Traefik só define `http`/`https`; backend `:PORT` local 200

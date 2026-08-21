@@ -12,6 +12,8 @@ const evo_http_client_1 = require("../evo-http.client");
 const data_path_1 = require("../data-path");
 const base_path_1 = require("../base-path");
 const evo_instance_key_1 = require("../instances/evo-instance-key");
+const evo_instance_phone_service_1 = require("../instances/evo-instance-phone.service");
+const evo_connection_state_service_1 = require("../instances/evo-connection-state.service");
 const waba_public_base_url_1 = require("../lib/waba-public-base-url");
 const waba_push_media_service_1 = require("./waba-push-media.service");
 const waba_push_repository_1 = require("./waba-push.repository");
@@ -303,28 +305,7 @@ async function discoverPushCommunityInstanceWithGroups(preferred) {
     return null;
 }
 const normalizePhoneHintDigits = (value) => String(value || "").replace(/\D/g, "");
-const expandPhoneHintDigits = (phoneHint) => {
-    const hint = normalizePhoneHintDigits(phoneHint);
-    if (!hint)
-        return [];
-    const variants = new Set([hint]);
-    const withCountry = (digits) => (digits.startsWith("55") ? digits : `55${digits}`);
-    const withoutCountry = (digits) => digits.startsWith("55") && digits.length > 2 ? digits.slice(2) : digits;
-    const base = withoutCountry(hint);
-    variants.add(base);
-    variants.add(withCountry(base));
-    if (base.length === 11 && base.charAt(2) === "9") {
-        const legacyTen = `${base.slice(0, 2)}${base.slice(3)}`;
-        variants.add(legacyTen);
-        variants.add(withCountry(legacyTen));
-    }
-    else if (base.length === 10) {
-        const mobileEleven = `${base.slice(0, 2)}9${base.slice(2)}`;
-        variants.add(mobileEleven);
-        variants.add(withCountry(mobileEleven));
-    }
-    return [...variants].filter(Boolean);
-};
+const expandPhoneHintDigits = (phoneHint) => (0, evo_instance_phone_service_1.expandBrazilWhatsAppNumberVariants)(phoneHint);
 const phoneHintMatchesInstance = (row, phoneHint) => {
     const hints = expandPhoneHintDigits(phoneHint);
     if (!hints.length)
@@ -334,6 +315,8 @@ const phoneHintMatchesInstance = (row, phoneHint) => {
     const instanceDigits = [numberDigits, nameDigits].filter(Boolean);
     for (const hint of hints) {
         for (const digits of instanceDigits) {
+            if ((0, evo_instance_phone_service_1.brazilWhatsAppNumbersMatch)(digits, hint))
+                return true;
             if (digits === hint || digits.endsWith(hint) || hint.endsWith(digits))
                 return true;
             const digitsBr = digits.startsWith("55") ? digits.slice(2) : digits;
@@ -346,22 +329,52 @@ const phoneHintMatchesInstance = (row, phoneHint) => {
     }
     return false;
 };
+const rankPhoneHintMatches = (catalog, hint) => catalog
+    .filter((row) => phoneHintMatchesInstance(row, hint))
+    .sort((a, b) => {
+    const aNum = normalizePhoneHintDigits(a.number);
+    const bNum = normalizePhoneHintDigits(b.number);
+    const aExact = aNum === hint || aNum.endsWith(hint) ? 1 : 0;
+    const bExact = bNum === hint || bNum.endsWith(hint) ? 1 : 0;
+    if (bExact !== aExact)
+        return bExact - aExact;
+    return Number(b.isOpen) - Number(a.isOpen);
+});
+const isEvoLiveStateUsableForSend = (liveState) => {
+    const state = String(liveState || "").trim().toLowerCase();
+    if (!state)
+        return true;
+    if ((0, evo_connection_state_service_1.isEvoLiveStateOpen)(state))
+        return true;
+    return state !== "close" && state !== "closed" && state !== "disconnected";
+};
 /** Instância Evolution conectada cujo número/nome corresponde ao hint (ex.: 51981077770). */
-async function resolveConnectedEvoInstanceByPhoneHint(phoneHint) {
+async function resolveConnectedEvoInstanceByPhoneHint(phoneHint, opts) {
     const hint = normalizePhoneHintDigits(phoneHint);
     if (!hint)
         return null;
     const catalog = await fetchEvoInstanceCatalog();
-    const matches = catalog
-        .filter((row) => row.isOpen && phoneHintMatchesInstance(row, hint))
-        .sort((a, b) => {
-        const aNum = normalizePhoneHintDigits(a.number);
-        const bNum = normalizePhoneHintDigits(b.number);
-        const aExact = aNum === hint || aNum.endsWith(hint) ? 1 : 0;
-        const bExact = bNum === hint || bNum.endsWith(hint) ? 1 : 0;
-        return bExact - aExact;
-    });
-    return matches[0]?.name || null;
+    const openMatches = catalog.filter((row) => row.isOpen && phoneHintMatchesInstance(row, hint));
+    const rankedOpen = rankPhoneHintMatches(openMatches, hint);
+    if (rankedOpen[0]?.name)
+        return rankedOpen[0].name;
+    if (!opts?.verifyLiveIfCatalogClosed)
+        return null;
+    for (const row of rankPhoneHintMatches(catalog, hint)) {
+        try {
+            const liveState = await (0, evo_connection_state_service_1.fetchEvoInstanceLiveState)(row.name, { fresh: true });
+            if (isEvoLiveStateUsableForSend(liveState)) {
+                if (!row.isOpen) {
+                    console.info(`[push] instância ${row.name} (${hint}) usada com connectionState=${liveState || "?"} (catálogo stale; boas-vindas/crítico).`);
+                }
+                return row.name;
+            }
+        }
+        catch {
+            /* tenta próximo match do mesmo hint */
+        }
+    }
+    return null;
 }
 /** Instância Evolution conectada para envio outbound (boas-vindas, alertas, etc.). */
 async function resolveConnectedEvoOutboundInstance(preferred) {

@@ -31,6 +31,9 @@ export type WabaWhatsAppDeliveryResult = {
 
 const DEFAULT_COMMUNITY_LINK = "https://chat.whatsapp.com/EoP6r6BIZt83GenpCgvUJ7";
 
+/** Traço ASCII curto: caixa U+2501 no iOS impede wrap e corta o texto na borda. */
+const WELCOME_TEXT_SEPARATOR = "--------------------";
+
 const resolveWelcomeCommunityLink = (): string => {
   const fromEnv = String(process.env.WABA_WELCOME_COMMUNITY_LINK || "").trim();
   if (fromEnv) return fromEnv;
@@ -54,11 +57,11 @@ export const buildSubscriberWelcomeWhatsAppText = (input: SubscriberWelcomeWhats
     "",
     "🔐 Seus dados de acesso:",
     "",
-    "━━━━━━━━━━━━━━━━━━",
+    WELCOME_TEXT_SEPARATOR,
     `📧 E-mail: ${email}`,
     passwordLine,
     `🌐 Sistema: ${loginUrl}`,
-    "━━━━━━━━━━━━━━━━━━",
+    WELCOME_TEXT_SEPARATOR,
     "",
     "📢 Entre na nossa Comunidade Oficial no WhatsApp",
     "",
@@ -110,11 +113,11 @@ export const buildStaffWelcomeWhatsAppText = (input: StaffWelcomeWhatsAppInput):
     "",
     "🔐 Seus dados de acesso:",
     "",
-    "━━━━━━━━━━━━━━━━━━",
+    WELCOME_TEXT_SEPARATOR,
     `📧 E-mail: ${email}`,
     passwordLine,
     `🌐 Sistema: ${loginUrl}`,
-    "━━━━━━━━━━━━━━━━━━",
+    WELCOME_TEXT_SEPARATOR,
     operacionalBlock,
     "",
     "Qualquer dúvida, fale com o administrador master da sua conta.",
@@ -125,17 +128,29 @@ export const buildStaffWelcomeWhatsAppText = (input: StaffWelcomeWhatsAppInput):
     .join("\n");
 };
 
+const buildWelcomeRetryKey = (kind: string, email: string, whatsapp: string): string => {
+  const digits = String(whatsapp || "").replace(/\D/g, "");
+  const mail = String(email || "").trim().toLowerCase() || "unknown";
+  return `welcome:${kind}:${mail}:${digits || "no-wa"}`;
+};
+
 const deliverWelcomeWhatsAppMessage = async (input: {
   email: string;
   whatsapp: string;
   text: string;
   logLabel: string;
+  retryKind: string;
 }): Promise<WabaWhatsAppDeliveryResult> => {
+  // Crítico: não falhar por Preparando / pausa humana; retry em background até sent.
   return deliverWabaEvolutionWhatsApp({
     targetWhatsapp: input.whatsapp,
     recipientEmail: input.email,
     text: input.text,
     logLabel: input.logLabel || "boas-vindas",
+    ignoreAquecedorLifecycle: true,
+    linkPreview: false,
+    sendWelcomeCover: true,
+    backgroundRetryKey: buildWelcomeRetryKey(input.retryKind, input.email, input.whatsapp),
   });
 };
 
@@ -149,6 +164,7 @@ export const deliverSubscriberWelcomeWhatsApp = async (
     whatsapp: input.whatsapp,
     text,
     logLabel: "boas-vindas",
+    retryKind: "subscriber",
   });
 };
 
@@ -162,6 +178,7 @@ export const deliverStaffWelcomeWhatsApp = async (
     whatsapp: input.whatsapp,
     text,
     logLabel: "boas-vindas equipe",
+    retryKind: "staff",
   });
 };
 

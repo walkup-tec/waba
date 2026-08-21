@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.filterIntakesBySubscriberEmails = exports.buildMasterSubscribersDisparosDashboardOverview = exports.buildDisparosDashboardOverview = exports.buildCompareSubscribersFromIntakes = exports.buildCampaignComparisonFromIntakes = void 0;
 const waba_dispatches_api_kind_1 = require("./waba-dispatches-api-kind");
 const waba_campaign_intake_status_1 = require("./waba-campaign-intake-status");
+const waba_campaign_report_read_overrides_1 = require("./waba-campaign-report-read-overrides");
+const waba_metrics_excluded_owners_1 = require("../billing/waba-metrics-excluded-owners");
 const normalizeStoredStatus = (status) => (0, waba_campaign_intake_status_1.normalizeCampaignIntakeStatus)(status);
 const roundMetric = (value) => {
     const parsed = Math.round(Number(value));
@@ -35,7 +37,7 @@ const buildCampaignComparisonFromIntakes = (intakes, options) => {
         return status === "completed" && Boolean(intake.performanceReport);
     })
         .map((intake) => {
-        const report = intake.performanceReport;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
         const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
         const rates = computeRatesFromReport(report);
         return {
@@ -84,17 +86,26 @@ const listAvailableApiKinds = (items) => {
         ordered.push("alternativa");
     return ordered;
 };
+const emptyIndicators = () => ({
+    totalLeads: 0,
+    enviados: 0,
+    entregues: 0,
+    lidos: 0,
+    falhados: 0,
+});
 const aggregateDisparosDashboardFromIntakes = (intakes, comparisonOptions) => {
     let completed = 0;
     let inProgress = 0;
     let awaiting = 0;
     let withReport = 0;
-    const indicators = {
-        totalLeads: 0,
-        enviados: 0,
-        entregues: 0,
-        lidos: 0,
-        falhados: 0,
+    const indicators = emptyIndicators();
+    const indicatorsByApi = {
+        oficial: emptyIndicators(),
+        alternativa: emptyIndicators(),
+    };
+    const withReportByApi = {
+        oficial: 0,
+        alternativa: 0,
     };
     for (const intake of intakes) {
         const status = normalizeStoredStatus(intake.status);
@@ -107,12 +118,24 @@ const aggregateDisparosDashboardFromIntakes = (intakes, comparisonOptions) => {
         if (status !== "completed" || !intake.performanceReport)
             continue;
         withReport += 1;
-        const report = intake.performanceReport;
-        indicators.totalLeads += roundMetric(report.totalLeads);
-        indicators.enviados += roundMetric(report.sent);
-        indicators.entregues += roundMetric(report.delivered);
-        indicators.lidos += roundMetric(report.read);
-        indicators.falhados += roundMetric(report.failed);
+        const apiKind = (0, waba_dispatches_api_kind_1.resolveIntakeApiKindFromIntake)(intake);
+        withReportByApi[apiKind] += 1;
+        const report = (0, waba_campaign_report_read_overrides_1.applyCampaignReportReadOverride)(intake.campaignName, intake.createdAt, intake.performanceReport);
+        const addLeads = roundMetric(report.totalLeads);
+        const addSent = roundMetric(report.sent);
+        const addDelivered = roundMetric(report.delivered);
+        const addRead = roundMetric(report.read);
+        const addFailed = roundMetric(report.failed);
+        indicators.totalLeads += addLeads;
+        indicators.enviados += addSent;
+        indicators.entregues += addDelivered;
+        indicators.lidos += addRead;
+        indicators.falhados += addFailed;
+        indicatorsByApi[apiKind].totalLeads += addLeads;
+        indicatorsByApi[apiKind].enviados += addSent;
+        indicatorsByApi[apiKind].entregues += addDelivered;
+        indicatorsByApi[apiKind].lidos += addRead;
+        indicatorsByApi[apiKind].falhados += addFailed;
     }
     const campaignComparison = (0, exports.buildCampaignComparisonFromIntakes)(intakes, comparisonOptions);
     const hasPartialReports = completed > withReport;
@@ -126,6 +149,8 @@ const aggregateDisparosDashboardFromIntakes = (intakes, comparisonOptions) => {
             withReport,
         },
         indicators,
+        indicatorsByApi,
+        withReportByApi,
         campaignComparison,
         availableApiKinds: listAvailableApiKinds(campaignComparison),
         hasPartialReports,
@@ -177,12 +202,15 @@ const buildDisparosDashboardOverview = (ownerEmail, intakes) => {
 };
 exports.buildDisparosDashboardOverview = buildDisparosDashboardOverview;
 const buildMasterSubscribersDisparosDashboardOverview = (masterEmail, intakes, subscribers) => {
-    const subscriberEmailSet = new Set(subscribers.map((subscriber) => subscriber.email.trim().toLowerCase()).filter(Boolean));
-    const subscriberIntakes = intakes.filter((item) => subscriberEmailSet.has(item.ownerEmail.trim().toLowerCase()));
+    const eligibleSubscribers = subscribers.filter((subscriber) => !(0, waba_metrics_excluded_owners_1.isWabaMetricsExcludedOwnerEmail)(subscriber.email));
+    const subscriberEmailSet = new Set(eligibleSubscribers
+        .map((subscriber) => subscriber.email.trim().toLowerCase())
+        .filter(Boolean));
+    const subscriberIntakes = (0, waba_metrics_excluded_owners_1.filterOutMetricsExcludedOwners)(intakes.filter((item) => subscriberEmailSet.has(item.ownerEmail.trim().toLowerCase())));
     const aggregated = aggregateDisparosDashboardFromIntakes(subscriberIntakes, {
         includeOwnerEmail: true,
     });
-    const compareSubscribers = (0, exports.buildCompareSubscribersFromIntakes)(subscriberIntakes, subscribers);
+    const compareSubscribers = (0, exports.buildCompareSubscribersFromIntakes)(subscriberIntakes, eligibleSubscribers);
     return {
         scope: "master_subscribers",
         ownerEmail: masterEmail.trim().toLowerCase(),

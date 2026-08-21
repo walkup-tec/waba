@@ -11,3 +11,11 @@ ftp-bundle/
 Thumbs.db
 OnBoarding/
 
+
+.tools/
+
+.tmp-*/
+
+AWS Server/
+
+.env.v02.bak*

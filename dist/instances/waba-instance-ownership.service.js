@@ -1,13 +1,10 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.wabaInstanceOwnershipService = exports.WabaInstanceOwnershipService = void 0;
 const fs_1 = require("fs");
-const path_1 = __importDefault(require("path"));
 const waba_auth_service_1 = require("../auth/waba-auth.service");
 const data_path_1 = require("../data-path");
+const write_json_file_resilient_1 = require("../utils/write-json-file-resilient");
 const OWNERS_FILE = (0, data_path_1.resolveDataFile)("instance-owners.json");
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const normalizeInstanceName = (value) => String(value || "").trim();
@@ -60,8 +57,7 @@ class WabaInstanceOwnershipService {
     }
     async saveStore(store) {
         this.cache = store;
-        await fs_1.promises.mkdir(path_1.default.dirname(OWNERS_FILE), { recursive: true });
-        await fs_1.promises.writeFile(OWNERS_FILE, JSON.stringify(store, null, 2), "utf-8");
+        await (0, write_json_file_resilient_1.writeJsonFileResilient)(OWNERS_FILE, store);
         try {
             this.cacheLoadedAtMs = (0, fs_1.statSync)(OWNERS_FILE).mtimeMs;
         }
@@ -241,6 +237,8 @@ class WabaInstanceOwnershipService {
             return { ok: false, error: "Sessão inválida para registrar instância." };
         return this.runLocked(async () => {
             const store = await this.loadStore();
+            // Reuso após purge: limpar tombstone para o nome poder ser registrado de novo.
+            this.clearDeletedMark(store, name);
             const existingKey = this.findStoreKey(store, name);
             if (existingKey) {
                 const currentOwner = normalizeEmail(store.instances[existingKey]?.ownerEmail || "");

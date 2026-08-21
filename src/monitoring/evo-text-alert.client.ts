@@ -1,10 +1,18 @@
-import { defaultEvoSendTextTimeoutMs } from "../evo-http.client";
+import { defaultEvoHttpTimeoutMs, defaultEvoSendTextTimeoutMs } from "../evo-http.client";
 import { evoHttpRequestWithBaseFailover } from "../evo-api-config";
 import {
   isEvoSendInternalDbError,
   recoverEvoSendTextAfterFailure,
 } from "../services/evo-send-recovery.service";
 import { resolvePrimaryEvoApiBase } from "../evo-api-config";
+
+export type SendEvoTextAlertResult = {
+  ok: boolean;
+  detail: string;
+  status: number;
+  messageId?: string;
+  remoteJid?: string;
+};
 
 const resolveEvoApiKey = (): string =>
   String(process.env.EVO_API_KEY || "429683C4C977415CAAFCCE10F7D57E11").trim();
@@ -15,6 +23,14 @@ const resolveSendTextUrlTemplate = (): string => {
     process.env.EVO_SEND_TEXT_URL_TEMPLATE || `${base}/message/sendText/{instance}`
   ).trim();
 };
+
+const resolveSendMediaUrlTemplate = (): string => {
+  const base = resolvePrimaryEvoApiBase();
+  return (
+    process.env.EVO_SEND_MEDIA_URL_TEMPLATE || `${base}/message/sendMedia/{instance}`
+  ).trim();
+};
+
 
 const isSendTextV1 = (): boolean => {
   const raw = String(process.env.EVO_SEND_TEXT_V1 ?? "").trim().toLowerCase();
@@ -52,13 +68,60 @@ const isEvoSendTextAccepted = (json: unknown, body: string): boolean => {
   return rawBody.length > 0;
 };
 
+const extractSendMessageMeta = (json: unknown): { id: string; remoteJid: string } => {
+  const visit = (node: unknown, depth: number): { id: string; remoteJid: string } | null => {
+    if (node == null || depth > 8) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = visit(item, depth + 1);
+        if (hit?.id) return hit;
+      }
+      return null;
+    }
+    if (typeof node !== "object") return null;
+    const rec = node as Record<string, unknown>;
+    const key = rec.key;
+    if (key && typeof key === "object") {
+      const keyRec = key as Record<string, unknown>;
+      const id = String(keyRec.id || rec.messageId || rec.id || "").trim();
+      if (id) {
+        return { id, remoteJid: String(keyRec.remoteJid || rec.remoteJid || "").trim() };
+      }
+    }
+    for (const value of Object.values(rec)) {
+      const hit = visit(value, depth + 1);
+      if (hit?.id) return hit;
+    }
+    return null;
+  };
+  return visit(json, 0) || { id: "", remoteJid: "" };
+};
+
+const toSendResult = (
+  ok: boolean,
+  detail: string,
+  status: number,
+  json?: unknown,
+): SendEvoTextAlertResult => {
+  const meta = extractSendMessageMeta(json);
+  return {
+    ok,
+    detail,
+    status,
+    messageId: meta.id || undefined,
+    remoteJid: meta.remoteJid || undefined,
+  };
+};
+
 export async function sendEvoTextAlert(input: {
   instanceName: string;
   targetNumber: string;
   text: string;
   timeoutMs?: number;
   retries?: number;
-}): Promise<{ ok: boolean; detail: string; status: number }> {
+  /** Evolution: false evita card OG/vídeo no WhatsApp. Omitido = padrão do servidor. */
+  linkPreview?: boolean;
+}): Promise<SendEvoTextAlertResult> {
   const instanceName = String(input.instanceName || "").trim();
   const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
   const text = String(input.text || "").trim();
@@ -77,6 +140,9 @@ export async function sendEvoTextAlert(input: {
   const body: Record<string, unknown> = isSendTextV1()
     ? { number: targetNumber, textMessage: { text } }
     : { number: targetNumber, text, textMessage: { text } };
+  if (typeof input.linkPreview === "boolean") {
+    body.linkPreview = input.linkPreview;
+  }
 
   const timeoutMs =
     typeof input.timeoutMs === "number" && input.timeoutMs >= 10_000
@@ -92,7 +158,7 @@ export async function sendEvoTextAlert(input: {
 
   let accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
   if (accepted) {
-    return { ok: true, detail: "sendText OK.", status: result.status };
+    return toSendResult(true, "sendText OK.", result.status, result.json);
   }
 
   const initialDetail =
@@ -114,14 +180,15 @@ export async function sendEvoTextAlert(input: {
     });
     accepted = recovered.ok && isEvoSendTextAccepted(recovered.json, recovered.body);
     if (accepted) {
-      return { ok: true, detail: "sendText OK (após restart EVO).", status: recovered.status };
+      return toSendResult(true, "sendText OK (após restart EVO).", recovered.status, recovered.json);
     }
     const recoveredDetail = recovered.error || recovered.body || initialDetail;
-    return {
-      ok: false,
-      detail: String(recoveredDetail).slice(0, 300),
-      status: recovered.status || result.status,
-    };
+    return toSendResult(
+      false,
+      String(recoveredDetail).slice(0, 300),
+      recovered.status || result.status,
+      recovered.json,
+    );
   }
 
   const detail =
@@ -132,9 +199,84 @@ export async function sendEvoTextAlert(input: {
       : "") ||
     "Falha no envio via sistema WABA - Drax.";
 
-  return {
-    ok: false,
-    detail: String(detail).slice(0, 300),
-    status: result.status,
-  };
+  return toSendResult(false, String(detail).slice(0, 300), result.status, result.json);
 }
+
+export async function sendEvoImageAlert(input: {
+  instanceName: string;
+  targetNumber: string;
+  mediaBase64?: string;
+  mediaUrl?: string;
+  mimetype?: string;
+  fileName?: string;
+  caption?: string;
+  timeoutMs?: number;
+}): Promise<SendEvoTextAlertResult> {
+  const instanceName = String(input.instanceName || "").trim();
+  const targetNumber = normalizeWhatsAppNumber(String(input.targetNumber || "").trim());
+  const mediaBase64 = String(input.mediaBase64 || "").replace(/\s+/g, "");
+  const mediaUrl = String(input.mediaUrl || "").trim();
+  const mimetype = String(input.mimetype || "image/jpeg").trim() || "image/jpeg";
+  const fileName = String(input.fileName || "boas-vindas.jpg").trim() || "boas-vindas.jpg";
+
+  if (!instanceName) {
+    return { ok: false, detail: "Instância EVO não informada.", status: 0 };
+  }
+  if (!targetNumber) {
+    return { ok: false, detail: "Número de destino inválido.", status: 0 };
+  }
+
+  const mediaVariants: string[] = [];
+  if (mediaBase64) {
+    mediaVariants.push(`data:${mimetype};base64,${mediaBase64}`);
+    mediaVariants.push(mediaBase64);
+  }
+  if (/^https?:\/\//i.test(mediaUrl)) {
+    mediaVariants.push(mediaUrl);
+  }
+  if (!mediaVariants.length) {
+    return { ok: false, detail: "Imagem de capa vazia.", status: 0 };
+  }
+
+  const url = buildTemplateUrl(resolveSendMediaUrlTemplate(), instanceName);
+  const timeoutMs =
+    typeof input.timeoutMs === "number" && input.timeoutMs >= 10_000
+      ? Math.round(input.timeoutMs)
+      : Math.max(60_000, defaultEvoHttpTimeoutMs());
+
+  let lastDetail = "Falha no envio de imagem via Evolution.";
+  let lastStatus = 0;
+  let lastJson: unknown = null;
+  for (const media of mediaVariants) {
+    const body: Record<string, unknown> = {
+      number: targetNumber,
+      mediatype: "image",
+      mimetype,
+      caption: String(input.caption || "").trim(),
+      fileName,
+      media,
+    };
+    const result = await evoHttpRequestWithBaseFailover(url, "POST", {
+      apiKey: resolveEvoApiKey(),
+      body,
+      timeoutMs,
+      retries: 2,
+    });
+    const accepted = result.ok && isEvoSendTextAccepted(result.json, result.body);
+    if (accepted) {
+      return toSendResult(true, "sendMedia OK.", result.status, result.json);
+    }
+    lastStatus = result.status;
+    lastJson = result.json;
+    lastDetail =
+      result.error ||
+      result.body ||
+      (result.json && typeof result.json === "object"
+        ? String((result.json as Record<string, unknown>).message ?? "")
+        : "") ||
+      lastDetail;
+  }
+
+  return toSendResult(false, String(lastDetail).slice(0, 300), lastStatus, lastJson);
+}
+

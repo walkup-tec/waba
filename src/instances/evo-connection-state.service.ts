@@ -22,6 +22,17 @@ export function isEvoLiveStateOpen(state: string): boolean {
   return String(state || "").trim().toLowerCase() === "open";
 }
 
+/**
+ * fetchInstances já marcou a linha como open. Só descarta quando o
+ * connectionState vier explícito e diferente de open (close/connecting).
+ * Estado vazio (timeout/404) não é ghost.
+ */
+export function aquecedorLiveStateAllowsConnected(liveState: string): boolean {
+  const state = String(liveState || "").trim().toLowerCase();
+  if (!state) return true;
+  return isEvoLiveStateOpen(state);
+}
+
 export function isEvoConnectionInProgress(state: string): boolean {
   const s = String(state || "").trim().toLowerCase();
   return s === "connecting" || s === "pairing" || s === "qrcode";
@@ -46,6 +57,33 @@ export async function waitForEvoInstanceLiveOpen(
     }
     if (lastState === "close") {
       return { open: false, state: lastState };
+    }
+    await sleep(pollMs);
+  }
+
+  invalidateEvoLiveStateCache(instanceName);
+  lastState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+  return { open: isEvoLiveStateOpen(lastState), state: lastState };
+}
+
+/**
+ * Após proxy/set + restart a sessão pode piscar close/connecting antes de voltar open.
+ * Não aborta no primeiro close — espera até open ou timeout.
+ */
+export async function waitForEvoInstanceLiveOpenLenient(
+  instanceName: string,
+  options?: { maxWaitMs?: number; pollMs?: number },
+): Promise<{ open: boolean; state: string }> {
+  const maxWaitMs = Math.max(10_000, Math.min(180_000, options?.maxWaitMs ?? 90_000));
+  const pollMs = Math.max(500, Math.min(5_000, options?.pollMs ?? 1_500));
+  const deadline = Date.now() + maxWaitMs;
+  let lastState = "";
+
+  while (Date.now() < deadline) {
+    invalidateEvoLiveStateCache(instanceName);
+    lastState = await fetchEvoInstanceLiveState(instanceName, { fresh: true });
+    if (isEvoLiveStateOpen(lastState)) {
+      return { open: true, state: lastState };
     }
     await sleep(pollMs);
   }

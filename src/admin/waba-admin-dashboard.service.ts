@@ -8,6 +8,7 @@ import { WabaAdminFinanceiroService } from "./waba-admin-financeiro.service";
 import { WabaAdminSubscribersService } from "./waba-admin-subscribers.service";
 import { WabaAdminUsersService } from "./waba-admin-users.service";
 import { WabaOperacionalCampanhasService } from "./waba-operacional-campanhas.service";
+import { isWabaMetricsExcludedOwnerEmail } from "../billing/waba-metrics-excluded-owners";
 
 export type AdminDashboardAuth = {
   role: string;
@@ -276,14 +277,25 @@ export class WabaAdminDashboardService {
     const capabilities = this.resolveCapabilities(auth);
     const staff = { email: auth.email, role: auth.role };
 
+    if (capabilities.finance) {
+      this.splitService.purgeExcludedOwnerSettlements();
+      this.splitService.purgeBonusOnlyCampaignSettlements();
+    }
+
     const disparosOrders = this.orderRepository
       .list()
-      .filter((order) => order.product === "waba-disparos")
+      .filter(
+        (order) =>
+          order.product === "waba-disparos" &&
+          !isWabaMetricsExcludedOwnerEmail(order.ownerEmail),
+      )
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
 
     const subscribers = capabilities.subscribers ? this.subscribersService.listSubscribers() : [];
     const campaigns = capabilities.campanhas
-      ? this.campanhasService.listCampaigns(staff)
+      ? this.campanhasService
+          .listCampaigns(staff)
+          .filter((campaign) => !isWabaMetricsExcludedOwnerEmail(campaign.subscriberEmail))
       : [];
     const users = capabilities.users ? this.usersService.listUsers() : [];
 
@@ -341,6 +353,7 @@ export class WabaAdminDashboardService {
 
     const subscriberTotals = subscribers.reduce(
       (accumulator, subscriber) => {
+        if (isWabaMetricsExcludedOwnerEmail(subscriber.email)) return accumulator;
         accumulator.creditsValueCents += Number(subscriber.creditsValueCents || 0);
         accumulator.contractedShipments += Number(subscriber.contractedShipments || 0);
         accumulator.campaignsAwaiting += Number(subscriber.campaignsAwaiting || 0);
@@ -373,7 +386,9 @@ export class WabaAdminDashboardService {
           }
         : null,
       operational: {
-        subscriberCount: subscribers.length,
+        subscriberCount: subscribers.filter(
+          (subscriber) => !isWabaMetricsExcludedOwnerEmail(subscriber.email),
+        ).length,
         staffUserCount: users.length,
         usersByRole,
         campaignsOpen,
@@ -396,9 +411,19 @@ export class WabaAdminDashboardService {
       trend: capabilities.finance ? buildTrendSeries(disparosOrders) : [],
       growthAnalysis:
         capabilities.finance && capabilities.subscribers
-          ? buildSubscriberRevenueGrowth(subscribers, disparosOrders)
+          ? buildSubscriberRevenueGrowth(
+              subscribers.filter(
+                (subscriber) => !isWabaMetricsExcludedOwnerEmail(subscriber.email),
+              ),
+              disparosOrders,
+            )
           : null,
-      recentActivity: this.buildRecentActivity(disparosOrders, subscribers, campaigns, capabilities),
+      recentActivity: this.buildRecentActivity(
+        disparosOrders,
+        subscribers.filter((subscriber) => !isWabaMetricsExcludedOwnerEmail(subscriber.email)),
+        campaigns,
+        capabilities,
+      ),
     };
   }
 }

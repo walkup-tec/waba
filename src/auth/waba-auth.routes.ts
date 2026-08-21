@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { BASE_PATH } from "../base-path";
 import { WabaSubscriberService } from "../subscribers/waba-subscriber.service";
 import { isStaffRole, WabaSystemUserService } from "../users/waba-system-user.service";
+import { resolveOperacionalDispatchesApis } from "../users/waba-operacional-dispatches-apis";
 import {
   createWabaSessionToken,
   getWabaAuthPublicConfig,
@@ -75,6 +76,9 @@ const sendSession = (req: Request, res: Response) => {
     ? systemUserService.getSessionMenuAccess(session.email)
     : null;
   const canOpenSupportTickets = Boolean(session.email);
+  const operacionalDispatchesApis = systemUser
+    ? resolveOperacionalDispatchesApis(systemUser)
+    : [];
 
   return res.status(200).json({
     authenticated: true,
@@ -89,11 +93,13 @@ const sendSession = (req: Request, res: Response) => {
           fullName: systemUser.fullName,
           email: systemUser.email,
           role: systemUser.role,
-          operacionalDispatchesApi: systemUser.operacionalDispatchesApi ?? null,
+          operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+          operacionalDispatchesApis,
           operacionalSegment: systemUser.operacionalSegment ?? null,
         }
       : null,
-    operacionalDispatchesApi: systemUser?.operacionalDispatchesApi ?? null,
+    operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+    operacionalDispatchesApis,
     operacionalSegment: systemUser?.operacionalSegment ?? null,
     allowedMenuIds: menuAccess?.allowedMenuIds ?? [],
     menuPermissions: menuAccess?.menuPermissions ?? null,
@@ -137,7 +143,10 @@ const isAuthBypassPath = (method: string, reqPath: string): boolean => {
     p === "/drax-logo.png" ||
     p.startsWith("/media/") ||
     p.startsWith("/push/public-media/") ||
-    p === "/instancias/avatar"
+    /^\/disparos\/messenger-images\/[^/]+\/file$/.test(p) ||
+    p === "/instancias/avatar" ||
+    p === "/integrations/soma/aquecedor-instances" ||
+    p === "/integrations/soma/alternativa-campaigns"
   ) {
     return true;
   }
@@ -197,6 +206,7 @@ export const registerWabaAuthRoutes = (app: Express) => {
         const token = createWabaSessionToken(user.email, user.role);
         writeSessionCookie(res, token);
         const menuAccess = systemUserService.getSessionMenuAccess(user.email);
+        const operacionalDispatchesApis = resolveOperacionalDispatchesApis(user);
         return res.status(200).json({
           ok: true,
           email: user.email,
@@ -206,10 +216,12 @@ export const registerWabaAuthRoutes = (app: Express) => {
             fullName: user.fullName,
             email: user.email,
             role: user.role,
-            operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+            operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+            operacionalDispatchesApis,
             operacionalSegment: user.operacionalSegment ?? null,
           },
-          operacionalDispatchesApi: user.operacionalDispatchesApi ?? null,
+          operacionalDispatchesApi: operacionalDispatchesApis[0] ?? null,
+          operacionalDispatchesApis,
           operacionalSegment: user.operacionalSegment ?? null,
           allowedMenuIds: menuAccess.allowedMenuIds,
           menuPermissions: menuAccess.menuPermissions,
