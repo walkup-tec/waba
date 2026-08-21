@@ -339,12 +339,7 @@ async function findCnaeSearchInput(page, timeoutMs = 10000) {
         '.dropdown-menu input[type="search"]',
         'xpath=//*[contains(., "selecionados") or contains(., "Fechar")]//input[@type="search"]',
         'xpath=//*[contains(@class,"modal") or contains(@class,"dialog") or @role="dialog"]//input[contains(@placeholder,"atividade") or @type="search"]',
-        'input[type="text"][placeholder*="Código ou nome da atividade" i]',
-        'input[type="text"][placeholder*="Codigo ou nome da atividade" i]',
-        'input[type="text"][placeholder*="codigo ou nome da atividade" i]',
-        'input[placeholder*="Código ou nome" i]',
-        'input[placeholder*="Codigo ou nome" i]',
-        'input[placeholder*="atividade" i]',
+        // Evitar input[type=text] da página (Oruga): fill força → "Target crashed" no Chromium Docker/Xvfb.
     ];
     const deadline = Date.now() + Math.max(1000, timeoutMs);
     while (Date.now() < deadline) {
@@ -433,6 +428,35 @@ async function readCnaeSelectedCount(page) {
         return m ? Number(m[1]) : null;
     });
 }
+function isChromiumTargetCrash(error) {
+    const msg = error instanceof Error ? error.message : String(error || "");
+    return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
+}
+/** Digita no input do modal sem fill+force no type=text (evita crash do renderer). */
+async function typeCnaeIntoSearch(search, code) {
+    try {
+        await search.click({ timeout: 5000 }).catch(() => search.click({ timeout: 5000, force: true }));
+        await search.press("Control+A").catch(() => undefined);
+        await search.press("Backspace").catch(() => undefined);
+        await search.type(code, { delay: 25 });
+        await search.dispatchEvent("input").catch(() => undefined);
+    }
+    catch (error) {
+        if (isChromiumTargetCrash(error)) {
+            throw new Error(`Chromium caiu ao digitar CNAE ${code} (Target crashed). Sessão será reconectada.`);
+        }
+        // Fallback leve: fill sem force (modal search costuma aceitar).
+        try {
+            await search.fill(code);
+        }
+        catch (inner) {
+            if (isChromiumTargetCrash(inner)) {
+                throw new Error(`Chromium caiu ao preencher CNAE ${code} (Target crashed). Sessão será reconectada.`);
+            }
+            throw inner;
+        }
+    }
+}
 async function selectAtividadePrincipalCnae(page, rawCode) {
     const code = String(rawCode || "").replace(/\D/g, "");
     if (!code)
@@ -459,15 +483,7 @@ async function selectAtividadePrincipalCnae(page, rawCode) {
             .filter(Boolean));
         throw new Error(`CNAE: modal/campo de atividade ausente. Código pedido: ${code}. Placeholders visíveis: ${placeholders.length ? placeholders.join(" | ") : "(nenhum)"}.`);
     }
-    await search.click({ timeout: 5000, force: true }).catch(() => undefined);
-    await search.fill("", { force: true }).catch(() => undefined);
-    await search.fill(code, { force: true });
-    await search.dispatchEvent("input").catch(() => undefined);
-    await search.press("Control+A").catch(() => undefined);
-    await page.waitForTimeout(200);
-    await search.type(code, { delay: 40 }).catch(async () => {
-        await search.fill(code, { force: true });
-    });
+    await typeCnaeIntoSearch(search, code);
     await page.waitForTimeout(1100);
     let marked = await markCnaeOption(page, code);
     let selectedState = await readCnaeSelectedCount(page);
@@ -720,6 +736,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             : "Abrindo Portal: abrindo janela do Casa dos Dados (visível)…");
     let browser;
     try {
+        const hasXvfb = Boolean(String(process.env.DISPLAY || "").trim());
         browser = await playwright.chromium.launch({
             headless,
             slowMo,
@@ -727,7 +744,13 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                ...(headless ? [] : ["--start-maximized"]),
+                "--disable-gpu",
+                "--disable-software-rasterizer",
+                "--disable-extensions",
+                "--mute-audio",
+                "--renderer-process-limit=2",
+                // Maximizar sob Xvfb costuma derrubar o renderer ("Target crashed").
+                ...(headless || hasXvfb ? [] : ["--start-maximized"]),
             ],
         });
     }
@@ -739,10 +762,11 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         throw error;
     }
     try {
+        const hasXvfb = Boolean(String(process.env.DISPLAY || "").trim());
         const context = await browser.newContext({
             locale: "pt-BR",
-            // Janela visível: sem viewport fixo para respeitar --start-maximized.
-            viewport: headless ? { width: 1440, height: 900 } : null,
+            // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
+            viewport: headless || hasXvfb ? { width: 1440, height: 900 } : null,
             userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         });
         await context.addInitScript(() => {
