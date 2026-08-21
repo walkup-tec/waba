@@ -5,7 +5,8 @@
 | Campo | Valor |
 |-------|--------|
 | Branch | `v02` |
-| Tag sugerida | `checkpoint/v02-device-cloud-pairing-2026-08-21` |
+| Commit | `014067c849240d99bbe70e9a968cfeac4f494a8f` |
+| Tag | `checkpoint/v02-device-cloud-pairing-2026-08-21` |
 | Branch backup | `backup/v02-device-cloud-pairing-checkpoint-20260821` |
 | Marker | `DEPLOY-2026-08-21-dc-fix-false-browser-pairing-screen` |
 | Device | WABA · EM-6034 (`11111111-1111-4111-8111-111111111111`) |
