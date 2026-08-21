@@ -30,11 +30,11 @@
 ## Ordem warm
 
 1. Métricas do screenshot  
-2. **Gerar** pairingCode (soft-reset EVO ≤35s)  
-3. Abrir «Insira o código»  
-4. Digitar 8 chars  
+2. **Paralelo:** gerar pairingCode (número COM 9º BR) + abrir «Insira o código»  
+3. Digitar 8 chars  
+4. Se modal «Não foi possível conectar» → OK + 1 retry com número alternado  
 5. Poll open / aquecedor  
 
 ## Device de referência
 
-WABA · EM-6034 / 555182006034
+WABA · EM-6034 / phones.json `555182006034` → pairing EVO `5551982006034` (com 9º)

@@ -24764,6 +24764,35 @@
         return digits;
       }
 
+      /**
+       * Número para pairingCode na EVO.
+       * Evidência EM-6034: sem 9º (555182006034) → WA «Não foi possível conectar» + EVO 401.
+       * Com 9º (5551982006034) → chega a open (histórico do chat). Preferir COM 9 no create/connect.
+       * Doc EVO: GET /instance/connect/:name?number=55… (TTL ~60s).
+       * https://doc.evolution-api.com/v2/api-reference/instance-controller/instance-connect
+       */
+      function formatDeviceCloudPairingNumber(rawDigits) {
+        let digits = formatDeviceCloudEvoNumber(rawDigits);
+        if (!digits) return "";
+        if (digits.startsWith("55") && digits.length === 12) {
+          return digits.slice(0, 4) + "9" + digits.slice(4);
+        }
+        return digits;
+      }
+
+      /** Alterna COM↔SEM 9º BR para retry de pareamento. */
+      function alternateDeviceCloudPairingNumber(digits) {
+        const d = normalizeDeviceCloudPhoneDigits(digits);
+        if (!d.startsWith("55")) return d;
+        if (d.length === 13 && d.charAt(4) === "9") {
+          return d.slice(0, 4) + d.slice(5);
+        }
+        if (d.length === 12) {
+          return d.slice(0, 4) + "9" + d.slice(4);
+        }
+        return d;
+      }
+
       function extractPairingCodeFromPayload(data) {
         const normalizePairing = (value, keyHint) => {
           const raw = String(value || "").trim();
@@ -24985,6 +25014,8 @@
         conectarNumero: [360, 1133],
         codeBoxY: 468,
         codeBoxXs: [71, 147, 223, 299, 418, 494, 572, 648],
+        /** Botão OK do modal «Não foi possível conectar» — canto inferior direito do card. */
+        failDialogOk: [580, 710],
       };
 
       const DEVICE_CLOUD_PAIRING_NAV_MAX_STEP = 7;
@@ -25059,6 +25090,112 @@
         });
         await sleepDeviceCloud(2000);
         await refreshDeviceCloudScreen(deviceId).catch(() => {});
+      }
+
+      /**
+       * Detecta o modal branco «Não foi possível conectar o dispositivo».
+       * Assinatura: faixa central clara + botão verde «OK» na parte inferior do card.
+       */
+      async function detectDeviceCloudPairingFailDialog(deviceId) {
+        try {
+          const res = await fetch(
+            "/device-cloud/device/" + encodeURIComponent(deviceId) + "/screenshot?t=" + Date.now(),
+            { credentials: "same-origin" },
+          );
+          if (!res.ok) return false;
+          const blob = await res.blob();
+          const bitmap = await createImageBitmap(blob);
+          const canvas = document.createElement("canvas");
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx) return false;
+          ctx.drawImage(bitmap, 0, 0);
+          const w = bitmap.width;
+          const h = bitmap.height;
+          const sample = (x0, y0, x1, y1, pred) => {
+            const width = Math.max(1, x1 - x0);
+            const height = Math.max(1, y1 - y0);
+            const { data } = ctx.getImageData(x0, y0, width, height);
+            let hit = 0;
+            let n = 0;
+            const step = 10 * 4;
+            for (let i = 0; i < data.length; i += step) {
+              n += 1;
+              if (pred(data[i], data[i + 1], data[i + 2])) hit += 1;
+            }
+            return n ? hit / n : 0;
+          };
+          // Card branco central (modal)
+          const whiteCard = sample(
+            Math.floor(w * 0.1),
+            Math.floor(h * 0.26),
+            Math.floor(w * 0.9),
+            Math.floor(h * 0.55),
+            (r, g, b) => r > 225 && g > 225 && b > 225,
+          );
+          // Título preto «Não foi possível…»
+          const darkTitle = sample(
+            Math.floor(w * 0.18),
+            Math.floor(h * 0.3),
+            Math.floor(w * 0.82),
+            Math.floor(h * 0.4),
+            (r, g, b) => r < 45 && g < 45 && b < 45,
+          );
+          // OK teal/verde (texto), canto inferior direito do card
+          const tealOk = sample(
+            Math.floor(w * 0.62),
+            Math.floor(h * 0.48),
+            Math.floor(w * 0.92),
+            Math.floor(h * 0.6),
+            (r, g, b) => g > 85 && g > r + 15 && b < g + 50 && r < 110,
+          );
+          return whiteCard > 0.35 && (darkTitle > 0.015 || tealOk > 0.02);
+        } catch {
+          return false;
+        }
+      }
+
+      async function dismissDeviceCloudPairingFailDialog(deviceId) {
+        const map = DEVICE_CLOUD_PAIRING_MAP;
+        await sendDeviceCloudTapMapped(deviceId, map.failDialogOk[0], map.failDialogOk[1], {
+          skipRefresh: true,
+        });
+        await sleepDeviceCloud(600);
+        await refreshDeviceCloudScreen(deviceId).catch(() => {});
+      }
+
+      /**
+       * Após digitar: espera Meta responder. Se modal de falha → true.
+       * Se caixas ainda visíveis sem modal → false (ainda processando / ok).
+       */
+      async function refreshDeviceCloudPairingCode(instanceName, numberForEvo) {
+        const res = await fetchWithTimeout(
+          `/instancias/${encodeURIComponent(instanceName)}/pairing-code?number=${encodeURIComponent(numberForEvo)}`,
+          { credentials: "same-origin" },
+          50000,
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            String(data.error || data.detail || "Falha ao renovar código de vinculação."),
+          );
+        }
+        const code = extractPairingCodeFromPayload(data);
+        if (!code) {
+          throw new Error("Renovação não retornou pairingCode.");
+        }
+        return code;
+      }
+
+      async function waitDeviceCloudPairingRejectOrPass(deviceId, maxWaitMs = 12000) {
+        const started = Date.now();
+        while (Date.now() - started < maxWaitMs) {
+          if (await detectDeviceCloudPairingFailDialog(deviceId)) return "fail";
+          await sleepDeviceCloud(700);
+        }
+        if (await detectDeviceCloudPairingFailDialog(deviceId)) return "fail";
+        return "unknown";
       }
 
       /** Foca caixas do código e digita pairingCode — 1 char/caixa, escalado do mapa. */
@@ -25367,7 +25504,7 @@
           deviceLabel,
           phoneInput,
         );
-        const evoNumber = formatDeviceCloudEvoNumber(phoneDigits);
+        let evoNumber = formatDeviceCloudPairingNumber(phoneDigits);
         if (!evoNumber || evoNumber.length < 12) {
           warmSt.busy = false;
           setDeviceCloudWarmStatus(
@@ -25379,41 +25516,86 @@
         }
         if (phoneInput) phoneInput.value = evoNumber;
 
-        try {
-          // Soft-reset EVO pode levar ~30–60s. Gerar o código ANTES de abrir «Insira o código»
-          // (TTL ~1 min) — senão a UI fica parada na tela certa enquanto o servidor ainda reseta.
-          const warmProgress = (msg) =>
-            setDeviceCloudWarmStatus(id, msg, { phase: "busy", hideActions: true });
-          warmProgress(`Gerando código para ${evoNumber} (pode levar até ~1 min)…`);
-          const data = await submitAndPollRegistrarQrcode(
+        const warmProgress = (msg) =>
+          setDeviceCloudWarmStatus(id, msg, { phase: "busy", hideActions: true });
+
+        const runPairingAttempt = async (numberForEvo, attemptLabel) => {
+          warmProgress(
+            `${attemptLabel} — preparando sessão + tela (${numberForEvo})…`,
+          );
+          // Soft-reset+create em paralelo com a nav. Depois RENOVAMOS o pairingCode
+          // via connect?number= imediatamente antes de digitar (TTL ~60s).
+          const codePromise = submitAndPollRegistrarQrcode(
             {
               name: instanceName,
               token: generateTokenLike(),
-              number: evoNumber,
+              number: numberForEvo,
             },
             120000,
-            warmProgress,
+            (msg) => warmProgress(`${attemptLabel} — ${msg}`),
           );
+          const navPromise = openDeviceCloudWhatsAppPairingCodeScreen(id);
+          const [data] = await Promise.all([codePromise, navPromise]);
 
           if (data?.alreadyConnected) {
-            await finishDeviceCloudWarmIntegration(id, instanceName, deviceLabel);
-            return;
+            return { alreadyConnected: true };
           }
 
-          const pairingCode = extractPairingCodeFromPayload(data);
+          warmProgress(`${attemptLabel} — renovando código fresco na EVO…`);
+          let pairingCode = "";
+          try {
+            pairingCode = await refreshDeviceCloudPairingCode(instanceName, numberForEvo);
+          } catch (err) {
+            pairingCode = extractPairingCodeFromPayload(data);
+            if (!pairingCode) throw err;
+            console.warn("[DeviceCloud] refresh pairing falhou; usando código do create:", err);
+          }
           if (!pairingCode) {
             throw new Error(
               "O sistema não retornou o código de vinculação. Tente de novo em alguns segundos.",
             );
           }
-
           warmSt.pendingPairingCode = pairingCode;
           const codeLabel = normalizeDeviceCloudPairingCode(pairingCode);
-          warmProgress(`Código ${codeLabel} pronto — abrindo Insira o código…`);
-          await openDeviceCloudWhatsAppPairingCodeScreen(id);
-
-          warmProgress(`Digitando ${codeLabel} (1 char/caixa)…`);
+          warmProgress(`${attemptLabel} — digitando ${codeLabel} agora…`);
           await typeDeviceCloudPairingCodeOnDevice(id, pairingCode);
+          warmProgress(`${attemptLabel} — aguardando resposta do WhatsApp…`);
+          const outcome = await waitDeviceCloudPairingRejectOrPass(id, 14000);
+          return { pairingCode, outcome, numberForEvo };
+        };
+
+        try {
+          let result = await runPairingAttempt(evoNumber, "Tentativa 1");
+          if (result.alreadyConnected) {
+            await finishDeviceCloudWarmIntegration(id, instanceName, deviceLabel);
+            return;
+          }
+
+          if (result.outcome === "fail") {
+            await dismissDeviceCloudPairingFailDialog(id);
+            const alt = alternateDeviceCloudPairingNumber(evoNumber);
+            if (alt && alt !== evoNumber) {
+              evoNumber = alt;
+              if (phoneInput) phoneInput.value = evoNumber;
+              warmProgress(`WhatsApp recusou. Retry com número ${evoNumber}…`);
+              result = await runPairingAttempt(evoNumber, "Tentativa 2");
+              if (result.alreadyConnected) {
+                await finishDeviceCloudWarmIntegration(id, instanceName, deviceLabel);
+                return;
+              }
+              if (result.outcome === "fail") {
+                await dismissDeviceCloudPairingFailDialog(id);
+                throw new Error(
+                  "WhatsApp recusou o código (número ou código inválido/expirado). Confira o número no Digitar e tente de novo.",
+                );
+              }
+            } else {
+              throw new Error(
+                "WhatsApp recusou o código. Gere de novo com «Tentar de novo».",
+              );
+            }
+          }
+
           setDeviceCloudWarmStatus(id, "Código enviado. Aguardando conexão no WhatsApp…", {
             phase: "busy",
             hideActions: true,
@@ -47426,11 +47608,16 @@
                     0,
                     Math.floor(Number(health?.disconnectedCount) || 0)
                   );
+                  const spareConnectedForSwap = Math.max(
+                    0,
+                    Math.floor(Number(health?.spareConnectedForSwap) || 0)
+                  );
                   const showAddInstances =
                     !isFinished &&
                     (needsMoreInstancesForMinimum ||
                       shouldPauseByDisconnectedRatio ||
-                      disconnectedCount > 0);
+                      disconnectedCount > 0) &&
+                    (spareConnectedForSwap === 0 || !isRunning);
                   const minConnectedRequired = Math.max(
                     1,
                     Math.floor(Number(health?.minConnectedRequired) || 1)
@@ -47469,13 +47656,25 @@
                       '<div class="aquecedor-envio-time muted" style="margin-top:6px;">Instâncias: nenhuma definida no snapshot — selecione na Seção 1.</div>';
                   }
                   if (shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). Use «+ Instâncias» para trocar os bloqueados (vermelhos) por números conectados.</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Menos de 50% das instâncias selecionadas estão ativas (${connectedCount} de ${selectedCount}). ${
+                      spareConnectedForSwap > 0 && isRunning
+                        ? "A substituição pelos conectados habilitados para disparos é automática (Proxy sai do desconectado e entra no novo)."
+                        : spareConnectedForSwap > 0
+                          ? "Há número conectado livre. Use «+ Instâncias» para adicioná-lo à campanha."
+                          : "Não há instância livre. Conecte um número habilitado para disparos e use «+ Instâncias»."
+                    }</div>`;
                   }
                   if (needsMoreInstancesForMinimum) {
                     tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Quantidade mínima para campanha = ${minConnectedRequired} números</div>`;
                   }
                   if (!needsMoreInstancesForMinimum && disconnectedCount > 0 && !shouldPauseByDisconnectedRatio) {
-                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). Use «+ Instâncias» para trocar por um conectado (o bloqueado sai da campanha e a Proxy é transferida).</div>`;
+                    tagsBlock += `<div class="aquecedor-envio-time" style="margin-top:6px;color:#fca5a5;">Há ${disconnectedCount} número(s) desconectado(s). ${
+                      spareConnectedForSwap > 0 && isRunning
+                        ? "A substituição por um conectado habilitado para disparos é automática (Proxy sai do desconectado e entra no novo)."
+                        : spareConnectedForSwap > 0
+                          ? "Há número conectado livre. Use «+ Instâncias» para adicioná-lo à campanha."
+                          : "Não há instância livre. Conecte um número habilitado para disparos e use «+ Instâncias»."
+                    }</div>`;
                   }
       
                   const proxyTag =

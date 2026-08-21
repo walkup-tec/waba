@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-21 — Troca automática de instância desconectada na campanha
+
+- **Decisão:** No tick, se a campanha está `running` e há chip `connectionState≠open`, substitui automaticamente por outra instância `open` do dono com `useDisparador` e lifecycle pronto. Proxy off no que sai, prepare/on no que entra. «+ Instâncias» só quando não há reserva (ou campanha pausada para o operador adicionar após conectar).
+- **Motivo:** Campanha parada com chip vermelho perde envio; o operador não deve clicar para cada queda se já existe número habilitado.
+- **Impacto:** Marker `DEPLOY-2026-08-21-campanha-auto-swap-instancias`. A decisão de 21/08 (não desligar proxy ao **pausar**) permanece: disable só no chip **removido** da seleção.
+
 ### 2026-08-21 — CHECKPOINT V02 Device Cloud pairing (restauração)
 
 - **Decisão:** Congelar o estado funcional do pareamento Device Cloud na `v02` com tag `checkpoint/v02-device-cloud-pairing-2026-08-21`, branch `backup/v02-device-cloud-pairing-checkpoint-20260821` e doc `doc/CHECKPOINT-2026-08-21__v02-device-cloud-pairing.md`.

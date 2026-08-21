@@ -32,7 +32,7 @@ Não usar como histórico de desenvolvimento.
 ## Pendências relevantes
 
 - Validar ponta a ponta Device Cloud: pairingCode digitado → instância `open` → lingueta «Integração Finalizada»
-- **«+ Instâncias» na campanha:** correção em `v02` (pointerdown + POST com `connectionState`). Produção só muda após commit/`master` + FTP + Redeploy `waba_disparador`. LOG `doc/LOG-2026-08-21__174800__fix-campanha-botao-instancias.md`
+- **Troca automática de instância na campanha** (`v02`): tick substitui desconectado por conectado habilitado para disparos (Proxy off/on). «+ Instâncias» só sem reserva ou campanha pausada. Marker `DEPLOY-2026-08-21-campanha-auto-swap-instancias`. Produção após commit/`master` + FTP + Redeploy.
 - **Redeploy EasyPanel** `waba_disparador` para marker `DEPLOY-2026-08-19-device-cloud-lingueta-tab` (código e `dist/` já em `master`; produção ainda pode servir marker antigo até redeploy)
 - Após redeploy: validar `/health`, lingueta visível, ausência de `device-cloud-warm-btn` / **Início** / **Aquecer** no HTML servido
 - Após cada mudança de UI/runtime: `npm run build` + commit `dist/` antes do push (FTP sozinho **não** atualiza `waba.draxsistemas.com.br`)

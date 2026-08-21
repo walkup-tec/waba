@@ -1,5 +1,25 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 18:02 — Troca automática de instância na campanha
+
+- Tick substitui desconectado por conectado habilitado para disparos; Proxy off no que sai / on no que entra.
+- «+ Instâncias» só sem reserva ou campanha pausada.
+- Marker `DEPLOY-2026-08-21-campanha-auto-swap-instancias`
+- LOG: `doc/LOG-2026-08-21__180200__campanha-auto-swap-instancias.md`
+
+## 2026-08-21 18:10 — Pareamento: código fresco + soft-reset sem race + detect modal
+
+- Tentativa 1 com 9º ainda falhou (modal WA); detector não via o OK; soft-reset race invalidava código.
+- Fix: await logout/delete completo; GET `/instancias/:name/pairing-code` antes de digitar; detect modal por card branco + título; OK @ (580,710).
+- Marker `DEPLOY-2026-08-21-dc-fix-pairing-fresh-code`
+
+## 2026-08-21 17:58 — Pareamento: TTL + número COM 9º após digitar código
+
+- Sintoma: WA «Não foi possível conectar» + UI tempo esgotado; EVO 401 com `555182006034`.
+- Fix: pairing COM 9º, generate∥nav, detect modal + 1 retry alternado.
+- Marker `DEPLOY-2026-08-21-dc-fix-pairing-ttl-number9`
+- LOG: doc/LOG-2026-08-21__175800__fix-pairing-after-code-ttl-number.md
+
 ## 2026-08-21 17:52 — CHECKPOINT V02 Device Cloud pairing
 
 - Ponto de backup: `doc/CHECKPOINT-2026-08-21__v02-device-cloud-pairing.md`
