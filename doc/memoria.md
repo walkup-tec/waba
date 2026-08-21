@@ -1,5 +1,23 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-21 10:05 — Pin Evolution 2.4.0-rc2 (autorizado)
+
+- Script `scripts/pin-evo-2-4-rc2-vps.sh` + workflow SSH. Rollback se não for 2.4 ou LICENSE_REQUIRED.
+- LOG: doc/LOG-2026-08-21__100500__pin-evo-2-4-rc2.md
+
+## 2026-08-21 10:00 — EVO 2.4.0-rc2 (semana 11/08) revertida para 2.3.7
+
+- 20/08 11:07: imagem `evoapicloud/evolution-api:2.4.0-rc2` (Baileys 7.0.0-rc.9) — a que renderiza botão.
+- 20/08 11:16: Redeploy/update Easypanel trocou para `:latest` = API 2.3.7. GET `/` em 21/08 ainda 2.3.7.
+- LOG: doc/LOG-2026-08-21__100000__evo-2-4-rc2-revertida-para-2-3-7.md
+
+## 2026-08-21 09:55 — Botão nativo Alternativa: estudo EVO/WhatsApp (sem patch WABA)
+
+- Evolution 2.3.7 (produção) envolve `sendButtons` em `viewOnceMessage`; o WhatsApp não desenha o botão. O WABA não controla esse wrapper.
+- Fix do vendor: Evolution **2.4.0-rc** (remove viewOnce + `native_flow`) ou PR #2651. Cloud API oficial tem `cta_url` (outro canal).
+- Patch local que tratava viewOnce+nativeFlow como sucesso foi revertido (regressão 20/08: só imagem).
+- LOG: doc/LOG-2026-08-21__095500__estudo-evo-wa-botao-nativo.md
+
 ## 2026-08-21 07:17 — Permanência do pareamento (Seguradoras)
 
 - 11/08: campanha enviava sem desligar proxy. 12/08: tick desligava proxy nos offline; Ativar fazia proxy/set no meio do disparo
