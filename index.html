@@ -25784,7 +25784,16 @@
         const ok = await ensureDeviceCloudSession();
         if (!ok) return;
         try {
-          const devices = (await fetchDeviceCloudDevicesList()).filter((d) => !isDeviceCloudHidden(String(d.id)));
+          const all = await fetchDeviceCloudDevicesList();
+          let devices = all.filter((d) => !isDeviceCloudHidden(String(d.id)));
+          // Se a tela ficou vazia só porque o device foi «removido» do board local,
+          // reabrir os ONLINE (ex.: WABA · EM-6034) em vez de parecer que sumiu.
+          if (devices.length < 1 && all.length > 0) {
+            const online = all.filter((d) => String(d.status || "").toUpperCase() === "ONLINE");
+            const revive = online.length > 0 ? online : all.slice(0, 1);
+            revive.forEach((d) => setDeviceCloudHidden(String(d.id), false));
+            devices = revive;
+          }
           const openIds = new Set(listVisibleDeviceCloudWindows().map((w) => String(w.dataset.deviceId || "")));
           devices.forEach((d) => {
             if (!d.id || openIds.has(String(d.id))) return;
