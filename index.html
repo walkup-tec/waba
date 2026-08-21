@@ -34319,7 +34319,7 @@
       }
       function formatMarketingLeadsCnpjLiveAge(updatedAt) {
         const ms = Date.parse(String(updatedAt || ""));
-        if (!Number.isFinite(ms)) return { ageSec: null, label: "sem horário" };
+        if (!Number.isFinite(ms)) return { ageSec: null, label: "sem data do servidor" };
         const ageSec = Math.max(0, Math.round((Date.now() - ms) / 1000));
         if (ageSec < 5) return { ageSec, label: "agora" };
         if (ageSec < 60) return { ageSec, label: "há " + ageSec + "s" };

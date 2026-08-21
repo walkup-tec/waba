@@ -40,6 +40,7 @@ function toSummary(list, downloads = [], extras) {
         source: list.source,
         leadCount: list.leadCount,
         createdAt: list.createdAt,
+        updatedAt: list.updatedAt || list.createdAt || null,
         generatedAt: list.generatedAt,
         exportFileName: list.exportFileName,
         error: list.error,

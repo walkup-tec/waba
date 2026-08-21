@@ -160,6 +160,8 @@ export type WabaLeadsCnpjListSummary = {
   source: WabaLeadsCnpjSource;
   leadCount: number;
   createdAt: string;
+  /** Último patch do job (sinal de vida na UI). */
+  updatedAt?: string | null;
   generatedAt: string | null;
   exportFileName: string | null;
   error: string | null;
