@@ -1053,12 +1053,18 @@ export async function scrapeCasaDosDadosLeads(
       });
     } catch (error) {
       lastErr = error;
+      const crashed = isChromiumTargetCrash(error);
       const msg = error instanceof Error ? error.message : String(error);
       onProgress?.(
-        `Abrindo Portal: interrupção na página ${resumeFrom} (${msg.slice(0, 140)}). Registros já arquivados serão mantidos.`,
+        crashed
+          ? `Copiando: Chromium interrompido — recuperando da página ${resumeFrom}…`
+          : `Abrindo Portal: falha operacional — retomando página ${resumeFrom} (${msg.slice(0, 120)})…`,
       );
       if (attempt >= maxAttempts) break;
-      await new Promise((r) => setTimeout(r, Math.min(20_000, 2_000 * attempt)));
+      const delayMs = crashed
+        ? Math.min(8000, 1000 * attempt)
+        : Math.min(20_000, 2000 * attempt);
+      await new Promise((r) => setTimeout(r, delayMs));
     }
   }
 
@@ -1108,11 +1114,15 @@ async function scrapeCasaDosDadosLeadsOnce(
         "--disable-blink-features=AutomationControlled",
         "--no-sandbox",
         "--disable-dev-shm-usage",
+        // Sem GPU física no Docker/Xvfb — mas NÃO desligar software rasterizer
+        // (--disable-software-rasterizer + --disable-gpu mata o fallback e crasha o renderer).
         "--disable-gpu",
-        "--disable-software-rasterizer",
         "--disable-extensions",
         "--mute-audio",
-        "--renderer-process-limit=2",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-background-timer-throttling",
         // Maximizar sob Xvfb costuma derrubar o renderer ("Target crashed").
         ...(headless || hasXvfb ? [] : ["--start-maximized"]),
       ],
@@ -1127,6 +1137,11 @@ async function scrapeCasaDosDadosLeadsOnce(
     throw error;
   }
 
+  const resumeFromPageLog = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
+  browser.on("disconnected", () => {
+    console.error(`[Leads PJ] BROWSER_DISCONNECTED page=${resumeFromPageLog}`);
+  });
+
   try {
     const context = await browser.newContext({
       locale: "pt-BR",
@@ -1140,6 +1155,9 @@ async function scrapeCasaDosDadosLeadsOnce(
     });
     const page = await context.newPage();
     page.setDefaultTimeout(45000);
+    page.on("crash", () => {
+      console.error(`[Leads PJ] PAGE_CRASH page=${resumeFromPageLog}`);
+    });
     if (!headless) {
       await page.bringToFront().catch(() => undefined);
     }
@@ -1203,24 +1221,14 @@ async function scrapeCasaDosDadosLeadsOnce(
     }
 
     await page
-      .waitForFunction(
-        () =>
-          /retornou\s+[\d.]+\s+empresas/i.test(document.body.innerText) ||
-          /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(document.body.innerText),
-        { timeout: 45000 },
-      )
+      .locator("body")
+      .filter({ hasText: /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+|retornou\s+[\d.]+\s+empresas/i })
+      .first()
+      .waitFor({ timeout: 45000 })
       .catch(() => null);
 
-    // Garante que os cards da página atual entraram no DOM / viewport.
-    await page.evaluate(async () => {
-      for (let i = 0; i < 8; i += 1) {
-        window.scrollBy(0, 600);
-        await new Promise((r) => setTimeout(r, 200));
-      }
-      window.scrollTo(0, 0);
-    });
-
-    const pageText = await page.evaluate(() => document.body.innerText || "");
+    // Sem scrolls artificiais — 20 cards/página já estão no DOM; scroll redesenha e estressa o renderer.
+    const pageText = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
     const portalTotal = interceptedTotal ?? parseResultTotalFromText(pageText);
     if (portalTotal != null) {
       onProgress?.(
@@ -1236,29 +1244,21 @@ async function scrapeCasaDosDadosLeadsOnce(
     // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
 
     const readScreenCards = async (): Promise<string[][]> => {
-      await page.evaluate(async () => {
-        for (let i = 0; i < 8; i += 1) {
-          window.scrollBy(0, 500);
-          await new Promise((r) => setTimeout(r, 120));
-        }
-        // Fica no rodapé: paginação Oruga fica sob os cards.
-      });
-      return page.evaluate(() => {
-        const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
-        const seen = new Set<string>();
-        const out: string[][] = [];
-        const lines = String(document.body?.innerText || "")
-          .split(/\n+/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-        for (const line of lines) {
-          const m = line.match(re);
-          if (!m || seen.has(m[1])) continue;
-          seen.add(m[1]);
-          out.push([m[1], m[2]]);
-        }
-        return out;
-      });
+      const bodyText = await page.locator("body").innerText({ timeout: 15000 });
+      const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
+      const seen = new Set<string>();
+      const out: string[][] = [];
+      const lines = bodyText
+        .split(/\n+/)
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      for (const line of lines) {
+        const m = line.match(re);
+        if (!m || seen.has(m[1])) continue;
+        seen.add(m[1]);
+        out.push([m[1], m[2]]);
+      }
+      return out;
     };
 
     const firstCnpjOf = (rows: string[][]) => (rows[0] ? normalizeCnpjDigits(rows[0][0]) : "");
@@ -1312,27 +1312,50 @@ async function scrapeCasaDosDadosLeadsOnce(
 
         await btn.scrollIntoViewIfNeeded().catch(() => null);
         await btn.click({ force: true, timeout: 8000 }).catch(() => null);
-        await page.waitForTimeout(1200);
 
+        // Prioridade: número da página ativa (aria-current / is-current). CNPJ = fallback leve.
         const changed = await page
           .waitForFunction(
-            ({ prev, expectedPage }: { prev: string; expectedPage: number }) => {
+            (expectedPage: number) => {
               const active = document.querySelector(
-                'nav[data-oruga="pagination"] button.pagination-link.is-current, nav[data-oruga="pagination"] button[aria-current="true"]',
+                'nav[data-oruga="pagination"] button.pagination-link.is-current,' +
+                  'nav[data-oruga="pagination"] button[aria-current="true"],' +
+                  'nav[data-oruga="pagination"] button[aria-current="page"]',
               );
               const n = Number(String(active?.textContent || "").trim());
-              if (Number.isFinite(n) && n === expectedPage) return true;
-              const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+/m;
-              const m = String(document.body?.innerText || "").match(re);
-              if (!m) return false;
-              return m[1].replace(/\D/g, "") !== prev;
+              return Number.isFinite(n) && n === expectedPage;
             },
-            { prev: previousFirstCnpj, expectedPage: targetPage },
-            { timeout: 25000 },
+            targetPage,
+            { timeout: 15000 },
           )
           .then(() => true)
           .catch(() => false);
-        if (changed) return true;
+
+        if (!changed && previousFirstCnpj) {
+          const okByCnpj = await page
+            .waitForFunction(
+              (prev: string) => {
+                const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+/m;
+                const text = String(document.body?.innerText || "");
+                const m = text.match(re);
+                if (!m) return false;
+                return m[1].replace(/\D/g, "") !== prev;
+              },
+              previousFirstCnpj,
+              { timeout: 8000 },
+            )
+            .then(() => true)
+            .catch(() => false);
+          if (okByCnpj) return true;
+        } else if (changed) {
+          await page
+            .locator("body")
+            .filter({ hasText: /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/ })
+            .first()
+            .waitFor({ timeout: 10000 })
+            .catch(() => null);
+          return true;
+        }
       }
       return false;
     };
@@ -1380,26 +1403,20 @@ async function scrapeCasaDosDadosLeadsOnce(
         for (const loc of candidates) {
           try {
             if (!(await loc.count()) || !(await loc.first().isVisible())) continue;
-            const prevRows = await readScreenCards();
-            const prev = firstCnpjOf(prevRows);
             await loc.first().click({ force: true });
-            await page.waitForTimeout(600);
             const changed = await page
               .waitForFunction(
-                ({ prevCnpj, expectedPage }: { prevCnpj: string; expectedPage: number }) => {
+                (expectedPage: number) => {
                   const curBtn = document.querySelector(
-                    'nav[data-oruga="pagination"] button.pagination-link[aria-current="page"], nav[data-oruga="pagination"] li[aria-current="page"] button, nav[data-oruga="pagination"] button.is-current',
+                    'nav[data-oruga="pagination"] button.pagination-link.is-current,' +
+                      'nav[data-oruga="pagination"] button[aria-current="true"],' +
+                      'nav[data-oruga="pagination"] button[aria-current="page"]',
                   );
-                  const curText = String(curBtn?.textContent || "").trim();
-                  const curNum = Number(curText.replace(/\D/g, ""));
-                  if (Number.isFinite(curNum) && curNum === expectedPage) return true;
-                  const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+/m;
-                  const m = String(document.body?.innerText || "").match(re);
-                  if (!m || !prevCnpj) return false;
-                  return m[1].replace(/\D/g, "") !== prevCnpj;
+                  const curNum = Number(String(curBtn?.textContent || "").trim());
+                  return Number.isFinite(curNum) && curNum === expectedPage;
                 },
-                { prevCnpj: prev, expectedPage: target },
-                { timeout: 25000 },
+                target,
+                { timeout: 15000 },
               )
               .then(() => true)
               .catch(() => false);
@@ -1413,16 +1430,28 @@ async function scrapeCasaDosDadosLeadsOnce(
 
       if (await tryClickPage()) return true;
 
+      // Evita recovery destrutivo: clicar 1→2→…→300 numa sessão nova sobrecarrega o renderer.
       let guard = 0;
-      const maxSteps = Math.max(target + 100, 500);
+      const maxSteps = Math.max(
+        1,
+        Math.min(
+          25,
+          Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 25) || 25),
+        ),
+      );
       while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
         guard += 1;
         const prevRows = await readScreenCards();
         const prev = firstCnpjOf(prevRows);
         const ok = await goToNextResultsPage(prev, current);
         if (!ok) return false;
+        if (await tryClickPage()) return true;
       }
-      return (await readCurrentPageNumber()) === target;
+      current = await readCurrentPageNumber();
+      if (current === target) return true;
+      throw new Error(
+        `Retomada limitada: não posicionou na página ${target} em ${maxSteps} passos (UI em ${current}). Checkpoint/pool mantidos.`,
+      );
     };
 
     const startPage = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
@@ -1480,17 +1509,12 @@ async function scrapeCasaDosDadosLeadsOnce(
       });
 
       if (pageIndex >= pagesToFetch) break;
-      // Só encerra por “sem novos” DEPOIS da página 1 (pág.1 pode repetir intercept/API).
       if (rows.length === 0) {
         onProgress?.(`Copiando: página ${pageIndex} sem cards — encerrando paginação.`);
         break;
       }
-      if (added === 0 && pageIndex > 1) {
-        onProgress?.(
-          `Copiando: página ${pageIndex} sem CNPJs novos — encerrando paginação.`,
-        );
-        break;
-      }
+      // NÃO encerrar por added===0: página pode repetir CNPJs já em `collected` desta
+      // sessão e ainda haver conteúdo novo nas páginas seguintes.
 
       if (nextPage > portalUiMaxPage) {
         onProgress?.(
