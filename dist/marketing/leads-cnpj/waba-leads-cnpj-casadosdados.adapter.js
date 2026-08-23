@@ -903,8 +903,7 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
  * a partir de `resumeFromPage` e o service já terá arquivado o pool via checkpoint.
  */
 async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
-    // Cada chamada = 1 Chromium isolado. Sem teto de concorrência no código
-    // (N listas = N browsers em paralelo; o limite prático é RAM/CPU da máquina).
+    // Cada chamada = 1 Chromium. Concorrência limitada no service (soft-cap 2 + stagger).
     const { email, password } = readCasaDosDadosCredentials();
     const playwright = await loadPlaywright();
     // 0 / ausente = sem teto: copia todas as páginas até o portal acabar.

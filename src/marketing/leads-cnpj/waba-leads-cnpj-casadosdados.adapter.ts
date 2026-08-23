@@ -1076,8 +1076,7 @@ async function scrapeCasaDosDadosLeadsOnce(
   onProgress?: CasaDosDadosProgress,
   options?: ScrapeCasaDosDadosOptions,
 ): Promise<WabaLeadsCnpjLead[]> {
-  // Cada chamada = 1 Chromium isolado. Sem teto de concorrência no código
-  // (N listas = N browsers em paralelo; o limite prático é RAM/CPU da máquina).
+  // Cada chamada = 1 Chromium. Concorrência limitada no service (soft-cap 2 + stagger).
   const { email, password } = readCasaDosDadosCredentials();
   const playwright = await loadPlaywright();
   // 0 / ausente = sem teto: copia todas as páginas até o portal acabar.

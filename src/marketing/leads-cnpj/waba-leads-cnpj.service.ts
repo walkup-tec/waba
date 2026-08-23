@@ -35,6 +35,22 @@ const cancelledJobs = new Set<string>();
 const continueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
 let globalEnrichTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Soft-cap da raspagem Playwright: até N Chromiums em paralelo (default 2).
+ * Ilimitado derruba Docker/Xvfb (Target crashed / reinício do container).
+ * Mutex N=1 foi rejeitado (lento demais); N=2 + stagger mantém múltiplas extrações.
+ * Override: CASADOSDADOS_MAX_CONCURRENT_SCRAPES (1–4), CASADOSDADOS_SCRAPE_STAGGER_MS.
+ */
+type PortalScrapeWaiter = {
+  listId: string;
+  grant: () => void;
+  reject: (err: Error) => void;
+  pulse?: ReturnType<typeof setInterval>;
+};
+const portalScrapeActive = new Set<string>();
+const portalScrapeWaiters: PortalScrapeWaiter[] = [];
+let lastPortalScrapeLaunchAt = 0;
+
 const SITUACOES = new Set<WabaLeadsCnpjSituacao>(["Ativa", "Baixada", "Inapta", "Nula", "Suspensa"]);
 const CONTINUE_POLL_MS = 60_000;
 const ABORT_JOB_ERROR = "__MLC_JOB_ABORTED__";
@@ -43,9 +59,153 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set<string>();
 
+function resolveMaxConcurrentScrapes(): number {
+  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 2) || 2);
+  return Math.max(1, Math.min(4, Number.isFinite(raw) ? raw : 2));
+}
+
+function resolveScrapeStaggerMs(): number {
+  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 20_000) || 20_000);
+  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 20_000));
+}
+
 function formatListaLabel(index: number): string {
   const n = Math.max(1, Math.round(Number(index) || 1));
   return `Lista ${String(n).padStart(2, "0")}`;
+}
+
+function portalScrapeQueuePosition(listId: string): number {
+  const waitingIdx = portalScrapeWaiters.findIndex((w) => w.listId === listId);
+  if (waitingIdx >= 0) return waitingIdx + 1;
+  if (portalScrapeActive.has(listId)) return 0;
+  return Math.max(1, portalScrapeWaiters.length + portalScrapeActive.size);
+}
+
+/**
+ * Reserva vaga de Chromium (até max concurrent). Retorna `release()` — sempre em finally.
+ * Com stagger: espaça o launch quando outra raspagem já está ativa.
+ */
+function acquirePortalScrapeSlot(
+  listId: string,
+  onWaiting?: (info: {
+    phase: "queue" | "stagger";
+    position: number;
+    activeCount: number;
+    max: number;
+    waitMs?: number;
+  }) => void,
+): Promise<() => void> {
+  const max = resolveMaxConcurrentScrapes();
+
+  return new Promise((resolve, reject) => {
+    const release = () => {
+      portalScrapeActive.delete(listId);
+      while (
+        portalScrapeWaiters.length > 0 &&
+        portalScrapeActive.size < resolveMaxConcurrentScrapes()
+      ) {
+        const next = portalScrapeWaiters.shift();
+        if (!next) break;
+        if (next.pulse) clearInterval(next.pulse);
+        next.grant();
+      }
+    };
+
+    const activate = () => {
+      portalScrapeActive.add(listId);
+      void (async () => {
+        try {
+          if (cancelledJobs.has(listId)) {
+            release();
+            reject(new Error(ABORT_JOB_ERROR));
+            return;
+          }
+          const staggerMs = resolveScrapeStaggerMs();
+          if (staggerMs > 0 && lastPortalScrapeLaunchAt > 0) {
+            const elapsed = Date.now() - lastPortalScrapeLaunchAt;
+            const waitMs = staggerMs - elapsed;
+            if (waitMs > 0) {
+              onWaiting?.({
+                phase: "stagger",
+                position: 0,
+                activeCount: portalScrapeActive.size,
+                max,
+                waitMs,
+              });
+              const deadline = Date.now() + waitMs;
+              while (Date.now() < deadline) {
+                if (cancelledJobs.has(listId)) {
+                  release();
+                  reject(new Error(ABORT_JOB_ERROR));
+                  return;
+                }
+                const left = deadline - Date.now();
+                await new Promise((r) => setTimeout(r, Math.min(2000, Math.max(50, left))));
+              }
+            }
+          }
+          if (cancelledJobs.has(listId)) {
+            release();
+            reject(new Error(ABORT_JOB_ERROR));
+            return;
+          }
+          lastPortalScrapeLaunchAt = Date.now();
+          resolve(release);
+        } catch (err) {
+          release();
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      })();
+    };
+
+    // check+add síncrono: evita race entre vários enqueueJob no mesmo tick.
+    if (portalScrapeActive.size < max) {
+      activate();
+      return;
+    }
+
+    const waiter: PortalScrapeWaiter = {
+      listId,
+      grant: activate,
+      reject,
+    };
+    portalScrapeWaiters.push(waiter);
+    onWaiting?.({
+      phase: "queue",
+      position: portalScrapeWaiters.length,
+      activeCount: portalScrapeActive.size,
+      max,
+    });
+    waiter.pulse = setInterval(() => {
+      if (cancelledJobs.has(listId)) {
+        if (waiter.pulse) clearInterval(waiter.pulse);
+        const idx = portalScrapeWaiters.indexOf(waiter);
+        if (idx >= 0) portalScrapeWaiters.splice(idx, 1);
+        reject(new Error(ABORT_JOB_ERROR));
+        return;
+      }
+      const pos = portalScrapeQueuePosition(listId);
+      if (pos > 0) {
+        onWaiting?.({
+          phase: "queue",
+          position: pos,
+          activeCount: portalScrapeActive.size,
+          max,
+        });
+      }
+    }, 4000);
+  });
+}
+
+function rejectPortalScrapeWaiter(listId: string) {
+  const id = String(listId || "").trim();
+  if (!id) return;
+  for (let i = portalScrapeWaiters.length - 1; i >= 0; i -= 1) {
+    if (portalScrapeWaiters[i].listId !== id) continue;
+    const [w] = portalScrapeWaiters.splice(i, 1);
+    if (w.pulse) clearInterval(w.pulse);
+    w.reject(new Error(ABORT_JOB_ERROR));
+  }
 }
 
 function toSummary(
@@ -511,6 +671,7 @@ export class WabaLeadsCnpjService {
       : [list];
     for (const item of sameCampaign) {
       cancelledJobs.add(item.id);
+      rejectPortalScrapeWaiter(item.id);
     }
     this.clearContinueTimer(campaignKey);
 
@@ -1424,52 +1585,75 @@ export class WabaLeadsCnpjService {
                   : `Abrindo Portal: robô na tela (pool ${pendingCount}; meta do dia ${dailyLimit}; copiando até pág. ${portalUiMaxPage} · 20/pág.)…`,
               error: null,
             });
-            const scraped = await scrapeCasaDosDadosLeads(
-              scrapeFilters,
-              (message) => {
-                patch({ progressMessage: message });
-              },
-              {
-                resumeFromPage: scrapeResumeFrom,
-                onPageCheckpoint: async (c) => {
-                  if (c.pageLeads.length) {
-                    this.repository.mergePool({
-                      key: campaignKey,
-                      name: baseName,
-                      source: "portal",
-                      filters: campaignFilters,
-                      items: c.pageLeads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
-                      usedCnpjs: used,
-                    });
-                  }
-                  const archived =
-                    this.repository.getPool(campaignKey)?.pending.length || 0;
-                  const nextPage = Math.max(1, Math.round(Number(c.nextPage || 1) || 1));
-                  // Não persiste checkpoint > teto UI (evita retomada em 1001+).
-                  const beyondUi = nextPage > portalUiMaxPage;
+            let releaseScrapeSlot: (() => void) | null = null;
+            let scraped: WabaLeadsCnpjLead[] = [];
+            try {
+              releaseScrapeSlot = await acquirePortalScrapeSlot(listId, (info) => {
+                if (info.phase === "stagger") {
+                  const secs = Math.max(1, Math.ceil((info.waitMs || 0) / 1000));
                   patch({
                     status: "scraping",
-                    scrapeCheckpoint: beyondUi
-                      ? null
-                      : {
-                          nextPage,
-                          portalTotal: c.portalTotal,
-                          pagesToFetch: c.pagesToFetch,
-                          collectedCount: archived,
-                        },
-                    scrapeReconnectAttempts: 0,
-                    progressMessage: beyondUi
-                      ? `Copiando: página ${c.completedPage} (teto UI ${portalUiMaxPage}) — ${archived.toLocaleString("pt-BR")} CNPJs arquivados; encerrando raspagem.`
-                      : `Copiando: página ${c.completedPage}/${c.pagesToFetch}${
-                          c.portalTotal != null
-                            ? ` de ${c.portalTotal.toLocaleString("pt-BR")}`
-                            : ""
-                        } (${archived.toLocaleString("pt-BR")} CNPJs arquivados; próxima ${nextPage})…`,
+                    progressMessage: `Abrindo Portal: espaçando início (~${secs}s) — ${info.activeCount}/${info.max} Chromium(s) ativos…`,
                     error: null,
                   });
+                  return;
+                }
+                patch({
+                  status: "scraping",
+                  progressMessage: `Fila de raspagem: posição ${info.position} (máx. ${info.max} em paralelo; ${info.activeCount} ativo(s))…`,
+                  error: null,
+                });
+              });
+              assertAlive();
+              scraped = await scrapeCasaDosDadosLeads(
+                scrapeFilters,
+                (message) => {
+                  patch({ progressMessage: message });
                 },
-              },
-            );
+                {
+                  resumeFromPage: scrapeResumeFrom,
+                  onPageCheckpoint: async (c) => {
+                    if (c.pageLeads.length) {
+                      this.repository.mergePool({
+                        key: campaignKey,
+                        name: baseName,
+                        source: "portal",
+                        filters: campaignFilters,
+                        items: c.pageLeads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
+                        usedCnpjs: used,
+                      });
+                    }
+                    const archived =
+                      this.repository.getPool(campaignKey)?.pending.length || 0;
+                    const nextPage = Math.max(1, Math.round(Number(c.nextPage || 1) || 1));
+                    // Não persiste checkpoint > teto UI (evita retomada em 1001+).
+                    const beyondUi = nextPage > portalUiMaxPage;
+                    patch({
+                      status: "scraping",
+                      scrapeCheckpoint: beyondUi
+                        ? null
+                        : {
+                            nextPage,
+                            portalTotal: c.portalTotal,
+                            pagesToFetch: c.pagesToFetch,
+                            collectedCount: archived,
+                          },
+                      scrapeReconnectAttempts: 0,
+                      progressMessage: beyondUi
+                        ? `Copiando: página ${c.completedPage} (teto UI ${portalUiMaxPage}) — ${archived.toLocaleString("pt-BR")} CNPJs arquivados; encerrando raspagem.`
+                        : `Copiando: página ${c.completedPage}/${c.pagesToFetch}${
+                            c.portalTotal != null
+                              ? ` de ${c.portalTotal.toLocaleString("pt-BR")}`
+                              : ""
+                          } (${archived.toLocaleString("pt-BR")} CNPJs arquivados; próxima ${nextPage})…`,
+                      error: null,
+                    });
+                  },
+                },
+              );
+            } finally {
+              releaseScrapeSlot?.();
+            }
             if (!this.repository.getById(listId)) return;
             if (scraped.length) {
               this.repository.mergePool({
