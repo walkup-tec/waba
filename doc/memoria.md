@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 18:25 — Leads PJ: CNAE sem hang
+
+- Fases + timeout curto; falha não trava — segue filtros/Pesquisar.
+- Marker `DEPLOY-2026-08-23-1825-leads-pj-cnae-nohang-v5`
+- LOG: `doc/LOG-2026-08-23__182500__leads-pj-cnae-nohang-v5.md`
+
 ## 2026-08-23 18:05 — Leads PJ: paginação Xvfb anti-parada
 
 - Checkpoint fantasma (pool 0) → página 1; salto DOM + fallback copiar desde 1.
