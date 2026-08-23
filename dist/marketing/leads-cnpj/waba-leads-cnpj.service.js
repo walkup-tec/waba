@@ -166,6 +166,42 @@ function rejectPortalScrapeWaiter(listId) {
         w.reject(new Error(ABORT_JOB_ERROR));
     }
 }
+/** Libera vaga Chromium imediatamente (excluir não pode deixar slot zumbi bloqueando outras listas). */
+function forceReleasePortalScrapeSlot(listId) {
+    const id = String(listId || "").trim();
+    if (!id)
+        return;
+    rejectPortalScrapeWaiter(id);
+    if (!portalScrapeActive.has(id))
+        return;
+    portalScrapeActive.delete(id);
+    while (portalScrapeWaiters.length > 0 &&
+        portalScrapeActive.size < resolveMaxConcurrentScrapes()) {
+        const next = portalScrapeWaiters.shift();
+        if (!next)
+            break;
+        if (next.pulse)
+            clearInterval(next.pulse);
+        next.grant();
+    }
+}
+/** Campanhas purgadas por Excluir — bloqueia mergePool/recreate até nova criação. */
+const purgedCampaignKeys = new Set();
+function markCampaignPurged(campaignKey) {
+    const key = String(campaignKey || "").trim();
+    if (!key)
+        return;
+    purgedCampaignKeys.add(key);
+}
+function clearCampaignPurged(campaignKey) {
+    const key = String(campaignKey || "").trim();
+    if (!key)
+        return;
+    purgedCampaignKeys.delete(key);
+}
+function isCampaignPurged(campaignKey) {
+    return purgedCampaignKeys.has(String(campaignKey || "").trim());
+}
 function toSummary(list, downloads = [], extras) {
     const listaIndex = list.listaIndex != null && Number(list.listaIndex) > 0
         ? Math.round(Number(list.listaIndex))
@@ -634,7 +670,8 @@ class WabaLeadsCnpjService {
     }
     /**
      * Exclui a extração como se nunca tivesse existido:
-     * cancela jobs, apaga todas as listas da campanha + Excels + pool de CNPJs.
+     * cancela jobs/Chromium, apaga listas + Excels + pool + fila de enrich,
+     * e impede o job moribundo de recriar o pool (purgedCampaignKeys).
      */
     deleteList(id) {
         const listId = String(id || "").trim();
@@ -650,9 +687,12 @@ class WabaLeadsCnpjService {
             : [list];
         for (const item of sameCampaign) {
             cancelledJobs.add(item.id);
-            rejectPortalScrapeWaiter(item.id);
+            forceReleasePortalScrapeSlot(item.id);
+            phoneRefreshJobs.delete(item.id);
         }
         this.clearContinueTimer(campaignKey);
+        if (campaignKey)
+            markCampaignPurged(campaignKey);
         const removed = campaignKey
             ? this.repository.deleteByCampaignKey(campaignKey)
             : (() => {
@@ -662,7 +702,10 @@ class WabaLeadsCnpjService {
         if (campaignKey) {
             this.repository.deletePool(campaignKey);
             this.removeCampaignFromEnrichOrder(campaignKey);
+            // Segunda passada: job async pode ter reescrito o pool entre delete e cancel.
+            this.repository.deletePool(campaignKey);
         }
+        this.armGlobalEnrichQueue();
         return removed.length > 0;
     }
     removeCampaignFromEnrichOrder(campaignKey) {
@@ -1207,6 +1250,7 @@ class WabaLeadsCnpjService {
         }
         const dayKey = saoPauloDayKey();
         const campaignKey = buildCampaignKey(baseName, source);
+        clearCampaignPurged(campaignKey);
         const existingToday = this.repository.findListByCampaignDay(campaignKey, dayKey);
         if (existingToday && existingToday.status !== "failed") {
             throw new Error(`Já existe lista de hoje (${dayKey}) para “${baseName}” (status: ${existingToday.status}). Amanhã: nova linha + novo arquivo, sem CNPJs repetidos.`);
@@ -1493,6 +1537,11 @@ class WabaLeadsCnpjService {
                             }, {
                                 resumeFromPage: scrapeResumeFrom,
                                 onPageCheckpoint: async (c) => {
+                                    if (cancelledJobs.has(listId) ||
+                                        isCampaignPurged(campaignKey) ||
+                                        !this.repository.getById(listId)) {
+                                        throw new Error(ABORT_JOB_ERROR);
+                                    }
                                     if (c.pageLeads.length) {
                                         this.repository.mergePool({
                                             key: campaignKey,
@@ -1502,6 +1551,11 @@ class WabaLeadsCnpjService {
                                             items: c.pageLeads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
                                             usedCnpjs: used,
                                         });
+                                    }
+                                    if (cancelledJobs.has(listId) ||
+                                        isCampaignPurged(campaignKey) ||
+                                        !this.repository.getById(listId)) {
+                                        throw new Error(ABORT_JOB_ERROR);
                                     }
                                     const archived = this.repository.getPool(campaignKey)?.pending.length || 0;
                                     const nextPage = Math.max(1, Math.round(Number(c.nextPage || 1) || 1));
@@ -1532,6 +1586,8 @@ class WabaLeadsCnpjService {
                             releaseScrapeSlot?.();
                         }
                         if (!this.repository.getById(listId))
+                            return;
+                        if (isCampaignPurged(campaignKey) || cancelledJobs.has(listId))
                             return;
                         if (scraped.length) {
                             this.repository.mergePool({
