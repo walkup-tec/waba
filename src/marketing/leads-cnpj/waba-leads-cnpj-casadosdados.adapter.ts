@@ -557,12 +557,24 @@ async function readCnaeSelectedCount(page: PageLike): Promise<number | null> {
  * CNAE só via DOM — sem Playwright locator loops (travavam 2+ min no Docker).
  * Evidência local: checkbox id = "6619302 - correspondentes…"; label longo do menu
  * NÃO deve ser clicado (antes batia em "Início Planos Mais…").
+ *
+ * Harden (produção paralela): waits mais longos no Xvfb, poll do search/checkbox,
+ * sem Enter global (rouba foco entre jobs), retries in-place antes de derrubar o browser.
  */
 async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
   const code = String(rawCode || "").replace(/\D/g, "");
   if (!code) return;
 
   await dismissBlockingPortalOverlays(page).catch(() => undefined);
+
+  // Fecha modal residual de tentativa anterior (paralelo/Xvfb).
+  await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll("button")).find((b) =>
+      /^Fechar$/i.test(String(b.textContent || "").trim()),
+    ) as HTMLButtonElement | undefined;
+    btn?.click();
+  });
+  await page.waitForTimeout(300);
 
   // 1) Abrir: label curto OU input type=text da atividade (abre o modal)
   await page.evaluate(() => {
@@ -589,11 +601,52 @@ async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
     }) as HTMLInputElement[];
     textOpeners[0]?.click();
   });
-  await page.waitForTimeout(500);
 
-  // 2) Digitar no search (preferir modal / type=search)
+  // 2) Esperar search do modal (Xvfb sob carga demora mais que 500ms)
   let typedOk = false;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    let searchReady = false;
+    for (let poll = 0; poll < 12; poll += 1) {
+      searchReady = await page.evaluate(() => {
+        const visible = (el: Element) => {
+          const h = el as HTMLElement;
+          const s = window.getComputedStyle(h);
+          return s.display !== "none" && s.visibility !== "hidden";
+        };
+        const inputs = Array.from(document.querySelectorAll("input")) as HTMLInputElement[];
+        return inputs.some((el) => {
+          const ph = String(el.placeholder || "").toLowerCase();
+          const inModal = Boolean(
+            el.closest('[role="dialog"], .modal, .o-modal, .modal-card, .modal-content'),
+          );
+          return (
+            visible(el) &&
+            (el.type === "search" || /atividade|cnae|c[oó]digo/.test(ph)) &&
+            (inModal || el.type === "search")
+          );
+        });
+      });
+      if (searchReady) break;
+      await page.waitForTimeout(350);
+    }
+
+    if (!searchReady) {
+      await page.evaluate(() => {
+        const i = Array.from(document.querySelectorAll("input")).find((el) => {
+          const ph = String((el as HTMLInputElement).placeholder || "").toLowerCase();
+          return (el as HTMLInputElement).type === "text" && /atividade/.test(ph);
+        }) as HTMLInputElement | undefined;
+        i?.click();
+        const lab = Array.from(document.querySelectorAll("label")).find((el) => {
+          const t = String(el.textContent || "").replace(/\s+/g, " ").trim();
+          return t.length > 0 && t.length < 80 && /Atividade\s+Principal\s*\(CNAE\)/i.test(t);
+        }) as HTMLLabelElement | undefined;
+        lab?.click();
+      });
+      await page.waitForTimeout(400);
+      continue;
+    }
+
     const typed = await page.evaluate((cnae: string) => {
       const visible = (el: Element) => {
         const h = el as HTMLElement;
@@ -627,31 +680,23 @@ async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
       target.dispatchEvent(
         new KeyboardEvent("keyup", { bubbles: true, key: cnae.slice(-1) || "0" }),
       );
-      return { ok: true as const };
+      return { ok: true as const, value: String(target.value || "") };
     }, code);
-    if (typed?.ok) {
+    if (typed?.ok && String(typed.value || "").includes(code)) {
       typedOk = true;
       break;
     }
-    // Reabre e tenta de novo
-    await page.evaluate(() => {
-      const i = Array.from(document.querySelectorAll("input")).find((el) => {
-        const ph = String((el as HTMLInputElement).placeholder || "").toLowerCase();
-        return (el as HTMLInputElement).type === "text" && /atividade/.test(ph);
-      }) as HTMLInputElement | undefined;
-      i?.click();
-    });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(350);
   }
 
   if (!typedOk) {
     throw new Error(`CNAE ${code}: modal de busca não abriu (search ausente).`);
   }
-  await page.waitForTimeout(700);
 
-  // 3) Marcar checkbox da linha (id começa com o código)
+  // 3) Aguardar filtro + marcar checkbox (id começa com o código)
   let marked = false;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  const markDeadline = Date.now() + 12000;
+  while (Date.now() < markDeadline) {
     marked = await page.evaluate((cnae: string) => {
       const boxes = Array.from(
         document.querySelectorAll('input[type="checkbox"]'),
@@ -659,18 +704,23 @@ async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
       const box = boxes.find(
         (b) =>
           String(b.id || "").startsWith(cnae) ||
-          String(b.id || "").includes(cnae) ||
+          String(b.id || "").includes(`${cnae} `) ||
+          String(b.id || "").includes(`${cnae}-`) ||
           String(b.closest("label")?.textContent || "").includes(cnae),
       );
-      if (box) {
-        if (!box.checked) box.click();
-        return Boolean(box.checked || true);
+      if (!box) return false;
+      if (!box.checked) {
+        box.click();
+        if (!box.checked) {
+          box.checked = true;
+          box.dispatchEvent(new Event("change", { bubbles: true }));
+          box.dispatchEvent(new Event("input", { bubbles: true }));
+        }
       }
-      return false;
+      return Boolean(box.checked);
     }, code);
     if (marked) break;
-    await page.keyboard.press("Enter").catch(() => undefined);
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(400);
   }
 
   if (!marked) {
@@ -684,43 +734,75 @@ async function selectAtividadePrincipalCnae(page: PageLike, rawCode: string) {
     ) as HTMLButtonElement | undefined;
     btn?.click();
   });
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(400);
 }
 
 async function selectAtividadePrincipalCnaeWithTimeout(
   page: PageLike,
   rawCode: string,
   onProgress?: CasaDosDadosProgress,
-  timeoutMs = 35000,
+  timeoutMs = 45000,
 ) {
   const code = String(rawCode || "").replace(/\D/g, "");
   if (!code) return;
-  let beat: ReturnType<typeof setInterval> | undefined;
-  const started = Date.now();
-  beat = setInterval(() => {
-    const sec = Math.round((Date.now() - started) / 1000);
-    onProgress?.(`Pesquisando: selecionando CNAE ${code}… (${sec}s)`);
-  }, 8000);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      selectAtividadePrincipalCnae(page, code),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () =>
-            reject(
-              new Error(
-                `CNAE ${code}: timeout ${Math.round(timeoutMs / 1000)}s ao selecionar no portal.`,
+  const attempts = Math.max(
+    1,
+    Math.min(4, Math.round(Number(process.env.CASADOSDADOS_CNAE_RETRIES || 3) || 3)),
+  );
+  const perAttemptMs = Math.max(
+    20000,
+    Math.round(Number(timeoutMs) || 45000),
+  );
+  let lastErr: Error | null = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let beat: ReturnType<typeof setInterval> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const started = Date.now();
+    beat = setInterval(() => {
+      const sec = Math.round((Date.now() - started) / 1000);
+      onProgress?.(
+        attempt > 1
+          ? `Pesquisando: selecionando CNAE ${code}… tentativa ${attempt}/${attempts} (${sec}s)`
+          : `Pesquisando: selecionando CNAE ${code}… (${sec}s)`,
+      );
+    }, 5000);
+    try {
+      await Promise.race([
+        selectAtividadePrincipalCnae(page, code),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `CNAE ${code}: timeout ${Math.round(perAttemptMs / 1000)}s ao selecionar no portal.`,
+                ),
               ),
-            ),
-          timeoutMs,
-        );
-      }),
-    ]);
-  } finally {
-    if (beat) clearInterval(beat);
-    if (timer) clearTimeout(timer);
+            perAttemptMs,
+          );
+        }),
+      ]);
+      return;
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      onProgress?.(
+        `Pesquisando: CNAE ${code} falhou (tentativa ${attempt}/${attempts}) — ${lastErr.message.slice(0, 100)}`,
+      );
+      await dismissBlockingPortalOverlays(page).catch(() => undefined);
+      await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll("button")).find((b) =>
+          /^Fechar$/i.test(String(b.textContent || "").trim()),
+        ) as HTMLButtonElement | undefined;
+        btn?.click();
+      });
+      await page.waitForTimeout(600 + attempt * 250);
+    } finally {
+      if (beat) clearInterval(beat);
+      if (timer) clearTimeout(timer);
+    }
   }
+
+  throw lastErr || new Error(`CNAE ${code}: falha ao selecionar no portal.`);
 }
 
 async function setCheckboxByLabel(page: PageLike, label: string, checked: boolean) {
@@ -829,11 +911,18 @@ async function applyFilters(
       ? `selecionando CNAE ${cnaeCode}…`
       : "aplicando filtros (CNAE, situação, celular)…",
   );
+  // Jitter leve sob carga paralela (não serializa — só desfaz pico no mesmo ms).
+  if (cnaeCode) {
+    await page.waitForTimeout(200 + Math.floor(Math.random() * 800));
+  }
   await selectAtividadePrincipalCnaeWithTimeout(
     page,
     String(filters.atividadePrincipalCnae || "").trim(),
     onProgress,
-    35000,
+    Math.max(
+      45000,
+      Math.round(Number(process.env.CASADOSDADOS_CNAE_TIMEOUT_MS || 45000) || 45000),
+    ),
   );
   if (filters.incluirAtividadeSecundaria) {
     await setToggleByLabel(page, "incluir atividade secundária", true);

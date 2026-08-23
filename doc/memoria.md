@@ -3438,3 +3438,5 @@ Palavras-chave para buscar:
 - 2026-08-23: Leads PJ mutex scrape (1 Chromium) — N jobs paralelos causavam Page crashed. Ver doc/LOG-2026-08-23__112601__fix-leads-pj-scrape-mutex-chromium.md
 
 - 2026-08-23: Leads PJ scrape paralelo de novo (como V02); removido mutex 1 Chromium. Ver doc/LOG-2026-08-23__133500__fix-leads-pj-scrape-parallel-como-v02.md
+
+- 2026-08-23: Leads PJ CNAE harden (retries/poll) mantendo scrape paralelo. Ver doc/LOG-2026-08-23__143500__fix-leads-pj-cnae-harden-paralelo.md
