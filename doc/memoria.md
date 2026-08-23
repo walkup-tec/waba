@@ -3434,3 +3434,5 @@ Palavras-chave para buscar:
 - 2026-08-21: UI Leads PJ live-pulse (sinal de vida na etapa). Marker leads-pj-live-pulse.
 
 - 2026-08-21: Leads PJ UI maxPages 5/50 → **1000**; backend já pagina; headed 3 págs = 60 CNPJs (8069 no portal). Ver doc/LOG-2026-08-21__185359__fix-leads-pj-max-pages-1000.md
+
+- 2026-08-23: Leads PJ mutex scrape (1 Chromium) — N jobs paralelos causavam Page crashed. Ver doc/LOG-2026-08-23__112601__fix-leads-pj-scrape-mutex-chromium.md

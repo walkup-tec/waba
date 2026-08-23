@@ -18,6 +18,8 @@ const cancelledJobs = new Set();
 const continueTimers = new Map();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
 let globalEnrichTimer = null;
+let portalScrapeActiveListId = null;
+const portalScrapeWaiters = [];
 const SITUACOES = new Set(["Ativa", "Baixada", "Inapta", "Nula", "Suspensa"]);
 const CONTINUE_POLL_MS = 60000;
 const ABORT_JOB_ERROR = "__MLC_JOB_ABORTED__";
@@ -28,6 +30,73 @@ const phoneRefreshJobs = new Set();
 function formatListaLabel(index) {
     const n = Math.max(1, Math.round(Number(index) || 1));
     return `Lista ${String(n).padStart(2, "0")}`;
+}
+function portalScrapeQueuePosition(listId) {
+    const waitingIdx = portalScrapeWaiters.findIndex((w) => w.listId === listId);
+    if (waitingIdx >= 0)
+        return waitingIdx + 1;
+    if (portalScrapeActiveListId === listId)
+        return 0;
+    return Math.max(1, portalScrapeWaiters.length + (portalScrapeActiveListId ? 1 : 0));
+}
+/**
+ * Garante 1 Chromium por vez. Retorna `release()` — sempre chamar em finally.
+ */
+function acquirePortalScrapeSlot(listId, onWaiting) {
+    return new Promise((resolve, reject) => {
+        const release = () => {
+            if (portalScrapeActiveListId === listId)
+                portalScrapeActiveListId = null;
+            const next = portalScrapeWaiters.shift();
+            if (next) {
+                if (next.pulse)
+                    clearInterval(next.pulse);
+                next.grant();
+            }
+        };
+        const activate = () => {
+            portalScrapeActiveListId = listId;
+            resolve(release);
+        };
+        if (!portalScrapeActiveListId && portalScrapeWaiters.length === 0) {
+            activate();
+            return;
+        }
+        const waiter = {
+            listId,
+            grant: activate,
+            reject,
+        };
+        portalScrapeWaiters.push(waiter);
+        onWaiting?.(portalScrapeWaiters.length, portalScrapeActiveListId);
+        waiter.pulse = setInterval(() => {
+            if (cancelledJobs.has(listId)) {
+                if (waiter.pulse)
+                    clearInterval(waiter.pulse);
+                const idx = portalScrapeWaiters.indexOf(waiter);
+                if (idx >= 0)
+                    portalScrapeWaiters.splice(idx, 1);
+                reject(new Error(ABORT_JOB_ERROR));
+                return;
+            }
+            const pos = portalScrapeQueuePosition(listId);
+            if (pos > 0)
+                onWaiting?.(pos, portalScrapeActiveListId);
+        }, 4000);
+    });
+}
+function rejectPortalScrapeWaiter(listId) {
+    const id = String(listId || "").trim();
+    if (!id)
+        return;
+    for (let i = portalScrapeWaiters.length - 1; i >= 0; i -= 1) {
+        if (portalScrapeWaiters[i].listId !== id)
+            continue;
+        const [w] = portalScrapeWaiters.splice(i, 1);
+        if (w.pulse)
+            clearInterval(w.pulse);
+        w.reject(new Error(ABORT_JOB_ERROR));
+    }
 }
 function toSummary(list, downloads = [], extras) {
     const listaIndex = list.listaIndex != null && Number(list.listaIndex) > 0
@@ -450,6 +519,7 @@ class WabaLeadsCnpjService {
             : [list];
         for (const item of sameCampaign) {
             cancelledJobs.add(item.id);
+            rejectPortalScrapeWaiter(item.id);
         }
         this.clearContinueTimer(campaignKey);
         const removed = campaignKey
@@ -1267,56 +1337,71 @@ class WabaLeadsCnpjService {
                                 : `Abrindo Portal: robô na tela (pool ${pendingCount}; meta do dia ${dailyLimit}; copiando até pág. ${portalUiMaxPage} · 20/pág.)…`,
                             error: null,
                         });
-                        const scraped = await (0, waba_leads_cnpj_casadosdados_adapter_1.scrapeCasaDosDadosLeads)(scrapeFilters, (message) => {
-                            patch({ progressMessage: message });
-                        }, {
-                            resumeFromPage: scrapeResumeFrom,
-                            onPageCheckpoint: async (c) => {
-                                if (c.pageLeads.length) {
-                                    this.repository.mergePool({
-                                        key: campaignKey,
-                                        name: baseName,
-                                        source: "portal",
-                                        filters: campaignFilters,
-                                        items: c.pageLeads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
-                                        usedCnpjs: used,
-                                    });
-                                }
-                                const archived = this.repository.getPool(campaignKey)?.pending.length || 0;
-                                const nextPage = Math.max(1, Math.round(Number(c.nextPage || 1) || 1));
-                                // Não persiste checkpoint > teto UI (evita retomada em 1001+).
-                                const beyondUi = nextPage > portalUiMaxPage;
+                        let releaseScrapeSlot = null;
+                        let scraped = [];
+                        try {
+                            releaseScrapeSlot = await acquirePortalScrapeSlot(listId, (position, activeId) => {
                                 patch({
                                     status: "scraping",
-                                    scrapeCheckpoint: beyondUi
-                                        ? null
-                                        : {
-                                            nextPage,
-                                            portalTotal: c.portalTotal,
-                                            pagesToFetch: c.pagesToFetch,
-                                            collectedCount: archived,
-                                        },
-                                    scrapeReconnectAttempts: 0,
-                                    progressMessage: beyondUi
-                                        ? `Copiando: página ${c.completedPage} (teto UI ${portalUiMaxPage}) — ${archived.toLocaleString("pt-BR")} CNPJs arquivados; encerrando raspagem.`
-                                        : `Copiando: página ${c.completedPage}/${c.pagesToFetch}${c.portalTotal != null
-                                            ? ` de ${c.portalTotal.toLocaleString("pt-BR")}`
-                                            : ""} (${archived.toLocaleString("pt-BR")} CNPJs arquivados; próxima ${nextPage})…`,
+                                    progressMessage: `Fila de raspagem (1 Chromium por vez): posição ${position}${activeId ? ` — aguardando outro job` : ""}…`,
                                     error: null,
                                 });
-                            },
-                        });
-                        if (!this.repository.getById(listId))
-                            return;
-                        if (scraped.length) {
-                            this.repository.mergePool({
-                                key: campaignKey,
-                                name: baseName,
-                                source: "portal",
-                                filters: campaignFilters,
-                                items: scraped.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
-                                usedCnpjs: used,
                             });
+                            assertAlive();
+                            scraped = await (0, waba_leads_cnpj_casadosdados_adapter_1.scrapeCasaDosDadosLeads)(scrapeFilters, (message) => {
+                                patch({ progressMessage: message });
+                            }, {
+                                resumeFromPage: scrapeResumeFrom,
+                                onPageCheckpoint: async (c) => {
+                                    if (c.pageLeads.length) {
+                                        this.repository.mergePool({
+                                            key: campaignKey,
+                                            name: baseName,
+                                            source: "portal",
+                                            filters: campaignFilters,
+                                            items: c.pageLeads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
+                                            usedCnpjs: used,
+                                        });
+                                    }
+                                    const archived = this.repository.getPool(campaignKey)?.pending.length || 0;
+                                    const nextPage = Math.max(1, Math.round(Number(c.nextPage || 1) || 1));
+                                    // Não persiste checkpoint > teto UI (evita retomada em 1001+).
+                                    const beyondUi = nextPage > portalUiMaxPage;
+                                    patch({
+                                        status: "scraping",
+                                        scrapeCheckpoint: beyondUi
+                                            ? null
+                                            : {
+                                                nextPage,
+                                                portalTotal: c.portalTotal,
+                                                pagesToFetch: c.pagesToFetch,
+                                                collectedCount: archived,
+                                            },
+                                        scrapeReconnectAttempts: 0,
+                                        progressMessage: beyondUi
+                                            ? `Copiando: página ${c.completedPage} (teto UI ${portalUiMaxPage}) — ${archived.toLocaleString("pt-BR")} CNPJs arquivados; encerrando raspagem.`
+                                            : `Copiando: página ${c.completedPage}/${c.pagesToFetch}${c.portalTotal != null
+                                                ? ` de ${c.portalTotal.toLocaleString("pt-BR")}`
+                                                : ""} (${archived.toLocaleString("pt-BR")} CNPJs arquivados; próxima ${nextPage})…`,
+                                        error: null,
+                                    });
+                                },
+                            });
+                            if (!this.repository.getById(listId))
+                                return;
+                            if (scraped.length) {
+                                this.repository.mergePool({
+                                    key: campaignKey,
+                                    name: baseName,
+                                    source: "portal",
+                                    filters: campaignFilters,
+                                    items: scraped.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
+                                    usedCnpjs: used,
+                                });
+                            }
+                        }
+                        finally {
+                            releaseScrapeSlot?.();
                         }
                         const afterMerge = this.repository.getPool(campaignKey)?.pending.length || 0;
                         patch({
