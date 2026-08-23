@@ -284,7 +284,9 @@ export function isSoftScrapeError(error: unknown): boolean {
   if (anyErr?.soft === true) return true;
   if (anyErr?.recovery === "same-page" || anyErr?.recovery === "stop") return true;
   const msg = error instanceof Error ? error.message : String(error || "");
-  return /SEARCH_TIMEOUT_RESPONSIVE|SEARCH_DISPATCH_FAILED|PAGINATION_STALL/i.test(msg);
+  return /SEARCH_TIMEOUT_RESPONSIVE|SEARCH_DISPATCH_FAILED|SEARCH_BUTTON_NOT_FOUND|PAGINATION_STALL/i.test(
+    msg,
+  );
 }
 
 type SearchTransition =
@@ -294,6 +296,18 @@ type SearchTransition =
   | { kind: "timeout-responsive"; probe?: SearchProbe }
   | { kind: "renderer-unresponsive" };
 
+type SearchButtonCandidate = {
+  tag: string;
+  text: string;
+  aria: string;
+  title: string;
+  type: string;
+  classes: string;
+  score: number;
+  source: "control" | "ancestor";
+  rect: { x: number; y: number; width: number; height: number };
+};
+
 type SearchProbe = {
   url: string;
   readyState: string;
@@ -301,6 +315,8 @@ type SearchProbe = {
   searchButtonDisabled: boolean;
   searchButtonText: string | null;
   searchButtonCount: number;
+  searchButtonCandidate: SearchButtonCandidate | null;
+  topCandidates: SearchButtonCandidate[];
   pagination: boolean;
   currentPage: number | null;
   cnpjNodes: number;
@@ -308,6 +324,7 @@ type SearchProbe = {
   loadingNodes: number;
   dialogs: number;
   iframeCount: number;
+  iframeSrcs: string[];
   challengeNodes: number;
   buttonDebug: {
     tag: string;
@@ -315,17 +332,25 @@ type SearchProbe = {
     classes: string;
     rect: { x: number; y: number; width: number; height: number } | null;
     html: string;
+    score: number;
+    source: string;
   } | null;
 };
 
 function formatProbeShort(p: SearchProbe): string {
+  const win = p.searchButtonCandidate;
+  const winLabel = win
+    ? `${win.tag} text="${win.text.slice(0, 40)}" score=${win.score}`
+    : "none";
   return (
     `url=${p.url.replace(/^https?:\/\/[^/]+/, "")} ` +
     `btn=${p.searchButtonFound}/${p.searchButtonCount} ` +
+    `win=${winLabel} ` +
     `disabled=${p.searchButtonDisabled} ` +
     `loading=${p.loadingNodes} ` +
     `pag=${p.pagination} ` +
     `cnpj=${p.cnpjNodes} ` +
+    `iframes=${p.iframeCount} ` +
     `dialogs=${p.dialogs} ` +
     `challenge=${p.challengeNodes}`
   );
@@ -563,64 +588,267 @@ type SearchStateLite = {
   loadingNodes: number;
 };
 
-async function probeSearchState(page: PageLike): Promise<SearchProbe> {
+async function findSearchButtonCandidates(page: PageLike): Promise<SearchButtonCandidate[]> {
   return page.evaluate(() => {
     const clean = (v: unknown) =>
       String(v || "")
         .replace(/\s+/g, " ")
         .trim();
-
-    const visible = (el: HTMLElement) => {
+    const normalize = (v: unknown) => clean(v).toLowerCase();
+    const isVisible = (el: HTMLElement) => {
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);
       return (
-        r.width > 0 &&
-        r.height > 0 &&
+        r.width >= 20 &&
+        r.height >= 15 &&
+        r.bottom > 0 &&
+        r.right > 0 &&
         s.display !== "none" &&
-        s.visibility !== "hidden"
+        s.visibility !== "hidden" &&
+        Number(s.opacity || "1") > 0
       );
     };
+    const scoreEl = (
+      el: HTMLElement,
+      text: string,
+      aria: string,
+      title: string,
+    ): number | null => {
+      const nt = normalize(text);
+      const na = normalize(aria);
+      const nti = normalize(title);
+      const combined = `${nt} ${na} ${nti}`;
+      if (!combined.includes("pesquisar") && !combined.includes("buscar")) return null;
+      let score = 0;
+      if (nt === "pesquisar" || nt === "buscar") score += 100;
+      if (nt.includes("pesquisar")) score += 70;
+      if (nt.includes("buscar")) score += 50;
+      if (na.includes("pesquisar") || na.includes("buscar")) score += 60;
+      if (nti.includes("pesquisar") || nti.includes("buscar")) score += 40;
+      if (el.tagName === "BUTTON") score += 30;
+      if (el.getAttribute("type") === "submit") score += 25;
+      if (el.tagName === "A") score += 10;
+      const r = el.getBoundingClientRect();
+      score += Math.min(30, Math.round((r.width * r.height) / 1000));
+      return score;
+    };
+    const toCandidate = (
+      el: HTMLElement,
+      score: number,
+      source: "control" | "ancestor",
+    ) => {
+      const r = el.getBoundingClientRect();
+      const text =
+        el instanceof HTMLInputElement ? clean(el.value) : clean(el.textContent);
+      return {
+        tag: el.tagName,
+        text: text.slice(0, 120),
+        aria: clean(el.getAttribute("aria-label")).slice(0, 120),
+        title: clean(el.getAttribute("title")).slice(0, 120),
+        type: el.getAttribute("type") || "",
+        classes: typeof el.className === "string" ? el.className.slice(0, 250) : "",
+        score,
+        source,
+        rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+      };
+    };
+    const getClickableAncestor = (el: Element): HTMLElement | null => {
+      let current: HTMLElement | null = el as HTMLElement;
+      for (let depth = 0; current && depth < 5; depth += 1) {
+        const tag = current.tagName;
+        const role = current.getAttribute("role");
+        const type = current.getAttribute("type");
+        if (
+          tag === "BUTTON" ||
+          tag === "A" ||
+          role === "button" ||
+          type === "submit" ||
+          type === "button" ||
+          current.tabIndex >= 0
+        ) {
+          return current;
+        }
+        current = current.parentElement;
+      }
+      return null;
+    };
 
-    const buttons = Array.from(
-      document.querySelectorAll('button, [role="button"], input[type="submit"]'),
+    const selector = [
+      "button",
+      "a",
+      '[role="button"]',
+      'input[type="submit"]',
+      'input[type="button"]',
+      '[type="submit"]',
+      "[tabindex]",
+      '[class*="button"]',
+      '[class*="btn"]',
+    ].join(",");
+
+    const seen = new Set<Element>();
+    const out: ReturnType<typeof toCandidate>[] = [];
+
+    for (const raw of Array.from(document.querySelectorAll(selector))) {
+      if (seen.has(raw) || !(raw instanceof HTMLElement)) continue;
+      seen.add(raw);
+      if (!isVisible(raw)) continue;
+      const text =
+        raw instanceof HTMLInputElement ? clean(raw.value) : clean(raw.textContent);
+      const aria = clean(raw.getAttribute("aria-label"));
+      const title = clean(raw.getAttribute("title"));
+      const textForScore = text.length > 120 ? text.slice(0, 120) : text;
+      if (
+        text.length > 80 &&
+        !normalize(aria).includes("pesquis") &&
+        !normalize(title).includes("pesquis") &&
+        !normalize(aria).includes("busc") &&
+        !normalize(title).includes("busc")
+      ) {
+        const shortSelf = normalize(text).slice(0, 40);
+        if (!shortSelf.includes("pesquis") && !shortSelf.includes("busc")) continue;
+      }
+      const score = scoreEl(raw, textForScore, aria, title);
+      if (score == null) continue;
+      out.push(toCandidate(raw, score, "control"));
+    }
+
+    const root = document.querySelector("main") || document.body;
+    for (const raw of Array.from(root.querySelectorAll("*")).slice(0, 2500)) {
+      if (!(raw instanceof HTMLElement)) continue;
+      const own = clean(
+        Array.from(raw.childNodes)
+          .filter((n) => n.nodeType === 3)
+          .map((n) => n.textContent || "")
+          .join(" "),
+      );
+      const text = own || clean(raw.textContent).slice(0, 80);
+      if (!text || text.length > 80) continue;
+      if (!/pesquisar|buscar/i.test(text)) continue;
+      const clickable = getClickableAncestor(raw);
+      if (!clickable || seen.has(clickable) || !isVisible(clickable)) continue;
+      seen.add(clickable);
+      const cText =
+        clickable instanceof HTMLInputElement
+          ? clean(clickable.value)
+          : clean(clickable.textContent).slice(0, 120);
+      const aria = clean(clickable.getAttribute("aria-label"));
+      const title = clean(clickable.getAttribute("title"));
+      const score = scoreEl(clickable, cText || text, aria, title);
+      if (score == null) continue;
+      out.push(toCandidate(clickable, score + 5, "ancestor"));
+    }
+
+    return out.sort((a, b) => b.score - a.score).slice(0, 10);
+  });
+}
+
+async function dumpVisibleActions(page: PageLike): Promise<unknown[]> {
+  return page.evaluate(() => {
+    const clean = (v: unknown) =>
+      String(v || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const root = document.querySelector("main") ?? document.body;
+    const elements = Array.from(
+      root.querySelectorAll(
+        'button, a, [role="button"], input[type="submit"], input[type="button"], [tabindex]',
+      ),
     ) as HTMLElement[];
+    return elements
+      .map((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        const visible =
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden";
+        if (!visible) return null;
+        return {
+          tag: el.tagName,
+          text:
+            el instanceof HTMLInputElement
+              ? clean(el.value)
+              : clean(el.textContent).slice(0, 80),
+          aria: clean(el.getAttribute("aria-label")),
+          title: clean(el.getAttribute("title")),
+          type: el.getAttribute("type") || "",
+          classes: typeof el.className === "string" ? el.className.slice(0, 150) : "",
+          rect: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            w: Math.round(rect.width),
+            h: Math.round(rect.height),
+          },
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 30);
+  });
+}
 
-    const matches = buttons.filter((el) => {
-      const text = clean(
-        el instanceof HTMLInputElement ? el.value : el.textContent,
-      ).toLowerCase();
-      return text === "pesquisar" || text === "buscar";
-    });
+async function dumpSearchTextNodes(page: PageLike): Promise<unknown[]> {
+  return page.evaluate(() => {
+    const clean = (v: unknown) =>
+      String(v || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const root = document.querySelector("main");
+    if (!root) return [];
+    return Array.from(root.querySelectorAll("*"))
+      .map((el) => {
+        const text = clean((el as HTMLElement).textContent).slice(0, 120);
+        if (!/pesq|busc/i.test(text)) return null;
+        if (text.length > 120) return null;
+        return {
+          tag: el.tagName,
+          text,
+          classes:
+            typeof (el as HTMLElement).className === "string"
+              ? String((el as HTMLElement).className).slice(0, 120)
+              : "",
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 30);
+  });
+}
 
-    const visibleMatches = matches.filter((el) => visible(el));
-    visibleMatches.sort((a, b) => {
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
-      return rb.width * rb.height - ra.width * ra.height;
-    });
-    const searchButton = visibleMatches[0] || matches[0] || null;
+async function captureSearchDiagnostics(page: PageLike): Promise<void> {
+  const actions = await dumpVisibleActions(page).catch(() => []);
+  const texts = await dumpSearchTextNodes(page).catch(() => []);
+  console.warn(
+    "[Leads PJ] SEARCH_ACTION_DUMP",
+    JSON.stringify({ actions, texts, at: new Date().toISOString() }),
+  );
+}
 
+async function probeSearchState(page: PageLike): Promise<SearchProbe> {
+  const topCandidates = await findSearchButtonCandidates(page);
+  const winner = topCandidates[0] || null;
+  const rest = await page.evaluate(() => {
+    const clean = (v: unknown) =>
+      String(v || "")
+        .replace(/\s+/g, " ")
+        .trim();
     const pagination = document.querySelector('nav[data-oruga="pagination"]');
     const current = pagination?.querySelector(
       ['[aria-current="page"]', ".pagination-link.is-current", '[aria-current="true"]'].join(","),
     );
-
-    const candidates = Array.from(
-      document.querySelectorAll("main a, main p, main span, main div, main li, main h1, main h2, main h3"),
+    const contentNodes = Array.from(
+      document.querySelectorAll(
+        "main a, main p, main span, main div, main li, main h1, main h2, main h3",
+      ),
     ).slice(0, 1500);
-
     const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/;
     let cnpjNodes = 0;
     const totalCandidates: string[] = [];
-    for (const el of candidates) {
+    for (const el of contentNodes) {
       const text = clean(el.textContent);
       if (!text || text.length > 200) continue;
       if (cnpjRe.test(text)) cnpjNodes += 1;
-      if (/\b\d[\d.]*\s+(empresas?|resultados?)\b/i.test(text)) {
-        totalCandidates.push(text);
-      }
+      if (/\b\d[\d.]*\s+(empresas?|resultados?)\b/i.test(text)) totalCandidates.push(text);
     }
-
     const loadingNodes = document.querySelectorAll(
       [
         '[aria-busy="true"]',
@@ -632,43 +860,44 @@ async function probeSearchState(page: PageLike): Promise<SearchProbe> {
         '[class*="spinner"]',
       ].join(","),
     ).length;
-
-    const rect = searchButton?.getBoundingClientRect();
+    const iframes = Array.from(document.querySelectorAll("iframe"));
     return {
       url: location.href,
       readyState: document.readyState,
-      searchButtonFound: Boolean(searchButton),
-      searchButtonDisabled: searchButton
-        ? Boolean((searchButton as HTMLButtonElement).disabled) ||
-          searchButton.getAttribute("aria-disabled") === "true"
-        : false,
-      searchButtonText: searchButton
-        ? clean(searchButton instanceof HTMLInputElement ? searchButton.value : searchButton.textContent)
-        : null,
-      searchButtonCount: matches.length,
       pagination: Boolean(pagination),
       currentPage: Number(clean(current?.textContent)) || null,
       cnpjNodes,
       totalCandidates: totalCandidates.slice(0, 5),
       loadingNodes,
       dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
-      iframeCount: document.querySelectorAll("iframe").length,
+      iframeCount: iframes.length,
+      iframeSrcs: iframes.map((f) => f.getAttribute("src") || "").slice(0, 10),
       challengeNodes: document.querySelectorAll(
         '[id*="challenge"], [class*="challenge"], iframe[src*="challenge"]',
       ).length,
-      buttonDebug: searchButton
-        ? {
-            tag: searchButton.tagName,
-            type: searchButton.getAttribute("type"),
-            classes: String(searchButton.className || "").slice(0, 200),
-            rect: rect
-              ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-              : null,
-            html: searchButton.outerHTML.slice(0, 500),
-          }
-        : null,
     };
   });
+
+  return {
+    ...rest,
+    searchButtonFound: Boolean(winner),
+    searchButtonDisabled: false,
+    searchButtonText: winner?.text || null,
+    searchButtonCount: topCandidates.length,
+    searchButtonCandidate: winner,
+    topCandidates,
+    buttonDebug: winner
+      ? {
+          tag: winner.tag,
+          type: winner.type || null,
+          classes: winner.classes,
+          rect: winner.rect,
+          html: `${winner.tag} ${winner.text} ${winner.aria}`.slice(0, 500),
+          score: winner.score,
+          source: winner.source,
+        }
+      : null,
+  };
 }
 
 async function readSearchState(page: PageLike): Promise<SearchStateLite> {
@@ -731,89 +960,102 @@ type PlaywrightSearchPage = PageLike & {
   keyboard: { press: (k: string) => Promise<void> };
 };
 
-async function clickSearchByMouse(page: PlaywrightSearchPage): Promise<boolean> {
-  const point = await page.evaluate(() => {
-    const clean = (v: unknown) =>
-      String(v || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-    const visible = (el: HTMLElement) => {
-      const r = el.getBoundingClientRect();
-      const s = getComputedStyle(el);
-      return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
-    };
-    const buttons = Array.from(
-      document.querySelectorAll('button, [role="button"], input[type="submit"]'),
-    ) as HTMLElement[];
-    const matches = buttons.filter((el) => {
-      const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
-      return text === "pesquisar" || text === "buscar";
-    });
-    const visibleMatches = matches.filter((el) => visible(el));
-    visibleMatches.sort((a, b) => {
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
-      return rb.width * rb.height - ra.width * ra.height;
-    });
-    const button = visibleMatches[0] || matches[0];
-    if (!button) return null;
-    const r = button.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  });
-  if (!point || !page.mouse?.click) return false;
-  await page.mouse.click(point.x, point.y);
+async function clickSearchByMouse(
+  page: PlaywrightSearchPage,
+  candidate: SearchButtonCandidate,
+): Promise<boolean> {
+  if (!page.mouse?.click) return false;
+  const { x, y, width, height } = candidate.rect;
+  await page.mouse.click(x + width / 2, y + height / 2);
   return true;
 }
 
 async function clickSearchDom(page: PageLike): Promise<boolean> {
+  const candidates = await findSearchButtonCandidates(page);
+  if (!candidates[0]) return false;
+  // Reusa a mesma regra de scoring e clica o vencedor via DOM nativo.
   return page.evaluate(() => {
     const clean = (v: unknown) =>
       String(v || "")
         .replace(/\s+/g, " ")
         .trim()
         .toLowerCase();
-    const visible = (el: HTMLElement) => {
-      const r = el.getBoundingClientRect();
-      const s = getComputedStyle(el);
-      return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
-    };
-    const buttons = Array.from(
-      document.querySelectorAll('button, [role="button"], input[type="submit"]'),
-    ) as HTMLElement[];
-    const matches = buttons.filter((el) => {
-      const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
-      return text === "pesquisar" || text === "buscar";
-    });
-    const visibleMatches = matches.filter((el) => visible(el));
-    visibleMatches.sort((a, b) => {
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
-      return rb.width * rb.height - ra.width * ra.height;
-    });
-    const button = visibleMatches[0] || matches[0];
-    if (!button) return false;
-    button.click();
+    const selector = [
+      "button",
+      "a",
+      '[role="button"]',
+      'input[type="submit"]',
+      'input[type="button"]',
+      '[type="submit"]',
+      "[tabindex]",
+      '[class*="button"]',
+      '[class*="btn"]',
+    ].join(",");
+    const scored = Array.from(document.querySelectorAll(selector))
+      .map((raw) => {
+        const el = raw as HTMLElement;
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        if (
+          r.width < 20 ||
+          r.height < 15 ||
+          s.display === "none" ||
+          s.visibility === "hidden"
+        ) {
+          return null;
+        }
+        const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
+        const aria = clean(el.getAttribute("aria-label"));
+        const title = clean(el.getAttribute("title"));
+        const combined = `${text} ${aria} ${title}`;
+        if (!combined.includes("pesquisar") && !combined.includes("buscar")) return null;
+        let score = 0;
+        if (text === "pesquisar" || text === "buscar") score += 100;
+        if (text.includes("pesquisar")) score += 70;
+        if (aria.includes("pesquisar") || aria.includes("buscar")) score += 60;
+        if (el.tagName === "BUTTON") score += 30;
+        if (el.getAttribute("type") === "submit") score += 25;
+        score += Math.min(30, Math.round((r.width * r.height) / 1000));
+        return { el, score };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.score - a.score);
+    const winner = scored[0]?.el as HTMLElement | undefined;
+    if (!winner) return false;
+    winner.click();
     return true;
   });
 }
 
 async function focusSearchButton(page: PageLike): Promise<boolean> {
+  const candidates = await findSearchButtonCandidates(page);
+  if (!candidates[0]) return false;
   return page.evaluate(() => {
     const clean = (v: unknown) =>
       String(v || "")
         .replace(/\s+/g, " ")
         .trim()
         .toLowerCase();
-    const buttons = Array.from(
-      document.querySelectorAll('button, [role="button"], input[type="submit"]'),
-    ) as HTMLElement[];
-    const button = buttons.find((el) => {
-      const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
-      return text === "pesquisar" || text === "buscar";
-    });
-    if (!button) return false;
-    button.focus();
+    const selector = [
+      "button",
+      "a",
+      '[role="button"]',
+      'input[type="submit"]',
+      'input[type="button"]',
+      "[tabindex]",
+      '[class*="button"]',
+      '[class*="btn"]',
+    ].join(",");
+    const el = Array.from(document.querySelectorAll(selector)).find((raw) => {
+      const node = raw as HTMLElement;
+      const text = clean(node instanceof HTMLInputElement ? node.value : node.textContent);
+      const aria = clean(node.getAttribute("aria-label"));
+      const title = clean(node.getAttribute("title"));
+      const combined = `${text} ${aria} ${title}`;
+      return combined.includes("pesquisar") || combined.includes("buscar");
+    }) as HTMLElement | undefined;
+    if (!el) return false;
+    el.focus();
     return true;
   });
 }
@@ -830,15 +1072,30 @@ async function dispatchSearchWithAck(
     JSON.stringify({
       event: "SEARCH_PROBE",
       when: "before",
-      probe: { ...before, buttonDebug: before.buttonDebug },
+      probe: formatProbeShort(before),
+      top: before.topCandidates.slice(0, 5),
+      buttonDebug: before.buttonDebug,
+      iframeSrcs: before.iframeSrcs,
     }),
   );
+
+  if (!before.searchButtonFound || !before.searchButtonCandidate) {
+    onProgress?.("SEARCH: botão Pesquisar não localizado — diagnóstico capturado");
+    await captureSearchDiagnostics(page);
+    throw new LeadsScrapeError(
+      "SEARCH_BUTTON_NOT_FOUND",
+      "same-page",
+      `CTA de pesquisa não encontrado no DOM. ${formatProbeShort(before)}`,
+    );
+  }
+
+  const winner = before.searchButtonCandidate;
   onProgress?.(
-    `SEARCH: snapshot pré-clique — ${formatProbeShort(before)}`,
+    `SEARCH: snapshot — btn=true/${before.searchButtonCount} · #1 ${winner.tag} text="${winner.text.slice(0, 48)}" score=${winner.score}`,
   );
 
   onProgress?.("SEARCH: acionando Pesquisar via mouse…");
-  if (await clickSearchByMouse(page)) {
+  if (await clickSearchByMouse(page, winner)) {
     onProgress?.("SEARCH: aguardando ACK (mouse) — 5s…");
     const ack = await waitForSearchAck(page, before, 5000);
     if (ack) {
@@ -848,7 +1105,7 @@ async function dispatchSearchWithAck(
     }
     onProgress?.("SEARCH: mouse sem ACK após 5s");
   } else {
-    onProgress?.("SEARCH: mouse indisponível / botão não encontrado");
+    onProgress?.("SEARCH: mouse indisponível");
   }
 
   onProgress?.("SEARCH: tentando clique DOM…");
@@ -886,7 +1143,7 @@ async function dispatchSearchWithAck(
   throw new LeadsScrapeError(
     "SEARCH_DISPATCH_FAILED",
     "same-page",
-    `Nenhuma estratégia acionou a pesquisa. before=${formatProbeShort(before)} after=${formatProbeShort(last)}`,
+    `CTA encontrado mas nenhuma estratégia mudou o estado. before=${formatProbeShort(before)} after=${formatProbeShort(last)}`,
   );
 }
 
@@ -917,7 +1174,6 @@ async function waitForSearchTransition(
     }
 
     if (state.blocked) return { kind: "blocked" };
-    // Sucesso = CNPJ OR pagination OR total — não exigir AND.
     if (state.hasPagination || state.hasCnpj || (state.totalHint != null && state.totalHint > 0)) {
       onProgress?.(
         `SEARCH: resultados detectados — CNPJs=${state.cnpjNodes}, paginação=${state.hasPagination}`,
@@ -943,7 +1199,11 @@ async function waitForSearchTransition(
   if (!alive) return { kind: "renderer-unresponsive" };
   lastProbe = (await probeSearchState(page).catch(() => lastProbe)) || lastProbe;
   const finalState = await readSearchState(page).catch(() => null);
-  if (finalState?.hasPagination || finalState?.hasCnpj || (finalState?.totalHint != null && finalState.totalHint > 0)) {
+  if (
+    finalState?.hasPagination ||
+    finalState?.hasCnpj ||
+    (finalState?.totalHint != null && finalState.totalHint > 0)
+  ) {
     return { kind: "results", total: finalState.totalHint };
   }
   if (finalState?.searching || (lastProbe && lastProbe.loadingNodes > 0)) {

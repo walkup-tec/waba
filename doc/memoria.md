@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 21:45 — Leads PJ search discovery v9.1
+
+- Matcher amplo includes(pesquisar/buscar) + ancestral; SEARCH_BUTTON_NOT_FOUND + dump
+- Marker `DEPLOY-2026-08-23-2145-leads-pj-search-discovery-v9.1`
+- LOG: `doc/LOG-2026-08-23__214500__leads-pj-search-discovery-v91.md`
+
 ## 2026-08-23 21:00 — Leads PJ search ACK v9
 
 - Probe/ACK + fallbacks mouse→DOM→Enter; soft errors sem reconnect no service
