@@ -33,7 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RendererUnresponsiveError = void 0;
+exports.LeadsScrapeError = exports.RendererUnresponsiveError = void 0;
+exports.isLeadsScrapeError = isLeadsScrapeError;
+exports.isSoftScrapeError = isSoftScrapeError;
 exports.readCasaDosDadosCredentials = readCasaDosDadosCredentials;
 exports.assertCasaDosDadosCredentials = assertCasaDosDadosCredentials;
 exports.resolvePortalUiMaxPage = resolvePortalUiMaxPage;
@@ -206,6 +208,45 @@ class RendererUnresponsiveError extends Error {
     }
 }
 exports.RendererUnresponsiveError = RendererUnresponsiveError;
+/**
+ * Erro tipado do scraper — recovery decide se o service pode scheduleResume.
+ * same-page / stop → NUNCA reconnect automático no service.
+ * new-browser → Target crashed / renderer morto.
+ */
+class LeadsScrapeError extends Error {
+    constructor(code, recovery, message) {
+        super(message);
+        this.code = code;
+        this.recovery = recovery;
+        this.name = "LeadsScrapeError";
+    }
+}
+exports.LeadsScrapeError = LeadsScrapeError;
+function isLeadsScrapeError(error) {
+    return error instanceof LeadsScrapeError;
+}
+function isSoftScrapeError(error) {
+    if (error instanceof LeadsScrapeError) {
+        return error.recovery === "same-page" || error.recovery === "stop";
+    }
+    const anyErr = error;
+    if (anyErr?.soft === true)
+        return true;
+    if (anyErr?.recovery === "same-page" || anyErr?.recovery === "stop")
+        return true;
+    const msg = error instanceof Error ? error.message : String(error || "");
+    return /SEARCH_TIMEOUT_RESPONSIVE|SEARCH_DISPATCH_FAILED|PAGINATION_STALL/i.test(msg);
+}
+function formatProbeShort(p) {
+    return (`url=${p.url.replace(/^https?:\/\/[^/]+/, "")} ` +
+        `btn=${p.searchButtonFound}/${p.searchButtonCount} ` +
+        `disabled=${p.searchButtonDisabled} ` +
+        `loading=${p.loadingNodes} ` +
+        `pag=${p.pagination} ` +
+        `cnpj=${p.cnpjNodes} ` +
+        `dialogs=${p.dialogs} ` +
+        `challenge=${p.challengeNodes}`);
+}
 function readCasaDosDadosCredentials() {
     const email = String(process.env.CASADOSDADOS_EMAIL || "").trim();
     const password = String(process.env.CASADOSDADOS_PASSWORD || "").trim();
@@ -311,11 +352,17 @@ function isChromiumTargetCrash(error) {
     return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
 }
 function requiresBrowserRecovery(error) {
+    if (error instanceof LeadsScrapeError)
+        return error.recovery === "new-browser";
     if (error instanceof RendererUnresponsiveError)
         return true;
     const anyErr = error;
+    if (anyErr?.recovery === "new-browser")
+        return true;
     if (anyErr?.code === "RENDERER_UNRESPONSIVE")
         return true;
+    if (isSoftScrapeError(error))
+        return false;
     return isChromiumTargetCrash(error);
 }
 /** Texto da área de resultados (evita serializar document.body inteiro via CDP). */
@@ -372,44 +419,11 @@ async function rendererProbe(page, timeoutMs = 3000) {
         new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs)),
     ]);
 }
-async function readSearchState(page) {
+async function probeSearchState(page) {
     return page.evaluate(() => {
-        const pagination = document.querySelector('nav[data-oruga="pagination"]');
-        const active = pagination?.querySelector('button[aria-current="page"], button.pagination-link.is-current, button[aria-current="true"]');
-        const pageNum = Number(String(active?.textContent || "").trim());
-        const buttons = Array.from(document.querySelectorAll("button"));
-        const searching = buttons.some((b) => {
-            const text = String(b.textContent || "").toLowerCase();
-            return text.includes("pesquisando") || text.includes("carregando");
-        });
-        const root = document.querySelector("main") ||
-            document.querySelector(".section, .container, #app") ||
-            document.body;
-        const sample = String(root?.innerText || "").slice(0, 6000);
-        const cnpjRe = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/;
-        const totalMatch = sample.match(/retornou\s+([\d.\s]+)\s+empresas/i);
-        let totalHint = null;
-        if (totalMatch) {
-            const n = Number(String(totalMatch[1]).replace(/\./g, "").replace(/\s/g, ""));
-            if (Number.isFinite(n))
-                totalHint = n;
-        }
-        const emptyHint = /nenhum resultado|0\s+empresas|não\s+encontr|nao\s+encontr/i.test(sample) && !cnpjRe.test(sample);
-        const blocked = /cloudflare|just a moment|verificação de segurança|checking your browser/i.test(sample) ||
-            /um momento/i.test(document.title || "");
-        return {
-            hasPagination: Boolean(pagination),
-            currentPage: Number.isFinite(pageNum) && pageNum > 0 ? pageNum : null,
-            searching,
-            hasCnpj: cnpjRe.test(sample),
-            totalHint,
-            emptyHint,
-            blocked,
-        };
-    });
-}
-async function findSearchButtonPoint(page) {
-    return page.evaluate(() => {
+        const clean = (v) => String(v || "")
+            .replace(/\s+/g, " ")
+            .trim();
         const visible = (el) => {
             const r = el.getBoundingClientRect();
             const s = getComputedStyle(el);
@@ -418,64 +432,268 @@ async function findSearchButtonPoint(page) {
                 s.display !== "none" &&
                 s.visibility !== "hidden");
         };
-        const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
-        const button = candidates.find((el) => {
-            const text = String(el.textContent || "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            return visible(el) && (text === "pesquisar" || text === "buscar");
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+        const matches = buttons.filter((el) => {
+            const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent).toLowerCase();
+            return text === "pesquisar" || text === "buscar";
         });
-        if (!button)
-            return null;
-        const r = button.getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        const visibleMatches = matches.filter((el) => visible(el));
+        visibleMatches.sort((a, b) => {
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            return rb.width * rb.height - ra.width * ra.height;
+        });
+        const searchButton = visibleMatches[0] || matches[0] || null;
+        const pagination = document.querySelector('nav[data-oruga="pagination"]');
+        const current = pagination?.querySelector(['[aria-current="page"]', ".pagination-link.is-current", '[aria-current="true"]'].join(","));
+        const candidates = Array.from(document.querySelectorAll("main a, main p, main span, main div, main li, main h1, main h2, main h3")).slice(0, 1500);
+        const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/;
+        let cnpjNodes = 0;
+        const totalCandidates = [];
+        for (const el of candidates) {
+            const text = clean(el.textContent);
+            if (!text || text.length > 200)
+                continue;
+            if (cnpjRe.test(text))
+                cnpjNodes += 1;
+            if (/\b\d[\d.]*\s+(empresas?|resultados?)\b/i.test(text)) {
+                totalCandidates.push(text);
+            }
+        }
+        const loadingNodes = document.querySelectorAll([
+            '[aria-busy="true"]',
+            ".loading",
+            ".is-loading",
+            ".loader",
+            ".spinner",
+            '[class*="loading"]',
+            '[class*="spinner"]',
+        ].join(",")).length;
+        const rect = searchButton?.getBoundingClientRect();
+        return {
+            url: location.href,
+            readyState: document.readyState,
+            searchButtonFound: Boolean(searchButton),
+            searchButtonDisabled: searchButton
+                ? Boolean(searchButton.disabled) ||
+                    searchButton.getAttribute("aria-disabled") === "true"
+                : false,
+            searchButtonText: searchButton
+                ? clean(searchButton instanceof HTMLInputElement ? searchButton.value : searchButton.textContent)
+                : null,
+            searchButtonCount: matches.length,
+            pagination: Boolean(pagination),
+            currentPage: Number(clean(current?.textContent)) || null,
+            cnpjNodes,
+            totalCandidates: totalCandidates.slice(0, 5),
+            loadingNodes,
+            dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
+            iframeCount: document.querySelectorAll("iframe").length,
+            challengeNodes: document.querySelectorAll('[id*="challenge"], [class*="challenge"], iframe[src*="challenge"]').length,
+            buttonDebug: searchButton
+                ? {
+                    tag: searchButton.tagName,
+                    type: searchButton.getAttribute("type"),
+                    classes: String(searchButton.className || "").slice(0, 200),
+                    rect: rect
+                        ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+                        : null,
+                    html: searchButton.outerHTML.slice(0, 500),
+                }
+                : null,
+        };
     });
 }
-/**
- * Dispara SEARCH sem locator.click (evita actionability/auto-wait que trava no Xvfb).
- * AÇÃO ≠ CONFIRMAÇÃO — o caller deve chamar waitForSearchTransition em seguida.
- */
-async function dispatchSearchClick(page, onProgress) {
-    const point = await findSearchButtonPoint(page);
-    if (!point) {
-        onProgress?.("SEARCH: botão não encontrado — tentando Enter…");
-        await page.keyboard.press("Enter").catch(() => undefined);
-        return;
+async function readSearchState(page) {
+    const probe = await probeSearchState(page);
+    const sampleTotals = probe.totalCandidates.join(" ");
+    const totalMatch = sampleTotals.match(/([\d.]+)\s+(empresas?|resultados?)/i);
+    let totalHint = null;
+    if (totalMatch) {
+        const n = Number(String(totalMatch[1]).replace(/\./g, "").replace(/\s/g, ""));
+        if (Number.isFinite(n))
+            totalHint = n;
     }
-    onProgress?.(`SEARCH: disparando pesquisa em (${Math.round(point.x)}, ${Math.round(point.y)})…`);
-    if (page.mouse?.click) {
-        await page.mouse.click(point.x, point.y);
-        return;
+    const emptyHint = probe.cnpjNodes === 0 &&
+        !probe.pagination &&
+        /nenhum resultado|0\s+empresas|não\s+encontr|nao\s+encontr/i.test(sampleTotals);
+    const blocked = probe.challengeNodes > 0 ||
+        /cloudflare|just a moment|verificação de segurança|checking your browser|um momento/i.test(`${probe.url} ${probe.searchButtonText || ""}`);
+    return {
+        hasPagination: probe.pagination,
+        currentPage: probe.currentPage,
+        searching: probe.loadingNodes > 0 || probe.searchButtonDisabled,
+        hasCnpj: probe.cnpjNodes > 0,
+        cnpjNodes: probe.cnpjNodes,
+        totalHint,
+        emptyHint,
+        blocked,
+        loadingNodes: probe.loadingNodes,
+    };
+}
+async function waitForSearchAck(page, before, timeoutMs = 5000) {
+    const deadline = Date.now() + Math.max(1000, timeoutMs);
+    while (Date.now() < deadline) {
+        await page.waitForTimeout(400);
+        const after = await probeSearchState(page);
+        if (after.url !== before.url ||
+            after.searchButtonDisabled !== before.searchButtonDisabled ||
+            after.loadingNodes > before.loadingNodes ||
+            after.pagination ||
+            after.cnpjNodes > before.cnpjNodes ||
+            after.totalCandidates.length > before.totalCandidates.length ||
+            after.dialogs !== before.dialogs) {
+            return after;
+        }
     }
-    // Fallback raro: clique DOM sem locator Playwright.
-    await page.evaluate(() => {
+    return null;
+}
+async function clickSearchByMouse(page) {
+    const point = await page.evaluate(() => {
+        const clean = (v) => String(v || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
         const visible = (el) => {
             const r = el.getBoundingClientRect();
             const s = getComputedStyle(el);
             return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
         };
-        const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
-        const button = candidates.find((el) => {
-            const text = String(el.textContent || "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            return visible(el) && (text === "pesquisar" || text === "buscar");
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+        const matches = buttons.filter((el) => {
+            const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
+            return text === "pesquisar" || text === "buscar";
         });
-        button?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+        const visibleMatches = matches.filter((el) => visible(el));
+        visibleMatches.sort((a, b) => {
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            return rb.width * rb.height - ra.width * ra.height;
+        });
+        const button = visibleMatches[0] || matches[0];
+        if (!button)
+            return null;
+        const r = button.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     });
+    if (!point || !page.mouse?.click)
+        return false;
+    await page.mouse.click(point.x, point.y);
+    return true;
+}
+async function clickSearchDom(page) {
+    return page.evaluate(() => {
+        const clean = (v) => String(v || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        const visible = (el) => {
+            const r = el.getBoundingClientRect();
+            const s = getComputedStyle(el);
+            return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+        };
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+        const matches = buttons.filter((el) => {
+            const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
+            return text === "pesquisar" || text === "buscar";
+        });
+        const visibleMatches = matches.filter((el) => visible(el));
+        visibleMatches.sort((a, b) => {
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            return rb.width * rb.height - ra.width * ra.height;
+        });
+        const button = visibleMatches[0] || matches[0];
+        if (!button)
+            return false;
+        button.click();
+        return true;
+    });
+}
+async function focusSearchButton(page) {
+    return page.evaluate(() => {
+        const clean = (v) => String(v || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
+        const button = buttons.find((el) => {
+            const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
+            return text === "pesquisar" || text === "buscar";
+        });
+        if (!button)
+            return false;
+        button.focus();
+        return true;
+    });
+}
+/**
+ * DISPATCH → ACK (5s) → fallbacks. Não espera resultados aqui.
+ */
+async function dispatchSearchWithAck(page, onProgress) {
+    const before = await probeSearchState(page);
+    console.log(JSON.stringify({
+        event: "SEARCH_PROBE",
+        when: "before",
+        probe: { ...before, buttonDebug: before.buttonDebug },
+    }));
+    onProgress?.(`SEARCH: snapshot pré-clique — ${formatProbeShort(before)}`);
+    onProgress?.("SEARCH: acionando Pesquisar via mouse…");
+    if (await clickSearchByMouse(page)) {
+        onProgress?.("SEARCH: aguardando ACK (mouse) — 5s…");
+        const ack = await waitForSearchAck(page, before, 5000);
+        if (ack) {
+            console.log(JSON.stringify({ event: "SEARCH_ACK", method: "mouse", probe: formatProbeShort(ack) }));
+            onProgress?.(`SEARCH: ACK recebido via mouse — ${formatProbeShort(ack)}`);
+            return { method: "mouse", ack };
+        }
+        onProgress?.("SEARCH: mouse sem ACK após 5s");
+    }
+    else {
+        onProgress?.("SEARCH: mouse indisponível / botão não encontrado");
+    }
+    onProgress?.("SEARCH: tentando clique DOM…");
+    if (await clickSearchDom(page)) {
+        onProgress?.("SEARCH: aguardando ACK (DOM) — 5s…");
+        const ack = await waitForSearchAck(page, before, 5000);
+        if (ack) {
+            console.log(JSON.stringify({ event: "SEARCH_ACK", method: "dom", probe: formatProbeShort(ack) }));
+            onProgress?.(`SEARCH: ACK recebido via DOM — ${formatProbeShort(ack)}`);
+            return { method: "dom", ack };
+        }
+        onProgress?.("SEARCH: clique DOM sem ACK após 5s");
+    }
+    onProgress?.("SEARCH: tentando Enter…");
+    await focusSearchButton(page);
+    await page.keyboard.press("Enter").catch(() => undefined);
+    onProgress?.("SEARCH: aguardando ACK (Enter) — 5s…");
+    const ackEnter = await waitForSearchAck(page, before, 5000);
+    if (ackEnter) {
+        console.log(JSON.stringify({ event: "SEARCH_ACK", method: "enter", probe: formatProbeShort(ackEnter) }));
+        onProgress?.(`SEARCH: ACK recebido via Enter — ${formatProbeShort(ackEnter)}`);
+        return { method: "enter", ack: ackEnter };
+    }
+    const last = await probeSearchState(page);
+    console.log(JSON.stringify({
+        event: "SEARCH_DISPATCH_FAILED",
+        before: formatProbeShort(before),
+        last: formatProbeShort(last),
+        buttonDebug: last.buttonDebug,
+    }));
+    throw new LeadsScrapeError("SEARCH_DISPATCH_FAILED", "same-page", `Nenhuma estratégia acionou a pesquisa. before=${formatProbeShort(before)} after=${formatProbeShort(last)}`);
 }
 async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort) {
     const started = Date.now();
     const deadline = started + Math.max(5000, timeoutMs);
     let lastPulse = 0;
+    let lastProbe;
     while (Date.now() < deadline) {
         if (shouldAbort?.())
             throw new Error("__MLC_JOB_ABORTED__");
         const alive = await rendererProbe(page, 3000);
         if (!alive)
             return { kind: "renderer-unresponsive" };
+        lastProbe = await probeSearchState(page).catch(() => lastProbe);
         const state = await readSearchState(page).catch(() => null);
         if (!state) {
             const stillAlive = await rendererProbe(page, 3000);
@@ -486,7 +704,9 @@ async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort)
         }
         if (state.blocked)
             return { kind: "blocked" };
+        // Sucesso = CNPJ OR pagination OR total — não exigir AND.
         if (state.hasPagination || state.hasCnpj || (state.totalHint != null && state.totalHint > 0)) {
+            onProgress?.(`SEARCH: resultados detectados — CNPJs=${state.cnpjNodes}, paginação=${state.hasPagination}`);
             return { kind: "results", total: state.totalHint };
         }
         if (state.emptyHint && !state.searching)
@@ -495,38 +715,40 @@ async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort)
         const budget = Math.round(timeoutMs / 1000);
         if (elapsed - lastPulse >= 5) {
             lastPulse = elapsed;
-            onProgress?.(state.searching
+            onProgress?.(state.searching || state.loadingNodes > 0
                 ? `SEARCH: portal ainda processando — ${elapsed}s/${budget}s`
-                : `SEARCH: aguardando resposta do portal — ${elapsed}s/${budget}s`);
+                : `SEARCH: aguardando resultados — ${elapsed}s/${budget}s`);
         }
         await page.waitForTimeout(500);
     }
     const alive = await rendererProbe(page, 3000);
     if (!alive)
         return { kind: "renderer-unresponsive" };
+    lastProbe = (await probeSearchState(page).catch(() => lastProbe)) || lastProbe;
     const finalState = await readSearchState(page).catch(() => null);
-    if (finalState?.hasPagination || finalState?.hasCnpj) {
+    if (finalState?.hasPagination || finalState?.hasCnpj || (finalState?.totalHint != null && finalState.totalHint > 0)) {
         return { kind: "results", total: finalState.totalHint };
     }
-    if (finalState?.searching) {
-        // Grace: mais 30s se ainda há loading.
+    if (finalState?.searching || (lastProbe && lastProbe.loadingNodes > 0)) {
         const graceDeadline = Date.now() + 30000;
         while (Date.now() < graceDeadline) {
             if (shouldAbort?.())
                 throw new Error("__MLC_JOB_ABORTED__");
             if (!(await rendererProbe(page, 3000)))
                 return { kind: "renderer-unresponsive" };
+            lastProbe = (await probeSearchState(page).catch(() => lastProbe)) || lastProbe;
             const st = await readSearchState(page).catch(() => null);
-            if (st?.hasPagination || st?.hasCnpj)
+            if (st?.hasPagination || st?.hasCnpj || (st?.totalHint != null && st.totalHint > 0)) {
                 return { kind: "results", total: st.totalHint };
-            if (st && !st.searching)
+            }
+            if (st && !st.searching && (!lastProbe || lastProbe.loadingNodes === 0))
                 break;
             const g = Math.round((Date.now() - started) / 1000);
             onProgress?.(`SEARCH: grace loading — ${g}s`);
             await page.waitForTimeout(500);
         }
     }
-    return { kind: "timeout-responsive" };
+    return { kind: "timeout-responsive", probe: lastProbe };
 }
 /** @deprecated use waitForSearchTransition — mantido para next-page short waits */
 async function waitForPortalSearchResults(page, timeoutMs = 12000, onProgress) {
@@ -1411,32 +1633,60 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             /* segue para Pesquisar */
         }
         const searchTimeoutMs = Math.max(15000, Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90000) || 90000));
-        const runSearchOnce = async () => {
-            setPhase("SEARCH", "disparando pesquisa (mouse click)…");
-            await dispatchSearchClick(page, (msg) => {
+        const runSearchOnce = async (allowRedispatch) => {
+            const pre = await probeSearchState(page);
+            // Só redispara Pesquisar se não há loading/resultados (evita double-request).
+            const alreadyHasResults = pre.pagination || pre.cnpjNodes > 0 || pre.totalCandidates.length > 0;
+            if (alreadyHasResults) {
+                onProgress?.(`SEARCH: resultados já presentes — ${formatProbeShort(pre)}`);
+                return {
+                    kind: "results",
+                    total: (() => {
+                        const m = pre.totalCandidates.join(" ").match(/([\d.]+)\s+(empresas?|resultados?)/i);
+                        if (!m)
+                            return null;
+                        const n = Number(String(m[1]).replace(/\./g, "").replace(/\s/g, ""));
+                        return Number.isFinite(n) ? n : null;
+                    })(),
+                };
+            }
+            if (pre.loadingNodes > 0 && !allowRedispatch) {
+                setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
+                return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
+                    sessionPhase = msg;
+                    onProgress?.(msg);
+                }, options?.shouldAbort);
+            }
+            await dispatchSearchWithAck(page, (msg) => {
                 sessionPhase = msg;
                 phaseStartedAt = Date.now();
                 onProgress?.(msg);
             });
-            setPhase("SEARCH", "clique enviado; aguardando resposta do portal…");
+            setPhase("SEARCH", "ACK ok — aguardando resultados…");
             return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
                 sessionPhase = msg;
                 onProgress?.(msg);
             }, options?.shouldAbort);
         };
-        let searchResult = await runSearchOnce();
+        let searchResult = await runSearchOnce(true);
         if (searchResult.kind === "timeout-responsive") {
-            setPhase("SEARCH", "timeout com renderer saudável — 1 retry na mesma Page…");
-            searchResult = await runSearchOnce();
+            const stuckProbe = searchResult.probe || (await probeSearchState(page).catch(() => null));
+            // Retry same-Page só se portal idle (sem loading) e sem resultados.
+            if (stuckProbe && stuckProbe.loadingNodes > 0) {
+                throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "same-page", `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`);
+            }
+            setPhase("SEARCH", "timeout responsivo — 1 retry controlado na mesma Page…");
+            searchResult = await runSearchOnce(true);
         }
         if (searchResult.kind === "renderer-unresponsive") {
-            throw new RendererUnresponsiveError("SEARCH");
+            throw new LeadsScrapeError("RENDERER_UNRESPONSIVE", "new-browser", "Renderer não responde durante SEARCH");
         }
         if (searchResult.kind === "blocked") {
-            throw new Error("PORTAL_BLOCKED — Cloudflare ou desafio de segurança na pesquisa.");
+            throw new LeadsScrapeError("PORTAL_BLOCKED", "stop", "Cloudflare ou desafio de segurança na pesquisa.");
         }
         if (searchResult.kind === "timeout-responsive") {
-            throw new Error("SEARCH_TIMEOUT_RESPONSIVE — portal não retornou resultados em 90s+grace; Chromium vivo (sem recovery).");
+            const last = searchResult.probe || (await probeSearchState(page).catch(() => null));
+            throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "same-page", `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`);
         }
         if (searchResult.kind === "empty") {
             setPhase("DONE", "pesquisa sem resultados");

@@ -9,7 +9,14 @@ import {
   isEvoBrazilMobileDigits,
   sanitizeExportBaseName,
 } from "./waba-leads-cnpj-excel.service";
-import { scrapeCasaDosDadosLeads, assertCasaDosDadosCredentials, resolvePortalUiMaxPage } from "./waba-leads-cnpj-casadosdados.adapter";
+import {
+  scrapeCasaDosDadosLeads,
+  assertCasaDosDadosCredentials,
+  resolvePortalUiMaxPage,
+  isSoftScrapeError,
+  isLeadsScrapeError,
+  LeadsScrapeError,
+} from "./waba-leads-cnpj-casadosdados.adapter";
 import {
   enrichLeadsCnpjList,
   formatReceitaWsLegend,
@@ -2018,6 +2025,21 @@ export class WabaLeadsCnpjService {
         cancelledJobs.delete(listId);
         return;
       }
+
+      // Soft (same-page/stop): NUNCA scheduleResume / LOGIN de novo.
+      // Erros soft já esgotaram retry local no adapter.
+      if (isSoftScrapeError(error) || (isLeadsScrapeError(error) && error.recovery !== "new-browser")) {
+        const code = isLeadsScrapeError(error) ? error.code : "SOFT_SCRAPE";
+        patch({
+          status: "failed",
+          error: msg,
+          scrapeCompleted: false,
+          scrapeDoneReason: code,
+          progressMessage: `Pausado (erro operacional ${code}) — sem reconnect automático: ${msg.slice(0, 180)}`,
+        });
+        return;
+      }
+
       const current = this.repository.getById(listId);
       const ckptPage = Math.max(0, Math.round(Number(current?.scrapeCheckpoint?.nextPage || 0) || 0));
       const archived = current?.campaignKey
@@ -2034,18 +2056,22 @@ export class WabaLeadsCnpjService {
         archived <= 0
           ? 1
           : Math.max(1, ckptPage || Math.floor(archived / 20) + 1);
+
+      const hardRecovery =
+        (isLeadsScrapeError(error) && error.recovery === "new-browser") ||
+        (!(error instanceof LeadsScrapeError) &&
+          /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED/i.test(
+            msg,
+          ));
+
       const wasPortalScrape =
         Boolean(current) &&
         current!.source === "portal" &&
         !current!.skipPortalScrape &&
-        (current!.status === "scraping" ||
-          ckptPage >= 1 ||
-          /Target crashed|SCRAPE_ABORT|Chromium|página|portal|copi|pesquis|raspagem|stall|closed/i.test(
-            msg,
-          ));
+        (current!.status === "scraping" || ckptPage >= 1);
 
-      // Crash/travamento na cópia: mantém pool + checkpoint e retoma da página certa.
-      if (current && wasPortalScrape && attempts < maxReconnect) {
+      // Só reconnect automático em HARD (crash/disconnect/renderer morto).
+      if (current && wasPortalScrape && hardRecovery && attempts < maxReconnect) {
         patch({
           status: "scraping",
           error: msg,
@@ -2056,7 +2082,7 @@ export class WabaLeadsCnpjService {
             collectedCount: archived,
           },
           scrapeReconnectAttempts: attempts + 1,
-          progressMessage: `Interrompido: ${msg.slice(0, 140)}. Retomando da página ${resumePage} em ~15s (arquivados: ${archived.toLocaleString("pt-BR")}; tentativa ${attempts + 1}/${maxReconnect})…`,
+          progressMessage: `RECOVER: Chromium caiu — retomando página ${resumePage} em ~15s (arquivados: ${archived.toLocaleString("pt-BR")}; tentativa ${attempts + 1}/${maxReconnect})…`,
         });
         setTimeout(() => {
           const again = this.repository.getById(listId);
@@ -2065,13 +2091,13 @@ export class WabaLeadsCnpjService {
         return;
       }
 
+      // Erro desconhecido: NÃO destruir sessão automaticamente (conservador).
       patch({
         status: "failed",
         error: msg,
-        progressMessage:
-          wasPortalScrape
-            ? `Falhou após ${attempts} reconexão(ões). Checkpoint página ${resumePage} e ${archived.toLocaleString("pt-BR")} CNPJ(s) no pool foram mantidos.`
-            : null,
+        progressMessage: wasPortalScrape
+          ? `Falhou (sem reconnect auto). Checkpoint página ${resumePage} e ${archived.toLocaleString("pt-BR")} CNPJ(s) no pool mantidos. ${msg.slice(0, 120)}`
+          : null,
       });
     }
   }

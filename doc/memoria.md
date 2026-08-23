@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 21:00 — Leads PJ search ACK v9
+
+- Probe/ACK + fallbacks mouse→DOM→Enter; soft errors sem reconnect no service
+- Marker `DEPLOY-2026-08-23-2100-leads-pj-search-ack-v9`
+- LOG: `doc/LOG-2026-08-23__210000__leads-pj-search-ack-v9.md`
+
 ## 2026-08-23 20:15 — Leads PJ state machine v8
 
 - SEARCH mouse.click (sem locator.click); waitForSearchTransition 90s; renderer probe
