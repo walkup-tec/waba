@@ -301,6 +301,82 @@ function isChromiumTargetCrash(error) {
     const msg = error instanceof Error ? error.message : String(error || "");
     return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
 }
+/** Texto da área de resultados (evita serializar document.body inteiro via CDP). */
+async function readResultsSampleText(page, maxChars = 12000) {
+    return page.evaluate((limit) => {
+        const root = document.querySelector("main") ||
+            document.querySelector(".section, .container, #app") ||
+            document.body;
+        return String(root?.innerText || "").slice(0, Math.max(1000, limit));
+    }, maxChars);
+}
+/** Cards CNPJ na tela — evaluate leve, sem scroll artificial. */
+async function readScreenCardsLight(page) {
+    return page.evaluate(() => {
+        const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
+        const seen = new Set();
+        const out = [];
+        const root = document.querySelector("main") ||
+            document.querySelector(".section, .container, #app") ||
+            document.body;
+        const lines = String(root?.innerText || "")
+            .split(/\n+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+        // Cards ficam no miolo; evita varrer menus/rodapé enormes.
+        const slice = lines.length > 400 ? lines.slice(0, 400) : lines;
+        for (const line of slice) {
+            const m = line.match(re);
+            if (!m || seen.has(m[1]))
+                continue;
+            seen.add(m[1]);
+            out.push([m[1], m[2]]);
+            if (out.length >= 40)
+                break;
+        }
+        return out;
+    });
+}
+async function readFirstVisibleCnpjDigits(page) {
+    const rows = await readScreenCardsLight(page);
+    const raw = rows[0]?.[0] || "";
+    return (0, waba_leads_cnpj_repository_1.normalizeCnpjDigits)(raw);
+}
+async function waitForPortalSearchResults(page, timeoutMs = 45000) {
+    if (typeof page.waitForFunction === "function") {
+        await page
+            .waitForFunction(() => {
+            const nav = document.querySelector('nav[data-oruga="pagination"]');
+            if (nav)
+                return true;
+            const root = document.querySelector("main") ||
+                document.querySelector(".section, .container, #app") ||
+                document.body;
+            const sample = String(root?.innerText || "").slice(0, 8000);
+            return (/retornou\s+[\d.]+\s+empresas/i.test(sample) ||
+                /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample));
+        }, undefined, { timeout: timeoutMs })
+            .catch(() => null);
+        return;
+    }
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const ready = await page.evaluate(() => {
+            const nav = document.querySelector('nav[data-oruga="pagination"]');
+            if (nav)
+                return true;
+            const root = document.querySelector("main") ||
+                document.querySelector(".section, .container, #app") ||
+                document.body;
+            const sample = String(root?.innerText || "").slice(0, 8000);
+            return (/retornou\s+[\d.]+\s+empresas/i.test(sample) ||
+                /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample));
+        });
+        if (ready)
+            return;
+        await page.waitForTimeout(400);
+    }
+}
 async function fillByLabel(page, labels, value) {
     if (!value)
         return;
@@ -701,7 +777,8 @@ async function setCheckboxByLabel(page, label, checked) {
 async function setToggleByLabel(page, label, enabled) {
     if (!enabled)
         return;
-    await dismissBlockingPortalOverlays(page);
+    // Sem dismissBlocking aqui — applyFilters já fecha overlay no início.
+    // Chamar dismiss a cada switch multiplica xpath/evaluate e estressa o renderer.
     const needle = label.toLowerCase().replace(/"/g, "");
     const ok = await page.evaluate(({ needle, want }) => {
         const labels = Array.from(document.querySelectorAll("label"));
@@ -737,7 +814,7 @@ async function setToggleByLabel(page, label, enabled) {
     const textPath = `(//label|//span|//p|//strong|//div[contains(@class,'switch') or contains(@class,'control')])[contains(${lower}, '${needle}') and string-length(normalize-space(.)) < 90]`;
     const labelEl = page.locator(`xpath=${textPath}`).first();
     if ((await labelEl.count()) > 0 && (await labelEl.isVisible().catch(() => false))) {
-        await labelEl.click({ timeout: 8000 }).catch(() => undefined);
+        await labelEl.click({ timeout: 5000 }).catch(() => undefined);
     }
 }
 async function applyFilters(page, filters, onProgress) {
@@ -1022,24 +1099,21 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             await fecharCnae.click().catch(() => undefined);
             await page.waitForTimeout(300);
         }
+        onProgress?.("Pesquisando: clicando Pesquisar…");
         if ((await searchBtn.count()) > 0) {
-            await searchBtn.scrollIntoViewIfNeeded?.().catch(() => undefined);
-            await searchBtn.click({ timeout: 15000 });
-            await page.waitForTimeout(3000);
+            // Evita scrollIntoView sob Xvfb (layout thrash → Target crashed).
+            await searchBtn.click({ timeout: 15000, force: true }).catch(async () => {
+                await searchBtn.click({ timeout: 15000 });
+            });
         }
         else {
             onProgress?.("Botão Pesquisar não encontrado — tentando Enter…");
             await page.keyboard.press("Enter").catch(() => undefined);
-            await page.waitForTimeout(3000);
         }
-        await page
-            .locator("body")
-            .filter({ hasText: /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+|retornou\s+[\d.]+\s+empresas/i })
-            .first()
-            .waitFor({ timeout: 45000 })
-            .catch(() => null);
-        // Sem scrolls artificiais — 20 cards/página já estão no DOM; scroll redesenha e estressa o renderer.
-        const pageText = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
+        onProgress?.("Pesquisando: aguardando resultados…");
+        await waitForPortalSearchResults(page, 45000);
+        // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
+        const pageText = await readResultsSampleText(page, 12000);
         const portalTotal = interceptedTotal ?? parseResultTotalFromText(pageText);
         if (portalTotal != null) {
             onProgress?.(`Pesquisando: retornou ${portalTotal.toLocaleString("pt-BR")} empresas. Iniciando cópia…`);
@@ -1051,24 +1125,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         // NÃO pré-carregar interceptedRows aqui: se a API já encher `collected`,
         // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
         // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
-        const readScreenCards = async () => {
-            const bodyText = await page.locator("body").innerText({ timeout: 15000 });
-            const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
-            const seen = new Set();
-            const out = [];
-            const lines = bodyText
-                .split(/\n+/)
-                .map((s) => s.trim())
-                .filter(Boolean);
-            for (const line of lines) {
-                const m = line.match(re);
-                if (!m || seen.has(m[1]))
-                    continue;
-                seen.add(m[1]);
-                out.push([m[1], m[2]]);
-            }
-            return out;
-        };
+        const readScreenCards = async () => readScreenCardsLight(page);
         const firstCnpjOf = (rows) => (rows[0] ? (0, waba_leads_cnpj_repository_1.normalizeCnpjDigits)(rows[0][0]) : "");
         const readCurrentPageNumber = async () => page.evaluate(() => {
             const active = document.querySelector('nav[data-oruga="pagination"] button.pagination-link.is-current, nav[data-oruga="pagination"] button[aria-current="true"]');
@@ -1109,7 +1166,6 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     .catch(() => false);
                 if (blocked)
                     continue;
-                await btn.scrollIntoViewIfNeeded().catch(() => null);
                 await btn.click({ force: true, timeout: 8000 }).catch(() => null);
                 // Prioridade: número da página ativa (aria-current / is-current). CNPJ = fallback leve.
                 const changed = await page
@@ -1122,29 +1178,14 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 }, targetPage, { timeout: 15000 })
                     .then(() => true)
                     .catch(() => false);
-                if (!changed && previousFirstCnpj) {
-                    const okByCnpj = await page
-                        .waitForFunction((prev) => {
-                        const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+/m;
-                        const text = String(document.body?.innerText || "");
-                        const m = text.match(re);
-                        if (!m)
-                            return false;
-                        return m[1].replace(/\D/g, "") !== prev;
-                    }, previousFirstCnpj, { timeout: 8000 })
-                        .then(() => true)
-                        .catch(() => false);
-                    if (okByCnpj)
-                        return true;
-                }
-                else if (changed) {
-                    await page
-                        .locator("body")
-                        .filter({ hasText: /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/ })
-                        .first()
-                        .waitFor({ timeout: 10000 })
-                        .catch(() => null);
+                if (changed) {
+                    await waitForPortalSearchResults(page, 10000);
                     return true;
+                }
+                if (previousFirstCnpj) {
+                    const nextFirst = await readFirstVisibleCnpjDigits(page);
+                    if (nextFirst && nextFirst !== previousFirstCnpj)
+                        return true;
                 }
             }
             return false;
@@ -1212,8 +1253,8 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             const maxSteps = Math.max(1, Math.min(25, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 25) || 25)));
             while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
                 guard += 1;
-                const prevRows = await readScreenCards();
-                const prev = firstCnpjOf(prevRows);
+                onProgress?.(`Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`);
+                const prev = await readFirstVisibleCnpjDigits(page);
                 const ok = await goToNextResultsPage(prev, current);
                 if (!ok)
                     return false;

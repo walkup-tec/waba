@@ -338,6 +338,8 @@ type PageLike = {
   // Playwright aceita argumento; tipagem folgada para CNAE via DOM.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluate: <T>(fn: (arg?: any) => T, arg?: any) => Promise<T>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  waitForFunction?: (fn: (arg?: any) => unknown, arg?: any, options?: { timeout?: number }) => Promise<unknown>;
 };
 
 const XPATH_FOLD =
@@ -374,6 +376,93 @@ function isChromiumTargetCrash(error: unknown): boolean {
   return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(
     msg,
   );
+}
+
+/** Texto da área de resultados (evita serializar document.body inteiro via CDP). */
+async function readResultsSampleText(page: PageLike, maxChars = 12_000): Promise<string> {
+  return page.evaluate((limit: number) => {
+    const root =
+      (document.querySelector("main") as HTMLElement | null) ||
+      (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+      document.body;
+    return String(root?.innerText || "").slice(0, Math.max(1000, limit));
+  }, maxChars);
+}
+
+/** Cards CNPJ na tela — evaluate leve, sem scroll artificial. */
+async function readScreenCardsLight(page: PageLike): Promise<string[][]> {
+  return page.evaluate(() => {
+    const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
+    const seen = new Set<string>();
+    const out: string[][] = [];
+    const root =
+      (document.querySelector("main") as HTMLElement | null) ||
+      (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+      document.body;
+    const lines = String(root?.innerText || "")
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Cards ficam no miolo; evita varrer menus/rodapé enormes.
+    const slice = lines.length > 400 ? lines.slice(0, 400) : lines;
+    for (const line of slice) {
+      const m = line.match(re);
+      if (!m || seen.has(m[1])) continue;
+      seen.add(m[1]);
+      out.push([m[1], m[2]]);
+      if (out.length >= 40) break;
+    }
+    return out;
+  });
+}
+
+async function readFirstVisibleCnpjDigits(page: PageLike): Promise<string> {
+  const rows = await readScreenCardsLight(page);
+  const raw = rows[0]?.[0] || "";
+  return normalizeCnpjDigits(raw);
+}
+
+async function waitForPortalSearchResults(page: PageLike, timeoutMs = 45000): Promise<void> {
+  if (typeof page.waitForFunction === "function") {
+    await page
+      .waitForFunction(
+        () => {
+          const nav = document.querySelector('nav[data-oruga="pagination"]');
+          if (nav) return true;
+          const root =
+            (document.querySelector("main") as HTMLElement | null) ||
+            (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+            document.body;
+          const sample = String(root?.innerText || "").slice(0, 8000);
+          return (
+            /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
+            /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
+          );
+        },
+        undefined,
+        { timeout: timeoutMs },
+      )
+      .catch(() => null);
+    return;
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await page.evaluate(() => {
+      const nav = document.querySelector('nav[data-oruga="pagination"]');
+      if (nav) return true;
+      const root =
+        (document.querySelector("main") as HTMLElement | null) ||
+        (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+        document.body;
+      const sample = String(root?.innerText || "").slice(0, 8000);
+      return (
+        /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
+        /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
+      );
+    });
+    if (ready) return;
+    await page.waitForTimeout(400);
+  }
 }
 
 async function fillByLabel(page: PageLike, labels: string[], value: string) {
@@ -824,7 +913,8 @@ async function setCheckboxByLabel(page: PageLike, label: string, checked: boolea
  */
 async function setToggleByLabel(page: PageLike, label: string, enabled: boolean) {
   if (!enabled) return;
-  await dismissBlockingPortalOverlays(page);
+  // Sem dismissBlocking aqui — applyFilters já fecha overlay no início.
+  // Chamar dismiss a cada switch multiplica xpath/evaluate e estressa o renderer.
 
   const needle = label.toLowerCase().replace(/"/g, "");
   const ok = await page.evaluate(
@@ -861,7 +951,7 @@ async function setToggleByLabel(page: PageLike, label: string, enabled: boolean)
   const textPath = `(//label|//span|//p|//strong|//div[contains(@class,'switch') or contains(@class,'control')])[contains(${lower}, '${needle}') and string-length(normalize-space(.)) < 90]`;
   const labelEl = page.locator(`xpath=${textPath}`).first();
   if ((await labelEl.count()) > 0 && (await labelEl.isVisible().catch(() => false))) {
-    await labelEl.click({ timeout: 8000 }).catch(() => undefined);
+    await labelEl.click({ timeout: 5000 }).catch(() => undefined);
   }
 }
 
@@ -1210,25 +1300,22 @@ async function scrapeCasaDosDadosLeadsOnce(
       await page.waitForTimeout(300);
     }
 
+    onProgress?.("Pesquisando: clicando Pesquisar…");
     if ((await searchBtn.count()) > 0) {
-      await searchBtn.scrollIntoViewIfNeeded?.().catch(() => undefined);
-      await searchBtn.click({ timeout: 15000 });
-      await page.waitForTimeout(3000);
+      // Evita scrollIntoView sob Xvfb (layout thrash → Target crashed).
+      await searchBtn.click({ timeout: 15000, force: true }).catch(async () => {
+        await searchBtn.click({ timeout: 15000 });
+      });
     } else {
       onProgress?.("Botão Pesquisar não encontrado — tentando Enter…");
       await page.keyboard.press("Enter").catch(() => undefined);
-      await page.waitForTimeout(3000);
     }
 
-    await page
-      .locator("body")
-      .filter({ hasText: /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+|retornou\s+[\d.]+\s+empresas/i })
-      .first()
-      .waitFor({ timeout: 45000 })
-      .catch(() => null);
+    onProgress?.("Pesquisando: aguardando resultados…");
+    await waitForPortalSearchResults(page, 45000);
 
-    // Sem scrolls artificiais — 20 cards/página já estão no DOM; scroll redesenha e estressa o renderer.
-    const pageText = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
+    // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
+    const pageText = await readResultsSampleText(page, 12_000);
     const portalTotal = interceptedTotal ?? parseResultTotalFromText(pageText);
     if (portalTotal != null) {
       onProgress?.(
@@ -1243,23 +1330,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
     // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
 
-    const readScreenCards = async (): Promise<string[][]> => {
-      const bodyText = await page.locator("body").innerText({ timeout: 15000 });
-      const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
-      const seen = new Set<string>();
-      const out: string[][] = [];
-      const lines = bodyText
-        .split(/\n+/)
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-      for (const line of lines) {
-        const m = line.match(re);
-        if (!m || seen.has(m[1])) continue;
-        seen.add(m[1]);
-        out.push([m[1], m[2]]);
-      }
-      return out;
-    };
+    const readScreenCards = async (): Promise<string[][]> => readScreenCardsLight(page);
 
     const firstCnpjOf = (rows: string[][]) => (rows[0] ? normalizeCnpjDigits(rows[0][0]) : "");
 
@@ -1310,7 +1381,6 @@ async function scrapeCasaDosDadosLeadsOnce(
           .catch(() => false);
         if (blocked) continue;
 
-        await btn.scrollIntoViewIfNeeded().catch(() => null);
         await btn.click({ force: true, timeout: 8000 }).catch(() => null);
 
         // Prioridade: número da página ativa (aria-current / is-current). CNPJ = fallback leve.
@@ -1331,30 +1401,14 @@ async function scrapeCasaDosDadosLeadsOnce(
           .then(() => true)
           .catch(() => false);
 
-        if (!changed && previousFirstCnpj) {
-          const okByCnpj = await page
-            .waitForFunction(
-              (prev: string) => {
-                const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+/m;
-                const text = String(document.body?.innerText || "");
-                const m = text.match(re);
-                if (!m) return false;
-                return m[1].replace(/\D/g, "") !== prev;
-              },
-              previousFirstCnpj,
-              { timeout: 8000 },
-            )
-            .then(() => true)
-            .catch(() => false);
-          if (okByCnpj) return true;
-        } else if (changed) {
-          await page
-            .locator("body")
-            .filter({ hasText: /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/ })
-            .first()
-            .waitFor({ timeout: 10000 })
-            .catch(() => null);
+        if (changed) {
+          await waitForPortalSearchResults(page, 10000);
           return true;
+        }
+
+        if (previousFirstCnpj) {
+          const nextFirst = await readFirstVisibleCnpjDigits(page);
+          if (nextFirst && nextFirst !== previousFirstCnpj) return true;
         }
       }
       return false;
@@ -1441,8 +1495,10 @@ async function scrapeCasaDosDadosLeadsOnce(
       );
       while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
         guard += 1;
-        const prevRows = await readScreenCards();
-        const prev = firstCnpjOf(prevRows);
+        onProgress?.(
+          `Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`,
+        );
+        const prev = await readFirstVisibleCnpjDigits(page);
         const ok = await goToNextResultsPage(prev, current);
         if (!ok) return false;
         if (await tryClickPage()) return true;

@@ -3446,3 +3446,5 @@ Palavras-chave para buscar:
 - 2026-08-23: Leads PJ soft-cap **2** Chromiums + stagger 20s (múltiplas extrações sem derrubar container). Marker `leads-pj-soft-cap-2`. Env: `CASADOSDADOS_MAX_CONCURRENT_SCRAPES`, `CASADOSDADOS_SCRAPE_STAGGER_MS`. LOG: `doc/LOG-2026-08-23__151123__fix-leads-pj-soft-cap-2-stagger.md`
 
 - 2026-08-23: Leads PJ renderer stability v1 (sem software-rasterizer off; sem scroll artificial; paginação por aria-current; sem added===0 break). Marker leads-pj-renderer-stability-v1. LOG: doc/LOG-2026-08-23__154500__fix-leads-pj-renderer-stability-v1.md
+
+- 2026-08-23: Leads PJ renderer stability v2 (sem body.filter hasText; leitura leve pós-Pesquisar). Marker leads-pj-renderer-stability-v2.
