@@ -1499,7 +1499,23 @@ class WabaLeadsCnpjService {
                     // Pool insuficiente para o lote do dia → raspa o portal (até o teto da UI).
                     // O teto diário só vale no takeFromPool (enriquecimento), não na cópia.
                     if (mustResumeScrape || (!freshList.scrapeCheckpoint && pendingCount < dailyLimit && !(ckpt && resumeFromPage > portalUiMaxPage))) {
-                        const scrapeResumeFrom = Math.max(1, Math.round(Number(freshList.scrapeCheckpoint?.nextPage || 1) || 1));
+                        const scrapeResumeRaw = Math.max(1, Math.round(Number(freshList.scrapeCheckpoint?.nextPage || 1) || 1));
+                        // Pool vazio + checkpoint > 1 = retomada fantasma (ex.: pág. 11 sem CNPJs arquivados).
+                        // Força página 1 — dedupe no mergePool/used evita duplicata se reaparecer card.
+                        const scrapeResumeFrom = pendingCount === 0 && scrapeResumeRaw > 1 ? 1 : scrapeResumeRaw;
+                        if (scrapeResumeFrom !== scrapeResumeRaw) {
+                            patch({
+                                status: "scraping",
+                                scrapeCheckpoint: {
+                                    nextPage: 1,
+                                    portalTotal: freshList.scrapeCheckpoint?.portalTotal ?? null,
+                                    pagesToFetch: freshList.scrapeCheckpoint?.pagesToFetch ?? null,
+                                    collectedCount: 0,
+                                },
+                                progressMessage: `Abrindo Portal: checkpoint pág. ${scrapeResumeRaw} ignorado (pool vazio) — copiando desde a página 1…`,
+                                error: null,
+                            });
+                        }
                         const scrapeFilters = {
                             ...list.filters,
                             maxPages: Number(list.filters.maxPages) > 0 ? Number(list.filters.maxPages) : 0,
@@ -1754,7 +1770,10 @@ class WabaLeadsCnpjService {
             const attempts = Math.max(0, Math.round(Number(current?.scrapeReconnectAttempts || 0) || 0));
             const maxReconnect = Math.max(1, Math.round(Number(process.env.CASADOSDADOS_JOB_RECONNECTS || 20) || 20));
             // Sem checkpoint explícito: estima pela quantidade já no pool (20 cards/página).
-            const resumePage = Math.max(1, ckptPage || Math.floor(archived / 20) + 1);
+            // Pool 0 → sempre página 1 (nunca inventar pág. 8/11 e travar no posicionamento Xvfb).
+            const resumePage = archived <= 0
+                ? 1
+                : Math.max(1, ckptPage || Math.floor(archived / 20) + 1);
             const wasPortalScrape = Boolean(current) &&
                 current.source === "portal" &&
                 !current.skipPortalScrape &&

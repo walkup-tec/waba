@@ -1176,66 +1176,209 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             const n = Number(String(active?.textContent || "").trim());
             return Number.isFinite(n) && n > 0 ? n : 1;
         });
-        /**
-         * Paginação real (Oruga/Bulma) — evidência probe:
-         * <nav data-oruga="pagination">
-         *   <button class="pagination-next" aria-label="Pŕoxima página"> (ícone, sem texto "Próxima")
-         *   <button class="pagination-link" aria-label="Página 2.">2</button>
-         * </nav>
-         * 20 cards/página; UI só até botão "1000" (ver resolvePortalUiMaxPage).
-         */
         const portalUiMaxPage = resolvePortalUiMaxPage();
+        /** Lê página ativa Oruga (is-current / aria-current). */
+        const waitUntilPage = async (expectedPage, timeoutMs) => {
+            const deadline = Date.now() + Math.max(500, timeoutMs);
+            while (Date.now() < deadline) {
+                if (options?.shouldAbort?.())
+                    return false;
+                const cur = await readCurrentPageNumber();
+                if (cur === expectedPage)
+                    return true;
+                await page.waitForTimeout(200);
+            }
+            return false;
+        };
+        /**
+         * Salto de página via DOM nativo (sem locator Playwright) — mais estável no Xvfb.
+         * Oruga: botões aria-label "Página N." / texto N / input numérico se existir.
+         */
+        const jumpToPageDom = async (target) => {
+            const clicked = await page
+                .evaluate((t) => {
+                const nav = document.querySelector('nav[data-oruga="pagination"]');
+                if (!nav)
+                    return { ok: false, how: "no-nav" };
+                const tryClick = (el) => {
+                    if (!el)
+                        return false;
+                    const b = el;
+                    if (b.disabled || b.classList.contains("is-disabled") || b.getAttribute("aria-disabled") === "true") {
+                        return false;
+                    }
+                    b.click();
+                    return true;
+                };
+                const buttons = Array.from(nav.querySelectorAll("button.pagination-link, button"));
+                for (const b of buttons) {
+                    const label = String(b.getAttribute("aria-label") || "");
+                    const text = String(b.textContent || "").trim();
+                    if (label === `Página ${t}.` ||
+                        label === `Página ${t}` ||
+                        new RegExp(`Página\\s+${t}\\b`, "i").test(label) ||
+                        text === String(t)) {
+                        if (tryClick(b))
+                            return { ok: true, how: "button" };
+                    }
+                }
+                const input = nav.querySelector('input[type="number"], input.input, input[class*="pagination"]');
+                if (input) {
+                    input.focus();
+                    input.value = String(t);
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                    input.dispatchEvent(new Event("change", { bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }));
+                    return { ok: true, how: "input" };
+                }
+                return { ok: false, how: "miss" };
+            }, target)
+                .catch(() => ({ ok: false, how: "err" }));
+            if (!clicked.ok)
+                return false;
+            return waitUntilPage(target, 12000);
+        };
+        /**
+         * Avança 1 página: DOM click no next + confirmação por número OU 1º CNPJ.
+         * Timeout duro por passo (não fica 60s+ parado).
+         */
         const goToNextResultsPage = async (previousFirstCnpj, fromPage) => {
             const targetPage = fromPage + 1;
-            const nextCandidates = [
-                'nav[data-oruga="pagination"] button.pagination-next:not([disabled]):not(.is-disabled)',
-                "button.pagination-next.pagination-link:not([disabled]):not(.is-disabled)",
-                `nav[data-oruga="pagination"] button.pagination-link[aria-label="Página ${targetPage}."]`,
-                `nav[data-oruga="pagination"] button.pagination-link[aria-label*="Página ${targetPage}"]`,
-                `nav[data-oruga="pagination"] ul.pagination-list >> button.pagination-link:text-is("${targetPage}")`,
-            ];
-            for (const sel of nextCandidates) {
-                const btn = page.locator(sel).first();
-                if ((await btn.count()) === 0)
-                    continue;
-                if (!(await btn.isVisible().catch(() => false)))
-                    continue;
-                const blocked = await btn
-                    .evaluate((el) => {
-                    const b = el;
-                    return (Boolean(b.disabled) ||
-                        b.classList.contains("is-disabled") ||
-                        b.getAttribute("aria-disabled") === "true");
-                })
-                    .catch(() => false);
-                if (blocked)
-                    continue;
-                await btn.click({ force: true, timeout: 8000 }).catch(() => null);
-                // Prioridade: número da página ativa (aria-current / is-current). CNPJ = fallback leve.
-                const changed = await page
-                    .waitForFunction((expectedPage) => {
-                    const active = document.querySelector('nav[data-oruga="pagination"] button.pagination-link.is-current,' +
-                        'nav[data-oruga="pagination"] button[aria-current="true"],' +
-                        'nav[data-oruga="pagination"] button[aria-current="page"]');
-                    const n = Number(String(active?.textContent || "").trim());
-                    return Number.isFinite(n) && n === expectedPage;
-                }, targetPage, { timeout: 15000 })
-                    .then(() => true)
-                    .catch(() => false);
-                if (changed) {
-                    await waitForPortalSearchResults(page, 60000, (msg) => {
-                        sessionPhase = msg;
-                        markPhase(msg);
-                    });
-                    return true;
+            markPhase(`Copiando: avançando paginação ${fromPage} → ${targetPage}…`);
+            const clicked = await page
+                .evaluate(() => {
+                const nav = document.querySelector('nav[data-oruga="pagination"]');
+                if (!nav)
+                    return false;
+                const next = nav.querySelector("button.pagination-next:not([disabled]):not(.is-disabled)") ||
+                    nav.querySelector('button[aria-label*="Pŕoxima"], button[aria-label*="Próxima"], button[aria-label*="proxima" i]');
+                if (!next)
+                    return false;
+                if (next.disabled ||
+                    next.classList.contains("is-disabled") ||
+                    next.getAttribute("aria-disabled") === "true") {
+                    return false;
                 }
-                if (previousFirstCnpj) {
+                next.click();
+                return true;
+            })
+                .catch(() => false);
+            if (!clicked) {
+                // Fallback Playwright selectors (curto).
+                const sels = [
+                    'nav[data-oruga="pagination"] button.pagination-next:not([disabled]):not(.is-disabled)',
+                    "button.pagination-next.pagination-link:not([disabled]):not(.is-disabled)",
+                ];
+                let any = false;
+                for (const sel of sels) {
+                    const btn = page.locator(sel).first();
+                    if ((await btn.count()) === 0)
+                        continue;
+                    if (!(await btn.isVisible().catch(() => false)))
+                        continue;
+                    await btn.click({ force: true, timeout: 4000 }).catch(() => null);
+                    any = true;
+                    break;
+                }
+                if (!any)
+                    return false;
+            }
+            const pageOk = await waitUntilPage(targetPage, 10000);
+            if (pageOk) {
+                await waitForPortalSearchResults(page, 12000, (msg) => {
+                    sessionPhase = msg;
+                    markPhase(msg);
+                });
+                return true;
+            }
+            if (previousFirstCnpj) {
+                const deadline = Date.now() + 8000;
+                while (Date.now() < deadline) {
                     const nextFirst = await readFirstVisibleCnpjDigits(page);
                     if (nextFirst && nextFirst !== previousFirstCnpj)
                         return true;
+                    await page.waitForTimeout(250);
                 }
             }
             return false;
+        };
+        /**
+         * Posiciona na página alvo. Se falhar, retorna false (caller reinicia da 1 — processo não para).
+         */
+        const goToResultsPage = async (targetPage) => {
+            const target = Math.max(1, Math.round(targetPage || 1));
+            if (target > portalUiMaxPage)
+                return false;
+            let current = await readCurrentPageNumber();
+            if (current === target)
+                return true;
+            markPhase(`Copiando: salto DOM para página ${target} (UI em ${current})…`);
+            if (await jumpToPageDom(target))
+                return true;
+            // Clica no maior botão numérico visível ≤ target (aproxima sem 1→2→3… lento).
+            for (let hop = 0; hop < 8; hop += 1) {
+                current = await readCurrentPageNumber();
+                if (current === target)
+                    return true;
+                if (current > target)
+                    break;
+                const best = await page
+                    .evaluate((t) => {
+                    const nav = document.querySelector('nav[data-oruga="pagination"]');
+                    if (!nav)
+                        return 0;
+                    let bestN = 0;
+                    for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                        const text = String(b.textContent || "").trim();
+                        const n = Number(text);
+                        if (!Number.isFinite(n) || n <= 0 || n > t)
+                            continue;
+                        const btn = b;
+                        if (btn.disabled || btn.classList.contains("is-disabled"))
+                            continue;
+                        if (n > bestN)
+                            bestN = n;
+                    }
+                    if (bestN <= 0)
+                        return 0;
+                    for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                        if (String(b.textContent || "").trim() === String(bestN)) {
+                            b.click();
+                            return bestN;
+                        }
+                    }
+                    return 0;
+                }, target)
+                    .catch(() => 0);
+                if (best > 0) {
+                    markPhase(`Copiando: aproximando via botão ${best} (alvo ${target})…`);
+                    await waitUntilPage(best, 10000);
+                    if (await jumpToPageDom(target))
+                        return true;
+                    continue;
+                }
+                break;
+            }
+            // Último recurso: poucos "next" com teto baixo (não 25×60s).
+            const maxSteps = Math.max(1, Math.min(12, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 12) || 12)));
+            let guard = 0;
+            while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
+                if (options?.shouldAbort?.())
+                    return false;
+                guard += 1;
+                markPhase(`Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`);
+                const prev = await readFirstVisibleCnpjDigits(page);
+                const ok = await goToNextResultsPage(prev, current);
+                if (!ok) {
+                    markPhase(`Copiando: paginação não avançou no passo ${guard} (UI ${current}) — abortando posicionamento.`);
+                    return false;
+                }
+                if (await jumpToPageDom(target))
+                    return true;
+            }
+            current = await readCurrentPageNumber();
+            return current === target;
         };
         let pagesToFetch = maxPagesCap > 0 ? maxPagesCap : Number.MAX_SAFE_INTEGER;
         if (portalTotal != null) {
@@ -1254,66 +1397,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             markPhase(`Copiando: teto da UI do portal = página ${portalUiMaxPage} (além disso a paginação não avança).`);
             pagesToFetch = portalUiMaxPage;
         }
-        const goToResultsPage = async (targetPage) => {
-            const target = Math.max(1, Math.round(targetPage || 1));
-            if (target > portalUiMaxPage)
-                return false;
-            let current = await readCurrentPageNumber();
-            if (current === target)
-                return true;
-            const tryClickPage = async () => {
-                const candidates = [
-                    page.locator(`nav[data-oruga="pagination"] button.pagination-link[aria-label="Página ${target}."]`),
-                    page.locator(`nav[data-oruga="pagination"]`).getByRole("button", {
-                        name: String(target),
-                        exact: true,
-                    }),
-                ];
-                for (const loc of candidates) {
-                    try {
-                        if (!(await loc.count()) || !(await loc.first().isVisible()))
-                            continue;
-                        await loc.first().click({ force: true });
-                        const changed = await page
-                            .waitForFunction((expectedPage) => {
-                            const curBtn = document.querySelector('nav[data-oruga="pagination"] button.pagination-link.is-current,' +
-                                'nav[data-oruga="pagination"] button[aria-current="true"],' +
-                                'nav[data-oruga="pagination"] button[aria-current="page"]');
-                            const curNum = Number(String(curBtn?.textContent || "").trim());
-                            return Number.isFinite(curNum) && curNum === expectedPage;
-                        }, target, { timeout: 15000 })
-                            .then(() => true)
-                            .catch(() => false);
-                        if (changed)
-                            return true;
-                    }
-                    catch {
-                        /* tenta próximo seletor */
-                    }
-                }
-                return false;
-            };
-            if (await tryClickPage())
-                return true;
-            // Evita recovery destrutivo: clicar 1→2→…→300 numa sessão nova sobrecarrega o renderer.
-            let guard = 0;
-            const maxSteps = Math.max(1, Math.min(25, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 25) || 25)));
-            while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
-                guard += 1;
-                markPhase(`Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`);
-                const prev = await readFirstVisibleCnpjDigits(page);
-                const ok = await goToNextResultsPage(prev, current);
-                if (!ok)
-                    return false;
-                if (await tryClickPage())
-                    return true;
-            }
-            current = await readCurrentPageNumber();
-            if (current === target)
-                return true;
-            throw new Error(`Retomada limitada: não posicionou na página ${target} em ${maxSteps} passos (UI em ${current}). Checkpoint/pool mantidos.`);
-        };
-        const startPage = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
+        let startPage = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
         if (startPage > pagesToFetch) {
             markPhase(startPage > portalUiMaxPage
                 ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
@@ -1325,7 +1409,17 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             markPhase(`Copiando: posicionando na página ${startPage} (retomada)…`);
             const positioned = await goToResultsPage(startPage);
             if (!positioned) {
-                throw new Error(`Não foi possível posicionar na página ${startPage} para retomar a extração.`);
+                // Garantia: não para o processo — copia desde a 1 (dedupe no pool).
+                markPhase(`Copiando: falha ao posicionar pág. ${startPage} no Xvfb — reiniciando da página 1 (sem parar a extração)…`);
+                startPage = 1;
+                const backHome = await jumpToPageDom(1);
+                if (!backHome) {
+                    const cur = await readCurrentPageNumber();
+                    if (cur !== 1) {
+                        markPhase(`Copiando: UI na pág. ${cur}; seguindo daqui para não interromper (checkpoint será atualizado).`);
+                        startPage = cur;
+                    }
+                }
             }
         }
         for (let pageIndex = startPage; pageIndex <= pagesToFetch; pageIndex += 1) {

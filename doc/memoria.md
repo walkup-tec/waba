@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 18:05 — Leads PJ: paginação Xvfb anti-parada
+
+- Checkpoint fantasma (pool 0) → página 1; salto DOM + fallback copiar desde 1.
+- Marker `DEPLOY-2026-08-23-1805-leads-pj-pagination-xvfb-v4` (precisa `dist/` no Git).
+- LOG: `doc/LOG-2026-08-23__180500__leads-pj-pagination-xvfb-v4.md`
+
 ## 2026-08-23 17:15 — Leads PJ: Chromium aberto até fim da cópia
 
 - Stall close (90s) desligado por padrão — era ele que matava a sessão em produção (≠ V02).
