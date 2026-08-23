@@ -224,6 +224,8 @@ export type ScrapeCasaDosDadosOptions = {
   resumeFromPage?: number;
   /** Chamado após cada página lida com sucesso (antes de avançar). */
   onPageCheckpoint?: (ckpt: ScrapePageCheckpoint) => void | Promise<void>;
+  /** Se retornar true, fecha o Chromium e aborta (stall / exclusão). */
+  shouldAbort?: () => boolean;
 };
 
 export function readCasaDosDadosCredentials(): { email: string; password: string } {
@@ -1232,6 +1234,12 @@ async function scrapeCasaDosDadosLeadsOnce(
     console.error(`[Leads PJ] BROWSER_DISCONNECTED page=${resumeFromPageLog}`);
   });
 
+  const abortWatch = setInterval(() => {
+    if (!options?.shouldAbort?.()) return;
+    console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
+    void browser.close().catch(() => undefined);
+  }, 4000);
+
   try {
     const context = await browser.newContext({
       locale: "pt-BR",
@@ -1628,6 +1636,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     }
     return [...collected.values()];
   } finally {
+    clearInterval(abortWatch);
     await browser.close().catch(() => undefined);
   }
 }

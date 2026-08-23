@@ -1696,8 +1696,15 @@ export class WabaLeadsCnpjService {
               maxPages: Number(list.filters.maxPages) > 0 ? Number(list.filters.maxPages) : 0,
             };
             const campaignFilters = list.filters;
+            // Garante checkpoint desde o início: crash antes da 1ª página ainda retoma (pág. 1 ou pool).
             patch({
               status: "scraping",
+              scrapeCheckpoint: {
+                nextPage: scrapeResumeFrom,
+                portalTotal: freshList.scrapeCheckpoint?.portalTotal ?? null,
+                pagesToFetch: freshList.scrapeCheckpoint?.pagesToFetch ?? null,
+                collectedCount: pendingCount,
+              },
               progressMessage:
                 scrapeResumeFrom > 1
                   ? `Abrindo Portal: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; registros já copiados mantidos)…`
@@ -1706,8 +1713,14 @@ export class WabaLeadsCnpjService {
             });
             let releaseScrapeSlot: (() => void) | null = null;
             let scraped: WabaLeadsCnpjLead[] = [];
+            const stallMs = Math.max(
+              45_000,
+              Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STALL_MS || 90_000) || 90_000),
+            );
+            let lastProgressAt = Date.now();
             try {
               releaseScrapeSlot = await acquirePortalScrapeSlot(listId, (info) => {
+                lastProgressAt = Date.now();
                 if (info.phase === "stagger") {
                   const secs = Math.max(1, Math.ceil((info.waitMs || 0) / 1000));
                   patch({
@@ -1727,11 +1740,19 @@ export class WabaLeadsCnpjService {
               scraped = await scrapeCasaDosDadosLeads(
                 scrapeFilters,
                 (message) => {
+                  lastProgressAt = Date.now();
                   patch({ progressMessage: message });
                 },
                 {
                   resumeFromPage: scrapeResumeFrom,
+                  shouldAbort: () => {
+                    if (cancelledJobs.has(listId) || isCampaignPurged(campaignKey)) return true;
+                    if (!this.repository.getById(listId)) return true;
+                    if (Date.now() - lastProgressAt > stallMs) return true;
+                    return false;
+                  },
                   onPageCheckpoint: async (c) => {
+                    lastProgressAt = Date.now();
                     if (
                       cancelledJobs.has(listId) ||
                       isCampaignPurged(campaignKey) ||
@@ -1952,14 +1973,34 @@ export class WabaLeadsCnpjService {
         1,
         Math.round(Number(process.env.CASADOSDADOS_JOB_RECONNECTS || 20) || 20),
       );
+      // Sem checkpoint explícito: estima pela quantidade já no pool (20 cards/página).
+      const resumePage = Math.max(
+        1,
+        ckptPage || Math.floor(archived / 20) + 1,
+      );
+      const wasPortalScrape =
+        Boolean(current) &&
+        current!.source === "portal" &&
+        !current!.skipPortalScrape &&
+        (current!.status === "scraping" ||
+          ckptPage >= 1 ||
+          /Target crashed|SCRAPE_ABORT|Chromium|página|portal|copi|pesquis|raspagem|stall|closed/i.test(
+            msg,
+          ));
 
-      // Interrupção com checkpoint: mantém status scraping + pool; agenda nova tentativa.
-      if (current && ckptPage >= 1 && attempts < maxReconnect) {
+      // Crash/travamento na cópia: mantém pool + checkpoint e retoma da página certa.
+      if (current && wasPortalScrape && attempts < maxReconnect) {
         patch({
           status: "scraping",
           error: msg,
+          scrapeCheckpoint: {
+            nextPage: resumePage,
+            portalTotal: current.scrapeCheckpoint?.portalTotal ?? null,
+            pagesToFetch: current.scrapeCheckpoint?.pagesToFetch ?? null,
+            collectedCount: archived,
+          },
           scrapeReconnectAttempts: attempts + 1,
-          progressMessage: `Interrompido: ${msg.slice(0, 160)}. Retomando da página ${ckptPage} em ~15s (arquivados: ${archived.toLocaleString("pt-BR")}; tentativa ${attempts + 1}/${maxReconnect})…`,
+          progressMessage: `Interrompido: ${msg.slice(0, 140)}. Retomando da página ${resumePage} em ~15s (arquivados: ${archived.toLocaleString("pt-BR")}; tentativa ${attempts + 1}/${maxReconnect})…`,
         });
         setTimeout(() => {
           const again = this.repository.getById(listId);
@@ -1972,8 +2013,8 @@ export class WabaLeadsCnpjService {
         status: "failed",
         error: msg,
         progressMessage:
-          ckptPage >= 1
-            ? `Falhou após ${attempts} reconexão(ões). Checkpoint página ${ckptPage} e ${archived.toLocaleString("pt-BR")} CNPJ(s) no pool foram mantidos.`
+          wasPortalScrape
+            ? `Falhou após ${attempts} reconexão(ões). Checkpoint página ${resumePage} e ${archived.toLocaleString("pt-BR")} CNPJ(s) no pool foram mantidos.`
             : null,
       });
     }

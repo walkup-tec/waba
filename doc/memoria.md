@@ -3452,3 +3452,5 @@ Palavras-chave para buscar:
 - 2026-08-23: Leads PJ guard raspagem parcial (não enriquecer 140 de ~8k). Endpoint resume-scrape. Marker leads-pj-partial-scrape-guard.
 
 - 2026-08-23: Excluir Leads PJ purga slot Chromium + bloqueia recreate do pool. Marker leads-pj-delete-purge-v1.
+
+- 2026-08-23: Leads PJ retoma cópia após crash/stall (checkpoint + watchdog 90s). Marker leads-pj-resume-on-stall-v1.

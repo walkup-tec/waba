@@ -1037,6 +1037,12 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     browser.on("disconnected", () => {
         console.error(`[Leads PJ] BROWSER_DISCONNECTED page=${resumeFromPageLog}`);
     });
+    const abortWatch = setInterval(() => {
+        if (!options?.shouldAbort?.())
+            return;
+        console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
+        void browser.close().catch(() => undefined);
+    }, 4000);
     try {
         const context = await browser.newContext({
             locale: "pt-BR",
@@ -1356,6 +1362,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         return [...collected.values()];
     }
     finally {
+        clearInterval(abortWatch);
         await browser.close().catch(() => undefined);
     }
 }
