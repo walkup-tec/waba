@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 17:15 — Leads PJ: Chromium aberto até fim da cópia
+
+- Stall close (90s) desligado por padrão — era ele que matava a sessão em produção (≠ V02).
+- Keepalive + pulse em “aguardando resultados”; fecha browser só no fim da cópia ou exclusão.
+- Marker `DEPLOY-2026-08-23-leads-pj-keep-browser-until-copy-v1`
+- LOG: `doc/LOG-2026-08-23__171500__leads-pj-keep-browser-until-copy.md`
+
 ## 2026-08-21 18:02 — Troca automática de instância na campanha
 
 - Tick substitui desconectado por conectado habilitado para disparos; Proxy off no que sai / on no que entra.

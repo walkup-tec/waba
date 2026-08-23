@@ -1713,9 +1713,15 @@ export class WabaLeadsCnpjService {
             });
             let releaseScrapeSlot: (() => void) | null = null;
             let scraped: WabaLeadsCnpjLead[] = [];
+            /**
+             * NÃO fechar Chromium por “stall” de progresso (default off).
+             * Em produção o watchdog de 90s matava a sessão no meio de CNAE/Pesquisar
+             * e reabria login+filtros em loop — oposto do V02 (1 janela até copiar tudo).
+             * Opt-in diagnóstico: CASADOSDADOS_SCRAPE_STALL_MS=90000
+             */
             const stallMs = Math.max(
-              45_000,
-              Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STALL_MS || 90_000) || 90_000),
+              0,
+              Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STALL_MS || 0) || 0),
             );
             let lastProgressAt = Date.now();
             try {
@@ -1746,9 +1752,10 @@ export class WabaLeadsCnpjService {
                 {
                   resumeFromPage: scrapeResumeFrom,
                   shouldAbort: () => {
+                    // Só fecha navegador se o usuário excluiu / job sumiu — nunca por demora.
                     if (cancelledJobs.has(listId) || isCampaignPurged(campaignKey)) return true;
                     if (!this.repository.getById(listId)) return true;
-                    if (Date.now() - lastProgressAt > stallMs) return true;
+                    if (stallMs > 0 && Date.now() - lastProgressAt > stallMs) return true;
                     return false;
                   },
                   onPageCheckpoint: async (c) => {

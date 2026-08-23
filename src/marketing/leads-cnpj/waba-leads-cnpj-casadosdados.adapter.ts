@@ -424,46 +424,59 @@ async function readFirstVisibleCnpjDigits(page: PageLike): Promise<string> {
   return normalizeCnpjDigits(raw);
 }
 
-async function waitForPortalSearchResults(page: PageLike, timeoutMs = 45000): Promise<void> {
-  if (typeof page.waitForFunction === "function") {
-    await page
-      .waitForFunction(
-        () => {
-          const nav = document.querySelector('nav[data-oruga="pagination"]');
-          if (nav) return true;
-          const root =
-            (document.querySelector("main") as HTMLElement | null) ||
-            (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
-            document.body;
-          const sample = String(root?.innerText || "").slice(0, 8000);
-          return (
-            /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
-            /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
-          );
-        },
-        undefined,
-        { timeout: timeoutMs },
-      )
-      .catch(() => null);
-    return;
-  }
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const ready = await page.evaluate(() => {
-      const nav = document.querySelector('nav[data-oruga="pagination"]');
-      if (nav) return true;
-      const root =
-        (document.querySelector("main") as HTMLElement | null) ||
-        (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
-        document.body;
-      const sample = String(root?.innerText || "").slice(0, 8000);
-      return (
-        /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
-        /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
-      );
-    });
-    if (ready) return;
-    await page.waitForTimeout(400);
+async function waitForPortalSearchResults(
+  page: PageLike,
+  timeoutMs = 180_000,
+  onProgress?: CasaDosDadosProgress,
+): Promise<void> {
+  const started = Date.now();
+  const pulse = setInterval(() => {
+    const sec = Math.max(1, Math.round((Date.now() - started) / 1000));
+    onProgress?.(`Pesquisando: aguardando resultados… (${sec}s — navegador permanece aberto)`);
+  }, 15_000);
+  try {
+    if (typeof page.waitForFunction === "function") {
+      await page
+        .waitForFunction(
+          () => {
+            const nav = document.querySelector('nav[data-oruga="pagination"]');
+            if (nav) return true;
+            const root =
+              (document.querySelector("main") as HTMLElement | null) ||
+              (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+              document.body;
+            const sample = String(root?.innerText || "").slice(0, 8000);
+            return (
+              /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
+              /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
+            );
+          },
+          undefined,
+          { timeout: timeoutMs },
+        )
+        .catch(() => null);
+      return;
+    }
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const ready = await page.evaluate(() => {
+        const nav = document.querySelector('nav[data-oruga="pagination"]');
+        if (nav) return true;
+        const root =
+          (document.querySelector("main") as HTMLElement | null) ||
+          (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+          document.body;
+        const sample = String(root?.innerText || "").slice(0, 8000);
+        return (
+          /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
+          /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
+        );
+      });
+      if (ready) return;
+      await page.waitForTimeout(400);
+    }
+  } finally {
+    clearInterval(pulse);
   }
 }
 
@@ -1234,11 +1247,23 @@ async function scrapeCasaDosDadosLeadsOnce(
     console.error(`[Leads PJ] BROWSER_DISCONNECTED page=${resumeFromPageLog}`);
   });
 
+  /** Fecha Chromium só se shouldAbort (exclusão do usuário) — não por demora. */
   const abortWatch = setInterval(() => {
     if (!options?.shouldAbort?.()) return;
     console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
     void browser.close().catch(() => undefined);
   }, 4000);
+
+  /** Mantém progresso vivo sem matar a sessão (UI + lastProgressAt se stall opt-in). */
+  let sessionPhase = "Abrindo Portal…";
+  const markPhase = (message: string) => {
+    sessionPhase = message;
+    onProgress?.(message);
+  };
+  const sessionKeepAlive = setInterval(() => {
+    const base = String(sessionPhase || "Copiando").replace(/\s*\(\d+s[^)]*\)\s*$/i, "").trim();
+    onProgress?.(`${base} (navegador aberto — persistindo)`);
+  }, 25_000);
 
   try {
     const context = await browser.newContext({
@@ -1260,7 +1285,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       await page.bringToFront().catch(() => undefined);
     }
 
-    onProgress?.(
+    markPhase(
       headless
         ? "Abrindo Portal: autenticando no Casa dos Dados…"
         : "Abrindo Portal: janela aberta — autenticando no Casa dos Dados…",
@@ -1271,13 +1296,16 @@ async function scrapeCasaDosDadosLeadsOnce(
     await loginCasaDosDadosPortal(page, email, password);
     await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
 
-    onProgress?.("Pesquisando: abrindo tela de pesquisa…");
+    markPhase("Pesquisando: abrindo tela de pesquisa…");
     await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
     await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
     await page.waitForTimeout(1500);
 
-    onProgress?.("Pesquisando: aplicando filtros (CNAE, situação, celular)…");
-    await applyFilters(page as unknown as PageLike, filters, onProgress);
+    markPhase("Pesquisando: aplicando filtros (CNAE, situação, celular)…");
+    await applyFilters(page as unknown as PageLike, filters, (msg) => {
+      sessionPhase = msg;
+      onProgress?.(msg);
+    });
 
     const searchBtn = page
       .locator(
@@ -1301,36 +1329,49 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
     });
 
-    // Garante modal CNAE fechado antes de pesquisar.
-    const fecharCnae = page.locator('button:has-text("Fechar")').first();
-    if ((await fecharCnae.count()) > 0 && (await fecharCnae.isVisible().catch(() => false))) {
-      await fecharCnae.click().catch(() => undefined);
-      await page.waitForTimeout(300);
+    // Garante modal CNAE fechado antes de pesquisar (timeout curto — não travar a sessão).
+    markPhase("Pesquisando: fechando modal CNAE (se aberto)…");
+    try {
+      await Promise.race([
+        (async () => {
+          const fecharCnae = page.locator('button:has-text("Fechar")').first();
+          if ((await fecharCnae.count()) > 0 && (await fecharCnae.isVisible().catch(() => false))) {
+            await fecharCnae.click().catch(() => undefined);
+            await page.waitForTimeout(300);
+          }
+        })(),
+        page.waitForTimeout(4000),
+      ]);
+    } catch {
+      /* segue para Pesquisar */
     }
 
-    onProgress?.("Pesquisando: clicando Pesquisar…");
+    markPhase("Pesquisando: clicando Pesquisar…");
     if ((await searchBtn.count()) > 0) {
       // Evita scrollIntoView sob Xvfb (layout thrash → Target crashed).
       await searchBtn.click({ timeout: 15000, force: true }).catch(async () => {
         await searchBtn.click({ timeout: 15000 });
       });
     } else {
-      onProgress?.("Botão Pesquisar não encontrado — tentando Enter…");
+      markPhase("Botão Pesquisar não encontrado — tentando Enter…");
       await page.keyboard.press("Enter").catch(() => undefined);
     }
 
-    onProgress?.("Pesquisando: aguardando resultados…");
-    await waitForPortalSearchResults(page, 45000);
+    markPhase("Pesquisando: aguardando resultados…");
+    await waitForPortalSearchResults(page, 180_000, (msg) => {
+      sessionPhase = msg;
+      onProgress?.(msg);
+    });
 
     // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
     const pageText = await readResultsSampleText(page, 12_000);
     const portalTotal = interceptedTotal ?? parseResultTotalFromText(pageText);
     if (portalTotal != null) {
-      onProgress?.(
+      markPhase(
         `Pesquisando: retornou ${portalTotal.toLocaleString("pt-BR")} empresas. Iniciando cópia…`,
       );
     } else {
-      onProgress?.("Copiando: lendo cards na tela (CNPJ + Razão Social)…");
+      markPhase("Copiando: lendo cards na tela (CNPJ + Razão Social)…");
     }
 
     const collected = new Map<string, WabaLeadsCnpjLead>();
@@ -1410,7 +1451,10 @@ async function scrapeCasaDosDadosLeadsOnce(
           .catch(() => false);
 
         if (changed) {
-          await waitForPortalSearchResults(page, 10000);
+          await waitForPortalSearchResults(page, 60_000, (msg) => {
+            sessionPhase = msg;
+            markPhase(msg);
+          });
           return true;
         }
 
@@ -1430,17 +1474,17 @@ async function scrapeCasaDosDadosLeadsOnce(
         maxPagesCap > 0
           ? Math.min(maxPagesCap, totalPagesAvailable)
           : totalPagesAvailable;
-      onProgress?.(
+      markPhase(
         `Portal: ${portalTotal.toLocaleString("pt-BR")} empresas · ${PORTAL_PAGE_SIZE}/página · ${totalPagesAvailable.toLocaleString("pt-BR")} página(s) — copiando ${maxPagesCap > 0 ? `até ${pagesToFetch}` : "todas"}…`,
       );
     } else if (maxPagesCap <= 0) {
-      onProgress?.(
+      markPhase(
         `Copiando: total do portal não lido — avançando página a página até acabar (sem teto)…`,
       );
     }
     // UI Oruga não navega além de portalUiMaxPage — evita loop Chromium em 1001+.
     if (pagesToFetch > portalUiMaxPage) {
-      onProgress?.(
+      markPhase(
         `Copiando: teto da UI do portal = página ${portalUiMaxPage} (além disso a paginação não avança).`,
       );
       pagesToFetch = portalUiMaxPage;
@@ -1503,7 +1547,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       );
       while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
         guard += 1;
-        onProgress?.(
+        markPhase(
           `Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`,
         );
         const prev = await readFirstVisibleCnpjDigits(page);
@@ -1520,7 +1564,7 @@ async function scrapeCasaDosDadosLeadsOnce(
 
     const startPage = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
     if (startPage > pagesToFetch) {
-      onProgress?.(
+      markPhase(
         startPage > portalUiMaxPage
           ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
           : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`,
@@ -1529,7 +1573,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       return [];
     }
     if (startPage > 1) {
-      onProgress?.(`Copiando: posicionando na página ${startPage} (retomada)…`);
+      markPhase(`Copiando: posicionando na página ${startPage} (retomada)…`);
       const positioned = await goToResultsPage(startPage);
       if (!positioned) {
         throw new Error(
@@ -1541,7 +1585,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     for (let pageIndex = startPage; pageIndex <= pagesToFetch; pageIndex += 1) {
       const totalLabel =
         portalTotal != null ? ` de ${portalTotal.toLocaleString("pt-BR")}` : "";
-      onProgress?.(
+      markPhase(
         `Copiando: página ${pageIndex}/${pagesToFetch === Number.MAX_SAFE_INTEGER ? "?" : pagesToFetch}${totalLabel} (${collected.size.toLocaleString("pt-BR")} CNPJs nesta sessão)…`,
       );
 
@@ -1558,7 +1602,7 @@ async function scrapeCasaDosDadosLeadsOnce(
           added += 1;
         }
       }
-      onProgress?.(
+      markPhase(
         `Copiando: página ${pageIndex} +${added} novos / ${rows.length} cards (sessão ${collected.size.toLocaleString("pt-BR")}).`,
       );
 
@@ -1577,7 +1621,7 @@ async function scrapeCasaDosDadosLeadsOnce(
         // Página vazia no meio da coleta ≠ fim do portal (UI glitch / posição errada).
         // Encerrar aqui zerava a retomada e ia enriquecer só o pool parcial (ex.: 140 de ~8070).
         if (pageIndex >= pagesToFetch || pageIndex >= portalUiMaxPage) {
-          onProgress?.(`Copiando: página ${pageIndex} sem cards — encerrando paginação.`);
+          markPhase(`Copiando: página ${pageIndex} sem cards — encerrando paginação.`);
           break;
         }
         throw new Error(
@@ -1588,19 +1632,19 @@ async function scrapeCasaDosDadosLeadsOnce(
       // sessão e ainda haver conteúdo novo nas páginas seguintes.
 
       if (nextPage > portalUiMaxPage) {
-        onProgress?.(
+        markPhase(
           `Copiando: atingiu o teto da UI (página ${portalUiMaxPage}) — encerrando raspagem do portal.`,
         );
         break;
       }
 
-      onProgress?.(`Copiando: avançando para a página ${pageIndex + 1}…`);
+      markPhase(`Copiando: avançando para a página ${pageIndex + 1}…`);
       const advanced = await goToNextResultsPage(pageFirst, pageIndex);
       if (!advanced) {
         const stillOn = await readCurrentPageNumber();
         // No teto da UI: next costuma falhar — encerra limpo (não reconecta em loop).
         if (pageIndex >= portalUiMaxPage || stillOn >= portalUiMaxPage) {
-          onProgress?.(
+          markPhase(
             `Copiando: paginação parou na página ${stillOn} (teto UI ${portalUiMaxPage}) — encerrando sem reconectar.`,
           );
           break;
@@ -1626,17 +1670,18 @@ async function scrapeCasaDosDadosLeadsOnce(
       );
     }
     if (portalTotal != null) {
-      onProgress?.(
+      markPhase(
         `Coletados ${collected.size.toLocaleString("pt-BR")} nesta sessão (portal ~${portalTotal.toLocaleString("pt-BR")}), página a página.`,
       );
     } else {
-      onProgress?.(
+      markPhase(
         `Coletados ${collected.size.toLocaleString("pt-BR")} CNPJ(s) + Razão Social nesta sessão (página a página).`,
       );
     }
     return [...collected.values()];
   } finally {
     clearInterval(abortWatch);
+    clearInterval(sessionKeepAlive);
     await browser.close().catch(() => undefined);
   }
 }
