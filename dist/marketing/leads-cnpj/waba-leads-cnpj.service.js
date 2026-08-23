@@ -483,6 +483,69 @@ class WabaLeadsCnpjService {
         return toSummary(updated, downloads);
     }
     /**
+     * Interrompe enrich/queued parcial e volta a copiar o portal.
+     * Devolve os CNPJs do lote ao pool e retoma a partir da página estimada (pool/20 + 1).
+     * Uso: raspagem encerrou cedo (ex. 140 de ~8070) e já tinha ido para ReceitaWS.
+     */
+    resumeIncompletePortalScrape(id) {
+        const listId = String(id || "").trim();
+        const list = this.repository.getById(listId);
+        if (!list)
+            throw new Error("Lista não encontrada.");
+        if (list.source !== "portal" || list.skipPortalScrape) {
+            throw new Error("Só listas do portal podem retomar a cópia.");
+        }
+        if (!["enriching", "queued", "failed", "ready", "scraping"].includes(list.status)) {
+            throw new Error(`Status ${list.status} não permite retomar a raspagem.`);
+        }
+        const campaignKey = String(list.campaignKey || buildCampaignKey(campaignBaseName(list.name), list.source)).trim();
+        const baseName = campaignBaseName(list.name);
+        cancelledJobs.add(listId);
+        const leads = Array.isArray(list.leads) ? list.leads : [];
+        const used = this.repository.collectUsedCnpjs(campaignKey);
+        // CNPJs do lote atual voltam ao pool (ainda não são “usados” de listas prontas anteriores).
+        for (const lead of leads)
+            used.delete((0, waba_leads_cnpj_repository_1.normalizeCnpjDigits)(lead.cnpj));
+        if (leads.length) {
+            this.repository.mergePool({
+                key: campaignKey,
+                name: baseName,
+                source: "portal",
+                filters: list.filters,
+                items: leads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
+                usedCnpjs: used,
+                persist: "flush",
+            });
+        }
+        const pending = this.repository.getPool(campaignKey)?.pending.length || 0;
+        const portalUiMaxPage = (0, waba_leads_cnpj_casadosdados_adapter_1.resolvePortalUiMaxPage)();
+        const nextPage = Math.min(portalUiMaxPage, Math.max(1, Math.floor(pending / 20) + 1));
+        cancelledJobs.delete(listId);
+        const updated = this.repository.update({
+            ...list,
+            status: "scraping",
+            leads: [],
+            leadCount: 0,
+            generatedAt: null,
+            exportFileName: null,
+            listaIndex: null,
+            downloadedAt: null,
+            error: null,
+            scrapeCheckpoint: {
+                nextPage,
+                portalTotal: list.scrapeCheckpoint?.portalTotal ?? null,
+                pagesToFetch: list.scrapeCheckpoint?.pagesToFetch ?? null,
+                collectedCount: pending,
+            },
+            scrapeReconnectAttempts: 0,
+            progressMessage: `Retomando cópia do portal na página ${nextPage} (pool ${pending.toLocaleString("pt-BR")})…`,
+            updatedAt: new Date().toISOString(),
+        }, { persist: "flush" });
+        this.enqueueJob(updated.id);
+        const downloads = this.listSummaries().find((s) => s.id === updated.id)?.campaignDownloads || [];
+        return toSummary(updated, downloads, { poolPending: pending });
+    }
+    /**
      * Finaliza o lote de enriquecimento agora (mesmo incompleto): gera Lista NN,
      * devolve CNPJs não enriquecidos ao pool e inicia a próxima campanha hoje.
      */
@@ -1481,6 +1544,10 @@ class WabaLeadsCnpjService {
                             });
                         }
                         const afterMerge = this.repository.getPool(campaignKey)?.pending.length || 0;
+                        // Retomada sem cards novos: não limpar checkpoint nem seguir para enrich parcial.
+                        if (scrapeResumeFrom > 1 && scraped.length === 0) {
+                            throw new Error(`Raspagem retomada da página ${scrapeResumeFrom} não trouxe cards — mantendo pool (${afterMerge}) e checkpoint.`);
+                        }
                         patch({
                             scrapeCheckpoint: null,
                             scrapeReconnectAttempts: 0,

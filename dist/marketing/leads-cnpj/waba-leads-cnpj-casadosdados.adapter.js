@@ -1311,8 +1311,13 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (pageIndex >= pagesToFetch)
                 break;
             if (rows.length === 0) {
-                onProgress?.(`Copiando: página ${pageIndex} sem cards — encerrando paginação.`);
-                break;
+                // Página vazia no meio da coleta ≠ fim do portal (UI glitch / posição errada).
+                // Encerrar aqui zerava a retomada e ia enriquecer só o pool parcial (ex.: 140 de ~8070).
+                if (pageIndex >= pagesToFetch || pageIndex >= portalUiMaxPage) {
+                    onProgress?.(`Copiando: página ${pageIndex} sem cards — encerrando paginação.`);
+                    break;
+                }
+                throw new Error(`Página ${pageIndex} sem cards com páginas restantes (meta ${pagesToFetch}) — reconectar sem encerrar a raspagem.`);
             }
             // NÃO encerrar por added===0: página pode repetir CNPJs já em `collected` desta
             // sessão e ainda haver conteúdo novo nas páginas seguintes.
@@ -1334,7 +1339,12 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             }
         }
         await context.close();
-        if (!collected.size && startPage <= 1) {
+        // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
+        // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
+        if (!collected.size) {
+            if (startPage > 1) {
+                throw new Error(`Retomada na página ${startPage} não leu CNPJ/Razão Social — reconectar mantendo checkpoint/pool.`);
+            }
             throw new Error("Robô não leu CNPJ/Razão Social na tela. Confirme login, filtros e se os cards aparecem (formato: 00.000.000/0000-00 - NOME). Se Cloudflare bloquear, use CASADOSDADOS_HEADLESS=0.");
         }
         if (portalTotal != null) {

@@ -3448,3 +3448,5 @@ Palavras-chave para buscar:
 - 2026-08-23: Leads PJ renderer stability v1 (sem software-rasterizer off; sem scroll artificial; paginação por aria-current; sem added===0 break). Marker leads-pj-renderer-stability-v1. LOG: doc/LOG-2026-08-23__154500__fix-leads-pj-renderer-stability-v1.md
 
 - 2026-08-23: Leads PJ renderer stability v2 (sem body.filter hasText; leitura leve pós-Pesquisar). Marker leads-pj-renderer-stability-v2.
+
+- 2026-08-23: Leads PJ guard raspagem parcial (não enriquecer 140 de ~8k). Endpoint resume-scrape. Marker leads-pj-partial-scrape-guard.

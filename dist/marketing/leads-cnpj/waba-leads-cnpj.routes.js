@@ -118,6 +118,19 @@ const registerWabaLeadsCnpjRoutes = (app) => {
             });
         }
     });
+    app.post("/admin/marketing/leads-cnpj/:id/resume-scrape", (req, res) => {
+        if (!rejectNonMaster(req, res))
+            return;
+        try {
+            const item = service.resumeIncompletePortalScrape(String(req.params.id || ""));
+            return res.status(200).json({ item });
+        }
+        catch (error) {
+            return res.status(400).json({
+                error: error instanceof Error ? error.message : "Não foi possível retomar a raspagem do portal.",
+            });
+        }
+    });
     app.delete("/admin/marketing/leads-cnpj/:id", (req, res) => {
         if (!rejectNonMaster(req, res))
             return;
