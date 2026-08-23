@@ -1042,32 +1042,34 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
             if (attempt > 1) {
-                onProgress?.(`Abrindo Portal: reconectando (tentativa ${attempt}/${maxAttempts}) — retomando página ${resumeFrom}…`);
+                onProgress?.(`Abrindo Portal: Chromium caiu — reabrindo (tentativa ${attempt}/${maxAttempts}) na página ${resumeFrom}…`);
             }
             else if (resumeFrom > 1) {
                 onProgress?.(`Abrindo Portal: retomando extração na página ${resumeFrom}…`);
             }
             return await scrapeCasaDosDadosLeadsOnce(filters, onProgress, {
+                ...options,
                 resumeFromPage: resumeFrom,
                 onPageCheckpoint: async (ckpt) => {
                     resumeFrom = Math.max(1, ckpt.nextPage);
                     await options?.onPageCheckpoint?.(ckpt);
                 },
+                shouldAbort: options?.shouldAbort,
             });
         }
         catch (error) {
             lastErr = error;
             const crashed = isChromiumTargetCrash(error);
             const msg = error instanceof Error ? error.message : String(error);
-            onProgress?.(crashed
-                ? `Copiando: Chromium interrompido — recuperando da página ${resumeFrom}…`
-                : `Abrindo Portal: falha operacional — retomando página ${resumeFrom} (${msg.slice(0, 120)})…`);
+            // Só reabre Chromium se o processo/renderer morreu.
+            // Falha de página vazia / paginação NÃO deve refazer CNAE.
+            if (!crashed) {
+                throw error instanceof Error ? error : new Error(msg);
+            }
+            onProgress?.(`Copiando: Chromium interrompido — recuperando da página ${resumeFrom}…`);
             if (attempt >= maxAttempts)
                 break;
-            const delayMs = crashed
-                ? Math.min(8000, 1000 * attempt)
-                : Math.min(20000, 2000 * attempt);
-            await new Promise((r) => setTimeout(r, delayMs));
+            await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * attempt)));
         }
     }
     throw lastErr instanceof Error
@@ -1505,10 +1507,24 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 }
             }
         }
+        let emptyStreak = 0;
         for (let pageIndex = startPage; pageIndex <= pagesToFetch; pageIndex += 1) {
+            if (options?.shouldAbort?.()) {
+                throw new Error("__MLC_JOB_ABORTED__");
+            }
             const totalLabel = portalTotal != null ? ` de ${portalTotal.toLocaleString("pt-BR")}` : "";
             markPhase(`Copiando: página ${pageIndex}/${pagesToFetch === Number.MAX_SAFE_INTEGER ? "?" : pagesToFetch}${totalLabel} (${collected.size.toLocaleString("pt-BR")} CNPJs nesta sessão)…`);
-            const rows = await readScreenCards();
+            let rows = await readScreenCards();
+            // Página vazia: relê na MESMA sessão (não fecha Chromium / não refaz CNAE).
+            if (rows.length === 0) {
+                for (let reread = 1; reread <= 3; reread += 1) {
+                    markPhase(`Copiando: página ${pageIndex} sem cards — relendo ${reread}/3 (mesma sessão)…`);
+                    await page.waitForTimeout(700);
+                    rows = await readScreenCards();
+                    if (rows.length)
+                        break;
+                }
+            }
             const pageFirst = firstCnpjOf(rows);
             let added = 0;
             const pageLeads = [];
@@ -1535,31 +1551,45 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (pageIndex >= pagesToFetch)
                 break;
             if (rows.length === 0) {
-                // Página vazia no meio da coleta ≠ fim do portal (UI glitch / posição errada).
-                // Encerrar aqui zerava a retomada e ia enriquecer só o pool parcial (ex.: 140 de ~8070).
+                emptyStreak += 1;
                 if (pageIndex >= pagesToFetch || pageIndex >= portalUiMaxPage) {
-                    markPhase(`Copiando: página ${pageIndex} sem cards — encerrando paginação.`);
+                    markPhase(`Copiando: página ${pageIndex} sem cards — fim da paginação.`);
                     break;
                 }
-                throw new Error(`Página ${pageIndex} sem cards com páginas restantes (meta ${pagesToFetch}) — reconectar sem encerrar a raspagem.`);
+                if (emptyStreak >= 3) {
+                    markPhase(`Copiando: 3 páginas vazias seguidas (até pág. ${pageIndex}) — encerrando cópia na mesma sessão (${collected.size} CNPJs).`);
+                    break;
+                }
+                markPhase(`Copiando: página ${pageIndex} vazia — avançando para ${nextPage} sem fechar o navegador…`);
             }
-            // NÃO encerrar por added===0: página pode repetir CNPJs já em `collected` desta
-            // sessão e ainda haver conteúdo novo nas páginas seguintes.
+            else {
+                emptyStreak = 0;
+            }
             if (nextPage > portalUiMaxPage) {
                 markPhase(`Copiando: atingiu o teto da UI (página ${portalUiMaxPage}) — encerrando raspagem do portal.`);
                 break;
             }
-            markPhase(`Copiando: avançando para a página ${pageIndex + 1}…`);
-            const advanced = await goToNextResultsPage(pageFirst, pageIndex);
+            markPhase(`Copiando: avançando para a página ${nextPage}…`);
+            let advanced = await goToNextResultsPage(pageFirst, pageIndex);
+            if (!advanced) {
+                advanced = await jumpToPageDom(nextPage);
+            }
+            if (!advanced) {
+                for (let retry = 1; retry <= 3; retry += 1) {
+                    markPhase(`Copiando: retry paginação ${pageIndex}→${nextPage} (${retry}/3) — mesma sessão…`);
+                    await page.waitForTimeout(600);
+                    advanced =
+                        (await goToNextResultsPage(pageFirst, pageIndex)) ||
+                            (await jumpToPageDom(nextPage));
+                    if (advanced)
+                        break;
+                }
+            }
             if (!advanced) {
                 const stillOn = await readCurrentPageNumber();
-                // No teto da UI: next costuma falhar — encerra limpo (não reconecta em loop).
-                if (pageIndex >= portalUiMaxPage || stillOn >= portalUiMaxPage) {
-                    markPhase(`Copiando: paginação parou na página ${stillOn} (teto UI ${portalUiMaxPage}) — encerrando sem reconectar.`);
-                    break;
-                }
-                // Lança para o wrapper reconectar e retomar em nextPage (já checkpointado).
-                throw new Error(`Paginação interrompida após página ${pageIndex} (UI em ${stillOn}; não avançou para ${pageIndex + 1}).`);
+                // Não reconecta: encerra com o que já copiou (Chromium só fecha no finally).
+                markPhase(`Copiando: não avançou de ${pageIndex} (UI em ${stillOn}) — mantendo sessão até aqui (${collected.size} CNPJs). Sem reabrir portal/CNAE.`);
+                break;
             }
         }
         await context.close();

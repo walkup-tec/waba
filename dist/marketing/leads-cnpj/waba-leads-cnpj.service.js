@@ -1648,6 +1648,26 @@ class WabaLeadsCnpjService {
                         if (scrapeResumeFrom > 1 && scraped.length === 0) {
                             throw new Error(`Raspagem retomada da página ${scrapeResumeFrom} não trouxe cards — mantendo pool (${afterMerge}) e checkpoint.`);
                         }
+                        const liveAfter = this.repository.getById(listId);
+                        const ckNext = Math.max(0, Math.round(Number(liveAfter?.scrapeCheckpoint?.nextPage || 0) || 0));
+                        // Cópia incompleta (parou antes do teto UI): mantém checkpoint e reagenda
+                        // sem tratar como “raspagem concluída → enrich”.
+                        const copyIncomplete = ckNext >= 2 && ckNext <= portalUiMaxPage && afterMerge > 0;
+                        if (copyIncomplete) {
+                            patch({
+                                status: "scraping",
+                                scrapeReconnectAttempts: 0,
+                                progressMessage: `Copiando: sessão pausou na pág. ${ckNext} — ${afterMerge.toLocaleString("pt-BR")} no pool; retomando cópia (sem limpar checkpoint)…`,
+                                error: null,
+                            });
+                            setTimeout(() => {
+                                const again = this.repository.getById(listId);
+                                if (again?.status === "scraping" && !cancelledJobs.has(listId)) {
+                                    this.enqueueJob(listId);
+                                }
+                            }, 8000);
+                            return;
+                        }
                         patch({
                             scrapeCheckpoint: null,
                             scrapeReconnectAttempts: 0,

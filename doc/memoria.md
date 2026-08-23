@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 19:55 — Leads PJ: uma sessão até copiar as páginas
+
+- Sem reconectar/refazer CNAE em página vazia; só reabre Chromium se crash.
+- Marker `DEPLOY-2026-08-23-1955-leads-pj-single-session-copy-v7`
+- LOG: `doc/LOG-2026-08-23__195500__leads-pj-single-session-copy-v7.md`
+
 ## 2026-08-23 19:35 — Leads PJ: pular filtros vazios
 
 - Pós-CNAE só aplica campos/switches ativos; sem esperar filtros não usados.
