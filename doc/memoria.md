@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 19:35 — Leads PJ: pular filtros vazios
+
+- Pós-CNAE só aplica campos/switches ativos; sem esperar filtros não usados.
+- Marker `DEPLOY-2026-08-23-1935-leads-pj-skip-empty-filters-v6`
+- LOG: `doc/LOG-2026-08-23__193500__leads-pj-skip-empty-filters-v6.md`
+
 ## 2026-08-23 18:25 — Leads PJ: CNAE sem hang
 
 - Fases + timeout curto; falha não trava — segue filtros/Pesquisar.

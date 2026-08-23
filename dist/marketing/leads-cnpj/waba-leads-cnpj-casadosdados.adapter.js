@@ -767,65 +767,106 @@ async function selectAtividadePrincipalCnaeWithTimeout(page, rawCode, onProgress
 async function setCheckboxByLabel(page, label, checked) {
     const needle = label.toLowerCase();
     // Só checkbox DENTRO do label — never preceding/following (pega opção de autocomplete CNAE).
+    // Timeout curto: xpath no Xvfb não pode segurar a sessão 45s.
     const box = page
         .locator(`xpath=//label[contains(${xpathLower()}, '${needle}')]//input[@type='checkbox']`)
         .first();
-    if ((await box.count()) === 0)
+    const n = await box.count().catch(() => 0);
+    if (!n)
         return;
-    if (!(await box.isVisible().catch(() => false)))
+    const visible = await box.isVisible().catch(() => false);
+    if (!visible)
         return;
     const isChecked = await box.isChecked().catch(() => false);
-    if (checked && !isChecked)
-        await box.check();
-    if (!checked && isChecked)
-        await box.uncheck();
+    if (checked && !isChecked) {
+        await box.check({ force: true }).catch(() => undefined);
+    }
+    if (!checked && isChecked) {
+        await box.uncheck().catch(() => undefined);
+    }
 }
 /**
  * Switches Oruga/Buefy: input[type=checkbox][role=switch] vem ANTES do label
  * (não dentro). Clique no .switch / label / input — evidência etapa 4b.
+ * Sem fallback Playwright lento: se o evaluate não achar, segue (filtro opcional).
  */
 async function setToggleByLabel(page, label, enabled) {
     if (!enabled)
         return;
-    // Sem dismissBlocking aqui — applyFilters já fecha overlay no início.
-    // Chamar dismiss a cada switch multiplica xpath/evaluate e estressa o renderer.
     const needle = label.toLowerCase().replace(/"/g, "");
-    const ok = await page.evaluate(({ needle, want }) => {
-        const labels = Array.from(document.querySelectorAll("label"));
-        const lab = labels.find((el) => {
-            const t = String(el.textContent || "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            return t === needle || (t.includes(needle) && t.length < 90);
-        });
-        if (!lab)
-            return false;
-        let box = (lab.previousElementSibling &&
-            lab.previousElementSibling.matches?.('input[type="checkbox"]')
-            ? lab.previousElementSibling
-            : null) ||
-            lab.parentElement?.querySelector('input[type="checkbox"]') ||
-            lab.querySelector('input[type="checkbox"]');
-        if (!box)
-            return false;
-        if (Boolean(box.checked) === want)
+    await Promise.race([
+        page.evaluate(({ needle, want }) => {
+            const labels = Array.from(document.querySelectorAll("label"));
+            const lab = labels.find((el) => {
+                const t = String(el.textContent || "")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .toLowerCase();
+                return t === needle || (t.includes(needle) && t.length < 90);
+            });
+            if (!lab)
+                return false;
+            const box = (lab.previousElementSibling &&
+                lab.previousElementSibling.matches?.('input[type="checkbox"]')
+                ? lab.previousElementSibling
+                : null) ||
+                lab.parentElement?.querySelector('input[type="checkbox"]') ||
+                lab.querySelector('input[type="checkbox"]');
+            if (!box)
+                return false;
+            if (Boolean(box.checked) === want)
+                return true;
+            const control = lab.closest(".switch") ||
+                lab.parentElement;
+            (control || lab).click();
+            if (Boolean(box.checked) !== want)
+                box.click();
             return true;
-        const control = lab.closest(".switch") || lab.parentElement;
-        (control || lab).click();
-        if (Boolean(box.checked) !== want)
-            box.click();
-        return Boolean(box.checked) === want || true;
-    }, { needle, want: true });
-    if (ok)
+        }, { needle, want: true }),
+        page.waitForTimeout(2500).then(() => false),
+    ]).catch(() => false);
+}
+/** Liga vários switches numa única ida ao DOM — só labels ativos. */
+async function enableTogglesFast(page, labels) {
+    const needles = labels
+        .map((l) => String(l || "").toLowerCase().replace(/"/g, "").trim())
+        .filter(Boolean);
+    if (!needles.length)
         return;
-    // Fallback Playwright (casos raros)
-    const lower = xpathLower();
-    const textPath = `(//label|//span|//p|//strong|//div[contains(@class,'switch') or contains(@class,'control')])[contains(${lower}, '${needle}') and string-length(normalize-space(.)) < 90]`;
-    const labelEl = page.locator(`xpath=${textPath}`).first();
-    if ((await labelEl.count()) > 0 && (await labelEl.isVisible().catch(() => false))) {
-        await labelEl.click({ timeout: 5000 }).catch(() => undefined);
-    }
+    await Promise.race([
+        page.evaluate((needlesIn) => {
+            const labels = Array.from(document.querySelectorAll("label"));
+            for (const needle of needlesIn) {
+                const lab = labels.find((el) => {
+                    const t = String(el.textContent || "")
+                        .replace(/\s+/g, " ")
+                        .trim()
+                        .toLowerCase();
+                    return t === needle || (t.includes(needle) && t.length < 90);
+                });
+                if (!lab)
+                    continue;
+                const box = (lab.previousElementSibling &&
+                    lab.previousElementSibling.matches?.('input[type="checkbox"]')
+                    ? lab.previousElementSibling
+                    : null) ||
+                    lab.parentElement?.querySelector('input[type="checkbox"]') ||
+                    lab.querySelector('input[type="checkbox"]');
+                if (!box)
+                    continue;
+                if (box.checked)
+                    continue;
+                const control = lab.closest(".switch") ||
+                    lab.parentElement;
+                (control || lab).click();
+                if (!box.checked) {
+                    box.checked = true;
+                    box.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+            }
+        }, needles),
+        page.waitForTimeout(4000),
+    ]).catch(() => undefined);
 }
 async function applyFilters(page, filters, onProgress) {
     const step = (label) => {
@@ -842,50 +883,63 @@ async function applyFilters(page, filters, onProgress) {
         const select = page
             .locator(`xpath=//label[contains(., 'Tipo de Pesquisa')]/following::select[1] | //label[contains(., 'Tipo de Pesquisa')]/following::*[contains(@class,'select')][1]//input`)
             .first();
-        if ((await select.count()) > 0) {
+        if ((await select.count().catch(() => 0)) > 0) {
             try {
                 await select.selectOption(filters.tipoPesquisa);
             }
             catch {
-                await select.fill(filters.tipoPesquisa);
+                await select.fill(filters.tipoPesquisa).catch(() => undefined);
             }
         }
     }
     await fillByLabel(page, ["cnpj raiz", "somente os 8"], String(filters.cnpjRaiz || "").trim());
     const situacoes = Array.isArray(filters.situacaoCadastral) ? filters.situacaoCadastral : [];
-    for (const situacao of ["Ativa", "Baixada", "Inapta", "Nula", "Suspensa"]) {
-        await setCheckboxByLabel(page, situacao.toLowerCase(), situacoes.includes(situacao));
+    // Só liga as pedidas; não percorre uncheck de todas (xpath ×5 no Xvfb).
+    for (const situacao of situacoes) {
+        await setCheckboxByLabel(page, String(situacao).toLowerCase(), true);
     }
     const cnaeCode = String(filters.atividadePrincipalCnae || "").replace(/\D/g, "");
     step(cnaeCode
         ? `selecionando CNAE ${cnaeCode}…`
         : "aplicando filtros (CNAE, situação, celular)…");
-    // Jitter leve sob carga paralela (não serializa — só desfaz pico no mesmo ms).
     if (cnaeCode) {
-        await page.waitForTimeout(150 + Math.floor(Math.random() * 400));
+        await page.waitForTimeout(100 + Math.floor(Math.random() * 200));
     }
     const cnaeOk = await selectAtividadePrincipalCnaeWithTimeout(page, String(filters.atividadePrincipalCnae || "").trim(), onProgress, Math.max(20000, Math.min(35000, Math.round(Number(process.env.CASADOSDADOS_CNAE_TIMEOUT_MS || 25000) || 25000))));
     if (cnaeCode && !cnaeOk) {
-        step(`CNAE ${cnaeCode} pulado após falha — demais filtros seguem (extração não para)…`);
+        step(`CNAE ${cnaeCode} pulado após falha — demais filtros ativos seguem…`);
     }
     else if (cnaeCode && cnaeOk) {
-        step(`CNAE ${cnaeCode} ok — aplicando demais filtros…`);
+        step(`CNAE ${cnaeCode} ok — aplicando só filtros ativos…`);
     }
-    if (filters.incluirAtividadeSecundaria) {
-        await setToggleByLabel(page, "incluir atividade secundária", true);
+    // Fecha residual do modal CNAE antes dos switches.
+    await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll("button")).find((b) => /^Fechar$/i.test(String(b.textContent || "").trim()));
+        btn?.click();
+    });
+    await page.waitForTimeout(150);
+    // Apenas preenchimentos com valor (fillByLabel já no-op se vazio — mas evitamos step falso).
+    const textJobs = [
+        { labels: ["natureza jurídica", "código ou nome da natureza"], value: String(filters.naturezaJuridica || "").trim() },
+        { labels: ["estado (uf)", "estado", "selecione o estado"], value: String(filters.estadoUf || "").trim() },
+        { labels: ["município", "municipio", "selecione um município"], value: String(filters.municipio || "").trim() },
+        { labels: ["bairro"], value: String(filters.bairro || "").trim() },
+        { labels: ["cep"], value: String(filters.cep || "").trim() },
+        { labels: ["ddd"], value: String(filters.ddd || "").trim() },
+        { labels: ["telefone"], value: String(filters.telefone || "").trim() },
+        { labels: ["data de abertura - a partir de", "a partir de"], value: String(filters.dataAberturaDe || "").trim() },
+        { labels: ["data de abertura - até"], value: String(filters.dataAberturaAte || "").trim() },
+        { labels: ["capital social - valor mínimo", "valor mínimo"], value: String(filters.capitalSocialMin || "").trim() },
+        { labels: ["capital social - valor máximo", "valor máximo"], value: String(filters.capitalSocialMax || "").trim() },
+        { labels: ["porte da empresa", "selecione o porte"], value: String(filters.porteEmpresa || "").trim() },
+    ];
+    const activeTexts = textJobs.filter((j) => j.value);
+    if (activeTexts.length) {
+        step(`preenchendo ${activeTexts.length} campo(s) de texto…`);
+        for (const job of activeTexts) {
+            await fillByLabel(page, job.labels, job.value);
+        }
     }
-    step("aplicando filtros (natureza, UF, contatos)…");
-    await fillByLabel(page, ["natureza jurídica", "código ou nome da natureza"], String(filters.naturezaJuridica || "").trim());
-    await fillByLabel(page, ["estado (uf)", "estado", "selecione o estado"], String(filters.estadoUf || "").trim());
-    await fillByLabel(page, ["município", "municipio", "selecione um município"], String(filters.municipio || "").trim());
-    await fillByLabel(page, ["bairro"], String(filters.bairro || "").trim());
-    await fillByLabel(page, ["cep"], String(filters.cep || "").trim());
-    await fillByLabel(page, ["ddd"], String(filters.ddd || "").trim());
-    await fillByLabel(page, ["telefone"], String(filters.telefone || "").trim());
-    await fillByLabel(page, ["data de abertura - a partir de", "a partir de"], String(filters.dataAberturaDe || "").trim());
-    await fillByLabel(page, ["data de abertura - até"], String(filters.dataAberturaAte || "").trim());
-    await fillByLabel(page, ["capital social - valor mínimo", "valor mínimo"], String(filters.capitalSocialMin || "").trim());
-    await fillByLabel(page, ["capital social - valor máximo", "valor máximo"], String(filters.capitalSocialMax || "").trim());
     if (filters.empresasExcluidasMei) {
         await setToggleByLabel(page, "empresas excluídas do mei", true);
         await fillByLabel(page, ["excluídas do mei"], String(filters.excluidasMeiDe || "").trim());
@@ -893,19 +947,42 @@ async function applyFilters(page, filters, onProgress) {
     if (filters.empresasExcluidasSimples) {
         await setToggleByLabel(page, "empresas excluídas do simples", true);
     }
-    await fillByLabel(page, ["porte da empresa", "selecione o porte"], String(filters.porteEmpresa || "").trim());
-    await setToggleByLabel(page, "somente mei", Boolean(filters.somenteMei));
-    await setToggleByLabel(page, "excluir mei", Boolean(filters.excluirMei));
-    await setToggleByLabel(page, "somente matriz", Boolean(filters.somenteMatriz));
-    await setToggleByLabel(page, "somente filial", Boolean(filters.somenteFilial));
-    await setToggleByLabel(page, "empresas do simples", Boolean(filters.empresasDoSimples));
-    await setToggleByLabel(page, "excluir empresas do simples", Boolean(filters.excluirEmpresasDoSimples));
-    await setToggleByLabel(page, "com contato de telefone", Boolean(filters.comContatoTelefone));
-    await setToggleByLabel(page, "somente fixo", Boolean(filters.somenteFixo));
-    await setToggleByLabel(page, "somente celular", Boolean(filters.somenteCelular));
-    await setToggleByLabel(page, "com e-mail", Boolean(filters.comEmail));
-    await setToggleByLabel(page, "excluir empresas visualizadas", Boolean(filters.excluirEmpresasVisualizadas));
-    await setToggleByLabel(page, 'excluir empresas que no e-mail contenham "contab"', Boolean(filters.excluirEmailContab));
+    // Só switches true — false não toca o DOM.
+    const activeSwitches = [];
+    if (filters.incluirAtividadeSecundaria)
+        activeSwitches.push("incluir atividade secundária");
+    if (filters.somenteMei)
+        activeSwitches.push("somente mei");
+    if (filters.excluirMei)
+        activeSwitches.push("excluir mei");
+    if (filters.somenteMatriz)
+        activeSwitches.push("somente matriz");
+    if (filters.somenteFilial)
+        activeSwitches.push("somente filial");
+    if (filters.empresasDoSimples)
+        activeSwitches.push("empresas do simples");
+    if (filters.excluirEmpresasDoSimples)
+        activeSwitches.push("excluir empresas do simples");
+    if (filters.comContatoTelefone)
+        activeSwitches.push("com contato de telefone");
+    if (filters.somenteFixo)
+        activeSwitches.push("somente fixo");
+    if (filters.somenteCelular)
+        activeSwitches.push("somente celular");
+    if (filters.comEmail)
+        activeSwitches.push("com e-mail");
+    if (filters.excluirEmpresasVisualizadas)
+        activeSwitches.push("excluir empresas visualizadas");
+    if (filters.excluirEmailContab) {
+        activeSwitches.push('excluir empresas que no e-mail contenham "contab"');
+    }
+    if (activeSwitches.length) {
+        step(`ativando ${activeSwitches.length} switch(es): ${activeSwitches.slice(0, 3).join(", ")}${activeSwitches.length > 3 ? "…" : ""}`);
+        await enableTogglesFast(page, activeSwitches);
+    }
+    else {
+        step("sem switches extras — pronto para pesquisar…");
+    }
     step("filtros aplicados — pronto para pesquisar…");
 }
 function parseResultTotalFromText(text) {
