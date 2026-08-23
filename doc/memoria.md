@@ -1,5 +1,16 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 20:15 — Leads PJ state machine v8
+
+- SEARCH mouse.click (sem locator.click); waitForSearchTransition 90s; renderer probe
+- scrapeCompleted gate no enrich; marker `DEPLOY-2026-08-23-2015-leads-pj-state-machine-v8`
+- LOG: `doc/LOG-2026-08-23__201500__leads-pj-state-machine-v8.md`
+
+## 2026-08-23 20:05 — Briefing GPT Leads PJ (10h problemas/soluções)
+
+- Consolidado A–K + prompt pronto para GPT (solução definitiva)
+- LOG: `doc/LOG-2026-08-23__200500__leads-pj-briefing-gpt-definitivo.md`
+
 ## 2026-08-23 19:55 — Leads PJ: uma sessão até copiar as páginas
 
 - Sem reconectar/refazer CNAE em página vazia; só reabre Chromium se crash.

@@ -226,7 +226,42 @@ export type ScrapeCasaDosDadosOptions = {
   onPageCheckpoint?: (ckpt: ScrapePageCheckpoint) => void | Promise<void>;
   /** Se retornar true, fecha o Chromium e aborta (stall / exclusão). */
   shouldAbort?: () => boolean;
+  /** Cookies/localStorage de sessão anterior (recovery sem re-login quando possível). */
+  storageState?: unknown;
+  /** Persistido após login bem-sucedido para o próximo recovery. */
+  onStorageState?: (state: unknown) => void | Promise<void>;
 };
+
+/** Resultado da raspagem — enrich só se scrapeCompleted. */
+export type ScrapeCasaDosDadosResult = {
+  leads: WabaLeadsCnpjLead[];
+  scrapeCompleted: boolean;
+  doneReason: string;
+};
+
+export type ScrapePhase =
+  | "BOOT"
+  | "LOGIN"
+  | "FILTERS"
+  | "SEARCH"
+  | "COPY"
+  | "RECOVER"
+  | "DONE";
+
+export class RendererUnresponsiveError extends Error {
+  readonly code = "RENDERER_UNRESPONSIVE" as const;
+  constructor(stage: string) {
+    super(`Renderer não responde durante ${stage}`);
+    this.name = "RendererUnresponsiveError";
+  }
+}
+
+type SearchTransition =
+  | { kind: "results"; total: number | null }
+  | { kind: "empty" }
+  | { kind: "blocked" }
+  | { kind: "timeout-responsive" }
+  | { kind: "renderer-unresponsive" };
 
 export function readCasaDosDadosCredentials(): { email: string; password: string } {
   const email = String(process.env.CASADOSDADOS_EMAIL || "").trim();
@@ -380,6 +415,13 @@ function isChromiumTargetCrash(error: unknown): boolean {
   );
 }
 
+function requiresBrowserRecovery(error: unknown): boolean {
+  if (error instanceof RendererUnresponsiveError) return true;
+  const anyErr = error as { code?: string } | null;
+  if (anyErr?.code === "RENDERER_UNRESPONSIVE") return true;
+  return isChromiumTargetCrash(error);
+}
+
 /** Texto da área de resultados (evita serializar document.body inteiro via CDP). */
 async function readResultsSampleText(page: PageLike, maxChars = 12_000): Promise<string> {
   return page.evaluate((limit: number) => {
@@ -424,59 +466,216 @@ async function readFirstVisibleCnpjDigits(page: PageLike): Promise<string> {
   return normalizeCnpjDigits(raw);
 }
 
-async function waitForPortalSearchResults(
+async function rendererProbe(page: { evaluate: <T>(fn: () => T) => Promise<T> }, timeoutMs = 3000): Promise<boolean> {
+  return Promise.race([
+    page
+      .evaluate(() => ({
+        href: location.href,
+        title: document.title,
+        readyState: document.readyState,
+      }))
+      .then(() => true)
+      .catch(() => false),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+  ]);
+}
+
+type SearchStateLite = {
+  hasPagination: boolean;
+  currentPage: number | null;
+  searching: boolean;
+  hasCnpj: boolean;
+  totalHint: number | null;
+  emptyHint: boolean;
+  blocked: boolean;
+};
+
+async function readSearchState(page: PageLike): Promise<SearchStateLite> {
+  return page.evaluate(() => {
+    const pagination = document.querySelector('nav[data-oruga="pagination"]');
+    const active = pagination?.querySelector(
+      'button[aria-current="page"], button.pagination-link.is-current, button[aria-current="true"]',
+    );
+    const pageNum = Number(String(active?.textContent || "").trim());
+    const buttons = Array.from(document.querySelectorAll("button"));
+    const searching = buttons.some((b) => {
+      const text = String(b.textContent || "").toLowerCase();
+      return text.includes("pesquisando") || text.includes("carregando");
+    });
+    const root =
+      (document.querySelector("main") as HTMLElement | null) ||
+      (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
+      document.body;
+    const sample = String(root?.innerText || "").slice(0, 6000);
+    const cnpjRe = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/;
+    const totalMatch = sample.match(/retornou\s+([\d.\s]+)\s+empresas/i);
+    let totalHint: number | null = null;
+    if (totalMatch) {
+      const n = Number(String(totalMatch[1]).replace(/\./g, "").replace(/\s/g, ""));
+      if (Number.isFinite(n)) totalHint = n;
+    }
+    const emptyHint =
+      /nenhum resultado|0\s+empresas|não\s+encontr|nao\s+encontr/i.test(sample) && !cnpjRe.test(sample);
+    const blocked =
+      /cloudflare|just a moment|verificação de segurança|checking your browser/i.test(sample) ||
+      /um momento/i.test(document.title || "");
+    return {
+      hasPagination: Boolean(pagination),
+      currentPage: Number.isFinite(pageNum) && pageNum > 0 ? pageNum : null,
+      searching,
+      hasCnpj: cnpjRe.test(sample),
+      totalHint,
+      emptyHint,
+      blocked,
+    };
+  });
+}
+
+async function findSearchButtonPoint(
   page: PageLike,
-  timeoutMs = 180_000,
+): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(() => {
+    const visible = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return (
+        r.width > 0 &&
+        r.height > 0 &&
+        s.display !== "none" &&
+        s.visibility !== "hidden"
+      );
+    };
+    const candidates = Array.from(
+      document.querySelectorAll("button, a, [role='button']"),
+    ) as HTMLElement[];
+    const button = candidates.find((el) => {
+      const text = String(el.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+      return visible(el) && (text === "pesquisar" || text === "buscar");
+    });
+    if (!button) return null;
+    const r = button.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+}
+
+/**
+ * Dispara SEARCH sem locator.click (evita actionability/auto-wait que trava no Xvfb).
+ * AÇÃO ≠ CONFIRMAÇÃO — o caller deve chamar waitForSearchTransition em seguida.
+ */
+async function dispatchSearchClick(
+  page: PageLike & { mouse?: { click: (x: number, y: number) => Promise<void> }; keyboard: { press: (k: string) => Promise<void> } },
   onProgress?: CasaDosDadosProgress,
 ): Promise<void> {
+  const point = await findSearchButtonPoint(page);
+  if (!point) {
+    onProgress?.("SEARCH: botão não encontrado — tentando Enter…");
+    await page.keyboard.press("Enter").catch(() => undefined);
+    return;
+  }
+  onProgress?.(`SEARCH: disparando pesquisa em (${Math.round(point.x)}, ${Math.round(point.y)})…`);
+  if (page.mouse?.click) {
+    await page.mouse.click(point.x, point.y);
+    return;
+  }
+  // Fallback raro: clique DOM sem locator Playwright.
+  await page.evaluate(() => {
+    const visible = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+    };
+    const candidates = Array.from(
+      document.querySelectorAll("button, a, [role='button']"),
+    ) as HTMLElement[];
+    const button = candidates.find((el) => {
+      const text = String(el.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+      return visible(el) && (text === "pesquisar" || text === "buscar");
+    });
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  });
+}
+
+async function waitForSearchTransition(
+  page: PageLike,
+  timeoutMs: number,
+  onProgress?: CasaDosDadosProgress,
+  shouldAbort?: () => boolean,
+): Promise<SearchTransition> {
   const started = Date.now();
-  const pulse = setInterval(() => {
-    const sec = Math.max(1, Math.round((Date.now() - started) / 1000));
-    onProgress?.(`Pesquisando: aguardando resultados… (${sec}s — navegador permanece aberto)`);
-  }, 15_000);
-  try {
-    if (typeof page.waitForFunction === "function") {
-      await page
-        .waitForFunction(
-          () => {
-            const nav = document.querySelector('nav[data-oruga="pagination"]');
-            if (nav) return true;
-            const root =
-              (document.querySelector("main") as HTMLElement | null) ||
-              (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
-              document.body;
-            const sample = String(root?.innerText || "").slice(0, 8000);
-            return (
-              /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
-              /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
-            );
-          },
-          undefined,
-          { timeout: timeoutMs },
-        )
-        .catch(() => null);
-      return;
-    }
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const ready = await page.evaluate(() => {
-        const nav = document.querySelector('nav[data-oruga="pagination"]');
-        if (nav) return true;
-        const root =
-          (document.querySelector("main") as HTMLElement | null) ||
-          (document.querySelector(".section, .container, #app") as HTMLElement | null) ||
-          document.body;
-        const sample = String(root?.innerText || "").slice(0, 8000);
-        return (
-          /retornou\s+[\d.]+\s+empresas/i.test(sample) ||
-          /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+-\s+/.test(sample)
-        );
-      });
-      if (ready) return;
+  const deadline = started + Math.max(5_000, timeoutMs);
+  let lastPulse = 0;
+
+  while (Date.now() < deadline) {
+    if (shouldAbort?.()) throw new Error("__MLC_JOB_ABORTED__");
+
+    const alive = await rendererProbe(page, 3000);
+    if (!alive) return { kind: "renderer-unresponsive" };
+
+    const state = await readSearchState(page).catch(() => null);
+    if (!state) {
+      const stillAlive = await rendererProbe(page, 3000);
+      if (!stillAlive) return { kind: "renderer-unresponsive" };
       await page.waitForTimeout(400);
+      continue;
     }
-  } finally {
-    clearInterval(pulse);
+
+    if (state.blocked) return { kind: "blocked" };
+    if (state.hasPagination || state.hasCnpj || (state.totalHint != null && state.totalHint > 0)) {
+      return { kind: "results", total: state.totalHint };
+    }
+    if (state.emptyHint && !state.searching) return { kind: "empty" };
+
+    const elapsed = Math.round((Date.now() - started) / 1000);
+    const budget = Math.round(timeoutMs / 1000);
+    if (elapsed - lastPulse >= 5) {
+      lastPulse = elapsed;
+      onProgress?.(
+        state.searching
+          ? `SEARCH: portal ainda processando — ${elapsed}s/${budget}s`
+          : `SEARCH: aguardando resposta do portal — ${elapsed}s/${budget}s`,
+      );
+    }
+    await page.waitForTimeout(500);
+  }
+
+  const alive = await rendererProbe(page, 3000);
+  if (!alive) return { kind: "renderer-unresponsive" };
+  const finalState = await readSearchState(page).catch(() => null);
+  if (finalState?.hasPagination || finalState?.hasCnpj) {
+    return { kind: "results", total: finalState.totalHint };
+  }
+  if (finalState?.searching) {
+    // Grace: mais 30s se ainda há loading.
+    const graceDeadline = Date.now() + 30_000;
+    while (Date.now() < graceDeadline) {
+      if (shouldAbort?.()) throw new Error("__MLC_JOB_ABORTED__");
+      if (!(await rendererProbe(page, 3000))) return { kind: "renderer-unresponsive" };
+      const st = await readSearchState(page).catch(() => null);
+      if (st?.hasPagination || st?.hasCnpj) return { kind: "results", total: st.totalHint };
+      if (st && !st.searching) break;
+      const g = Math.round((Date.now() - started) / 1000);
+      onProgress?.(`SEARCH: grace loading — ${g}s`);
+      await page.waitForTimeout(500);
+    }
+  }
+  return { kind: "timeout-responsive" };
+}
+
+/** @deprecated use waitForSearchTransition — mantido para next-page short waits */
+async function waitForPortalSearchResults(
+  page: PageLike,
+  timeoutMs = 12_000,
+  onProgress?: CasaDosDadosProgress,
+): Promise<void> {
+  const result = await waitForSearchTransition(page, timeoutMs, onProgress);
+  if (result.kind === "renderer-unresponsive") {
+    throw new RendererUnresponsiveError("waitForPortalSearchResults");
   }
 }
 
@@ -1190,7 +1389,7 @@ export async function scrapeCasaDosDadosLeads(
   filters: WabaLeadsCnpjFilters,
   onProgress?: CasaDosDadosProgress,
   options?: ScrapeCasaDosDadosOptions,
-): Promise<WabaLeadsCnpjLead[]> {
+): Promise<ScrapeCasaDosDadosResult> {
   // Coleta somente via robô na tela do portal (sem API).
   // Opt-in raro: CASADOSDADOS_USE_API=1 + CASADOSDADOS_API_KEY
   if (String(process.env.CASADOSDADOS_USE_API || "").trim() === "1") {
@@ -1198,7 +1397,8 @@ export async function scrapeCasaDosDadosLeads(
       "./waba-leads-cnpj-casadosdados-api.adapter"
     );
     if (hasCasaDosDadosApiKey()) {
-      return fetchCasaDosDadosLeadsViaApi(filters, onProgress);
+      const leads = await fetchCasaDosDadosLeadsViaApi(filters, onProgress);
+      return { leads, scrapeCompleted: true, doneReason: "api" };
     }
   }
 
@@ -1208,19 +1408,25 @@ export async function scrapeCasaDosDadosLeads(
   );
   let resumeFrom = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
   let lastErr: unknown;
+  let sessionStorageState: unknown = options?.storageState;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       if (attempt > 1) {
         onProgress?.(
-          `Abrindo Portal: Chromium caiu — reabrindo (tentativa ${attempt}/${maxAttempts}) na página ${resumeFrom}…`,
+          `RECOVER: Chromium caiu — tentativa ${attempt}/${maxAttempts} · próxima página ${resumeFrom}`,
         );
       } else if (resumeFrom > 1) {
-        onProgress?.(`Abrindo Portal: retomando extração na página ${resumeFrom}…`);
+        onProgress?.(`BOOT: retomando extração na página ${resumeFrom}…`);
       }
       return await scrapeCasaDosDadosLeadsOnce(filters, onProgress, {
         ...options,
         resumeFromPage: resumeFrom,
+        storageState: sessionStorageState,
+        onStorageState: async (state) => {
+          sessionStorageState = state;
+          await options?.onStorageState?.(state);
+        },
         onPageCheckpoint: async (ckpt) => {
           resumeFrom = Math.max(1, ckpt.nextPage);
           await options?.onPageCheckpoint?.(ckpt);
@@ -1229,15 +1435,13 @@ export async function scrapeCasaDosDadosLeads(
       });
     } catch (error) {
       lastErr = error;
-      const crashed = isChromiumTargetCrash(error);
       const msg = error instanceof Error ? error.message : String(error);
-      // Só reabre Chromium se o processo/renderer morreu.
-      // Falha de página vazia / paginação NÃO deve refazer CNAE.
-      if (!crashed) {
+      // Só reabre Chromium se Target crashed / disconnect / renderer morto.
+      if (!requiresBrowserRecovery(error)) {
         throw error instanceof Error ? error : new Error(msg);
       }
       onProgress?.(
-        `Copiando: Chromium interrompido — recuperando da página ${resumeFrom}…`,
+        `RECOVER: renderer/browser morto — checkpoint página ${resumeFrom} preservado…`,
       );
       if (attempt >= maxAttempts) break;
       await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * attempt)));
@@ -1250,14 +1454,14 @@ export async function scrapeCasaDosDadosLeads(
 }
 
 /**
- * Uma sessão Playwright (login → filtros → páginas). Em falha, o wrapper reconecta
- * a partir de `resumeFromPage` e o service já terá arquivado o pool via checkpoint.
+ * Uma sessão Playwright (LOGIN → FILTERS → SEARCH → COPY). Em HARD_FAILURE, o wrapper
+ * reconecta a partir de `resumeFromPage` (reaplica filtros + SEARCH + jump).
  */
 async function scrapeCasaDosDadosLeadsOnce(
   filters: WabaLeadsCnpjFilters,
   onProgress?: CasaDosDadosProgress,
   options?: ScrapeCasaDosDadosOptions,
-): Promise<WabaLeadsCnpjLead[]> {
+): Promise<ScrapeCasaDosDadosResult> {
   // Cada chamada = 1 Chromium. Concorrência limitada no service (soft-cap 2 + stagger).
   const { email, password } = readCasaDosDadosCredentials();
   const playwright = await loadPlaywright();
@@ -1274,12 +1478,33 @@ async function scrapeCasaDosDadosLeadsOnce(
         slowMoCap,
         Math.max(0, Math.round(Number(process.env.CASADOSDADOS_SLOWMO_MS || 0) || 0)),
       );
+
+  let phase: ScrapePhase = "BOOT";
+  let phaseStartedAt = Date.now();
+  /** Heartbeat = tempo na fase; NÃO fingir progresso. */
+  let sessionPhase = "BOOT…";
+  const setPhase = (next: ScrapePhase, detail: string) => {
+    phase = next;
+    phaseStartedAt = Date.now();
+    const msg = `${next}: ${detail}`;
+    sessionPhase = msg;
+    onProgress?.(msg);
+    console.log(
+      JSON.stringify({
+        event: "LEADS_SCRAPE",
+        phase: next,
+        detail,
+        ts: new Date().toISOString(),
+      }),
+    );
+  };
+
   onProgress?.(
     headless
-      ? "Abrindo Portal: iniciando navegador (headless real)…"
+      ? "BOOT: iniciando Chromium (headless real)…"
       : String(process.env.DISPLAY || "").trim()
-        ? "Abrindo Portal: abrindo Casa dos Dados (janela virtual Xvfb, como V02)…"
-        : "Abrindo Portal: abrindo janela do Casa dos Dados (visível)…",
+        ? "BOOT: abrindo Casa dos Dados (Xvfb)…"
+        : "BOOT: abrindo janela do Casa dos Dados…",
   );
   let browser;
   try {
@@ -1325,25 +1550,28 @@ async function scrapeCasaDosDadosLeadsOnce(
     void browser.close().catch(() => undefined);
   }, 4000);
 
-  /** Mantém progresso vivo sem matar a sessão (UI + lastProgressAt se stall opt-in). */
-  let sessionPhase = "Abrindo Portal…";
+  /** Heartbeat = tempo na fase; NÃO fingir progresso. */
   const markPhase = (message: string) => {
     sessionPhase = message;
+    phaseStartedAt = Date.now();
     onProgress?.(message);
   };
   const sessionKeepAlive = setInterval(() => {
-    const base = String(sessionPhase || "Copiando").replace(/\s*\(\d+s[^)]*\)\s*$/i, "").trim();
-    onProgress?.(`${base} (navegador aberto — persistindo)`);
-  }, 25_000);
+    const elapsed = Math.max(0, Math.round((Date.now() - phaseStartedAt) / 1000));
+    const base = String(sessionPhase || phase).replace(/\s*—\s*\d+s(?:\/\d+s)?\s*$/i, "").trim();
+    onProgress?.(`${base} — ${elapsed}s`);
+  }, 10_000);
 
   try {
-    const context = await browser.newContext({
+    const contextOptions: Record<string, unknown> = {
       locale: "pt-BR",
       // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
       viewport: headless || hasXvfb ? { width: 1440, height: 900 } : null,
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    });
+    };
+    if (options?.storageState) {
+      contextOptions.storageState = options.storageState;
+    }
+    const context = await browser.newContext(contextOptions);
     await context.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
@@ -1356,35 +1584,42 @@ async function scrapeCasaDosDadosLeadsOnce(
       await page.bringToFront().catch(() => undefined);
     }
 
-    markPhase(
-      headless
-        ? "Abrindo Portal: autenticando no Casa dos Dados…"
-        : "Abrindo Portal: janela aberta — autenticando no Casa dos Dados…",
-    );
+    setPhase("LOGIN", "abrindo portal…");
     await gotoWithRetry(page, PORTAL_LOGIN_URL, { waitUntil: "domcontentloaded" });
     await waitPastCloudflare(page, { onProgress, stage: "login" });
-    // Portal real: /entrar → input[name=email] + input[name=senha] + botão "Acessar"
-    await loginCasaDosDadosPortal(page, email, password);
-    await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
 
-    markPhase("Pesquisando: abrindo tela de pesquisa…");
+    const alreadyIn = await page
+      .evaluate(() => /\/plataforma\b/i.test(location.pathname || ""))
+      .catch(() => false);
+    if (!alreadyIn) {
+      setPhase("LOGIN", "autenticando…");
+      await loginCasaDosDadosPortal(page, email, password);
+      await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
+      setPhase("LOGIN", "autenticado");
+    } else {
+      setPhase("LOGIN", "sessão restaurada (storageState)");
+    }
+
+    try {
+      const state = await context.storageState();
+      await options?.onStorageState?.(state);
+    } catch {
+      /* ignore */
+    }
+
+    setPhase("FILTERS", "abrindo tela de pesquisa…");
     await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
     await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
     await page.waitForTimeout(1500);
 
-    markPhase("Pesquisando: aplicando filtros (CNAE, situação, celular)…");
+    setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");
     await applyFilters(page as unknown as PageLike, filters, (msg) => {
-      sessionPhase = msg;
-      onProgress?.(msg);
+      sessionPhase = `FILTERS: ${msg}`;
+      phaseStartedAt = Date.now();
+      onProgress?.(sessionPhase);
     });
 
-    const searchBtn = page
-      .locator(
-        'button:has-text("Pesquisar"), button:has-text("Buscar"), a:has-text("Pesquisar"), [role="button"]:has-text("Pesquisar")',
-      )
-      .first();
-    // Captura total da API (se houver). CNPJs vêm da tela — não pré-carregar do JSON
-    // (senão página 1 dá added=0 e a paginação para).
+    // Captura total da API (se houver). CNPJs vêm da tela — não pré-carregar do JSON.
     let interceptedTotal: number | null = null;
     page.on("response", async (res: any) => {
       try {
@@ -1401,7 +1636,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     });
 
     // Garante modal CNAE fechado antes de pesquisar (timeout curto — não travar a sessão).
-    markPhase("Pesquisando: fechando modal CNAE (se aberto)…");
+    setPhase("SEARCH", "fechando modal CNAE (se aberto)…");
     try {
       await Promise.race([
         (async () => {
@@ -1417,35 +1652,70 @@ async function scrapeCasaDosDadosLeadsOnce(
       /* segue para Pesquisar */
     }
 
-    markPhase("Pesquisando: clicando Pesquisar…");
-    if ((await searchBtn.count()) > 0) {
-      // Evita scrollIntoView sob Xvfb (layout thrash → Target crashed).
-      await searchBtn.click({ timeout: 15000, force: true }).catch(async () => {
-        await searchBtn.click({ timeout: 15000 });
-      });
-    } else {
-      markPhase("Botão Pesquisar não encontrado — tentando Enter…");
-      await page.keyboard.press("Enter").catch(() => undefined);
-    }
+    const searchTimeoutMs = Math.max(
+      15_000,
+      Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90_000) || 90_000),
+    );
 
-    markPhase("Pesquisando: aguardando resultados…");
-    await waitForPortalSearchResults(page, 180_000, (msg) => {
-      sessionPhase = msg;
-      onProgress?.(msg);
-    });
+    const runSearchOnce = async (): Promise<SearchTransition> => {
+      setPhase("SEARCH", "disparando pesquisa (mouse click)…");
+      await dispatchSearchClick(page, (msg) => {
+        sessionPhase = msg;
+        phaseStartedAt = Date.now();
+        onProgress?.(msg);
+      });
+      setPhase("SEARCH", "clique enviado; aguardando resposta do portal…");
+      return waitForSearchTransition(
+        page as unknown as PageLike,
+        searchTimeoutMs,
+        (msg) => {
+          sessionPhase = msg;
+          onProgress?.(msg);
+        },
+        options?.shouldAbort,
+      );
+    };
+
+    let searchResult = await runSearchOnce();
+    if (searchResult.kind === "timeout-responsive") {
+      setPhase("SEARCH", "timeout com renderer saudável — 1 retry na mesma Page…");
+      searchResult = await runSearchOnce();
+    }
+    if (searchResult.kind === "renderer-unresponsive") {
+      throw new RendererUnresponsiveError("SEARCH");
+    }
+    if (searchResult.kind === "blocked") {
+      throw new Error("PORTAL_BLOCKED — Cloudflare ou desafio de segurança na pesquisa.");
+    }
+    if (searchResult.kind === "timeout-responsive") {
+      throw new Error(
+        "SEARCH_TIMEOUT_RESPONSIVE — portal não retornou resultados em 90s+grace; Chromium vivo (sem recovery).",
+      );
+    }
+    if (searchResult.kind === "empty") {
+      setPhase("DONE", "pesquisa sem resultados");
+      await context.close();
+      return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
+    }
 
     // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
     const pageText = await readResultsSampleText(page, 12_000);
-    const portalTotal = interceptedTotal ?? parseResultTotalFromText(pageText);
+    const portalTotal =
+      interceptedTotal ??
+      searchResult.total ??
+      parseResultTotalFromText(pageText);
     if (portalTotal != null) {
-      markPhase(
-        `Pesquisando: retornou ${portalTotal.toLocaleString("pt-BR")} empresas. Iniciando cópia…`,
+      setPhase(
+        "COPY",
+        `retornou ${portalTotal.toLocaleString("pt-BR")} empresas — iniciando cópia…`,
       );
     } else {
-      markPhase("Copiando: lendo cards na tela (CNPJ + Razão Social)…");
+      setPhase("COPY", "lendo cards na tela (CNPJ + Razão Social)…");
     }
 
     const collected = new Map<string, WabaLeadsCnpjLead>();
+    let doneReason = "UNKNOWN";
+    let scrapeCompleted = false;
     // NÃO pré-carregar interceptedRows aqui: se a API já encher `collected`,
     // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
     // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
@@ -1457,7 +1727,11 @@ async function scrapeCasaDosDadosLeadsOnce(
     const readCurrentPageNumber = async (): Promise<number> =>
       page.evaluate(() => {
         const active = document.querySelector(
-          'nav[data-oruga="pagination"] button.pagination-link.is-current, nav[data-oruga="pagination"] button[aria-current="true"]',
+          [
+            'nav[data-oruga="pagination"] button[aria-current="page"]',
+            'nav[data-oruga="pagination"] button.pagination-link.is-current',
+            'nav[data-oruga="pagination"] button[aria-current="true"]',
+          ].join(", "),
         );
         const n = Number(String(active?.textContent || "").trim());
         return Number.isFinite(n) && n > 0 ? n : 1;
@@ -1719,15 +1993,19 @@ async function scrapeCasaDosDadosLeadsOnce(
           : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`,
       );
       await context.close();
-      return [];
+      return {
+        leads: [],
+        scrapeCompleted: true,
+        doneReason: startPage > portalUiMaxPage ? "BEYOND_UI_MAX" : "BEYOND_TOTAL",
+      };
     }
     if (startPage > 1) {
-      markPhase(`Copiando: posicionando na página ${startPage} (retomada)…`);
+      markPhase(`COPY: posicionando na página ${startPage} (retomada)…`);
       const positioned = await goToResultsPage(startPage);
       if (!positioned) {
         // Garantia: não para o processo — copia desde a 1 (dedupe no pool).
         markPhase(
-          `Copiando: falha ao posicionar pág. ${startPage} no Xvfb — reiniciando da página 1 (sem parar a extração)…`,
+          `COPY: falha ao posicionar pág. ${startPage} no Xvfb — reiniciando da página 1…`,
         );
         startPage = 1;
         const backHome = await jumpToPageDom(1);
@@ -1735,7 +2013,7 @@ async function scrapeCasaDosDadosLeadsOnce(
           const cur = await readCurrentPageNumber();
           if (cur !== 1) {
             markPhase(
-              `Copiando: UI na pág. ${cur}; seguindo daqui para não interromper (checkpoint será atualizado).`,
+              `COPY: UI na pág. ${cur}; seguindo daqui (checkpoint será atualizado).`,
             );
             startPage = cur;
           }
@@ -1751,8 +2029,9 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
       const totalLabel =
         portalTotal != null ? ` de ${portalTotal.toLocaleString("pt-BR")}` : "";
-      markPhase(
-        `Copiando: página ${pageIndex}/${pagesToFetch === Number.MAX_SAFE_INTEGER ? "?" : pagesToFetch}${totalLabel} (${collected.size.toLocaleString("pt-BR")} CNPJs nesta sessão)…`,
+      setPhase(
+        "COPY",
+        `página ${pageIndex}/${pagesToFetch === Number.MAX_SAFE_INTEGER ? "?" : pagesToFetch}${totalLabel} · sessão ${collected.size.toLocaleString("pt-BR")} CNPJ(s)`,
       );
 
       let rows = await readScreenCards();
@@ -1760,9 +2039,9 @@ async function scrapeCasaDosDadosLeadsOnce(
       if (rows.length === 0) {
         for (let reread = 1; reread <= 3; reread += 1) {
           markPhase(
-            `Copiando: página ${pageIndex} sem cards — relendo ${reread}/3 (mesma sessão)…`,
+            `COPY: página ${pageIndex} sem cards — relendo ${reread}/3 (mesma sessão)…`,
           );
-          await page.waitForTimeout(700);
+          await page.waitForTimeout(reread === 1 ? 500 : 1000);
           rows = await readScreenCards();
           if (rows.length) break;
         }
@@ -1781,10 +2060,11 @@ async function scrapeCasaDosDadosLeadsOnce(
         }
       }
       markPhase(
-        `Copiando: página ${pageIndex} +${added} novos / ${rows.length} cards (sessão ${collected.size.toLocaleString("pt-BR")}).`,
+        `COPY: página ${pageIndex} arquivada — +${added} / ${rows.length} cards · pool sessão ${collected.size.toLocaleString("pt-BR")} · próxima ${pageIndex + 1}`,
       );
 
       const nextPage = pageIndex + 1;
+      // Checkpoint ANTES do next (contrato: persistir página N antes de avançar).
       await options?.onPageCheckpoint?.({
         completedPage: pageIndex,
         nextPage,
@@ -1794,22 +2074,30 @@ async function scrapeCasaDosDadosLeadsOnce(
         pagesToFetch: pagesToFetch === Number.MAX_SAFE_INTEGER ? pageIndex : pagesToFetch,
       });
 
-      if (pageIndex >= pagesToFetch) break;
+      if (pageIndex >= pagesToFetch) {
+        doneReason = "MAX_PAGES";
+        scrapeCompleted = true;
+        break;
+      }
 
       if (rows.length === 0) {
         emptyStreak += 1;
         if (pageIndex >= pagesToFetch || pageIndex >= portalUiMaxPage) {
-          markPhase(`Copiando: página ${pageIndex} sem cards — fim da paginação.`);
+          markPhase(`COPY: página ${pageIndex} sem cards — fim da paginação.`);
+          doneReason = "EMPTY_AT_END";
+          scrapeCompleted = true;
           break;
         }
         if (emptyStreak >= 3) {
           markPhase(
-            `Copiando: 3 páginas vazias seguidas (até pág. ${pageIndex}) — encerrando cópia na mesma sessão (${collected.size} CNPJs).`,
+            `COPY: 3 páginas vazias seguidas (até pág. ${pageIndex}) — fim (${collected.size} CNPJs).`,
           );
+          doneReason = "THREE_EMPTY_PAGES";
+          scrapeCompleted = true;
           break;
         }
         markPhase(
-          `Copiando: página ${pageIndex} vazia — avançando para ${nextPage} sem fechar o navegador…`,
+          `COPY: página ${pageIndex} vazia — avançando para ${nextPage} (mesma Page)…`,
         );
       } else {
         emptyStreak = 0;
@@ -1817,12 +2105,14 @@ async function scrapeCasaDosDadosLeadsOnce(
 
       if (nextPage > portalUiMaxPage) {
         markPhase(
-          `Copiando: atingiu o teto da UI (página ${portalUiMaxPage}) — encerrando raspagem do portal.`,
+          `COPY: atingiu teto UI (página ${portalUiMaxPage}) — encerrando raspagem.`,
         );
+        doneReason = "UI_MAX_PAGE";
+        scrapeCompleted = true;
         break;
       }
 
-      markPhase(`Copiando: avançando para a página ${nextPage}…`);
+      markPhase(`COPY: avançando ${pageIndex} → ${nextPage}…`);
       let advanced = await goToNextResultsPage(pageFirst, pageIndex);
       if (!advanced) {
         advanced = await jumpToPageDom(nextPage);
@@ -1830,7 +2120,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       if (!advanced) {
         for (let retry = 1; retry <= 3; retry += 1) {
           markPhase(
-            `Copiando: retry paginação ${pageIndex}→${nextPage} (${retry}/3) — mesma sessão…`,
+            `COPY: retry paginação ${pageIndex}→${nextPage} (${retry}/3) — mesma sessão…`,
           );
           await page.waitForTimeout(600);
           advanced =
@@ -1841,12 +2131,24 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
       if (!advanced) {
         const stillOn = await readCurrentPageNumber();
-        // Não reconecta: encerra com o que já copiou (Chromium só fecha no finally).
+        const alive = await rendererProbe(page, 3000);
+        if (!alive) {
+          throw new RendererUnresponsiveError(`COPY next ${pageIndex}→${nextPage}`);
+        }
+        // Soft: encerra com o já copiado — scrape incompleto (service mantém checkpoint).
         markPhase(
-          `Copiando: não avançou de ${pageIndex} (UI em ${stillOn}) — mantendo sessão até aqui (${collected.size} CNPJs). Sem reabrir portal/CNAE.`,
+          `COPY: paginação stall em ${pageIndex} (UI ${stillOn}) — ${collected.size} CNPJs; sem reabrir portal.`,
         );
+        doneReason = "PAGINATION_STALL";
+        scrapeCompleted = false;
         break;
       }
+    }
+
+    if (!scrapeCompleted && doneReason === "UNKNOWN") {
+      // Saiu do for sem marcar fim explícito — tratar como incompleto.
+      doneReason = "INCOMPLETE";
+      scrapeCompleted = false;
     }
 
     await context.close();
@@ -1862,16 +2164,15 @@ async function scrapeCasaDosDadosLeadsOnce(
         "Robô não leu CNPJ/Razão Social na tela. Confirme login, filtros e se os cards aparecem (formato: 00.000.000/0000-00 - NOME). Se Cloudflare bloquear, use CASADOSDADOS_HEADLESS=0.",
       );
     }
-    if (portalTotal != null) {
-      markPhase(
-        `Coletados ${collected.size.toLocaleString("pt-BR")} nesta sessão (portal ~${portalTotal.toLocaleString("pt-BR")}), página a página.`,
-      );
-    } else {
-      markPhase(
-        `Coletados ${collected.size.toLocaleString("pt-BR")} CNPJ(s) + Razão Social nesta sessão (página a página).`,
-      );
-    }
-    return [...collected.values()];
+    setPhase(
+      "DONE",
+      `${collected.size.toLocaleString("pt-BR")} CNPJ(s) · reason=${doneReason} · completed=${scrapeCompleted}`,
+    );
+    return {
+      leads: [...collected.values()],
+      scrapeCompleted,
+      doneReason,
+    };
   } finally {
     clearInterval(abortWatch);
     clearInterval(sessionKeepAlive);

@@ -141,6 +141,13 @@ export type WabaLeadsCnpjList = {
   scrapeCheckpoint?: WabaLeadsCnpjScrapeCheckpoint | null;
   /** Tentativas de reconexão após falha com checkpoint (cap no service). */
   scrapeReconnectAttempts?: number;
+  /**
+   * true somente quando a cópia no portal terminou de forma definitiva
+   * (teto, 3 vazias, next disabled, maxPages). Enrich depende disso.
+   */
+  scrapeCompleted?: boolean | null;
+  /** Motivo do fim da raspagem (debug / UI). */
+  scrapeDoneReason?: string | null;
   /** Índice do Excel na campanha (Lista 01, 02, …). */
   listaIndex?: number | null;
   /** Quando o master baixou este Excel (ISO). */

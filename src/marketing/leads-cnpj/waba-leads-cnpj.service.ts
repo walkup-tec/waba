@@ -1730,6 +1730,8 @@ export class WabaLeadsCnpjService {
             });
             let releaseScrapeSlot: (() => void) | null = null;
             let scraped: WabaLeadsCnpjLead[] = [];
+            let scrapeSessionCompleted = false;
+            let scrapeSessionDoneReason = "";
             /**
              * NÃO fechar Chromium por “stall” de progresso (default off).
              * Em produção o watchdog de 90s matava a sessão no meio de CNAE/Pesquisar
@@ -1760,7 +1762,7 @@ export class WabaLeadsCnpjService {
                 });
               });
               assertAlive();
-              scraped = await scrapeCasaDosDadosLeads(
+              const scrapeResult = await scrapeCasaDosDadosLeads(
                 scrapeFilters,
                 (message) => {
                   lastProgressAt = Date.now();
@@ -1808,6 +1810,7 @@ export class WabaLeadsCnpjService {
                     const beyondUi = nextPage > portalUiMaxPage;
                     patch({
                       status: "scraping",
+                      scrapeCompleted: false,
                       scrapeCheckpoint: beyondUi
                         ? null
                         : {
@@ -1818,8 +1821,8 @@ export class WabaLeadsCnpjService {
                           },
                       scrapeReconnectAttempts: 0,
                       progressMessage: beyondUi
-                        ? `Copiando: página ${c.completedPage} (teto UI ${portalUiMaxPage}) — ${archived.toLocaleString("pt-BR")} CNPJs arquivados; encerrando raspagem.`
-                        : `Copiando: página ${c.completedPage}/${c.pagesToFetch}${
+                        ? `COPY: página ${c.completedPage} (teto UI ${portalUiMaxPage}) — ${archived.toLocaleString("pt-BR")} CNPJs; encerrando.`
+                        : `COPY: página ${c.completedPage}/${c.pagesToFetch}${
                             c.portalTotal != null
                               ? ` de ${c.portalTotal.toLocaleString("pt-BR")}`
                               : ""
@@ -1829,6 +1832,9 @@ export class WabaLeadsCnpjService {
                   },
                 },
               );
+              scraped = scrapeResult.leads;
+              scrapeSessionCompleted = scrapeResult.scrapeCompleted;
+              scrapeSessionDoneReason = scrapeResult.doneReason;
             } finally {
               releaseScrapeSlot?.();
             }
@@ -1856,15 +1862,14 @@ export class WabaLeadsCnpjService {
               0,
               Math.round(Number(liveAfter?.scrapeCheckpoint?.nextPage || 0) || 0),
             );
-            // Cópia incompleta (parou antes do teto UI): mantém checkpoint e reagenda
-            // sem tratar como “raspagem concluída → enrich”.
-            const copyIncomplete =
-              ckNext >= 2 && ckNext <= portalUiMaxPage && afterMerge > 0;
-            if (copyIncomplete) {
+            // Enrich só com scrapeCompleted explícito (nunca pool parcial implícito).
+            if (!scrapeSessionCompleted) {
               patch({
                 status: "scraping",
+                scrapeCompleted: false,
+                scrapeDoneReason: scrapeSessionDoneReason || "INCOMPLETE",
                 scrapeReconnectAttempts: 0,
-                progressMessage: `Copiando: sessão pausou na pág. ${ckNext} — ${afterMerge.toLocaleString("pt-BR")} no pool; retomando cópia (sem limpar checkpoint)…`,
+                progressMessage: `COPY: incompleta (${scrapeSessionDoneReason || "INCOMPLETE"}) — pág. ${ckNext || "?"} · pool ${afterMerge.toLocaleString("pt-BR")}; retomando sem limpar checkpoint…`,
                 error: null,
               });
               setTimeout(() => {
@@ -1877,8 +1882,10 @@ export class WabaLeadsCnpjService {
             }
             patch({
               scrapeCheckpoint: null,
+              scrapeCompleted: true,
+              scrapeDoneReason: scrapeSessionDoneReason || "DONE",
               scrapeReconnectAttempts: 0,
-              progressMessage: `Copiando: raspagem concluída — ${afterMerge.toLocaleString("pt-BR")} CNPJ(s) no pool.`,
+              progressMessage: `DONE: raspagem concluída (${scrapeSessionDoneReason}) — ${afterMerge.toLocaleString("pt-BR")} CNPJ(s) no pool.`,
             });
             if (!afterMerge && scraped.length > 0) {
               throw new Error(
