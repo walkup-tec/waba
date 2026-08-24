@@ -1,5 +1,16 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 15:05 — CTA Alternativa máx. 15 caracteres
+
+- Rótulo do botão URL (GPT + normalização) limitado a 15 caracteres
+- LOG: `doc/LOG-2026-08-24__144500__alternativa-cta-variavel-optout-italico.md`
+
+## 2026-08-24 14:45 — Alternativa CTA variável + opt-out itálico
+
+- Mesma chamada GPT: `body` + `buttonLabel` (variação do CTA do usuário, ≤20) + `optOut`
+- Opt-out no final do texto em itálico WhatsApp (`_..._`); destino do botão inalterado
+- LOG: `doc/LOG-2026-08-24__144500__alternativa-cta-variavel-optout-italico.md`
+
 ## 2026-08-24 14:36 — Leads PJ resume jump v9.19
 
 - Retomada pág. alta: hop + next com teto = distância (env não corta)

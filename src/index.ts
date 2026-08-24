@@ -8573,6 +8573,9 @@ function metaAppSecretProof(accessToken: string, appSecret: string): string {
   return crypto.createHmac("sha256", String(appSecret || "")).update(String(accessToken || "")).digest("hex");
 }
 
+const ALTERNATIVA_OPT_OUT_SEED =
+  "😊 Se não quiser mais receber minhas mensagens, é só me avisar, tá bem?";
+
 function buildDisparosAiPrompt(input: {
   briefing?: string;
   tone?: string;
@@ -8582,6 +8585,7 @@ function buildDisparosAiPrompt(input: {
   accessLink?: string;
   /** Alternativa: mensagem sem URL; CTA vira rótulo do botão. */
   ctaMode?: "link" | "button";
+  uniqueSeed?: string;
 }) {
   const briefing = String(input.briefing || "").trim();
   const tone = String(input.tone || "consultivo").trim();
@@ -8590,15 +8594,20 @@ function buildDisparosAiPrompt(input: {
   const objective = String(input.objective || "gerar mensagem de prospeccao via WhatsApp").trim();
   const accessLink = String(input.accessLink || "").trim();
   const buttonMode = input.ctaMode === "button";
+  const uniqueSeed = String(input.uniqueSeed || "").trim();
   const rules = buttonMode
     ? [
         "Regras:",
-        "- Retorne apenas uma mensagem final pronta para envio.",
-        "- Mensagem curta (maximo 280 caracteres).",
-        "- Nao use aspas nem explicacoes extras.",
-        "- Nao inclua links, URLs, wa.me nem 'http' na mensagem.",
-        "- Negrito no WhatsApp: use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase (ex.: *Vem Card*). Nunca deixe a abertura/saudacao em negrito.",
-        `- O destinatario vera um botao com o texto: "${cta.slice(0, 20)}". Nao mencione 'clique no link'; incentive a acao do botao de forma natural.`,
+        "- Responda APENAS um JSON valido, sem markdown e sem texto fora do JSON.",
+        '- Formato: {"body":"...","buttonLabel":"...","optOut":"..."}',
+        "- body: mensagem curta (maximo 280 caracteres), pronta para WhatsApp.",
+        "- Nao inclua links, URLs, wa.me nem 'http' em nenhum campo.",
+        "- Nao coloque a frase de opt-out dentro de body.",
+        "- Negrito no WhatsApp (so em body): use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase (ex.: *Vem Card*). Nunca deixe a abertura/saudacao em negrito.",
+        `- buttonLabel: parafraseie o CTA do usuario (nao copie literal). CTA base: "${cta.slice(0, 15)}". Maximo 15 caracteres. Mesma intencao. Sem emoji.`,
+        `- optOut: uma unica linha, variacao natural de: "${ALTERNATIVA_OPT_OUT_SEED}". Sem markdown. Sem URL.`,
+        "- Nao mencione 'clique no link'; incentive a acao do botao de forma natural em body.",
+        ...(uniqueSeed ? [`- Gere uma variante unica para este envio (id ${uniqueSeed}).`] : []),
       ]
     : [
         "Regras:",
@@ -8655,15 +8664,67 @@ function normalizeAlternativaUrlButtonLabel(
   return loose || fallback;
 }
 
-/** Rótulo do botão WhatsApp (limite prático ~20 caracteres). */
+const ALTERNATIVA_BUTTON_LABEL_MAX_CHARS = 15;
+
+/** Rótulo do botão WhatsApp (limite prático ~15 caracteres). */
 function normalizeButtonDisplayText(
   raw: string,
   fallback: string = ALTERNATIVA_URL_BUTTON_LABELS[0],
 ): string {
   const fromAllowlist = normalizeAlternativaUrlButtonLabel(raw, "");
-  if (fromAllowlist) return fromAllowlist.slice(0, 20);
+  if (fromAllowlist) return fromAllowlist.slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS);
   const text = String(raw || "").trim() || fallback;
-  return text.slice(0, 20);
+  return text.slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS);
+}
+
+function parseJsonObjectFromModelText(raw: string): Record<string, unknown> | null {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function wrapWhatsAppItalic(text: string): string {
+  const inner = String(text || "")
+    .replace(/[_*`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!inner) return "";
+  return `_${inner}_`;
+}
+
+function newDisparosAiUniqueSeed(): string {
+  return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1_000_000).toString(36)}`;
+}
+
+/** Corpo + opt-out em itálico + rótulo do botão a partir da resposta JSON do GPT. */
+function assembleAlternativaButtonOutbound(
+  generatedText: string,
+  userCta: string,
+): { text: string; buttonLabel: string } {
+  const fallbackLabel = normalizeButtonDisplayText(userCta);
+  const parsed = parseJsonObjectFromModelText(generatedText);
+  const bodyRaw = parsed
+    ? String(parsed.body || parsed.text || parsed.message || "")
+    : generatedText;
+  const body =
+    prepareOutboundWhatsAppText(bodyRaw, { stripUrls: true }) ||
+    "Olá! Temos uma novidade para você.";
+  const optRaw = parsed ? String(parsed.optOut || parsed.opt_out || "") : "";
+  const optClean = prepareOutboundWhatsAppText(optRaw, { stripUrls: true });
+  const optLine =
+    wrapWhatsAppItalic(optClean) || wrapWhatsAppItalic(ALTERNATIVA_OPT_OUT_SEED);
+  const labelRaw = parsed ? String(parsed.buttonLabel || parsed.button_label || "") : "";
+  const buttonLabel = normalizeButtonDisplayText(labelRaw, fallbackLabel);
+  return { text: `${body}\n\n${optLine}`.trim(), buttonLabel };
 }
 
 function stripUrlsFromMessageText(message: string): string {
@@ -12519,15 +12580,18 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
       objective,
       accessLink: buttonMode ? undefined : shortUrl,
       ctaMode: buttonMode ? "button" : "link",
+      uniqueSeed: buttonMode ? newDisparosAiUniqueSeed() : undefined,
     });
     const generated = await callOpenAiGenerateMessage({
       prompt,
       model: String(req.body?.model || OPENAI_MODEL),
-      maxOutputTokens: Number(req.body?.maxOutputTokens || 220),
+      maxOutputTokens: Number(req.body?.maxOutputTokens || (buttonMode ? 400 : 220)),
     });
-    const finalMessage = buttonMode
-      ? prepareOutboundWhatsAppText(generated.text, { stripUrls: true }) ||
-        "Olá! Temos uma novidade para você."
+    const assembled = buttonMode
+      ? assembleAlternativaButtonOutbound(generated.text, buttonLabel)
+      : null;
+    const finalMessage = assembled
+      ? assembled.text
       : ensureMessageContainsLink(generated.text, shortUrl, cta);
     return res.json({
       ok: true,
@@ -12537,7 +12601,7 @@ app.post("/disparos/gerar-mensagem-ai", async (req, res) => {
       shortUrl,
       shortenerProvider,
       ctaMode: buttonMode ? "button" : "link",
-      buttonLabel: buttonMode ? buttonLabel : undefined,
+      buttonLabel: buttonMode ? assembled?.buttonLabel || buttonLabel : undefined,
       buttonUrl: buttonMode ? shortUrl : undefined,
       ...(shortenerWarning ? { shortenerWarning } : {}),
     });
@@ -13050,7 +13114,8 @@ async function composeOutboundMessageForConfig(
   opts?: { buttonMode?: boolean },
 ): Promise<{ text: string; shortUrl: string | null; buttonLabel?: string }> {
   const buttonMode = opts?.buttonMode === true;
-  const buttonLabel = normalizeButtonDisplayText(String(config.aiCta || "Quero saber mais"));
+  const userCta = String(config.aiCta || "Quero saber mais");
+  const buttonLabel = normalizeButtonDisplayText(userCta);
 
   const { shortUrl } = await generateUniqueShortUrlForDisparosConfig(config);
   const briefing = String(config.aiBriefing || "");
@@ -13058,28 +13123,23 @@ async function composeOutboundMessageForConfig(
     briefing,
     tone: String(config.aiTone || "consultivo"),
     audience: String(config.aiAudience || "CORBAN"),
-    cta: String(config.aiCta || "Quero saber mais"),
+    cta: userCta,
     objective: "gerar mensagem de prospeccao via WhatsApp",
     accessLink: buttonMode ? undefined : shortUrl,
     ctaMode: buttonMode ? "button" : "link",
+    uniqueSeed: buttonMode ? newDisparosAiUniqueSeed() : undefined,
   });
   const generated = await callOpenAiGenerateMessage({
     prompt,
     model: OPENAI_MODEL,
-    maxOutputTokens: 220,
+    maxOutputTokens: buttonMode ? 400 : 220,
   });
   if (buttonMode) {
-    const text =
-      prepareOutboundWhatsAppText(generated.text, { stripUrls: true }) ||
-      "Olá! Temos uma novidade para você.";
-    return { text, shortUrl, buttonLabel };
+    const assembled = assembleAlternativaButtonOutbound(generated.text, userCta);
+    return { text: assembled.text, shortUrl, buttonLabel: assembled.buttonLabel };
   }
   return {
-    text: ensureMessageContainsLink(
-      generated.text,
-      shortUrl,
-      String(config.aiCta || "Quero saber mais")
-    ),
+    text: ensureMessageContainsLink(generated.text, shortUrl, userCta),
     shortUrl,
     buttonLabel,
   };
