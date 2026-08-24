@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 10:10 — Leads PJ histórico métricas v9.10
+
+- Colunas: Páginas (N/M), CNPJs copiados, Higienizados
+- API: `pagesDone`, `pagesTotal`, `cnpjCopied`, `leadsHigienizados`
+- Marker `DEPLOY-2026-08-24-1010-leads-pj-historico-metricas-v9.10`
+- LOG: `doc/LOG-2026-08-24__101000__leads-pj-historico-metricas-v910.md`
+
 ## 2026-08-24 08:18 — Leads PJ paginação rápida v9.9
 
 - Removido `waitForPortalSearchResults` após cada “próxima” (era ~10–30s+/página)

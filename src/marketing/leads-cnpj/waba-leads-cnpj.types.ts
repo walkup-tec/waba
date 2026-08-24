@@ -187,6 +187,14 @@ export type WabaLeadsCnpjListSummary = {
   poolPending?: number;
   /** true só quando pool zerou e não há lote em andamento desta campanha. */
   campaignFinished?: boolean;
+  /** Páginas já copiadas no portal (avançadas com sucesso). */
+  pagesDone?: number;
+  /** Meta de páginas (teto UI / maxPages / pagesToFetch). */
+  pagesTotal?: number;
+  /** CNPJs copiados do portal (pool pendente + já usados em listas). */
+  cnpjCopied?: number;
+  /** Leads após higienização (Excel com celular / prontos nesta lista). */
+  leadsHigienizados?: number;
 };
 
 export type WabaLeadsCnpjEnrichQueueEntry = {

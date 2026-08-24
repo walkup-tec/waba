@@ -3480,12 +3480,13 @@
         table-layout: fixed;
         width: 100%;
       }
-      .mlc-history-table .mlc-col-actions { width: 11%; }
-      .mlc-history-table .mlc-col-name { width: 16%; }
-      .mlc-history-table .mlc-col-date { width: 13%; }
-      .mlc-history-table .mlc-col-pool { width: 8%; }
-      .mlc-history-table .mlc-col-leads { width: 7%; }
-      .mlc-history-table .mlc-col-stage { width: 45%; }
+      .mlc-history-table .mlc-col-actions { width: 10%; }
+      .mlc-history-table .mlc-col-name { width: 14%; }
+      .mlc-history-table .mlc-col-date { width: 11%; }
+      .mlc-history-table .mlc-col-pages { width: 8%; }
+      .mlc-history-table .mlc-col-cnpj { width: 8%; }
+      .mlc-history-table .mlc-col-leads { width: 8%; }
+      .mlc-history-table .mlc-col-stage { width: 41%; }
       .mlc-history-table td.mlc-col-name,
       .mlc-history-table th.mlc-col-name {
         max-width: 0;
@@ -21176,12 +21177,13 @@
                         <th class="mlc-col-actions">Ações</th>
                         <th class="mlc-col-name">Nome</th>
                         <th class="mlc-col-date">Data gerada</th>
-                        <th class="mlc-col-pool" title="CNPJs já copiados do portal e gravados no pool da campanha">Pool</th>
-                        <th class="mlc-col-leads" title="Linhas no Excel desta lista (após enriquecimento)">Leads</th>
+                        <th class="mlc-col-pages" title="Páginas do portal já avançadas / meta">Páginas</th>
+                        <th class="mlc-col-cnpj" title="CNPJs copiados do portal (pool + já usados)">CNPJs</th>
+                        <th class="mlc-col-leads" title="Leads higienizados (com celular nesta lista)">Higienizados</th>
                         <th class="mlc-col-stage">Etapa</th>
                       </tr>
                     </thead>
-                    <tbody id="mlc-tbody"><tr><td colspan="6" class="muted">Carregando…</td></tr></tbody>
+                    <tbody id="mlc-tbody"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody>
                   </table>
                 </div>
               </div>
@@ -34534,7 +34536,7 @@
             rows.length === 1 ? "1 lista no histórico" : rows.length + " listas no histórico";
         }
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="muted">Nenhuma lista gerada ainda.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="muted">Nenhuma lista gerada ainda.</td></tr>';
           return;
         }
         tbody.innerHTML = rows
@@ -34543,7 +34545,16 @@
             const started = escapeAdminHtml(formatMarketingLeadsCnpjDate(item.createdAt));
             const actionsHtml = renderMarketingLeadsCnpjActionsCell(item);
             const stageHtml = renderMarketingLeadsCnpjStageCell(item);
-            const poolCopied = Number(item.poolPending || 0);
+            const pagesDone = Number(item.pagesDone || 0);
+            const pagesTotal = Math.max(1, Number(item.pagesTotal || 1000) || 1000);
+            const cnpjCopied = Number(
+              item.cnpjCopied != null ? item.cnpjCopied : item.poolPending || 0
+            );
+            const higienizados = Number(
+              item.leadsHigienizados != null ? item.leadsHigienizados : item.leadCount || 0
+            );
+            const pagesLabel =
+              pagesDone.toLocaleString("pt-BR") + "/" + pagesTotal.toLocaleString("pt-BR");
             return (
               '<tr data-mlc-row="' +
               encodeURIComponent(String(item.id || "")) +
@@ -34559,11 +34570,14 @@
               '<td class="mlc-col-date">' +
               started +
               "</td>" +
-              '<td class="mlc-col-pool" title="CNPJs copiados do portal no pool da campanha">' +
-              poolCopied.toLocaleString("pt-BR") +
+              '<td class="mlc-col-pages" title="Páginas avançadas no portal">' +
+              pagesLabel +
               "</td>" +
-              '<td class="mlc-col-leads">' +
-              Number(item.leadCount || 0) +
+              '<td class="mlc-col-cnpj" title="CNPJs copiados do portal">' +
+              cnpjCopied.toLocaleString("pt-BR") +
+              "</td>" +
+              '<td class="mlc-col-leads" title="Leads higienizados (celular)">' +
+              higienizados.toLocaleString("pt-BR") +
               "</td>" +
               '<td class="mlc-col-stage">' +
               stageHtml +

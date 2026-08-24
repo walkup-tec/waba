@@ -202,10 +202,44 @@ function clearCampaignPurged(campaignKey) {
 function isCampaignPurged(campaignKey) {
     return purgedCampaignKeys.has(String(campaignKey || "").trim());
 }
+function countLeadsHigienizados(list) {
+    if (list.status === "ready") {
+        return Math.max(0, Math.round(Number(list.leadCount || 0) || 0));
+    }
+    const leads = Array.isArray(list.leads) ? list.leads : [];
+    let n = 0;
+    for (const lead of leads) {
+        const digits = String(lead?.telefone || "").replace(/\D/g, "");
+        // Celular BR: 10–11 nacionais ou 12–13 com DDI 55.
+        if (digits.length >= 10 && digits.length <= 13)
+            n += 1;
+    }
+    return n;
+}
+function resolveScrapeHistoryMetrics(list, poolPending, usedCount) {
+    const ckpt = list.scrapeCheckpoint;
+    const fromFilter = Math.max(0, Math.round(Number(list.filters?.maxPages || 0) || 0));
+    const fromCkptTotal = Math.max(0, Math.round(Number(ckpt?.pagesToFetch || 0) || 0));
+    const pagesTotal = Math.max(1, fromCkptTotal || fromFilter || 1000);
+    const nextPage = Math.max(0, Math.round(Number(ckpt?.nextPage || 0) || 0));
+    const collected = Math.max(0, Math.round(Number(ckpt?.collectedCount || 0) || 0));
+    const cnpjCopied = Math.max(collected, poolPending + usedCount);
+    let pagesDone = 0;
+    if (nextPage > 0) {
+        pagesDone = Math.max(0, nextPage - 1);
+    }
+    else if (list.scrapeCompleted || cnpjCopied > 0) {
+        pagesDone = Math.min(pagesTotal, Math.max(0, Math.ceil(cnpjCopied / 20)));
+    }
+    return { pagesDone, pagesTotal, cnpjCopied };
+}
 function toSummary(list, downloads = [], extras) {
     const listaIndex = list.listaIndex != null && Number(list.listaIndex) > 0
         ? Math.round(Number(list.listaIndex))
         : null;
+    const poolPending = extras?.poolPending ?? 0;
+    const usedCount = extras?.usedCount ?? 0;
+    const scrape = resolveScrapeHistoryMetrics(list, poolPending, usedCount);
     return {
         id: list.id,
         name: list.name,
@@ -224,8 +258,12 @@ function toSummary(list, downloads = [], extras) {
         listaLabel: listaIndex ? formatListaLabel(listaIndex) : null,
         downloadedAt: list.downloadedAt ?? null,
         campaignDownloads: downloads,
-        poolPending: extras?.poolPending ?? 0,
+        poolPending,
         campaignFinished: Boolean(extras?.campaignFinished),
+        pagesDone: scrape.pagesDone,
+        pagesTotal: scrape.pagesTotal,
+        cnpjCopied: scrape.cnpjCopied,
+        leadsHigienizados: countLeadsHigienizados(list),
     };
 }
 /** Dia civil em America/Sao_Paulo (YYYY-MM-DD). */
@@ -435,6 +473,7 @@ class WabaLeadsCnpjService {
             const poolPending = key
                 ? this.repository.getPool(key)?.pending.length || 0
                 : 0;
+            const usedCount = key ? this.repository.collectUsedCnpjs(key).size : 0;
             const busySame = key
                 ? lists.some((l) => String(l.campaignKey || "").trim() === key &&
                     (l.status === "enriching" ||
@@ -446,6 +485,7 @@ class WabaLeadsCnpjService {
             return toSummary(list, key ? downloadsByCampaign.get(key) || [] : [], {
                 poolPending,
                 campaignFinished,
+                usedCount,
             });
         });
         return { items, enrichQueue: this.getEnrichQueueSummary() };
