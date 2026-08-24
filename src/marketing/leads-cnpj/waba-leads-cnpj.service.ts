@@ -732,7 +732,7 @@ export class WabaLeadsCnpjService {
         listaIndex,
         downloadedAt: null,
         error: null,
-        progressMessage: `${formatListaLabel(listaIndex)} finalizada (${forExport.length} linha(s) enriquecidas; ${leftover.length} devolvidos ao pool).${
+        progressMessage: `${formatListaLabel(listaIndex)} finalizada (${forExport.length} linha(s) com celular; ${leftover.length} devolvidos ao pool).${
           startNext ? " Próxima campanha da fila iniciando." : " Continuação desta campanha / fila conforme slot do dia."
         }${remaining ? ` Pool: ${remaining.toLocaleString("pt-BR")} pendente(s).` : ""}`,
         updatedAt: new Date().toISOString(),
@@ -2004,7 +2004,7 @@ export class WabaLeadsCnpjService {
         exportFileName,
         listaIndex,
         downloadedAt: null,
-        progressMessage: `${formatListaLabel(listaIndex)} pronta (${forExport.length} linha(s); celular EVO 55+DDD+9…).${continueHint}`,
+        progressMessage: `${formatListaLabel(listaIndex)} pronta (${forExport.length} linha(s) com celular EVO 55+DDD+9…).${continueHint}`,
         error: null,
       });
 

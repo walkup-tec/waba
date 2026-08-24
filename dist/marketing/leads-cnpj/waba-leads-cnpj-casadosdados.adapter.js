@@ -2310,16 +2310,18 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 .catch(() => ({ ok: false, how: "err" }));
             if (!clicked.ok)
                 return false;
-            return waitUntilPage(target, 12000);
+            return waitUntilPage(target, 5000);
         };
         /**
-         * Avança 1 página: DOM click no next + confirmação por número OU 1º CNPJ.
-         * Timeout duro por passo (não fica 60s+ parado).
+         * Avança 1 página — caminho rápido (estilo V02).
+         * Só: click DOM no next + confirmação por nº da página OU troca do 1º CNPJ.
+         * NÃO chama waitForPortalSearchResults (isso é da 1ª pesquisa; na paginação
+         * custava 10–30s+/página e travava horas em 5/1000).
          */
         const goToNextResultsPage = async (previousFirstCnpj, fromPage) => {
             const targetPage = fromPage + 1;
             markPhase(`Copiando: avançando paginação ${fromPage} → ${targetPage}…`);
-            const clicked = await page
+            const clicked = await withNodeTimeout(page
                 .evaluate(() => {
                 const nav = document.querySelector('nav[data-oruga="pagination"]');
                 if (!nav)
@@ -2336,43 +2338,33 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 next.click();
                 return true;
             })
-                .catch(() => false);
-            if (!clicked) {
-                // Fallback Playwright selectors (curto).
-                const sels = [
-                    'nav[data-oruga="pagination"] button.pagination-next:not([disabled]):not(.is-disabled)',
-                    "button.pagination-next.pagination-link:not([disabled]):not(.is-disabled)",
-                ];
-                let any = false;
-                for (const sel of sels) {
-                    const btn = page.locator(sel).first();
-                    if ((await btn.count()) === 0)
-                        continue;
-                    if (!(await btn.isVisible().catch(() => false)))
-                        continue;
-                    await btn.click({ force: true, timeout: 4000 }).catch(() => null);
-                    any = true;
-                    break;
-                }
-                if (!any)
+                .catch(() => false), 2500, false);
+            if (!clicked)
+                return false;
+            // Oruga troca a página em ~0,2–1s. Teto duro 4s — sem re-aguardar “SEARCH”.
+            const deadline = Date.now() + 4000;
+            while (Date.now() < deadline) {
+                if (options?.shouldAbort?.())
                     return false;
-            }
-            const pageOk = await waitUntilPage(targetPage, 10000);
-            if (pageOk) {
-                await waitForPortalSearchResults(page, 12000, (msg) => {
-                    sessionPhase = msg;
-                    markPhase(msg);
-                });
-                return true;
-            }
-            if (previousFirstCnpj) {
-                const deadline = Date.now() + 8000;
-                while (Date.now() < deadline) {
-                    const nextFirst = await readFirstVisibleCnpjDigits(page);
+                const cur = await withNodeTimeout(page
+                    .evaluate(() => {
+                    const active = document.querySelector([
+                        'nav[data-oruga="pagination"] button[aria-current="page"]',
+                        'nav[data-oruga="pagination"] button.pagination-link.is-current',
+                        'nav[data-oruga="pagination"] button[aria-current="true"]',
+                    ].join(", "));
+                    const n = Number(String(active?.textContent || "").trim());
+                    return Number.isFinite(n) && n > 0 ? n : 0;
+                })
+                    .catch(() => 0), 1500, 0);
+                if (cur === targetPage)
+                    return true;
+                if (previousFirstCnpj) {
+                    const nextFirst = await withNodeTimeout(readFirstVisibleCnpjDigits(page), 1500, "");
                     if (nextFirst && nextFirst !== previousFirstCnpj)
                         return true;
-                    await sleepNode(250);
                 }
+                await sleepNode(120);
             }
             return false;
         };
@@ -2426,7 +2418,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     .catch(() => 0);
                 if (best > 0) {
                     markPhase(`Copiando: aproximando via botão ${best} (alvo ${target})…`);
-                    await waitUntilPage(best, 10000);
+                    await waitUntilPage(best, 5000);
                     if (await jumpToPageDom(target))
                         return true;
                     continue;
@@ -2579,7 +2571,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             if (!advanced) {
                 for (let retry = 1; retry <= 3; retry += 1) {
                     markPhase(`COPY: retry paginação ${pageIndex}→${nextPage} (${retry}/3) — mesma sessão…`);
-                    await page.waitForTimeout(600);
+                    await sleepNode(400);
                     advanced =
                         (await goToNextResultsPage(pageFirst, pageIndex)) ||
                             (await jumpToPageDom(nextPage));

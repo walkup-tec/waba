@@ -1,5 +1,23 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 08:18 — Leads PJ paginação rápida v9.9
+
+- Removido `waitForPortalSearchResults` após cada “próxima” (era ~10–30s+/página)
+- Avanço: click DOM + nº página/CNPJ em ≤4s; marker `…paginacao-rapida-v9.9`
+- LOG: `doc/LOG-2026-08-24__081800__leads-pj-paginacao-rapida-v99.md`
+
+## 2026-08-24 08:15 — Leads PJ coluna Pool no histórico
+
+- Histórico: coluna **Pool** = `poolPending` (CNPJs copiados no estoque da campanha)
+- **Leads** continua sendo o Excel desta lista
+- LOG: `doc/LOG-2026-08-24__081500__leads-pj-coluna-pool-historico.md`
+
+## 2026-08-24 07:30 — Leads PJ Excel somente celular v9.8
+
+- Excel/`leadCount` só linhas com celular EVO; sem telefone omitido
+- Marker `DEPLOY-2026-08-24-0730-leads-pj-excel-somente-celular-v9.8`
+- LOG: `doc/LOG-2026-08-24__073000__leads-pj-excel-somente-celular-v98.md`
+
 ## 2026-08-23 23:35 — Leads PJ E2E local OK (v9.7)
 
 - Ambiente controlado: LOGIN→CNAE→SEARCH→COPY pág.1 = **20 CNPJs**, `scrapeCompleted=true`

@@ -91,18 +91,15 @@ export function extractMobilePhonesForEvo(raw: string): string[] {
 }
 
 /**
- * 1 linha por celular (EVO). Sem celular reconhecido → mantém 1 linha com
- * Telefone vazio (evita mandar fixo/máscara inválida para disparo).
+ * 1 linha por celular (EVO). Sem celular reconhecido → **omite** o CNPJ
+ * (Excel e leadCount só contam quem tem telefone móvel válido).
  */
 export function expandLeadsByMobileForEvo(leads: WabaLeadsCnpjLead[]): WabaLeadsCnpjLead[] {
   const rows: WabaLeadsCnpjLead[] = [];
   for (const lead of leads) {
     const rawTel = String(lead.telefone || "").trim();
     const mobiles = extractMobilePhonesForEvo(rawTel);
-    if (!mobiles.length) {
-      rows.push({ ...lead, telefone: "" });
-      continue;
-    }
+    if (!mobiles.length) continue;
     for (const telefone of mobiles) {
       rows.push({ ...lead, telefone });
     }
@@ -111,7 +108,8 @@ export function expandLeadsByMobileForEvo(leads: WabaLeadsCnpjLead[]): WabaLeads
 }
 
 export function buildLeadsCnpjExcelBuffer(leads: WabaLeadsCnpjLead[]): Buffer {
-  const rows = leads.map((lead) => ({
+  const withPhone = leads.filter((lead) => String(lead.telefone || "").trim().length > 0);
+  const rows = withPhone.map((lead) => ({
     CNPJ: lead.cnpj,
     "Nome (Razão Social)": lead.nome,
     Telefone: lead.telefone,

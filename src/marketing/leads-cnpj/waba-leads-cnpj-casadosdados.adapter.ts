@@ -2892,12 +2892,14 @@ async function scrapeCasaDosDadosLeadsOnce(
         .catch(() => ({ ok: false, how: "err" as const }));
 
       if (!clicked.ok) return false;
-      return waitUntilPage(target, 12_000);
+      return waitUntilPage(target, 5_000);
     };
 
     /**
-     * Avança 1 página: DOM click no next + confirmação por número OU 1º CNPJ.
-     * Timeout duro por passo (não fica 60s+ parado).
+     * Avança 1 página — caminho rápido (estilo V02).
+     * Só: click DOM no next + confirmação por nº da página OU troca do 1º CNPJ.
+     * NÃO chama waitForPortalSearchResults (isso é da 1ª pesquisa; na paginação
+     * custava 10–30s+/página e travava horas em 5/1000).
      */
     const goToNextResultsPage = async (
       previousFirstCnpj: string,
@@ -2906,64 +2908,66 @@ async function scrapeCasaDosDadosLeadsOnce(
       const targetPage = fromPage + 1;
       markPhase(`Copiando: avançando paginação ${fromPage} → ${targetPage}…`);
 
-      const clicked = await page
-        .evaluate(() => {
-          const nav = document.querySelector('nav[data-oruga="pagination"]');
-          if (!nav) return false;
-          const next =
-            (nav.querySelector(
-              "button.pagination-next:not([disabled]):not(.is-disabled)",
-            ) as HTMLButtonElement | null) ||
-            (nav.querySelector(
-              'button[aria-label*="Pŕoxima"], button[aria-label*="Próxima"], button[aria-label*="proxima" i]',
-            ) as HTMLButtonElement | null);
-          if (!next) return false;
-          if (
-            next.disabled ||
-            next.classList.contains("is-disabled") ||
-            next.getAttribute("aria-disabled") === "true"
-          ) {
-            return false;
-          }
-          next.click();
-          return true;
-        })
-        .catch(() => false);
+      const clicked = await withNodeTimeout(
+        page
+          .evaluate(() => {
+            const nav = document.querySelector('nav[data-oruga="pagination"]');
+            if (!nav) return false;
+            const next =
+              (nav.querySelector(
+                "button.pagination-next:not([disabled]):not(.is-disabled)",
+              ) as HTMLButtonElement | null) ||
+              (nav.querySelector(
+                'button[aria-label*="Pŕoxima"], button[aria-label*="Próxima"], button[aria-label*="proxima" i]',
+              ) as HTMLButtonElement | null);
+            if (!next) return false;
+            if (
+              next.disabled ||
+              next.classList.contains("is-disabled") ||
+              next.getAttribute("aria-disabled") === "true"
+            ) {
+              return false;
+            }
+            next.click();
+            return true;
+          })
+          .catch(() => false),
+        2500,
+        false,
+      );
+      if (!clicked) return false;
 
-      if (!clicked) {
-        // Fallback Playwright selectors (curto).
-        const sels = [
-          'nav[data-oruga="pagination"] button.pagination-next:not([disabled]):not(.is-disabled)',
-          "button.pagination-next.pagination-link:not([disabled]):not(.is-disabled)",
-        ];
-        let any = false;
-        for (const sel of sels) {
-          const btn = page.locator(sel).first();
-          if ((await btn.count()) === 0) continue;
-          if (!(await btn.isVisible().catch(() => false))) continue;
-          await btn.click({ force: true, timeout: 4000 }).catch(() => null);
-          any = true;
-          break;
-        }
-        if (!any) return false;
-      }
-
-      const pageOk = await waitUntilPage(targetPage, 10_000);
-      if (pageOk) {
-        await waitForPortalSearchResults(page, 12_000, (msg) => {
-          sessionPhase = msg;
-          markPhase(msg);
-        });
-        return true;
-      }
-
-      if (previousFirstCnpj) {
-        const deadline = Date.now() + 8_000;
-        while (Date.now() < deadline) {
-          const nextFirst = await readFirstVisibleCnpjDigits(page);
+      // Oruga troca a página em ~0,2–1s. Teto duro 4s — sem re-aguardar “SEARCH”.
+      const deadline = Date.now() + 4_000;
+      while (Date.now() < deadline) {
+        if (options?.shouldAbort?.()) return false;
+        const cur = await withNodeTimeout(
+          page
+            .evaluate(() => {
+              const active = document.querySelector(
+                [
+                  'nav[data-oruga="pagination"] button[aria-current="page"]',
+                  'nav[data-oruga="pagination"] button.pagination-link.is-current',
+                  'nav[data-oruga="pagination"] button[aria-current="true"]',
+                ].join(", "),
+              );
+              const n = Number(String(active?.textContent || "").trim());
+              return Number.isFinite(n) && n > 0 ? n : 0;
+            })
+            .catch(() => 0),
+          1500,
+          0,
+        );
+        if (cur === targetPage) return true;
+        if (previousFirstCnpj) {
+          const nextFirst = await withNodeTimeout(
+            readFirstVisibleCnpjDigits(page),
+            1500,
+            "",
+          );
           if (nextFirst && nextFirst !== previousFirstCnpj) return true;
-          await sleepNode(250);
         }
+        await sleepNode(120);
       }
       return false;
     };
@@ -3010,7 +3014,7 @@ async function scrapeCasaDosDadosLeadsOnce(
           .catch(() => 0);
         if (best > 0) {
           markPhase(`Copiando: aproximando via botão ${best} (alvo ${target})…`);
-          await waitUntilPage(best, 10_000);
+          await waitUntilPage(best, 5_000);
           if (await jumpToPageDom(target)) return true;
           continue;
         }
@@ -3207,7 +3211,7 @@ async function scrapeCasaDosDadosLeadsOnce(
           markPhase(
             `COPY: retry paginação ${pageIndex}→${nextPage} (${retry}/3) — mesma sessão…`,
           );
-          await page.waitForTimeout(600);
+          await sleepNode(400);
           advanced =
             (await goToNextResultsPage(pageFirst, pageIndex)) ||
             (await jumpToPageDom(nextPage));

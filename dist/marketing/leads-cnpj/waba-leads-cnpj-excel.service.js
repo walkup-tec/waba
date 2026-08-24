@@ -133,18 +133,16 @@ function extractMobilePhonesForEvo(raw) {
     return out;
 }
 /**
- * 1 linha por celular (EVO). Sem celular reconhecido → mantém 1 linha com
- * Telefone vazio (evita mandar fixo/máscara inválida para disparo).
+ * 1 linha por celular (EVO). Sem celular reconhecido → **omite** o CNPJ
+ * (Excel e leadCount só contam quem tem telefone móvel válido).
  */
 function expandLeadsByMobileForEvo(leads) {
     const rows = [];
     for (const lead of leads) {
         const rawTel = String(lead.telefone || "").trim();
         const mobiles = extractMobilePhonesForEvo(rawTel);
-        if (!mobiles.length) {
-            rows.push({ ...lead, telefone: "" });
+        if (!mobiles.length)
             continue;
-        }
         for (const telefone of mobiles) {
             rows.push({ ...lead, telefone });
         }
@@ -152,7 +150,8 @@ function expandLeadsByMobileForEvo(leads) {
     return rows;
 }
 function buildLeadsCnpjExcelBuffer(leads) {
-    const rows = leads.map((lead) => ({
+    const withPhone = leads.filter((lead) => String(lead.telefone || "").trim().length > 0);
+    const rows = withPhone.map((lead) => ({
         CNPJ: lead.cnpj,
         "Nome (Razão Social)": lead.nome,
         Telefone: lead.telefone,
