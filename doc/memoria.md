@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 13:52 — Motor Alternativa teto 100/dia + pausa ±30%
+
+- Teto: `ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 100` (throttle 8h–22h ≈ 240–264s, 8/h)
+- Pausa do ciclo: base 14 min com sorteio estável por ciclo em ±30% (≈ 9,8–18,2 min)
+- LOG: `doc/LOG-2026-08-24__135200__alternativa-motor-teto-100-pausa-jitter.md`
+
 ## 2026-08-24 13:35 — Leads PJ resume floor v9.18
 
 - Piso do pool na retomada rápida + recover; rejeita salto de checkpoint

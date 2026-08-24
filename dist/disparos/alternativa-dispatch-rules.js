@@ -1,7 +1,8 @@
 "use strict";
 /** Regras do motor de envio API Alternativa (números da fazenda). */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALTERNATIVA_BURST_OFF_MINUTES = exports.ALTERNATIVA_BURST_ON_MINUTES = exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
+exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO = exports.ALTERNATIVA_BURST_OFF_MINUTES = exports.ALTERNATIVA_BURST_ON_MINUTES = exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND = void 0;
+exports.getAlternativaBurstOffBoundsMinutes = getAlternativaBurstOffBoundsMinutes;
 exports.getAlternativaDispatchRulesMeta = getAlternativaDispatchRulesMeta;
 exports.isAlternativaBurstWindowOpen = isAlternativaBurstWindowOpen;
 exports.computeAlternativaTypingDelayMs = computeAlternativaTypingDelayMs;
@@ -17,10 +18,12 @@ exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER = 4;
 exports.ALTERNATIVA_MIN_PURCHASE_QUANTITY = 4;
 /** Mínimo de números conectados para ativar campanha (era 4; agora 1). */
 exports.DISPAROS_CAMPAIGN_MIN_CONNECTED_INSTANCES = 1;
-exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 300;
+exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 100;
 /** Dentro do expediente: 60 min enviando / 14 min pausa (mesmo padrão do aquecedor). */
 exports.ALTERNATIVA_BURST_ON_MINUTES = 60;
 exports.ALTERNATIVA_BURST_OFF_MINUTES = 14;
+/** Cada pausa do ciclo sorteia duração entre −30% e +30% do valor definido. */
+exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO = 0.3;
 const DEFAULT_WORKING_DAY_KEYS = ["seg", "ter", "qua", "qui", "sex"];
 const WEEKDAY_KEY_TO_JS = {
     dom: 0,
@@ -31,7 +34,42 @@ const WEEKDAY_KEY_TO_JS = {
     sex: 5,
     sab: 6,
 };
+function getAlternativaBurstOffBoundsMinutes() {
+    const base = exports.ALTERNATIVA_BURST_OFF_MINUTES;
+    const ratio = exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO;
+    return {
+        min: base * (1 - ratio),
+        max: base * (1 + ratio),
+    };
+}
+function rollAlternativaBurstOffDurationMs() {
+    const { min, max } = getAlternativaBurstOffBoundsMinutes();
+    const minMs = min * 60000;
+    const maxMs = max * 60000;
+    return minMs + Math.random() * (maxMs - minMs);
+}
+let alternativaBurstPhaseState = null;
+function initAlternativaBurstPhaseState(now, nowMs) {
+    const minutesOfDay = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60 + now.getMilliseconds() / 60000;
+    const nominalCycle = exports.ALTERNATIVA_BURST_ON_MINUTES + exports.ALTERNATIVA_BURST_OFF_MINUTES;
+    const pos = nominalCycle > 0 ? minutesOfDay % nominalCycle : 0;
+    const offDurationMs = rollAlternativaBurstOffDurationMs();
+    if (pos < exports.ALTERNATIVA_BURST_ON_MINUTES) {
+        return {
+            phase: "on",
+            phaseStartedAtMs: nowMs - pos * 60000,
+            offDurationMs,
+        };
+    }
+    const offElapsedMin = pos - exports.ALTERNATIVA_BURST_ON_MINUTES;
+    return {
+        phase: "off",
+        phaseStartedAtMs: nowMs - offElapsedMin * 60000,
+        offDurationMs,
+    };
+}
 function getAlternativaDispatchRulesMeta() {
+    const offBounds = getAlternativaBurstOffBoundsMinutes();
     return {
         minActivatedForSend: exports.ALTERNATIVA_MIN_ACTIVATED_FOR_SEND,
         minPurchasedForPicker: exports.ALTERNATIVA_MIN_PURCHASED_FOR_PICKER,
@@ -40,15 +78,52 @@ function getAlternativaDispatchRulesMeta() {
         maxSendsPerDayPerNumber: exports.ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER,
         burstOnMinutes: exports.ALTERNATIVA_BURST_ON_MINUTES,
         burstOffMinutes: exports.ALTERNATIVA_BURST_OFF_MINUTES,
+        burstOffVariationRatio: exports.ALTERNATIVA_BURST_OFF_VARIATION_RATIO,
+        burstOffMinMinutes: offBounds.min,
+        burstOffMaxMinutes: offBounds.max,
     };
 }
-/** Janela liga/pausa humanizada (minutos do dia em SP), independente do expediente. */
+/** Janela liga/pausa humanizada (minutos do dia em SP), independente do expediente.
+ * A pausa de cada ciclo é sorteada uma vez em ±30% de ALTERNATIVA_BURST_OFF_MINUTES
+ * e permanece estável até o ciclo acabar (não re-sorteia a cada tick).
+ */
 function isAlternativaBurstWindowOpen(now) {
-    const minutesOfDay = now.getHours() * 60 + now.getMinutes();
-    const cycle = exports.ALTERNATIVA_BURST_ON_MINUTES + exports.ALTERNATIVA_BURST_OFF_MINUTES;
-    if (cycle <= 0)
+    const onMs = exports.ALTERNATIVA_BURST_ON_MINUTES * 60000;
+    if (onMs <= 0)
         return true;
-    return minutesOfDay % cycle < exports.ALTERNATIVA_BURST_ON_MINUTES;
+    const nowMs = now.getTime();
+    if (!Number.isFinite(nowMs))
+        return true;
+    if (!alternativaBurstPhaseState) {
+        alternativaBurstPhaseState = initAlternativaBurstPhaseState(now, nowMs);
+    }
+    let state = alternativaBurstPhaseState;
+    let guard = 0;
+    while (guard++ < 10000) {
+        if (state.phase === "on") {
+            if (nowMs - state.phaseStartedAtMs < onMs) {
+                alternativaBurstPhaseState = state;
+                return true;
+            }
+            state = {
+                phase: "off",
+                phaseStartedAtMs: state.phaseStartedAtMs + onMs,
+                offDurationMs: rollAlternativaBurstOffDurationMs(),
+            };
+            continue;
+        }
+        if (nowMs - state.phaseStartedAtMs < state.offDurationMs) {
+            alternativaBurstPhaseState = state;
+            return false;
+        }
+        state = {
+            phase: "on",
+            phaseStartedAtMs: state.phaseStartedAtMs + state.offDurationMs,
+            offDurationMs: state.offDurationMs,
+        };
+    }
+    alternativaBurstPhaseState = state;
+    return state.phase === "on";
 }
 /** Delay de “digitando…” proporcional ao tamanho da mensagem (1,8s–8s + jitter). */
 function computeAlternativaTypingDelayMs(messageText) {
@@ -57,8 +132,8 @@ function computeAlternativaTypingDelayMs(messageText) {
     const jitter = Math.floor(Math.random() * 900);
     return base + jitter;
 }
-/** Calcula delay e limites para respeitar até 300 envios/dia por número na janela de expediente.
- * Intervalo entre envios = metade do pacing “cheio” (ex.: 8–22h → ~72–96s em vez de ~144–192s).
+/** Calcula delay e limites para respeitar o teto diário por número na janela de expediente.
+ * Intervalo entre envios = metade do pacing “cheio” (ex.: 8–22h e 100/dia → ~240–264s).
  */
 function computeAlternativaThrottle(input) {
     const startHour = Math.max(0, Math.min(23, Math.floor(Number(input.startHour) || 8)));
