@@ -93,21 +93,48 @@ async function gotoWithRetry(
   options?: { waitUntil?: "domcontentloaded" | "load" | "networkidle"; timeout?: number },
 ) {
   const waitUntil = options?.waitUntil || "domcontentloaded";
-  const timeout = options?.timeout || 60000;
+  const timeout = options?.timeout || 45000;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       await page.goto(url, { waitUntil, timeout });
       return;
     } catch (error) {
       lastError = error;
       const msg = error instanceof Error ? error.message : String(error);
+      if (/Page crashed|Target crashed|has been closed/i.test(msg)) {
+        throw error;
+      }
       if (!/interrupted by another navigation/i.test(msg)) throw error;
       await page.waitForLoadState("domcontentloaded").catch(() => null);
       await page.waitForTimeout(600 * attempt);
     }
   }
   throw lastError;
+}
+
+/**
+ * page.goto sem teto Node trava o job em "LOGIN: autenticado — 400s" (CDP morto).
+ * Orçamento duro no processo; estouro = hard recover.
+ */
+async function gotoWithNodeBudget(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  page: any,
+  url: string,
+  label: string,
+  budgetMs = 40_000,
+): Promise<void> {
+  const pwTimeout = Math.max(8_000, Math.min(35_000, budgetMs - 2_000));
+  const ok = await withNodeTimeout(
+    gotoWithRetry(page, url, { waitUntil: "domcontentloaded", timeout: pwTimeout }).then(
+      () => true as const,
+    ),
+    budgetMs,
+    false as const,
+  );
+  if (!ok) {
+    throw new RendererUnresponsiveError(`goto ${label} (${budgetMs}ms)`);
+  }
 }
 
 /**
@@ -131,90 +158,103 @@ async function loginCasaDosDadosPortal(
     );
   }
 
-  const emailInput = page.locator('input[name="email"]').first();
-  const passwordInput = page.locator('input[name="senha"]').first();
-  const accessBtn = page.locator('button:has-text("Acessar")').first();
+  try {
+    const emailInput = page.locator('input[name="email"]').first();
+    const passwordInput = page.locator('input[name="senha"]').first();
+    const accessBtn = page.locator('button:has-text("Acessar")').first();
 
-  await emailInput.waitFor({ state: "visible", timeout: 30000 });
-  await passwordInput.waitFor({ state: "visible", timeout: 15000 });
-  await accessBtn.waitFor({ state: "visible", timeout: 10000 });
+    await emailInput.waitFor({ state: "visible", timeout: 30000 });
+    await passwordInput.waitFor({ state: "visible", timeout: 15000 });
+    await accessBtn.waitFor({ state: "visible", timeout: 10000 });
 
-  const readLoginState = async () =>
-    page.evaluate(() => {
-      const emailEl = document.querySelector('input[name="email"]') as HTMLInputElement | null;
-      const senhaEl = document.querySelector('input[name="senha"]') as HTMLInputElement | null;
-      const btn = Array.from(document.querySelectorAll("button")).find((b) =>
-        /acessar/i.test(b.textContent || ""),
-      ) as HTMLButtonElement | undefined;
-      return {
-        emailLen: emailEl ? String(emailEl.value || "").length : -1,
-        senhaLen: senhaEl ? String(senhaEl.value || "").length : -1,
-        btnDisabled: btn ? btn.disabled : null,
-        url: location.href,
-      };
-    }) as Promise<{ emailLen: number; senhaLen: number; btnDisabled: boolean | null; url: string }>;
-
-  const fillBoth = async (mode: "fill" | "type") => {
-    await emailInput.click({ clickCount: 3 });
-    await emailInput.fill("");
-    if (mode === "fill") await emailInput.fill(email);
-    else await emailInput.pressSequentially(email, { delay: 15 });
-    await emailInput.dispatchEvent("input").catch(() => undefined);
-    await emailInput.dispatchEvent("change").catch(() => undefined);
-
-    await passwordInput.click({ clickCount: 3 });
-    await passwordInput.fill("");
-    if (mode === "fill") await passwordInput.fill(password);
-    else await passwordInput.pressSequentially(password, { delay: 15 });
-    await passwordInput.dispatchEvent("input").catch(() => undefined);
-    await passwordInput.dispatchEvent("change").catch(() => undefined);
-  };
-
-  await fillBoth("fill");
-  let state = await readLoginState();
-  if (state.btnDisabled !== false || state.emailLen < 3 || state.senhaLen < 1) {
-    await fillBoth("type");
-    state = await readLoginState();
-  }
-
-  if (state.btnDisabled !== false) {
-    await page
-      .waitForFunction(() => {
+    const readLoginState = async () =>
+      page.evaluate(() => {
+        const emailEl = document.querySelector('input[name="email"]') as HTMLInputElement | null;
+        const senhaEl = document.querySelector('input[name="senha"]') as HTMLInputElement | null;
         const btn = Array.from(document.querySelectorAll("button")).find((b) =>
-          /acessar/i.test((b as HTMLButtonElement).textContent || ""),
-        );
-        return Boolean(btn && !(btn as HTMLButtonElement).disabled);
-      }, { timeout: 8000 })
+          /acessar/i.test(b.textContent || ""),
+        ) as HTMLButtonElement | undefined;
+        return {
+          emailLen: emailEl ? String(emailEl.value || "").length : -1,
+          senhaLen: senhaEl ? String(senhaEl.value || "").length : -1,
+          btnDisabled: btn ? btn.disabled : null,
+          url: location.href,
+        };
+      }) as Promise<{ emailLen: number; senhaLen: number; btnDisabled: boolean | null; url: string }>;
+
+    const fillBoth = async (mode: "fill" | "type") => {
+      await emailInput.click({ clickCount: 3 });
+      await emailInput.fill("");
+      if (mode === "fill") await emailInput.fill(email);
+      else await emailInput.pressSequentially(email, { delay: 15 });
+      await emailInput.dispatchEvent("input").catch(() => undefined);
+      await emailInput.dispatchEvent("change").catch(() => undefined);
+
+      await passwordInput.click({ clickCount: 3 });
+      await passwordInput.fill("");
+      if (mode === "fill") await passwordInput.fill(password);
+      else await passwordInput.pressSequentially(password, { delay: 15 });
+      await passwordInput.dispatchEvent("input").catch(() => undefined);
+      await passwordInput.dispatchEvent("change").catch(() => undefined);
+    };
+
+    await fillBoth("fill");
+    let state = await readLoginState();
+    if (state.btnDisabled !== false || state.emailLen < 3 || state.senhaLen < 1) {
+      await fillBoth("type");
+      state = await readLoginState();
+    }
+
+    if (state.btnDisabled !== false) {
+      await page
+        .waitForFunction(() => {
+          const btn = Array.from(document.querySelectorAll("button")).find((b) =>
+            /acessar/i.test((b as HTMLButtonElement).textContent || ""),
+          );
+          return Boolean(btn && !(btn as HTMLButtonElement).disabled);
+        }, { timeout: 8000 })
+        .catch(() => null);
+      state = await readLoginState();
+    }
+
+    if (state.btnDisabled !== false) {
+      throw new Error(
+        `Login Casa dos Dados: botão Acessar continua disabled (emailLen=${state.emailLen}, senhaLen=${state.senhaLen}, url=${state.url}). O portal só habilita com e-mail e senha aceitos no formulário — não é falha de clique.`,
+      );
+    }
+
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => null),
+      accessBtn.click({ timeout: 15000 }),
+    ]);
+    // Pós-login o portal costuma ir para /plataforma (redirect). Espera sair de /entrar.
+    await page
+      .waitForURL((url: URL) => !/\/entrar\/?$/i.test(url.pathname), { timeout: 45000 })
       .catch(() => null);
-    state = await readLoginState();
-  }
+    await page.waitForLoadState("domcontentloaded").catch(() => null);
+    await page.waitForTimeout(400);
 
-  if (state.btnDisabled !== false) {
-    throw new Error(
-      `Login Casa dos Dados: botão Acessar continua disabled (emailLen=${state.emailLen}, senhaLen=${state.senhaLen}, url=${state.url}). O portal só habilita com e-mail e senha aceitos no formulário — não é falha de clique.`,
-    );
-  }
-
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => null),
-    accessBtn.click({ timeout: 15000 }),
-  ]);
-  // Pós-login o portal costuma ir para /plataforma (redirect). Espera sair de /entrar.
-  await page
-    .waitForURL((url: URL) => !/\/entrar\/?$/i.test(url.pathname), { timeout: 45000 })
-    .catch(() => null);
-  await page.waitForLoadState("domcontentloaded").catch(() => null);
-  await page.waitForTimeout(400);
-
-  const afterUrl = String(page.url?.() || "");
-  if (/\/entrar\/?$/i.test(new URL(afterUrl || "https://portal.casadosdados.com.br/entrar").pathname)) {
-    const tip = await page
-      .evaluate(() => String(document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 220))
-      .catch(() => "");
-    throw new Error(
-      `Login Casa dos Dados: ainda em /entrar após Acessar (url=${afterUrl}). ` +
-        `Confira CASADOSDADOS_EMAIL/PASSWORD no ambiente. Detalhe: ${tip || "(sem texto)"}`,
-    );
+    const afterUrl = String(page.url?.() || "");
+    if (/\/entrar\/?$/i.test(new URL(afterUrl || "https://portal.casadosdados.com.br/entrar").pathname)) {
+      const tip = await page
+        .evaluate(() => String(document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 220))
+        .catch(() => "");
+      throw new Error(
+        `Login Casa dos Dados: ainda em /entrar após Acessar (url=${afterUrl}). ` +
+          `Confira CASADOSDADOS_EMAIL/PASSWORD no ambiente. Detalhe: ${tip || "(sem texto)"}`,
+      );
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error || "");
+    // Formulario não pintou (Xvfb saturado / Cloudflare) — novo Chromium, não "failed" permanente.
+    if (
+      /locator\.waitFor|Timeout \d+ms exceeded|input\[name=["']email|input\[name=["']senha|Acessar continua disabled|ainda em \/entrar/i.test(
+        msg,
+      )
+    ) {
+      throw new LeadsScrapeError("LOGIN_TIMEOUT", "new-browser", msg.slice(0, 400));
+    }
+    throw error instanceof Error ? error : new Error(msg);
   }
 }
 
@@ -312,9 +352,8 @@ export function isSoftScrapeError(error: unknown): boolean {
   if (anyErr?.soft === true) return true;
   if (anyErr?.recovery === "same-page" || anyErr?.recovery === "stop") return true;
   const msg = error instanceof Error ? error.message : String(error || "");
-  return /SEARCH_TIMEOUT_RESPONSIVE|SEARCH_DISPATCH_FAILED|SEARCH_BUTTON_NOT_FOUND|PAGINATION_STALL/i.test(
-    msg,
-  );
+  // SEARCH_TIMEOUT / LOGIN_TIMEOUT agora são new-browser — não listar aqui.
+  return /SEARCH_DISPATCH_FAILED|SEARCH_BUTTON_NOT_FOUND|PAGINATION_STALL/i.test(msg);
 }
 
 type SearchTransition =
@@ -2773,12 +2812,13 @@ async function scrapeCasaDosDadosLeadsOnce(
       // Fluxo completo: login só se necessário; filtros + pesquisa.
       if (!wantFastResume) {
         setPhase("LOGIN", "abrindo portal…");
-        await gotoWithRetry(page, PORTAL_LOGIN_URL, { waitUntil: "domcontentloaded" });
-        await waitPastCloudflare(page, { onProgress, stage: "login" });
+        await gotoWithNodeBudget(page, PORTAL_LOGIN_URL, "login", 40_000);
+        await waitPastCloudflare(page, { onProgress, stage: "login", timeoutMs: 45_000 });
       } else {
         // Já estamos (ou estivemos) em /pesquisa — garantir auth sem /entrar cego.
-        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+        setPhase("LOGIN", "abrindo pesquisa (retomada)…");
+        await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-retomada", 40_000);
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa", timeoutMs: 45_000 });
       }
 
       const alreadyIn = await page
@@ -2787,10 +2827,10 @@ async function scrapeCasaDosDadosLeadsOnce(
       if (!alreadyIn) {
         setPhase("LOGIN", "autenticando…");
         await loginCasaDosDadosPortal(page, email, password);
-        await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
-        setPhase("LOGIN", "autenticado");
-        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+        await waitPastCloudflare(page, { onProgress, stage: "pós-login", timeoutMs: 45_000 });
+        setPhase("LOGIN", "autenticado — abrindo pesquisa…");
+        await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-pos-login", 40_000);
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa", timeoutMs: 45_000 });
       } else {
         setPhase("LOGIN", "sessão restaurada (storageState)");
       }
@@ -2805,8 +2845,8 @@ async function scrapeCasaDosDadosLeadsOnce(
 
       if (!wantFastResume) {
         setPhase("FILTERS", "abrindo tela de pesquisa…");
-        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+        await gotoWithNodeBudget(page, PORTAL_SEARCH_URL, "pesquisa-filtros", 40_000);
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa", timeoutMs: 45_000 });
         await sleepNode(800);
       }
 
@@ -2883,7 +2923,7 @@ async function scrapeCasaDosDadosLeadsOnce(
         if (stuckProbe && stuckProbe.loadingNodes > 0) {
           throw new LeadsScrapeError(
             "SEARCH_TIMEOUT_RESPONSIVE",
-            "same-page",
+            "new-browser",
             `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`,
           );
         }
@@ -2908,9 +2948,10 @@ async function scrapeCasaDosDadosLeadsOnce(
         const last =
           searchResult.probe ||
           (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
+        // Sem CNPJ após ACK+timeout sob carga: Chromium novo (same-page só “pausava” o job).
         throw new LeadsScrapeError(
           "SEARCH_TIMEOUT_RESPONSIVE",
-          "same-page",
+          "new-browser",
           `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`,
         );
       }

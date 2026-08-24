@@ -68,14 +68,14 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 const phoneRefreshJobs = new Set<string>();
 
 function resolveMaxConcurrentScrapes(): number {
-  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 3) || 3);
-  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 3));
+  // Evidência: 3 Chromiums → Page crashed / login timeout / SEARCH sem CNPJ.
+  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 2) || 2);
+  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 2));
 }
 
 function resolveScrapeStaggerMs(): number {
-  // Espaça o launch para não derrubar Xvfb/login (3 jobs no mesmo segundo).
-  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 8_000) || 8_000);
-  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 8_000));
+  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 12_000) || 12_000);
+  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 12_000));
 }
 
 function formatListaLabel(index: number): string {
@@ -2576,7 +2576,7 @@ export class WabaLeadsCnpjService {
       const hardRecovery =
         (isLeadsScrapeError(error) && error.recovery === "new-browser") ||
         (!(error instanceof LeadsScrapeError) &&
-          /Target crashed|Page crashed|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(
+          /Target crashed|Page crashed|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|LOGIN_TIMEOUT|locator\.waitFor|input\[name=.email/i.test(
             msg,
           ));
 

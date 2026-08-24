@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 16:30 — Leads PJ login/SEARCH recover v9.23
+
+- goto com teto Node; login/SEARCH timeout → new-browser; soft-cap 2
+- Marker `DEPLOY-2026-08-24-1630-leads-pj-login-search-recover-v9.23`
+- LOG: `doc/LOG-2026-08-24__163000__leads-pj-login-search-recover-v923.md`
+
 ## 2026-08-24 16:10 — Leads PJ Page crashed recover v9.22
 
 - `Page crashed` vira hard reconnect; soft-cap default 3 + stagger 8s
