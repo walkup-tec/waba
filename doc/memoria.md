@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 15:15 — Leads PJ sem early-stop v9.20
+
+- `portalTotal` não encolhe `pagesToFetch`; meta = maxPages
+- `isPortalScrapeReallyComplete` bloqueia enrich em 104/1000
+- Marker `DEPLOY-2026-08-24-1515-leads-pj-no-early-stop-v9.20`
+- LOG: `doc/LOG-2026-08-24__151500__leads-pj-no-early-stop-v920.md`
+
 ## 2026-08-24 15:05 — CTA Alternativa máx. 15 caracteres
 
 - Rótulo do botão URL (GPT + normalização) limitado a 15 caracteres
