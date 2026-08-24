@@ -252,6 +252,19 @@ function isCampaignPurged(campaignKey: string): boolean {
   return purgedCampaignKeys.has(String(campaignKey || "").trim());
 }
 
+/** Continuação de cópia do portal sem destruir Lista NN já ready (dayKey `YYYY-MM-DD#portal-copy`). */
+const PORTAL_COPY_DAY_SUFFIX = "#portal-copy";
+
+function isPortalCopyContinuationList(list: Pick<WabaLeadsCnpjList, "dayKey" | "name">): boolean {
+  const day = String(list.dayKey || "");
+  if (day.includes(PORTAL_COPY_DAY_SUFFIX)) return true;
+  return /\bc[oó]pia portal\b/i.test(String(list.name || ""));
+}
+
+function portalCopyContinuationDayKey(today = saoPauloDayKey()): string {
+  return `${today}${PORTAL_COPY_DAY_SUFFIX}`;
+}
+
 function countLeadsHigienizados(list: WabaLeadsCnpjList): number {
   if (list.status === "ready") {
     return Math.max(0, Math.round(Number(list.leadCount || 0) || 0));
@@ -635,6 +648,217 @@ export class WabaLeadsCnpjService {
     return toSummary(updated, downloads);
   }
 
+  /** Campanha já marcou cópia do portal como definitiva. */
+  private isCampaignPortalCopyComplete(campaignKey: string): boolean {
+    const key = String(campaignKey || "").trim();
+    if (!key) return false;
+    return this.repository.list().some(
+      (l) => String(l.campaignKey || "").trim() === key && l.scrapeCompleted === true,
+    );
+  }
+
+  /**
+   * Estima próxima página a retomar (checkpoint ou pool+used / 20).
+   * Nunca acima do teto da UI Oruga.
+   */
+  private estimatePortalResumePage(campaignKey: string, hint?: WabaLeadsCnpjList | null): number {
+    const portalUiMaxPage = resolvePortalUiMaxPage();
+    const key = String(campaignKey || "").trim();
+    const pool = key ? this.repository.getPool(key) : null;
+    const pending = pool?.pending.length || 0;
+    const used = key ? this.repository.collectUsedCnpjs(key).size : 0;
+    const fromCkpt = Math.max(
+      0,
+      Math.round(Number(hint?.scrapeCheckpoint?.nextPage || 0) || 0),
+    );
+    const fromVolume = Math.max(1, Math.floor((pending + used) / 20) + 1);
+    const next = fromCkpt > 0 ? fromCkpt : fromVolume;
+    return Math.min(portalUiMaxPage, Math.max(1, next));
+  }
+
+  /**
+   * Se a cópia do portal ficou incompleta (ex.: Lista 01 ready com 118/1000),
+   * retoma a raspagem. Listas ready com Excel são preservadas — cria fila `#portal-copy`.
+   */
+  ensureIncompletePortalCopiesResume(): void {
+    const portalUiMaxPage = resolvePortalUiMaxPage();
+    const seen = new Set<string>();
+    for (const list of this.repository.list()) {
+      if (list.source !== "portal") continue;
+      const key = String(list.campaignKey || "").trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      try {
+        this.ensurePortalCopyContinues(key, portalUiMaxPage);
+      } catch {
+        /* boot não pode falhar por uma campanha */
+      }
+    }
+  }
+
+  private ensurePortalCopyContinues(campaignKey: string, portalUiMaxPage: number): void {
+    const key = String(campaignKey || "").trim();
+    if (!key || this.isCampaignPortalCopyComplete(key)) return;
+
+    const lists = this.repository
+      .list()
+      .filter((l) => String(l.campaignKey || "").trim() === key && l.source === "portal");
+    if (!lists.length) return;
+
+    const activeScrape = lists.find(
+      (l) => l.status === "scraping" && !l.skipPortalScrape,
+    );
+    if (activeScrape) {
+      this.enqueueJob(activeScrape.id);
+      return;
+    }
+
+    const pool = this.repository.getPool(key);
+    const pending = pool?.pending.length || 0;
+    const used = this.repository.collectUsedCnpjs(key).size;
+    const sample =
+      lists.find((l) => isPortalCopyContinuationList(l)) ||
+      lists.find((l) => l.status === "ready") ||
+      lists.find((l) => !l.skipPortalScrape) ||
+      lists[0];
+    const metrics = resolveScrapeHistoryMetrics(sample, pending, used);
+    const resumePage = this.estimatePortalResumePage(key, sample);
+    const clearlyIncomplete =
+      metrics.pagesDone > 0 &&
+      metrics.pagesDone < portalUiMaxPage &&
+      resumePage <= portalUiMaxPage;
+    const neverFinished = sample.scrapeCompleted !== true && resumePage <= portalUiMaxPage;
+    if (!clearlyIncomplete && !(neverFinished && (pending > 0 || metrics.cnpjCopied > 0))) {
+      return;
+    }
+    // Checkpoint já além do teto = cópia tratada como fim da UI.
+    if (resumePage > portalUiMaxPage) return;
+
+    const openPartial = lists.find(
+      (l) =>
+        !isPortalCopyContinuationList(l) &&
+        (l.status === "enriching" || l.status === "queued" || l.status === "failed") &&
+        !l.skipPortalScrape,
+    );
+    if (openPartial) {
+      this.resumeIncompletePortalScrape(openPartial.id);
+      return;
+    }
+
+    const readyWithExcel = lists.find(
+      (l) =>
+        !isPortalCopyContinuationList(l) &&
+        l.status === "ready" &&
+        Boolean(l.exportFileName) &&
+        l.scrapeCompleted !== true,
+    );
+    if (readyWithExcel) {
+      this.startPortalCopyContinuation(readyWithExcel, resumePage, pending);
+      return;
+    }
+
+    const anyIncomplete = lists.find(
+      (l) =>
+        !l.skipPortalScrape &&
+        l.scrapeCompleted !== true &&
+        ["draft", "failed", "scraping"].includes(l.status),
+    );
+    if (anyIncomplete) {
+      if (anyIncomplete.status === "failed" || anyIncomplete.status === "draft") {
+        this.resumeIncompletePortalScrape(anyIncomplete.id);
+      } else {
+        this.enqueueJob(anyIncomplete.id);
+      }
+    }
+  }
+
+  /**
+   * Nova linha de cópia do portal (não apaga Lista NN ready).
+   * dayKey `hoje#portal-copy` evita colisão com a lista do dia no enrich.
+   */
+  private startPortalCopyContinuation(
+    from: WabaLeadsCnpjList,
+    resumePage: number,
+    pendingCount: number,
+  ): WabaLeadsCnpjListSummary {
+    const campaignKey = String(from.campaignKey || "").trim();
+    const baseName = campaignBaseName(from.name);
+    const copyDay = portalCopyContinuationDayKey();
+    const existing = this.repository.findListByCampaignDay(campaignKey, copyDay);
+    if (existing) {
+      if (existing.status === "scraping" || existing.status === "failed") {
+        const updated = this.repository.update(
+          {
+            ...existing,
+            status: "scraping",
+            skipPortalScrape: false,
+            scrapeCompleted: false,
+            scrapeCheckpoint: {
+              nextPage: resumePage,
+              portalTotal: existing.scrapeCheckpoint?.portalTotal ?? from.scrapeCheckpoint?.portalTotal ?? null,
+              pagesToFetch:
+                existing.scrapeCheckpoint?.pagesToFetch ??
+                from.scrapeCheckpoint?.pagesToFetch ??
+                resolvePortalUiMaxPage(),
+              collectedCount: pendingCount,
+            },
+            scrapeReconnectAttempts: 0,
+            progressMessage: `Retomando cópia do portal na página ${resumePage} (Lista pronta preservada; pool ${pendingCount.toLocaleString("pt-BR")})…`,
+            error: null,
+            updatedAt: new Date().toISOString(),
+          },
+          { persist: "flush" },
+        );
+        cancelledJobs.delete(updated.id);
+        this.enqueueJob(updated.id);
+        return toSummary(updated, [], { poolPending: pendingCount });
+      }
+      if (existing.scrapeCompleted === true) {
+        return toSummary(existing, [], { poolPending: pendingCount });
+      }
+    }
+
+    assertCasaDosDadosCredentials();
+    const now = new Date().toISOString();
+    const portalUiMaxPage = resolvePortalUiMaxPage();
+    const list: WabaLeadsCnpjList = {
+      id: this.repository.newId(),
+      name: `${baseName} · cópia portal`,
+      status: "scraping",
+      source: "portal",
+      filters: {
+        ...from.filters,
+        maxPages: Number(from.filters?.maxPages) > 0 ? Number(from.filters.maxPages) : portalUiMaxPage,
+      },
+      leads: [],
+      leadCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      generatedAt: null,
+      exportFileName: null,
+      error: null,
+      createdByEmail: "pipeline@local",
+      dayKey: copyDay,
+      campaignKey,
+      skipPortalScrape: false,
+      scrapeCheckpoint: {
+        nextPage: resumePage,
+        portalTotal: from.scrapeCheckpoint?.portalTotal ?? null,
+        pagesToFetch: from.scrapeCheckpoint?.pagesToFetch ?? portalUiMaxPage,
+        collectedCount: pendingCount,
+      },
+      scrapeReconnectAttempts: 0,
+      scrapeCompleted: false,
+      progressMessage: `Retomando cópia do portal na página ${resumePage}/${portalUiMaxPage} (Lista pronta preservada; pool ${pendingCount.toLocaleString("pt-BR")})…`,
+    };
+    this.repository.create(list);
+    this.repository.setPoolAutoContinuePaused(campaignKey, false);
+    cancelledJobs.delete(list.id);
+    this.enqueueJob(list.id);
+    this.armGlobalEnrichQueue();
+    return toSummary(list, [], { poolPending: pendingCount });
+  }
+
   /**
    * Interrompe enrich/queued parcial e volta a copiar o portal.
    * Devolve os CNPJs do lote ao pool e retoma a partir da página estimada (pool/20 + 1).
@@ -649,6 +873,15 @@ export class WabaLeadsCnpjService {
     }
     if (!["enriching", "queued", "failed", "ready", "scraping"].includes(list.status)) {
       throw new Error(`Status ${list.status} não permite retomar a raspagem.`);
+    }
+    // Ready com Excel: não apaga Lista NN — sobe linha `#portal-copy`.
+    if (list.status === "ready" && list.exportFileName && !isPortalCopyContinuationList(list)) {
+      const campaignKey = String(
+        list.campaignKey || buildCampaignKey(campaignBaseName(list.name), list.source),
+      ).trim();
+      const pending = this.repository.getPool(campaignKey)?.pending.length || 0;
+      const resumePage = this.estimatePortalResumePage(campaignKey, list);
+      return this.startPortalCopyContinuation(list, resumePage, pending);
     }
     const campaignKey = String(
       list.campaignKey || buildCampaignKey(campaignBaseName(list.name), list.source),
@@ -1097,7 +1330,11 @@ export class WabaLeadsCnpjService {
         this.enqueueJob(existingToday.id);
         return;
       }
-      if (existingToday.status === "ready") return;
+      if (existingToday.status === "ready") {
+        // Lista do dia já gerada — se a cópia do portal ficou pela metade, retoma sem apagar o Excel.
+        this.ensurePortalCopyContinues(active, resolvePortalUiMaxPage());
+        return;
+      }
       if (existingToday.status === "failed") {
         /* cai no createAndStart abaixo (createAndStart permite recriar failed) */
       } else {
@@ -1246,6 +1483,8 @@ export class WabaLeadsCnpjService {
     }
     const active = this.ensureEnrichSlotForToday();
     this.pauseNonActiveEnrichLists(active);
+    // Antes do enrich: retoma cópia incompleta (ex. 118/1000 com Lista 01 já ready).
+    this.ensureIncompletePortalCopiesResume();
     for (const list of this.repository.list()) {
       if (list.status === "scraping") {
         this.enqueueJob(list.id);
@@ -1256,6 +1495,7 @@ export class WabaLeadsCnpjService {
     if (!this.hasActiveEnrichWork()) {
       for (const list of this.repository.list()) {
         if (list.status === "ready" && list.exportFileName && Array.isArray(list.leads) && list.leads.length) {
+          if (isPortalCopyContinuationList(list)) continue;
           const evoPhones = list.leads.filter((l) => isEvoBrazilMobileDigits(l.telefone)).length;
           const anyPhone = list.leads.filter((l) => String(l.telefone || "").trim()).length;
           if (evoPhones === 0 && anyPhone > 0) {
@@ -1983,6 +2223,27 @@ export class WabaLeadsCnpjService {
         }
 
         if (!this.repository.getById(listId)) return;
+
+        // Continuação `#portal-copy`: só alimenta o pool; Lista NN ready permanece.
+        {
+          const liveCopy = this.repository.getById(listId);
+          if (liveCopy && isPortalCopyContinuationList(liveCopy) && liveCopy.scrapeCompleted === true) {
+            const poolLeft = this.repository.getPool(campaignKey)?.pending.length || 0;
+            patch({
+              status: "ready",
+              leads: [],
+              leadCount: 0,
+              exportFileName: null,
+              listaIndex: null,
+              generatedAt: new Date().toISOString(),
+              progressMessage: `Cópia do portal concluída — ${poolLeft.toLocaleString("pt-BR")} CNPJ(s) no pool para a fila ReceitaWS (próximas listas diárias).`,
+              error: null,
+            });
+            this.armContinueFromPool(campaignKey);
+            this.armGlobalEnrichQueue();
+            return;
+          }
+        }
 
         // Trava: nunca enriquecer enquanto a cópia do portal da campanha não terminou.
         if (list.source === "portal" && !list.skipPortalScrape) {

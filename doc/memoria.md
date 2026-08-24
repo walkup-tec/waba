@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 11:00 — Leads PJ auto-retoma cópia incompleta v9.13
+
+- Boot retoma cópia se páginas &lt; 1000 e sem `scrapeCompleted`
+- Lista ready (Excel) preservada; linha `· cópia portal` (`#portal-copy`)
+- Marker `DEPLOY-2026-08-24-1100-leads-pj-auto-retoma-copia-v9.13`
+- LOG: `doc/LOG-2026-08-24__110000__leads-pj-auto-retoma-copia-v913.md`
+
 ## 2026-08-24 10:45 — Leads PJ cópia completa antes do enrich v9.12
 
 - Não enriquecer com raspagem incompleta (ex.: 118/1000)
