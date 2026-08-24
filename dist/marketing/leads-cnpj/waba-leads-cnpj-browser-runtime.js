@@ -42,6 +42,7 @@ exports.saveCasaDosDadosStorageState = saveCasaDosDadosStorageState;
 exports.buildChromiumLaunchArgs = buildChromiumLaunchArgs;
 exports.acquireSharedBrowser = acquireSharedBrowser;
 exports.releaseSharedBrowser = releaseSharedBrowser;
+exports.isSharedBrowserConnected = isSharedBrowserConnected;
 exports.shutdownLeadsCnpjBrowserRuntime = shutdownLeadsCnpjBrowserRuntime;
 exports.logScrapePageTelemetry = logScrapePageTelemetry;
 /**
@@ -207,6 +208,14 @@ async function releaseSharedBrowser(reason) {
         catch {
             /* ignore */
         }
+    }
+}
+function isSharedBrowserConnected() {
+    try {
+        return Boolean(browser && browser.isConnected());
+    }
+    catch {
+        return false;
     }
 }
 async function shutdownLeadsCnpjBrowserRuntime() {

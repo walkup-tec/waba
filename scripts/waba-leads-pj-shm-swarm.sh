@@ -12,7 +12,7 @@
 #   memória do serviço >= 4GB recomendado
 set -euo pipefail
 
-SERVICE="${WABA_DISPARADOR_SERVICE:-waba_disparador}"
+SERVICE="${WABA_DISPARADOR_SERVICE:-waba_waba_disparador}"
 SHM_SIZE="${WABA_LEADS_SHM_SIZE:-2147483648}" # 2 GiB
 
 cmd_status() {

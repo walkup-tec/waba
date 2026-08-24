@@ -187,6 +187,14 @@ export async function releaseSharedBrowser(reason: string): Promise<void> {
   }
 }
 
+export function isSharedBrowserConnected(): boolean {
+  try {
+    return Boolean(browser && browser.isConnected());
+  } catch {
+    return false;
+  }
+}
+
 export async function shutdownLeadsCnpjBrowserRuntime(): Promise<void> {
   await releaseSharedBrowser("process-shutdown");
 }

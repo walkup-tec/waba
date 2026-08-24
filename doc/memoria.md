@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 12:25 — Leads PJ context leak fix v9.15
+
+- Fecha Context sempre no finally; não mata Chromium se ainda conectado
+- Soft-cap 1 com browser compartilhado
+- Marker `DEPLOY-2026-08-24-1225-leads-pj-context-leak-fix-v9.15`
+- LOG: `doc/LOG-2026-08-24__122500__leads-pj-context-leak-fix-v915.md`
+
 ## 2026-08-24 11:45 — Leads PJ browser runtime v9.14 (A+B+C)
 
 - Browser compartilhado (`launchServer`+`connect`); sem `browser.close` no fim do job

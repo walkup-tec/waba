@@ -1921,8 +1921,10 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
         try {
             if (attempt > 1) {
                 // Prefixo COPY: mantém UI em «Copiando» (não volta para Abrindo Portal).
-                onProgress?.(`COPY: recover browser ${attempt}/${maxAttempts} · retomando página ${resumeFrom} (storageState)…`);
-                await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)(`hard-recover-attempt-${attempt}`);
+                onProgress?.(`COPY: recover tentativa ${attempt}/${maxAttempts} · retomando página ${resumeFrom}…`);
+                if (!(0, waba_leads_cnpj_browser_runtime_1.isSharedBrowserConnected)()) {
+                    await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)(`hard-recover-attempt-${attempt}`);
+                }
             }
             else if (resumeFrom > 1) {
                 onProgress?.(`COPY: retomando extração na página ${resumeFrom} (mesma campanha)…`);
@@ -1950,8 +1952,14 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
             if (!requiresBrowserRecovery(error)) {
                 throw error instanceof Error ? error : new Error(msg);
             }
-            onProgress?.(`COPY: recover — Chromium morto; checkpoint página ${resumeFrom} preservado…`);
-            await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)("chromium-dead");
+            onProgress?.(`COPY: recover — falha de sessão; checkpoint página ${resumeFrom} preservado…`);
+            // Só mata o Chromium se ele realmente morreu. Context já foi fechado no finally.
+            if (!(0, waba_leads_cnpj_browser_runtime_1.isSharedBrowserConnected)()) {
+                await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)("chromium-dead");
+            }
+            else {
+                onProgress?.(`COPY: recover — Chromium ainda vivo; novo Context na tentativa ${attempt + 1} (sem BOOT completo)…`);
+            }
             if (attempt >= maxAttempts)
                 break;
             await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * attempt)));
@@ -2003,6 +2011,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     // Persistência: se o caller não passou storageState, usa disco.
     const effectiveStorage = options?.storageState ?? (0, waba_leads_cnpj_browser_runtime_1.loadCasaDosDadosStorageState)() ?? undefined;
     let browser;
+    let context = null;
     try {
         browser = await (0, waba_leads_cnpj_browser_runtime_1.acquireSharedBrowser)({ headless, slowMo, hasXvfb });
     }
@@ -2012,6 +2021,10 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             throw new Error("Chromium do Playwright ausente no servidor. No Docker: rode `npx playwright install --with-deps chromium` na imagem (ver Dockerfile) e faça Redeploy.");
         }
         throw error;
+    }
+    if (!browser.isConnected()) {
+        await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)("not-connected-at-start");
+        browser = await (0, waba_leads_cnpj_browser_runtime_1.acquireSharedBrowser)({ headless, slowMo, hasXvfb });
     }
     const resumeFromPageLog = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
     /** Fecha Chromium só se shouldAbort (exclusão do usuário) — não por demora. */
@@ -2041,7 +2054,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         if (effectiveStorage) {
             contextOptions.storageState = effectiveStorage;
         }
-        const context = await browser.newContext(contextOptions);
+        context = await browser.newContext(contextOptions);
         await context.addInitScript(() => {
             Object.defineProperty(navigator, "webdriver", { get: () => undefined });
         });
@@ -2197,7 +2210,8 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         }
         if (searchResult.kind === "empty") {
             setPhase("DONE", "pesquisa sem resultados");
-            await context.close();
+            await context.close().catch(() => undefined);
+            context = null;
             return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
         }
         // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
@@ -2481,7 +2495,8 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             markPhase(startPage > portalUiMaxPage
                 ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
                 : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`);
-            await context.close();
+            await context.close().catch(() => undefined);
+            context = null;
             return {
                 leads: [],
                 scrapeCompleted: true,
@@ -2644,6 +2659,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             scrapeCompleted = false;
         }
         await context.close().catch(() => undefined);
+        context = null;
         // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
         // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
         if (!collected.size) {
@@ -2662,7 +2678,12 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     finally {
         clearInterval(abortWatch);
         clearInterval(sessionKeepAlive);
-        // Fase C: NÃO fecha o Chromium compartilhado aqui — só context (acima).
+        // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava e derrubava o Chromium compartilhado).
+        if (context) {
+            await context.close().catch(() => undefined);
+            context = null;
+        }
+        // Fase C: NÃO fecha o Chromium compartilhado aqui.
         // releaseSharedBrowser fica para crash hard / abort / shutdown do processo.
     }
 }

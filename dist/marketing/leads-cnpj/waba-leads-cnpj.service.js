@@ -29,8 +29,11 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set();
 function resolveMaxConcurrentScrapes() {
+    // Browser compartilhado (launchServer): 1 Context por vez — N jobs no mesmo Chromium vazam/crasham.
+    const shared = String(process.env.CASADOSDADOS_BROWSER_SERVER || "1").trim() !== "0";
     const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 2) || 2);
-    return Math.max(1, Math.min(4, Number.isFinite(raw) ? raw : 2));
+    const capped = Math.max(1, Math.min(4, Number.isFinite(raw) ? raw : 2));
+    return shared ? 1 : capped;
 }
 function resolveScrapeStaggerMs() {
     const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 20000) || 20000);

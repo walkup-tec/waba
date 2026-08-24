@@ -2,6 +2,7 @@ import type { WabaLeadsCnpjFilters, WabaLeadsCnpjLead } from "./waba-leads-cnpj.
 import { emptyLeadFromCnpj, normalizeCnpjDigits } from "./waba-leads-cnpj.repository";
 import {
   acquireSharedBrowser,
+  isSharedBrowserConnected,
   loadCasaDosDadosStorageState,
   logScrapePageTelemetry,
   releaseSharedBrowser,
@@ -2414,9 +2415,11 @@ export async function scrapeCasaDosDadosLeads(
       if (attempt > 1) {
         // Prefixo COPY: mantém UI em «Copiando» (não volta para Abrindo Portal).
         onProgress?.(
-          `COPY: recover browser ${attempt}/${maxAttempts} · retomando página ${resumeFrom} (storageState)…`,
+          `COPY: recover tentativa ${attempt}/${maxAttempts} · retomando página ${resumeFrom}…`,
         );
-        await releaseSharedBrowser(`hard-recover-attempt-${attempt}`);
+        if (!isSharedBrowserConnected()) {
+          await releaseSharedBrowser(`hard-recover-attempt-${attempt}`);
+        }
       } else if (resumeFrom > 1) {
         onProgress?.(`COPY: retomando extração na página ${resumeFrom} (mesma campanha)…`);
       }
@@ -2443,9 +2446,16 @@ export async function scrapeCasaDosDadosLeads(
         throw error instanceof Error ? error : new Error(msg);
       }
       onProgress?.(
-        `COPY: recover — Chromium morto; checkpoint página ${resumeFrom} preservado…`,
+        `COPY: recover — falha de sessão; checkpoint página ${resumeFrom} preservado…`,
       );
-      await releaseSharedBrowser("chromium-dead");
+      // Só mata o Chromium se ele realmente morreu. Context já foi fechado no finally.
+      if (!isSharedBrowserConnected()) {
+        await releaseSharedBrowser("chromium-dead");
+      } else {
+        onProgress?.(
+          `COPY: recover — Chromium ainda vivo; novo Context na tentativa ${attempt + 1} (sem BOOT completo)…`,
+        );
+      }
       if (attempt >= maxAttempts) break;
       await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * attempt)));
     }
@@ -2515,6 +2525,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     options?.storageState ?? loadCasaDosDadosStorageState() ?? undefined;
 
   let browser;
+  let context: import("playwright").BrowserContext | null = null;
   try {
     browser = await acquireSharedBrowser({ headless, slowMo, hasXvfb });
   } catch (error) {
@@ -2525,6 +2536,11 @@ async function scrapeCasaDosDadosLeadsOnce(
       );
     }
     throw error;
+  }
+
+  if (!browser.isConnected()) {
+    await releaseSharedBrowser("not-connected-at-start");
+    browser = await acquireSharedBrowser({ headless, slowMo, hasXvfb });
   }
 
   const resumeFromPageLog = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
@@ -2557,7 +2573,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     if (effectiveStorage) {
       contextOptions.storageState = effectiveStorage;
     }
-    const context = await browser.newContext(contextOptions);
+    context = await browser.newContext(contextOptions);
     await context.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
@@ -2580,7 +2596,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       } catch {
         /* ignore */
       }
-      page = await context.newPage();
+      page = await context!.newPage();
       page.setDefaultTimeout(45000);
       pageCrashed = false;
       page.on("crash", () => {
@@ -2749,7 +2765,8 @@ async function scrapeCasaDosDadosLeadsOnce(
     }
     if (searchResult.kind === "empty") {
       setPhase("DONE", "pesquisa sem resultados");
-      await context.close();
+      await context!.close().catch(() => undefined);
+      context = null;
       return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
     }
 
@@ -3108,7 +3125,8 @@ async function scrapeCasaDosDadosLeadsOnce(
           ? `Copiando: checkpoint página ${startPage} além do teto da UI (${portalUiMaxPage}) — raspagem via portal encerrada; pool já arquivado será usado.`
           : `Copiando: checkpoint página ${startPage} além do total (${pagesToFetch}) — sessão sem páginas novas.`,
       );
-      await context.close();
+      await context!.close().catch(() => undefined);
+      context = null;
       return {
         leads: [],
         scrapeCompleted: true,
@@ -3297,7 +3315,8 @@ async function scrapeCasaDosDadosLeadsOnce(
       scrapeCompleted = false;
     }
 
-    await context.close().catch(() => undefined);
+    await context!.close().catch(() => undefined);
+    context = null;
     // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
     // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
     if (!collected.size) {
@@ -3322,7 +3341,12 @@ async function scrapeCasaDosDadosLeadsOnce(
   } finally {
     clearInterval(abortWatch);
     clearInterval(sessionKeepAlive);
-    // Fase C: NÃO fecha o Chromium compartilhado aqui — só context (acima).
+    // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava e derrubava o Chromium compartilhado).
+    if (context) {
+      await context.close().catch(() => undefined);
+      context = null;
+    }
+    // Fase C: NÃO fecha o Chromium compartilhado aqui.
     // releaseSharedBrowser fica para crash hard / abort / shutdown do processo.
   }
 }
