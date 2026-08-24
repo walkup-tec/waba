@@ -36,19 +36,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isDedicatedBrowserMode = isDedicatedBrowserMode;
+exports.isDedicatedJobBrowser = isDedicatedJobBrowser;
 exports.resolveCasaDosDadosStoragePath = resolveCasaDosDadosStoragePath;
 exports.loadCasaDosDadosStorageState = loadCasaDosDadosStorageState;
 exports.saveCasaDosDadosStorageState = saveCasaDosDadosStorageState;
 exports.buildChromiumLaunchArgs = buildChromiumLaunchArgs;
 exports.acquireSharedBrowser = acquireSharedBrowser;
+exports.releaseJobBrowser = releaseJobBrowser;
 exports.releaseSharedBrowser = releaseSharedBrowser;
 exports.isSharedBrowserConnected = isSharedBrowserConnected;
 exports.shutdownLeadsCnpjBrowserRuntime = shutdownLeadsCnpjBrowserRuntime;
 exports.logScrapePageTelemetry = logScrapePageTelemetry;
 /**
- * Browser runtime Leads PJ — Fase C (Playwright Server + connect).
- * O Chromium sobrevive ao fim do job (só fecha context/page).
- * Relaunch só em disconnect / kill explícito / shutdown do processo.
+ * Browser runtime Leads PJ.
+ * - Modo paralelo (default): 1 Chromium dedicado por job (`CASADOSDADOS_BROWSER_SERVER=0`).
+ * - Modo legado: launchServer + connect singleton (`CASADOSDADOS_BROWSER_SERVER=1`) — só seguro com 1 job.
  *
  * Docs: https://playwright.dev/docs/api/class-browsertype#browser-type-launch-server
  *       https://playwright.dev/docs/docker
@@ -64,11 +67,23 @@ let launchArgs = [];
 let launchHeadless = true;
 let launchSlowMo = 0;
 let starting = null;
+/** Dedicated browsers launched for parallel jobs (closed by the job). */
+const dedicatedBrowsers = new WeakSet();
 async function loadPlaywright() {
     if (pwMod)
         return pwMod;
     pwMod = await Promise.resolve().then(() => __importStar(require("playwright")));
     return pwMod;
+}
+/**
+ * Browser compartilhado só com CASADOSDADOS_BROWSER_SERVER=1.
+ * Default = dedicado (N jobs em paralelo, cada um com seu Chromium).
+ */
+function isDedicatedBrowserMode() {
+    return String(process.env.CASADOSDADOS_BROWSER_SERVER || "0").trim() !== "1";
+}
+function isDedicatedJobBrowser(b) {
+    return Boolean(b && dedicatedBrowsers.has(b));
 }
 function resolveCasaDosDadosStoragePath() {
     return path_1.default.join((0, data_path_1.resolveDataDir)(), STORAGE_FILE);
@@ -125,20 +140,39 @@ function wireBrowser(b, label) {
     });
 }
 /**
- * Obtém Browser compartilhado via launchServer + connect (protocolo Playwright).
- * Env: CASADOSDADOS_BROWSER_SERVER=0 força launch() clássico (legado).
+ * Obtém Browser para um job de raspagem.
+ * - Dedicado (default): novo `chromium.launch()` por chamada — paralelo seguro.
+ * - Compartilhado (`CASADOSDADOS_BROWSER_SERVER=1`): launchServer + connect singleton.
  */
 async function acquireSharedBrowser(opts) {
+    const pw = await loadPlaywright();
+    launchHeadless = opts.headless;
+    launchSlowMo = opts.slowMo;
+    launchArgs = buildChromiumLaunchArgs(opts);
+    if (isDedicatedBrowserMode()) {
+        const dedicated = await pw.chromium.launch({
+            headless: launchHeadless,
+            slowMo: launchSlowMo,
+            args: launchArgs,
+        });
+        dedicatedBrowsers.add(dedicated);
+        dedicated.on("disconnected", () => {
+            console.error("[Leads PJ] BROWSER_DISCONNECTED (dedicated)");
+        });
+        console.log(JSON.stringify({
+            event: "LEADS_BROWSER_DEDICATED",
+            headless: launchHeadless,
+            useDevShm: String(process.env.CASADOSDADOS_USE_DEV_SHM || "") === "1",
+            ts: new Date().toISOString(),
+        }));
+        return dedicated;
+    }
     if (browser && browser.isConnected())
         return browser;
     if (starting)
         return starting;
     starting = (async () => {
-        const pw = await loadPlaywright();
-        launchHeadless = opts.headless;
-        launchSlowMo = opts.slowMo;
-        launchArgs = buildChromiumLaunchArgs(opts);
-        const useServer = String(process.env.CASADOSDADOS_BROWSER_SERVER || "1").trim() !== "0";
+        const useServer = true;
         if (useServer) {
             try {
                 if (server) {
@@ -185,6 +219,24 @@ async function acquireSharedBrowser(opts) {
     finally {
         starting = null;
     }
+}
+/**
+ * Fecha Chromium do job: dedicado sempre; compartilhado só em hard recovery.
+ */
+async function releaseJobBrowser(jobBrowser, reason) {
+    if (!jobBrowser)
+        return;
+    if (isDedicatedJobBrowser(jobBrowser)) {
+        console.warn(`[Leads PJ] releaseJobBrowser(dedicated): ${reason}`);
+        try {
+            await jobBrowser.close();
+        }
+        catch {
+            /* ignore */
+        }
+        return;
+    }
+    await releaseSharedBrowser(reason);
 }
 /** Fecha o browser compartilhado (hard recovery / abort usuário / shutdown). */
 async function releaseSharedBrowser(reason) {

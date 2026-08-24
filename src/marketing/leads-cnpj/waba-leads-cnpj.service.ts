@@ -44,10 +44,9 @@ const continueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
 let globalEnrichTimer: ReturnType<typeof setTimeout> | null = null;
 /**
- * Soft-cap da raspagem Playwright: até N Chromiums em paralelo (default 2).
- * Ilimitado derruba Docker/Xvfb (Target crashed / reinício do container).
- * Mutex N=1 foi rejeitado (lento demais); N=2 + stagger mantém múltiplas extrações.
- * Override: CASADOSDADOS_MAX_CONCURRENT_SCRAPES (1–4), CASADOSDADOS_SCRAPE_STAGGER_MS.
+ * Soft-cap da raspagem Playwright: até N Chromiums em paralelo (default 10).
+ * Cada job = 1 Chromium dedicado (login + cópia simultâneos entre campanhas).
+ * Override: CASADOSDADOS_MAX_CONCURRENT_SCRAPES (1–12), CASADOSDADOS_SCRAPE_STAGGER_MS.
  */
 type PortalScrapeWaiter = {
   listId: string;
@@ -68,16 +67,14 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 const phoneRefreshJobs = new Set<string>();
 
 function resolveMaxConcurrentScrapes(): number {
-  // Browser compartilhado (launchServer): 1 Context por vez — N jobs no mesmo Chromium vazam/crasham.
-  const shared = String(process.env.CASADOSDADOS_BROWSER_SERVER || "1").trim() !== "0";
-  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 2) || 2);
-  const capped = Math.max(1, Math.min(4, Number.isFinite(raw) ? raw : 2));
-  return shared ? 1 : capped;
+  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 10) || 10);
+  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 10));
 }
 
 function resolveScrapeStaggerMs(): number {
-  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 20_000) || 20_000);
-  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 20_000));
+  // Default 0: jobs sobem juntos (pedido: N jobs em simultâneo).
+  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 0) || 0);
+  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 0));
 }
 
 function formatListaLabel(index: number): string {

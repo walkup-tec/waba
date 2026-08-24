@@ -2,9 +2,11 @@ import type { WabaLeadsCnpjFilters, WabaLeadsCnpjLead } from "./waba-leads-cnpj.
 import { emptyLeadFromCnpj, normalizeCnpjDigits } from "./waba-leads-cnpj.repository";
 import {
   acquireSharedBrowser,
+  isDedicatedJobBrowser,
   isSharedBrowserConnected,
   loadCasaDosDadosStorageState,
   logScrapePageTelemetry,
+  releaseJobBrowser,
   releaseSharedBrowser,
   saveCasaDosDadosStorageState,
 } from "./waba-leads-cnpj-browser-runtime";
@@ -2516,8 +2518,7 @@ async function scrapeCasaDosDadosLeadsOnce(
   onProgress?: CasaDosDadosProgress,
   options?: ScrapeCasaDosDadosOptions,
 ): Promise<ScrapeCasaDosDadosResult> {
-  // Cada chamada = 1 Chromium. Concorrência limitada no service (soft-cap 2 + stagger).
-  // Cada chamada = 1 Context. Browser compartilhado via launchServer+connect (Fase C).
+  // Cada chamada = 1 Chromium dedicado (N jobs em paralelo). Soft-cap no service (default 10).
   const { email, password } = readCasaDosDadosCredentials();
   // 0 / ausente = sem teto: copia todas as páginas até o portal acabar.
   const maxPagesCap = Math.max(0, Math.round(Number(filters.maxPages ?? 0) || 0));
@@ -2558,10 +2559,10 @@ async function scrapeCasaDosDadosLeadsOnce(
     resumeHint > 1
       ? `COPY: conectando Chromium para retomada pág. ${resumeHint}…`
       : headless
-        ? "BOOT: conectando Chromium compartilhado (headless)…"
+        ? "BOOT: abrindo Chromium (headless)…"
         : String(process.env.DISPLAY || "").trim()
-          ? "BOOT: conectando Chromium compartilhado (Xvfb)…"
-          : "BOOT: conectando Chromium compartilhado (janela)…",
+          ? "BOOT: abrindo Chromium (Xvfb)…"
+          : "BOOT: abrindo Chromium (janela)…",
   );
 
   // Persistência: se o caller não passou storageState, usa disco.
@@ -2583,7 +2584,7 @@ async function scrapeCasaDosDadosLeadsOnce(
   }
 
   if (!browser.isConnected()) {
-    await releaseSharedBrowser("not-connected-at-start");
+    await releaseJobBrowser(browser, "not-connected-at-start");
     browser = await acquireSharedBrowser({ headless, slowMo, hasXvfb });
   }
 
@@ -2593,7 +2594,7 @@ async function scrapeCasaDosDadosLeadsOnce(
   const abortWatch = setInterval(() => {
     if (!options?.shouldAbort?.()) return;
     console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
-    void releaseSharedBrowser("user-abort");
+    void releaseJobBrowser(browser, "user-abort");
   }, 4000);
 
   /** Heartbeat = tempo na fase; NÃO fingir progresso. */
@@ -3628,12 +3629,14 @@ async function scrapeCasaDosDadosLeadsOnce(
   } finally {
     clearInterval(abortWatch);
     clearInterval(sessionKeepAlive);
-    // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava e derrubava o Chromium compartilhado).
+    // Sempre fecha o Context (erro em FILTERS/CNAE antes vazava).
     if (context) {
       await context.close().catch(() => undefined);
       context = null;
     }
-    // Fase C: NÃO fecha o Chromium compartilhado aqui.
-    // releaseSharedBrowser fica para crash hard / abort / shutdown do processo.
+    // Modo paralelo: cada job fecha o próprio Chromium. Compartilhado (legado) fica vivo.
+    if (isDedicatedJobBrowser(browser)) {
+      await releaseJobBrowser(browser, "job-session-end");
+    }
   }
 }

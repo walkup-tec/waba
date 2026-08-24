@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 15:45 — Leads PJ raspagens paralelas v9.21
+
+- Soft-cap default 10; Chromium dedicado por job; stagger 0
+- Marker `DEPLOY-2026-08-24-1545-leads-pj-parallel-scrapes-v9.21`
+- LOG: `doc/LOG-2026-08-24__154500__leads-pj-parallel-scrapes-v921.md`
+
 ## 2026-08-24 15:25 — Alternativa contact/save em background
 
 - Cada lead: nome aleatório + `POST /contact/save` na instância, sem `await`

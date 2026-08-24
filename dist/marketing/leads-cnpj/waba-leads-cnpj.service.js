@@ -29,15 +29,13 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set();
 function resolveMaxConcurrentScrapes() {
-    // Browser compartilhado (launchServer): 1 Context por vez — N jobs no mesmo Chromium vazam/crasham.
-    const shared = String(process.env.CASADOSDADOS_BROWSER_SERVER || "1").trim() !== "0";
-    const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 2) || 2);
-    const capped = Math.max(1, Math.min(4, Number.isFinite(raw) ? raw : 2));
-    return shared ? 1 : capped;
+    const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 10) || 10);
+    return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 10));
 }
 function resolveScrapeStaggerMs() {
-    const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 20000) || 20000);
-    return Math.max(0, Math.min(120000, Number.isFinite(raw) ? raw : 20000));
+    // Default 0: jobs sobem juntos (pedido: N jobs em simultâneo).
+    const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 0) || 0);
+    return Math.max(0, Math.min(120000, Number.isFinite(raw) ? raw : 0));
 }
 function formatListaLabel(index) {
     const n = Math.max(1, Math.round(Number(index) || 1));
