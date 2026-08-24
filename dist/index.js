@@ -11183,6 +11183,66 @@ async function pickDisparadorInstanceForConfig(config, opts) {
     disparosRoundRobinCounter = cur + 1;
     return pool[idx];
 }
+const EVO_SAVE_CONTACT_TIMEOUT_MS = 2000;
+const EVO_CONTACT_FIRST_NAMES = [
+    "Ana", "Bruno", "Camila", "Diego", "Eduarda", "Felipe", "Gabriela", "Henrique",
+    "Isabela", "João", "Karina", "Lucas", "Mariana", "Nicolas", "Olivia", "Pedro",
+    "Rafael", "Sofia", "Thiago", "Vanessa", "William", "Yasmin",
+];
+const EVO_CONTACT_LAST_NAMES = [
+    "Almeida", "Barbosa", "Cardoso", "Dias", "Fernandes", "Gomes", "Lima", "Mendes",
+    "Nogueira", "Oliveira", "Pereira", "Ribeiro", "Rocha", "Santos", "Silva", "Souza",
+    "Teixeira", "Vieira",
+];
+function pickRandomItem(items) {
+    return items[Math.floor(Math.random() * items.length)];
+}
+function generateRandomEvoContactName() {
+    const first = pickRandomItem(EVO_CONTACT_FIRST_NAMES);
+    const last = pickRandomItem(EVO_CONTACT_LAST_NAMES);
+    let last2 = pickRandomItem(EVO_CONTACT_LAST_NAMES);
+    if (last2 === last) {
+        last2 = EVO_CONTACT_LAST_NAMES[(EVO_CONTACT_LAST_NAMES.indexOf(last) + 7) % EVO_CONTACT_LAST_NAMES.length];
+    }
+    return Math.random() < 0.6 ? `${first} ${last} ${last2}` : `${first} ${last}`;
+}
+/** Grava o lead na agenda da instância EVO. Não lança; timeout curto. */
+async function saveEvoLeadContactInBackground(instanceName, phone) {
+    const instance = String(instanceName || "").trim();
+    const number = String(phone || "").replace(/\D/g, "");
+    if (!instance || number.length < 10)
+        return;
+    const name = generateRandomEvoContactName();
+    const payload = { number, name, saveOnDevice: true };
+    const urls = [
+        `${EVO_API_BASE}/contact/save/${encodeURIComponent(instance)}`,
+        `${EVO_API_BASE}/chat/saveContact/${encodeURIComponent(instance)}`,
+    ];
+    for (const url of urls) {
+        try {
+            const result = await callEvoAction(url, "POST", payload, {
+                timeoutMs: EVO_SAVE_CONTACT_TIMEOUT_MS,
+                retries: 0,
+            });
+            if (result.ok)
+                return;
+            if (result.status !== 404 && result.status !== 405) {
+                console.warn(`[Campanha Alternativa] contact/save ${instance} HTTP ${result.status}`);
+                return;
+            }
+        }
+        catch (err) {
+            console.warn(`[Campanha Alternativa] contact/save ${instance}:`, String(err?.message || err).slice(0, 160));
+            return;
+        }
+    }
+}
+/** Dispara o save em paralelo: o envio não espera nem atrasa. */
+function queueEvoLeadContactSave(instanceName, phone) {
+    void saveEvoLeadContactInBackground(instanceName, phone).catch((err) => {
+        console.warn("[Campanha Alternativa] contact/save background:", String(err?.message || err).slice(0, 160));
+    });
+}
 async function sendEvoComposingPresenceBeforeText(instanceName, number, typingDelayMs) {
     const delay = Math.max(1200, Math.min(12000, Math.floor(typingDelayMs)));
     const body = {
@@ -11726,6 +11786,7 @@ async function processOneCampaignDispatch(campaignId) {
             return ackProbe.status;
         };
         if (isAlternativaMotor) {
+            queueEvoLeadContactSave(instancePick.instancia, numero);
             const typingMs = (0, alternativa_dispatch_rules_1.computeAlternativaTypingDelayMs)(outbound.text);
             await sendEvoComposingPresenceBeforeText(instancePick.instancia, numero, typingMs);
         }

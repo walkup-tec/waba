@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 15:25 — Alternativa contact/save em background
+
+- Cada lead: nome aleatório + `POST /contact/save` na instância, sem `await`
+- Falha/timeout (2s) não barra nem atrasa o `sendButtons`
+- LOG: `doc/LOG-2026-08-24__152500__alternativa-contact-save-background.md`
+
 ## 2026-08-24 15:15 — Leads PJ sem early-stop v9.20
 
 - `portalTotal` não encolhe `pagesToFetch`; meta = maxPages
