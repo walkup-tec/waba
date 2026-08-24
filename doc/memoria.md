@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 13:35 — Leads PJ resume floor v9.18
+
+- Piso do pool na retomada rápida + recover; rejeita salto de checkpoint
+- goToResultsPage sem next quando UI > alvo; sync UI após posicionar
+- Marker `DEPLOY-2026-08-24-1335-leads-pj-resume-floor-v9.18`
+- LOG: `doc/LOG-2026-08-24__133500__leads-pj-resume-floor-v918.md`
+
 ## 2026-08-24 13:15 — Leads PJ copy every page v9.17
 
 - Regra: copiar todos os CNPJs de cada página visitada

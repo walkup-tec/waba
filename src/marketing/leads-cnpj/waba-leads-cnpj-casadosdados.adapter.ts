@@ -245,6 +245,19 @@ export type ScrapeCasaDosDadosOptions = {
   onStorageState?: (state: unknown) => void | Promise<void>;
 };
 
+/**
+ * Alinha página de retomada ao piso do pool (~CNPJs/20).
+ * - raw ≫ floor → volta ao piso (não pula páginas sem arquivar)
+ * - raw ≪ floor → sobe ao piso (não reprocessa páginas já no pool)
+ */
+export function resolvePortalResumePage(rawPage: number, floorPage: number): number {
+  const raw = Math.max(1, Math.round(Number(rawPage) || 1) || 1);
+  const floor = Math.max(1, Math.round(Number(floorPage) || 1) || 1);
+  if (raw > floor + 2) return floor;
+  if (raw < floor) return floor;
+  return raw;
+}
+
 /** Resultado da raspagem — enrich só se scrapeCompleted. */
 export type ScrapeCasaDosDadosResult = {
   leads: WabaLeadsCnpjLead[];
@@ -2407,7 +2420,16 @@ export async function scrapeCasaDosDadosLeads(
     1,
     Math.round(Number(process.env.CASADOSDADOS_SCRAPE_RETRIES || 8) || 8),
   );
-  let resumeFrom = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
+  const poolResumeFloor = Math.max(
+    1,
+    Math.round(Number(options?.resumeFloorPage || 1) || 1) || 1,
+  );
+  /** Piso que sobe só com páginas realmente arquivadas nesta sessão (recover). */
+  let liveResumeFloor = poolResumeFloor;
+  let resumeFrom = resolvePortalResumePage(
+    Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1)),
+    liveResumeFloor,
+  );
   let lastErr: unknown;
   let sessionStorageState: unknown = options?.storageState;
 
@@ -2417,20 +2439,24 @@ export async function scrapeCasaDosDadosLeads(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      resumeFrom = resolvePortalResumePage(resumeFrom, liveResumeFloor);
       if (attempt > 1) {
         // Prefixo COPY: mantém UI em «Copiando» (não volta para Abrindo Portal).
         onProgress?.(
-          `COPY: recover tentativa ${attempt}/${maxAttempts} · retomando página ${resumeFrom}…`,
+          `COPY: recover tentativa ${attempt}/${maxAttempts} · retomando página ${resumeFrom} (piso ${liveResumeFloor})…`,
         );
         if (!isSharedBrowserConnected()) {
           await releaseSharedBrowser(`hard-recover-attempt-${attempt}`);
         }
       } else if (resumeFrom > 1) {
-        onProgress?.(`COPY: retomando extração na página ${resumeFrom} (mesma campanha)…`);
+        onProgress?.(
+          `COPY: retomando extração na página ${resumeFrom} (piso pool ${liveResumeFloor})…`,
+        );
       }
       return await scrapeCasaDosDadosLeadsOnce(filters, onProgress, {
         ...options,
         resumeFromPage: resumeFrom,
+        resumeFloorPage: liveResumeFloor,
         storageState: sessionStorageState,
         onStorageState: async (state) => {
           sessionStorageState = state;
@@ -2438,8 +2464,17 @@ export async function scrapeCasaDosDadosLeads(
           await options?.onStorageState?.(state);
         },
         onPageCheckpoint: async (ckpt) => {
-          resumeFrom = Math.max(1, ckpt.nextPage);
           await options?.onPageCheckpoint?.(ckpt);
+          const sequential = Math.max(1, Math.round(Number(ckpt.completedPage || 0) || 0) + 1);
+          // Rejeita salto absurdo (ex.: 59 → 389) — mantém retomada sequencial.
+          if (resumeFrom > 1 && sequential > resumeFrom + 3) {
+            onProgress?.(
+              `COPY: ignorando salto de checkpoint ${resumeFrom}→${sequential} (mantém ${resumeFrom})…`,
+            );
+            return;
+          }
+          liveResumeFloor = Math.max(liveResumeFloor, Math.round(Number(ckpt.completedPage || 0) || 0));
+          resumeFrom = sequential;
         },
         shouldAbort: options?.shouldAbort,
       });
@@ -2450,8 +2485,9 @@ export async function scrapeCasaDosDadosLeads(
       if (!requiresBrowserRecovery(error)) {
         throw error instanceof Error ? error : new Error(msg);
       }
+      resumeFrom = resolvePortalResumePage(resumeFrom, liveResumeFloor);
       onProgress?.(
-        `COPY: recover — falha de sessão; checkpoint página ${resumeFrom} preservado…`,
+        `COPY: recover — falha de sessão; checkpoint página ${resumeFrom} (piso ${liveResumeFloor})…`,
       );
       // Só mata o Chromium se ele realmente morreu. Context já foi fechado no finally.
       if (!isSharedBrowserConnected()) {
@@ -2616,10 +2652,20 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
     };
 
-    const resumeTarget = Math.max(
+    const resumeFloor = Math.max(
+      1,
+      Math.round(Number(options?.resumeFloorPage || 0) || 0) || 1,
+    );
+    const resumeTargetRaw = Math.max(
       1,
       Math.round(Number(options?.resumeFromPage || 1) || 1),
     );
+    const resumeTarget = resolvePortalResumePage(resumeTargetRaw, resumeFloor);
+    if (resumeTarget !== resumeTargetRaw) {
+      markPhase(
+        `COPY: alvo pág. ${resumeTargetRaw} ajustado para ${resumeTarget} (piso pool ${resumeFloor})…`,
+      );
+    }
     const wantFastResume = resumeTarget > 1 && Boolean(effectiveStorage);
 
     // Captura total da API (se houver). Anexar cedo — vale para retomada e pesquisa nova.
@@ -3129,6 +3175,20 @@ async function scrapeCasaDosDadosLeadsOnce(
       let current = await readCurrentPageNumber();
       if (current === target) return true;
 
+      // UI à frente do alvo (checkpoint/UI loucos) — tenta salto direto; não anda com "next".
+      if (current > target + 1) {
+        markPhase(
+          `Copiando: UI pág. ${current} > alvo ${target} — salto DOM (sem next sequencial)…`,
+        );
+        if (await jumpToPageDom(target)) return true;
+        current = await readCurrentPageNumber();
+        if (current === target) return true;
+        markPhase(
+          `Copiando: não reposicionou de ${current} para ${target} — abortando posicionamento.`,
+        );
+        return false;
+      }
+
       markPhase(`Copiando: salto DOM para página ${target} (UI em ${current})…`);
       if (await jumpToPageDom(target)) return true;
 
@@ -3228,17 +3288,18 @@ async function scrapeCasaDosDadosLeadsOnce(
       pagesToFetch = portalUiMaxPage;
     }
 
-    let startPage = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
-    const resumeFloor = Math.max(
+    let startPage = resolvePortalResumePage(
+      Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1)),
+      Math.max(1, Math.round(Number(options?.resumeFloorPage || 0) || 0) || 1),
+    );
+    const copyResumeFloor = Math.max(
       1,
       Math.round(Number(options?.resumeFloorPage || 0) || 0) || startPage,
     );
-    // Checkpoint inflado (UI em 400+ com pool de ~50 págs): volta ao piso do pool.
-    if (startPage > resumeFloor + 2) {
+    if (startPage !== Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1))) {
       markPhase(
-        `COPY: checkpoint pág. ${startPage} inconsistente com pool (piso ${resumeFloor}) — não pula páginas sem copiar; retomando da ${resumeFloor}.`,
+        `COPY: checkpoint alinhado ao piso ${copyResumeFloor} → início na pág. ${startPage}.`,
       );
-      startPage = resumeFloor;
     }
     if (startPage > pagesToFetch) {
       markPhase(
@@ -3255,27 +3316,57 @@ async function scrapeCasaDosDadosLeadsOnce(
       };
     }
     if (startPage > 1) {
-      markPhase(`COPY: posicionando na página ${startPage} (retomada)…`);
+      markPhase(`COPY: posicionando na página ${startPage} (retomada; piso ${copyResumeFloor})…`);
       const positioned = await goToResultsPage(startPage);
       if (!positioned) {
         markPhase(
-          `COPY: falha ao posicionar pág. ${startPage} — retomando pelo piso do pool (${resumeFloor})…`,
+          `COPY: falha ao posicionar pág. ${startPage} — forçando piso do pool (${copyResumeFloor})…`,
         );
-        startPage = resumeFloor;
-        const okFloor = startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
+        startPage = copyResumeFloor;
+        const okFloor =
+          startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
         if (!okFloor) {
           const cur = await readCurrentPageNumber();
-          // Só aceita UI atual se não estiver anos-luz à frente do pool.
-          if (cur >= 1 && cur <= resumeFloor + 2) {
+          // Só aceita UI atual se estiver no entorno do piso (nunca página inflada).
+          if (cur >= copyResumeFloor && cur <= copyResumeFloor + 2) {
             markPhase(`COPY: UI na pág. ${cur}; copiando daqui (sem pular CNPJs).`);
             startPage = cur;
           } else {
             markPhase(
-              `COPY: UI pág. ${cur} inválida vs pool (piso ${resumeFloor}) — forçando página ${resumeFloor}.`,
+              `COPY: UI pág. ${cur} ≠ piso ${copyResumeFloor} — tentando jump Dom ${copyResumeFloor}.`,
             );
-            startPage = resumeFloor;
-            await jumpToPageDom(startPage).catch(() => undefined);
+            startPage = copyResumeFloor;
+            const jumped = await jumpToPageDom(startPage).catch(() => false);
+            if (!jumped) {
+              throw new RendererUnresponsiveError(
+                `COPY resume: não posicionou na pág. ${startPage} (UI ${cur})`,
+              );
+            }
           }
+        }
+      }
+      const uiAfter = await readCurrentPageNumber();
+      if (uiAfter > 0 && uiAfter !== startPage) {
+        markPhase(
+          `COPY: após posicionar, UI=${uiAfter} alvo=${startPage} — re-sincronizando…`,
+        );
+        if (await jumpToPageDom(startPage)) {
+          const ui2 = await readCurrentPageNumber();
+          if (ui2 === startPage) {
+            /* ok */
+          } else if (ui2 >= copyResumeFloor && ui2 <= startPage + 2) {
+            startPage = ui2;
+          } else {
+            throw new RendererUnresponsiveError(
+              `COPY resume: UI ${ui2} desalinhada do alvo ${startPage} (piso ${copyResumeFloor})`,
+            );
+          }
+        } else if (uiAfter >= copyResumeFloor && uiAfter <= copyResumeFloor + 2) {
+          startPage = uiAfter;
+        } else {
+          throw new RendererUnresponsiveError(
+            `COPY resume: UI ${uiAfter} ≠ ${startPage} após jump`,
+          );
         }
       }
     }

@@ -13,6 +13,7 @@ import {
   scrapeCasaDosDadosLeads,
   assertCasaDosDadosCredentials,
   resolvePortalUiMaxPage,
+  resolvePortalResumePage,
   isSoftScrapeError,
   isLeadsScrapeError,
   LeadsScrapeError,
@@ -686,10 +687,8 @@ export class WabaLeadsCnpjService {
       Math.round(Number(hint?.scrapeCheckpoint?.nextPage || 0) || 0),
     );
     const fromVolume = Math.max(1, Math.floor((pending + used) / 20) + 1);
-    let next = fromCkpt > 0 ? fromCkpt : fromVolume;
-    if (fromCkpt > fromVolume + 2) {
-      next = fromVolume;
-    }
+    const next =
+      fromCkpt > 0 ? resolvePortalResumePage(fromCkpt, fromVolume) : fromVolume;
     return Math.min(portalUiMaxPage, Math.max(1, next));
   }
 
@@ -2014,14 +2013,12 @@ export class WabaLeadsCnpjService {
               Math.round(Number(freshList.scrapeCheckpoint?.nextPage || 1) || 1),
             );
             // Pool vazio + checkpoint > 1 = retomada fantasma (ex.: pág. 11 sem CNPJs arquivados).
-            // Força página 1 — dedupe no mergePool/used evita duplicata se reaparecer card.
-            // Checkpoint inflado vs pool (ex.: pág. 400 com ~980 CNPJs ≈ 49 págs) → piso do pool.
+            // Checkpoint inflado ou atrás do pool → piso ≈ pending/20 + 1.
             const poolFloorPage = Math.max(1, Math.floor(pendingCount / 20) + 1);
-            let scrapeResumeFrom =
-              pendingCount === 0 && scrapeResumeRaw > 1 ? 1 : scrapeResumeRaw;
-            if (scrapeResumeFrom > poolFloorPage + 2) {
-              scrapeResumeFrom = poolFloorPage;
-            }
+            const scrapeResumeFrom =
+              pendingCount === 0 && scrapeResumeRaw > 1
+                ? 1
+                : resolvePortalResumePage(scrapeResumeRaw, poolFloorPage);
             if (scrapeResumeFrom !== scrapeResumeRaw) {
               patch({
                 status: "scraping",
@@ -2034,7 +2031,7 @@ export class WabaLeadsCnpjService {
                 progressMessage:
                   pendingCount === 0
                     ? `Abrindo Portal: checkpoint pág. ${scrapeResumeRaw} ignorado (pool vazio) — copiando desde a página 1…`
-                    : `COPY: checkpoint pág. ${scrapeResumeRaw} inconsistente (~${pendingCount} CNPJs ≈ piso ${poolFloorPage}) — não pula páginas; retomando da ${scrapeResumeFrom}…`,
+                    : `COPY: checkpoint pág. ${scrapeResumeRaw} → ${scrapeResumeFrom} (piso pool ${poolFloorPage}, ~${pendingCount} CNPJs)…`,
                 error: null,
               });
             }
@@ -2137,7 +2134,16 @@ export class WabaLeadsCnpjService {
                     }
                     const archived =
                       this.repository.getPool(campaignKey)?.pending.length || 0;
-                    const nextPage = Math.max(1, Math.round(Number(c.nextPage || 1) || 1));
+                    const volumeFloor = Math.max(1, Math.floor(archived / 20) + 1);
+                    const sequential = Math.max(
+                      1,
+                      Math.round(Number(c.completedPage || 0) || 0) + 1,
+                    );
+                    // Só corta runaway absurdo (página ≫ volume). Avanço normal com dedupe OK.
+                    const nextPage =
+                      Math.round(Number(c.completedPage || 0) || 0) > volumeFloor + 50
+                        ? volumeFloor
+                        : sequential;
                     // Não persiste checkpoint > teto UI (evita retomada em 1001+).
                     const beyondUi = nextPage > portalUiMaxPage;
                     patch({
