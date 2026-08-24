@@ -1536,9 +1536,18 @@ class WabaLeadsCnpjService {
                         Math.max(1, Math.round(Number(freshList.scrapeCheckpoint.nextPage || 1) || 1)) >= 1 &&
                         Math.max(1, Math.round(Number(freshList.scrapeCheckpoint.nextPage || 1) || 1)) <=
                             portalUiMaxPage);
-                    // Pool insuficiente para o lote do dia → raspa o portal (até o teto da UI).
-                    // O teto diário só vale no takeFromPool (enriquecimento), não na cópia.
-                    if (mustResumeScrape || (!freshList.scrapeCheckpoint && pendingCount < dailyLimit && !(ckpt && resumeFromPage > portalUiMaxPage))) {
+                    /**
+                     * Regra de produto: copiar TODAS as páginas do portal (até teto UI) ANTES
+                     * de enriquecer. O teto diário (~2880) só limita o takeFromPool, nunca a cópia.
+                     * Antes: pending >= dailyLimit pulava a raspagem → Excel com ~118 pág. e “Pool esgotado”.
+                     */
+                    const portalCopyDone = freshList.scrapeCompleted === true ||
+                        Boolean(ckpt && resumeFromPage > portalUiMaxPage) ||
+                        this.repository.list().some((l) => String(l.campaignKey || "").trim() === campaignKey &&
+                            l.scrapeCompleted === true);
+                    const needPortalCopy = !portalCopyDone &&
+                        !(ckpt && resumeFromPage > portalUiMaxPage);
+                    if (needPortalCopy || mustResumeScrape) {
                         const scrapeResumeRaw = Math.max(1, Math.round(Number(freshList.scrapeCheckpoint?.nextPage || 1) || 1));
                         // Pool vazio + checkpoint > 1 = retomada fantasma (ex.: pág. 11 sem CNPJs arquivados).
                         // Força página 1 — dedupe no mergePool/used evita duplicata se reaparecer card.
@@ -1571,8 +1580,8 @@ class WabaLeadsCnpjService {
                                 collectedCount: pendingCount,
                             },
                             progressMessage: scrapeResumeFrom > 1
-                                ? `Abrindo Portal: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; registros já copiados mantidos)…`
-                                : `Abrindo Portal: robô na tela (pool ${pendingCount}; meta do dia ${dailyLimit}; copiando até pág. ${portalUiMaxPage} · 20/pág.)…`,
+                                ? `Abrindo Portal: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} antes do ReceitaWS)…`
+                                : `Abrindo Portal: robô na tela (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} · 20/pág. — enrich só depois)…`,
                             error: null,
                         });
                         let releaseScrapeSlot = null;
@@ -1703,7 +1712,7 @@ class WabaLeadsCnpjService {
                                 scrapeCompleted: false,
                                 scrapeDoneReason: scrapeSessionDoneReason || "INCOMPLETE",
                                 scrapeReconnectAttempts: 0,
-                                progressMessage: `COPY: incompleta (${scrapeSessionDoneReason || "INCOMPLETE"}) — pág. ${ckNext || "?"} · pool ${afterMerge.toLocaleString("pt-BR")}; retomando sem limpar checkpoint…`,
+                                progressMessage: `COPY: incompleta (${scrapeSessionDoneReason || "INCOMPLETE"}) — pág. ${ckNext || "?"} · pool ${afterMerge.toLocaleString("pt-BR")}; retomando cópia (enrich só após 1000 pág./fim do portal)…`,
                                 error: null,
                             });
                             setTimeout(() => {
@@ -1719,15 +1728,30 @@ class WabaLeadsCnpjService {
                             scrapeCompleted: true,
                             scrapeDoneReason: scrapeSessionDoneReason || "DONE",
                             scrapeReconnectAttempts: 0,
-                            progressMessage: `DONE: raspagem concluída (${scrapeSessionDoneReason}) — ${afterMerge.toLocaleString("pt-BR")} CNPJ(s) no pool.`,
+                            progressMessage: `DONE: raspagem concluída (${scrapeSessionDoneReason}) — ${afterMerge.toLocaleString("pt-BR")} CNPJ(s) no pool; liberando fila ReceitaWS…`,
                         });
                         if (!afterMerge && scraped.length > 0) {
                             throw new Error(`Raspagem trouxe ${scraped.length} CNPJ(s), mas todos já saíram em listas anteriores desta campanha (anti-duplicidade). Use outro filtro/CNAE ou aguarde novos resultados no portal.`);
                         }
                     }
+                    else if (!portalCopyDone) {
+                        // Precisa copiar, mas não entrou no if (ex.: race) — não enriquecer.
+                        patch({
+                            status: "scraping",
+                            scrapeCompleted: false,
+                            progressMessage: `Aguardando cópia completa do portal (até pág. ${portalUiMaxPage}) antes do ReceitaWS…`,
+                            error: null,
+                        });
+                        setTimeout(() => {
+                            const again = this.repository.getById(listId);
+                            if (again && !cancelledJobs.has(listId))
+                                this.enqueueJob(listId);
+                        }, 8000);
+                        return;
+                    }
                     else {
                         patch({
-                            progressMessage: `Usando pool existente (${pendingCount} pendente(s)); sem nova raspagem.`,
+                            progressMessage: `Usando pool existente (${pendingCount} pendente(s)); raspagem do portal já concluída.`,
                         });
                     }
                 }
@@ -1739,6 +1763,27 @@ class WabaLeadsCnpjService {
                 }
                 if (!this.repository.getById(listId))
                     return;
+                // Trava: nunca enriquecer enquanto a cópia do portal da campanha não terminou.
+                if (list.source === "portal" && !list.skipPortalScrape) {
+                    const liveGate = this.repository.getById(listId);
+                    const campaignCopyDone = liveGate?.scrapeCompleted === true ||
+                        this.repository.list().some((l) => String(l.campaignKey || "").trim() === campaignKey &&
+                            l.scrapeCompleted === true);
+                    if (!campaignCopyDone) {
+                        patch({
+                            status: "scraping",
+                            scrapeCompleted: false,
+                            progressMessage: "Cópia do portal incompleta — enriquecimento ReceitaWS só após todas as páginas (até 1000).",
+                            error: null,
+                        });
+                        setTimeout(() => {
+                            const again = this.repository.getById(listId);
+                            if (again && !cancelledJobs.has(listId))
+                                this.enqueueJob(listId);
+                        }, 8000);
+                        return;
+                    }
+                }
                 // Fila global: só a campanha do dia tira do pool / enriquece.
                 if (!this.canEnrichCampaignToday(campaignKey)) {
                     this.rebuildEnrichOrder();
@@ -1799,9 +1844,12 @@ class WabaLeadsCnpjService {
             const excel = (0, waba_leads_cnpj_excel_service_1.buildLeadsCnpjExcelBuffer)(forExport);
             const listaIndex = this.repository.nextListaIndex(campaignKey);
             const exportFileName = this.repository.saveExportFile(listId, excel, (0, waba_leads_cnpj_excel_service_1.sanitizeExportBaseName)(`${baseName}-${formatListaLabel(listaIndex)}`), dayKey);
+            const campaignScrapeDone = this.repository.list().some((l) => String(l.campaignKey || "").trim() === campaignKey && l.scrapeCompleted === true);
             const continueHint = remaining > 0
-                ? ` Pool: ${remaining.toLocaleString("pt-BR")} pendente(s) — amanhã a fila segue para a próxima campanha; esta volta na rodada.`
-                : " Pool esgotado.";
+                ? ` Pool: ${remaining.toLocaleString("pt-BR")} pendente(s) — amanhã a fila ReceitaWS continua (Lista seguinte).`
+                : campaignScrapeDone
+                    ? " Pool esgotado — raspagem do portal concluída."
+                    : " Lote do dia esgotado; a cópia do portal ainda precisa completar as páginas restantes.";
             patch({
                 leads: forExport,
                 leadCount: forExport.length,

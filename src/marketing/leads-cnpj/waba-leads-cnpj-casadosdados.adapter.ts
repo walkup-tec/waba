@@ -2989,35 +2989,41 @@ async function scrapeCasaDosDadosLeadsOnce(
         current = await readCurrentPageNumber();
         if (current === target) return true;
         if (current > target) break;
-        const best = await page
-          .evaluate((t: number) => {
-            const nav = document.querySelector('nav[data-oruga="pagination"]');
-            if (!nav) return 0;
-            let bestN = 0;
-            for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
-              const text = String(b.textContent || "").trim();
-              const n = Number(text);
-              if (!Number.isFinite(n) || n <= 0 || n > t) continue;
-              const btn = b as HTMLButtonElement;
-              if (btn.disabled || btn.classList.contains("is-disabled")) continue;
-              if (n > bestN) bestN = n;
-            }
-            if (bestN <= 0) return 0;
-            for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
-              if (String(b.textContent || "").trim() === String(bestN)) {
-                (b as HTMLButtonElement).click();
-                return bestN;
+        const best = await withNodeTimeout(
+          page
+            .evaluate((t: number) => {
+              const nav = document.querySelector('nav[data-oruga="pagination"]');
+              if (!nav) return 0;
+              let bestN = 0;
+              for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                const text = String(b.textContent || "").trim();
+                const n = Number(text);
+                if (!Number.isFinite(n) || n <= 0 || n > t) continue;
+                const btn = b as HTMLButtonElement;
+                if (btn.disabled || btn.classList.contains("is-disabled")) continue;
+                if (n > bestN) bestN = n;
               }
-            }
-            return 0;
-          }, target)
-          .catch(() => 0);
-        if (best > 0) {
+              if (bestN <= 0) return 0;
+              for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                if (String(b.textContent || "").trim() === String(bestN)) {
+                  (b as HTMLButtonElement).click();
+                  return bestN;
+                }
+              }
+              return 0;
+            }, target)
+            .catch(() => 0),
+          2500,
+          0,
+        );
+        if (best > 0 && best !== current) {
           markPhase(`Copiando: aproximando via botão ${best} (alvo ${target})…`);
-          await waitUntilPage(best, 5_000);
+          const moved = await waitUntilPage(best, 5_000);
+          if (!moved) break;
           if (await jumpToPageDom(target)) return true;
           continue;
         }
+        // Sem botão útil ou UI não andou — cai no next sequencial.
         break;
       }
 

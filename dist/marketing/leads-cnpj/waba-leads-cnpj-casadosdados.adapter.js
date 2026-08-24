@@ -2388,7 +2388,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     return true;
                 if (current > target)
                     break;
-                const best = await page
+                const best = await withNodeTimeout(page
                     .evaluate((t) => {
                     const nav = document.querySelector('nav[data-oruga="pagination"]');
                     if (!nav)
@@ -2415,14 +2415,17 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     }
                     return 0;
                 }, target)
-                    .catch(() => 0);
-                if (best > 0) {
+                    .catch(() => 0), 2500, 0);
+                if (best > 0 && best !== current) {
                     markPhase(`Copiando: aproximando via botão ${best} (alvo ${target})…`);
-                    await waitUntilPage(best, 5000);
+                    const moved = await waitUntilPage(best, 5000);
+                    if (!moved)
+                        break;
                     if (await jumpToPageDom(target))
                         return true;
                     continue;
                 }
+                // Sem botão útil ou UI não andou — cai no next sequencial.
                 break;
             }
             // Último recurso: poucos "next" com teto baixo (não 25×60s).

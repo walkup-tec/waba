@@ -3682,6 +3682,27 @@
         font-size: 12px;
         padding: 4px 10px;
         white-space: nowrap;
+        text-decoration: none !important;
+        text-align: center;
+      }
+      .mlc-download-cell a.mlc-dl-btn {
+        text-decoration: none !important;
+        color: #f8fafc;
+      }
+      .mlc-download-cell a.mlc-dl-btn:hover,
+      .mlc-download-cell a.mlc-dl-btn:focus,
+      .mlc-download-cell a.mlc-dl-btn:visited {
+        text-decoration: none !important;
+        color: #f8fafc;
+      }
+      /* Não baixado = azul; já baixado = verde */
+      .mlc-download-cell a.mlc-dl-pending.enabled {
+        background: rgba(37, 99, 235, 0.9);
+        border-color: rgba(147, 197, 253, 0.75);
+      }
+      .mlc-download-cell a.mlc-dl-done.enabled {
+        background: rgba(22, 101, 52, 0.9);
+        border-color: rgba(134, 239, 172, 0.75);
       }
       .mlc-delete-btn.is-deleting {
         pointer-events: none;
@@ -34443,13 +34464,50 @@
           '" data-mlc-name="' +
           escapeAdminHtml(String(item?.name || "lista")) +
           '" title="Excluir esta linha do histórico"><span class="mlc-delete-spin" aria-hidden="true"></span><span class="mlc-delete-label">Excluir</span></button>';
-        const downloadBtn =
-          status === "ready"
-            ? '<a class="instance-action-btn btn-refresh enabled" href="' +
-              resolveWabaPublicPath("/admin/marketing/leads-cnpj/" + id + "/download") +
-              '">Baixar Excel</a>'
-            : "";
-        return '<div class="mlc-download-cell">' + deleteBtn + downloadBtn + "</div>";
+        const campaignDls = Array.isArray(item?.campaignDownloads)
+          ? item.campaignDownloads
+          : [];
+        const downloadTargets =
+          campaignDls.length > 0
+            ? campaignDls
+            : status === "ready" && item?.exportFileName
+              ? [
+                  {
+                    id: item.id,
+                    listaLabel: item.listaLabel || "Baixar Excel",
+                    downloadedAt: item.downloadedAt || null,
+                  },
+                ]
+              : [];
+        const downloadBtns = downloadTargets
+          .map((dl) => {
+            const dlId = encodeURIComponent(String(dl.id || ""));
+            const done = Boolean(dl.downloadedAt);
+            const label = escapeAdminHtml(
+              String(dl.listaLabel || "Baixar Excel").trim() || "Baixar Excel"
+            );
+            const cls =
+              "instance-action-btn enabled mlc-dl-btn " +
+              (done ? "mlc-dl-done" : "mlc-dl-pending");
+            const title = done
+              ? "Já baixado — clique para baixar de novo"
+              : "Baixar Excel (marca como baixado)";
+            return (
+              '<a class="' +
+              cls +
+              '" href="' +
+              resolveWabaPublicPath("/admin/marketing/leads-cnpj/" + dlId + "/download") +
+              '" data-mlc-download-id="' +
+              dlId +
+              '" title="' +
+              title +
+              '">' +
+              label +
+              "</a>"
+            );
+          })
+          .join("");
+        return '<div class="mlc-download-cell">' + deleteBtn + downloadBtns + "</div>";
       }
       function normalizeMlcCnaeInput(value) {
         const raw = String(value || "").trim();
@@ -34705,6 +34763,14 @@
           void loadMarketingLeadsCnpjHistory();
         });
         document.getElementById("mlc-tbody")?.addEventListener("click", (event) => {
+          const dl = event.target?.closest?.("a.mlc-dl-btn");
+          if (dl) {
+            // GET /download já marca downloadedAt; atualiza a cor azul→verde em seguida.
+            setTimeout(() => {
+              void loadMarketingLeadsCnpjHistory({ silent: true });
+            }, 900);
+            return;
+          }
           const btn = event.target?.closest?.(".mlc-delete-btn");
           if (!btn) return;
           event.preventDefault();

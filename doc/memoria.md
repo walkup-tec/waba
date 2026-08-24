@@ -1,5 +1,19 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 10:45 — Leads PJ cópia completa antes do enrich v9.12
+
+- Não enriquecer com raspagem incompleta (ex.: 118/1000)
+- Enrich só após `scrapeCompleted`; fila ReceitaWS no pool
+- Marker `DEPLOY-2026-08-24-1045-leads-pj-copia-antes-enrich-v9.12`
+- LOG: `doc/LOG-2026-08-24__104500__leads-pj-copia-antes-enrich-v912.md`
+
+## 2026-08-24 10:30 — Leads PJ download azul/verde + fila confirmada v9.11
+
+- Fila diária já no service (lote do dia → Excel → resto no pool)
+- Botão Excel: sem underline; azul pendente / verde após `downloadedAt`
+- Marker `DEPLOY-2026-08-24-1030-leads-pj-download-azul-verde-v9.11`
+- LOG: `doc/LOG-2026-08-24__103000__leads-pj-download-azul-verde-fila-v911.md`
+
 ## 2026-08-24 10:10 — Leads PJ histórico métricas v9.10
 
 - Colunas: Páginas (N/M), CNPJs copiados, Higienizados
