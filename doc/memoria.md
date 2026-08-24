@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 22:50 — Leads PJ CTA fast probe v9.5
+
+- Pré-clique SEARCH: fast CTA (sem probeSearchState pesado); timeout CDP → `new-browser`
+- Marker `DEPLOY-2026-08-23-2250-leads-pj-cta-fast-probe-v9.5`
+- LOG: `doc/LOG-2026-08-23__225000__leads-pj-cta-fast-probe-v95.md`
+
 ## 2026-08-23 22:40 — Leads PJ pré-CTA lite probe v9.4
 
 - runSearchOnce sem probeSearchState completo; waitForSearchTransition com lite+Node

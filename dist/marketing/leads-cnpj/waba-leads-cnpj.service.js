@@ -1817,7 +1817,7 @@ class WabaLeadsCnpjService {
                 : Math.max(1, ckptPage || Math.floor(archived / 20) + 1);
             const hardRecovery = ((0, waba_leads_cnpj_casadosdados_adapter_1.isLeadsScrapeError)(error) && error.recovery === "new-browser") ||
                 (!(error instanceof waba_leads_cnpj_casadosdados_adapter_1.LeadsScrapeError) &&
-                    /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED/i.test(msg));
+                    /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(msg));
             const wasPortalScrape = Boolean(current) &&
                 current.source === "portal" &&
                 !current.skipPortalScrape &&

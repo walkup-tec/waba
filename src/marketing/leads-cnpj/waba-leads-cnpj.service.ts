@@ -2060,7 +2060,7 @@ export class WabaLeadsCnpjService {
       const hardRecovery =
         (isLeadsScrapeError(error) && error.recovery === "new-browser") ||
         (!(error instanceof LeadsScrapeError) &&
-          /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED/i.test(
+          /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(
             msg,
           ));
 

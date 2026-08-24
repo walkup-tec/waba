@@ -1174,24 +1174,153 @@ async function focusSearchButton(page: PageLike): Promise<boolean> {
 }
 
 /**
+ * Descoberta rápida do CTA — só controles clicáveis (sem varrer 2500 nós ancestrais).
+ * Usado no pré-clique para não estourar/travar a fila CDP.
+ */
+async function findSearchButtonCandidatesFast(
+  page: PageLike,
+): Promise<SearchButtonCandidate[]> {
+  return page.evaluate(() => {
+    const clean = (v: unknown) =>
+      String(v || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const normalize = (v: unknown) => clean(v).toLowerCase();
+    const isVisible = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return (
+        r.width >= 20 &&
+        r.height >= 15 &&
+        r.bottom > 0 &&
+        r.right > 0 &&
+        s.display !== "none" &&
+        s.visibility !== "hidden" &&
+        Number(s.opacity || "1") > 0
+      );
+    };
+    const selector = [
+      "button",
+      "a",
+      '[role="button"]',
+      'input[type="submit"]',
+      'input[type="button"]',
+      '[type="submit"]',
+    ].join(",");
+    const out: SearchButtonCandidate[] = [];
+    for (const raw of Array.from(document.querySelectorAll(selector))) {
+      if (!(raw instanceof HTMLElement) || !isVisible(raw)) continue;
+      const text =
+        raw instanceof HTMLInputElement ? clean(raw.value) : clean(raw.textContent).slice(0, 80);
+      const aria = clean(raw.getAttribute("aria-label"));
+      const title = clean(raw.getAttribute("title"));
+      const combined = normalize(`${text} ${aria} ${title}`);
+      if (!combined.includes("pesquisar") && !combined.includes("buscar")) continue;
+      const nt = normalize(text);
+      let score = 0;
+      if (nt === "pesquisar" || nt === "buscar") score += 100;
+      if (nt.includes("pesquisar")) score += 70;
+      if (nt.includes("buscar")) score += 50;
+      if (normalize(aria).includes("pesquisar") || normalize(aria).includes("buscar")) score += 60;
+      if (raw.tagName === "BUTTON") score += 30;
+      if (raw.getAttribute("type") === "submit") score += 25;
+      const r = raw.getBoundingClientRect();
+      score += Math.min(30, Math.round((r.width * r.height) / 1000));
+      out.push({
+        tag: raw.tagName,
+        text: text.slice(0, 120),
+        aria: aria.slice(0, 120),
+        title: title.slice(0, 120),
+        type: raw.getAttribute("type") || "",
+        classes: typeof raw.className === "string" ? raw.className.slice(0, 250) : "",
+        score,
+        source: "control",
+        rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+      });
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, 10);
+  });
+}
+
+function probeFromCandidates(
+  candidates: SearchButtonCandidate[],
+  urlHint = "",
+): SearchProbe {
+  const winner = candidates[0] || null;
+  return {
+    url: urlHint || "",
+    readyState: "interactive",
+    searchButtonFound: Boolean(winner),
+    searchButtonDisabled: false,
+    searchButtonText: winner?.text || null,
+    searchButtonCount: candidates.length,
+    searchButtonCandidate: winner,
+    topCandidates: candidates,
+    pagination: false,
+    currentPage: null,
+    cnpjNodes: 0,
+    totalCandidates: [],
+    loadingNodes: 0,
+    dialogs: 0,
+    iframeCount: 0,
+    iframeSrcs: [],
+    challengeNodes: 0,
+    buttonDebug: winner
+      ? {
+          tag: winner.tag,
+          type: winner.type || null,
+          classes: winner.classes,
+          rect: winner.rect,
+          html: `${winner.tag} ${winner.text}`.slice(0, 500),
+          score: winner.score,
+          source: winner.source,
+        }
+      : null,
+  };
+}
+
+/**
  * DISPATCH → ACK (5s) → fallbacks. Não espera resultados aqui.
  */
 async function dispatchSearchWithAck(
   page: PlaywrightSearchPage,
   onProgress?: CasaDosDadosProgress,
 ): Promise<{ method: "mouse" | "dom" | "enter"; ack: SearchProbe }> {
-  const before = await withNodeTimeout(
-    probeSearchState(page),
-    8000,
-    null as SearchProbe | null,
+  onProgress?.("SEARCH: descoberta rápida do CTA (fast)…");
+  // NÃO usar probeSearchState completo no pré-clique (scan pesado → CDP trava >8s).
+  const fast = await withNodeTimeout(
+    findSearchButtonCandidatesFast(page),
+    5000,
+    null as SearchButtonCandidate[] | null,
   );
-  if (!before) {
+  if (fast === null) {
+    // CDP realmente não respondeu — mesma Page não serve; pede Chromium novo.
     throw new LeadsScrapeError(
-      "SEARCH_BUTTON_NOT_FOUND",
-      "same-page",
-      "Probe pré-clique não respondeu em 8s (CDP/DOM travado).",
+      "CDP_PROBE_TIMEOUT",
+      "new-browser",
+      "Probe rápido do CTA não respondeu em 5s (CDP/DOM travado) — reconectar Chromium.",
     );
   }
+
+  let before = probeFromCandidates(fast);
+  if (!before.searchButtonFound) {
+    // Fallback: descoberta completa com teto Node.
+    onProgress?.("SEARCH: fast=0 — tentando descoberta completa…");
+    const full = await withNodeTimeout(
+      findSearchButtonCandidates(page),
+      6000,
+      null as SearchButtonCandidate[] | null,
+    );
+    if (full === null) {
+      throw new LeadsScrapeError(
+        "CDP_PROBE_TIMEOUT",
+        "new-browser",
+        "Descoberta completa do CTA não respondeu em 6s — reconectar Chromium.",
+      );
+    }
+    before = probeFromCandidates(full);
+  }
+
   console.log(
     JSON.stringify({
       event: "SEARCH_PROBE",
@@ -1199,13 +1328,12 @@ async function dispatchSearchWithAck(
       probe: formatProbeShort(before),
       top: before.topCandidates.slice(0, 5),
       buttonDebug: before.buttonDebug,
-      iframeSrcs: before.iframeSrcs,
     }),
   );
 
   if (!before.searchButtonFound || !before.searchButtonCandidate) {
     onProgress?.("SEARCH: botão Pesquisar não localizado — diagnóstico capturado");
-    await withNodeTimeout(captureSearchDiagnostics(page), 5000, undefined);
+    await withNodeTimeout(captureSearchDiagnostics(page), 4000, undefined);
     throw new LeadsScrapeError(
       "SEARCH_BUTTON_NOT_FOUND",
       "same-page",
