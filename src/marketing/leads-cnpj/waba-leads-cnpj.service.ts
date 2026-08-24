@@ -294,11 +294,21 @@ function resolveScrapeHistoryMetrics(
   const nextPage = Math.max(0, Math.round(Number(ckpt?.nextPage || 0) || 0));
   const collected = Math.max(0, Math.round(Number(ckpt?.collectedCount || 0) || 0));
   const cnpjCopied = Math.max(collected, poolPending + usedCount);
-  let pagesDone = 0;
+  // Volume real ≈ CNPJs/20 (portal = 20 cards/página).
+  const volumePages =
+    cnpjCopied > 0 ? Math.min(pagesTotal, Math.max(0, Math.ceil(cnpjCopied / 20))) : 0;
+  let ckptPages = 0;
   if (nextPage > 0) {
-    pagesDone = Math.max(0, nextPage - 1);
+    ckptPages = Math.max(0, nextPage - 1);
   } else if (list.scrapeCompleted || cnpjCopied > 0) {
-    pagesDone = Math.min(pagesTotal, Math.max(0, Math.ceil(cnpjCopied / 20)));
+    ckptPages = volumePages;
+  }
+  // Checkpoint inflado (pulou páginas sem arquivar) → confiar no volume de CNPJs.
+  let pagesDone = ckptPages;
+  if (volumePages > 0 && ckptPages > volumePages + 2) {
+    pagesDone = volumePages;
+  } else if (ckptPages <= 0 && volumePages > 0) {
+    pagesDone = volumePages;
   }
   return { pagesDone, pagesTotal, cnpjCopied };
 }
@@ -663,6 +673,7 @@ export class WabaLeadsCnpjService {
   /**
    * Estima próxima página a retomar (checkpoint ou pool+used / 20).
    * Nunca acima do teto da UI Oruga.
+   * Checkpoint inflado (páginas ≫ CNPJs/20) → piso pelo volume arquivado.
    */
   private estimatePortalResumePage(campaignKey: string, hint?: WabaLeadsCnpjList | null): number {
     const portalUiMaxPage = resolvePortalUiMaxPage();
@@ -675,7 +686,10 @@ export class WabaLeadsCnpjService {
       Math.round(Number(hint?.scrapeCheckpoint?.nextPage || 0) || 0),
     );
     const fromVolume = Math.max(1, Math.floor((pending + used) / 20) + 1);
-    const next = fromCkpt > 0 ? fromCkpt : fromVolume;
+    let next = fromCkpt > 0 ? fromCkpt : fromVolume;
+    if (fromCkpt > fromVolume + 2) {
+      next = fromVolume;
+    }
     return Math.min(portalUiMaxPage, Math.max(1, next));
   }
 
@@ -2001,18 +2015,26 @@ export class WabaLeadsCnpjService {
             );
             // Pool vazio + checkpoint > 1 = retomada fantasma (ex.: pág. 11 sem CNPJs arquivados).
             // Força página 1 — dedupe no mergePool/used evita duplicata se reaparecer card.
-            const scrapeResumeFrom =
+            // Checkpoint inflado vs pool (ex.: pág. 400 com ~980 CNPJs ≈ 49 págs) → piso do pool.
+            const poolFloorPage = Math.max(1, Math.floor(pendingCount / 20) + 1);
+            let scrapeResumeFrom =
               pendingCount === 0 && scrapeResumeRaw > 1 ? 1 : scrapeResumeRaw;
+            if (scrapeResumeFrom > poolFloorPage + 2) {
+              scrapeResumeFrom = poolFloorPage;
+            }
             if (scrapeResumeFrom !== scrapeResumeRaw) {
               patch({
                 status: "scraping",
                 scrapeCheckpoint: {
-                  nextPage: 1,
+                  nextPage: scrapeResumeFrom,
                   portalTotal: freshList.scrapeCheckpoint?.portalTotal ?? null,
                   pagesToFetch: freshList.scrapeCheckpoint?.pagesToFetch ?? null,
-                  collectedCount: 0,
+                  collectedCount: pendingCount,
                 },
-                progressMessage: `Abrindo Portal: checkpoint pág. ${scrapeResumeRaw} ignorado (pool vazio) — copiando desde a página 1…`,
+                progressMessage:
+                  pendingCount === 0
+                    ? `Abrindo Portal: checkpoint pág. ${scrapeResumeRaw} ignorado (pool vazio) — copiando desde a página 1…`
+                    : `COPY: checkpoint pág. ${scrapeResumeRaw} inconsistente (~${pendingCount} CNPJs ≈ piso ${poolFloorPage}) — não pula páginas; retomando da ${scrapeResumeFrom}…`,
                 error: null,
               });
             }
@@ -2078,6 +2100,8 @@ export class WabaLeadsCnpjService {
                 },
                 {
                   resumeFromPage: scrapeResumeFrom,
+                  // Piso pelo pool: não pular páginas ainda sem CNPJs arquivados.
+                  resumeFloorPage: Math.max(1, Math.floor(pendingCount / 20) + 1),
                   shouldAbort: () => {
                     // Só fecha navegador se o usuário excluiu / job sumiu — nunca por demora.
                     if (cancelledJobs.has(listId) || isCampaignPurged(campaignKey)) return true;

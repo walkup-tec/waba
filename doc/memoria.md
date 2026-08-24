@@ -1,5 +1,20 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 13:15 — Leads PJ copy every page v9.17
+
+- Regra: copiar todos os CNPJs de cada página visitada
+- Checkpoint inflado → piso `pool/20+1`; métricas alinhadas a CNPJs/20
+- COPY não avança se cards sem CNPJ parseável
+- Marker `DEPLOY-2026-08-24-1315-leads-pj-copy-every-page-v9.17`
+- LOG: `doc/LOG-2026-08-24__131500__leads-pj-copy-every-page-v917.md`
+
+## 2026-08-24 13:05 — Leads PJ fast resume v9.16
+
+- Retomada pós-crash: storageState → pesquisa → pág. N sem CNAE
+- Evita loop em LOGIN:/entrar; UI Copiando na retomada
+- Marker `DEPLOY-2026-08-24-1305-leads-pj-fast-resume-v9.16`
+- LOG: `doc/LOG-2026-08-24__130500__leads-pj-fast-resume-v916.md`
+
 ## 2026-08-24 12:25 — Leads PJ context leak fix v9.15
 
 - Fecha Context sempre no finally; não mata Chromium se ainda conectado

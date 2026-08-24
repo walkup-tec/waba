@@ -230,6 +230,11 @@ export type ScrapePageCheckpoint = {
 export type ScrapeCasaDosDadosOptions = {
   /** Página Oruga a partir da qual continuar (1 = início). */
   resumeFromPage?: number;
+  /**
+   * Piso seguro pela quantidade já no pool (≈ pending/20 + 1).
+   * Impede checkpoint inflado (ex.: pág. 400 com só ~50 págs de CNPJs) de pular páginas sem copiar.
+   */
+  resumeFloorPage?: number;
   /** Chamado após cada página lida com sucesso (antes de avançar). */
   onPageCheckpoint?: (ckpt: ScrapePageCheckpoint) => void | Promise<void>;
   /** Se retornar true, fecha o Chromium e aborta (stall / exclusão). */
@@ -3224,6 +3229,17 @@ async function scrapeCasaDosDadosLeadsOnce(
     }
 
     let startPage = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
+    const resumeFloor = Math.max(
+      1,
+      Math.round(Number(options?.resumeFloorPage || 0) || 0) || startPage,
+    );
+    // Checkpoint inflado (UI em 400+ com pool de ~50 págs): volta ao piso do pool.
+    if (startPage > resumeFloor + 2) {
+      markPhase(
+        `COPY: checkpoint pág. ${startPage} inconsistente com pool (piso ${resumeFloor}) — não pula páginas sem copiar; retomando da ${resumeFloor}.`,
+      );
+      startPage = resumeFloor;
+    }
     if (startPage > pagesToFetch) {
       markPhase(
         startPage > portalUiMaxPage
@@ -3242,19 +3258,23 @@ async function scrapeCasaDosDadosLeadsOnce(
       markPhase(`COPY: posicionando na página ${startPage} (retomada)…`);
       const positioned = await goToResultsPage(startPage);
       if (!positioned) {
-        // Garantia: não para o processo — copia desde a 1 (dedupe no pool).
         markPhase(
-          `COPY: falha ao posicionar pág. ${startPage} no Xvfb — reiniciando da página 1…`,
+          `COPY: falha ao posicionar pág. ${startPage} — retomando pelo piso do pool (${resumeFloor})…`,
         );
-        startPage = 1;
-        const backHome = await jumpToPageDom(1);
-        if (!backHome) {
+        startPage = resumeFloor;
+        const okFloor = startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
+        if (!okFloor) {
           const cur = await readCurrentPageNumber();
-          if (cur !== 1) {
-            markPhase(
-              `COPY: UI na pág. ${cur}; seguindo daqui (checkpoint será atualizado).`,
-            );
+          // Só aceita UI atual se não estiver anos-luz à frente do pool.
+          if (cur >= 1 && cur <= resumeFloor + 2) {
+            markPhase(`COPY: UI na pág. ${cur}; copiando daqui (sem pular CNPJs).`);
             startPage = cur;
+          } else {
+            markPhase(
+              `COPY: UI pág. ${cur} inválida vs pool (piso ${resumeFloor}) — forçando página ${resumeFloor}.`,
+            );
+            startPage = resumeFloor;
+            await jumpToPageDom(startPage).catch(() => undefined);
           }
         }
       }
@@ -3286,20 +3306,48 @@ async function scrapeCasaDosDadosLeadsOnce(
         }
       }
 
-      const pageFirst = firstCnpjOf(rows);
-      let added = 0;
-      const pageLeads: WabaLeadsCnpjLead[] = [];
-      for (const cells of rows) {
-        const lead = mapRowCells(cells);
-        if (!lead) continue;
-        if (!collected.has(lead.cnpj)) {
-          collected.set(lead.cnpj, lead);
-          pageLeads.push(lead);
-          added += 1;
+      const mapPageRows = (sourceRows: string[][]) => {
+        let mapped = 0;
+        let fresh = 0;
+        const leads: WabaLeadsCnpjLead[] = [];
+        for (const cells of sourceRows) {
+          const lead = mapRowCells(cells);
+          if (!lead) continue;
+          mapped += 1;
+          // Sempre inclui no merge (dedupe no pool) — garante arquivar CNPJ da página visitada.
+          leads.push(lead);
+          if (!collected.has(lead.cnpj)) {
+            collected.set(lead.cnpj, lead);
+            fresh += 1;
+          }
+        }
+        return { mapped, fresh, leads };
+      };
+
+      let mappedResult = mapPageRows(rows);
+      // Cards na tela sem CNPJ parseável = não avançar checkpoint (não “pular” a página).
+      if (rows.length > 0 && mappedResult.mapped === 0) {
+        for (let reread = 1; reread <= 3; reread += 1) {
+          markPhase(
+            `COPY: página ${pageIndex} com ${rows.length} cards sem CNPJ — relendo ${reread}/3…`,
+          );
+          await sleepNode(600);
+          rows = await readScreenCards();
+          mappedResult = mapPageRows(rows);
+          if (mappedResult.mapped > 0 || rows.length === 0) break;
         }
       }
+      if (rows.length > 0 && mappedResult.mapped === 0) {
+        throw new RendererUnresponsiveError(
+          `COPY page ${pageIndex}: ${rows.length} cards na tela mas 0 CNPJ parseável — não avança sem copiar`,
+        );
+      }
+
+      const pageFirst = firstCnpjOf(rows);
+      const added = mappedResult.fresh;
+      const pageLeads = mappedResult.leads;
       markPhase(
-        `COPY: página ${pageIndex} arquivada — +${added} / ${rows.length} cards · pool sessão ${collected.size.toLocaleString("pt-BR")} · próxima ${pageIndex + 1}`,
+        `COPY: página ${pageIndex} arquivada — +${added} novos / ${mappedResult.mapped} CNPJ(s) / ${rows.length} cards · pool sessão ${collected.size.toLocaleString("pt-BR")} · próxima ${pageIndex + 1}`,
       );
       logScrapePageTelemetry({
         page: pageIndex,
@@ -3308,7 +3356,7 @@ async function scrapeCasaDosDadosLeadsOnce(
       });
 
       const nextPage = pageIndex + 1;
-      // Checkpoint ANTES do next (contrato: persistir página N antes de avançar).
+      // Checkpoint ANTES do next (contrato: persistir página N com CNPJs antes de avançar).
       await options?.onPageCheckpoint?.({
         completedPage: pageIndex,
         nextPage,
