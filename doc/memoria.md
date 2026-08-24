@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 16:10 — Leads PJ Page crashed recover v9.22
+
+- `Page crashed` vira hard reconnect; soft-cap default 3 + stagger 8s
+- Marker `DEPLOY-2026-08-24-1610-leads-pj-page-crash-recover-v9.22`
+- LOG: `doc/LOG-2026-08-24__161000__leads-pj-page-crash-recover-v922.md`
+
 ## 2026-08-24 15:45 — Leads PJ raspagens paralelas v9.21
 
 - Soft-cap default 10; Chromium dedicado por job; stagger 0

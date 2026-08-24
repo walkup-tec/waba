@@ -536,7 +536,7 @@ async function dismissBlockingPortalOverlays(page: PageLike) {
 
 function isChromiumTargetCrash(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error || "");
-  return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(
+  return /Target crashed|Page crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(
     msg,
   );
 }

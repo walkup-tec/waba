@@ -44,8 +44,9 @@ const continueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Timer global da fila de enriquecimento (1 campanha por dia civil SP). */
 let globalEnrichTimer: ReturnType<typeof setTimeout> | null = null;
 /**
- * Soft-cap da raspagem Playwright: até N Chromiums em paralelo (default 10).
- * Cada job = 1 Chromium dedicado (login + cópia simultâneos entre campanhas).
+ * Soft-cap da raspagem Playwright: até N Chromiums em paralelo (default 3).
+ * Evidência prod 2026-08-24: 3 dedicados simultâneos → Page crashed / login timeout.
+ * Fila segura o restante; override até 12 se o VPS aguentar.
  * Override: CASADOSDADOS_MAX_CONCURRENT_SCRAPES (1–12), CASADOSDADOS_SCRAPE_STAGGER_MS.
  */
 type PortalScrapeWaiter = {
@@ -67,14 +68,14 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 const phoneRefreshJobs = new Set<string>();
 
 function resolveMaxConcurrentScrapes(): number {
-  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 10) || 10);
-  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 10));
+  const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 3) || 3);
+  return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 3));
 }
 
 function resolveScrapeStaggerMs(): number {
-  // Default 0: jobs sobem juntos (pedido: N jobs em simultâneo).
-  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 0) || 0);
-  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 0));
+  // Espaça o launch para não derrubar Xvfb/login (3 jobs no mesmo segundo).
+  const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 8_000) || 8_000);
+  return Math.max(0, Math.min(120_000, Number.isFinite(raw) ? raw : 8_000));
 }
 
 function formatListaLabel(index: number): string {
@@ -2575,7 +2576,7 @@ export class WabaLeadsCnpjService {
       const hardRecovery =
         (isLeadsScrapeError(error) && error.recovery === "new-browser") ||
         (!(error instanceof LeadsScrapeError) &&
-          /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(
+          /Target crashed|Page crashed|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(
             msg,
           ));
 

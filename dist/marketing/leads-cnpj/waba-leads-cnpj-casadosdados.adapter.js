@@ -369,7 +369,7 @@ async function dismissBlockingPortalOverlays(page) {
 }
 function isChromiumTargetCrash(error) {
     const msg = error instanceof Error ? error.message : String(error || "");
-    return /Target crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
+    return /Target crashed|Page crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
 }
 function requiresBrowserRecovery(error) {
     if (error instanceof LeadsScrapeError)

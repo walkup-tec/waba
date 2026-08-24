@@ -29,13 +29,13 @@ const ENRICH_QUEUE_PREFERRED_FIRST = "portal:corretora de seguros";
 /** Evita dois backfills de telefone no mesmo listId. */
 const phoneRefreshJobs = new Set();
 function resolveMaxConcurrentScrapes() {
-    const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 10) || 10);
-    return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 10));
+    const raw = Math.round(Number(process.env.CASADOSDADOS_MAX_CONCURRENT_SCRAPES || 3) || 3);
+    return Math.max(1, Math.min(12, Number.isFinite(raw) ? raw : 3));
 }
 function resolveScrapeStaggerMs() {
-    // Default 0: jobs sobem juntos (pedido: N jobs em simultâneo).
-    const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 0) || 0);
-    return Math.max(0, Math.min(120000, Number.isFinite(raw) ? raw : 0));
+    // Espaça o launch para não derrubar Xvfb/login (3 jobs no mesmo segundo).
+    const raw = Math.round(Number(process.env.CASADOSDADOS_SCRAPE_STAGGER_MS || 8000) || 8000);
+    return Math.max(0, Math.min(120000, Number.isFinite(raw) ? raw : 8000));
 }
 function formatListaLabel(index) {
     const n = Math.max(1, Math.round(Number(index) || 1));
@@ -2248,7 +2248,7 @@ class WabaLeadsCnpjService {
                 : Math.max(1, ckptPage || Math.floor(archived / 20) + 1);
             const hardRecovery = ((0, waba_leads_cnpj_casadosdados_adapter_1.isLeadsScrapeError)(error) && error.recovery === "new-browser") ||
                 (!(error instanceof waba_leads_cnpj_casadosdados_adapter_1.LeadsScrapeError) &&
-                    /Target crashed|browser has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(msg));
+                    /Target crashed|Page crashed|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT/i.test(msg));
             const wasPortalScrape = Boolean(current) &&
                 current.source === "portal" &&
                 !current.skipPortalScrape &&
