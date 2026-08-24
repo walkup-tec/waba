@@ -13171,6 +13171,14 @@ const httpServer = app.listen(PORT, () => {
 });
 (0, waba_graceful_shutdown_1.registerWabaGracefulShutdown)(httpServer, async () => {
     try {
+        const { shutdownLeadsCnpjBrowserRuntime } = await Promise.resolve().then(() => __importStar(require("./marketing/leads-cnpj/waba-leads-cnpj-browser-runtime")));
+        await shutdownLeadsCnpjBrowserRuntime();
+        console.log("[shutdown] Leads PJ Chromium runtime encerrado.");
+    }
+    catch (err) {
+        console.error("[shutdown] falha ao encerrar Chromium Leads PJ:", err);
+    }
+    try {
         await (0, aquecedor_owner_runtime_registry_1.flushAquecedorOwnerMotorsToDisk)();
         console.log("[shutdown] aquecedor desired/runtime-intent persistido.");
     }

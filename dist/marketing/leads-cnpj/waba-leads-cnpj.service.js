@@ -1786,7 +1786,7 @@ class WabaLeadsCnpjService {
                                 collectedCount: pendingCount,
                             },
                             progressMessage: scrapeResumeFrom > 1
-                                ? `Abrindo Portal: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} antes do ReceitaWS)…`
+                                ? `COPY: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} antes do ReceitaWS)…`
                                 : `Abrindo Portal: robô na tela (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} · 20/pág. — enrich só depois)…`,
                             error: null,
                         });
@@ -2148,7 +2148,7 @@ class WabaLeadsCnpjService {
                         collectedCount: archived,
                     },
                     scrapeReconnectAttempts: attempts + 1,
-                    progressMessage: `RECOVER: Chromium caiu — retomando página ${resumePage} em ~15s (arquivados: ${archived.toLocaleString("pt-BR")}; tentativa ${attempts + 1}/${maxReconnect})…`,
+                    progressMessage: `COPY: recover Chromium — retomando página ${resumePage} em ~15s (arquivados: ${archived.toLocaleString("pt-BR")}; tentativa ${attempts + 1}/${maxReconnect})…`,
                 });
                 setTimeout(() => {
                     const again = this.repository.getById(listId);

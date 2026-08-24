@@ -14,4 +14,14 @@ if command -v Xvfb >/dev/null 2>&1; then
   fi
 fi
 
+# Fase B — diagnóstico /dev/shm (Playwright/Chromium).
+if [[ -d /dev/shm ]]; then
+  shm_line="$(df -h /dev/shm 2>/dev/null | tail -n1 || true)"
+  echo "[entrypoint] /dev/shm: ${shm_line}"
+  # Aviso se parecer o default Docker 64M (sem alterar mount — precisa Swarm tmpfs).
+  if echo "${shm_line}" | grep -Eqi '64M|63M|62M'; then
+    echo "[entrypoint] AVISO: /dev/shm ~64M — Chromium longo pode crashar. Rode scripts/waba-leads-pj-shm-swarm.sh apply no VPS."
+  fi
+fi
+
 exec "$@"

@@ -41,6 +41,7 @@ exports.assertCasaDosDadosCredentials = assertCasaDosDadosCredentials;
 exports.resolvePortalUiMaxPage = resolvePortalUiMaxPage;
 exports.scrapeCasaDosDadosLeads = scrapeCasaDosDadosLeads;
 const waba_leads_cnpj_repository_1 = require("./waba-leads-cnpj.repository");
+const waba_leads_cnpj_browser_runtime_1 = require("./waba-leads-cnpj-browser-runtime");
 const PORTAL_LOGIN_URL = process.env.CASADOSDADOS_LOGIN_URL || "https://portal.casadosdados.com.br/entrar";
 const PORTAL_SEARCH_URL = process.env.CASADOSDADOS_SEARCH_URL ||
     "https://portal.casadosdados.com.br/plataforma/pesquisa";
@@ -1913,13 +1914,18 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
     let resumeFrom = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
     let lastErr;
     let sessionStorageState = options?.storageState;
+    if (!sessionStorageState) {
+        sessionStorageState = (0, waba_leads_cnpj_browser_runtime_1.loadCasaDosDadosStorageState)();
+    }
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
             if (attempt > 1) {
-                onProgress?.(`RECOVER: Chromium caiu — tentativa ${attempt}/${maxAttempts} · próxima página ${resumeFrom}`);
+                // Prefixo COPY: mantém UI em «Copiando» (não volta para Abrindo Portal).
+                onProgress?.(`COPY: recover browser ${attempt}/${maxAttempts} · retomando página ${resumeFrom} (storageState)…`);
+                await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)(`hard-recover-attempt-${attempt}`);
             }
             else if (resumeFrom > 1) {
-                onProgress?.(`BOOT: retomando extração na página ${resumeFrom}…`);
+                onProgress?.(`COPY: retomando extração na página ${resumeFrom} (mesma campanha)…`);
             }
             return await scrapeCasaDosDadosLeadsOnce(filters, onProgress, {
                 ...options,
@@ -1927,6 +1933,7 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
                 storageState: sessionStorageState,
                 onStorageState: async (state) => {
                     sessionStorageState = state;
+                    (0, waba_leads_cnpj_browser_runtime_1.saveCasaDosDadosStorageState)(state);
                     await options?.onStorageState?.(state);
                 },
                 onPageCheckpoint: async (ckpt) => {
@@ -1943,7 +1950,8 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
             if (!requiresBrowserRecovery(error)) {
                 throw error instanceof Error ? error : new Error(msg);
             }
-            onProgress?.(`RECOVER: renderer/browser morto — checkpoint página ${resumeFrom} preservado…`);
+            onProgress?.(`COPY: recover — Chromium morto; checkpoint página ${resumeFrom} preservado…`);
+            await (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)("chromium-dead");
             if (attempt >= maxAttempts)
                 break;
             await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * attempt)));
@@ -1959,8 +1967,8 @@ async function scrapeCasaDosDadosLeads(filters, onProgress, options) {
  */
 async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     // Cada chamada = 1 Chromium. Concorrência limitada no service (soft-cap 2 + stagger).
+    // Cada chamada = 1 Context. Browser compartilhado via launchServer+connect (Fase C).
     const { email, password } = readCasaDosDadosCredentials();
-    const playwright = await loadPlaywright();
     // 0 / ausente = sem teto: copia todas as páginas até o portal acabar.
     const maxPagesCap = Math.max(0, Math.round(Number(filters.maxPages ?? 0) || 0));
     const hasXvfb = Boolean(String(process.env.DISPLAY || "").trim());
@@ -1988,50 +1996,30 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         }));
     };
     onProgress?.(headless
-        ? "BOOT: iniciando Chromium (headless real)…"
+        ? "BOOT: conectando Chromium compartilhado (headless)…"
         : String(process.env.DISPLAY || "").trim()
-            ? "BOOT: abrindo Casa dos Dados (Xvfb)…"
-            : "BOOT: abrindo janela do Casa dos Dados…");
+            ? "BOOT: conectando Chromium compartilhado (Xvfb)…"
+            : "BOOT: conectando Chromium compartilhado (janela)…");
+    // Persistência: se o caller não passou storageState, usa disco.
+    const effectiveStorage = options?.storageState ?? (0, waba_leads_cnpj_browser_runtime_1.loadCasaDosDadosStorageState)() ?? undefined;
     let browser;
     try {
-        browser = await playwright.chromium.launch({
-            headless,
-            slowMo,
-            args: [
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                // Sem GPU física no Docker/Xvfb — mas NÃO desligar software rasterizer
-                // (--disable-software-rasterizer + --disable-gpu mata o fallback e crasha o renderer).
-                "--disable-gpu",
-                "--disable-extensions",
-                "--mute-audio",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-background-networking",
-                "--disable-background-timer-throttling",
-                // Maximizar sob Xvfb costuma derrubar o renderer ("Target crashed").
-                ...(headless || hasXvfb ? [] : ["--start-maximized"]),
-            ],
-        });
+        browser = await (0, waba_leads_cnpj_browser_runtime_1.acquireSharedBrowser)({ headless, slowMo, hasXvfb });
     }
     catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        if (/Executable doesn't exist|browserType\.launch/i.test(detail)) {
+        if (/Executable doesn't exist|browserType\.launch|launchServer/i.test(detail)) {
             throw new Error("Chromium do Playwright ausente no servidor. No Docker: rode `npx playwright install --with-deps chromium` na imagem (ver Dockerfile) e faça Redeploy.");
         }
         throw error;
     }
     const resumeFromPageLog = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
-    browser.on("disconnected", () => {
-        console.error(`[Leads PJ] BROWSER_DISCONNECTED page=${resumeFromPageLog}`);
-    });
     /** Fecha Chromium só se shouldAbort (exclusão do usuário) — não por demora. */
     const abortWatch = setInterval(() => {
         if (!options?.shouldAbort?.())
             return;
         console.error(`[Leads PJ] SCRAPE_ABORT_CLOSE page=${resumeFromPageLog}`);
-        void browser.close().catch(() => undefined);
+        void (0, waba_leads_cnpj_browser_runtime_1.releaseSharedBrowser)("user-abort");
     }, 4000);
     /** Heartbeat = tempo na fase; NÃO fingir progresso. */
     const markPhase = (message) => {
@@ -2050,21 +2038,43 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             // Viewport fixo no Docker/Xvfb — null + maximizado crasha o Chromium.
             viewport: headless || hasXvfb ? { width: 1440, height: 900 } : null,
         };
-        if (options?.storageState) {
-            contextOptions.storageState = options.storageState;
+        if (effectiveStorage) {
+            contextOptions.storageState = effectiveStorage;
         }
         const context = await browser.newContext(contextOptions);
         await context.addInitScript(() => {
             Object.defineProperty(navigator, "webdriver", { get: () => undefined });
         });
-        const page = await context.newPage();
+        let page = await context.newPage();
         page.setDefaultTimeout(45000);
+        let pageCrashed = false;
         page.on("crash", () => {
+            pageCrashed = true;
             console.error(`[Leads PJ] PAGE_CRASH page=${resumeFromPageLog}`);
         });
         if (!headless) {
             await page.bringToFront().catch(() => undefined);
         }
+        /** Nível 4: nova Page no mesmo Context (renderer morto, browser vivo). */
+        const recreatePageSameContext = async (reason) => {
+            markPhase(`COPY: recover nível4 — nova Page (mesmo context): ${reason}`);
+            try {
+                await page.close().catch(() => undefined);
+            }
+            catch {
+                /* ignore */
+            }
+            page = await context.newPage();
+            page.setDefaultTimeout(45000);
+            pageCrashed = false;
+            page.on("crash", () => {
+                pageCrashed = true;
+                console.error(`[Leads PJ] PAGE_CRASH page=${resumeFromPageLog}`);
+            });
+            if (!headless) {
+                await page.bringToFront().catch(() => undefined);
+            }
+        };
         setPhase("LOGIN", "abrindo portal…");
         await gotoWithRetry(page, PORTAL_LOGIN_URL, { waitUntil: "domcontentloaded" });
         await waitPastCloudflare(page, { onProgress, stage: "login" });
@@ -2082,6 +2092,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         }
         try {
             const state = await context.storageState();
+            (0, waba_leads_cnpj_browser_runtime_1.saveCasaDosDadosStorageState)(state);
             await options?.onStorageState?.(state);
         }
         catch {
@@ -2526,6 +2537,11 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 }
             }
             markPhase(`COPY: página ${pageIndex} arquivada — +${added} / ${rows.length} cards · pool sessão ${collected.size.toLocaleString("pt-BR")} · próxima ${pageIndex + 1}`);
+            (0, waba_leads_cnpj_browser_runtime_1.logScrapePageTelemetry)({
+                page: pageIndex,
+                sessionCnpjs: collected.size,
+                browserConnected: Boolean(browser?.isConnected?.() ?? true),
+            });
             const nextPage = pageIndex + 1;
             // Checkpoint ANTES do next (contrato: persistir página N antes de avançar).
             await options?.onPageCheckpoint?.({
@@ -2573,7 +2589,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             }
             if (!advanced) {
                 for (let retry = 1; retry <= 3; retry += 1) {
-                    markPhase(`COPY: retry paginação ${pageIndex}→${nextPage} (${retry}/3) — mesma sessão…`);
+                    markPhase(`COPY: recover nível1 — retry paginação ${pageIndex}→${nextPage} (${retry}/3)…`);
                     await sleepNode(400);
                     advanced =
                         (await goToNextResultsPage(pageFirst, pageIndex)) ||
@@ -2582,14 +2598,41 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                         break;
                 }
             }
-            if (!advanced) {
-                const stillOn = await readCurrentPageNumber();
-                const alive = await rendererProbe(page, 3000);
-                if (!alive) {
+            // Nível 3: reload da Page atual (renderer lento, browser vivo).
+            if (!advanced && !pageCrashed) {
+                markPhase(`COPY: recover nível3 — reload Page e retry ${pageIndex}→${nextPage}…`);
+                try {
+                    await page.reload({ waitUntil: "domcontentloaded", timeout: 45000 });
+                    await sleepNode(800);
+                    advanced =
+                        (await jumpToPageDom(nextPage)) ||
+                            (await goToNextResultsPage(pageFirst, pageIndex));
+                }
+                catch {
+                    /* segue */
+                }
+            }
+            // Nível 4: page.crash → nova Page no context; se não recuperar, sobe para hard recover.
+            if (pageCrashed || (!advanced && !(await rendererProbe(page, 2000)))) {
+                try {
+                    await recreatePageSameContext(pageCrashed ? "page.crash" : "renderer-soft");
+                    advanced = await jumpToPageDom(nextPage);
+                    if (advanced) {
+                        markPhase(`COPY: recover nível4 OK — UI na página ${nextPage}`);
+                    }
+                }
+                catch {
+                    advanced = false;
+                }
+                if (!advanced) {
                     throw new RendererUnresponsiveError(`COPY next ${pageIndex}→${nextPage}`);
                 }
+            }
+            if (!advanced) {
+                const stillOn = await readCurrentPageNumber();
                 // Soft: encerra com o já copiado — scrape incompleto (service mantém checkpoint).
-                markPhase(`COPY: paginação stall em ${pageIndex} (UI ${stillOn}) — ${collected.size} CNPJs; sem reabrir portal.`);
+                // Browser compartilhado permanece aberto (Fase C).
+                markPhase(`COPY: paginação stall em ${pageIndex} (UI ${stillOn}) — ${collected.size} CNPJs; sem matar Chromium.`);
                 doneReason = "PAGINATION_STALL";
                 scrapeCompleted = false;
                 break;
@@ -2600,7 +2643,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             doneReason = "INCOMPLETE";
             scrapeCompleted = false;
         }
-        await context.close();
+        await context.close().catch(() => undefined);
         // Retomada (startPage>1) que não leu nenhum card NÃO é sucesso — senão o service
         // limpa o checkpoint e enriquece só o pool parcial (incidente Corbans: 140 de ~8070).
         if (!collected.size) {
@@ -2619,6 +2662,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
     finally {
         clearInterval(abortWatch);
         clearInterval(sessionKeepAlive);
-        await browser.close().catch(() => undefined);
+        // Fase C: NÃO fecha o Chromium compartilhado aqui — só context (acima).
+        // releaseSharedBrowser fica para crash hard / abort / shutdown do processo.
     }
 }

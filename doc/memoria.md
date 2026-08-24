@@ -1,5 +1,13 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 11:45 — Leads PJ browser runtime v9.14 (A+B+C)
+
+- Browser compartilhado (`launchServer`+`connect`); sem `browser.close` no fim do job
+- Recovery em níveis; UI Copiando em soft recover; storageState em `/app/data`
+- Script Swarm tmpfs `/dev/shm`; env `CASADOSDADOS_USE_DEV_SHM`
+- Marker `DEPLOY-2026-08-24-1145-leads-pj-browser-runtime-v9.14`
+- LOG: `doc/LOG-2026-08-24__114500__leads-pj-browser-runtime-v914.md`
+
 ## 2026-08-24 11:00 — Leads PJ auto-retoma cópia incompleta v9.13
 
 - Boot retoma cópia se páginas &lt; 1000 e sem `scrapeCompleted`

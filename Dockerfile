@@ -15,6 +15,9 @@ ENV PORT=3000
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # Display virtual para Leads PJ (mesmo comportamento do V02 com janela).
 ENV DISPLAY=:99
+# Fase B: no Swarm, monte tmpfs em /dev/shm (ver scripts/waba-leads-pj-shm-swarm.sh).
+# Com shm >= 1G, defina CASADOSDADOS_USE_DEV_SHM=1 no EasyPanel (tira --disable-dev-shm-usage).
+# Fase C: browser compartilhado via launchServer (CASADOSDADOS_BROWSER_SERVER=1 default).
 
 RUN groupadd --gid 1001 nodejs \
   && useradd --uid 1001 --gid nodejs --create-home --shell /usr/sbin/nologin nodejs
