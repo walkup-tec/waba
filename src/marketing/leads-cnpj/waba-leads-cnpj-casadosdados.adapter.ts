@@ -2193,22 +2193,22 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
     });
 
-    // Garante modal CNAE fechado antes de pesquisar (timeout curto — não travar a sessão).
-    setPhase("SEARCH", "fechando modal CNAE (se aberto)…");
+    // NÃO usar locator.has-text("Fechar") nem page.waitForTimeout no race:
+    // no Playwright a fila CDP é serial — locator/evaluate travado impede o timeout.
+    // Só Escape com timeout do Node; depois segue para descoberta do CTA.
+    setPhase("SEARCH", "dismiss modal CNAE (Escape)…");
     try {
       await Promise.race([
-        (async () => {
-          const fecharCnae = page.locator('button:has-text("Fechar")').first();
-          if ((await fecharCnae.count()) > 0 && (await fecharCnae.isVisible().catch(() => false))) {
-            await fecharCnae.click().catch(() => undefined);
-            await page.waitForTimeout(300);
-          }
-        })(),
-        page.waitForTimeout(4000),
+        page.keyboard.press("Escape").then(() => undefined),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 800);
+        }),
       ]);
+      await new Promise((r) => setTimeout(r, 200));
     } catch {
-      /* segue para Pesquisar */
+      /* segue */
     }
+    setPhase("SEARCH", "preparando CTA Pesquisar…");
 
     const searchTimeoutMs = Math.max(
       15_000,

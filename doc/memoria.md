@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 22:05 — Leads PJ CNAE modal Node timeout v9.2
+
+- Escape + setTimeout Node; sem locator Fechar (fila CDP)
+- Marker `DEPLOY-2026-08-23-2205-leads-pj-cnae-modal-node-timeout-v9.2`
+- LOG: `doc/LOG-2026-08-23__220500__leads-pj-cnae-modal-node-timeout-v92.md`
+
 ## 2026-08-23 21:45 — Leads PJ search discovery v9.1
 
 - Matcher amplo includes(pesquisar/buscar) + ancestral; SEARCH_BUTTON_NOT_FOUND + dump
