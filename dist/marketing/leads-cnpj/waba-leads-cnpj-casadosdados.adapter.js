@@ -1024,63 +1024,79 @@ async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort)
     while (Date.now() < deadline) {
         if (shouldAbort?.())
             throw new Error("__MLC_JOB_ABORTED__");
-        const alive = await rendererProbe(page, 3000);
+        const alive = await rendererProbe(page, 2000);
         if (!alive)
             return { kind: "renderer-unresponsive" };
-        lastProbe = await probeSearchState(page).catch(() => lastProbe);
-        const state = await readSearchState(page).catch(() => null);
-        if (!state) {
-            const stillAlive = await rendererProbe(page, 3000);
-            if (!stillAlive)
-                return { kind: "renderer-unresponsive" };
-            await page.waitForTimeout(400);
-            continue;
+        // Probe leve + teto Node — evita probeSearchState completo a cada tick.
+        const lite = await withNodeTimeout(probeSearchAckLite(page), 1500, null);
+        if (lite) {
+            if (lite.pagination || lite.cnpjNodes > 0) {
+                onProgress?.(`SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`);
+                return { kind: "results", total: null };
+            }
+            lastProbe = {
+                ...(lastProbe || {
+                    url: lite.url,
+                    readyState: "unknown",
+                    searchButtonFound: false,
+                    searchButtonDisabled: lite.searchButtonDisabled,
+                    searchButtonText: null,
+                    searchButtonCount: 0,
+                    searchButtonCandidate: null,
+                    topCandidates: [],
+                    pagination: lite.pagination,
+                    currentPage: null,
+                    cnpjNodes: lite.cnpjNodes,
+                    totalCandidates: [],
+                    loadingNodes: lite.loadingNodes,
+                    dialogs: lite.dialogs,
+                    iframeCount: 0,
+                    iframeSrcs: [],
+                    challengeNodes: 0,
+                    buttonDebug: null,
+                }),
+                url: lite.url,
+                pagination: lite.pagination,
+                cnpjNodes: lite.cnpjNodes,
+                loadingNodes: lite.loadingNodes,
+                dialogs: lite.dialogs,
+                searchButtonDisabled: lite.searchButtonDisabled,
+            };
         }
-        if (state.blocked)
-            return { kind: "blocked" };
-        if (state.hasPagination || state.hasCnpj || (state.totalHint != null && state.totalHint > 0)) {
-            onProgress?.(`SEARCH: resultados detectados — CNPJs=${state.cnpjNodes}, paginação=${state.hasPagination}`);
-            return { kind: "results", total: state.totalHint };
-        }
-        if (state.emptyHint && !state.searching)
-            return { kind: "empty" };
         const elapsed = Math.round((Date.now() - started) / 1000);
         const budget = Math.round(timeoutMs / 1000);
         if (elapsed - lastPulse >= 5) {
             lastPulse = elapsed;
-            onProgress?.(state.searching || state.loadingNodes > 0
+            const loading = (lite?.loadingNodes || 0) > 0;
+            onProgress?.(loading
                 ? `SEARCH: portal ainda processando — ${elapsed}s/${budget}s`
                 : `SEARCH: aguardando resultados — ${elapsed}s/${budget}s`);
         }
-        await page.waitForTimeout(500);
+        // Sleep Node — não page.waitForTimeout.
+        await new Promise((r) => setTimeout(r, 500));
     }
-    const alive = await rendererProbe(page, 3000);
+    const alive = await rendererProbe(page, 2000);
     if (!alive)
         return { kind: "renderer-unresponsive" };
-    lastProbe = (await probeSearchState(page).catch(() => lastProbe)) || lastProbe;
-    const finalState = await readSearchState(page).catch(() => null);
-    if (finalState?.hasPagination ||
-        finalState?.hasCnpj ||
-        (finalState?.totalHint != null && finalState.totalHint > 0)) {
-        return { kind: "results", total: finalState.totalHint };
+    const finalLite = await withNodeTimeout(probeSearchAckLite(page), 2000, null);
+    if (finalLite && (finalLite.pagination || finalLite.cnpjNodes > 0)) {
+        return { kind: "results", total: null };
     }
-    if (finalState?.searching || (lastProbe && lastProbe.loadingNodes > 0)) {
+    if (finalLite && finalLite.loadingNodes > 0) {
         const graceDeadline = Date.now() + 30000;
         while (Date.now() < graceDeadline) {
             if (shouldAbort?.())
                 throw new Error("__MLC_JOB_ABORTED__");
-            if (!(await rendererProbe(page, 3000)))
+            if (!(await rendererProbe(page, 2000)))
                 return { kind: "renderer-unresponsive" };
-            lastProbe = (await probeSearchState(page).catch(() => lastProbe)) || lastProbe;
-            const st = await readSearchState(page).catch(() => null);
-            if (st?.hasPagination || st?.hasCnpj || (st?.totalHint != null && st.totalHint > 0)) {
-                return { kind: "results", total: st.totalHint };
-            }
-            if (st && !st.searching && (!lastProbe || lastProbe.loadingNodes === 0))
+            const st = await withNodeTimeout(probeSearchAckLite(page), 1500, null);
+            if (st && (st.pagination || st.cnpjNodes > 0))
+                return { kind: "results", total: null };
+            if (st && st.loadingNodes === 0)
                 break;
             const g = Math.round((Date.now() - started) / 1000);
             onProgress?.(`SEARCH: grace loading — ${g}s`);
-            await page.waitForTimeout(500);
+            await new Promise((r) => setTimeout(r, 500));
         }
     }
     return { kind: "timeout-responsive", probe: lastProbe };
@@ -1969,23 +1985,15 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         setPhase("SEARCH", "preparando CTA Pesquisar…");
         const searchTimeoutMs = Math.max(15000, Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90000) || 90000));
         const runSearchOnce = async (allowRedispatch) => {
-            const pre = await probeSearchState(page);
-            // Só redispara Pesquisar se não há loading/resultados (evita double-request).
-            const alreadyHasResults = pre.pagination || pre.cnpjNodes > 0 || pre.totalCandidates.length > 0;
-            if (alreadyHasResults) {
-                onProgress?.(`SEARCH: resultados já presentes — ${formatProbeShort(pre)}`);
-                return {
-                    kind: "results",
-                    total: (() => {
-                        const m = pre.totalCandidates.join(" ").match(/([\d.]+)\s+(empresas?|resultados?)/i);
-                        if (!m)
-                            return null;
-                        const n = Number(String(m[1]).replace(/\./g, "").replace(/\s/g, ""));
-                        return Number.isFinite(n) ? n : null;
-                    })(),
-                };
+            // Probe LEVE com teto Node — NÃO chamar probeSearchState completo aqui
+            // (findSearchButtonCandidates trava a fila CDP e o keepalive fica em "preparando CTA").
+            setPhase("SEARCH", "checando estado pré-CTA…");
+            const preLite = await withNodeTimeout(probeSearchAckLite(page), 3000, null);
+            if (preLite && (preLite.pagination || preLite.cnpjNodes > 0)) {
+                onProgress?.(`SEARCH: resultados já presentes — pag=${preLite.pagination} cnpj=${preLite.cnpjNodes}`);
+                return { kind: "results", total: null };
             }
-            if (pre.loadingNodes > 0 && !allowRedispatch) {
+            if (preLite && preLite.loadingNodes > 0 && !allowRedispatch) {
                 setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
                 return waitForSearchTransition(page, searchTimeoutMs, (msg) => {
                     sessionPhase = msg;
@@ -2005,7 +2013,8 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         };
         let searchResult = await runSearchOnce(true);
         if (searchResult.kind === "timeout-responsive") {
-            const stuckProbe = searchResult.probe || (await probeSearchState(page).catch(() => null));
+            const stuckProbe = searchResult.probe ||
+                (await withNodeTimeout(probeSearchState(page), 3000, null));
             // Retry same-Page só se portal idle (sem loading) e sem resultados.
             if (stuckProbe && stuckProbe.loadingNodes > 0) {
                 throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "same-page", `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`);
@@ -2020,7 +2029,8 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             throw new LeadsScrapeError("PORTAL_BLOCKED", "stop", "Cloudflare ou desafio de segurança na pesquisa.");
         }
         if (searchResult.kind === "timeout-responsive") {
-            const last = searchResult.probe || (await probeSearchState(page).catch(() => null));
+            const last = searchResult.probe ||
+                (await withNodeTimeout(probeSearchState(page), 3000, null));
             throw new LeadsScrapeError("SEARCH_TIMEOUT_RESPONSIVE", "same-page", `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`);
         }
         if (searchResult.kind === "empty") {

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 22:40 — Leads PJ pré-CTA lite probe v9.4
+
+- runSearchOnce sem probeSearchState completo; waitForSearchTransition com lite+Node
+- Marker `DEPLOY-2026-08-23-2240-leads-pj-precta-lite-probe-v9.4`
+- LOG: `doc/LOG-2026-08-23__224000__leads-pj-precta-lite-probe-v94.md`
+
 ## 2026-08-23 22:25 — Leads PJ ACK Node deadline v9.3
 
 - waitForSearchAck com setTimeout Node + probe leve; sem page.waitForTimeout no loop
