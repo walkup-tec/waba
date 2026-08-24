@@ -2398,10 +2398,12 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         /**
          * Salto de página via DOM nativo (sem locator Playwright) — mais estável no Xvfb.
          * Oruga: botões aria-label "Página N." / texto N / input numérico se existir.
+         * Retorna true só se a UI confirmar a página alvo.
          */
         const jumpToPageDom = async (target) => {
-            const clicked = await page
-                .evaluate((t) => {
+            const t = Math.max(1, Math.round(target || 1));
+            const attempt = await withNodeTimeout(page
+                .evaluate((pageTarget) => {
                 const nav = document.querySelector('nav[data-oruga="pagination"]');
                 if (!nav)
                     return { ok: false, how: "no-nav" };
@@ -2409,40 +2411,84 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     if (!el)
                         return false;
                     const b = el;
-                    if (b.disabled || b.classList.contains("is-disabled") || b.getAttribute("aria-disabled") === "true") {
+                    if (b.disabled ||
+                        b.classList.contains("is-disabled") ||
+                        b.getAttribute("aria-disabled") === "true") {
                         return false;
                     }
                     b.click();
                     return true;
                 };
+                // 1) Botão exato "Página N"
                 const buttons = Array.from(nav.querySelectorAll("button.pagination-link, button"));
                 for (const b of buttons) {
                     const label = String(b.getAttribute("aria-label") || "");
                     const text = String(b.textContent || "").trim();
-                    if (label === `Página ${t}.` ||
-                        label === `Página ${t}` ||
-                        new RegExp(`Página\\s+${t}\\b`, "i").test(label) ||
-                        text === String(t)) {
+                    if (label === `Página ${pageTarget}.` ||
+                        label === `Página ${pageTarget}` ||
+                        new RegExp(`Página\\s+${pageTarget}\\b`, "i").test(label) ||
+                        text === String(pageTarget)) {
                         if (tryClick(b))
                             return { ok: true, how: "button" };
                     }
                 }
+                // 2) Input numérico (Oruga) — dispara eventos que a UI realmente escuta
                 const input = nav.querySelector('input[type="number"], input.input, input[class*="pagination"]');
                 if (input) {
                     input.focus();
-                    input.value = String(t);
+                    const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+                    proto?.set?.call(input, String(pageTarget));
                     input.dispatchEvent(new Event("input", { bubbles: true }));
                     input.dispatchEvent(new Event("change", { bubbles: true }));
                     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
                     input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }));
+                    input.blur();
                     return { ok: true, how: "input" };
                 }
                 return { ok: false, how: "miss" };
-            }, target)
-                .catch(() => ({ ok: false, how: "err" }));
-            if (!clicked.ok)
+            }, t)
+                .catch(() => ({ ok: false, how: "err" })), 4000, { ok: false, how: "err" });
+            if (!attempt.ok)
                 return false;
-            return waitUntilPage(target, 5000);
+            return waitUntilPage(t, attempt.how === "input" ? 8000 : 5000);
+        };
+        /** Maior botão numérico visível com N > current e N <= target (aproxima em saltos). */
+        const hopTowardPageDom = async (target) => {
+            const t = Math.max(1, Math.round(target || 1));
+            const hopped = await withNodeTimeout(page
+                .evaluate((pageTarget) => {
+                const nav = document.querySelector('nav[data-oruga="pagination"]');
+                if (!nav)
+                    return 0;
+                const active = nav.querySelector('button[aria-current="page"], button.pagination-link.is-current, button[aria-current="true"]');
+                const current = Number(String(active?.textContent || "").trim()) || 0;
+                let bestN = 0;
+                for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                    const text = String(b.textContent || "").trim();
+                    const n = Number(text);
+                    if (!Number.isFinite(n) || n <= current || n > pageTarget)
+                        continue;
+                    const btn = b;
+                    if (btn.disabled || btn.classList.contains("is-disabled"))
+                        continue;
+                    if (n > bestN)
+                        bestN = n;
+                }
+                if (bestN <= 0)
+                    return 0;
+                for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
+                    if (String(b.textContent || "").trim() === String(bestN)) {
+                        b.click();
+                        return bestN;
+                    }
+                }
+                return 0;
+            }, t)
+                .catch(() => 0), 3000, 0);
+            if (hopped <= 0)
+                return 0;
+            const moved = await waitUntilPage(hopped, 5000);
+            return moved ? hopped : 0;
         };
         /**
          * Avança 1 página — caminho rápido (estilo V02).
@@ -2501,7 +2547,9 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             return false;
         };
         /**
-         * Posiciona na página alvo. Se falhar, retorna false (caller reinicia da 1 — processo não para).
+         * Posiciona na página alvo.
+         * Estratégia: jump (input/botão) → hops nos botões visíveis → next sequencial
+         * com teto = distância real (não 12 passos fixos — isso travava em pág. 104).
          */
         const goToResultsPage = async (targetPage) => {
             const target = Math.max(1, Math.round(targetPage || 1));
@@ -2510,81 +2558,58 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             let current = await readCurrentPageNumber();
             if (current === target)
                 return true;
-            // UI à frente do alvo (checkpoint/UI loucos) — tenta salto direto; não anda com "next".
+            // UI à frente do alvo — tenta salto direto; não anda com "next" para trás.
             if (current > target + 1) {
                 markPhase(`Copiando: UI pág. ${current} > alvo ${target} — salto DOM (sem next sequencial)…`);
                 if (await jumpToPageDom(target))
                     return true;
                 current = await readCurrentPageNumber();
-                if (current === target)
-                    return true;
-                markPhase(`Copiando: não reposicionou de ${current} para ${target} — abortando posicionamento.`);
-                return false;
+                return current === target;
             }
-            markPhase(`Copiando: salto DOM para página ${target} (UI em ${current})…`);
-            if (await jumpToPageDom(target))
-                return true;
-            // Clica no maior botão numérico visível ≤ target (aproxima sem 1→2→3… lento).
-            for (let hop = 0; hop < 8; hop += 1) {
+            // Distância real manda — env só PODE AUMENTAR o teto, nunca cortar (bug pág. 104).
+            const distanceSteps = Math.max(20, target - current + 15);
+            const envBoost = Math.max(0, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 0) || 0));
+            const maxSteps = Math.min(400, Math.max(distanceSteps, envBoost));
+            let guard = 0;
+            let stalled = 0;
+            while (guard < maxSteps) {
+                if (options?.shouldAbort?.())
+                    return false;
                 current = await readCurrentPageNumber();
                 if (current === target)
                     return true;
-                if (current > target)
-                    break;
-                const best = await withNodeTimeout(page
-                    .evaluate((t) => {
-                    const nav = document.querySelector('nav[data-oruga="pagination"]');
-                    if (!nav)
-                        return 0;
-                    let bestN = 0;
-                    for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
-                        const text = String(b.textContent || "").trim();
-                        const n = Number(text);
-                        if (!Number.isFinite(n) || n <= 0 || n > t)
-                            continue;
-                        const btn = b;
-                        if (btn.disabled || btn.classList.contains("is-disabled"))
-                            continue;
-                        if (n > bestN)
-                            bestN = n;
-                    }
-                    if (bestN <= 0)
-                        return 0;
-                    for (const b of Array.from(nav.querySelectorAll("button.pagination-link"))) {
-                        if (String(b.textContent || "").trim() === String(bestN)) {
-                            b.click();
-                            return bestN;
-                        }
-                    }
-                    return 0;
-                }, target)
-                    .catch(() => 0), 2500, 0);
-                if (best > 0 && best !== current) {
-                    markPhase(`Copiando: aproximando via botão ${best} (alvo ${target})…`);
-                    const moved = await waitUntilPage(best, 5000);
-                    if (!moved)
-                        break;
+                if (current > target) {
+                    // Passou do alvo — tenta voltar via jump; se falhar, aceita falso.
                     if (await jumpToPageDom(target))
                         return true;
-                    continue;
-                }
-                // Sem botão útil ou UI não andou — cai no next sequencial.
-                break;
-            }
-            // Último recurso: poucos "next" com teto baixo (não 25×60s).
-            const maxSteps = Math.max(1, Math.min(12, Math.round(Number(process.env.CASADOSDADOS_MAX_SEQUENTIAL_RESUME_STEPS || 12) || 12)));
-            let guard = 0;
-            while ((current = await readCurrentPageNumber()) < target && guard < maxSteps) {
-                if (options?.shouldAbort?.())
                     return false;
+                }
                 guard += 1;
                 markPhase(`Copiando: posicionando retomada — passo ${guard}/${maxSteps} (UI pág. ${current} → ${target})…`);
+                // 1) Salto direto (input / botão exato)
+                if (await jumpToPageDom(target))
+                    return true;
+                // 2) Hop no maior botão visível ≤ alvo
+                const before = current;
+                const hopped = await hopTowardPageDom(target);
+                if (hopped > before) {
+                    stalled = 0;
+                    continue;
+                }
+                // 3) Next +1
                 const prev = await readFirstVisibleCnpjDigits(page);
                 const ok = await goToNextResultsPage(prev, current);
                 if (!ok) {
-                    markPhase(`Copiando: paginação não avançou no passo ${guard} (UI ${current}) — abortando posicionamento.`);
-                    return false;
+                    stalled += 1;
+                    if (stalled >= 3) {
+                        markPhase(`Copiando: paginação não avançou (UI ${current} → ${target}) — abortando posicionamento.`);
+                        return false;
+                    }
+                    await sleepNode(400);
+                    continue;
                 }
+                stalled = 0;
+                // Após next, tenta jump de novo (às vezes o botão 104 aparece na janela).
                 if (await jumpToPageDom(target))
                     return true;
             }
@@ -2634,17 +2659,26 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 const okFloor = startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
                 if (!okFloor) {
                     const cur = await readCurrentPageNumber();
-                    // Só aceita UI atual se estiver no entorno do piso (nunca página inflada).
+                    // Preferência: UI no entorno do piso.
                     if (cur >= copyResumeFloor && cur <= copyResumeFloor + 2) {
                         markPhase(`COPY: UI na pág. ${cur}; copiando daqui (sem pular CNPJs).`);
                         startPage = cur;
                     }
                     else {
                         markPhase(`COPY: UI pág. ${cur} ≠ piso ${copyResumeFloor} — tentando jump Dom ${copyResumeFloor}.`);
-                        startPage = copyResumeFloor;
-                        const jumped = await jumpToPageDom(startPage).catch(() => false);
-                        if (!jumped) {
-                            throw new RendererUnresponsiveError(`COPY resume: não posicionou na pág. ${startPage} (UI ${cur})`);
+                        const jumped = await jumpToPageDom(copyResumeFloor).catch(() => false);
+                        if (jumped) {
+                            startPage = copyResumeFloor;
+                        }
+                        else if (cur >= 1) {
+                            // Oruga ficou em janela baixa (ex.: 41 vs alvo 104). NÃO classificar como
+                            // renderer morto — pool deduplica; continua da UI e sobe com next/hop.
+                            markPhase(`COPY: salto ${copyResumeFloor} indisponível (UI ${cur}) — continuando da pág. ${cur} (dedupe no pool).`);
+                            startPage = cur;
+                        }
+                        else {
+                            markPhase(`COPY: paginação ilegível após falha de salto — reiniciando da pág. 1 (dedupe no pool).`);
+                            startPage = 1;
                         }
                     }
                 }
@@ -2657,18 +2691,14 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     if (ui2 === startPage) {
                         /* ok */
                     }
-                    else if (ui2 >= copyResumeFloor && ui2 <= startPage + 2) {
+                    else if (ui2 >= 1) {
+                        markPhase(`COPY: UI ${ui2} ≠ alvo ${startPage} pós-jump — adotando UI (piso ${copyResumeFloor}).`);
                         startPage = ui2;
                     }
-                    else {
-                        throw new RendererUnresponsiveError(`COPY resume: UI ${ui2} desalinhada do alvo ${startPage} (piso ${copyResumeFloor})`);
-                    }
                 }
-                else if (uiAfter >= copyResumeFloor && uiAfter <= copyResumeFloor + 2) {
+                else if (uiAfter >= 1) {
+                    markPhase(`COPY: UI ${uiAfter} ≠ ${startPage} e jump falhou — adotando UI (sem hard-fail).`);
                     startPage = uiAfter;
-                }
-                else {
-                    throw new RendererUnresponsiveError(`COPY resume: UI ${uiAfter} ≠ ${startPage} após jump`);
                 }
             }
         }

@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 14:36 — Leads PJ resume jump v9.19
+
+- Retomada pág. alta: hop + next com teto = distância (env não corta)
+- Falha de salto ≠ renderer morto — continua da UI (dedupe pool)
+- Marker `DEPLOY-2026-08-24-1436-leads-pj-resume-jump-v9.19`
+- LOG: `doc/LOG-2026-08-24__143000__leads-pj-resume-jump-v919.md`
+
 ## 2026-08-24 14:05 — Alternativa: sem `**` antes do texto
 
 - Evolution envolve `title` em `*...*`; ZWSP virava `**` na digitação.
