@@ -666,9 +666,44 @@ export class WabaLeadsCnpjService {
   private isCampaignPortalCopyComplete(campaignKey: string): boolean {
     const key = String(campaignKey || "").trim();
     if (!key) return false;
-    return this.repository.list().some(
-      (l) => String(l.campaignKey || "").trim() === key && l.scrapeCompleted === true,
+    const portalUiMaxPage = resolvePortalUiMaxPage();
+    const pool = this.repository.getPool(key);
+    const pending = pool?.pending.length || 0;
+    const used = this.repository.collectUsedCnpjs(key).size;
+    return this.repository.list().some((l) => {
+      if (String(l.campaignKey || "").trim() !== key) return false;
+      if (l.scrapeCompleted !== true) return false;
+      return this.isPortalScrapeReallyComplete(l, pending, used, portalUiMaxPage);
+    });
+  }
+
+  /**
+   * scrapeCompleted prematuro (ex.: pagesToFetch encolhido pelo portalTotal ≈ 104)
+   * NÃO conta como fim — exige atingir maxPages/teto UI ou fim real da paginação.
+   */
+  private isPortalScrapeReallyComplete(
+    list: WabaLeadsCnpjList,
+    poolPending: number,
+    usedCount: number,
+    portalUiMaxPage = resolvePortalUiMaxPage(),
+  ): boolean {
+    if (list.scrapeCompleted !== true) return false;
+    const reason = String(list.scrapeDoneReason || "").trim().toUpperCase();
+    if (
+      reason === "THREE_EMPTY_PAGES" ||
+      reason === "EMPTY_AT_END" ||
+      reason === "SEARCH_EMPTY" ||
+      reason === "UI_MAX_PAGE"
+    ) {
+      return true;
+    }
+    const maxWanted = Math.max(
+      1,
+      Math.round(Number(list.filters?.maxPages || 0) || 0) || portalUiMaxPage,
     );
+    const target = Math.min(maxWanted, portalUiMaxPage);
+    const metrics = resolveScrapeHistoryMetrics(list, poolPending, usedCount);
+    return metrics.pagesDone >= target;
   }
 
   /**
@@ -940,10 +975,16 @@ export class WabaLeadsCnpjService {
         listaIndex: null,
         downloadedAt: null,
         error: null,
+        scrapeCompleted: false,
+        scrapeDoneReason: null,
         scrapeCheckpoint: {
           nextPage,
           portalTotal: list.scrapeCheckpoint?.portalTotal ?? null,
-          pagesToFetch: list.scrapeCheckpoint?.pagesToFetch ?? null,
+          pagesToFetch:
+            Math.max(
+              1,
+              Math.round(Number(list.filters?.maxPages || 0) || 0) || portalUiMaxPage,
+            ),
           collectedCount: pending,
         },
         scrapeReconnectAttempts: 0,
@@ -1940,10 +1981,60 @@ export class WabaLeadsCnpjService {
       const used = this.repository.collectUsedCnpjs(campaignKey);
 
       // Retomada após restart: já tem o lote do dia na lista — só enriquecer de novo.
+      // Exceto se a cópia do portal ficou prematura (ex. parou em 104/1000).
+      const poolPendingForGate = this.repository.getPool(campaignKey)?.pending.length || 0;
+      const prematurePortalCopy =
+        list.source === "portal" &&
+        !list.skipPortalScrape &&
+        (list.status === "enriching" || list.status === "queued") &&
+        !this.isPortalScrapeReallyComplete(list, poolPendingForGate, used.size);
+
       const resumeEnrichment =
-        list.status === "enriching" && Array.isArray(list.leads) && list.leads.length > 0;
+        !prematurePortalCopy &&
+        list.status === "enriching" &&
+        Array.isArray(list.leads) &&
+        list.leads.length > 0;
       const resumeQueued =
-        list.status === "queued" && Array.isArray(list.leads) && list.leads.length > 0;
+        !prematurePortalCopy &&
+        list.status === "queued" &&
+        Array.isArray(list.leads) &&
+        list.leads.length > 0;
+
+      if (prematurePortalCopy && Array.isArray(list.leads) && list.leads.length > 0) {
+        // Devolve o lote parcial ao pool e limpa flags antes de retomar COPY.
+        for (const lead of list.leads) used.delete(normalizeCnpjDigits(lead.cnpj));
+        this.repository.mergePool({
+          key: campaignKey,
+          name: baseName,
+          source: "portal",
+          filters: list.filters,
+          items: list.leads.map((l) => ({ cnpj: l.cnpj, nome: l.nome })),
+          usedCnpjs: used,
+          persist: "flush",
+        });
+        const pendingAfter = this.repository.getPool(campaignKey)?.pending.length || 0;
+        const resumePage = this.estimatePortalResumePage(campaignKey, list);
+        patch({
+          status: "scraping",
+          leads: [],
+          leadCount: 0,
+          scrapeCompleted: false,
+          scrapeDoneReason: null,
+          scrapeCheckpoint: {
+            nextPage: resumePage,
+            portalTotal: list.scrapeCheckpoint?.portalTotal ?? null,
+            pagesToFetch:
+              Math.max(
+                1,
+                Math.round(Number(list.filters?.maxPages || 0) || 0) || resolvePortalUiMaxPage(),
+              ),
+            collectedCount: pendingAfter,
+          },
+          progressMessage: `COPY prematura detectada (${resolveScrapeHistoryMetrics(list, pendingAfter, used.size).pagesDone}/${Math.max(1, Number(list.filters?.maxPages) || 1000)}) — retomando na pág. ${resumePage}…`,
+          error: null,
+        });
+        list = this.repository.getById(listId) || list;
+      }
 
       let dayLeads: WabaLeadsCnpjLead[] = [];
       let remaining = this.repository.getPool(campaignKey)?.pending.length || 0;
@@ -1992,17 +2083,21 @@ export class WabaLeadsCnpjService {
                 portalUiMaxPage,
           );
           /**
-           * Regra de produto: copiar TODAS as páginas do portal (até teto UI) ANTES
-           * de enriquecer. O teto diário (~2880) só limita o takeFromPool, nunca a cópia.
-           * Antes: pending >= dailyLimit pulava a raspagem → Excel com ~118 pág. e “Pool esgotado”.
+           * Regra de produto: copiar até maxPages / teto UI ANTES de enriquecer.
+           * scrapeCompleted prematuro (total do portal subestimado → ~104 págs.) não conta.
            */
           const portalCopyDone =
-            freshList.scrapeCompleted === true ||
+            this.isPortalScrapeReallyComplete(
+              freshList,
+              pendingCount,
+              used.size,
+              portalUiMaxPage,
+            ) ||
             Boolean(ckpt && resumeFromPage > portalUiMaxPage) ||
             this.repository.list().some(
               (l) =>
                 String(l.campaignKey || "").trim() === campaignKey &&
-                l.scrapeCompleted === true,
+                this.isPortalScrapeReallyComplete(l, pendingCount, used.size, portalUiMaxPage),
             );
           const needPortalCopy =
             !portalCopyDone &&
@@ -2040,19 +2135,24 @@ export class WabaLeadsCnpjService {
               maxPages: Number(list.filters.maxPages) > 0 ? Number(list.filters.maxPages) : 0,
             };
             const campaignFilters = list.filters;
+            const pagesToFetchTarget =
+              Number(list.filters?.maxPages) > 0
+                ? Number(list.filters.maxPages)
+                : portalUiMaxPage;
             // Garante checkpoint desde o início: crash antes da 1ª página ainda retoma (pág. 1 ou pool).
             patch({
               status: "scraping",
+              scrapeCompleted: false,
               scrapeCheckpoint: {
                 nextPage: scrapeResumeFrom,
                 portalTotal: freshList.scrapeCheckpoint?.portalTotal ?? null,
-                pagesToFetch: freshList.scrapeCheckpoint?.pagesToFetch ?? null,
+                pagesToFetch: pagesToFetchTarget,
                 collectedCount: pendingCount,
               },
               progressMessage:
                 scrapeResumeFrom > 1
-                  ? `COPY: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} antes do ReceitaWS)…`
-                  : `Abrindo Portal: robô na tela (pool ${pendingCount}; copiando até pág. ${portalUiMaxPage} · 20/pág. — enrich só depois)…`,
+                  ? `COPY: retomando da página ${scrapeResumeFrom} (pool ${pendingCount}; copiando até pág. ${pagesToFetchTarget} antes do ReceitaWS)…`
+                  : `Abrindo Portal: robô na tela (pool ${pendingCount}; copiando até pág. ${pagesToFetchTarget} · 20/pág. — enrich só depois)…`,
               error: null,
             });
             let releaseScrapeSlot: (() => void) | null = null;
@@ -2200,14 +2300,32 @@ export class WabaLeadsCnpjService {
               0,
               Math.round(Number(liveAfter?.scrapeCheckpoint?.nextPage || 0) || 0),
             );
-            // Enrich só com scrapeCompleted explícito (nunca pool parcial implícito).
+            // Enrich só com scrapeCompleted explícito E realmente completo (nunca parcial ~104/1000).
+            if (scrapeSessionCompleted) {
+              const provisional: WabaLeadsCnpjList = {
+                ...(this.repository.getById(listId) || list),
+                scrapeCompleted: true,
+                scrapeDoneReason: scrapeSessionDoneReason || "DONE",
+              };
+              if (
+                !this.isPortalScrapeReallyComplete(
+                  provisional,
+                  afterMerge,
+                  used.size,
+                  portalUiMaxPage,
+                )
+              ) {
+                scrapeSessionCompleted = false;
+                scrapeSessionDoneReason = `${scrapeSessionDoneReason || "DONE"}_PREMATURE`;
+              }
+            }
             if (!scrapeSessionCompleted) {
               patch({
                 status: "scraping",
                 scrapeCompleted: false,
                 scrapeDoneReason: scrapeSessionDoneReason || "INCOMPLETE",
                 scrapeReconnectAttempts: 0,
-                progressMessage: `COPY: incompleta (${scrapeSessionDoneReason || "INCOMPLETE"}) — pág. ${ckNext || "?"} · pool ${afterMerge.toLocaleString("pt-BR")}; retomando cópia (enrich só após 1000 pág./fim do portal)…`,
+                progressMessage: `COPY: incompleta (${scrapeSessionDoneReason || "INCOMPLETE"}) — pág. ${ckNext || "?"} · pool ${afterMerge.toLocaleString("pt-BR")}; retomando cópia (enrich só após ${Number(list.filters?.maxPages) > 0 ? list.filters.maxPages : portalUiMaxPage} pág./fim do portal)…`,
                 error: null,
               });
               setTimeout(() => {
@@ -2260,8 +2378,13 @@ export class WabaLeadsCnpjService {
         // Continuação `#portal-copy`: só alimenta o pool; Lista NN ready permanece.
         {
           const liveCopy = this.repository.getById(listId);
-          if (liveCopy && isPortalCopyContinuationList(liveCopy) && liveCopy.scrapeCompleted === true) {
-            const poolLeft = this.repository.getPool(campaignKey)?.pending.length || 0;
+          const poolLeftGate = this.repository.getPool(campaignKey)?.pending.length || 0;
+          if (
+            liveCopy &&
+            isPortalCopyContinuationList(liveCopy) &&
+            this.isPortalScrapeReallyComplete(liveCopy, poolLeftGate, used.size)
+          ) {
+            const poolLeft = poolLeftGate;
             patch({
               status: "ready",
               leads: [],
@@ -2281,19 +2404,17 @@ export class WabaLeadsCnpjService {
         // Trava: nunca enriquecer enquanto a cópia do portal da campanha não terminou.
         if (list.source === "portal" && !list.skipPortalScrape) {
           const liveGate = this.repository.getById(listId);
+          const poolLeftGate = this.repository.getPool(campaignKey)?.pending.length || 0;
           const campaignCopyDone =
-            liveGate?.scrapeCompleted === true ||
-            this.repository.list().some(
-              (l) =>
-                String(l.campaignKey || "").trim() === campaignKey &&
-                l.scrapeCompleted === true,
-            );
+            (liveGate
+              ? this.isPortalScrapeReallyComplete(liveGate, poolLeftGate, used.size)
+              : false) || this.isCampaignPortalCopyComplete(campaignKey);
           if (!campaignCopyDone) {
             patch({
               status: "scraping",
               scrapeCompleted: false,
               progressMessage:
-                "Cópia do portal incompleta — enriquecimento ReceitaWS só após todas as páginas (até 1000).",
+                "Cópia do portal incompleta — enriquecimento ReceitaWS só após todas as páginas (até maxPages/teto UI).",
               error: null,
             });
             setTimeout(() => {

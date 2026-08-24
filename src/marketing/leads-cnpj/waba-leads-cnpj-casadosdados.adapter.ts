@@ -3303,12 +3303,13 @@ async function scrapeCasaDosDadosLeadsOnce(
       maxPagesCap > 0 ? maxPagesCap : Number.MAX_SAFE_INTEGER;
     if (portalTotal != null) {
       const totalPagesAvailable = Math.max(1, Math.ceil(portalTotal / PORTAL_PAGE_SIZE));
-      pagesToFetch =
-        maxPagesCap > 0
-          ? Math.min(maxPagesCap, totalPagesAvailable)
-          : totalPagesAvailable;
+      // portalTotal é só informativo na UI. NÃO encolher o teto de cópia:
+      // total subestimado (API/DOM) fazia MAX_PAGES em ~104 com maxPages=1000
+      // e seguia para ReceitaWS com pool parcial.
       markPhase(
-        `Portal: ${portalTotal.toLocaleString("pt-BR")} empresas · ${PORTAL_PAGE_SIZE}/página · ${totalPagesAvailable.toLocaleString("pt-BR")} página(s) — copiando ${maxPagesCap > 0 ? `até ${pagesToFetch}` : "todas"}…`,
+        `Portal: ${portalTotal.toLocaleString("pt-BR")} empresas · ${PORTAL_PAGE_SIZE}/página · ~${totalPagesAvailable.toLocaleString("pt-BR")} pág. no total · meta de cópia ${
+          maxPagesCap > 0 ? pagesToFetch : "todas até o fim"
+        }…`,
       );
     } else if (maxPagesCap <= 0) {
       markPhase(
