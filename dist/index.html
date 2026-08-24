@@ -34329,7 +34329,9 @@
         const msg = String(item?.progressMessage || item?.error || "").toLowerCase();
         // Prefixo de fase do adapter (BOOT/LOGIN/FILTERS/SEARCH/COPY) — fonte de verdade.
         if (
-          /\bcopy\b|^\s*copy:|recover nível|retomando (da )?página|retomando extração/i.test(msg) ||
+          /\bcopy\b|^\s*copy:|recover nível|retomada|retomando (da )?página|retomando extração/i.test(
+            msg,
+          ) ||
           /página\s+\d+|arquivada|cards copy|lendo cards/.test(msg)
         ) {
           if (status === "ready") return "baixar";

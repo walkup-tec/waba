@@ -2512,12 +2512,15 @@ async function scrapeCasaDosDadosLeadsOnce(
     );
   };
 
+  const resumeHint = Math.max(1, Math.round(Number(options?.resumeFromPage || 1) || 1));
   onProgress?.(
-    headless
-      ? "BOOT: conectando Chromium compartilhado (headless)…"
-      : String(process.env.DISPLAY || "").trim()
-        ? "BOOT: conectando Chromium compartilhado (Xvfb)…"
-        : "BOOT: conectando Chromium compartilhado (janela)…",
+    resumeHint > 1
+      ? `COPY: conectando Chromium para retomada pág. ${resumeHint}…`
+      : headless
+        ? "BOOT: conectando Chromium compartilhado (headless)…"
+        : String(process.env.DISPLAY || "").trim()
+          ? "BOOT: conectando Chromium compartilhado (Xvfb)…"
+          : "BOOT: conectando Chromium compartilhado (janela)…",
   );
 
   // Persistência: se o caller não passou storageState, usa disco.
@@ -2608,43 +2611,13 @@ async function scrapeCasaDosDadosLeadsOnce(
       }
     };
 
-    setPhase("LOGIN", "abrindo portal…");
-    await gotoWithRetry(page, PORTAL_LOGIN_URL, { waitUntil: "domcontentloaded" });
-    await waitPastCloudflare(page, { onProgress, stage: "login" });
+    const resumeTarget = Math.max(
+      1,
+      Math.round(Number(options?.resumeFromPage || 1) || 1),
+    );
+    const wantFastResume = resumeTarget > 1 && Boolean(effectiveStorage);
 
-    const alreadyIn = await page
-      .evaluate(() => /\/plataforma\b/i.test(location.pathname || ""))
-      .catch(() => false);
-    if (!alreadyIn) {
-      setPhase("LOGIN", "autenticando…");
-      await loginCasaDosDadosPortal(page, email, password);
-      await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
-      setPhase("LOGIN", "autenticado");
-    } else {
-      setPhase("LOGIN", "sessão restaurada (storageState)");
-    }
-
-    try {
-      const state = await context.storageState();
-      saveCasaDosDadosStorageState(state);
-      await options?.onStorageState?.(state);
-    } catch {
-      /* ignore */
-    }
-
-    setPhase("FILTERS", "abrindo tela de pesquisa…");
-    await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
-    await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
-    await sleepNode(800);
-
-    setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");
-    await applyFilters(page as unknown as PageLike, filters, (msg) => {
-      sessionPhase = `FILTERS: ${msg}`;
-      phaseStartedAt = Date.now();
-      onProgress?.(sessionPhase);
-    });
-
-    // Captura total da API (se houver). CNPJs vêm da tela — não pré-carregar do JSON.
+    // Captura total da API (se houver). Anexar cedo — vale para retomada e pesquisa nova.
     let interceptedTotal: number | null = null;
     page.on("response", async (res: any) => {
       try {
@@ -2656,45 +2629,189 @@ async function scrapeCasaDosDadosLeadsOnce(
         if (!json) return;
         if (typeof json.total === "number") interceptedTotal = json.total;
       } catch {
-        /* ignore — fonte principal é o texto da tela */
+        /* ignore */
       }
     });
 
-    // NÃO usar locator.has-text("Fechar") nem page.waitForTimeout no race:
-    // no Playwright a fila CDP é serial — locator/evaluate travado impede o timeout.
-    // Só Escape com timeout do Node; depois segue para descoberta do CTA.
-    setPhase("SEARCH", "dismiss modal CNAE (Escape)…");
-    try {
-      await Promise.race([
-        page.keyboard.press("Escape").then(() => undefined),
-        new Promise<void>((resolve) => {
-          setTimeout(resolve, 800);
-        }),
-      ]);
-      await sleepNode(200);
-    } catch {
-      /* segue */
-    }
-    setPhase("SEARCH", "preparando CTA Pesquisar…");
-
-    const searchTimeoutMs = Math.max(
-      15_000,
-      Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90_000) || 90_000),
-    );
-
-    const runSearchOnce = async (allowRedispatch: boolean): Promise<SearchTransition> => {
-      // Probe LEVE com teto Node — NÃO chamar probeSearchState completo aqui
-      // (findSearchButtonCandidates trava a fila CDP e o keepalive fica em "preparando CTA").
-      setPhase("SEARCH", "checando estado pré-CTA…");
-      const preLite = await withNodeTimeout(probeSearchAckLite(page), 3000, null);
-      if (preLite && (preLite.pagination || preLite.cnpjNodes > 0)) {
-        onProgress?.(
-          `SEARCH: resultados já presentes — pag=${preLite.pagination} cnpj=${preLite.cnpjNodes}`,
-        );
-        return { kind: "results", total: null };
+    const ensureAuthedOnSearch = async (): Promise<void> => {
+      const pathNow = await page
+        .evaluate(() => String(location.pathname || ""))
+        .catch(() => "");
+      if (/\/entrar/i.test(pathNow)) {
+        setPhase("LOGIN", "sessão expirou — autenticando…");
+        await loginCasaDosDadosPortal(page, email, password);
+        await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
+        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
       }
-      if (preLite && preLite.loadingNodes > 0 && !allowRedispatch) {
-        setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
+    };
+
+    let searchResult: SearchTransition = { kind: "results", total: null };
+    let usedFastResume = false;
+
+    if (wantFastResume) {
+      // Retomada: NÃO abrir /entrar (travava em LOGIN). Vai direto à pesquisa com cookies.
+      setPhase(
+        "COPY",
+        `retomada rápida → pág. ${resumeTarget} (storageState; sem CNAE)…`,
+      );
+      await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+      await waitPastCloudflare(page, { onProgress, stage: "retomada" });
+      await ensureAuthedOnSearch();
+      await sleepNode(500);
+
+      try {
+        const state = await context!.storageState();
+        saveCasaDosDadosStorageState(state);
+        await options?.onStorageState?.(state);
+      } catch {
+        /* ignore */
+      }
+
+      let lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
+      if (!(lite && (lite.pagination || lite.cnpjNodes > 0))) {
+        // Sessão pode manter filtros sem resultados pintados — 1 disparo de Pesquisar.
+        markPhase("COPY: retomada — disparando Pesquisar (filtros da sessão)…");
+        try {
+          await dispatchSearchWithAck(page, (msg) => {
+            sessionPhase = msg;
+            onProgress?.(msg);
+          });
+          await waitForSearchTransition(
+            page as unknown as PageLike,
+            Math.min(
+              60_000,
+              Math.max(
+                15_000,
+                Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90_000) || 90_000),
+              ),
+            ),
+            (msg) => {
+              sessionPhase = msg;
+              onProgress?.(msg);
+            },
+            options?.shouldAbort,
+          );
+        } catch (resumeSearchErr) {
+          markPhase(
+            `COPY: retomada Pesquisar falhou — ${
+              resumeSearchErr instanceof Error
+                ? resumeSearchErr.message.slice(0, 80)
+                : "erro"
+            }; caindo no fluxo completo…`,
+          );
+        }
+        lite = await withNodeTimeout(probeSearchAckLite(page), 4000, null);
+      }
+
+      if (lite && (lite.pagination || lite.cnpjNodes > 0)) {
+        usedFastResume = true;
+        searchResult = { kind: "results", total: null };
+        markPhase(
+          `COPY: sessão OK (pag=${lite.pagination || "?"} cnpj=${lite.cnpjNodes}) — pulando login/CNAE; alvo pág. ${resumeTarget}`,
+        );
+      } else {
+        markPhase(
+          "COPY: retomada sem resultados na sessão — reaplicando filtros (fallback)…",
+        );
+      }
+    }
+
+    if (!usedFastResume) {
+      // Fluxo completo: login só se necessário; filtros + pesquisa.
+      if (!wantFastResume) {
+        setPhase("LOGIN", "abrindo portal…");
+        await gotoWithRetry(page, PORTAL_LOGIN_URL, { waitUntil: "domcontentloaded" });
+        await waitPastCloudflare(page, { onProgress, stage: "login" });
+      } else {
+        // Já estamos (ou estivemos) em /pesquisa — garantir auth sem /entrar cego.
+        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+      }
+
+      const alreadyIn = await page
+        .evaluate(() => /\/plataforma\b/i.test(location.pathname || ""))
+        .catch(() => false);
+      if (!alreadyIn) {
+        setPhase("LOGIN", "autenticando…");
+        await loginCasaDosDadosPortal(page, email, password);
+        await waitPastCloudflare(page, { onProgress, stage: "pós-login" });
+        setPhase("LOGIN", "autenticado");
+        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+      } else {
+        setPhase("LOGIN", "sessão restaurada (storageState)");
+      }
+
+      try {
+        const state = await context!.storageState();
+        saveCasaDosDadosStorageState(state);
+        await options?.onStorageState?.(state);
+      } catch {
+        /* ignore */
+      }
+
+      if (!wantFastResume) {
+        setPhase("FILTERS", "abrindo tela de pesquisa…");
+        await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
+        await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
+        await sleepNode(800);
+      }
+
+      setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");
+      await applyFilters(page as unknown as PageLike, filters, (msg) => {
+        sessionPhase = `FILTERS: ${msg}`;
+        phaseStartedAt = Date.now();
+        onProgress?.(sessionPhase);
+      });
+
+      setPhase("SEARCH", "dismiss modal CNAE (Escape)…");
+      try {
+        await Promise.race([
+          page.keyboard.press("Escape").then(() => undefined),
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 800);
+          }),
+        ]);
+        await sleepNode(200);
+      } catch {
+        /* segue */
+      }
+      setPhase("SEARCH", "preparando CTA Pesquisar…");
+
+      const searchTimeoutMs = Math.max(
+        15_000,
+        Math.round(Number(process.env.CASADOSDADOS_SEARCH_TIMEOUT_MS || 90_000) || 90_000),
+      );
+
+      const runSearchOnce = async (allowRedispatch: boolean): Promise<SearchTransition> => {
+        setPhase("SEARCH", "checando estado pré-CTA…");
+        const preLite = await withNodeTimeout(probeSearchAckLite(page), 3000, null);
+        if (preLite && (preLite.pagination || preLite.cnpjNodes > 0)) {
+          onProgress?.(
+            `SEARCH: resultados já presentes — pag=${preLite.pagination} cnpj=${preLite.cnpjNodes}`,
+          );
+          return { kind: "results", total: null };
+        }
+        if (preLite && preLite.loadingNodes > 0 && !allowRedispatch) {
+          setPhase("SEARCH", "loading ativo — aguardando sem redisparo…");
+          return waitForSearchTransition(
+            page as unknown as PageLike,
+            searchTimeoutMs,
+            (msg) => {
+              sessionPhase = msg;
+              onProgress?.(msg);
+            },
+            options?.shouldAbort,
+          );
+        }
+
+        await dispatchSearchWithAck(page, (msg) => {
+          sessionPhase = msg;
+          phaseStartedAt = Date.now();
+          onProgress?.(msg);
+        });
+        setPhase("SEARCH", "ACK ok — aguardando resultados…");
         return waitForSearchTransition(
           page as unknown as PageLike,
           searchTimeoutMs,
@@ -2704,70 +2821,53 @@ async function scrapeCasaDosDadosLeadsOnce(
           },
           options?.shouldAbort,
         );
+      };
+
+      searchResult = await runSearchOnce(true);
+      if (searchResult.kind === "timeout-responsive") {
+        const stuckProbe =
+          searchResult.probe ||
+          (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
+        if (stuckProbe && stuckProbe.loadingNodes > 0) {
+          throw new LeadsScrapeError(
+            "SEARCH_TIMEOUT_RESPONSIVE",
+            "same-page",
+            `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`,
+          );
+        }
+        setPhase("SEARCH", "timeout responsivo — 1 retry controlado na mesma Page…");
+        searchResult = await runSearchOnce(true);
       }
-
-      await dispatchSearchWithAck(page, (msg) => {
-        sessionPhase = msg;
-        phaseStartedAt = Date.now();
-        onProgress?.(msg);
-      });
-      setPhase("SEARCH", "ACK ok — aguardando resultados…");
-      return waitForSearchTransition(
-        page as unknown as PageLike,
-        searchTimeoutMs,
-        (msg) => {
-          sessionPhase = msg;
-          onProgress?.(msg);
-        },
-        options?.shouldAbort,
-      );
-    };
-
-    let searchResult = await runSearchOnce(true);
-    if (searchResult.kind === "timeout-responsive") {
-      const stuckProbe =
-        searchResult.probe ||
-        (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
-      // Retry same-Page só se portal idle (sem loading) e sem resultados.
-      if (stuckProbe && stuckProbe.loadingNodes > 0) {
+      if (searchResult.kind === "renderer-unresponsive") {
+        throw new LeadsScrapeError(
+          "RENDERER_UNRESPONSIVE",
+          "new-browser",
+          "Renderer não responde durante SEARCH",
+        );
+      }
+      if (searchResult.kind === "blocked") {
+        throw new LeadsScrapeError(
+          "PORTAL_BLOCKED",
+          "stop",
+          "Cloudflare ou desafio de segurança na pesquisa.",
+        );
+      }
+      if (searchResult.kind === "timeout-responsive") {
+        const last =
+          searchResult.probe ||
+          (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
         throw new LeadsScrapeError(
           "SEARCH_TIMEOUT_RESPONSIVE",
           "same-page",
-          `PORTAL_SEARCH_STUCK — loading ainda ativo após timeout. ${formatProbeShort(stuckProbe)}`,
+          `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`,
         );
       }
-      setPhase("SEARCH", "timeout responsivo — 1 retry controlado na mesma Page…");
-      searchResult = await runSearchOnce(true);
-    }
-    if (searchResult.kind === "renderer-unresponsive") {
-      throw new LeadsScrapeError(
-        "RENDERER_UNRESPONSIVE",
-        "new-browser",
-        "Renderer não responde durante SEARCH",
-      );
-    }
-    if (searchResult.kind === "blocked") {
-      throw new LeadsScrapeError(
-        "PORTAL_BLOCKED",
-        "stop",
-        "Cloudflare ou desafio de segurança na pesquisa.",
-      );
-    }
-    if (searchResult.kind === "timeout-responsive") {
-      const last =
-        searchResult.probe ||
-        (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null));
-      throw new LeadsScrapeError(
-        "SEARCH_TIMEOUT_RESPONSIVE",
-        "same-page",
-        `Pesquisa excedeu timeout (renderer saudável). ${last ? formatProbeShort(last) : "sem-probe"}`,
-      );
-    }
-    if (searchResult.kind === "empty") {
-      setPhase("DONE", "pesquisa sem resultados");
-      await context!.close().catch(() => undefined);
-      context = null;
-      return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
+      if (searchResult.kind === "empty") {
+        setPhase("DONE", "pesquisa sem resultados");
+        await context!.close().catch(() => undefined);
+        context = null;
+        return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
+      }
     }
 
     // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
@@ -2786,7 +2886,12 @@ async function scrapeCasaDosDadosLeadsOnce(
         `retornou ${portalTotal.toLocaleString("pt-BR")} empresas — iniciando cópia…`,
       );
     } else {
-      setPhase("COPY", "lendo cards na tela (CNPJ + Razão Social)…");
+      setPhase(
+        "COPY",
+        usedFastResume
+          ? `retomada pág. ${resumeTarget} — lendo cards…`
+          : "lendo cards na tela (CNPJ + Razão Social)…",
+      );
     }
 
     const collected = new Map<string, WabaLeadsCnpjLead>();
