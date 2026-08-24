@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 14:05 — Alternativa: sem `**` antes do texto
+
+- Evolution envolve `title` em `*...*`; ZWSP virava `**` na digitação.
+- Title volta a ser a primeira linha real; resto em `description`.
+- Marker `DEPLOY-2026-08-24-alternativa-sem-asteriscos-titulo`
+- LOG: `doc/LOG-2026-08-24__140500__alternativa-sem-asteriscos-titulo.md`
+
 ## 2026-08-24 13:52 — Motor Alternativa teto 100/dia + pausa ±30%
 
 - Teto: `ALTERNATIVA_MAX_SENDS_PER_DAY_PER_NUMBER = 100` (throttle 8h–22h ≈ 240–264s, 8/h)

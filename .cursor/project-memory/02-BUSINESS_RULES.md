@@ -34,6 +34,7 @@ Ordem obrigatória no WhatsApp:
 3. Botão nativo com a URL curta (destino só no botão)
 
 Proibido: card de preview antes do texto; “Mais informações: https://…” no corpo.
+Proibido: prefixo `**` (title ZWSP/vazio no sendButtons da Evolution).
 
 ### Campanha Alternativa — permanência do pareamento
 

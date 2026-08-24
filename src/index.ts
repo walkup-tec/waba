@@ -8732,21 +8732,32 @@ function isGhostButtonsPayload(raw: unknown): boolean {
 }
 
 /**
- * Evolution 2.4 `buttonMessage` monta o corpo como `*${title}*\n\n${description}`
- * (whatsapp.baileys.service.ts). Title visível vira cabeçalho em negrito;
- * slice(0,60) parte palavras (ex.: "ambiente").
- * Title ZWSP: o header não aparece; o texto inteiro vai em description.
+ * Evolution 2.4 `buttonMessage` monta o corpo como `*${title}*\n\n${description}`.
+ * Title ZWSP/`""` vira `**` visível na digitação (markdown vazio). Title precisa de
+ * letras reais para o WhatsApp consumir os asteriscos como negrito.
  * Botão nativo vem do array `buttons` (nativeFlow), não do title.
- * @see https://docs.evolutionfoundation.com.br/evolution-api/send-buttons
  */
+function visibleEvoButtonTitle(text: string): string {
+  const cleaned = String(text || "")
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")
+    .replace(/^\*+|\*+$/g, "")
+    .trim() || "Olá";
+  const firstLine = cleaned.split(/\n/)[0].trim() || cleaned;
+  if (firstLine.length <= 60) return firstLine;
+  const slice = firstLine.slice(0, 60);
+  const sp = slice.lastIndexOf(" ");
+  return (sp >= 12 ? slice.slice(0, sp) : slice).trim() || firstLine.slice(0, 60);
+}
+
 function splitMessageForUrlButton(fullText: string): { title: string; description: string } {
   const text = String(fullText || "").trim() || "Olá!";
   const maxBody = 1024;
-  const description =
-    text.length <= maxBody
-      ? text
-      : text.slice(0, maxBody).replace(/\s+\S*$/, "").trim() || text.slice(0, maxBody);
-  return { title: "\u200b", description };
+  const title = visibleEvoButtonTitle(text);
+  let description = text.startsWith(title) ? text.slice(title.length).replace(/^\s+/, "") : text;
+  if (description.length > maxBody) {
+    description = description.slice(0, maxBody).replace(/\s+\S*$/, "").trim() || description.slice(0, maxBody);
+  }
+  return { title, description };
 }
 
 async function sendEvoAlternativaUrlButtonMessage(input: {

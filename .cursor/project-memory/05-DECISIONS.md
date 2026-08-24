@@ -4,6 +4,12 @@ Registrar apenas decisões permanentes.
 
 ## Decisões
 
+### 2026-08-24 — sendButtons: title com letras reais (sem ZWSP)
+
+- **Decisão:** Não enviar `title` ZWSP/`""` no `sendButtons` da Alternativa. Title = primeira linha/palavras do texto; restante em `description`.
+- **Motivo:** Evolution 2.4 monta `*${title}*`. Title vazio/ZWSP aparece como `**` digitado antes da mensagem.
+- **Impacto:** Marker `DEPLOY-2026-08-24-alternativa-sem-asteriscos-titulo`. A primeira linha pode aparecer em negrito (wrap da Evolution).
+
 ### 2026-08-21 — Campanha: troca automática de instância desconectada
 
 - **Decisão:** Com campanha `running`, o tick substitui cada desconectado por uma instância `open` do dono habilitada para disparos (`useDisparador` + lifecycle). Proxy desliga só no que sai e liga no que entra. «+ Instâncias» só se não houver reserva (ou campanha pausada).

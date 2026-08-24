@@ -54,6 +54,7 @@ A URL de login/disparador usa o container Docker (`COPY dist/`). Mudança só em
 
 | Marker | Tema |
 |--------|------|
+| `DEPLOY-2026-08-24-alternativa-sem-asteriscos-titulo` | Alternativa: sendButtons sem `**` (title real) |
 | `DEPLOY-2026-08-21-campanha-auto-swap-instancias` | Campanha: troca automática de desconectado + Proxy |
 | `DEPLOY-2026-08-21-alternativa-keep-pairing` | Alternativa: não desligar proxy/restart com campanha viva |
 | `DEPLOY-2026-08-20-alternativa-image-then-text` | Alternativa: após imagem, texto visível (viewOnce não bloqueia) |
