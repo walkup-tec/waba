@@ -949,6 +949,34 @@ async function withNodeTimeout<T>(
   }
 }
 
+/** Sleep fora da fila CDP (nunca page.waitForTimeout no hot path). */
+function sleepNode(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+/**
+ * CDP com teto Node: se a Page não responder, força reconnect (new-browser).
+ * Usar no hot path SEARCH→COPY — fallback soft mascara renderer zumbi.
+ */
+async function cdpOrReconnect<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  type Race = { ok: true; value: T } | { ok: false };
+  const result = await withNodeTimeout<Race>(
+    promise.then((value): Race => ({ ok: true, value })),
+    timeoutMs,
+    { ok: false },
+  );
+  if (result.ok) return result.value;
+  throw new LeadsScrapeError(
+    "CDP_PROBE_TIMEOUT",
+    "new-browser",
+    `${label} não respondeu em ${Math.round(timeoutMs / 1000)}s (CDP/DOM travado) — reconectar Chromium.`,
+  );
+}
+
 /** Probe leve só para ACK pós-clique — sem reescanear todos os CTAs. */
 async function probeSearchAckLite(page: PageLike): Promise<{
   url: string;
@@ -1084,93 +1112,88 @@ async function clickSearchByMouse(
 }
 
 async function clickSearchDom(page: PageLike): Promise<boolean> {
-  const candidates = await findSearchButtonCandidates(page);
-  if (!candidates[0]) return false;
-  // Reusa a mesma regra de scoring e clica o vencedor via DOM nativo.
-  return page.evaluate(() => {
-    const clean = (v: unknown) =>
-      String(v || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-    const selector = [
-      "button",
-      "a",
-      '[role="button"]',
-      'input[type="submit"]',
-      'input[type="button"]',
-      '[type="submit"]',
-      "[tabindex]",
-      '[class*="button"]',
-      '[class*="btn"]',
-    ].join(",");
-    const scored = Array.from(document.querySelectorAll(selector))
-      .map((raw) => {
+  // Fast + Node — não reescanear ancestrais (fila CDP).
+  const candidates = await withNodeTimeout(
+    findSearchButtonCandidatesFast(page),
+    4000,
+    null as SearchButtonCandidate[] | null,
+  );
+  if (!candidates?.[0]) return false;
+  const want = candidates[0].text.slice(0, 80);
+  return withNodeTimeout(
+    page.evaluate((needle: string) => {
+      const clean = (v: unknown) =>
+        String(v || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      const wantNorm = clean(needle);
+      const selector = [
+        "button",
+        "a",
+        '[role="button"]',
+        'input[type="submit"]',
+        'input[type="button"]',
+        '[type="submit"]',
+      ].join(",");
+      for (const raw of Array.from(document.querySelectorAll(selector))) {
         const el = raw as HTMLElement;
-        const r = el.getBoundingClientRect();
-        const s = getComputedStyle(el);
-        if (
-          r.width < 20 ||
-          r.height < 15 ||
-          s.display === "none" ||
-          s.visibility === "hidden"
-        ) {
-          return null;
-        }
         const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
         const aria = clean(el.getAttribute("aria-label"));
-        const title = clean(el.getAttribute("title"));
-        const combined = `${text} ${aria} ${title}`;
-        if (!combined.includes("pesquisar") && !combined.includes("buscar")) return null;
-        let score = 0;
-        if (text === "pesquisar" || text === "buscar") score += 100;
-        if (text.includes("pesquisar")) score += 70;
-        if (aria.includes("pesquisar") || aria.includes("buscar")) score += 60;
-        if (el.tagName === "BUTTON") score += 30;
-        if (el.getAttribute("type") === "submit") score += 25;
-        score += Math.min(30, Math.round((r.width * r.height) / 1000));
-        return { el, score };
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => b.score - a.score);
-    const winner = scored[0]?.el as HTMLElement | undefined;
-    if (!winner) return false;
-    winner.click();
-    return true;
-  });
+        if (
+          (wantNorm && (text === wantNorm || text.includes(wantNorm))) ||
+          text.includes("pesquisar") ||
+          text.includes("buscar") ||
+          aria.includes("pesquisar") ||
+          aria.includes("buscar")
+        ) {
+          el.click();
+          return true;
+        }
+      }
+      return false;
+    }, want),
+    3000,
+    false,
+  );
 }
 
 async function focusSearchButton(page: PageLike): Promise<boolean> {
-  const candidates = await findSearchButtonCandidates(page);
-  if (!candidates[0]) return false;
-  return page.evaluate(() => {
-    const clean = (v: unknown) =>
-      String(v || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-    const selector = [
-      "button",
-      "a",
-      '[role="button"]',
-      'input[type="submit"]',
-      'input[type="button"]',
-      "[tabindex]",
-      '[class*="button"]',
-      '[class*="btn"]',
-    ].join(",");
-    const el = Array.from(document.querySelectorAll(selector)).find((raw) => {
-      const node = raw as HTMLElement;
-      const text = clean(node instanceof HTMLInputElement ? node.value : node.textContent);
-      const aria = clean(node.getAttribute("aria-label"));
-      const title = clean(node.getAttribute("title"));
-      const combined = `${text} ${aria} ${title}`;
-      return combined.includes("pesquisar") || combined.includes("buscar");
-    }) as HTMLElement | undefined;
-    if (!el) return false;
-    el.focus();
-    return true;
-  });
+  const candidates = await withNodeTimeout(
+    findSearchButtonCandidatesFast(page),
+    3000,
+    null as SearchButtonCandidate[] | null,
+  );
+  if (!candidates?.[0]) return false;
+  const want = candidates[0].text.slice(0, 80);
+  return withNodeTimeout(
+    page.evaluate((needle: string) => {
+      const clean = (v: unknown) =>
+        String(v || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      const wantNorm = clean(needle);
+      const selector = ["button", "a", '[role="button"]', 'input[type="submit"]'].join(",");
+      for (const raw of Array.from(document.querySelectorAll(selector))) {
+        const el = raw as HTMLElement;
+        const text = clean(el instanceof HTMLInputElement ? el.value : el.textContent);
+        const aria = clean(el.getAttribute("aria-label"));
+        if (
+          (wantNorm && (text === wantNorm || text.includes(wantNorm))) ||
+          text.includes("pesquisar") ||
+          text.includes("buscar") ||
+          aria.includes("pesquisar")
+        ) {
+          el.focus();
+          return true;
+        }
+      }
+      return false;
+    }, want),
+    2000,
+    false,
+  );
 }
 
 /**
@@ -1415,6 +1438,7 @@ async function waitForSearchTransition(
   const deadline = started + Math.max(5_000, timeoutMs);
   let lastPulse = 0;
   let lastProbe: SearchProbe | undefined;
+  let consecutiveLiteMiss = 0;
 
   while (Date.now() < deadline) {
     if (shouldAbort?.()) throw new Error("__MLC_JOB_ABORTED__");
@@ -1424,42 +1448,49 @@ async function waitForSearchTransition(
 
     // Probe leve + teto Node — evita probeSearchState completo a cada tick.
     const lite = await withNodeTimeout(probeSearchAckLite(page), 1500, null);
-    if (lite) {
-      if (lite.pagination || lite.cnpjNodes > 0) {
-        onProgress?.(
-          `SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`,
-        );
-        return { kind: "results", total: null };
+    if (!lite) {
+      consecutiveLiteMiss += 1;
+      if (consecutiveLiteMiss >= 3) {
+        return { kind: "renderer-unresponsive" };
       }
-      lastProbe = {
-        ...(lastProbe || {
-          url: lite.url,
-          readyState: "unknown",
-          searchButtonFound: false,
-          searchButtonDisabled: lite.searchButtonDisabled,
-          searchButtonText: null,
-          searchButtonCount: 0,
-          searchButtonCandidate: null,
-          topCandidates: [],
-          pagination: lite.pagination,
-          currentPage: null,
-          cnpjNodes: lite.cnpjNodes,
-          totalCandidates: [],
-          loadingNodes: lite.loadingNodes,
-          dialogs: lite.dialogs,
-          iframeCount: 0,
-          iframeSrcs: [],
-          challengeNodes: 0,
-          buttonDebug: null,
-        }),
+      await sleepNode(500);
+      continue;
+    }
+    consecutiveLiteMiss = 0;
+    if (lite.pagination || lite.cnpjNodes > 0) {
+      onProgress?.(
+        `SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`,
+      );
+      return { kind: "results", total: null };
+    }
+    lastProbe = {
+      ...(lastProbe || {
         url: lite.url,
+        readyState: "unknown",
+        searchButtonFound: false,
+        searchButtonDisabled: lite.searchButtonDisabled,
+        searchButtonText: null,
+        searchButtonCount: 0,
+        searchButtonCandidate: null,
+        topCandidates: [],
         pagination: lite.pagination,
+        currentPage: null,
         cnpjNodes: lite.cnpjNodes,
+        totalCandidates: [],
         loadingNodes: lite.loadingNodes,
         dialogs: lite.dialogs,
-        searchButtonDisabled: lite.searchButtonDisabled,
-      };
-    }
+        iframeCount: 0,
+        iframeSrcs: [],
+        challengeNodes: 0,
+        buttonDebug: null,
+      }),
+      url: lite.url,
+      pagination: lite.pagination,
+      cnpjNodes: lite.cnpjNodes,
+      loadingNodes: lite.loadingNodes,
+      dialogs: lite.dialogs,
+      searchButtonDisabled: lite.searchButtonDisabled,
+    };
 
     const elapsed = Math.round((Date.now() - started) / 1000);
     const budget = Math.round(timeoutMs / 1000);
@@ -1472,8 +1503,7 @@ async function waitForSearchTransition(
           : `SEARCH: aguardando resultados — ${elapsed}s/${budget}s`,
       );
     }
-    // Sleep Node — não page.waitForTimeout.
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await sleepNode(500);
   }
 
   const alive = await rendererProbe(page, 2000);
@@ -1493,7 +1523,7 @@ async function waitForSearchTransition(
       if (st && st.loadingNodes === 0) break;
       const g = Math.round((Date.now() - started) / 1000);
       onProgress?.(`SEARCH: grace loading — ${g}s`);
-      await new Promise<void>((r) => setTimeout(r, 500));
+      await sleepNode(500);
     }
   }
   return { kind: "timeout-responsive", probe: lastProbe };
@@ -2087,7 +2117,7 @@ async function applyFilters(
       : "aplicando filtros (CNAE, situação, celular)…",
   );
   if (cnaeCode) {
-    await page.waitForTimeout(100 + Math.floor(Math.random() * 200));
+    await sleepNode(100 + Math.floor(Math.random() * 200));
   }
   const cnaeOk = await selectAtividadePrincipalCnaeWithTimeout(
     page,
@@ -2108,13 +2138,17 @@ async function applyFilters(
   }
 
   // Fecha residual do modal CNAE antes dos switches.
-  await page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll("button")).find((b) =>
-      /^Fechar$/i.test(String(b.textContent || "").trim()),
-    ) as HTMLButtonElement | undefined;
-    btn?.click();
-  });
-  await page.waitForTimeout(150);
+  await withNodeTimeout(
+    page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll("button")).find((b) =>
+        /^Fechar$/i.test(String(b.textContent || "").trim()),
+      ) as HTMLButtonElement | undefined;
+      btn?.click();
+    }),
+    2000,
+    undefined,
+  );
+  await sleepNode(150);
 
   // Apenas preenchimentos com valor (fillByLabel já no-op se vazio — mas evitamos step falso).
   const textJobs: Array<{ labels: string[]; value: string }> = [
@@ -2442,7 +2476,7 @@ async function scrapeCasaDosDadosLeadsOnce(
     setPhase("FILTERS", "abrindo tela de pesquisa…");
     await gotoWithRetry(page, PORTAL_SEARCH_URL, { waitUntil: "domcontentloaded" });
     await waitPastCloudflare(page, { onProgress, stage: "pesquisa" });
-    await page.waitForTimeout(1500);
+    await sleepNode(800);
 
     setPhase("FILTERS", "aplicando filtros (CNAE, situação, celular)…");
     await applyFilters(page as unknown as PageLike, filters, (msg) => {
@@ -2478,7 +2512,7 @@ async function scrapeCasaDosDadosLeadsOnce(
           setTimeout(resolve, 800);
         }),
       ]);
-      await new Promise((r) => setTimeout(r, 200));
+      await sleepNode(200);
     } catch {
       /* segue */
     }
@@ -2577,7 +2611,11 @@ async function scrapeCasaDosDadosLeadsOnce(
     }
 
     // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
-    const pageText = await readResultsSampleText(page, 12_000);
+    const pageText = await cdpOrReconnect(
+      readResultsSampleText(page, 12_000),
+      8000,
+      "Leitura do texto de resultados pós-SEARCH",
+    );
     const portalTotal =
       interceptedTotal ??
       searchResult.total ??
@@ -2598,22 +2636,27 @@ async function scrapeCasaDosDadosLeadsOnce(
     // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
     // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
 
-    const readScreenCards = async (): Promise<string[][]> => readScreenCardsLight(page);
+    const readScreenCards = async (): Promise<string[][]> =>
+      cdpOrReconnect(readScreenCardsLight(page), 8000, "Leitura de cards COPY");
 
     const firstCnpjOf = (rows: string[][]) => (rows[0] ? normalizeCnpjDigits(rows[0][0]) : "");
 
     const readCurrentPageNumber = async (): Promise<number> =>
-      page.evaluate(() => {
-        const active = document.querySelector(
-          [
-            'nav[data-oruga="pagination"] button[aria-current="page"]',
-            'nav[data-oruga="pagination"] button.pagination-link.is-current',
-            'nav[data-oruga="pagination"] button[aria-current="true"]',
-          ].join(", "),
-        );
-        const n = Number(String(active?.textContent || "").trim());
-        return Number.isFinite(n) && n > 0 ? n : 1;
-      });
+      cdpOrReconnect(
+        page.evaluate(() => {
+          const active = document.querySelector(
+            [
+              'nav[data-oruga="pagination"] button[aria-current="page"]',
+              'nav[data-oruga="pagination"] button.pagination-link.is-current',
+              'nav[data-oruga="pagination"] button[aria-current="true"]',
+            ].join(", "),
+          );
+          const n = Number(String(active?.textContent || "").trim());
+          return Number.isFinite(n) && n > 0 ? n : 1;
+        }),
+        5000,
+        "Leitura do número da página Oruga",
+      );
 
     const portalUiMaxPage = resolvePortalUiMaxPage();
 
@@ -2624,7 +2667,7 @@ async function scrapeCasaDosDadosLeadsOnce(
         if (options?.shouldAbort?.()) return false;
         const cur = await readCurrentPageNumber();
         if (cur === expectedPage) return true;
-        await page.waitForTimeout(200);
+        await sleepNode(200);
       }
       return false;
     };
@@ -2755,7 +2798,7 @@ async function scrapeCasaDosDadosLeadsOnce(
         while (Date.now() < deadline) {
           const nextFirst = await readFirstVisibleCnpjDigits(page);
           if (nextFirst && nextFirst !== previousFirstCnpj) return true;
-          await page.waitForTimeout(250);
+          await sleepNode(250);
         }
       }
       return false;
@@ -2919,7 +2962,7 @@ async function scrapeCasaDosDadosLeadsOnce(
           markPhase(
             `COPY: página ${pageIndex} sem cards — relendo ${reread}/3 (mesma sessão)…`,
           );
-          await page.waitForTimeout(reread === 1 ? 500 : 1000);
+          await sleepNode(reread === 1 ? 500 : 1000);
           rows = await readScreenCards();
           if (rows.length) break;
         }

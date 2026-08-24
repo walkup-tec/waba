@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 23:10 — Leads PJ CDP hot-path gate v9.6
+
+- `cdpOrReconnect` + `sleepNode`; DOM click/focus fast; UI stage SEARCH; 1ª COPY com teto CDP
+- Marker `DEPLOY-2026-08-23-2310-leads-pj-cdp-hotpath-gate-v9.6`
+- LOG: `doc/LOG-2026-08-23__231000__leads-pj-cdp-hotpath-gate-v96.md`
+
 ## 2026-08-23 22:50 — Leads PJ CTA fast probe v9.5
 
 - Pré-clique SEARCH: fast CTA (sem probeSearchState pesado); timeout CDP → `new-browser`

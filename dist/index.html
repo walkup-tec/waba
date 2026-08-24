@@ -34302,18 +34302,34 @@
       function resolveMarketingLeadsCnpjStage(item) {
         const status = String(item?.status || "");
         const msg = String(item?.progressMessage || item?.error || "").toLowerCase();
+        // Prefixo de fase do adapter (BOOT/LOGIN/FILTERS/SEARCH/COPY) — fonte de verdade.
+        if (/\bcopy\b|^\s*copy:/.test(msg) || /página\s+\d+|arquivada|cards copy|lendo cards/.test(msg)) {
+          if (status === "ready") return "baixar";
+          return "copiando";
+        }
+        if (
+          /\bsearch\b|^\s*search:|filtro|pesquis|cnae|buscar|aplicando|atividade|cta|ack|cdp_probe|dispatch/.test(
+            msg,
+          )
+        ) {
+          return "pesquisando";
+        }
+        if (/\bfilters\b|^\s*filters:/.test(msg)) return "pesquisando";
         if (status === "ready") return "baixar";
         if (status === "failed") {
           if (/enriquec|receitaws|lote/.test(msg)) return "enriquecendo";
           if (/página|copi|card|cnpj|colet/.test(msg)) return "copiando";
-          if (/filtro|pesquis|cnae|buscar|aplicando/.test(msg)) return "pesquisando";
+          if (/filtro|pesquis|cnae|buscar|aplicando|search|cta|ack|cdp|probe|dispatch/.test(msg))
+            return "pesquisando";
+          if (/login|boot|abrindo|cloudflare|portal|entrar/.test(msg)) return "abrindo";
           return "abrindo";
         }
         if (status === "enriching") return "enriquecendo";
         if (status === "scraping" || status === "draft") {
           if (/enriquec|receitaws|lote do dia/.test(msg)) return "enriquecendo";
           if (/página|copi|card|lendo|coletados|avançando/.test(msg)) return "copiando";
-          if (/filtro|pesquis|cnae|buscar|aplicando|atividade/.test(msg)) return "pesquisando";
+          if (/filtro|pesquis|cnae|buscar|aplicando|atividade|search|cta|ack/.test(msg))
+            return "pesquisando";
           return "abrindo";
         }
         return "abrindo";
