@@ -1,5 +1,13 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-24 16:50 — Leads PJ pages metric v9.24
+
+- Coluna Páginas = checkpoint Oruga (não CNPJ/20); sem rewind de checkpoint
+- Retomada não adota UI ≫ piso; ERR_ABORTED → recover
+- E2E dual: `scripts/e2e-leads-pj-dual.cjs`
+- Marker `DEPLOY-2026-08-24-1650-leads-pj-pages-metric-v9.24`
+- LOG: `doc/LOG-2026-08-24__165000__leads-pj-pages-metric-v924.md`
+
 ## 2026-08-24 16:30 — Leads PJ login/SEARCH recover v9.23
 
 - goto com teto Node; login/SEARCH timeout → new-browser; soft-cap 2

@@ -396,7 +396,7 @@ async function dismissBlockingPortalOverlays(page) {
 }
 function isChromiumTargetCrash(error) {
     const msg = error instanceof Error ? error.message : String(error || "");
-    return /Target crashed|Page crashed|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
+    return /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|has been closed|browser has been closed|Target page, context or browser has been closed/i.test(msg);
 }
 function requiresBrowserRecovery(error) {
     if (error instanceof LeadsScrapeError)
@@ -2686,7 +2686,8 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                 const okFloor = startPage > 1 ? await goToResultsPage(startPage) : await jumpToPageDom(1);
                 if (!okFloor) {
                     const cur = await readCurrentPageNumber();
-                    // Preferência: UI no entorno do piso.
+                    // Só adota UI se estiver no entorno do piso. UI ≫ piso (ex.: 322 vs 60)
+                    // pulava dezenas de páginas sem arquivar CNPJs.
                     if (cur >= copyResumeFloor && cur <= copyResumeFloor + 2) {
                         markPhase(`COPY: UI na pág. ${cur}; copiando daqui (sem pular CNPJs).`);
                         startPage = cur;
@@ -2697,15 +2698,23 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                         if (jumped) {
                             startPage = copyResumeFloor;
                         }
-                        else if (cur >= 1) {
-                            // Oruga ficou em janela baixa (ex.: 41 vs alvo 104). NÃO classificar como
-                            // renderer morto — pool deduplica; continua da UI e sobe com next/hop.
-                            markPhase(`COPY: salto ${copyResumeFloor} indisponível (UI ${cur}) — continuando da pág. ${cur} (dedupe no pool).`);
+                        else if (cur >= 1 && cur < copyResumeFloor) {
+                            // UI atrás do piso — sobe com next/hop a partir da UI.
+                            markPhase(`COPY: UI ${cur} < piso ${copyResumeFloor} — avançando da UI até o piso (sem pular).`);
                             startPage = cur;
                         }
                         else {
-                            markPhase(`COPY: paginação ilegível após falha de salto — reiniciando da pág. 1 (dedupe no pool).`);
-                            startPage = 1;
+                            // UI à frente ou ilegível: NÃO adotar página alta. Recomeça do piso via
+                            // goToResultsPage com distância real; se falhar, pág. 1 (dedupe no pool).
+                            markPhase(`COPY: UI ${cur} longe do piso ${copyResumeFloor} — forçando caminhada até o piso (sem adotar ${cur}).`);
+                            const walked = await goToResultsPage(copyResumeFloor);
+                            if (walked) {
+                                startPage = copyResumeFloor;
+                            }
+                            else {
+                                markPhase(`COPY: não posicionou no piso ${copyResumeFloor} — reinício pág. 1 (dedupe no pool).`);
+                                startPage = 1;
+                            }
                         }
                     }
                 }
@@ -2718,14 +2727,20 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
                     if (ui2 === startPage) {
                         /* ok */
                     }
-                    else if (ui2 >= 1) {
-                        markPhase(`COPY: UI ${ui2} ≠ alvo ${startPage} pós-jump — adotando UI (piso ${copyResumeFloor}).`);
+                    else if (ui2 >= 1 && Math.abs(ui2 - startPage) <= 2) {
+                        markPhase(`COPY: UI ${ui2} ≈ alvo ${startPage} — adotando UI.`);
                         startPage = ui2;
                     }
+                    else {
+                        markPhase(`COPY: UI ${ui2} desalinhada do alvo ${startPage} — mantendo alvo (não adota salto).`);
+                    }
                 }
-                else if (uiAfter >= 1) {
-                    markPhase(`COPY: UI ${uiAfter} ≠ ${startPage} e jump falhou — adotando UI (sem hard-fail).`);
+                else if (uiAfter >= 1 && Math.abs(uiAfter - startPage) <= 2) {
+                    markPhase(`COPY: jump falhou; UI ${uiAfter} ≈ alvo — adotando UI.`);
                     startPage = uiAfter;
+                }
+                else {
+                    markPhase(`COPY: UI ${uiAfter} ≠ ${startPage} após jump — mantendo alvo ${startPage} (sem adotar UI distante).`);
                 }
             }
         }

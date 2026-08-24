@@ -281,11 +281,16 @@ function countLeadsHigienizados(list: WabaLeadsCnpjList): number {
   return n;
 }
 
-function resolveScrapeHistoryMetrics(
+/**
+ * Métricas da coluna Páginas / CNPJs no histórico.
+ * pagesDone = página real da paginação (checkpoint), NÃO estimativa CNPJ/20.
+ * (Estimativa por volume escondia pág. 322 com só 1.180 CNPJs → mostrava 59.)
+ */
+export function resolveScrapeHistoryMetrics(
   list: WabaLeadsCnpjList,
   poolPending: number,
   usedCount: number,
-): { pagesDone: number; pagesTotal: number; cnpjCopied: number } {
+): { pagesDone: number; pagesTotal: number; cnpjCopied: number; volumePages: number } {
   const ckpt = list.scrapeCheckpoint;
   const fromFilter = Math.max(0, Math.round(Number(list.filters?.maxPages || 0) || 0));
   const fromCkptTotal = Math.max(0, Math.round(Number(ckpt?.pagesToFetch || 0) || 0));
@@ -293,7 +298,6 @@ function resolveScrapeHistoryMetrics(
   const nextPage = Math.max(0, Math.round(Number(ckpt?.nextPage || 0) || 0));
   const collected = Math.max(0, Math.round(Number(ckpt?.collectedCount || 0) || 0));
   const cnpjCopied = Math.max(collected, poolPending + usedCount);
-  // Volume real ≈ CNPJs/20 (portal = 20 cards/página).
   const volumePages =
     cnpjCopied > 0 ? Math.min(pagesTotal, Math.max(0, Math.ceil(cnpjCopied / 20))) : 0;
   let ckptPages = 0;
@@ -302,14 +306,9 @@ function resolveScrapeHistoryMetrics(
   } else if (list.scrapeCompleted || cnpjCopied > 0) {
     ckptPages = volumePages;
   }
-  // Checkpoint inflado (pulou páginas sem arquivar) → confiar no volume de CNPJs.
-  let pagesDone = ckptPages;
-  if (volumePages > 0 && ckptPages > volumePages + 2) {
-    pagesDone = volumePages;
-  } else if (ckptPages <= 0 && volumePages > 0) {
-    pagesDone = volumePages;
-  }
-  return { pagesDone, pagesTotal, cnpjCopied };
+  // Sempre preferir checkpoint (página Oruga real). Volume só se não houver ckpt.
+  const pagesDone = ckptPages > 0 ? Math.min(pagesTotal, ckptPages) : volumePages;
+  return { pagesDone, pagesTotal, cnpjCopied, volumePages };
 }
 
 function toSummary(
@@ -2232,16 +2231,13 @@ export class WabaLeadsCnpjService {
                     }
                     const archived =
                       this.repository.getPool(campaignKey)?.pending.length || 0;
-                    const volumeFloor = Math.max(1, Math.floor(archived / 20) + 1);
                     const sequential = Math.max(
                       1,
                       Math.round(Number(c.completedPage || 0) || 0) + 1,
                     );
-                    // Só corta runaway absurdo (página ≫ volume). Avanço normal com dedupe OK.
-                    const nextPage =
-                      Math.round(Number(c.completedPage || 0) || 0) > volumeFloor + 50
-                        ? volumeFloor
-                        : sequential;
+                    // Sempre persiste a página Oruga real. NÃO rebobinar para volume/20
+                    // (isso fazia a coluna Páginas mostrar 59 enquanto o log ia 322→323).
+                    const nextPage = sequential;
                     // Não persiste checkpoint > teto UI (evita retomada em 1001+).
                     const beyondUi = nextPage > portalUiMaxPage;
                     patch({
@@ -2576,7 +2572,7 @@ export class WabaLeadsCnpjService {
       const hardRecovery =
         (isLeadsScrapeError(error) && error.recovery === "new-browser") ||
         (!(error instanceof LeadsScrapeError) &&
-          /Target crashed|Page crashed|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|LOGIN_TIMEOUT|locator\.waitFor|input\[name=.email/i.test(
+          /Target crashed|Page crashed|net::ERR_ABORTED|frame was detached|browser has been closed|has been closed|RENDERER_UNRESPONSIVE|BROWSER_DISCONNECTED|CDP_PROBE_TIMEOUT|LOGIN_TIMEOUT|locator\.waitFor|input\[name=.email/i.test(
             msg,
           ));
 
