@@ -931,6 +931,101 @@ async function readSearchState(page: PageLike): Promise<SearchStateLite> {
   };
 }
 
+async function withNodeTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), Math.max(50, timeoutMs));
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Probe leve só para ACK pós-clique — sem reescanear todos os CTAs. */
+async function probeSearchAckLite(page: PageLike): Promise<{
+  url: string;
+  pagination: boolean;
+  loadingNodes: number;
+  cnpjNodes: number;
+  dialogs: number;
+  searchButtonDisabled: boolean;
+} | null> {
+  return page
+    .evaluate(() => {
+      const pagination = Boolean(document.querySelector('nav[data-oruga="pagination"]'));
+      const loadingNodes = document.querySelectorAll(
+        [
+          '[aria-busy="true"]',
+          ".loading",
+          ".is-loading",
+          ".loader",
+          ".spinner",
+          '[class*="loading"]',
+          '[class*="spinner"]',
+        ].join(","),
+      ).length;
+      const root = (document.querySelector("main") as HTMLElement | null) || document.body;
+      const nodes = Array.from(root.querySelectorAll("span, a, p, li, div")).slice(0, 500);
+      const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/;
+      let cnpjNodes = 0;
+      for (const el of nodes) {
+        const t = String(el.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (t.length < 14 || t.length > 100) continue;
+        if (cnpjRe.test(t)) {
+          cnpjNodes += 1;
+          if (cnpjNodes >= 5) break;
+        }
+      }
+      const buttons = Array.from(
+        document.querySelectorAll('button, [role="button"], input[type="submit"]'),
+      ) as HTMLElement[];
+      const searchBtn = buttons.find((el) => {
+        const text = String(
+          el instanceof HTMLInputElement ? el.value : el.textContent || "",
+        )
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        const aria = String(el.getAttribute("aria-label") || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        return (
+          text.includes("pesquisar") ||
+          text.includes("buscar") ||
+          aria.includes("pesquisar") ||
+          aria.includes("buscar")
+        );
+      });
+      return {
+        url: location.href,
+        pagination,
+        loadingNodes,
+        cnpjNodes,
+        dialogs: document.querySelectorAll('[role="dialog"], .modal, .o-modal').length,
+        searchButtonDisabled: searchBtn
+          ? Boolean((searchBtn as HTMLButtonElement).disabled) ||
+            searchBtn.getAttribute("aria-disabled") === "true"
+          : false,
+      };
+    })
+    .catch(() => null);
+}
+
+/**
+ * ACK com deadline do Node. Nunca usa page.waitForTimeout no loop —
+ * se o evaluate travar, o tick falha e o deadline geral encerra em timeoutMs.
+ */
 async function waitForSearchAck(
   page: PageLike,
   before: SearchProbe,
@@ -938,19 +1033,34 @@ async function waitForSearchAck(
 ): Promise<SearchProbe | null> {
   const deadline = Date.now() + Math.max(1000, timeoutMs);
   while (Date.now() < deadline) {
-    await page.waitForTimeout(400);
-    const after = await probeSearchState(page);
-    if (
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    // Sleep no Node (não ocupa fila CDP).
+    await new Promise<void>((r) => setTimeout(r, 350));
+    const tickBudget = Math.min(1200, Math.max(200, deadline - Date.now()));
+    const after = await withNodeTimeout(probeSearchAckLite(page), tickBudget, null);
+    if (!after) continue;
+    const changed =
       after.url !== before.url ||
       after.searchButtonDisabled !== before.searchButtonDisabled ||
       after.loadingNodes > before.loadingNodes ||
       after.pagination ||
       after.cnpjNodes > before.cnpjNodes ||
-      after.totalCandidates.length > before.totalCandidates.length ||
-      after.dialogs !== before.dialogs
-    ) {
-      return after;
-    }
+      after.dialogs !== before.dialogs;
+    if (!changed) continue;
+
+    // Tenta probe completo com teto Node; se travar, sintetiza ACK a partir do lite.
+    const full = await withNodeTimeout(probeSearchState(page), 2000, null as SearchProbe | null);
+    if (full) return full;
+    return {
+      ...before,
+      url: after.url,
+      pagination: after.pagination || before.pagination,
+      loadingNodes: after.loadingNodes,
+      cnpjNodes: Math.max(before.cnpjNodes, after.cnpjNodes),
+      dialogs: after.dialogs,
+      searchButtonDisabled: after.searchButtonDisabled,
+    };
   }
   return null;
 }
@@ -966,8 +1076,11 @@ async function clickSearchByMouse(
 ): Promise<boolean> {
   if (!page.mouse?.click) return false;
   const { x, y, width, height } = candidate.rect;
-  await page.mouse.click(x + width / 2, y + height / 2);
-  return true;
+  return withNodeTimeout(
+    page.mouse.click(x + width / 2, y + height / 2).then(() => true),
+    3000,
+    false,
+  );
 }
 
 async function clickSearchDom(page: PageLike): Promise<boolean> {
@@ -1067,7 +1180,18 @@ async function dispatchSearchWithAck(
   page: PlaywrightSearchPage,
   onProgress?: CasaDosDadosProgress,
 ): Promise<{ method: "mouse" | "dom" | "enter"; ack: SearchProbe }> {
-  const before = await probeSearchState(page);
+  const before = await withNodeTimeout(
+    probeSearchState(page),
+    8000,
+    null as SearchProbe | null,
+  );
+  if (!before) {
+    throw new LeadsScrapeError(
+      "SEARCH_BUTTON_NOT_FOUND",
+      "same-page",
+      "Probe pré-clique não respondeu em 8s (CDP/DOM travado).",
+    );
+  }
   console.log(
     JSON.stringify({
       event: "SEARCH_PROBE",
@@ -1081,7 +1205,7 @@ async function dispatchSearchWithAck(
 
   if (!before.searchButtonFound || !before.searchButtonCandidate) {
     onProgress?.("SEARCH: botão Pesquisar não localizado — diagnóstico capturado");
-    await captureSearchDiagnostics(page);
+    await withNodeTimeout(captureSearchDiagnostics(page), 5000, undefined);
     throw new LeadsScrapeError(
       "SEARCH_BUTTON_NOT_FOUND",
       "same-page",
@@ -1096,7 +1220,7 @@ async function dispatchSearchWithAck(
 
   onProgress?.("SEARCH: acionando Pesquisar via mouse…");
   if (await clickSearchByMouse(page, winner)) {
-    onProgress?.("SEARCH: aguardando ACK (mouse) — 5s…");
+    onProgress?.("SEARCH: aguardando ACK (mouse) — até 5s (Node)…");
     const ack = await waitForSearchAck(page, before, 5000);
     if (ack) {
       console.log(JSON.stringify({ event: "SEARCH_ACK", method: "mouse", probe: formatProbeShort(ack) }));
@@ -1105,12 +1229,13 @@ async function dispatchSearchWithAck(
     }
     onProgress?.("SEARCH: mouse sem ACK após 5s");
   } else {
-    onProgress?.("SEARCH: mouse indisponível");
+    onProgress?.("SEARCH: mouse indisponível / timeout");
   }
 
   onProgress?.("SEARCH: tentando clique DOM…");
-  if (await clickSearchDom(page)) {
-    onProgress?.("SEARCH: aguardando ACK (DOM) — 5s…");
+  const domOk = await withNodeTimeout(clickSearchDom(page), 4000, false);
+  if (domOk) {
+    onProgress?.("SEARCH: aguardando ACK (DOM) — até 5s (Node)…");
     const ack = await waitForSearchAck(page, before, 5000);
     if (ack) {
       console.log(JSON.stringify({ event: "SEARCH_ACK", method: "dom", probe: formatProbeShort(ack) }));
@@ -1121,9 +1246,13 @@ async function dispatchSearchWithAck(
   }
 
   onProgress?.("SEARCH: tentando Enter…");
-  await focusSearchButton(page);
-  await page.keyboard.press("Enter").catch(() => undefined);
-  onProgress?.("SEARCH: aguardando ACK (Enter) — 5s…");
+  await withNodeTimeout(focusSearchButton(page), 2000, false);
+  await withNodeTimeout(
+    page.keyboard.press("Enter").then(() => undefined),
+    1500,
+    undefined,
+  );
+  onProgress?.("SEARCH: aguardando ACK (Enter) — até 5s (Node)…");
   const ackEnter = await waitForSearchAck(page, before, 5000);
   if (ackEnter) {
     console.log(JSON.stringify({ event: "SEARCH_ACK", method: "enter", probe: formatProbeShort(ackEnter) }));
@@ -1131,7 +1260,8 @@ async function dispatchSearchWithAck(
     return { method: "enter", ack: ackEnter };
   }
 
-  const last = await probeSearchState(page);
+  const last =
+    (await withNodeTimeout(probeSearchState(page), 3000, null as SearchProbe | null)) || before;
   console.log(
     JSON.stringify({
       event: "SEARCH_DISPATCH_FAILED",

@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 22:25 — Leads PJ ACK Node deadline v9.3
+
+- waitForSearchAck com setTimeout Node + probe leve; sem page.waitForTimeout no loop
+- Marker `DEPLOY-2026-08-23-2225-leads-pj-ack-node-deadline-v9.3`
+- LOG: `doc/LOG-2026-08-23__222500__leads-pj-ack-node-deadline-v93.md`
+
 ## 2026-08-23 22:05 — Leads PJ CNAE modal Node timeout v9.2
 
 - Escape + setTimeout Node; sem locator Fechar (fila CDP)
