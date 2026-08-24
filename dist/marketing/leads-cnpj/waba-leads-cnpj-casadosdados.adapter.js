@@ -338,20 +338,18 @@ function xpathLower(expr = ".") {
 }
 /** Fecha modal "Inserir CNPJ em lote" se estiver aberto (bloqueia cliques nos filtros). */
 async function dismissBlockingPortalOverlays(page) {
-    const batchModal = page
-        .locator('xpath=//textarea[contains(@placeholder,"Um CNPJ por linha") or contains(@placeholder,"CNPJ por linha")]')
-        .first();
-    if ((await batchModal.count()) > 0 && (await batchModal.isVisible().catch(() => false))) {
-        await page.keyboard.press("Escape").catch(() => undefined);
-        await page.waitForTimeout(300);
-        const closeBtn = page
-            .locator('button:has-text("Cancelar"), button:has-text("Fechar"), .modal-close, button.delete')
-            .first();
-        if ((await closeBtn.count()) > 0 && (await closeBtn.isVisible().catch(() => false))) {
-            await closeBtn.click({ force: true }).catch(() => undefined);
-            await page.waitForTimeout(200);
-        }
-    }
+    // Sem locator Playwright: Escape + evaluate leve com teto Node.
+    await withNodeTimeout(page.keyboard.press("Escape").then(() => undefined), 800, undefined);
+    await sleepNode(150);
+    await withNodeTimeout(page.evaluate(() => {
+        const hasBatch = Array.from(document.querySelectorAll("textarea")).some((el) => /cnpj por linha/i.test(String(el.getAttribute("placeholder") || "")));
+        if (!hasBatch)
+            return false;
+        const btn = Array.from(document.querySelectorAll("button")).find((b) => /^(Cancelar|Fechar)$/i.test(String(b.textContent || "").trim()));
+        btn?.click();
+        return true;
+    }), 2000, false);
+    await sleepNode(100);
 }
 function isChromiumTargetCrash(error) {
     const msg = error instanceof Error ? error.message : String(error || "");
@@ -383,24 +381,32 @@ async function readResultsSampleText(page, maxChars = 12000) {
 /** Cards CNPJ na tela — evaluate leve, sem scroll artificial. */
 async function readScreenCardsLight(page) {
     return page.evaluate(() => {
-        const re = /^(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+-\s+(.+)$/;
+        const cnpjRe = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/;
         const seen = new Set();
         const out = [];
-        const root = document.querySelector("main") ||
-            document.querySelector(".section, .container, #app") ||
-            document.body;
+        const root = document.querySelector("main") || document.body;
         const lines = String(root?.innerText || "")
             .split(/\n+/)
             .map((s) => s.trim())
             .filter(Boolean);
-        // Cards ficam no miolo; evita varrer menus/rodapé enormes.
-        const slice = lines.length > 400 ? lines.slice(0, 400) : lines;
-        for (const line of slice) {
-            const m = line.match(re);
-            if (!m || seen.has(m[1]))
+        let start = lines.findIndex((l) => /encontrado/i.test(l) && /resultado/i.test(l));
+        if (start < 0)
+            start = lines.findIndex((l) => cnpjRe.test(l));
+        if (start < 0)
+            start = 0;
+        for (const line of lines.slice(Math.max(0, start), start + 400)) {
+            const m = line.match(cnpjRe);
+            if (!m || m.index == null || seen.has(m[1]))
+                continue;
+            const name = line
+                .slice(m.index + m[1].length)
+                .replace(/^[^A-Za-z0-9]+/, "")
+                .replace(/\s+/g, " ")
+                .trim();
+            if (!name || /^(ativa|baixada|inapta|nula|suspensa)$/i.test(name))
                 continue;
             seen.add(m[1]);
-            out.push([m[1], m[2]]);
+            out.push([m[1], name]);
             if (out.length >= 40)
                 break;
         }
@@ -778,21 +784,10 @@ async function probeSearchAckLite(page) {
             '[class*="spinner"]',
         ].join(",")).length;
         const root = document.querySelector("main") || document.body;
-        const nodes = Array.from(root.querySelectorAll("span, a, p, li, div")).slice(0, 500);
-        const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/;
-        let cnpjNodes = 0;
-        for (const el of nodes) {
-            const t = String(el.textContent || "")
-                .replace(/\s+/g, " ")
-                .trim();
-            if (t.length < 14 || t.length > 100)
-                continue;
-            if (cnpjRe.test(t)) {
-                cnpjNodes += 1;
-                if (cnpjNodes >= 5)
-                    break;
-            }
-        }
+        const sample = String(root?.innerText || "").slice(0, 20000);
+        const cnpjRe = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g;
+        const found = sample.match(cnpjRe) || [];
+        const cnpjNodes = Math.min(20, new Set(found).size);
         const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'));
         const searchBtn = buttons.find((el) => {
             const text = String(el instanceof HTMLInputElement ? el.value : el.textContent || "")
@@ -865,7 +860,34 @@ async function waitForSearchAck(page, before, timeoutMs = 5000) {
 async function clickSearchByMouse(page, candidate) {
     if (!page.mouse?.click)
         return false;
-    const { x, y, width, height } = candidate.rect;
+    // Botão fica no rodapé do formulário — fora do viewport → clique fantasma.
+    await withNodeTimeout(page.evaluate((textWant) => {
+        const want = String(textWant || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        const els = Array.from(document.querySelectorAll('a, button, [role="button"], input[type="submit"]'));
+        const el = els.find((node) => {
+            const t = String(node instanceof HTMLInputElement ? node.value : node.textContent || "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
+            return t === want || t.includes("pesquisar") || t.includes("buscar");
+        });
+        if (!el)
+            return false;
+        el.scrollIntoView({ block: "center", inline: "nearest" });
+        return true;
+    }, candidate.text || "Pesquisar"), 3000, false);
+    await sleepNode(150);
+    // Re-lê rect após scroll.
+    const fresh = await withNodeTimeout(findSearchButtonCandidatesFast(page), 3000, null);
+    const rect = fresh?.[0]?.rect || candidate.rect;
+    const { x, y, width, height } = rect;
+    if (y < 0 || y > 2000 || width < 10) {
+        // Fallback: clique DOM no elemento já scrollado.
+        return withNodeTimeout(clickSearchDom(page), 4000, false);
+    }
     return withNodeTimeout(page.mouse.click(x + width / 2, y + height / 2).then(() => true), 3000, false);
 }
 async function clickSearchDom(page) {
@@ -1138,8 +1160,12 @@ async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort)
         }
         consecutiveLiteMiss = 0;
         if (lite.pagination || lite.cnpjNodes > 0) {
-            onProgress?.(`SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`);
-            return { kind: "results", total: null };
+            // Paginação sozinha pode aparecer antes dos cards — exige CNPJ ou grace curto.
+            if (lite.cnpjNodes > 0) {
+                onProgress?.(`SEARCH: resultados detectados — CNPJs=${lite.cnpjNodes}, paginação=${lite.pagination}`);
+                return { kind: "results", total: null };
+            }
+            // pagination sem CNPJ ainda: continua o loop (não early-return).
         }
         lastProbe = {
             ...(lastProbe || {
@@ -1184,8 +1210,14 @@ async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort)
     if (!alive)
         return { kind: "renderer-unresponsive" };
     const finalLite = await withNodeTimeout(probeSearchAckLite(page), 2000, null);
-    if (finalLite && (finalLite.pagination || finalLite.cnpjNodes > 0)) {
+    if (finalLite && finalLite.cnpjNodes > 0) {
         return { kind: "results", total: null };
+    }
+    if (finalLite && finalLite.pagination) {
+        // Última chance: ler cards mesmo se o probe leve não contou CNPJs.
+        const cards = await withNodeTimeout(readScreenCardsLight(page), 4000, []);
+        if (cards.length > 0)
+            return { kind: "results", total: null };
     }
     if (finalLite && finalLite.loadingNodes > 0) {
         const graceDeadline = Date.now() + 30000;
@@ -1195,14 +1227,23 @@ async function waitForSearchTransition(page, timeoutMs, onProgress, shouldAbort)
             if (!(await rendererProbe(page, 2000)))
                 return { kind: "renderer-unresponsive" };
             const st = await withNodeTimeout(probeSearchAckLite(page), 1500, null);
-            if (st && (st.pagination || st.cnpjNodes > 0))
+            if (st && st.cnpjNodes > 0)
                 return { kind: "results", total: null };
-            if (st && st.loadingNodes === 0)
+            const cards = await withNodeTimeout(readScreenCardsLight(page), 3000, []);
+            if (cards.length > 0)
+                return { kind: "results", total: null };
+            if (st && st.loadingNodes === 0 && !st.pagination)
                 break;
             const g = Math.round((Date.now() - started) / 1000);
             onProgress?.(`SEARCH: grace loading — ${g}s`);
             await sleepNode(500);
         }
+    }
+    // Paginação presente no fim do timeout: ainda assim tentar COPY (cards leitores).
+    if (finalLite?.pagination || lastProbe?.pagination) {
+        const cards = await withNodeTimeout(readScreenCardsLight(page), 4000, []);
+        if (cards.length > 0)
+            return { kind: "results", total: null };
     }
     return { kind: "timeout-responsive", probe: lastProbe };
 }
@@ -1373,15 +1414,17 @@ async function markCnaeOption(page, code) {
     return false;
 }
 async function readCnaeSelectedCount(page) {
-    return page.evaluate(() => {
-        const text = String(document.body?.innerText || "");
+    return withNodeTimeout(page.evaluate(() => {
+        const root = document.querySelector('[role="dialog"], .modal, .o-modal') ||
+            document.querySelector("main") ||
+            document.body;
+        const text = String(root?.innerText || "").slice(0, 4000);
         const m = text.match(/(\d+)\s+selecionados?/i);
         return m ? Number(m[1]) : null;
-    });
+    }), 2500, null);
 }
 /**
- * CNAE via DOM nativo (Xvfb). Fases curtas + abortável — não fica minutos em
- * "selecionando CNAE…" sem avançar.
+ * CNAE via DOM nativo. Só evaluate leve + sleepNode — sem page.waitForTimeout / locator.
  */
 async function selectAtividadePrincipalCnae(page, rawCode, onProgress, shouldAbort) {
     const code = String(rawCode || "").replace(/\D/g, "");
@@ -1391,16 +1434,17 @@ async function selectAtividadePrincipalCnae(page, rawCode, onProgress, shouldAbo
         onProgress?.(`Pesquisando: CNAE ${code} — ${phase}`);
     };
     const aborted = () => Boolean(shouldAbort?.());
+    const evalSoft = async (fn, ms, fallback) => withNodeTimeout(fn(), ms, fallback);
     await dismissBlockingPortalOverlays(page).catch(() => undefined);
-    await page.evaluate(() => {
+    await evalSoft(() => page.evaluate(() => {
         const btn = Array.from(document.querySelectorAll("button")).find((b) => /^Fechar$/i.test(String(b.textContent || "").trim()));
         btn?.click();
-    });
-    await page.waitForTimeout(200);
+    }), 2000, undefined);
+    await sleepNode(150);
     if (aborted())
         throw new Error(`CNAE ${code}: abortado.`);
     report("abrindo modal…");
-    await page.evaluate(() => {
+    const opened = await evalSoft(() => page.evaluate(() => {
         const visible = (el) => {
             const h = el;
             const s = window.getComputedStyle(h);
@@ -1419,13 +1463,16 @@ async function selectAtividadePrincipalCnae(page, rawCode, onProgress, shouldAbo
             return visible(i) && i.type === "text" && /c[oó]digo ou nome da atividade|atividade/.test(ph);
         });
         textOpeners[0]?.click();
-    });
+        return true;
+    }), 4000, false);
+    if (!opened)
+        throw new Error(`CNAE ${code}: CDP travou ao abrir modal.`);
     report("aguardando campo de busca…");
     let searchReady = false;
-    for (let poll = 0; poll < 20; poll += 1) {
+    for (let poll = 0; poll < 16; poll += 1) {
         if (aborted())
             throw new Error(`CNAE ${code}: abortado.`);
-        searchReady = await page.evaluate(() => {
+        searchReady = await evalSoft(() => page.evaluate(() => {
             const visible = (el) => {
                 const h = el;
                 const s = window.getComputedStyle(h);
@@ -1438,26 +1485,25 @@ async function selectAtividadePrincipalCnae(page, rawCode, onProgress, shouldAbo
                     (el.type === "search" || /atividade|cnae|c[oó]digo/.test(ph)) &&
                     (inModal || el.type === "search"));
             });
-        });
+        }), 2500, false);
         if (searchReady)
             break;
-        // Re-clique leve a cada ~1s se o modal não abriu.
         if (poll > 0 && poll % 3 === 0) {
-            await page.evaluate(() => {
+            await evalSoft(() => page.evaluate(() => {
                 const lab = Array.from(document.querySelectorAll("label")).find((el) => {
                     const t = String(el.textContent || "").replace(/\s+/g, " ").trim();
                     return t.length > 0 && t.length < 80 && /Atividade\s+Principal\s*\(CNAE\)/i.test(t);
                 });
                 lab?.click();
-            });
+            }), 2000, undefined);
         }
-        await page.waitForTimeout(300);
+        await sleepNode(250);
     }
     if (!searchReady) {
         throw new Error(`CNAE ${code}: modal de busca não abriu (search ausente).`);
     }
     report("digitando código…");
-    const typed = await page.evaluate((cnae) => {
+    const typed = await evalSoft(() => page.evaluate((cnae) => {
         const visible = (el) => {
             const h = el;
             const s = window.getComputedStyle(h);
@@ -1495,16 +1541,16 @@ async function selectAtividadePrincipalCnae(page, rawCode, onProgress, shouldAbo
         target.dispatchEvent(new Event("change", { bubbles: true }));
         target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: cnae.slice(-1) || "0" }));
         return { ok: true, value: String(target.value || "") };
-    }, code);
+    }, code), 4000, { ok: false });
     if (!typed?.ok || !String(typed.value || "").includes(code)) {
         throw new Error(`CNAE ${code}: não digitou no campo de busca.`);
     }
     report("marcando checkbox…");
     let marked = false;
-    for (let poll = 0; poll < 25; poll += 1) {
+    for (let poll = 0; poll < 20; poll += 1) {
         if (aborted())
             throw new Error(`CNAE ${code}: abortado.`);
-        marked = await page.evaluate((cnae) => {
+        marked = await evalSoft(() => page.evaluate((cnae) => {
             const boxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
             const box = boxes.find((b) => String(b.id || "").startsWith(cnae) ||
                 String(b.id || "").includes(`${cnae} `) ||
@@ -1521,20 +1567,21 @@ async function selectAtividadePrincipalCnae(page, rawCode, onProgress, shouldAbo
                 }
             }
             return Boolean(box.checked);
-        }, code);
+        }, code), 3000, false);
         if (marked)
             break;
-        await page.waitForTimeout(250);
+        await sleepNode(200);
     }
     if (!marked) {
         throw new Error(`CNAE ${code}: checkbox da atividade não apareceu após filtrar.`);
     }
     report("fechando modal…");
-    await page.evaluate(() => {
+    await evalSoft(() => page.evaluate(() => {
         const btn = Array.from(document.querySelectorAll("button")).find((b) => /^(Fechar|Concluir|Aplicar|OK)$/i.test(String(b.textContent || "").trim()));
         btn?.click();
-    });
-    await page.waitForTimeout(300);
+    }), 2500, undefined);
+    await withNodeTimeout(page.keyboard.press("Escape").then(() => undefined), 800, undefined);
+    await sleepNode(200);
     onProgress?.(`Pesquisando: CNAE ${code} selecionado.`);
 }
 /**
@@ -1573,11 +1620,11 @@ async function selectAtividadePrincipalCnaeWithTimeout(page, rawCode, onProgress
             lastErr = err instanceof Error ? err : new Error(String(err));
             onProgress?.(`Pesquisando: CNAE ${code} falhou (tentativa ${attempt}/${attempts}) — ${lastErr.message.slice(0, 100)}`);
             await dismissBlockingPortalOverlays(page).catch(() => undefined);
-            await page.evaluate(() => {
+            await withNodeTimeout(page.evaluate(() => {
                 const btn = Array.from(document.querySelectorAll("button")).find((b) => /^Fechar$/i.test(String(b.textContent || "").trim()));
                 btn?.click();
-            });
-            await page.waitForTimeout(400 + attempt * 200);
+            }), 2000, undefined);
+            await sleepNode(300 + attempt * 150);
         }
         finally {
             aborted = true;
@@ -1592,24 +1639,29 @@ async function selectAtividadePrincipalCnaeWithTimeout(page, rawCode, onProgress
 }
 async function setCheckboxByLabel(page, label, checked) {
     const needle = label.toLowerCase();
-    // Só checkbox DENTRO do label — never preceding/following (pega opção de autocomplete CNAE).
-    // Timeout curto: xpath no Xvfb não pode segurar a sessão 45s.
-    const box = page
-        .locator(`xpath=//label[contains(${xpathLower()}, '${needle}')]//input[@type='checkbox']`)
-        .first();
-    const n = await box.count().catch(() => 0);
-    if (!n)
-        return;
-    const visible = await box.isVisible().catch(() => false);
-    if (!visible)
-        return;
-    const isChecked = await box.isChecked().catch(() => false);
-    if (checked && !isChecked) {
-        await box.check({ force: true }).catch(() => undefined);
-    }
-    if (!checked && isChecked) {
-        await box.uncheck().catch(() => undefined);
-    }
+    await withNodeTimeout(page.evaluate(({ needleIn, want }) => {
+        const labels = Array.from(document.querySelectorAll("label"));
+        const lab = labels.find((el) => {
+            const t = String(el.textContent || "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
+            return t.includes(needleIn) && t.length < 120;
+        });
+        if (!lab)
+            return false;
+        const box = lab.querySelector('input[type="checkbox"]');
+        if (!box)
+            return false;
+        if (Boolean(box.checked) === want)
+            return true;
+        box.click();
+        if (Boolean(box.checked) !== want) {
+            box.checked = want;
+            box.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return true;
+    }, { needleIn: needle, want: checked }), 3000, false);
 }
 /**
  * Switches Oruga/Buefy: input[type=checkbox][role=switch] vem ANTES do label
@@ -1620,37 +1672,34 @@ async function setToggleByLabel(page, label, enabled) {
     if (!enabled)
         return;
     const needle = label.toLowerCase().replace(/"/g, "");
-    await Promise.race([
-        page.evaluate(({ needle, want }) => {
-            const labels = Array.from(document.querySelectorAll("label"));
-            const lab = labels.find((el) => {
-                const t = String(el.textContent || "")
-                    .replace(/\s+/g, " ")
-                    .trim()
-                    .toLowerCase();
-                return t === needle || (t.includes(needle) && t.length < 90);
-            });
-            if (!lab)
-                return false;
-            const box = (lab.previousElementSibling &&
-                lab.previousElementSibling.matches?.('input[type="checkbox"]')
-                ? lab.previousElementSibling
-                : null) ||
-                lab.parentElement?.querySelector('input[type="checkbox"]') ||
-                lab.querySelector('input[type="checkbox"]');
-            if (!box)
-                return false;
-            if (Boolean(box.checked) === want)
-                return true;
-            const control = lab.closest(".switch") ||
-                lab.parentElement;
-            (control || lab).click();
-            if (Boolean(box.checked) !== want)
-                box.click();
+    await withNodeTimeout(page.evaluate(({ needle, want }) => {
+        const labels = Array.from(document.querySelectorAll("label"));
+        const lab = labels.find((el) => {
+            const t = String(el.textContent || "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase();
+            return t === needle || (t.includes(needle) && t.length < 90);
+        });
+        if (!lab)
+            return false;
+        const box = (lab.previousElementSibling &&
+            lab.previousElementSibling.matches?.('input[type="checkbox"]')
+            ? lab.previousElementSibling
+            : null) ||
+            lab.parentElement?.querySelector('input[type="checkbox"]') ||
+            lab.querySelector('input[type="checkbox"]');
+        if (!box)
+            return false;
+        if (Boolean(box.checked) === want)
             return true;
-        }, { needle, want: true }),
-        page.waitForTimeout(2500).then(() => false),
-    ]).catch(() => false);
+        const control = lab.closest(".switch") ||
+            lab.parentElement;
+        (control || lab).click();
+        if (Boolean(box.checked) !== want)
+            box.click();
+        return true;
+    }, { needle, want: true }), 2500, false);
 }
 /** Liga vários switches numa única ida ao DOM — só labels ativos. */
 async function enableTogglesFast(page, labels) {
@@ -1659,40 +1708,37 @@ async function enableTogglesFast(page, labels) {
         .filter(Boolean);
     if (!needles.length)
         return;
-    await Promise.race([
-        page.evaluate((needlesIn) => {
-            const labels = Array.from(document.querySelectorAll("label"));
-            for (const needle of needlesIn) {
-                const lab = labels.find((el) => {
-                    const t = String(el.textContent || "")
-                        .replace(/\s+/g, " ")
-                        .trim()
-                        .toLowerCase();
-                    return t === needle || (t.includes(needle) && t.length < 90);
-                });
-                if (!lab)
-                    continue;
-                const box = (lab.previousElementSibling &&
-                    lab.previousElementSibling.matches?.('input[type="checkbox"]')
-                    ? lab.previousElementSibling
-                    : null) ||
-                    lab.parentElement?.querySelector('input[type="checkbox"]') ||
-                    lab.querySelector('input[type="checkbox"]');
-                if (!box)
-                    continue;
-                if (box.checked)
-                    continue;
-                const control = lab.closest(".switch") ||
-                    lab.parentElement;
-                (control || lab).click();
-                if (!box.checked) {
-                    box.checked = true;
-                    box.dispatchEvent(new Event("change", { bubbles: true }));
-                }
+    await withNodeTimeout(page.evaluate((needlesIn) => {
+        const labels = Array.from(document.querySelectorAll("label"));
+        for (const needle of needlesIn) {
+            const lab = labels.find((el) => {
+                const t = String(el.textContent || "")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .toLowerCase();
+                return t === needle || (t.includes(needle) && t.length < 90);
+            });
+            if (!lab)
+                continue;
+            const box = (lab.previousElementSibling &&
+                lab.previousElementSibling.matches?.('input[type="checkbox"]')
+                ? lab.previousElementSibling
+                : null) ||
+                lab.parentElement?.querySelector('input[type="checkbox"]') ||
+                lab.querySelector('input[type="checkbox"]');
+            if (!box)
+                continue;
+            if (box.checked)
+                continue;
+            const control = lab.closest(".switch") ||
+                lab.parentElement;
+            (control || lab).click();
+            if (!box.checked) {
+                box.checked = true;
+                box.dispatchEvent(new Event("change", { bubbles: true }));
             }
-        }, needles),
-        page.waitForTimeout(4000),
-    ]).catch(() => undefined);
+        }
+    }, needles), 4000, undefined);
 }
 async function applyFilters(page, filters, onProgress) {
     const step = (label) => {
@@ -2144,7 +2190,7 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
             return { leads: [], scrapeCompleted: true, doneReason: "SEARCH_EMPTY" };
         }
         // Sem locator("body").filter(hasText) — reavalia o DOM inteiro e derruba o renderer.
-        const pageText = await cdpOrReconnect(readResultsSampleText(page, 12000), 8000, "Leitura do texto de resultados pós-SEARCH");
+        const pageText = await withNodeTimeout(readResultsSampleText(page, 24000), 8000, "");
         const portalTotal = interceptedTotal ??
             searchResult.total ??
             parseResultTotalFromText(pageText);
@@ -2160,7 +2206,39 @@ async function scrapeCasaDosDadosLeadsOnce(filters, onProgress, options) {
         // NÃO pré-carregar interceptedRows aqui: se a API já encher `collected`,
         // a página 1 fica com added=0 e o robô encerra a paginação sem ir à página 2
         // (Seguro 14: 20 CNPJs da pág.1 = já usados → pool vazio).
-        const readScreenCards = async () => cdpOrReconnect(readScreenCardsLight(page), 8000, "Leitura de cards COPY");
+        // Espera cards pintarem; parser alinhado a readScreenCardsLight.
+        setPhase("COPY", "aguardando cards CNPJ na tela…");
+        {
+            let primed = [];
+            for (let wait = 0; wait < 25; wait += 1) {
+                if (options?.shouldAbort?.())
+                    throw new Error("__MLC_JOB_ABORTED__");
+                primed = await withNodeTimeout(readScreenCardsLight(page), 8000, []);
+                if (primed.length > 0) {
+                    onProgress?.(`COPY: ${primed.length} card(s) prontos na tela`);
+                    break;
+                }
+                await sleepNode(400);
+            }
+            if (primed.length > 0) {
+                page.__mlcPrimedCards = primed;
+            }
+            else {
+                onProgress?.("COPY: sem cards após espera — seguir para tentativa de página");
+            }
+        }
+        const readScreenCards = async () => {
+            const primed = page.__mlcPrimedCards;
+            if (primed && primed.length) {
+                page.__mlcPrimedCards = undefined;
+                return primed;
+            }
+            const rows = await withNodeTimeout(readScreenCardsLight(page), 8000, null);
+            if (rows === null) {
+                throw new LeadsScrapeError("CDP_PROBE_TIMEOUT", "new-browser", "Leitura de cards COPY não respondeu em 8s (CDP/DOM travado) — reconectar Chromium.");
+            }
+            return rows;
+        };
         const firstCnpjOf = (rows) => (rows[0] ? (0, waba_leads_cnpj_repository_1.normalizeCnpjDigits)(rows[0][0]) : "");
         const readCurrentPageNumber = async () => cdpOrReconnect(page.evaluate(() => {
             const active = document.querySelector([

@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-23 23:35 — Leads PJ E2E local OK (v9.7)
+
+- Ambiente controlado: LOGIN→CNAE→SEARCH→COPY pág.1 = **20 CNPJs**, `scrapeCompleted=true`
+- Sem push produção até autorização
+- Marker local `DEPLOY-2026-08-23-2330-leads-pj-cnae-cdp-safe-v9.7`
+- LOG: `doc/LOG-2026-08-23__233500__leads-pj-e2e-local-sucesso-v97.md`
+
 ## 2026-08-23 23:10 — Leads PJ CDP hot-path gate v9.6
 
 - `cdpOrReconnect` + `sleepNode`; DOM click/focus fast; UI stage SEARCH; 1ª COPY com teto CDP
