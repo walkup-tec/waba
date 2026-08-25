@@ -2120,6 +2120,11 @@
         color: #86efac;
       }
 
+      .tab-button.active[data-menu-section="lab-api-oficial"] {
+        border-bottom-color: rgba(59, 130, 246, 0.9);
+        color: #93c5fd;
+      }
+
       .tab-button.active[data-menu-section="admin"] {
         border-bottom-color: rgba(250, 204, 21, 0.85);
         color: #fde68a;
@@ -2137,6 +2142,10 @@
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
+      }
+
+      .mobile-tabs-section-label[data-menu-section="lab-api-oficial"] {
+        color: #93c5fd;
       }
 
       .mobile-tabs-section-label[data-menu-section="admin"] {
@@ -3020,6 +3029,100 @@
           gap: 8px;
           text-align: left;
           border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+          width: 100%;
+          min-width: max-content;
+          box-sizing: border-box;
+        }
+
+        #tab-btn-whatsapp-oficial,
+        #tab-btn-whatsapp-inbox,
+        #tab-btn-whatsapp-templates,
+        #tab-btn-whatsapp-automation {
+          border-color: rgba(37, 211, 102, 0.72);
+          background: rgba(6, 36, 24, 0.94);
+          color: #f8fafc;
+        }
+
+        .meta-inbox {
+          display: grid;
+          grid-template-columns: minmax(220px, 28%) minmax(0, 1fr) minmax(200px, 26%);
+          gap: 10px;
+          min-height: 62vh;
+        }
+        .meta-inbox-col {
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+          background: rgba(15, 23, 42, 0.35);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 10px;
+          overflow: hidden;
+        }
+        .meta-inbox-col-head {
+          padding: 10px 12px 8px;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+        }
+        .meta-inbox-scroll {
+          overflow: auto;
+          flex: 1;
+          min-height: 180px;
+        }
+        .meta-inbox-item {
+          display: block;
+          width: 100%;
+          text-align: left;
+          border: 0;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+          background: transparent;
+          color: inherit;
+          padding: 10px 12px;
+          cursor: pointer;
+        }
+        .meta-inbox-item.is-active {
+          background: rgba(37, 211, 102, 0.12);
+        }
+        .meta-inbox-item-title {
+          font-weight: 600;
+          font-size: 13px;
+        }
+        .meta-inbox-item-preview {
+          font-size: 12px;
+          opacity: 0.78;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .meta-inbox-msg {
+          max-width: 78%;
+          margin: 6px 12px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          font-size: 13px;
+        }
+        .meta-inbox-msg.is-in {
+          background: rgba(148, 163, 184, 0.16);
+        }
+        .meta-inbox-msg.is-out {
+          margin-left: auto;
+          background: rgba(37, 211, 102, 0.18);
+        }
+        .meta-inbox-composer {
+          display: flex;
+          gap: 8px;
+          padding: 8px;
+          border-top: 1px solid rgba(148, 163, 184, 0.16);
+        }
+        .meta-inbox-composer textarea {
+          flex: 1;
+          min-height: 42px;
+          resize: none;
+        }
+        @media (max-width: 980px) {
+          .meta-inbox {
+            grid-template-columns: 1fr;
+            min-height: 0;
+          }
+          .meta-inbox-scroll { min-height: 220px; }
         }
 
         .menu-group[data-menu-group="nao-oficial"] {
@@ -3028,6 +3131,10 @@
 
         .menu-group[data-menu-group="oficial"] {
           --menu-section-accent-rgb: 34, 197, 94;
+        }
+
+        .menu-group[data-menu-group="lab-api-oficial"] {
+          --menu-section-accent-rgb: 59, 130, 246;
         }
 
         .menu-group[data-menu-group="admin"] {
@@ -3050,6 +3157,11 @@
         .menu-group[data-menu-group="oficial"] .menu-group-toggle {
           background: rgba(4, 46, 26, 0.88);
           color: #86efac;
+        }
+
+        .menu-group[data-menu-group="lab-api-oficial"] .menu-group-toggle {
+          background: rgba(15, 40, 80, 0.9);
+          color: #93c5fd;
         }
 
         .menu-group[data-menu-group] .tab-button.active {
@@ -3083,6 +3195,11 @@
         }
 
       body:not(.waba-menu-admin-visible) .menu-group[data-menu-group="admin"] {
+        display: none !important;
+      }
+
+      body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .menu-group[data-menu-group="lab-api-oficial"],
+      body:not(.waba-ui-production):not(.waba-subscriber-disparos-menus) .mobile-tabs-section-label[data-menu-section="lab-api-oficial"] {
         display: none !important;
       }
 
@@ -17109,6 +17226,98 @@
               </div>
             </div>
 
+            <div class="menu-group" data-menu-group="lab-api-oficial">
+              <button
+                type="button"
+                class="menu-group-toggle"
+                data-menu-group-toggle="lab-api-oficial"
+                aria-expanded="false"
+              >
+                <span class="menu-group-title">Laboratório</span>
+                <span class="menu-group-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="menu-group-items">
+                <button
+                  id="tab-btn-whatsapp-oficial"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-oficial"
+                  data-tab="whatsapp-oficial"
+                  data-menu-key="whatsapp-oficial"
+                  data-menu-section="lab-api-oficial"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg class="tab-icon-wa" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"
+                      />
+                    </svg>
+                  </span>
+                  <span class="tab-label">Conexão</span>
+                </button>
+                <button
+                  id="tab-btn-whatsapp-inbox"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-inbox"
+                  data-tab="whatsapp-inbox"
+                  data-menu-key="whatsapp-inbox"
+                  data-menu-section="lab-api-oficial"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Inbox</span>
+                </button>
+                <button
+                  id="tab-btn-whatsapp-templates"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-templates"
+                  data-tab="whatsapp-templates"
+                  data-menu-key="whatsapp-templates"
+                  data-menu-section="lab-api-oficial"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                      <path d="M14 3v6h6"></path>
+                      <path d="M8 13h8"></path>
+                      <path d="M8 17h5"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Templates</span>
+                </button>
+                <button
+                  id="tab-btn-whatsapp-automation"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-automation"
+                  data-tab="whatsapp-automation"
+                  data-menu-key="whatsapp-automation"
+                  data-menu-section="lab-api-oficial"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Automação</span>
+                </button>
+              </div>
+            </div>
+
             <div class="menu-group" data-menu-group="admin">
               <button
                 type="button"
@@ -17513,6 +17722,53 @@
               aria-checked="false"
             >
               3) Disparo API
+            </button>
+            <div class="mobile-tabs-section-label" data-menu-section="lab-api-oficial">
+              Laboratório
+            </div>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-oficial"
+              data-menu-key="whatsapp-oficial"
+              data-menu-section="lab-api-oficial"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Conexão
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-inbox"
+              data-menu-key="whatsapp-inbox"
+              data-menu-section="lab-api-oficial"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Inbox
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-templates"
+              data-menu-key="whatsapp-templates"
+              data-menu-section="lab-api-oficial"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Templates
+            </button>
+            <button
+              class="tab-button waba-prod-only"
+              type="button"
+              data-tab="whatsapp-automation"
+              data-menu-key="whatsapp-automation"
+              data-menu-section="lab-api-oficial"
+              role="menuitemradio"
+              aria-checked="false"
+            >
+              Automação
             </button>
             <div class="mobile-tabs-section-label" data-menu-section="admin">
               Admin
@@ -19850,6 +20106,429 @@
                     </div>
                   </div>
                 </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-whatsapp-oficial" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Conectar WhatsApp</div>
+                <span class="muted">Meta Tech Provider — Laboratório</span>
+              </div>
+              <p class="muted" style="margin: 0;">
+                Conexão do WhatsApp oficial desta conta. Novos menus desta função ficam na seção Laboratório.
+              </p>
+            </section>
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">WhatsApp Oficial</div>
+                <span class="muted">Embedded Signup — Tech Provider</span>
+              </div>
+              <p id="meta-tp-connect-status" class="muted" style="margin: 0 0 12px;" role="status" aria-live="polite">
+                Carregando status da conexão…
+              </p>
+              <div class="disparos-inline-actions" style="margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <button
+                  id="meta-tp-connect-btn"
+                  type="button"
+                  class="instance-action-btn btn-qrcode enabled"
+                  onclick="return window.wabaConnectMetaWhatsappOficial(event);"
+                >
+                  Conectar WhatsApp Oficial
+                </button>
+                <button
+                  id="meta-tp-refresh-btn"
+                  type="button"
+                  class="instance-action-btn btn-refresh enabled"
+                  onclick="return window.wabaRefreshMetaWhatsappStatus(event);"
+                >
+                  Atualizar status
+                </button>
+                <button
+                  id="meta-tp-subscribe-btn"
+                  type="button"
+                  class="instance-action-btn btn-refresh enabled"
+                  onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);"
+                >
+                  Inscrever webhooks
+                </button>
+              </div>
+              <p class="muted" style="margin: 0 0 8px;">
+                Use um número já existente na Business Manager se a Meta oferecer essa opção.
+                Se o número estiver no WhatsApp Business App, siga apenas o fluxo de Coexistence que a própria Meta apresentar.
+                Não use QR da Evolution nesta tela.
+              </p>
+              <p id="meta-tp-connect-log" class="muted" style="margin: 0; white-space: pre-wrap;" role="status" aria-live="polite"></p>
+            </section>
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Teste de envio Cloud API</div>
+                <span class="muted">Somente Meta — não usa Evolution</span>
+              </div>
+              <p class="muted" style="margin: 0 0 12px;">
+                Envia texto pela conexão Meta <strong>connected</strong> desta sessão. Informe o destino com DDI.
+              </p>
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                  <label class="muted" for="meta-cloud-lab-to">Número destino</label>
+                  <input
+                    id="meta-cloud-lab-to"
+                    class="form-control"
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="5551999887766"
+                  />
+                </div>
+                <div class="col-12 col-md-5">
+                  <label class="muted" for="meta-cloud-lab-text">Mensagem</label>
+                  <input
+                    id="meta-cloud-lab-text"
+                    class="form-control"
+                    type="text"
+                    maxlength="4096"
+                    placeholder="Olá"
+                  />
+                </div>
+                <div class="col-12 col-md-3">
+                  <button
+                    id="meta-cloud-lab-send"
+                    type="button"
+                    class="instance-action-btn btn-qrcode enabled"
+                    onclick="return window.wabaSendMetaCloudLabTest(event);"
+                  >
+                    Enviar
+                  </button>
+                </div>
+              </div>
+              <p id="meta-cloud-lab-result" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-whatsapp-inbox" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Inbox</div>
+                <span class="muted">WhatsApp Oficial — atendimento</span>
+              </div>
+              <p id="meta-inbox-banner" class="muted" style="margin: 0 0 10px;" role="status" aria-live="polite">Carregando</p>
+              <div class="disparos-inline-actions" style="margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="all">Todas</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="unread">Não lidas</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="open">Abertas</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="pending">Pendentes</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="closed">Finalizadas</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="mine">Minhas conversas</button>
+              </div>
+              <div class="meta-inbox">
+                <div class="meta-inbox-col">
+                  <div class="meta-inbox-col-head">Conversas</div>
+                  <div id="meta-inbox-list" class="meta-inbox-scroll"></div>
+                  <div style="padding: 8px;">
+                    <button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled" hidden>Carregar mais</button>
+                  </div>
+                </div>
+                <div class="meta-inbox-col">
+                  <div class="meta-inbox-col-head" id="meta-inbox-thread-title">Conversa</div>
+                  <div id="meta-inbox-thread" class="meta-inbox-scroll"></div>
+                  <div class="meta-inbox-composer">
+                    <textarea id="meta-inbox-text" placeholder="Digite uma mensagem..." maxlength="4096"></textarea>
+                    <button id="meta-inbox-send" type="button" class="instance-action-btn btn-qrcode enabled">Enviar</button>
+                  </div>
+                </div>
+                <div class="meta-inbox-col">
+                  <div class="meta-inbox-col-head">Atendimento</div>
+                  <div id="meta-inbox-side" class="meta-inbox-scroll" style="padding: 12px; font-size: 13px;"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-whatsapp-templates" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Templates WhatsApp</div>
+                <span class="muted">Meta Cloud API — Laboratório</span>
+              </div>
+              <p class="muted" style="margin: 0 0 12px;">
+                Gerencie templates da WABA conectada nesta sessão. Status e categoria vêm da Meta.
+              </p>
+              <div class="disparos-inline-actions" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <button
+                  id="meta-tpl-lab-sync"
+                  type="button"
+                  class="instance-action-btn btn-refresh enabled"
+                  onclick="return window.wabaSyncMetaTemplatesLab(event);"
+                >
+                  Atualizar da Meta
+                </button>
+                <button
+                  id="meta-tpl-lab-reload"
+                  type="button"
+                  class="instance-action-btn btn-refresh enabled"
+                  onclick="return window.wabaLoadMetaTemplatesLab(event);"
+                >
+                  Recarregar lista
+                </button>
+              </div>
+              <div class="aquecedor-command-log" style="margin-top: 0; overflow-x: auto;">
+                <table class="meta-tpl-lab-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding:8px;">Nome</th>
+                      <th style="text-align:left; padding:8px;">Idioma</th>
+                      <th style="text-align:left; padding:8px;">Categoria</th>
+                      <th style="text-align:left; padding:8px;">Status</th>
+                      <th style="text-align:left; padding:8px;">Qualidade</th>
+                      <th style="text-align:left; padding:8px;">Última sincronização</th>
+                      <th style="text-align:left; padding:8px;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="meta-tpl-lab-tbody">
+                    <tr>
+                      <td class="muted" colspan="7" style="padding:10px;">Conecte o WhatsApp Oficial e atualize da Meta.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p id="meta-tpl-lab-status" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="panel col-12 col-lg-6">
+              <div class="panel-header">
+                <div class="panel-title">Criar template</div>
+                <span class="muted">Sem editor visual</span>
+              </div>
+              <div class="aquecedor-field">
+                <label for="meta-tpl-lab-name">Nome</label>
+                <input id="meta-tpl-lab-name" type="text" autocomplete="off" placeholder="retorno_lead" />
+              </div>
+              <div class="disparos-grid disparos-grid-2" style="margin-top: 8px;">
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-lab-language">Idioma</label>
+                  <input id="meta-tpl-lab-language" type="text" value="pt_BR" autocomplete="off" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-tpl-lab-category">Categoria</label>
+                  <select id="meta-tpl-lab-category">
+                    <option value="UTILITY">UTILITY</option>
+                    <option value="MARKETING">MARKETING</option>
+                    <option value="AUTHENTICATION">AUTHENTICATION</option>
+                  </select>
+                </div>
+              </div>
+              <div class="aquecedor-field" style="margin-top: 8px;">
+                <label for="meta-tpl-lab-header">Cabeçalho (opcional)</label>
+                <input id="meta-tpl-lab-header" type="text" autocomplete="off" placeholder="Texto do HEADER" />
+              </div>
+              <div class="aquecedor-field" style="margin-top: 8px;">
+                <label for="meta-tpl-lab-body">Corpo</label>
+                <textarea id="meta-tpl-lab-body" rows="3" placeholder="Olá {{1}}, recebemos sua solicitação."></textarea>
+              </div>
+              <div class="aquecedor-field" style="margin-top: 8px;">
+                <label for="meta-tpl-lab-examples">Exemplos das variáveis (um por linha)</label>
+                <textarea id="meta-tpl-lab-examples" rows="2" placeholder="Ana"></textarea>
+                <span class="muted">Obrigatório se o corpo tiver {{1}}, {{2}}… Não geramos exemplos automáticos.</span>
+              </div>
+              <div class="aquecedor-field" style="margin-top: 8px;">
+                <label for="meta-tpl-lab-footer">Rodapé (opcional)</label>
+                <input id="meta-tpl-lab-footer" type="text" autocomplete="off" />
+              </div>
+              <div class="disparos-inline-actions" style="margin-top: 10px;">
+                <button
+                  id="meta-tpl-lab-create"
+                  type="button"
+                  class="instance-action-btn btn-qrcode enabled"
+                  onclick="return window.wabaCreateMetaTemplateLab(event);"
+                >
+                  Criar template
+                </button>
+              </div>
+            </section>
+
+            <section class="panel col-12 col-lg-6">
+              <div class="panel-header">
+                <div class="panel-title">Visualizar / usar em teste</div>
+                <span class="muted">Somente desta WABA</span>
+              </div>
+              <pre id="meta-tpl-lab-view" class="aquecedor-command-log" style="white-space:pre-wrap; min-height:120px; margin:0;">Selecione Visualizar em um template.</pre>
+              <div class="aquecedor-field" style="margin-top: 10px;">
+                <label for="meta-tpl-lab-test-to">Número destino</label>
+                <input id="meta-tpl-lab-test-to" type="text" inputmode="numeric" autocomplete="off" placeholder="5551999887766" />
+              </div>
+              <div class="aquecedor-field" style="margin-top: 8px;">
+                <label for="meta-tpl-lab-test-params">Parâmetros do corpo (um por linha)</label>
+                <textarea id="meta-tpl-lab-test-params" rows="2" placeholder="Ana"></textarea>
+              </div>
+              <p id="meta-tpl-lab-test-result" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
+            </section>
+          </div>
+        </div>
+
+        <div id="tab-whatsapp-automation" class="tab-panel tab-hidden" aria-hidden="true">
+          <div class="row g-3">
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Automação</div>
+                <span class="muted">WhatsApp Oficial — regras, sem builder visual</span>
+              </div>
+              <p class="muted" style="margin: 0 0 12px;">
+                Primeira regra correspondente vence. Desligar o chatbot não desconecta a WABA.
+                Com atendimento humano ativo, nenhuma resposta automática é enviada.
+              </p>
+              <p id="meta-auto-lab-status" class="muted" style="margin: 0 0 12px;" role="status" aria-live="polite"></p>
+              <div class="disparos-grid disparos-grid-2">
+                <div class="aquecedor-field">
+                  <label for="meta-auto-enabled">Chatbot</label>
+                  <select id="meta-auto-enabled">
+                    <option value="false">Inativo</option>
+                    <option value="true">Ativo</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-flow-status">Fluxo padrão</label>
+                  <select id="meta-auto-flow-status">
+                    <option value="active">Ativo</option>
+                    <option value="inactive">Inativo</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-tz">Fuso</label>
+                  <input id="meta-auto-tz" type="text" value="America/Sao_Paulo" autocomplete="off" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-days">Dias (1=seg … 7=dom)</label>
+                  <input id="meta-auto-days" type="text" value="1,2,3,4,5" autocomplete="off" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-start">Início</label>
+                  <input id="meta-auto-start" type="text" value="08:00" autocomplete="off" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-end">Fim</label>
+                  <input id="meta-auto-end" type="text" value="18:00" autocomplete="off" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rate-count">Máx. respostas</label>
+                  <input id="meta-auto-rate-count" type="number" min="1" max="100" value="10" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rate-window">Janela (segundos)</label>
+                  <input id="meta-auto-rate-window" type="number" min="30" max="86400" value="300" />
+                </div>
+              </div>
+              <div class="aquecedor-field" style="margin-top: 8px;">
+                <label>
+                  <input id="meta-auto-rate-takeover" type="checkbox" checked />
+                  Ao exceder o limite, transferir para humano
+                </label>
+              </div>
+              <div class="disparos-inline-actions" style="margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+                <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaSaveMetaAutomationSettings(event);">Salvar configuração</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaLoadMetaAutomationLab(event);">Recarregar</button>
+              </div>
+            </section>
+
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Regras</div>
+                <span class="muted">Prioridade menor executa primeiro</span>
+              </div>
+              <div class="aquecedor-command-log" style="margin-top: 0; overflow-x: auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding:8px;">Pri</th>
+                      <th style="text-align:left; padding:8px;">Gatilho</th>
+                      <th style="text-align:left; padding:8px;">Valor</th>
+                      <th style="text-align:left; padding:8px;">Ação</th>
+                      <th style="text-align:left; padding:8px;">Ativa</th>
+                      <th style="text-align:left; padding:8px;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="meta-auto-rules-tbody">
+                    <tr><td class="muted" colspan="6" style="padding:10px;">Carregue a automação da conexão.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <input id="meta-auto-rule-id" type="hidden" />
+              <input id="meta-auto-flow-id" type="hidden" />
+              <div class="disparos-grid disparos-grid-2" style="margin-top: 12px;">
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rule-priority">Prioridade</label>
+                  <input id="meta-auto-rule-priority" type="number" min="1" max="10000" value="100" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rule-active">Regra</label>
+                  <select id="meta-auto-rule-active">
+                    <option value="true">Ativa</option>
+                    <option value="false">Inativa</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rule-trigger">Gatilho</label>
+                  <select id="meta-auto-rule-trigger">
+                    <option value="EXACT_TEXT">EXACT_TEXT</option>
+                    <option value="KEYWORD">KEYWORD</option>
+                    <option value="FIRST_INBOUND">FIRST_INBOUND</option>
+                    <option value="ANY_INBOUND">ANY_INBOUND</option>
+                    <option value="OUTSIDE_BUSINESS_HOURS">OUTSIDE_BUSINESS_HOURS</option>
+                    <option value="INSIDE_BUSINESS_HOURS">INSIDE_BUSINESS_HOURS</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rule-value">Valor (texto/palavra-chave)</label>
+                  <input id="meta-auto-rule-value" type="text" autocomplete="off" placeholder="1  ou  preço,valor" />
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rule-action">Ação</label>
+                  <select id="meta-auto-rule-action">
+                    <option value="SEND_TEXT">SEND_TEXT</option>
+                    <option value="SEND_TEMPLATE">SEND_TEMPLATE</option>
+                    <option value="SET_STATUS">SET_STATUS</option>
+                    <option value="ASSIGN_HUMAN">ASSIGN_HUMAN</option>
+                    <option value="ENABLE_HUMAN_TAKEOVER">ENABLE_HUMAN_TAKEOVER</option>
+                    <option value="DISABLE_AUTOMATION">DISABLE_AUTOMATION</option>
+                    <option value="DELAY">DELAY</option>
+                  </select>
+                </div>
+                <div class="aquecedor-field">
+                  <label for="meta-auto-rule-payload">Payload JSON</label>
+                  <textarea id="meta-auto-rule-payload" rows="3" placeholder='{"text":"Olá! Recebemos sua mensagem."}'></textarea>
+                </div>
+              </div>
+              <div class="disparos-inline-actions" style="margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+                <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaSaveMetaAutomationRule(event);">Salvar regra</button>
+                <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaResetMetaAutomationRuleForm(event);">Nova regra</button>
+              </div>
+            </section>
+
+            <section class="panel col-12">
+              <div class="panel-header">
+                <div class="panel-title">Execuções recentes</div>
+                <span class="muted">Sem conteúdo da mensagem</span>
+              </div>
+              <div class="aquecedor-command-log" style="margin-top: 0; overflow-x: auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding:8px;">Quando</th>
+                      <th style="text-align:left; padding:8px;">Status</th>
+                      <th style="text-align:left; padding:8px;">Ação</th>
+                      <th style="text-align:left; padding:8px;">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="meta-auto-runs-tbody">
+                    <tr><td class="muted" colspan="4" style="padding:10px;">Nenhuma execução ainda.</td></tr>
+                  </tbody>
+                </table>
               </div>
             </section>
           </div>
@@ -26532,6 +27211,7 @@
 
       function getMenuSectionForTab(tabName) {
         if (isMarketingTab(tabName)) return "marketing";
+        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (tabName === "disparos" || tabName === "disparo-evo" || isOfficialTab(tabName)) return "disparos";
@@ -33737,6 +34417,1122 @@
         return raw.startsWith("/") ? `${base}${raw}` : `${base}/${raw}`;
       }
 
+      window.wabaSendMetaCloudLabTest = async function wabaSendMetaCloudLabTest(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        const toEl = document.getElementById("meta-cloud-lab-to");
+        const textEl = document.getElementById("meta-cloud-lab-text");
+        const outEl = document.getElementById("meta-cloud-lab-result");
+        const btn = document.getElementById("meta-cloud-lab-send");
+        const to = String(toEl && toEl.value ? toEl.value : "").trim();
+        const text = String(textEl && textEl.value ? textEl.value : "").trim();
+        if (outEl) outEl.textContent = "Enviando…";
+        if (btn) btn.disabled = true;
+        try {
+          const response = await fetch(resolveWabaPublicPath("/integrations/meta/whatsapp/messages"), {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ to, type: "text", text }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          const serialized = JSON.stringify(payload);
+          if (/access_token|app_secret|verify_token|Bearer /i.test(serialized)) {
+            if (outEl) outEl.textContent = "Envio concluído.";
+            return false;
+          }
+          if (!response.ok || payload.ok === false) {
+            if (outEl) outEl.textContent = String(payload.error || "Não foi possível enviar.");
+            return false;
+          }
+          if (outEl) {
+            outEl.textContent =
+              "Aceito pela Meta. status=" +
+              String(payload.status || "") +
+              " id=" +
+              String(payload.messageId || "—");
+          }
+        } catch {
+          if (outEl) outEl.textContent = "Falha de rede ao enviar.";
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+        return false;
+      };
+
+      const META_TP_FINISH_EVENTS = {
+        FINISH: true,
+        FINISH_ONLY_WABA: true,
+        FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING: true,
+        FINISH_GRANT_ONLY_API_ACCESS: true,
+        FINISH_OBO_MIGRATION: true,
+      };
+      const metaTpSession = {
+        codeReceived: false,
+        exchanged: false,
+        wabaId: "",
+        phoneNumberId: "",
+        businessId: "",
+        finishEvent: "",
+        advancing: false,
+      };
+      let metaTpLogLines = [];
+
+      function metaTpHasSecret(payload) {
+        return /access_token|accessToken|accessTokenEncrypted|app_secret|verify_token|Bearer |META_TOKEN|authorization_code|META_APP_SECRET/i.test(
+          JSON.stringify(payload || {}),
+        );
+      }
+
+      function metaTpSetStatus(text) {
+        const el = document.getElementById("meta-tp-connect-status");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaTpLog(step) {
+        metaTpLogLines.push(String(step || "").trim());
+        if (metaTpLogLines.length > 12) metaTpLogLines = metaTpLogLines.slice(-12);
+        const el = document.getElementById("meta-tp-connect-log");
+        if (el) el.textContent = metaTpLogLines.join("\n");
+      }
+
+      function metaTpResetSession() {
+        metaTpSession.codeReceived = false;
+        metaTpSession.exchanged = false;
+        metaTpSession.wabaId = "";
+        metaTpSession.phoneNumberId = "";
+        metaTpSession.businessId = "";
+        metaTpSession.finishEvent = "";
+        metaTpSession.advancing = false;
+      }
+
+      function metaTpFormatPublicStatus(payload) {
+        const status = String(payload.status || "disconnected");
+        const ui = String(payload.uiStatus || "");
+        const parts = ["status=" + status];
+        if (ui) parts.push("ui=" + ui);
+        if (payload.connected) parts.push("connected");
+        if (payload.pending) parts.push("pending");
+        if (payload.verifiedName) parts.push("nome=" + String(payload.verifiedName));
+        if (payload.displayPhoneNumber) parts.push("número=" + String(payload.displayPhoneNumber));
+        if (payload.qualityRating) parts.push("qualidade=" + String(payload.qualityRating));
+        parts.push(payload.wabaId ? "WABA=presente" : "WABA=ausente");
+        parts.push(payload.phoneNumberId ? "Phone=presente" : "Phone=ausente");
+        return parts.join(" · ");
+      }
+
+      async function metaTpFetchJson(path, options) {
+        const opts = options || {};
+        const headers = { Accept: "application/json" };
+        if (opts.body) headers["Content-Type"] = "application/json";
+        const response = await fetch(resolveWabaPublicPath(path), {
+          credentials: "same-origin",
+          method: opts.method || "GET",
+          headers,
+          body: opts.body || undefined,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (metaTpHasSecret(payload)) {
+          throw new Error("Resposta bloqueada por segurança.");
+        }
+        return { response, payload };
+      }
+
+      async function metaTpRefreshStatusSilent() {
+        const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/status");
+        if (!response.ok || payload.ok === false) {
+          metaTpSetStatus(String(payload.error || "Não foi possível ler o status da conexão."));
+          return payload;
+        }
+        metaTpSetStatus(metaTpFormatPublicStatus(payload));
+        return payload;
+      }
+
+      window.wabaRefreshMetaWhatsappStatus = async function wabaRefreshMetaWhatsappStatus(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        try {
+          await metaTpRefreshStatusSilent();
+        } catch {
+          metaTpSetStatus("Falha de rede ao ler o status.");
+        }
+        return false;
+      };
+
+      window.wabaSubscribeMetaWhatsappWebhooks = async function wabaSubscribeMetaWhatsappWebhooks(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        try {
+          const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
+            method: "POST",
+            body: "{}",
+          });
+          if (!response.ok || payload.ok === false) {
+            metaTpLog("webhooks: " + String(payload.error || "falha"));
+            return false;
+          }
+          metaTpLog(
+            payload.alreadySubscribed
+              ? "webhooks: já inscrito"
+              : "webhooks: inscrição concluída",
+          );
+        } catch {
+          metaTpLog("webhooks: falha de rede");
+        }
+        return false;
+      };
+
+      async function metaTpTryAdvance() {
+        if (metaTpSession.advancing) return;
+        metaTpSession.advancing = true;
+        try {
+          if (metaTpSession.codeReceived && !metaTpSession.exchanged) {
+            metaTpLog("code recebido");
+            let redirectUri = "";
+            try {
+              const cfg = await metaTpFetchJson("/integrations/meta/whatsapp/config");
+              redirectUri = String(cfg.payload.redirectUri || "").trim();
+            } catch {
+              redirectUri = "";
+            }
+            const body = { code: metaTpSession._code };
+            if (redirectUri) body.redirectUri = redirectUri;
+            const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/callback", {
+              method: "POST",
+              body: JSON.stringify(body),
+            });
+            metaTpSession._code = "";
+            if (!response.ok || payload.ok === false) {
+              metaTpLog("token exchange falhou");
+              metaTpSetStatus(String(payload.error || "Não foi possível autorizar na Meta."));
+              window.__wabaMetaTechSignupActive = false;
+              return;
+            }
+            metaTpSession.exchanged = true;
+            metaTpLog("token exchange concluído");
+            metaTpSetStatus(metaTpFormatPublicStatus(payload));
+          }
+
+          if (metaTpSession.exchanged && metaTpSession.wabaId) {
+            const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/complete", {
+              method: "POST",
+              body: JSON.stringify({
+                wabaId: metaTpSession.wabaId,
+                phoneNumberId: metaTpSession.phoneNumberId || undefined,
+                businessId: metaTpSession.businessId || undefined,
+              }),
+            });
+            if (!response.ok || payload.ok === false) {
+              metaTpLog("claim falhou");
+              metaTpSetStatus(String(payload.error || "Não foi possível confirmar a WABA."));
+              return;
+            }
+            metaTpLog(payload.wabaId ? "WABA claimed" : "WABA ainda ausente");
+            if (payload.phoneNumberId) metaTpLog("Phone claimed");
+            metaTpSetStatus(metaTpFormatPublicStatus(payload));
+          }
+
+          if (metaTpSession.exchanged && metaTpSession.wabaId && metaTpSession.phoneNumberId) {
+            metaTpLog("Graph validation");
+            const { response, payload } = await metaTpFetchJson("/integrations/meta/whatsapp/confirm", {
+              method: "POST",
+              body: "{}",
+            });
+            if (!response.ok || payload.ok === false) {
+              metaTpLog("Graph validation falhou");
+              metaTpSetStatus(String(payload.error || "A Meta não confirmou a WABA/número."));
+              return;
+            }
+            metaTpLog("connection status=" + String(payload.status || ""));
+            metaTpSetStatus(metaTpFormatPublicStatus(payload));
+            if (payload.status === "connected") {
+              const sub = await metaTpFetchJson("/integrations/meta/whatsapp/subscribe-webhooks", {
+                method: "POST",
+                body: "{}",
+              });
+              if (sub.response.ok && sub.payload.ok !== false) {
+                metaTpLog(
+                  sub.payload.alreadySubscribed
+                    ? "webhooks: já inscrito"
+                    : "webhooks: inscrição concluída",
+                );
+              } else {
+                metaTpLog("webhooks: " + String(sub.payload.error || "falha"));
+              }
+              window.__wabaMetaTechSignupActive = false;
+            }
+          }
+        } finally {
+          metaTpSession.advancing = false;
+        }
+      }
+
+      window.wabaConnectMetaWhatsappOficial = async function wabaConnectMetaWhatsappOficial(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaTpLogLines = [];
+        metaTpResetSession();
+        if (window.location.protocol !== "https:") {
+          metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
+          return false;
+        }
+        try {
+          const started = await metaTpFetchJson("/integrations/meta/whatsapp/start");
+          if (!started.response.ok || started.payload.ok === false) {
+            metaTpSetStatus(String(started.payload.error || "Não foi possível iniciar a conexão."));
+            return false;
+          }
+          const appId = String(started.payload.appId || "").trim();
+          const configId = String(started.payload.configId || "").trim();
+          if (!appId || !configId) {
+            metaTpSetStatus("A conexão com a Meta não está disponível. Fale com o suporte.");
+            return false;
+          }
+          window.__wabaMetaTechSignupActive = true;
+          metaTpLog("início");
+          const runLogin = function () {
+            if (typeof FB === "undefined" || typeof FB.login !== "function") {
+              window.__wabaMetaTechSignupActive = false;
+              metaTpSetStatus("SDK da Meta não carregou. Verifique bloqueador de anúncios.");
+              return;
+            }
+            FB.login(
+              function (response) {
+                const code = String((response && response.authResponse && response.authResponse.code) || "").trim();
+                if (!code) {
+                  metaTpLog("FB.login sem code");
+                  return;
+                }
+                metaTpSession.codeReceived = true;
+                metaTpSession._code = code;
+                metaTpTryAdvance();
+              },
+              {
+                config_id: configId,
+                response_type: "code",
+                override_default_response_type: true,
+                extras: { setup: {} },
+              },
+            );
+          };
+          if (typeof FB !== "undefined" && typeof FB.login === "function") {
+            runLogin();
+          } else {
+            window.setTimeout(runLogin, 800);
+          }
+        } catch {
+          window.__wabaMetaTechSignupActive = false;
+          metaTpSetStatus("Falha de rede ao iniciar a conexão.");
+        }
+        return false;
+      };
+
+      window.addEventListener("message", function (event) {
+        if (!window.__wabaMetaTechSignupActive) return;
+        const origin = String(event.origin || "");
+        if (!origin.endsWith("facebook.com")) return;
+        let payload;
+        try {
+          payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        } catch {
+          return;
+        }
+        if (!payload) return;
+        const inner = payload.data || {};
+        const eventName = String(payload.event || "");
+        if (inner.waba_id) metaTpSession.wabaId = String(inner.waba_id);
+        if (inner.phone_number_id) metaTpSession.phoneNumberId = String(inner.phone_number_id);
+        if (inner.business_id) metaTpSession.businessId = String(inner.business_id);
+        if (META_TP_FINISH_EVENTS[eventName]) {
+          metaTpSession.finishEvent = eventName;
+          metaTpLog("signup event=" + eventName);
+        }
+        if (eventName === "CANCEL" || eventName === "ERROR") {
+          window.__wabaMetaTechSignupActive = false;
+          metaTpLog(eventName === "CANCEL" ? "fluxo cancelado" : "erro no Embedded Signup");
+          return;
+        }
+        if (metaTpSession.wabaId || metaTpSession.phoneNumberId) {
+          metaTpTryAdvance();
+        }
+      });
+
+      if (document.getElementById("tab-whatsapp-oficial")) {
+        window.setTimeout(function () {
+          if (typeof window.wabaRefreshMetaWhatsappStatus === "function") {
+            window.wabaRefreshMetaWhatsappStatus();
+          }
+        }, 400);
+      }
+
+      let metaTplLabCache = [];
+      let metaTplLabSelected = null;
+
+      function metaTplLabHasSecret(payload) {
+        return /access_token|accessTokenEncrypted|app_secret|verify_token|Bearer |META_TOKEN/i.test(
+          JSON.stringify(payload || {}),
+        );
+      }
+
+      function metaTplLabSetStatus(text) {
+        const el = document.getElementById("meta-tpl-lab-status");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaTplLabFormatSync(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "—";
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) return raw;
+        return date.toLocaleString("pt-BR");
+      }
+
+      function metaTplLabRenderTable(templates) {
+        const tbody = document.getElementById("meta-tpl-lab-tbody");
+        if (!tbody) return;
+        const rows = Array.isArray(templates) ? templates : [];
+        metaTplLabCache = rows;
+        if (!rows.length) {
+          tbody.innerHTML =
+            '<tr><td class="muted" colspan="7" style="padding:10px;">Nenhum template local. Use Atualizar da Meta ou Criar template.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows
+          .map((item, index) => {
+            const name = escapeAdminHtml(String(item?.name || ""));
+            const language = escapeAdminHtml(String(item?.language || "—"));
+            const category = escapeAdminHtml(String(item?.category || "—"));
+            const status = escapeAdminHtml(String(item?.status || "—"));
+            const quality = escapeAdminHtml(String(item?.qualityScore || "—"));
+            const synced = escapeAdminHtml(metaTplLabFormatSync(item?.lastSyncedAt));
+            return (
+              "<tr>" +
+              `<td style="padding:8px;">${name}</td>` +
+              `<td style="padding:8px;">${language}</td>` +
+              `<td style="padding:8px;">${category}</td>` +
+              `<td style="padding:8px;">${status}</td>` +
+              `<td style="padding:8px;">${quality}</td>` +
+              `<td style="padding:8px;">${synced}</td>` +
+              `<td style="padding:8px; white-space:nowrap;">` +
+              `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-tpl-view="${index}">Visualizar</button> ` +
+              `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-tpl-test="${index}">Usar em teste</button>` +
+              "</td></tr>"
+            );
+          })
+          .join("");
+      }
+
+      async function metaTplLabFetchJson(path, options) {
+        const response = await fetch(resolveWabaPublicPath(path), {
+          credentials: "same-origin",
+          headers: { Accept: "application/json", ...(options && options.body ? { "Content-Type": "application/json" } : {}) },
+          ...options,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (metaTplLabHasSecret(payload)) {
+          throw new Error("Resposta inválida.");
+        }
+        if (!response.ok || payload.ok === false) {
+          throw new Error(String(payload.error || "Não foi possível concluir."));
+        }
+        return payload;
+      }
+
+      window.wabaLoadMetaTemplatesLab = async function wabaLoadMetaTemplatesLab(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaTplLabSetStatus("Carregando templates…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates");
+          metaTplLabRenderTable(payload.templates);
+          metaTplLabSetStatus(payload.templates && payload.templates.length ? "" : "Lista local vazia.");
+        } catch (error) {
+          metaTplLabRenderTable([]);
+          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível listar.");
+        }
+        return false;
+      };
+
+      window.wabaSyncMetaTemplatesLab = async function wabaSyncMetaTemplatesLab(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        const btn = document.getElementById("meta-tpl-lab-sync");
+        if (btn) btn.disabled = true;
+        metaTplLabSetStatus("Sincronizando com a Meta…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates/sync", {
+            method: "POST",
+            body: "{}",
+          });
+          metaTplLabRenderTable(payload.templates);
+          metaTplLabSetStatus("Sincronizado. páginas=" + String(payload.pages || 1));
+        } catch (error) {
+          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível sincronizar.");
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+        return false;
+      };
+
+      window.wabaCreateMetaTemplateLab = async function wabaCreateMetaTemplateLab(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        const name = String((document.getElementById("meta-tpl-lab-name") || {}).value || "").trim();
+        const language = String((document.getElementById("meta-tpl-lab-language") || {}).value || "").trim();
+        const category = String((document.getElementById("meta-tpl-lab-category") || {}).value || "").trim();
+        const header = String((document.getElementById("meta-tpl-lab-header") || {}).value || "").trim();
+        const body = String((document.getElementById("meta-tpl-lab-body") || {}).value || "").trim();
+        const footer = String((document.getElementById("meta-tpl-lab-footer") || {}).value || "").trim();
+        const exampleLines = String((document.getElementById("meta-tpl-lab-examples") || {}).value || "")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const components = [];
+        if (header) components.push({ type: "HEADER", format: "TEXT", text: header });
+        if (body) {
+          const bodyComp = { type: "BODY", text: body };
+          if (/\{\{\d+\}\}/.test(body)) {
+            if (!exampleLines.length) {
+              metaTplLabSetStatus("Informe os exemplos das variáveis. Não enviamos exemplos automáticos.");
+              return false;
+            }
+            bodyComp.example = { body_text: [exampleLines] };
+          }
+          components.push(bodyComp);
+        }
+        if (footer) components.push({ type: "FOOTER", text: footer });
+        const btn = document.getElementById("meta-tpl-lab-create");
+        if (btn) btn.disabled = true;
+        metaTplLabSetStatus("Criando template na Meta…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/templates", {
+            method: "POST",
+            body: JSON.stringify({ name, language, category, components }),
+          });
+          metaTplLabSetStatus(
+            "Template criado. status=" + String((payload.template && payload.template.status) || "—"),
+          );
+          await window.wabaLoadMetaTemplatesLab();
+        } catch (error) {
+          metaTplLabSetStatus(error && error.message ? error.message : "Não foi possível criar.");
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+        return false;
+      };
+
+      window.wabaViewMetaTemplateLab = function wabaViewMetaTemplateLab(index) {
+        const item = metaTplLabCache[index];
+        const view = document.getElementById("meta-tpl-lab-view");
+        if (!item || !view) return false;
+        metaTplLabSelected = item;
+        const safe = {
+          id: item.id,
+          metaTemplateId: item.metaTemplateId,
+          name: item.name,
+          language: item.language,
+          category: item.category,
+          status: item.status,
+          qualityScore: item.qualityScore,
+          rejectedReason: item.rejectedReason,
+          lastSyncedAt: item.lastSyncedAt,
+          components: item.components,
+        };
+        view.textContent = JSON.stringify(safe, null, 2);
+        return false;
+      };
+
+      window.wabaTestMetaTemplateLab = async function wabaTestMetaTemplateLab(index) {
+        const item = metaTplLabCache[index] || metaTplLabSelected;
+        const outEl = document.getElementById("meta-tpl-lab-test-result");
+        const to = String((document.getElementById("meta-tpl-lab-test-to") || {}).value || "").trim();
+        const params = String((document.getElementById("meta-tpl-lab-test-params") || {}).value || "")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (!item) {
+          if (outEl) outEl.textContent = "Selecione um template.";
+          return false;
+        }
+        metaTplLabSelected = item;
+        window.wabaViewMetaTemplateLab(index);
+        if (outEl) outEl.textContent = "Enviando template…";
+        const components = params.length
+          ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }]
+          : [];
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/messages", {
+            method: "POST",
+            body: JSON.stringify({
+              to,
+              type: "template",
+              template: { name: item.name, language: item.language, components },
+            }),
+          });
+          if (outEl) {
+            outEl.textContent =
+              "Aceito pela Meta. status=" +
+              String(payload.status || "") +
+              " id=" +
+              String(payload.messageId || "—");
+          }
+        } catch (error) {
+          if (outEl) outEl.textContent = error && error.message ? error.message : "Não foi possível enviar.";
+        }
+        return false;
+      };
+
+      document.addEventListener("click", function onMetaTplLabClick(event) {
+        const target = event.target && event.target.closest ? event.target.closest("[data-meta-tpl-view], [data-meta-tpl-test]") : null;
+        if (!target) return;
+        const viewIndex = target.getAttribute("data-meta-tpl-view");
+        const testIndex = target.getAttribute("data-meta-tpl-test");
+        if (viewIndex != null) window.wabaViewMetaTemplateLab(Number(viewIndex));
+        if (testIndex != null) window.wabaTestMetaTemplateLab(Number(testIndex));
+      });
+
+      let metaAutoLabFlowId = "";
+      let metaAutoLabRules = [];
+
+      function metaAutoLabSetStatus(text) {
+        const el = document.getElementById("meta-auto-lab-status");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaAutoLabVal(id) {
+        return String((document.getElementById(id) || {}).value || "").trim();
+      }
+
+      function metaAutoLabFillSettings(settings, flow) {
+        const enabled = document.getElementById("meta-auto-enabled");
+        const flowStatus = document.getElementById("meta-auto-flow-status");
+        const flowId = document.getElementById("meta-auto-flow-id");
+        if (enabled) enabled.value = settings && settings.enabled ? "true" : "false";
+        if (flowStatus) flowStatus.value = flow && flow.status === "inactive" ? "inactive" : "active";
+        if (flowId) flowId.value = flow && flow.id ? flow.id : "";
+        metaAutoLabFlowId = flow && flow.id ? String(flow.id) : "";
+        const tz = document.getElementById("meta-auto-tz");
+        const days = document.getElementById("meta-auto-days");
+        const start = document.getElementById("meta-auto-start");
+        const end = document.getElementById("meta-auto-end");
+        const count = document.getElementById("meta-auto-rate-count");
+        const windowSec = document.getElementById("meta-auto-rate-window");
+        const takeover = document.getElementById("meta-auto-rate-takeover");
+        if (tz) tz.value = settings && settings.timezone ? settings.timezone : "America/Sao_Paulo";
+        if (days) days.value = Array.isArray(settings && settings.businessDays) ? settings.businessDays.join(",") : "1,2,3,4,5";
+        if (start) start.value = settings && settings.businessStart ? settings.businessStart : "08:00";
+        if (end) end.value = settings && settings.businessEnd ? settings.businessEnd : "18:00";
+        if (count) count.value = String((settings && settings.rateLimitCount) || 10);
+        if (windowSec) windowSec.value = String((settings && settings.rateLimitWindowSeconds) || 300);
+        if (takeover) takeover.checked = !settings || settings.rateLimitTakeover !== false;
+      }
+
+      function metaAutoLabRenderRules(rules) {
+        const tbody = document.getElementById("meta-auto-rules-tbody");
+        if (!tbody) return;
+        metaAutoLabRules = Array.isArray(rules) ? rules : [];
+        if (!metaAutoLabRules.length) {
+          tbody.innerHTML = '<tr><td class="muted" colspan="6" style="padding:10px;">Nenhuma regra. Crie FIRST_INBOUND, EXACT_TEXT ou ANY_INBOUND.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = metaAutoLabRules
+          .map(function (rule, index) {
+            return (
+              "<tr>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(rule.priority)) + "</td>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(rule.triggerType || "")) + "</td>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(rule.triggerValue || "—")) + "</td>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(rule.actionType || "")) + "</td>" +
+              '<td style="padding:8px;">' + (rule.active === false ? "não" : "sim") + "</td>" +
+              '<td style="padding:8px; white-space:nowrap;">' +
+              '<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-auto-edit="' + index + '">Editar</button> ' +
+              '<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-auto-toggle="' + index + '">' +
+              (rule.active === false ? "Ativar" : "Desativar") +
+              "</button> " +
+              '<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-auto-del="' + index + '">Excluir</button>' +
+              "</td></tr>"
+            );
+          })
+          .join("");
+      }
+
+      function metaAutoLabRenderRuns(runs) {
+        const tbody = document.getElementById("meta-auto-runs-tbody");
+        if (!tbody) return;
+        const rows = Array.isArray(runs) ? runs : [];
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td class="muted" colspan="4" style="padding:10px;">Nenhuma execução ainda.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows
+          .map(function (run) {
+            return (
+              "<tr>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(run.createdAt || "—")) + "</td>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(run.status || "—")) + "</td>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(run.actionType || "—")) + "</td>" +
+              '<td style="padding:8px;">' + escapeAdminHtml(String(run.error || "—")) + "</td>" +
+              "</tr>"
+            );
+          })
+          .join("");
+      }
+
+      function metaAutoLabFillRule(rule) {
+        document.getElementById("meta-auto-rule-id").value = rule && rule.id ? rule.id : "";
+        document.getElementById("meta-auto-rule-priority").value = String((rule && rule.priority) || 100);
+        document.getElementById("meta-auto-rule-active").value = rule && rule.active === false ? "false" : "true";
+        document.getElementById("meta-auto-rule-trigger").value = (rule && rule.triggerType) || "ANY_INBOUND";
+        document.getElementById("meta-auto-rule-value").value = (rule && rule.triggerValue) || "";
+        document.getElementById("meta-auto-rule-action").value = (rule && rule.actionType) || "SEND_TEXT";
+        document.getElementById("meta-auto-rule-payload").value = JSON.stringify((rule && rule.actionPayload) || { text: "" }, null, 2);
+      }
+
+      function metaAutoLabReadPayload() {
+        const raw = metaAutoLabVal("meta-auto-rule-payload") || "{}";
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid");
+          return parsed;
+        } catch (error) {
+          throw new Error("Payload JSON inválido.");
+        }
+      }
+
+      window.wabaLoadMetaAutomationLab = async function wabaLoadMetaAutomationLab(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaAutoLabSetStatus("Carregando automação…");
+        try {
+          const payload = await metaTplLabFetchJson("/integrations/meta/whatsapp/automation");
+          metaAutoLabFillSettings(payload.settings, payload.flow);
+          metaAutoLabRenderRules(payload.rules);
+          metaAutoLabRenderRuns(payload.runs);
+          metaAutoLabSetStatus("Política: primeira regra correspondente. Fluxo: " + String((payload.flow && payload.flow.name) || "Padrão"));
+        } catch (error) {
+          metaAutoLabRenderRules([]);
+          metaAutoLabRenderRuns([]);
+          metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível carregar.");
+        }
+        return false;
+      };
+
+      window.wabaSaveMetaAutomationSettings = async function wabaSaveMetaAutomationSettings(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaAutoLabSetStatus("Salvando configuração…");
+        try {
+          const days = metaAutoLabVal("meta-auto-days")
+            .split(",")
+            .map(function (item) { return Number(item.trim()); })
+            .filter(function (item) { return item >= 1 && item <= 7; });
+          await metaTplLabFetchJson("/integrations/meta/whatsapp/automation/settings", {
+            method: "PATCH",
+            body: JSON.stringify({
+              enabled: metaAutoLabVal("meta-auto-enabled") === "true",
+              timezone: metaAutoLabVal("meta-auto-tz") || "America/Sao_Paulo",
+              businessDays: days.length ? days : [1, 2, 3, 4, 5],
+              businessStart: metaAutoLabVal("meta-auto-start") || "08:00",
+              businessEnd: metaAutoLabVal("meta-auto-end") || "18:00",
+              rateLimitCount: Number(metaAutoLabVal("meta-auto-rate-count") || 10),
+              rateLimitWindowSeconds: Number(metaAutoLabVal("meta-auto-rate-window") || 300),
+              rateLimitTakeover: Boolean((document.getElementById("meta-auto-rate-takeover") || {}).checked),
+            }),
+          });
+          const flowId = metaAutoLabVal("meta-auto-flow-id") || metaAutoLabFlowId;
+          if (flowId) {
+            await metaTplLabFetchJson("/integrations/meta/whatsapp/automation/flows/" + encodeURIComponent(flowId), {
+              method: "PATCH",
+              body: JSON.stringify({ status: metaAutoLabVal("meta-auto-flow-status") || "active" }),
+            });
+          }
+          await window.wabaLoadMetaAutomationLab();
+          metaAutoLabSetStatus("Configuração salva.");
+        } catch (error) {
+          metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível salvar.");
+        }
+        return false;
+      };
+
+      window.wabaResetMetaAutomationRuleForm = function wabaResetMetaAutomationRuleForm(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaAutoLabFillRule({
+          priority: 100,
+          active: true,
+          triggerType: "ANY_INBOUND",
+          triggerValue: "",
+          actionType: "SEND_TEXT",
+          actionPayload: { text: "Não entendi sua opção. Digite 1, 2 ou 3." },
+        });
+        return false;
+      };
+
+      window.wabaSaveMetaAutomationRule = async function wabaSaveMetaAutomationRule(event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        metaAutoLabSetStatus("Salvando regra…");
+        try {
+          const ruleId = metaAutoLabVal("meta-auto-rule-id");
+          const body = {
+            flowId: metaAutoLabVal("meta-auto-flow-id") || metaAutoLabFlowId,
+            priority: Number(metaAutoLabVal("meta-auto-rule-priority") || 100),
+            triggerType: metaAutoLabVal("meta-auto-rule-trigger") || "ANY_INBOUND",
+            triggerValue: metaAutoLabVal("meta-auto-rule-value"),
+            actionType: metaAutoLabVal("meta-auto-rule-action") || "SEND_TEXT",
+            actionPayload: metaAutoLabReadPayload(),
+            active: metaAutoLabVal("meta-auto-rule-active") !== "false",
+          };
+          if (ruleId) {
+            await metaTplLabFetchJson("/integrations/meta/whatsapp/automation/rules/" + encodeURIComponent(ruleId), {
+              method: "PATCH",
+              body: JSON.stringify(body),
+            });
+          } else {
+            await metaTplLabFetchJson("/integrations/meta/whatsapp/automation/rules", {
+              method: "POST",
+              body: JSON.stringify(body),
+            });
+          }
+          window.wabaResetMetaAutomationRuleForm();
+          await window.wabaLoadMetaAutomationLab();
+          metaAutoLabSetStatus("Regra salva.");
+        } catch (error) {
+          metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível salvar a regra.");
+        }
+        return false;
+      };
+
+      document.addEventListener("click", function onMetaAutoLabClick(event) {
+        const target = event.target && event.target.closest
+          ? event.target.closest("[data-meta-auto-edit], [data-meta-auto-toggle], [data-meta-auto-del]")
+          : null;
+        if (!target) return;
+        const editIndex = target.getAttribute("data-meta-auto-edit");
+        const toggleIndex = target.getAttribute("data-meta-auto-toggle");
+        const delIndex = target.getAttribute("data-meta-auto-del");
+        if (editIndex != null) {
+          metaAutoLabFillRule(metaAutoLabRules[Number(editIndex)]);
+          return;
+        }
+        const rule = metaAutoLabRules[Number(toggleIndex != null ? toggleIndex : delIndex)];
+        if (!rule || !rule.id) return;
+        const run = async function () {
+          try {
+            if (toggleIndex != null) {
+              await metaTplLabFetchJson("/integrations/meta/whatsapp/automation/rules/" + encodeURIComponent(rule.id), {
+                method: "PATCH",
+                body: JSON.stringify({ active: rule.active === false }),
+              });
+            } else {
+              await metaTplLabFetchJson("/integrations/meta/whatsapp/automation/rules/" + encodeURIComponent(rule.id), {
+                method: "DELETE",
+              });
+            }
+            await window.wabaLoadMetaAutomationLab();
+          } catch (error) {
+            metaAutoLabSetStatus(error && error.message ? error.message : "Não foi possível alterar a regra.");
+          }
+        };
+        run();
+      });
+
+      const metaInbox = {
+        active: false,
+        filter: "all",
+        offset: 0,
+        hasMore: false,
+        listMs: 8000,
+        threadMs: 3000,
+        selectedId: "",
+        listTimer: 0,
+        threadTimer: 0,
+        listFp: "",
+        templates: [],
+      };
+
+      function metaInboxBanner(text) {
+        const el = document.getElementById("meta-inbox-banner");
+        if (el) el.textContent = text || "";
+      }
+
+      function metaInboxWindowLabel(state) {
+        if (state === "OPEN") return "Janela de atendimento aberta";
+        if (state === "CLOSED") return "Janela de atendimento encerrada";
+        return "Não foi possível determinar";
+      }
+
+      function metaInboxStatusLabel(status) {
+        const map = {
+          queued: "na fila",
+          accepted: "aceita",
+          sent: "enviada",
+          delivered: "entregue",
+          read: "lida",
+          failed: "falhou",
+          open: "aberta",
+          pending: "pendente",
+          closed: "finalizada",
+        };
+        return map[status] || status || "—";
+      }
+
+      async function metaInboxJson(path, options) {
+        const response = await fetch(resolveWabaPublicPath(path), {
+          credentials: "same-origin",
+          headers: {
+            Accept: "application/json",
+            ...(options && options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          ...options,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (/access_token|app_secret|Bearer /i.test(JSON.stringify(payload))) {
+          throw new Error("Resposta inválida.");
+        }
+        if (!response.ok || payload.ok === false) {
+          throw new Error(String(payload.error || "Não foi possível concluir."));
+        }
+        return payload;
+      }
+
+      function metaInboxRenderList(conversations, append) {
+        const box = document.getElementById("meta-inbox-list");
+        if (!box) return;
+        const rows = Array.isArray(conversations) ? conversations : [];
+        if (!append) box.innerHTML = "";
+        if (!rows.length && !append) {
+          box.innerHTML = '<div class="muted" style="padding:12px;">Sem conversas</div>';
+          return;
+        }
+        const html = rows
+          .map((item) => {
+            const active = item.id === metaInbox.selectedId ? " is-active" : "";
+            const unread = Number(item.unreadCount || 0) > 0 ? ` · ${item.unreadCount}` : "";
+            const when = item.lastMessageAt ? new Date(item.lastMessageAt).toLocaleString("pt-BR") : "—";
+            return (
+              `<button type="button" class="meta-inbox-item${active}" data-meta-inbox-open="${escapeAdminHtml(item.id)}">` +
+              `<div class="meta-inbox-item-title">${escapeAdminHtml(item.contactName || item.contactWaId || "Contato")}${unread}</div>` +
+              `<div class="meta-inbox-item-preview">${escapeAdminHtml(item.lastMessagePreview || "—")}</div>` +
+              `<div class="muted" style="font-size:11px;">${escapeAdminHtml(item.contactPhone || item.contactWaId || "")} · ${escapeAdminHtml(when)} · ${escapeAdminHtml(metaInboxStatusLabel(item.status))}</div>` +
+              `</button>`
+            );
+          })
+          .join("");
+        if (append) box.insertAdjacentHTML("beforeend", html);
+        else box.innerHTML = html;
+      }
+
+      function metaInboxRenderThread(payload) {
+        const box = document.getElementById("meta-inbox-thread");
+        const title = document.getElementById("meta-inbox-thread-title");
+        const side = document.getElementById("meta-inbox-side");
+        if (!box || !payload || !payload.conversation) return;
+        const conv = payload.conversation;
+        if (title) title.textContent = conv.contactName || conv.contactWaId || "Conversa";
+        const messages = Array.isArray(payload.messages) ? payload.messages : [];
+        box.innerHTML = messages
+          .map((msg) => {
+            const cls = msg.direction === "outbound" ? "is-out" : "is-in";
+            const body = msg.templateName
+              ? `Template ${msg.templateName}`
+              : msg.text || `[${msg.type || "mensagem"}]`;
+            const err = msg.errorMessage ? `<div class="muted">${escapeAdminHtml(msg.errorMessage)}</div>` : "";
+            const when = msg.createdAt ? new Date(msg.createdAt).toLocaleString("pt-BR") : "";
+            return (
+              `<div class="meta-inbox-msg ${cls}">` +
+              `<div>${escapeAdminHtml(body)}</div>` +
+              `<div class="muted" style="font-size:11px;">${escapeAdminHtml(metaInboxStatusLabel(msg.status))} · ${escapeAdminHtml(when)}</div>` +
+              err +
+              `</div>`
+            );
+          })
+          .join("");
+        box.scrollTop = box.scrollHeight;
+        const windowState = conv.customerCareWindow && conv.customerCareWindow.state;
+        const closedHint =
+          windowState === "CLOSED"
+            ? '<p>Use um template aprovado para iniciar/retomar a conversa.</p>'
+            : "";
+        const tplOptions = metaInbox.templates
+          .filter((item) => String(item.status || "").toUpperCase() === "APPROVED")
+          .map((item) => `<option value="${escapeAdminHtml(item.name)}|${escapeAdminHtml(item.language)}">${escapeAdminHtml(item.name)} (${escapeAdminHtml(item.language)})</option>`)
+          .join("");
+        if (side) {
+          side.innerHTML =
+            `<p><strong>Perfil</strong><br>${escapeAdminHtml(conv.contactName || "—")}</p>` +
+            `<p><strong>wa_id</strong><br>${escapeAdminHtml(conv.contactWaId || "—")}</p>` +
+            `<p><strong>Telefone</strong><br>${escapeAdminHtml(conv.contactPhone || "—")}</p>` +
+            `<p><strong>${escapeAdminHtml(metaInboxWindowLabel(windowState))}</strong></p>` +
+            closedHint +
+            `<p>Status: ${escapeAdminHtml(metaInboxStatusLabel(conv.status))}<br>Atendente: ${escapeAdminHtml(conv.assignedTo || "livre")}</p>` +
+            `<div class="disparos-inline-actions" style="flex-wrap:wrap; gap:6px; margin: 8px 0;">` +
+            `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-status="open">Reabrir</button>` +
+            `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-status="pending">Pendente</button>` +
+            `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-status="closed">Finalizar</button>` +
+            `<button type="button" class="instance-action-btn btn-qrcode enabled" data-meta-inbox-assign="assume">Assumir</button>` +
+            `<button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-assign="release">Liberar</button>` +
+            `</div>` +
+            `<label class="muted" for="meta-inbox-template">Template aprovado</label>` +
+            `<select id="meta-inbox-template" class="form-control">${tplOptions || "<option value=''>Nenhum template aprovado</option>"}</select>` +
+            `<textarea id="meta-inbox-tpl-params" rows="2" placeholder="Parâmetros do corpo, um por linha" style="margin-top:6px;width:100%;"></textarea>` +
+            `<button type="button" class="instance-action-btn btn-qrcode enabled" id="meta-inbox-tpl-send" style="margin-top:6px;">Enviar template</button>`;
+        }
+      }
+
+      async function metaInboxLoadList(append) {
+        if (!metaInbox.active || document.hidden) return;
+        try {
+          const offset = append ? metaInbox.offset : 0;
+          const payload = await metaInboxJson(
+            `/integrations/meta/whatsapp/inbox/conversations?filter=${encodeURIComponent(metaInbox.filter)}&limit=30&offset=${offset}`,
+          );
+          metaInbox.listMs = Number(payload.poll && payload.poll.listMs) || metaInbox.listMs;
+          metaInbox.threadMs = Number(payload.poll && payload.poll.threadMs) || metaInbox.threadMs;
+          metaInbox.hasMore = Boolean(payload.page && payload.page.hasMore);
+          metaInbox.offset = offset + (payload.conversations || []).length;
+          const fp = (payload.conversations || [])
+            .map((item) => `${item.id}:${item.unreadCount}:${item.lastMessageAt}:${item.status}`)
+            .join("|");
+          if (!append && fp === metaInbox.listFp) {
+            metaInboxBanner("Conectado");
+            return;
+          }
+          if (!append) metaInbox.listFp = fp;
+          metaInboxRenderList(payload.conversations, append);
+          const more = document.getElementById("meta-inbox-more");
+          if (more) more.hidden = !metaInbox.hasMore;
+          metaInboxBanner(payload.conversations && payload.conversations.length ? "Conectado" : "Sem conversas");
+        } catch (error) {
+          const msg = error && error.message ? error.message : "Erro";
+          metaInboxBanner(/conecte/i.test(msg) ? "Sem conexão Meta" : msg);
+          if (!append) {
+            const box = document.getElementById("meta-inbox-list");
+            if (box) box.innerHTML = `<div class="muted" style="padding:12px;">${escapeAdminHtml(msg)}</div>`;
+          }
+        }
+      }
+
+      async function metaInboxLoadThread() {
+        if (!metaInbox.active || document.hidden || !metaInbox.selectedId) return;
+        try {
+          const payload = await metaInboxJson(
+            `/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/messages`,
+          );
+          metaInboxRenderThread(payload);
+        } catch (error) {
+          const box = document.getElementById("meta-inbox-thread");
+          if (box) box.innerHTML = `<div class="muted" style="padding:12px;">${escapeAdminHtml(error && error.message ? error.message : "Erro")}</div>`;
+        }
+      }
+
+      function metaInboxClearTimers() {
+        if (metaInbox.listTimer) window.clearInterval(metaInbox.listTimer);
+        if (metaInbox.threadTimer) window.clearInterval(metaInbox.threadTimer);
+        metaInbox.listTimer = 0;
+        metaInbox.threadTimer = 0;
+      }
+
+      window.wabaStopMetaInbox = function wabaStopMetaInbox() {
+        metaInbox.active = false;
+        metaInboxClearTimers();
+      };
+
+      window.wabaStartMetaInbox = async function wabaStartMetaInbox() {
+        metaInbox.active = true;
+        metaInboxClearTimers();
+        metaInboxBanner("Carregando");
+        metaInboxJson("/integrations/meta/whatsapp/templates")
+          .then((payload) => {
+            metaInbox.templates = Array.isArray(payload.templates) ? payload.templates : [];
+          })
+          .catch(() => {
+            metaInbox.templates = [];
+          });
+        await metaInboxLoadList(false);
+        if (metaInbox.selectedId) await metaInboxLoadThread();
+        metaInbox.listTimer = window.setInterval(() => metaInboxLoadList(false), metaInbox.listMs);
+        metaInbox.threadTimer = window.setInterval(() => metaInboxLoadThread(), metaInbox.threadMs);
+      };
+
+      document.addEventListener("visibilitychange", function onMetaInboxVisibility() {
+        if (document.hidden) metaInboxClearTimers();
+        else if (metaInbox.active) window.wabaStartMetaInbox();
+      });
+
+      document.addEventListener("click", async function onMetaInboxClick(event) {
+        const target = event.target && event.target.closest ? event.target.closest("[data-meta-inbox-filter], [data-meta-inbox-open], [data-meta-inbox-status], [data-meta-inbox-assign], #meta-inbox-send, #meta-inbox-more, #meta-inbox-tpl-send") : null;
+        if (!target) return;
+        if (target.id === "meta-inbox-more") {
+          await metaInboxLoadList(true);
+          return;
+        }
+        const filter = target.getAttribute("data-meta-inbox-filter");
+        if (filter) {
+          metaInbox.filter = filter;
+          metaInbox.offset = 0;
+          metaInbox.listFp = "";
+          await metaInboxLoadList(false);
+          return;
+        }
+        const openId = target.getAttribute("data-meta-inbox-open");
+        if (openId) {
+          metaInbox.selectedId = openId;
+          await metaInboxJson(`/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(openId)}/read`, {
+            method: "POST",
+            body: "{}",
+          }).catch(() => null);
+          await metaInboxLoadList(false);
+          await metaInboxLoadThread();
+          return;
+        }
+        if (!metaInbox.selectedId) return;
+        const status = target.getAttribute("data-meta-inbox-status");
+        if (status) {
+          await metaInboxJson(`/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/status`, {
+            method: "POST",
+            body: JSON.stringify({ status }),
+          });
+          await metaInboxLoadList(false);
+          await metaInboxLoadThread();
+          return;
+        }
+        const assign = target.getAttribute("data-meta-inbox-assign");
+        if (assign) {
+          await metaInboxJson(`/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/assign`, {
+            method: "POST",
+            body: JSON.stringify({ action: assign }),
+          });
+          await metaInboxLoadThread();
+          return;
+        }
+        if (target.id === "meta-inbox-send") {
+          const text = String((document.getElementById("meta-inbox-text") || {}).value || "").trim();
+          if (!text) return;
+          const payload = await metaInboxJson(
+            `/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/messages`,
+            { method: "POST", body: JSON.stringify({ type: "text", text }) },
+          );
+          const input = document.getElementById("meta-inbox-text");
+          if (input) input.value = "";
+          if (payload.message) {
+            await metaInboxLoadThread();
+          }
+          return;
+        }
+        if (target.id === "meta-inbox-tpl-send") {
+          const raw = String((document.getElementById("meta-inbox-template") || {}).value || "");
+          const parts = raw.split("|");
+          const params = String((document.getElementById("meta-inbox-tpl-params") || {}).value || "")
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+          const components = params.length
+            ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }]
+            : [];
+          await metaInboxJson(
+            `/integrations/meta/whatsapp/inbox/conversations/${encodeURIComponent(metaInbox.selectedId)}/messages`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                type: "template",
+                template: { name: parts[0], language: parts[1], components },
+              }),
+            },
+          );
+          await metaInboxLoadThread();
+        }
+      });
+
       function buildAdminChamadosAttachmentOpenLink(attachment, extraClass = "") {
         const url = escapeAdminHtml(resolveWabaPublicPath(String(attachment?.url || "")));
         const label = escapeAdminHtml(String(attachment?.fileName || "Anexo"));
@@ -35463,6 +37259,7 @@
       const WABA_MENU_SECTION_LABELS = {
         "nao-oficial": "Aquecedor",
         oficial: "Disparos",
+        "lab-api-oficial": "Laboratório",
         admin: "Admin",
         suporte: "Suporte",
         marketing: "Marketing",
@@ -48973,6 +50770,10 @@
         const disparosDashboardPanel = document.getElementById("tab-disparos-dashboard");
         const disparosLancamentoPanel = document.getElementById("tab-disparos-lancamento");
         const metaAtivosPanel = document.getElementById("tab-meta-ativos");
+        const whatsappOficialPanel = document.getElementById("tab-whatsapp-oficial");
+        const whatsappInboxPanel = document.getElementById("tab-whatsapp-inbox");
+        const whatsappTemplatesPanel = document.getElementById("tab-whatsapp-templates");
+        const whatsappAutomationPanel = document.getElementById("tab-whatsapp-automation");
         const metaTemplatesPanel = document.getElementById("tab-meta-templates");
         const metaDisparoPanel = document.getElementById("tab-meta-disparo");
         const adminDashboardPanel = document.getElementById("tab-admin-dashboard");
@@ -49069,6 +50870,49 @@
             "aria-hidden",
             nextTab !== "disparos-lancamento" ? "true" : "false"
           );
+        }
+
+        if (whatsappOficialPanel) {
+          whatsappOficialPanel.classList.toggle("tab-hidden", nextTab !== "whatsapp-oficial");
+          whatsappOficialPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "whatsapp-oficial" ? "true" : "false"
+          );
+        }
+
+        if (whatsappInboxPanel) {
+          whatsappInboxPanel.classList.toggle("tab-hidden", nextTab !== "whatsapp-inbox");
+          whatsappInboxPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "whatsapp-inbox" ? "true" : "false"
+          );
+          if (nextTab === "whatsapp-inbox" && typeof window.wabaStartMetaInbox === "function") {
+            window.wabaStartMetaInbox();
+          } else if (typeof window.wabaStopMetaInbox === "function") {
+            window.wabaStopMetaInbox();
+          }
+        }
+
+        if (whatsappTemplatesPanel) {
+          whatsappTemplatesPanel.classList.toggle("tab-hidden", nextTab !== "whatsapp-templates");
+          whatsappTemplatesPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "whatsapp-templates" ? "true" : "false"
+          );
+          if (nextTab === "whatsapp-templates" && typeof window.wabaLoadMetaTemplatesLab === "function") {
+            window.wabaLoadMetaTemplatesLab();
+          }
+        }
+
+        if (whatsappAutomationPanel) {
+          whatsappAutomationPanel.classList.toggle("tab-hidden", nextTab !== "whatsapp-automation");
+          whatsappAutomationPanel.setAttribute(
+            "aria-hidden",
+            nextTab !== "whatsapp-automation" ? "true" : "false"
+          );
+          if (nextTab === "whatsapp-automation" && typeof window.wabaLoadMetaAutomationLab === "function") {
+            window.wabaLoadMetaAutomationLab();
+          }
         }
 
         if (metaAtivosPanel) {
@@ -53346,10 +55190,12 @@
         syncWabaSupportFabPosition();
         window.setTimeout(syncWabaSupportFabPosition, 220);
         syncWabaSidebarStackTop();
+        window.setTimeout(syncWabaSidebarStackTop, 220);
       }
 
       function resolveMenuGroupForTab(tabName) {
         if (isMarketingTab(tabName)) return "marketing";
+        if (tabName === "whatsapp-oficial" || tabName === "whatsapp-inbox" || tabName === "whatsapp-templates" || tabName === "whatsapp-automation") return "lab-api-oficial";
         if (isSuporteTab(tabName)) return "suporte";
         if (isAdminTab(tabName)) return "admin";
         if (isOfficialTab(tabName)) return "oficial";
@@ -53359,7 +55205,7 @@
       /** Ao expandir a sidebar, abre só o grupo da aba ativa (evita menu maior que a tela). */
       function focusDesktopMenuGroupForActiveTab() {
         const activeGroup = resolveMenuGroupForTab(activeTab);
-        ["nao-oficial", "oficial", "admin", "suporte", "marketing"].forEach((groupName) => {
+        ["nao-oficial", "oficial", "lab-api-oficial", "admin", "suporte", "marketing"].forEach((groupName) => {
           setDesktopMenuGroupOpen(groupName, groupName === activeGroup);
         });
       }
@@ -54926,6 +56772,7 @@
       };
 
       window.addEventListener("message", (event) => {
+        if (window.__wabaMetaTechSignupActive) return;
         const origin = String(event.origin || "");
         if (!origin.endsWith("facebook.com")) return;
         let payload;

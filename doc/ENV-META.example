@@ -1,0 +1,13 @@
+# Meta Tech Provider — variáveis de ambiente (valores vazios)
+
+# Copie as chaves para o .env do servidor. Nunca commite valores reais.
+
+META_APP_ID=
+META_APP_SECRET=
+META_BUSINESS_ID=
+META_CONFIG_ID=
+META_ES_CONFIG_ID=
+META_GRAPH_VERSION=
+META_OAUTH_REDIRECT_URI=
+META_TOKEN_ENCRYPTION_KEY=
+META_WEBHOOK_VERIFY_TOKEN=

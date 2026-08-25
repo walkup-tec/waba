@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-25 19:05 — Meta Tech Provider integrado no master atual (local)
+
+- Branch local `feat/meta-tech-provider-master` sobre `origin/master` `8f05836`
+- Cherry-pick `1e29b80` com conflitos resolvidos: master + wiring Meta (`/bets`+legais, marketing+Laboratório)
+- Build PASS; testes Meta 121/0; **sem push / sem deploy**
+- LOG: `doc/LOG-2026-08-25__190500__meta-tech-provider-master-integration.md`
+
 ## 2026-08-24 16:50 — Leads PJ pages metric v9.24
 
 - Coluna Páginas = checkpoint Oruga (não CNPJ/20); sem rewind de checkpoint

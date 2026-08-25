@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listWabaMenuIds = exports.getWabaMenusByTab = exports.getWabaMenuById = exports.listWabaMenuDefinitions = exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = exports.WABA_MENU_REGISTRY = exports.WABA_MENU_SECTION_LABELS = void 0;
+exports.listWabaMenuIds = exports.getWabaMenusByTab = exports.getWabaMenuById = exports.listWabaMenuDefinitions = exports.WABA_TECH_PROVIDER_MENU_IDS = exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = exports.WABA_MENU_REGISTRY = exports.WABA_MENU_SECTION_LABELS = void 0;
 exports.WABA_MENU_SECTION_LABELS = {
     "nao-oficial": "Aquecedor",
     oficial: "Disparos",
+    "lab-api-oficial": "Laboratório",
     admin: "Admin",
     suporte: "Suporte",
 };
@@ -111,6 +112,38 @@ exports.WABA_MENU_REGISTRY = [
         profile: "full",
     },
     {
+        id: "whatsapp-oficial",
+        label: "Conexão",
+        tab: "whatsapp-oficial",
+        section: "lab-api-oficial",
+        sectionLabel: SECTION_LABELS["lab-api-oficial"],
+        profile: "production",
+    },
+    {
+        id: "whatsapp-inbox",
+        label: "Inbox",
+        tab: "whatsapp-inbox",
+        section: "lab-api-oficial",
+        sectionLabel: SECTION_LABELS["lab-api-oficial"],
+        profile: "production",
+    },
+    {
+        id: "whatsapp-templates",
+        label: "Templates",
+        tab: "whatsapp-templates",
+        section: "lab-api-oficial",
+        sectionLabel: SECTION_LABELS["lab-api-oficial"],
+        profile: "production",
+    },
+    {
+        id: "whatsapp-automation",
+        label: "Automação",
+        tab: "whatsapp-automation",
+        section: "lab-api-oficial",
+        sectionLabel: SECTION_LABELS["lab-api-oficial"],
+        profile: "production",
+    },
+    {
         id: "admin-dashboard",
         label: "Dashboard",
         tab: "admin-dashboard",
@@ -181,6 +214,16 @@ exports.WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
     "disparos-lancamento",
     "disparo-evo",
     "campanhas",
+];
+/**
+ * Menus Meta Tech Provider (Embedded Signup / Cloud API).
+ * Novos itens desta função devem ir na seção Laboratório (`lab-api-oficial`).
+ */
+exports.WABA_TECH_PROVIDER_MENU_IDS = [
+    "whatsapp-oficial",
+    "whatsapp-inbox",
+    "whatsapp-templates",
+    "whatsapp-automation",
 ];
 const listWabaMenuDefinitions = () => exports.WABA_MENU_REGISTRY.map((item) => ({ ...item }));
 exports.listWabaMenuDefinitions = listWabaMenuDefinitions;

@@ -1,0 +1,243 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type {
+  MetaConversationRecord,
+  MetaConversationStatus,
+} from "./meta-whatsapp-messaging.types";
+
+const TABLE = "meta_whatsapp_conversations";
+
+const COLUMNS = [
+  "id",
+  "tenant_id",
+  "connection_id",
+  "phone_number_id",
+  "contact_wa_id",
+  "contact_phone",
+  "contact_name",
+  "status",
+  "assigned_to",
+  "last_message_at",
+  "last_inbound_at",
+  "last_outbound_at",
+  "unread_count",
+  "human_takeover",
+  "last_message_preview",
+  "created_at",
+  "updated_at",
+].join(", ");
+
+type DbRow = Record<string, unknown>;
+
+function asRow(data: unknown): DbRow {
+  if (!data || typeof data !== "object") throw new Error("Conversa Meta inválida.");
+  return data as DbRow;
+}
+
+function mapRow(row: DbRow): MetaConversationRecord {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    connectionId: String(row.connection_id),
+    phoneNumberId: row.phone_number_id ? String(row.phone_number_id) : null,
+    contactWaId: String(row.contact_wa_id),
+    contactPhone: row.contact_phone ? String(row.contact_phone) : null,
+    contactName: row.contact_name ? String(row.contact_name) : null,
+    status: String(row.status || "open") as MetaConversationStatus,
+    assignedTo: row.assigned_to ? String(row.assigned_to) : null,
+    lastMessageAt: row.last_message_at ? String(row.last_message_at) : null,
+    lastInboundAt: row.last_inbound_at ? String(row.last_inbound_at) : null,
+    lastOutboundAt: row.last_outbound_at ? String(row.last_outbound_at) : null,
+    unreadCount: Number(row.unread_count || 0),
+    humanTakeover: row.human_takeover === true,
+    lastMessagePreview: row.last_message_preview ? String(row.last_message_preview) : null,
+    createdAt: String(row.created_at || ""),
+    updatedAt: String(row.updated_at || ""),
+  };
+}
+
+function getClient(): SupabaseClient {
+  const url = String(process.env.SUPABASE_URL || "").trim();
+  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!url || !key) {
+    throw new Error("Supabase não configurado (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).");
+  }
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+export type UpsertConversationInput = {
+  tenantId: string;
+  connectionId: string;
+  phoneNumberId?: string | null;
+  contactWaId: string;
+  contactPhone?: string | null;
+  contactName?: string | null;
+  inbound?: boolean;
+  outbound?: boolean;
+  lastMessagePreview?: string | null;
+  atIso: string;
+};
+
+export class MetaWhatsappConversationRepository {
+  constructor(private readonly clientFactory: () => SupabaseClient = getClient) {}
+
+  private client(): SupabaseClient {
+    return this.clientFactory();
+  }
+
+  async findByTenantConnectionContact(
+    tenantId: string,
+    connectionId: string,
+    contactWaId: string,
+  ): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", tenantId)
+      .eq("connection_id", connectionId)
+      .eq("contact_wa_id", contactWaId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async upsertForContact(
+    input: UpsertConversationInput,
+  ): Promise<{ record: MetaConversationRecord; created: boolean }> {
+    const existing = await this.findByTenantConnectionContact(
+      input.tenantId,
+      input.connectionId,
+      input.contactWaId,
+    );
+    if (existing) {
+      const unread = input.inbound ? existing.unreadCount + 1 : existing.unreadCount;
+      const { data, error } = await this.client()
+        .from(TABLE)
+        .update({
+          phone_number_id: input.phoneNumberId || existing.phoneNumberId,
+          contact_phone: input.contactPhone || existing.contactPhone,
+          contact_name: input.contactName || existing.contactName,
+          last_message_at: input.atIso,
+          last_inbound_at: input.inbound ? input.atIso : existing.lastInboundAt,
+          last_outbound_at: input.outbound ? input.atIso : existing.lastOutboundAt,
+          last_message_preview:
+            input.lastMessagePreview === undefined
+              ? existing.lastMessagePreview
+              : input.lastMessagePreview,
+          unread_count: unread,
+          status: existing.status === "closed" && input.inbound ? "open" : existing.status,
+        })
+        .eq("id", existing.id)
+        .eq("tenant_id", input.tenantId)
+        .select(COLUMNS)
+        .single();
+      if (error) throw new Error(error.message);
+      return { record: mapRow(asRow(data)), created: false };
+    }
+
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .insert({
+        tenant_id: input.tenantId,
+        connection_id: input.connectionId,
+        phone_number_id: input.phoneNumberId || null,
+        contact_wa_id: input.contactWaId,
+        contact_phone: input.contactPhone || null,
+        contact_name: input.contactName || null,
+        status: "open",
+        assigned_to: null,
+        human_takeover: false,
+        last_message_at: input.atIso,
+        last_inbound_at: input.inbound ? input.atIso : null,
+        last_outbound_at: input.outbound ? input.atIso : null,
+        last_message_preview: input.lastMessagePreview || null,
+        unread_count: input.inbound ? 1 : 0,
+        created_at: input.atIso,
+        updated_at: input.atIso,
+      })
+      .select(COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    return { record: mapRow(asRow(data)), created: true };
+  }
+
+  async findByIdForTenant(tenantId: string, id: string): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async listForInbox(input: {
+    tenantId: string;
+    connectionId: string;
+    filter: "all" | "unread" | "open" | "pending" | "closed" | "mine";
+    assignedTo?: string | null;
+    limit: number;
+    offset: number;
+  }): Promise<MetaConversationRecord[]> {
+    let query = this.client()
+      .from(TABLE)
+      .select(COLUMNS)
+      .eq("tenant_id", input.tenantId)
+      .eq("connection_id", input.connectionId)
+      .order("last_message_at", { ascending: false })
+      .range(input.offset, input.offset + input.limit - 1);
+    if (input.filter === "unread") query = query.gt("unread_count", 0);
+    if (input.filter === "open" || input.filter === "pending" || input.filter === "closed") {
+      query = query.eq("status", input.filter);
+    }
+    if (input.filter === "mine") query = query.eq("assigned_to", String(input.assignedTo || ""));
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => mapRow(asRow(row)));
+  }
+
+  async markRead(tenantId: string, id: string): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .update({ unread_count: 0 })
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .select(COLUMNS)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async patchStatus(
+    tenantId: string,
+    id: string,
+    status: MetaConversationStatus,
+  ): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .update({ status })
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .select(COLUMNS)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+
+  async assign(
+    tenantId: string,
+    id: string,
+    assignedTo: string | null,
+    humanTakeover: boolean,
+  ): Promise<MetaConversationRecord | null> {
+    const { data, error } = await this.client()
+      .from(TABLE)
+      .update({ assigned_to: assignedTo, human_takeover: humanTakeover })
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .select(COLUMNS)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapRow(asRow(data)) : null;
+  }
+}

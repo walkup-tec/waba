@@ -1,0 +1,277 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.hashRawPayload = hashRawPayload;
+exports.parseMetaWebhookPayload = parseMetaWebhookPayload;
+const node_crypto_1 = require("node:crypto");
+function asRecord(value) {
+    return value && typeof value === "object" ? value : {};
+}
+function asArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+function text(value) {
+    return String(value || "").trim();
+}
+function reasonText(value) {
+    if (value == null)
+        return null;
+    if (typeof value === "string") {
+        const raw = value.trim();
+        if (!raw || raw.toUpperCase() === "NONE")
+            return null;
+        return raw;
+    }
+    if (typeof value === "object") {
+        const row = asRecord(value);
+        return reasonText(row.reason) || reasonText(row.error) || reasonText(row.message);
+    }
+    return null;
+}
+function shortHash(parts) {
+    return (0, node_crypto_1.createHash)("sha256").update(parts.join("|")).digest("hex").slice(0, 32);
+}
+function fromMetadata(value) {
+    const metadata = asRecord(value.metadata);
+    const phoneNumberId = text(metadata.phone_number_id) || null;
+    return { phoneNumberId };
+}
+function contactNameFor(value, waId) {
+    if (!waId)
+        return null;
+    for (const item of asArray(value.contacts)) {
+        const row = asRecord(item);
+        if (text(row.wa_id) === waId) {
+            return text(asRecord(row.profile).name) || null;
+        }
+    }
+    return null;
+}
+function extra() {
+    return {
+        fromWaId: null,
+        textContent: null,
+        contactName: null,
+        templateName: null,
+        templateLanguage: null,
+        rejectedReason: null,
+    };
+}
+function hashRawPayload(rawBody) {
+    return (0, node_crypto_1.createHash)("sha256").update(rawBody).digest("hex");
+}
+function parseMetaWebhookPayload(payload, payloadHash) {
+    const root = asRecord(payload);
+    const events = [];
+    const entries = asArray(root.entry);
+    if (!entries.length) {
+        events.push({
+            eventKey: `unknown:root:${payloadHash.slice(0, 32)}`,
+            eventType: "unknown",
+            wabaId: null,
+            phoneNumberId: null,
+            messageId: null,
+            status: null,
+            timestamp: null,
+            recipientId: null,
+            conversationId: null,
+            pricingCategory: null,
+            errorCode: null,
+            qualityRating: null,
+            verifiedName: null,
+            messageType: null,
+            ...extra(),
+        });
+        return events;
+    }
+    for (const entry of entries) {
+        const entryObj = asRecord(entry);
+        const wabaId = text(entryObj.id) || null;
+        for (const change of asArray(entryObj.changes)) {
+            const changeObj = asRecord(change);
+            const field = text(changeObj.field) || "unknown";
+            const value = asRecord(changeObj.value);
+            const { phoneNumberId } = fromMetadata(value);
+            if (field === "messages") {
+                for (const message of asArray(value.messages)) {
+                    const msg = asRecord(message);
+                    const messageId = text(msg.id);
+                    const fromWaId = text(msg.from) || null;
+                    const messageType = text(msg.type) || null;
+                    const textBody = messageType === "text" ? text(asRecord(msg.text).body) || null : null;
+                    events.push({
+                        eventKey: `msg:${phoneNumberId || wabaId || "na"}:${messageId || shortHash([payloadHash, text(msg.timestamp)])}`,
+                        eventType: "messages",
+                        wabaId,
+                        phoneNumberId,
+                        messageId: messageId || null,
+                        status: null,
+                        timestamp: text(msg.timestamp) || null,
+                        recipientId: null,
+                        conversationId: null,
+                        pricingCategory: null,
+                        errorCode: null,
+                        qualityRating: null,
+                        verifiedName: null,
+                        messageType,
+                        fromWaId,
+                        textContent: textBody,
+                        contactName: contactNameFor(value, fromWaId),
+                        templateName: null,
+                        templateLanguage: null,
+                        rejectedReason: null,
+                    });
+                }
+                for (const statusRow of asArray(value.statuses)) {
+                    const row = asRecord(statusRow);
+                    const conversation = asRecord(row.conversation);
+                    const pricing = asRecord(row.pricing);
+                    const errors = asArray(row.errors);
+                    const firstError = asRecord(errors[0]);
+                    const statusId = text(row.id);
+                    const status = text(row.status);
+                    events.push({
+                        eventKey: `status:${phoneNumberId || wabaId || "na"}:${statusId}:${status || shortHash([payloadHash])}`,
+                        eventType: "statuses",
+                        wabaId,
+                        phoneNumberId,
+                        messageId: statusId || null,
+                        status: status || null,
+                        timestamp: text(row.timestamp) || null,
+                        recipientId: text(row.recipient_id) || null,
+                        conversationId: text(conversation.id) || null,
+                        pricingCategory: text(pricing.category) || null,
+                        errorCode: text(firstError.code) || null,
+                        qualityRating: null,
+                        verifiedName: null,
+                        messageType: null,
+                        ...extra(),
+                    });
+                }
+                if (!asArray(value.messages).length && !asArray(value.statuses).length) {
+                    events.push({
+                        eventKey: `messages:${phoneNumberId || wabaId || "na"}:${shortHash([payloadHash, field])}`,
+                        eventType: "messages",
+                        wabaId,
+                        phoneNumberId,
+                        messageId: null,
+                        status: null,
+                        timestamp: null,
+                        recipientId: null,
+                        conversationId: null,
+                        pricingCategory: null,
+                        errorCode: null,
+                        qualityRating: null,
+                        verifiedName: null,
+                        messageType: null,
+                        ...extra(),
+                    });
+                }
+                continue;
+            }
+            if (field === "account_update") {
+                events.push({
+                    eventKey: `account_update:${wabaId || "na"}:${shortHash([payloadHash, text(value.event)])}`,
+                    eventType: field,
+                    wabaId,
+                    phoneNumberId: phoneNumberId || text(value.phone_number) || null,
+                    messageId: null,
+                    status: text(value.event) || null,
+                    timestamp: null,
+                    recipientId: null,
+                    conversationId: null,
+                    pricingCategory: null,
+                    errorCode: null,
+                    qualityRating: null,
+                    verifiedName: null,
+                    messageType: null,
+                    ...extra(),
+                });
+                continue;
+            }
+            if (field === "phone_number_name_update") {
+                const verifiedName = text(value.requested_verified_name) || text(value.verified_name) || null;
+                events.push({
+                    eventKey: `name:${phoneNumberId || wabaId || "na"}:${shortHash([payloadHash, verifiedName || ""])}`,
+                    eventType: field,
+                    wabaId,
+                    phoneNumberId,
+                    messageId: null,
+                    status: text(value.decision) || null,
+                    timestamp: null,
+                    recipientId: null,
+                    conversationId: null,
+                    pricingCategory: null,
+                    errorCode: null,
+                    qualityRating: null,
+                    verifiedName,
+                    messageType: null,
+                    ...extra(),
+                });
+                continue;
+            }
+            if (field === "phone_number_quality_update") {
+                const qualityRating = text(value.current_limit) || text(value.quality_rating) || text(value.event) || null;
+                events.push({
+                    eventKey: `quality:${phoneNumberId || wabaId || "na"}:${shortHash([payloadHash, qualityRating || ""])}`,
+                    eventType: field,
+                    wabaId,
+                    phoneNumberId,
+                    messageId: null,
+                    status: text(value.event) || null,
+                    timestamp: null,
+                    recipientId: null,
+                    conversationId: null,
+                    pricingCategory: null,
+                    errorCode: null,
+                    qualityRating,
+                    verifiedName: null,
+                    messageType: null,
+                    ...extra(),
+                });
+                continue;
+            }
+            if (field === "message_template_status_update") {
+                const templateId = text(value.message_template_id) || text(value.message_template_name);
+                events.push({
+                    eventKey: `tpl:${wabaId || "na"}:${templateId || shortHash([payloadHash])}:${text(value.event)}`,
+                    eventType: field,
+                    wabaId,
+                    phoneNumberId,
+                    messageId: templateId || null,
+                    status: text(value.event) || null,
+                    timestamp: null,
+                    recipientId: null,
+                    conversationId: null,
+                    pricingCategory: null,
+                    errorCode: text(asRecord(asArray(value.reason)[0]).code) || null,
+                    qualityRating: null,
+                    verifiedName: null,
+                    messageType: null,
+                    ...extra(),
+                    templateName: text(value.message_template_name) || null,
+                    templateLanguage: text(value.message_template_language) || null,
+                    rejectedReason: reasonText(value.reason),
+                });
+                continue;
+            }
+            events.push({
+                eventKey: `unknown:${field}:${wabaId || "na"}:${payloadHash.slice(0, 32)}`,
+                eventType: field,
+                wabaId,
+                phoneNumberId,
+                messageId: null,
+                status: null,
+                timestamp: null,
+                recipientId: null,
+                conversationId: null,
+                pricingCategory: null,
+                errorCode: null,
+                qualityRating: null,
+                verifiedName: null,
+                messageType: null,
+                ...extra(),
+            });
+        }
+    }
+    return events;
+}

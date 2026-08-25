@@ -87,8 +87,16 @@ import {
 } from "./aquecedor/aquecedor-chip-identity";
 import { resolveWabaContainerServiceId } from "./waba-container-service";
 import { registerWabaAuthRoutes, wabaRequireAuthMiddleware } from "./auth/waba-auth.routes";
+import { registerMetaWhatsappIntegrationRoutes } from "./integrations/meta-whatsapp/meta-whatsapp.routes";
+import { startMetaWhatsappAutomation } from "./integrations/meta-whatsapp/meta-whatsapp-automation.bootstrap";
+import {
+  registerMetaWhatsappSubscriptionRoute,
+  registerMetaWhatsappWebhookRoutes,
+} from "./integrations/meta-whatsapp/meta-whatsapp-webhook.routes";
+import { isMetaWhatsappWebhookPath } from "./integrations/meta-whatsapp/meta-whatsapp-webhook-path";
 import { resolveWabaRequestAuth, type WabaRequestAuth } from "./auth/waba-request-auth";
 import { isWabaAuthConfigured, isWabaMasterEmail } from "./auth/waba-auth.service";
+import { authorizeMetaOficialLabAccess } from "./auth/waba-meta-oficial-token-access";
 import { WabaSystemUserRepository } from "./users/waba-system-user.repository";
 import { AlternativaNumberActivationRepository } from "./billing/alternativa-number-activation.repository";
 import { WabaAlternativaNumbersService } from "./billing/waba-alternativa-numbers.service";
@@ -498,6 +506,13 @@ const CAMPAIGN_CREATE_JSON_LIMIT =
 
 const parseJsonDefault = express.json({ limit: JSON_BODY_LIMIT });
 const parseJsonCampaignCreate = express.json({ limit: CAMPAIGN_CREATE_JSON_LIMIT });
+/** Webhook Meta: JSON + raw body intacto para HMAC SHA-256 (X-Hub-Signature-256). */
+const parseJsonMetaWhatsappWebhook = express.json({
+  limit: "1mb",
+  verify: (req, _res, buf) => {
+    (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+  },
+});
 
 const CAMPAIGN_UPLOAD_MAX_BYTES =
   Math.max(5, Number(process.env.CAMPAIGN_UPLOAD_MAX_MB || 100)) * 1024 * 1024;
@@ -552,6 +567,9 @@ app.use((req, res, next) => {
   if (shouldSkipBodyParserForMultipart(req)) {
     return next();
   }
+  if (req.method === "POST" && isMetaWhatsappWebhookPath(req.path)) {
+    return parseJsonMetaWhatsappWebhook(req, res, next);
+  }
   if (isDisparosCampaignCreatePost(req)) {
     return parseJsonCampaignCreate(req, res, next);
   }
@@ -563,12 +581,18 @@ app.use((req, res, next) => {
   if (shouldSkipBodyParserForMultipart(req)) {
     return next();
   }
+  if (isMetaWhatsappWebhookPath(req.path)) {
+    return next();
+  }
   return express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT })(req, res, next);
 });
 
 function isMaintenanceBypassPath(method: string, reqPath: string): boolean {
   const p = String(reqPath || "/").replace(/\/+$/, "") || "/";
   if (p === "/webhooks/asaas" || p.startsWith("/webhooks/asaas/") || p === "/webhooks/evolution") {
+    return true;
+  }
+  if (p === "/webhooks/meta/whatsapp") {
     return true;
   }
   if (method !== "GET" && method !== "HEAD") return false;
@@ -749,9 +773,13 @@ app.get("/maintenance", (_req, res) => {
 
 registerWabaCors(app);
 registerWabaAuthRoutes(app);
+registerMetaWhatsappWebhookRoutes(app);
 registerWabaSubscriberRoutes(app);
 registerWabaEntitlementRoutes(app);
 app.use(wabaRequireAuthMiddleware);
+registerMetaWhatsappIntegrationRoutes(app);
+startMetaWhatsappAutomation();
+registerMetaWhatsappSubscriptionRoute(app);
 
 const wabaEntitlementService = new WabaEntitlementService();
 
@@ -5123,6 +5151,20 @@ app.get("/cadastro", (_req, res) => sendVendasPage(res));
 app.get("/vendas", (_req, res) => sendVendasPage(res));
 
 app.get("/bets", (_req, res) => sendBetsLandingPage(res));
+
+const sendPublicLegalPage = (res: express.Response, fileName: string) => {
+  const filePath = path.join(rootPath, "public-pages", fileName);
+  if (!existsSync(filePath)) {
+    return res.status(404).type("html").send("<p>Página indisponível.</p>");
+  }
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.type("html").send(readFileSync(filePath, "utf8"));
+};
+
+app.get(["/termos", "/termos/"], (_req, res) => sendPublicLegalPage(res, "termos.html"));
+app.get(["/exclusao-de-dados", "/exclusao-de-dados/", "/exclusao", "/exclusao/"], (_req, res) =>
+  sendPublicLegalPage(res, "exclusao-de-dados.html"),
+);
 
 if (BASE_PATH) {
   // Após stripBasePathMiddleware, assets ficam em req.url relativo à raiz.
@@ -11485,8 +11527,18 @@ app.get("/aquecedor/diagnostico", async (req, res) => {
  * Token de aplicativo (grant client_credentials). Uso típico: etapa inicial / chamadas limitadas;
  * não substitui token de System User com escopos no WABA.
  */
+function rejectUnlessMetaOficialLab(req: express.Request, res: express.Response): boolean {
+  const gate = authorizeMetaOficialLabAccess(resolveWabaRequestAuth(req));
+  if (!gate.ok) {
+    res.status(gate.status).json({ error: gate.error });
+    return true;
+  }
+  return false;
+}
+
 app.post("/meta-oficial/tokens/app-access", parseJsonDefault, async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const appId = String(req.body?.appId || "").trim();
     const appSecret = String(req.body?.appSecret || "").trim();
     if (!appId || !/^\d+$/.test(appId)) {
@@ -11545,6 +11597,7 @@ app.post("/meta-oficial/tokens/app-access", parseJsonDefault, async (req, res) =
  */
 app.post("/meta-oficial/tokens/system-user-access", parseJsonDefault, async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const businessAppId = String(req.body?.appId || req.body?.businessAppId || "").trim();
     const appSecret = String(req.body?.appSecret || "").trim();
     const systemUserId = sanitizeMetaId(req.body?.systemUserId);
@@ -11650,6 +11703,7 @@ app.get("/meta-oficial/embedded-signup/config", (_req, res) => {
  */
 async function metaEmbeddedSignupExchangeCodeHandler(req: express.Request, res: express.Response) {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const code = String(req.body?.code || "").trim();
     const appId = String(process.env.META_APP_ID || "").trim();
     const appSecret = String(process.env.META_APP_SECRET || "").trim();
@@ -11751,6 +11805,7 @@ app.post("/api/meta/embedded-signup/exchange-code", metaEmbeddedSignupExchangeCo
 /** Inscreve o app nos webhooks do WABA do cliente (pós-Embedded Signup). */
 app.post("/meta-oficial/embedded-signup/subscribe-webhooks", parseJsonDefault, async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
     const subscribedFields = String(
@@ -11796,6 +11851,7 @@ app.post("/meta-oficial/embedded-signup/subscribe-webhooks", parseJsonDefault, a
 
 app.post("/meta-oficial/ativos/phone-numbers/list", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
     if (!token) return res.status(400).json({ error: "Campo 'token' é obrigatório." });
@@ -11825,6 +11881,7 @@ app.post("/meta-oficial/ativos/phone-numbers/list", async (req, res) => {
 
 app.post("/meta-oficial/ativos/phone-numbers/register", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const phoneNumberId = sanitizeMetaId(req.body?.phoneNumberId);
     const pin = String(req.body?.pin || "").trim();
@@ -11855,6 +11912,7 @@ app.post("/meta-oficial/ativos/phone-numbers/register", async (req, res) => {
 
 app.post("/meta-oficial/ativos/subscribed-apps/list", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
     if (!token) return res.status(400).json({ error: "Campo 'token' é obrigatório." });
@@ -11880,6 +11938,7 @@ app.post("/meta-oficial/ativos/subscribed-apps/list", async (req, res) => {
 
 app.post("/meta-oficial/ativos/subscribed-apps/ensure", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
     const subscribedFields = String(
@@ -11926,6 +11985,7 @@ app.post("/meta-oficial/ativos/subscribed-apps/ensure", async (req, res) => {
 
 app.post("/meta-oficial/templates/list", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
     const limit = Math.max(1, Math.min(200, Number(req.body?.limit || 30)));
@@ -11956,6 +12016,7 @@ app.post("/meta-oficial/templates/list", async (req, res) => {
 
 app.post("/meta-oficial/templates/create-utility", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const wabaId = sanitizeMetaId(req.body?.wabaId || req.body?.id_bm);
     const rawName = String(req.body?.name || "").trim().toLowerCase();
@@ -11994,6 +12055,7 @@ app.post("/meta-oficial/templates/create-utility", async (req, res) => {
 
 app.post("/meta-oficial/disparo/send-template", async (req, res) => {
   try {
+    if (rejectUnlessMetaOficialLab(req, res)) return;
     const token = String(req.body?.token || "").trim();
     const phoneNumberId = sanitizeMetaId(req.body?.phoneNumberId);
     const toRaw = String(req.body?.to || "").trim();

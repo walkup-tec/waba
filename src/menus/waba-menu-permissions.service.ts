@@ -3,6 +3,7 @@ import {
   listWabaMenuDefinitions,
   listWabaMenuIds,
   WABA_SUBSCRIBER_DISPAROS_MENU_IDS,
+  WABA_TECH_PROVIDER_MENU_IDS,
 } from "./waba-menu-registry";
 
 export type MenuPermissionsMap = Record<string, boolean>;
@@ -59,7 +60,7 @@ export const resolveEffectiveMenuPermissions = (
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
 export const buildLegacyMigrationPermissions = (): MenuPermissionsMap => buildAllMenusEnabled();
 
-/** Padrão operacional: Aquecedor + Disparos (Dashboard, Créditos, API Alternativa, API Oficial). */
+/** Padrão operacional: Aquecedor + Disparos + Laboratório (Meta Tech Provider). */
 export const buildDefaultOperacionalMenuPermissions = (): MenuPermissionsMap => {
   const result = buildNoMenusEnabled();
   const defaults = new Set<string>([
@@ -67,6 +68,7 @@ export const buildDefaultOperacionalMenuPermissions = (): MenuPermissionsMap => 
     "instancias",
     "aquecedor",
     ...WABA_SUBSCRIBER_DISPAROS_MENU_IDS,
+    ...WABA_TECH_PROVIDER_MENU_IDS,
   ]);
   for (const id of listWabaMenuIds()) {
     result[id] = defaults.has(id);

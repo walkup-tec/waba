@@ -110,6 +110,10 @@ const isAuthBypassPath = (method, reqPath) => {
         return true;
     if (p === "/webhooks/asaas/transfer-authorization")
         return true;
+    if (p === "/webhooks/meta/whatsapp")
+        return true;
+    if (p === "/integrations/meta/whatsapp/config" && (method === "GET" || method === "HEAD"))
+        return true;
     if (method === "OPTIONS")
         return true;
     if (method !== "GET" && method !== "HEAD")
@@ -122,6 +126,9 @@ const isAuthBypassPath = (method, reqPath) => {
         p === "/cadastro" ||
         p === "/vendas" ||
         p === "/bets" ||
+        p === "/termos" ||
+        p === "/exclusao-de-dados" ||
+        p === "/exclusao" ||
         p === "/favicon.ico" ||
         p === "/logo.png" ||
         p === "/drax-logo.png" ||

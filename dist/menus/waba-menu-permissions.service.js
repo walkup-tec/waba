@@ -46,7 +46,7 @@ exports.resolveEffectiveMenuPermissions = resolveEffectiveMenuPermissions;
 /** Migra usuário legado (sem menuPermissions): concede todos os menus atuais uma vez. */
 const buildLegacyMigrationPermissions = () => (0, exports.buildAllMenusEnabled)();
 exports.buildLegacyMigrationPermissions = buildLegacyMigrationPermissions;
-/** Padrão operacional: Aquecedor + Disparos (Dashboard, Créditos, API Alternativa, API Oficial). */
+/** Padrão operacional: Aquecedor + Disparos + Laboratório (Meta Tech Provider). */
 const buildDefaultOperacionalMenuPermissions = () => {
     const result = (0, exports.buildNoMenusEnabled)();
     const defaults = new Set([
@@ -54,6 +54,7 @@ const buildDefaultOperacionalMenuPermissions = () => {
         "instancias",
         "aquecedor",
         ...waba_menu_registry_1.WABA_SUBSCRIBER_DISPAROS_MENU_IDS,
+        ...waba_menu_registry_1.WABA_TECH_PROVIDER_MENU_IDS,
     ]);
     for (const id of (0, waba_menu_registry_1.listWabaMenuIds)()) {
         result[id] = defaults.has(id);

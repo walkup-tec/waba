@@ -1,4 +1,4 @@
-export type WabaMenuSection = "nao-oficial" | "oficial" | "admin" | "suporte";
+export type WabaMenuSection = "nao-oficial" | "oficial" | "lab-api-oficial" | "admin" | "suporte";
 
 export type WabaMenuProfile = "all" | "production" | "full";
 
@@ -16,6 +16,7 @@ export type WabaMenuDefinition = {
 export const WABA_MENU_SECTION_LABELS: Record<WabaMenuSection, string> = {
   "nao-oficial": "Aquecedor",
   oficial: "Disparos",
+  "lab-api-oficial": "Laboratório",
   admin: "Admin",
   suporte: "Suporte",
 };
@@ -125,6 +126,38 @@ export const WABA_MENU_REGISTRY: WabaMenuDefinition[] = [
     profile: "full",
   },
   {
+    id: "whatsapp-oficial",
+    label: "Conexão",
+    tab: "whatsapp-oficial",
+    section: "lab-api-oficial",
+    sectionLabel: SECTION_LABELS["lab-api-oficial"],
+    profile: "production",
+  },
+  {
+    id: "whatsapp-inbox",
+    label: "Inbox",
+    tab: "whatsapp-inbox",
+    section: "lab-api-oficial",
+    sectionLabel: SECTION_LABELS["lab-api-oficial"],
+    profile: "production",
+  },
+  {
+    id: "whatsapp-templates",
+    label: "Templates",
+    tab: "whatsapp-templates",
+    section: "lab-api-oficial",
+    sectionLabel: SECTION_LABELS["lab-api-oficial"],
+    profile: "production",
+  },
+  {
+    id: "whatsapp-automation",
+    label: "Automação",
+    tab: "whatsapp-automation",
+    section: "lab-api-oficial",
+    sectionLabel: SECTION_LABELS["lab-api-oficial"],
+    profile: "production",
+  },
+  {
     id: "admin-dashboard",
     label: "Dashboard",
     tab: "admin-dashboard",
@@ -196,6 +229,17 @@ export const WABA_SUBSCRIBER_DISPAROS_MENU_IDS = [
   "disparos-lancamento",
   "disparo-evo",
   "campanhas",
+] as const;
+
+/**
+ * Menus Meta Tech Provider (Embedded Signup / Cloud API).
+ * Novos itens desta função devem ir na seção Laboratório (`lab-api-oficial`).
+ */
+export const WABA_TECH_PROVIDER_MENU_IDS = [
+  "whatsapp-oficial",
+  "whatsapp-inbox",
+  "whatsapp-templates",
+  "whatsapp-automation",
 ] as const;
 
 export const listWabaMenuDefinitions = (): WabaMenuDefinition[] =>
