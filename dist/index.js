@@ -7114,7 +7114,9 @@ function buildDisparosAiPrompt(input) {
             "- Nao inclua links, URLs, wa.me nem 'http' em nenhum campo.",
             "- Nao coloque a frase de opt-out dentro de body.",
             "- Nao use asteriscos nem negrito no body (nem na abertura, nem no inicio de frases/itens).",
-            `- buttonLabel: so o texto visivel do botao URL nativo. Parafraseie o CTA (nao copie literal). CTA base: "${cta.slice(0, 20)}". Maximo 20 caracteres. Mesma intencao. Sem emoji. Sem URL. O sistema sempre envia o botao no mesmo formato; nao descreva o botao no body.`,
+            "- No body, quebras de linha reais (escape JSON \\n). Nunca deixe as duas letras barra-n visiveis na mensagem.",
+            "- Se enumerar 1) 2) 3) (ou 1. 2. 3.), cada item na sua propria linha.",
+            `- buttonLabel: texto curto que caiba inteiro no botao. Maximo 15 caracteres. Prefira: Quero saber mais, Me inscrever, Comprar agora. CTA base: "${cta.slice(0, 15)}". Sem emoji. Sem URL. Nao descreva o botao no body.`,
             `- optOut: uma unica linha, variacao natural de: "${ALTERNATIVA_OPT_OUT_SEED}". Sem markdown. Sem URL.`,
             "- Nao mencione 'clique no link'; incentive a acao do botao de forma natural em body.",
             ...(uniqueSeed ? [`- Gere uma variante unica para este envio (id ${uniqueSeed}).`] : []),
@@ -7169,7 +7171,7 @@ function normalizeAlternativaUrlButtonLabel(raw, fallback = ALTERNATIVA_URL_BUTT
     const loose = ALTERNATIVA_URL_BUTTON_LABELS.find((opt) => fold(opt) === folded);
     return loose || fallback;
 }
-const ALTERNATIVA_BUTTON_LABEL_MAX_CHARS = 20;
+const ALTERNATIVA_BUTTON_LABEL_MAX_CHARS = 15;
 /** Limpa rótulo da IA para o mesmo payload nativo (sem URL, markdown, emoji, quebra de linha). */
 function sanitizeUrlButtonDisplayText(raw) {
     return String(raw || "")
@@ -7181,14 +7183,17 @@ function sanitizeUrlButtonDisplayText(raw) {
         .replace(/\s+/g, " ")
         .trim();
 }
-/** Rótulo do botão WhatsApp (limite nativo de URL button ~20 caracteres). Sempre retorna texto válido. */
+/** Rótulo do botão WhatsApp. Allowlist inteira; rótulo longo da IA cai no fallback (não fatia no meio). */
 function normalizeButtonDisplayText(raw, fallback = ALTERNATIVA_URL_BUTTON_LABELS[0]) {
     const fromAllowlist = normalizeAlternativaUrlButtonLabel(raw, "");
-    const candidate = sanitizeUrlButtonDisplayText(fromAllowlist || raw);
-    const safeFallback = sanitizeUrlButtonDisplayText(fallback).slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS) ||
-        ALTERNATIVA_URL_BUTTON_LABELS[0];
-    const text = (candidate || safeFallback).slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS).trim();
-    return text || ALTERNATIVA_URL_BUTTON_LABELS[0];
+    if (fromAllowlist)
+        return fromAllowlist;
+    const candidate = sanitizeUrlButtonDisplayText(raw);
+    if (candidate && [...candidate].length <= ALTERNATIVA_BUTTON_LABEL_MAX_CHARS) {
+        return candidate;
+    }
+    const fromFallback = normalizeAlternativaUrlButtonLabel(fallback, ALTERNATIVA_URL_BUTTON_LABELS[0]);
+    return fromFallback || ALTERNATIVA_URL_BUTTON_LABELS[0];
 }
 function parseJsonObjectFromModelText(raw) {
     const text = String(raw || "").trim();
@@ -7247,6 +7252,28 @@ function stripUrlsFromMessageText(message) {
         .trim();
 }
 /**
+ * A IA às vezes deixa `\n` visível (duas letras) em vez de quebra de linha.
+ * Itens 1) 2) 3) na mesma linha passam cada um para a linha de baixo.
+ */
+function formatWhatsAppVisibleLayout(message) {
+    let text = String(message || "");
+    for (let i = 0; i < 3; i++) {
+        const next = text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\n");
+        if (next === text)
+            break;
+        text = next;
+    }
+    const numberedParen = (text.match(/\d{1,2}\)\s/g) || []).length;
+    if (numberedParen >= 2) {
+        text = text.replace(/[ \t]+(?=\d{1,2}\)\s)/g, "\n");
+    }
+    const numberedDot = (text.match(/(?:^|\s)\d{1,2}\.\s/g) || []).length;
+    if (numberedDot >= 2) {
+        text = text.replace(/[ \t]+(?=\d{1,2}\.\s)/g, "\n");
+    }
+    return text.replace(/\n{3,}/g, "\n\n");
+}
+/**
  * WhatsApp formatação: negrito = *texto* (um par).
  * GPT/Markdown costuma emitir **texto** — converter antes do envio.
  * @see https://faq.whatsapp.com/539178204879377
@@ -7267,6 +7294,7 @@ function prepareOutboundWhatsAppText(message, opts) {
     if (opts?.stripUrls) {
         text = stripUrlsFromMessageText(text) || text;
     }
+    text = formatWhatsAppVisibleLayout(text);
     return normalizeWhatsAppFormatting(text).trim();
 }
 function ensureMessageContainsLink(message, link, cta) {

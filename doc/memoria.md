@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-26 14:28 — Alternativa: newline real + botão sem corte
+- `\n` literal vira quebra de linha; `1) 2) 3)` cada item na sua linha
+- Rótulo custom >15 caracteres cai na allowlist (WhatsApp corta texto de 20)
+- Marker `DEPLOY-2026-08-26-alternativa-quebra-linha-botao-curto`
+- LOG: `doc/LOG-2026-08-26__142800__alternativa-newline-botao-curto.md`
+
 ## 2026-08-26 11:15 — Liberar drax (5181077770) da pausa humana
 - Lifecycle `drax` estava `restricted_wait` até 11:40 BRT; chip `open`
 - SSH Actions falhou: `VPS_SSH_PRIVATE_KEY` vazio no runner
