@@ -23524,38 +23524,48 @@
 
     <script>
       (function initMetaEmbeddedSignupSdk() {
-        fetch("/meta-oficial/embedded-signup/config")
-          .then((r) => {
-            if (!r.ok) throw new Error(String(r.status));
-            return r.json();
-          })
-          .then((cfg) => {
-            window.__META_ES_CONFIG = cfg;
-            window.fbAsyncInit = function () {
-              if (typeof FB !== "undefined" && cfg.appId) {
-                FB.init({
-                  appId: cfg.appId,
-                  cookie: true,
-                  xfbml: true,
-                  version: cfg.graphVersion || "v22.0",
-                });
-              }
-            };
-            if (!document.getElementById("facebook-jssdk")) {
-              const s = document.createElement("script");
-              s.id = "facebook-jssdk";
-              s.async = true;
-              s.defer = true;
-              s.crossOrigin = "anonymous";
-              s.src = "https://connect.facebook.net/pt_BR/sdk.js";
-              document.body.appendChild(s);
-            } else if (typeof window.fbAsyncInit === "function") {
-              window.fbAsyncInit();
+        function applyMetaEsConfig(cfg) {
+          window.__META_ES_CONFIG = cfg;
+          window.fbAsyncInit = function () {
+            if (typeof FB !== "undefined" && cfg.appId) {
+              FB.init({
+                appId: cfg.appId,
+                cookie: true,
+                xfbml: true,
+                version: cfg.graphVersion || "v22.0",
+              });
             }
-          })
-          .catch(() => {
-            window.__META_ES_CONFIG = { ok: false, loadError: true };
-          });
+          };
+          if (!document.getElementById("facebook-jssdk")) {
+            const s = document.createElement("script");
+            s.id = "facebook-jssdk";
+            s.async = true;
+            s.defer = true;
+            s.crossOrigin = "anonymous";
+            s.src = "https://connect.facebook.net/pt_BR/sdk.js";
+            document.body.appendChild(s);
+          } else if (typeof window.fbAsyncInit === "function") {
+            window.fbAsyncInit();
+          }
+        }
+        function loadMetaEsConfig(attempt) {
+          fetch("/meta-oficial/embedded-signup/config", { credentials: "same-origin" })
+            .then((r) => {
+              if (!r.ok) throw new Error(String(r.status));
+              return r.json();
+            })
+            .then(applyMetaEsConfig)
+            .catch(() => {
+              if (attempt < 10) {
+                window.setTimeout(function () {
+                  loadMetaEsConfig(attempt + 1);
+                }, 1200);
+                return;
+              }
+              window.__META_ES_CONFIG = { ok: false, loadError: true };
+            });
+        }
+        loadMetaEsConfig(0);
       })();
 
       // Litepicker (range em um único input)
@@ -34664,7 +34674,7 @@
         }
       }
 
-      window.wabaConnectMetaWhatsappOficial = async function wabaConnectMetaWhatsappOficial(event) {
+      window.wabaConnectMetaWhatsappOficial = function wabaConnectMetaWhatsappOficial(event) {
         if (event && typeof event.preventDefault === "function") event.preventDefault();
         metaTpLogLines = [];
         metaTpResetSession();
@@ -34672,54 +34682,48 @@
           metaTpSetStatus("O Embedded Signup exige HTTPS. Abra o Waba em https://waba.draxsistemas.com.br/");
           return false;
         }
+        const cfg = window.__META_ES_CONFIG || {};
+        const appId = String(cfg.appId || "").trim();
+        const configId = String(cfg.configId || "").trim();
+        if (!appId || !configId) {
+          metaTpSetStatus("A conexão com a Meta não está disponível. Recarregue a página e tente de novo.");
+          return false;
+        }
+        if (typeof FB === "undefined" || typeof FB.login !== "function") {
+          metaTpSetStatus("SDK da Meta não carregou. Verifique bloqueador de anúncios.");
+          return false;
+        }
         try {
-          const started = await metaTpFetchJson("/integrations/meta/whatsapp/start");
-          if (!started.response.ok || started.payload.ok === false) {
-            metaTpSetStatus(String(started.payload.error || "Não foi possível iniciar a conexão."));
-            return false;
-          }
-          const appId = String(started.payload.appId || "").trim();
-          const configId = String(started.payload.configId || "").trim();
-          if (!appId || !configId) {
-            metaTpSetStatus("A conexão com a Meta não está disponível. Fale com o suporte.");
-            return false;
-          }
-          window.__wabaMetaTechSignupActive = true;
-          metaTpLog("início");
-          const runLogin = function () {
-            if (typeof FB === "undefined" || typeof FB.login !== "function") {
-              window.__wabaMetaTechSignupActive = false;
-              metaTpSetStatus("SDK da Meta não carregou. Verifique bloqueador de anúncios.");
+          FB.init({
+            appId: appId,
+            cookie: true,
+            xfbml: true,
+            version: String(cfg.graphVersion || "v22.0"),
+          });
+        } catch (_err) {
+          /* init já pode ter ocorrido no carregamento da página */
+        }
+        window.__wabaMetaTechSignupActive = true;
+        metaTpLog("início");
+        metaTpFetchJson("/integrations/meta/whatsapp/start").catch(function () {});
+        FB.login(
+          function (response) {
+            const code = String((response && response.authResponse && response.authResponse.code) || "").trim();
+            if (!code) {
+              metaTpLog("FB.login sem code");
               return;
             }
-            FB.login(
-              function (response) {
-                const code = String((response && response.authResponse && response.authResponse.code) || "").trim();
-                if (!code) {
-                  metaTpLog("FB.login sem code");
-                  return;
-                }
-                metaTpSession.codeReceived = true;
-                metaTpSession._code = code;
-                metaTpTryAdvance();
-              },
-              {
-                config_id: configId,
-                response_type: "code",
-                override_default_response_type: true,
-                extras: { setup: {} },
-              },
-            );
-          };
-          if (typeof FB !== "undefined" && typeof FB.login === "function") {
-            runLogin();
-          } else {
-            window.setTimeout(runLogin, 800);
-          }
-        } catch {
-          window.__wabaMetaTechSignupActive = false;
-          metaTpSetStatus("Falha de rede ao iniciar a conexão.");
-        }
+            metaTpSession.codeReceived = true;
+            metaTpSession._code = code;
+            metaTpTryAdvance();
+          },
+          {
+            config_id: configId,
+            response_type: "code",
+            override_default_response_type: true,
+            extras: { setup: {}, sessionInfoVersion: "3" },
+          },
+        );
         return false;
       };
 
