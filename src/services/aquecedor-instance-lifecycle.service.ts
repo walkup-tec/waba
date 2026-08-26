@@ -338,6 +338,49 @@ export async function getAquecedorLifecycleRow(
   return { ...found.row };
 }
 
+/** Tira a instância da pausa humana de 3h e deixa phase=active (não mexe em proxy). */
+export async function clearAquecedorHumanPause(
+  instanceName: string,
+): Promise<{
+  ok: boolean;
+  instanceName: string;
+  key: string | null;
+  phase: AquecedorInstancePhase | null;
+  wasRestricted: boolean;
+}> {
+  const name = String(instanceName || "").trim();
+  if (!name) {
+    return { ok: false, instanceName: "", key: null, phase: null, wasRestricted: false };
+  }
+  const store = await loadStore();
+  const found = await findAquecedorLifecycleRow(name);
+  if (!found) {
+    const key = normalizeKey(name);
+    const row = emptyRow("active");
+    row.preparingSince = null;
+    row.activatedAt = new Date().toISOString();
+    store.instances[key] = row;
+    await saveStore(store);
+    return { ok: true, instanceName: name, key, phase: "active", wasRestricted: false };
+  }
+  refreshRestrictionPhase(found.row);
+  const wasRestricted = found.row.phase === "restricted_wait";
+  found.row.phase = "active";
+  found.row.restrictedUntil = null;
+  found.row.restrictedReason = null;
+  if (!found.row.activatedAt) found.row.activatedAt = new Date().toISOString();
+  store.instances[found.key] = found.row;
+  await saveStore(store);
+  console.info(`[Aquecedor] ${name}: pausa humana liberada (phase=active).`);
+  return {
+    ok: true,
+    instanceName: name,
+    key: found.key,
+    phase: "active",
+    wasRestricted,
+  };
+}
+
 export async function removeAquecedorInstanceLifecycle(instanceName: string): Promise<void> {
   const aliasesMap = await loadAliasesMap();
   const keys = collectInstanceNameKeys(instanceName, aliasesMap);

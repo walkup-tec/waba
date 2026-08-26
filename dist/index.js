@@ -8764,6 +8764,47 @@ app.get("/proxy-brasil/status", (_req, res) => {
     return res.json((0, proxy_brasil_config_1.proxyBrasilPublicSummary)((0, proxy_brasil_config_1.loadProxyBrasilConfig)()));
 });
 /**
+ * Tira a instância da pausa humana (restricted_wait → active).
+ * Master: qualquer instância. Não mexe em proxy nem na Evolution.
+ */
+app.post("/instancias/:name/liberar-pausa-humana", async (req, res) => {
+    try {
+        const instanceName = String(req.params.name || "").trim();
+        if (!instanceName) {
+            return res.status(400).json({ error: "Nome da instância é obrigatório." });
+        }
+        if (await rejectForeignInstance(req, res, instanceName))
+            return;
+        const cleared = await (0, aquecedor_instance_lifecycle_service_1.clearAquecedorHumanPause)(instanceName);
+        if (!cleared.ok) {
+            return res.status(400).json({ error: "Não foi possível liberar a pausa humana." });
+        }
+        const usageMap = await loadInstanceUsageMap();
+        const current = getInstanceUsageFromMap(usageMap, instanceName);
+        await persistInstanceUsage([
+            {
+                instanceName,
+                useAquecedor: current?.useAquecedor !== false,
+                useDisparador: true,
+            },
+        ]);
+        await (0, whatsapp_connecting_restriction_service_1.clearWhatsappConnectingRestriction)(instanceName);
+        return res.json({
+            ok: true,
+            message: "Pausa humana liberada. Instância conectada permanece disponível para disparo.",
+            instanceName: cleared.instanceName,
+            key: cleared.key,
+            phase: cleared.phase,
+            wasRestricted: cleared.wasRestricted,
+            useDisparador: true,
+        });
+    }
+    catch (error) {
+        console.error("Erro ao liberar pausa humana:", error);
+        return res.status(500).json({ error: "Erro ao liberar pausa humana." });
+    }
+});
+/**
  * Aplica Proxy Brasil na instância Evolution (teste / número já existente).
  * Master: qualquer instância. Assinante: só a própria.
  */

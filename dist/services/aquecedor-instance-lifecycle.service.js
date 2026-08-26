@@ -10,6 +10,7 @@ exports.getAquecedorLifecycleStatusForInstance = getAquecedorLifecycleStatusForI
 exports.computeDailyCapForInstance = computeDailyCapForInstance;
 exports.isLikelyWhatsAppRestriction = isLikelyWhatsAppRestriction;
 exports.getAquecedorLifecycleRow = getAquecedorLifecycleRow;
+exports.clearAquecedorHumanPause = clearAquecedorHumanPause;
 exports.removeAquecedorInstanceLifecycle = removeAquecedorInstanceLifecycle;
 exports.restoreAquecedorLifecycleFromHistory = restoreAquecedorLifecycleFromHistory;
 exports.restoreAquecedorLifecyclesFromHistoryBatch = restoreAquecedorLifecyclesFromHistoryBatch;
@@ -305,6 +306,40 @@ async function getAquecedorLifecycleRow(instanceName) {
         return null;
     refreshRestrictionPhase(found.row);
     return { ...found.row };
+}
+async function clearAquecedorHumanPause(instanceName) {
+    const name = String(instanceName || "").trim();
+    if (!name) {
+        return { ok: false, instanceName: "", key: null, phase: null, wasRestricted: false };
+    }
+    const store = await loadStore();
+    const found = await findAquecedorLifecycleRow(name);
+    if (!found) {
+        const key = normalizeKey(name);
+        const row = emptyRow("active");
+        row.preparingSince = null;
+        row.activatedAt = new Date().toISOString();
+        store.instances[key] = row;
+        await saveStore(store);
+        return { ok: true, instanceName: name, key, phase: "active", wasRestricted: false };
+    }
+    refreshRestrictionPhase(found.row);
+    const wasRestricted = found.row.phase === "restricted_wait";
+    found.row.phase = "active";
+    found.row.restrictedUntil = null;
+    found.row.restrictedReason = null;
+    if (!found.row.activatedAt)
+        found.row.activatedAt = new Date().toISOString();
+    store.instances[found.key] = found.row;
+    await saveStore(store);
+    console.info(`[Aquecedor] ${name}: pausa humana liberada (phase=active).`);
+    return {
+        ok: true,
+        instanceName: name,
+        key: found.key,
+        phase: "active",
+        wasRestricted,
+    };
 }
 async function removeAquecedorInstanceLifecycle(instanceName) {
     const aliasesMap = await loadAliasesMap();

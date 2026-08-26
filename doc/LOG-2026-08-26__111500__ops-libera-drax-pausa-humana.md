@@ -16,26 +16,29 @@ Tirar o número **5181077770** (instância Evolution `drax`, alias WB-7770) da *
 
 ## Solução
 
-1. Workflow `Clear Human Pause (SSH)` faz `docker exec` no container `waba_disparador`, grava backup do lifecycle, seta `drax` para `phase=active` e limpa `restrictedUntil` / `restrictedReason`.
-2. Reinicia **somente** o container WABA para recarregar o cache em memória (`let cache` do lifecycle). Evolution e proxy não são tocados.
-3. Trigger: `.github/pause-triggers/drax-7770.json` no push em `master`.
+1. Workflow SSH tentou gravar o JSON no volume — **falhou** porque `VPS_SSH_PRIVATE_KEY` não está disponível no GitHub Actions (run [#1](https://github.com/walkup-tec/waba/actions/runs/32979902863)).
+2. Endpoint `POST /instancias/:name/liberar-pausa-humana` (sessão master): `clearAquecedorHumanPause` + `useDisparador=true` + limpa restrição WhatsApp connecting. Sem proxy/restart Evolution.
+3. Marker `DEPLOY-2026-08-26-libera-pausa-humana` — exige Redeploy EasyPanel `waba_disparador` para valer no processo em execução.
 
 ## Arquivos
 
 - `.github/workflows/clear-human-pause-ssh.yml`
 - `.github/pause-triggers/drax-7770.json`
+- `src/services/aquecedor-instance-lifecycle.service.ts` (`clearAquecedorHumanPause`)
+- `src/index.ts` (rota)
+- `src/deploy-marker.ts` / `dist/*` equivalentes
 
 ## Como validar
 
-- Actions → **Clear Human Pause (SSH)** concluído com `phase=active`
-- `GET /admin/infra/data-snapshot` → lifecycle `drax.phase=active`
-- UI Instâncias: WB-7770 sem rótulo «3 horas pausa humana», status conectado
-- Campanha Alternativa volta a poder escolher `drax` (`skipHumanPaused`)
+- Após Redeploy: `GET /health` mostra o marker
+- `POST /instancias/drax/liberar-pausa-humana` com cookie master → `phase=active`
+- Snapshot: `drax.phase=active`
+- UI: WB-7770 conectado, sem «3 horas pausa humana»
 
 ## Observações de segurança
 
 - Sem restart da Evolution, sem `proxy/set`, sem log de chaves
-- Restart do WABA pode gerar ~1 min de HTTP 502 no Traefik (mesmo padrão de Redeploy)
+- Redeploy do WABA pode gerar ~1 min de HTTP 502 no Traefik
 
 ## Palavras-chave
 

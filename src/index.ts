@@ -222,6 +222,7 @@ import {
   findAquecedorLifecycleRow,
   getAquecedorLifecycleStatusMap,
   markAquecedorInstanceRestricted,
+  clearAquecedorHumanPause,
   recordAquecedorInstanceDailySend,
   registerAquecedorInstancePreparing,
   removeAquecedorInstanceLifecycle,
@@ -10494,6 +10495,47 @@ app.delete("/admin/instances/:name", async (req, res) => {
 /** Status público (sem senha) da config Proxy Brasil no processo. */
 app.get("/proxy-brasil/status", (_req, res) => {
   return res.json(proxyBrasilPublicSummary(loadProxyBrasilConfig()));
+});
+
+/**
+ * Tira a instância da pausa humana (restricted_wait → active).
+ * Master: qualquer instância. Não mexe em proxy nem na Evolution.
+ */
+app.post("/instancias/:name/liberar-pausa-humana", async (req, res) => {
+  try {
+    const instanceName = String(req.params.name || "").trim();
+    if (!instanceName) {
+      return res.status(400).json({ error: "Nome da instância é obrigatório." });
+    }
+    if (await rejectForeignInstance(req, res, instanceName)) return;
+
+    const cleared = await clearAquecedorHumanPause(instanceName);
+    if (!cleared.ok) {
+      return res.status(400).json({ error: "Não foi possível liberar a pausa humana." });
+    }
+    const usageMap = await loadInstanceUsageMap();
+    const current = getInstanceUsageFromMap(usageMap, instanceName);
+    await persistInstanceUsage([
+      {
+        instanceName,
+        useAquecedor: current?.useAquecedor !== false,
+        useDisparador: true,
+      },
+    ]);
+    await clearWhatsappConnectingRestriction(instanceName);
+    return res.json({
+      ok: true,
+      message: "Pausa humana liberada. Instância conectada permanece disponível para disparo.",
+      instanceName: cleared.instanceName,
+      key: cleared.key,
+      phase: cleared.phase,
+      wasRestricted: cleared.wasRestricted,
+      useDisparador: true,
+    });
+  } catch (error) {
+    console.error("Erro ao liberar pausa humana:", error);
+    return res.status(500).json({ error: "Erro ao liberar pausa humana." });
+  }
 });
 
 /**

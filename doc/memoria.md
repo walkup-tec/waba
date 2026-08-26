@@ -1,8 +1,9 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
 ## 2026-08-26 11:15 — Liberar drax (5181077770) da pausa humana
-- Lifecycle `drax` saiu de `restricted_wait` via SSH no volume `/app/data` (sem mexer em Evolution/proxy)
-- Restart só do container WABA para recarregar cache; workflow `Clear Human Pause (SSH)`
+- Lifecycle `drax` estava `restricted_wait` até 11:40 BRT; chip `open`
+- SSH Actions falhou: `VPS_SSH_PRIVATE_KEY` vazio no runner
+- Endpoint `POST /instancias/:name/liberar-pausa-humana` (master) + marker `DEPLOY-2026-08-26-libera-pausa-humana`
 - LOG: `doc/LOG-2026-08-26__111500__ops-libera-drax-pausa-humana.md`
 
 ## 2026-08-26 10:28 — Alternativa botão nativo sempre + sem título em negrito
