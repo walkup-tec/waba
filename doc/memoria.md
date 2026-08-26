@@ -1,5 +1,12 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-26 10:28 — Alternativa botão nativo sempre + sem título em negrito
+- Rótulo da IA só altera `displayText`; payload continua `sendButtons` URL
+- Sem fallback `sendText` sem botão; retry com `Quero saber mais` se o rótulo da IA falhar
+- Texto inteiro em `description`; botão até 20 caracteres
+- Marker `DEPLOY-2026-08-26-alternativa-botao-nativo-sempre`
+- LOG: `doc/LOG-2026-08-26__102200__alternativa-sem-titulo-botao-20.md`
+
 ## 2026-08-25 19:05 — Meta Tech Provider integrado no master atual (local)
 
 - Branch local `feat/meta-tech-provider-master` sobre `origin/master` `8f05836`

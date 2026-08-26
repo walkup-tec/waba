@@ -8645,8 +8645,8 @@ function buildDisparosAiPrompt(input: {
         "- body: mensagem curta (maximo 280 caracteres), pronta para WhatsApp.",
         "- Nao inclua links, URLs, wa.me nem 'http' em nenhum campo.",
         "- Nao coloque a frase de opt-out dentro de body.",
-        "- Negrito no WhatsApp (so em body): use exatamente um par de asteriscos (*termo*), nunca dois (**termo**). So se o briefing pedir enfase (ex.: *Vem Card*). Nunca deixe a abertura/saudacao em negrito.",
-        `- buttonLabel: parafraseie o CTA do usuario (nao copie literal). CTA base: "${cta.slice(0, 15)}". Maximo 15 caracteres. Mesma intencao. Sem emoji.`,
+        "- Nao use asteriscos nem negrito no body (nem na abertura, nem no inicio de frases/itens).",
+        `- buttonLabel: so o texto visivel do botao URL nativo. Parafraseie o CTA (nao copie literal). CTA base: "${cta.slice(0, 20)}". Maximo 20 caracteres. Mesma intencao. Sem emoji. Sem URL. O sistema sempre envia o botao no mesmo formato; nao descreva o botao no body.`,
         `- optOut: uma unica linha, variacao natural de: "${ALTERNATIVA_OPT_OUT_SEED}". Sem markdown. Sem URL.`,
         "- Nao mencione 'clique no link'; incentive a acao do botao de forma natural em body.",
         ...(uniqueSeed ? [`- Gere uma variante unica para este envio (id ${uniqueSeed}).`] : []),
@@ -8706,17 +8706,32 @@ function normalizeAlternativaUrlButtonLabel(
   return loose || fallback;
 }
 
-const ALTERNATIVA_BUTTON_LABEL_MAX_CHARS = 15;
+const ALTERNATIVA_BUTTON_LABEL_MAX_CHARS = 20;
 
-/** Rótulo do botão WhatsApp (limite prático ~15 caracteres). */
+/** Limpa rótulo da IA para o mesmo payload nativo (sem URL, markdown, emoji, quebra de linha). */
+function sanitizeUrlButtonDisplayText(raw: string): string {
+  return String(raw || "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")
+    .replace(/[*_`]/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Rótulo do botão WhatsApp (limite nativo de URL button ~20 caracteres). Sempre retorna texto válido. */
 function normalizeButtonDisplayText(
   raw: string,
   fallback: string = ALTERNATIVA_URL_BUTTON_LABELS[0],
 ): string {
   const fromAllowlist = normalizeAlternativaUrlButtonLabel(raw, "");
-  if (fromAllowlist) return fromAllowlist.slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS);
-  const text = String(raw || "").trim() || fallback;
-  return text.slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS);
+  const candidate = sanitizeUrlButtonDisplayText(fromAllowlist || raw);
+  const safeFallback =
+    sanitizeUrlButtonDisplayText(fallback).slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS) ||
+    ALTERNATIVA_URL_BUTTON_LABELS[0];
+  const text = (candidate || safeFallback).slice(0, ALTERNATIVA_BUTTON_LABEL_MAX_CHARS).trim();
+  return text || ALTERNATIVA_URL_BUTTON_LABELS[0];
 }
 
 function parseJsonObjectFromModelText(raw: string): Record<string, unknown> | null {
@@ -8826,41 +8841,42 @@ function ensureMessageContainsLink(message: string, link: string, cta: string) {
 
 function isGhostButtonsPayload(raw: unknown): boolean {
   try {
-    // Evolution 2.3.x envolve o CTA em viewOnce — no WhatsApp isso não aparece como
-    // texto+botão visível. Tratar como falha para enviar o texto em seguida.
-    return JSON.stringify(raw ?? "").includes("viewOnceMessage");
+    const serialized = JSON.stringify(raw ?? "");
+    if (!serialized.includes("viewOnceMessage")) return false;
+    // Evolution 2.4 devolve interactive/cta_url mesmo com wrapper viewOnce — botão nativo visível.
+    if (
+      serialized.includes("nativeFlowMessage") ||
+      serialized.includes("interactiveMessage") ||
+      serialized.includes("cta_url")
+    ) {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
 }
 
-/**
- * Evolution 2.4 `buttonMessage` monta o corpo como `*${title}*\n\n${description}`.
- * Title ZWSP/`""` vira `**` visível na digitação (markdown vazio). Title precisa de
- * letras reais para o WhatsApp consumir os asteriscos como negrito.
- * Botão nativo vem do array `buttons` (nativeFlow), não do title.
- */
-function visibleEvoButtonTitle(text: string): string {
-  const cleaned = String(text || "")
-    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")
-    .replace(/^\*+|\*+$/g, "")
-    .trim() || "Olá";
-  const firstLine = cleaned.split(/\n/)[0].trim() || cleaned;
-  if (firstLine.length <= 60) return firstLine;
-  const slice = firstLine.slice(0, 60);
-  const sp = slice.lastIndexOf(" ");
-  return (sp >= 12 ? slice.slice(0, sp) : slice).trim() || firstLine.slice(0, 60);
+/** Remove `*negrito*` do WhatsApp; itálico `_..._` permanece (opt-out). */
+function stripWhatsAppBoldMarkers(message: string): string {
+  return String(message || "").replace(/\*([^*\n]+)\*/g, "$1");
 }
 
+/**
+ * Evolution 2.4 `buttonMessage` monta o corpo como `*${title}*\n\n${description}`.
+ * Title com as primeiras palavras vira cabeçalho em negrito no WhatsApp.
+ * Title vazio/ZWSP vira `**` na digitação. NBSP não forma palavra em negrito.
+ * Texto visível vai inteiro em `description`. Botão nativo vem de `buttons`.
+ */
 function splitMessageForUrlButton(fullText: string): { title: string; description: string } {
-  const text = String(fullText || "").trim() || "Olá!";
+  const text = stripWhatsAppBoldMarkers(String(fullText || "").trim()) || "Olá!";
   const maxBody = 1024;
-  const title = visibleEvoButtonTitle(text);
-  let description = text.startsWith(title) ? text.slice(title.length).replace(/^\s+/, "") : text;
+  let description = text;
   if (description.length > maxBody) {
-    description = description.slice(0, maxBody).replace(/\s+\S*$/, "").trim() || description.slice(0, maxBody);
+    description =
+      description.slice(0, maxBody).replace(/\s+\S*$/, "").trim() || description.slice(0, maxBody);
   }
-  return { title, description };
+  return { title: "\u00A0", description };
 }
 
 async function sendEvoAlternativaUrlButtonMessage(input: {
@@ -13887,14 +13903,24 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     }
 
     if (isAlternativaMotor && buttonUrl) {
-      const buttonResult = await sendEvoAlternativaUrlButtonMessage({
-        instanceName: instancePick.instancia,
-        number: numero,
-        messageText: outbound.text,
-        buttonLabel,
-        buttonUrl,
-      });
-      const ghost = isGhostButtonsPayload(buttonResult.json ?? buttonResult.body);
+      const sendButtonsWithLabel = (label: string) =>
+        sendEvoAlternativaUrlButtonMessage({
+          instanceName: instancePick.instancia,
+          number: numero,
+          messageText: outbound.text,
+          buttonLabel: label,
+          buttonUrl,
+        });
+      let buttonResult = await sendButtonsWithLabel(buttonLabel);
+      let ghost = isGhostButtonsPayload(buttonResult.json ?? buttonResult.body);
+      const safeFallbackLabel = ALTERNATIVA_URL_BUTTON_LABELS[0];
+      if (
+        (!buttonResult.ok || ghost) &&
+        normalizeButtonDisplayText(buttonLabel) !== safeFallbackLabel
+      ) {
+        buttonResult = await sendButtonsWithLabel(safeFallbackLabel);
+        ghost = isGhostButtonsPayload(buttonResult.json ?? buttonResult.body);
+      }
       if (buttonResult.ok && !ghost) {
         usedUrlButton = true;
         deliveredText =
@@ -13902,18 +13928,21 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
         lastSendJson = buttonResult.json;
       } else {
         console.warn(
-          "[Campanha Alternativa] sendButtons indisponível; envia texto sem URL (imagem já foi):",
+          "[Campanha Alternativa] sendButtons falhou; lead volta a pending (sem fallback texto):",
           buttonResult.status,
           ghost ? "viewOnce" : String(buttonResult.body || "").slice(0, 180),
         );
-        const textOnly =
-          prepareOutboundWhatsAppText(outbound.text, { stripUrls: true }) || outbound.text;
-        if (!(await sendCampaignTextMessage(textOnly))) {
-          scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
-          return;
-        }
-        deliveredText = textOnly;
+        lead.status = "pending";
+        scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+        return;
       }
+    } else if (isAlternativaMotor && !buttonUrl) {
+      console.error(
+        "[Campanha Alternativa] sem URL do botão; lead pending — não envia texto sem botão.",
+      );
+      lead.status = "pending";
+      scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
+      return;
     } else {
       if (!(await sendCampaignTextMessage(outbound.text))) {
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
