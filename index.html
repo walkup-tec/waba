@@ -3164,6 +3164,112 @@
           color: #93c5fd;
         }
 
+        .meta-onboard { max-width: 920px; margin: 0 auto; }
+        .meta-onboard-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
+        .meta-onboard-hero h2 { margin:0 0 6px; font-size:1.35rem; font-weight:700; }
+        .meta-onboard-hero p { margin:0; max-width:42rem; color:rgba(226,232,240,.78); line-height:1.45; }
+        .meta-onboard-cta { min-width:220px; min-height:48px; border:0; border-radius:12px; background:#25d366; color:#052e16; font-weight:700; font-size:15px; padding:12px 18px; cursor:pointer; }
+        .meta-onboard-cta:hover { filter:brightness(1.06); }
+        .meta-onboard-cta:disabled { opacity:.55; cursor:wait; }
+        .meta-onboard-steps { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:0 0 18px; padding:0; list-style:none; }
+        .meta-onboard-step { background:rgba(15,23,42,.55); border:1px solid rgba(148,163,184,.18); border-radius:12px; padding:10px 10px 12px; min-height:88px; }
+        .meta-onboard-step.is-done { border-color:rgba(37,211,102,.45); background:rgba(6,36,24,.55); }
+        .meta-onboard-step.is-current { border-color:rgba(37,211,102,.9); box-shadow:0 0 0 1px rgba(37,211,102,.35); }
+        .meta-onboard-step-n {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          width: 22px;
+          height: 22px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1;
+          background: rgba(148, 163, 184, 0.2);
+          color: #e2e8f0;
+          margin-bottom: 6px;
+        }
+        .meta-onboard-step.is-current .meta-onboard-step-n {
+          background: #25d366;
+          color: #052e16;
+        }
+        .meta-onboard-step.is-done .meta-onboard-step-n {
+          background: #25d366;
+          color: transparent;
+          font-size: 0;
+        }
+        .meta-onboard-step.is-done .meta-onboard-step-n::after {
+          content: "";
+          position: absolute;
+          left: 6px;
+          top: 7px;
+          width: 8px;
+          height: 4px;
+          border-left: 2.2px solid #052e16;
+          border-bottom: 2.2px solid #052e16;
+          transform: rotate(-45deg);
+        }
+        .meta-onboard-step strong { display:block; font-size:12px; line-height:1.3; }
+        .meta-onboard-step-hint { display:block; margin-top:4px; font-size:11px; color:rgba(226,232,240,.62); }
+        .meta-connected-card { display:none; align-items:center; gap:14px; padding:16px 18px; border-radius:14px; border:1px solid rgba(37,211,102,.4); background:linear-gradient(180deg, rgba(6,36,24,.92), rgba(15,23,42,.7)); margin-bottom:14px; }
+        .meta-connected-card.is-visible { display:flex; }
+        .meta-connected-avatar, .meta-chat-avatar { width:52px; height:52px; border-radius:50%; background:#25d366; color:#052e16; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; flex:0 0 auto; }
+        .meta-chat-avatar { width:44px; height:44px; font-size:14px; font-weight:700; background:#00a884; }
+        .meta-connected-card h3 { margin:0 0 4px; font-size:1.05rem; }
+        .meta-connected-card p { margin:0; font-size:13px; color:rgba(226,232,240,.78); }
+        .meta-connected-badge { margin-left:auto; background:#25d366; color:#052e16; font-weight:700; font-size:12px; border-radius:999px; padding:6px 10px; white-space:nowrap; }
+        .meta-onboard-next { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+        .meta-tpl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:16px; }
+        .meta-tpl-card { text-align:left; border:1px solid rgba(148,163,184,.2); background:rgba(15,23,42,.55); border-radius:14px; padding:14px; color:inherit; cursor:pointer; min-height:140px; }
+        .meta-tpl-card.is-selected, .meta-tpl-card:hover { border-color:rgba(37,211,102,.55); }
+        .meta-tpl-card-status { display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:3px 8px; margin-bottom:8px; background:rgba(148,163,184,.18); }
+        .meta-tpl-card-status.is-approved { background:rgba(37,211,102,.2); color:#86efac; }
+        .meta-tpl-card h4 { margin:0 0 6px; font-size:14px; }
+        .meta-tpl-card p { margin:0; font-size:12px; color:rgba(226,232,240,.7); }
+        .meta-chat { display:grid; grid-template-columns:minmax(280px,34%) minmax(0,1fr); min-height:calc(100vh - 168px); max-height:calc(100vh - 132px); border:1px solid rgba(148,163,184,.16); border-radius:16px; overflow:hidden; background:#0b141a; }
+        .meta-chat-list, .meta-chat-thread { display:flex; flex-direction:column; min-height:0; }
+        .meta-chat-list { background:#111b21; border-right:1px solid rgba(255,255,255,.06); }
+        .meta-chat-list-head, .meta-chat-thread-head { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#202c33; min-height:62px; }
+        .meta-chat-search { margin:8px 12px 10px; }
+        .meta-chat-search input, .meta-inbox-composer textarea { width:100%; border:0; border-radius:10px; background:#202c33; color:#e9edef; padding:10px 12px; }
+        .meta-chat-filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; }
+        .meta-chat-filters button { border:0; border-radius:999px; background:#202c33; color:#8696a0; font-size:12px; padding:6px 10px; cursor:pointer; }
+        .meta-chat-filters button.is-active { background:#005c4b; color:#fff; }
+        .meta-inbox-scroll { overflow:auto; flex:1; min-height:0; }
+        .meta-inbox-item { display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:10px; width:100%; text-align:left; border:0; border-bottom:1px solid rgba(255,255,255,.04); background:transparent; color:#e9edef; padding:12px 14px; cursor:pointer; }
+        .meta-inbox-item:hover { background:#202c33; }
+        .meta-inbox-item.is-active { background:#2a3942; }
+        .meta-inbox-item-title { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .meta-inbox-item-preview { font-size:13px; color:#8696a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .meta-chat-unread { min-width:18px; height:18px; border-radius:999px; background:#25d366; color:#052e16; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
+        .meta-chat-thread { background:#0b141a; }
+        .meta-chat-thread-title { font-weight:700; font-size:15px; }
+        .meta-chat-thread-sub { font-size:12px; color:#8696a0; }
+        .meta-chat-empty { margin:auto; text-align:center; color:#8696a0; padding:24px; }
+        .meta-inbox-msg { max-width:min(78%,520px); margin:4px 16px; padding:7px 9px 5px; border-radius:8px; font-size:14px; line-height:1.4; color:#e9edef; width:fit-content; }
+        .meta-inbox-msg.is-in { background:#202c33; border-top-left-radius:2px; }
+        .meta-inbox-msg.is-out { margin-left:auto; background:#005c4b; border-top-right-radius:2px; }
+        .meta-chat-meta { display:flex; justify-content:flex-end; gap:6px; margin-top:2px; font-size:11px; color:rgba(233,237,239,.72); }
+        .meta-chat-tick.is-read { color:#53bdeb; }
+        .meta-chat-tick.is-fail { color:#f87171; font-weight:700; }
+        .meta-inbox-composer { display:flex; align-items:flex-end; gap:8px; padding:10px 12px; background:#202c33; }
+        .meta-inbox-composer textarea { flex:1; min-height:44px; max-height:120px; resize:none; }
+        .meta-chat-send { width:44px; height:44px; border:0; border-radius:50%; background:#00a884; color:#fff; font-size:18px; cursor:pointer; flex:0 0 auto; }
+        .meta-chat-side { display:none; width:min(320px,100%); background:#111b21; border-left:1px solid rgba(255,255,255,.06); padding:14px; overflow:auto; }
+        .meta-chat.has-side { grid-template-columns:minmax(260px,30%) minmax(0,1fr) minmax(240px,28%); }
+        .meta-chat.has-side .meta-chat-side { display:block; }
+        .meta-chat-back { display:none; border:0; background:transparent; color:#e9edef; font-size:18px; cursor:pointer; }
+        @media (max-width:980px) {
+          .meta-onboard-steps { grid-template-columns:repeat(2,minmax(0,1fr)); }
+          .meta-chat { grid-template-columns:1fr; min-height:72vh; }
+          .meta-chat.has-side { grid-template-columns:1fr; }
+          .meta-chat-side { display:none !important; }
+          .meta-chat-back { display:inline-flex; }
+          .meta-chat.is-thread-open .meta-chat-list { display:none; }
+          .meta-chat:not(.is-thread-open) .meta-chat-thread { display:none; }
+        }
+
         .menu-group[data-menu-group] .tab-button.active {
           border-color: rgba(var(--menu-section-accent-rgb), 0.66);
           background: rgba(var(--menu-section-accent-rgb), 0.14);
@@ -17258,24 +17364,6 @@
                   <span class="tab-label">Conexão</span>
                 </button>
                 <button
-                  id="tab-btn-whatsapp-inbox"
-                  class="tab-button waba-prod-only"
-                  type="button"
-                  role="tab"
-                  aria-selected="false"
-                  aria-controls="tab-whatsapp-inbox"
-                  data-tab="whatsapp-inbox"
-                  data-menu-key="whatsapp-inbox"
-                  data-menu-section="lab-api-oficial"
-                >
-                  <span class="tab-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                  </span>
-                  <span class="tab-label">Inbox</span>
-                </button>
-                <button
                   id="tab-btn-whatsapp-templates"
                   class="tab-button waba-prod-only"
                   type="button"
@@ -17295,6 +17383,24 @@
                     </svg>
                   </span>
                   <span class="tab-label">Templates</span>
+                </button>
+                <button
+                  id="tab-btn-whatsapp-inbox"
+                  class="tab-button waba-prod-only"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="tab-whatsapp-inbox"
+                  data-tab="whatsapp-inbox"
+                  data-menu-key="whatsapp-inbox"
+                  data-menu-section="lab-api-oficial"
+                >
+                  <span class="tab-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </span>
+                  <span class="tab-label">Inbox</span>
                 </button>
                 <button
                   id="tab-btn-whatsapp-automation"
@@ -20111,57 +20217,42 @@
           </div>
         </div>
 
-        <div id="tab-whatsapp-oficial" class="tab-panel tab-hidden" aria-hidden="true">
+                <div id="tab-whatsapp-oficial" class="tab-panel tab-hidden" aria-hidden="true">
           <div class="row g-3">
             <section class="panel col-12">
-              <div class="panel-header">
-                <div class="panel-title">Conectar WhatsApp</div>
-                <span class="muted">Meta Tech Provider — Laboratório</span>
+              <div class="meta-onboard">
+                <div class="meta-onboard-hero">
+                  <div>
+                    <h2>Conectar WhatsApp</h2>
+                    <p>Um clique abre o Embedded Signup da Meta. Empresa, WABA e número são escolhidos <strong>na janela da Meta</strong>. Ao terminar, o Drax mostra o número conectado.</p>
+                  </div>
+                  <button id="meta-tp-connect-btn" type="button" class="meta-onboard-cta" onclick="return window.wabaConnectMetaWhatsappOficial(event);">Conectar WhatsApp</button>
+                </div>
+                <ol class="meta-onboard-steps" id="meta-onboard-steps">
+                  <li class="meta-onboard-step is-current" data-meta-step="1"><span class="meta-onboard-step-n" aria-hidden="true">1</span><strong>Conectar</strong><span class="meta-onboard-step-hint">Clique no botão verde</span></li>
+                  <li class="meta-onboard-step" data-meta-step="2"><span class="meta-onboard-step-n" aria-hidden="true">2</span><strong>Empresa</strong><span class="meta-onboard-step-hint">Autorize na Meta</span></li>
+                  <li class="meta-onboard-step" data-meta-step="3"><span class="meta-onboard-step-n" aria-hidden="true">3</span><strong>WABA</strong><span class="meta-onboard-step-hint">Conta WhatsApp Business</span></li>
+                  <li class="meta-onboard-step" data-meta-step="4"><span class="meta-onboard-step-n" aria-hidden="true">4</span><strong>Número</strong><span class="meta-onboard-step-hint">Escolha o chip oficial</span></li>
+                  <li class="meta-onboard-step" data-meta-step="5"><span class="meta-onboard-step-n" aria-hidden="true">5</span><strong>Templates</strong><span class="meta-onboard-step-hint">Aprovados pela Meta</span></li>
+                  <li class="meta-onboard-step" data-meta-step="6"><span class="meta-onboard-step-n" aria-hidden="true">6</span><strong>Inbox</strong><span class="meta-onboard-step-hint">Teste e atendimento</span></li>
+                </ol>
+                <div id="meta-tp-connected-card" class="meta-connected-card" aria-live="polite">
+                  <div class="meta-connected-avatar" id="meta-tp-connected-initials">WA</div>
+                  <div>
+                    <h3 id="meta-tp-connected-name">WhatsApp conectado</h3>
+                    <p id="meta-tp-connected-phone">—</p>
+                  </div>
+                  <span class="meta-connected-badge">Conectado</span>
+                </div>
+                <p id="meta-tp-connect-status" class="muted" style="margin:0 0 10px;" role="status" aria-live="polite">Carregando status da conexão…</p>
+                <div class="meta-onboard-next">
+                  <button type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaOpenLabTab('whatsapp-templates');">Ir para Templates</button>
+                  <button type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaOpenLabTab('whatsapp-inbox');">Abrir Inbox</button>
+                  <button id="meta-tp-refresh-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaRefreshMetaWhatsappStatus(event);">Atualizar</button>
+                  <button id="meta-tp-subscribe-btn" type="button" class="instance-action-btn btn-refresh enabled" onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);">Inscrever webhooks</button>
+                </div>
+                <details><summary class="muted" style="cursor:pointer;">Detalhes técnicos</summary><p id="meta-tp-connect-log" class="muted" style="white-space:pre-wrap;" role="status" aria-live="polite"></p></details>
               </div>
-              <p class="muted" style="margin: 0;">
-                Conexão do WhatsApp oficial desta conta. Novos menus desta função ficam na seção Laboratório.
-              </p>
-            </section>
-            <section class="panel col-12">
-              <div class="panel-header">
-                <div class="panel-title">WhatsApp Oficial</div>
-                <span class="muted">Embedded Signup — Tech Provider</span>
-              </div>
-              <p id="meta-tp-connect-status" class="muted" style="margin: 0 0 12px;" role="status" aria-live="polite">
-                Carregando status da conexão…
-              </p>
-              <div class="disparos-inline-actions" style="margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-                <button
-                  id="meta-tp-connect-btn"
-                  type="button"
-                  class="instance-action-btn btn-qrcode enabled"
-                  onclick="return window.wabaConnectMetaWhatsappOficial(event);"
-                >
-                  Conectar WhatsApp Oficial
-                </button>
-                <button
-                  id="meta-tp-refresh-btn"
-                  type="button"
-                  class="instance-action-btn btn-refresh enabled"
-                  onclick="return window.wabaRefreshMetaWhatsappStatus(event);"
-                >
-                  Atualizar status
-                </button>
-                <button
-                  id="meta-tp-subscribe-btn"
-                  type="button"
-                  class="instance-action-btn btn-refresh enabled"
-                  onclick="return window.wabaSubscribeMetaWhatsappWebhooks(event);"
-                >
-                  Inscrever webhooks
-                </button>
-              </div>
-              <p class="muted" style="margin: 0 0 8px;">
-                Use um número já existente na Business Manager se a Meta oferecer essa opção.
-                Se o número estiver no WhatsApp Business App, siga apenas o fluxo de Coexistence que a própria Meta apresentar.
-                Não use QR da Evolution nesta tela.
-              </p>
-              <p id="meta-tp-connect-log" class="muted" style="margin: 0; white-space: pre-wrap;" role="status" aria-live="polite"></p>
             </section>
             <section class="panel col-12">
               <div class="panel-header">
@@ -20174,34 +20265,14 @@
               <div class="row g-2 align-items-end">
                 <div class="col-12 col-md-4">
                   <label class="muted" for="meta-cloud-lab-to">Número destino</label>
-                  <input
-                    id="meta-cloud-lab-to"
-                    class="form-control"
-                    type="text"
-                    inputmode="numeric"
-                    autocomplete="off"
-                    placeholder="5551999887766"
-                  />
+                  <input id="meta-cloud-lab-to" class="form-control" type="text" inputmode="numeric" autocomplete="off" placeholder="5551999887766" />
                 </div>
                 <div class="col-12 col-md-5">
                   <label class="muted" for="meta-cloud-lab-text">Mensagem</label>
-                  <input
-                    id="meta-cloud-lab-text"
-                    class="form-control"
-                    type="text"
-                    maxlength="4096"
-                    placeholder="Olá"
-                  />
+                  <input id="meta-cloud-lab-text" class="form-control" type="text" maxlength="4096" placeholder="Olá" />
                 </div>
                 <div class="col-12 col-md-3">
-                  <button
-                    id="meta-cloud-lab-send"
-                    type="button"
-                    class="instance-action-btn btn-qrcode enabled"
-                    onclick="return window.wabaSendMetaCloudLabTest(event);"
-                  >
-                    Enviar
-                  </button>
+                  <button id="meta-cloud-lab-send" type="button" class="instance-action-btn btn-qrcode enabled" onclick="return window.wabaSendMetaCloudLabTest(event);">Enviar</button>
                 </div>
               </div>
               <p id="meta-cloud-lab-result" class="muted" style="margin: 10px 0 0;" role="status" aria-live="polite"></p>
@@ -20209,42 +20280,42 @@
           </div>
         </div>
 
-        <div id="tab-whatsapp-inbox" class="tab-panel tab-hidden" aria-hidden="true">
+                <div id="tab-whatsapp-inbox" class="tab-panel tab-hidden" aria-hidden="true">
           <div class="row g-3">
-            <section class="panel col-12">
-              <div class="panel-header">
-                <div class="panel-title">Inbox</div>
-                <span class="muted">WhatsApp Oficial — atendimento</span>
-              </div>
-              <p id="meta-inbox-banner" class="muted" style="margin: 0 0 10px;" role="status" aria-live="polite">Carregando</p>
-              <div class="disparos-inline-actions" style="margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="all">Todas</button>
-                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="unread">Não lidas</button>
-                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="open">Abertas</button>
-                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="pending">Pendentes</button>
-                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="closed">Finalizadas</button>
-                <button type="button" class="instance-action-btn btn-refresh enabled" data-meta-inbox-filter="mine">Minhas conversas</button>
-              </div>
-              <div class="meta-inbox">
-                <div class="meta-inbox-col">
-                  <div class="meta-inbox-col-head">Conversas</div>
-                  <div id="meta-inbox-list" class="meta-inbox-scroll"></div>
-                  <div style="padding: 8px;">
-                    <button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled" hidden>Carregar mais</button>
+            <section class="panel col-12" style="padding:10px;">
+              <p id="meta-inbox-banner" class="muted" style="margin:0 0 8px;" role="status" aria-live="polite">Carregando</p>
+              <div id="meta-chat-shell" class="meta-chat">
+                <div class="meta-chat-list">
+                  <div class="meta-chat-list-head"><div><div class="meta-chat-thread-title">Conversas</div><div class="meta-chat-thread-sub">WhatsApp Oficial</div></div></div>
+                  <div class="meta-chat-search"><input id="meta-inbox-search" type="search" placeholder="Buscar conversa" autocomplete="off" /></div>
+                  <div class="meta-chat-filters">
+                    <button type="button" class="is-active" data-meta-inbox-filter="all">Todas</button>
+                    <button type="button" data-meta-inbox-filter="unread">Não lidas</button>
+                    <button type="button" data-meta-inbox-filter="open">Abertas</button>
+                    <button type="button" data-meta-inbox-filter="pending">Pendentes</button>
+                    <button type="button" data-meta-inbox-filter="closed">Finalizadas</button>
+                    <button type="button" data-meta-inbox-filter="mine">Minhas</button>
                   </div>
+                  <div id="meta-inbox-list" class="meta-inbox-scroll"><div class="meta-chat-empty">Nenhuma conversa ainda.</div></div>
+                  <div style="padding:8px;"><button id="meta-inbox-more" type="button" class="instance-action-btn btn-refresh enabled" hidden>Carregar mais</button></div>
                 </div>
-                <div class="meta-inbox-col">
-                  <div class="meta-inbox-col-head" id="meta-inbox-thread-title">Conversa</div>
-                  <div id="meta-inbox-thread" class="meta-inbox-scroll"></div>
+                <div class="meta-chat-thread">
+                  <div class="meta-chat-thread-head">
+                    <button type="button" class="meta-chat-back" id="meta-inbox-back" aria-label="Voltar">←</button>
+                    <div class="meta-chat-avatar" id="meta-inbox-thread-avatar">WA</div>
+                    <div style="flex:1;min-width:0;">
+                      <div class="meta-chat-thread-title" id="meta-inbox-thread-title">Conversa</div>
+                      <div class="meta-chat-thread-sub" id="meta-inbox-thread-sub">Inbox do WhatsApp Oficial</div>
+                    </div>
+                    <button type="button" class="instance-action-btn btn-refresh enabled" id="meta-inbox-toggle-side">Detalhes</button>
+                  </div>
+                  <div id="meta-inbox-thread" class="meta-inbox-scroll"><div class="meta-chat-empty">Escolha uma conversa à esquerda.</div></div>
                   <div class="meta-inbox-composer">
-                    <textarea id="meta-inbox-text" placeholder="Digite uma mensagem..." maxlength="4096"></textarea>
-                    <button id="meta-inbox-send" type="button" class="instance-action-btn btn-qrcode enabled">Enviar</button>
+                    <textarea id="meta-inbox-text" placeholder="Mensagem" maxlength="4096" rows="1"></textarea>
+                    <button id="meta-inbox-send" type="button" class="meta-chat-send" aria-label="Enviar">➤</button>
                   </div>
                 </div>
-                <div class="meta-inbox-col">
-                  <div class="meta-inbox-col-head">Atendimento</div>
-                  <div id="meta-inbox-side" class="meta-inbox-scroll" style="padding: 12px; font-size: 13px;"></div>
-                </div>
+                <aside class="meta-chat-side" id="meta-inbox-side"></aside>
               </div>
             </section>
           </div>
@@ -23566,6 +23637,38 @@
             });
         }
         loadMetaEsConfig(0);
+      })();
+
+      (function initMetaLabFrontUi() {
+        window.wabaOpenLabTab = function (tabName) {
+          const btn = document.querySelector('.tab-button[data-tab="' + String(tabName || "") + '"]');
+          if (btn) btn.click();
+          return false;
+        };
+        window.wabaMetaLabSetStep = function (current) {
+          document.querySelectorAll("#meta-onboard-steps [data-meta-step]").forEach(function (el) {
+            const n = Number(el.getAttribute("data-meta-step") || 0);
+            el.classList.toggle("is-done", n < current);
+            el.classList.toggle("is-current", n === current);
+          });
+        };
+        document.addEventListener("click", function (event) {
+          const sideBtn = event.target && event.target.closest && event.target.closest("#meta-inbox-toggle-side");
+          if (sideBtn) {
+            const shell = document.getElementById("meta-chat-shell");
+            if (shell) shell.classList.toggle("has-side");
+          }
+          const back = event.target && event.target.closest && event.target.closest("#meta-inbox-back");
+          if (back) {
+            const shell = document.getElementById("meta-chat-shell");
+            if (shell) shell.classList.remove("is-thread-open");
+          }
+          const item = event.target && event.target.closest && event.target.closest("#meta-inbox-list .meta-inbox-item, #meta-inbox-list button, #meta-inbox-list [data-conversation-id]");
+          if (item) {
+            const shell = document.getElementById("meta-chat-shell");
+            if (shell) shell.classList.add("is-thread-open");
+          }
+        });
       })();
 
       // Litepicker (range em um único input)
@@ -34554,6 +34657,22 @@
           return payload;
         }
         metaTpSetStatus(metaTpFormatPublicStatus(payload));
+        try {
+          const connected = String(payload.status || payload.uiStatus || "").toLowerCase();
+          if (connected === "connected" || connected === "conectado") {
+            if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(5);
+            const card = document.getElementById("meta-tp-connected-card");
+            if (card) card.classList.add("is-visible");
+            const name = payload.verifiedName || "WhatsApp Business";
+            const phone = payload.displayPhoneNumber || payload.phoneNumber || "";
+            const nameEl = document.getElementById("meta-tp-connected-name");
+            const phoneEl = document.getElementById("meta-tp-connected-phone");
+            const ini = document.getElementById("meta-tp-connected-initials");
+            if (nameEl) nameEl.textContent = name;
+            if (phoneEl) phoneEl.textContent = phone || "Número conectado";
+            if (ini) ini.textContent = String(name).slice(0, 2).toUpperCase();
+          }
+        } catch (_err) {}
         return payload;
       }
 
@@ -34705,6 +34824,7 @@
         }
         window.__wabaMetaTechSignupActive = true;
         metaTpLog("início");
+        if (typeof window.wabaMetaLabSetStep === "function") window.wabaMetaLabSetStep(2);
         metaTpFetchJson("/integrations/meta/whatsapp/start").catch(function () {});
         FB.login(
           function (response) {
