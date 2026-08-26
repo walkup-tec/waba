@@ -18,6 +18,7 @@ exports.desiredProxyBrasilEnabled = desiredProxyBrasilEnabled;
 exports.shouldEnableProxyBrasil = shouldEnableProxyBrasil;
 exports.shouldDisableProxyBrasil = shouldDisableProxyBrasil;
 exports.instanceNamesToReleaseAfterCampaignEnd = instanceNamesToReleaseAfterCampaignEnd;
+exports.pickNextEligibleCampaignInstance = pickNextEligibleCampaignInstance;
 exports.runProxyBrasilCampaignRulesSelfCheck = runProxyBrasilCampaignRulesSelfCheck;
 function campaignStatusHoldsProxyBrasil(status) {
     const s = String(status || "").trim().toLowerCase();
@@ -77,6 +78,26 @@ function shouldDisableProxyBrasil(input) {
 function instanceNamesToReleaseAfterCampaignEnd(endingSelected, otherLiveSelected) {
     const held = new Set(normalizeProxyBrasilInstanceNames(otherLiveSelected).map((n) => n.toLowerCase()));
     return normalizeProxyBrasilInstanceNames(endingSelected).filter((n) => !held.has(n.toLowerCase()));
+}
+/**
+ * 1 envio por número selecionado e ativo, na ordem da campanha, depois repete.
+ * Inativos (sem proxy, não open, pausa humana, teto diário) são pulados nesta vez e tentados no próximo ciclo.
+ */
+function pickNextEligibleCampaignInstance(input) {
+    const selected = normalizeProxyBrasilInstanceNames(input.selectedNames);
+    const eligible = new Set(normalizeProxyBrasilInstanceNames(input.eligibleNames).map((n) => n.toLowerCase()));
+    if (!selected.length || !eligible.size) {
+        return { instanceName: null, nextCursor: Number.isFinite(input.cursor) ? input.cursor : 0 };
+    }
+    const start = ((Number(input.cursor) || 0) % selected.length + selected.length) % selected.length;
+    for (let step = 0; step < selected.length; step += 1) {
+        const idx = (start + step) % selected.length;
+        const name = selected[idx];
+        if (eligible.has(name.toLowerCase())) {
+            return { instanceName: name, nextCursor: (idx + 1) % selected.length };
+        }
+    }
+    return { instanceName: null, nextCursor: start };
 }
 function runProxyBrasilCampaignRulesSelfCheck() {
     const send = instanceMaySendWithProxyBrasil;
@@ -180,5 +201,38 @@ function runProxyBrasilCampaignRulesSelfCheck() {
     const released = instanceNamesToReleaseAfterCampaignEnd(["drax", "9224"], ["9224", "2477"]);
     if (released.join(",") !== "drax") {
         throw new Error(`proxy-brasil rule failed: release ${released.join(",")}`);
+    }
+    const cycle = ["2477", "walkup-5401", "drax", "9224"];
+    const first = pickNextEligibleCampaignInstance({
+        selectedNames: cycle,
+        eligibleNames: cycle,
+        cursor: 0,
+    });
+    if (first.instanceName !== "2477" || first.nextCursor !== 1) {
+        throw new Error(`proxy-brasil rule failed: rr-first ${first.instanceName}`);
+    }
+    const second = pickNextEligibleCampaignInstance({
+        selectedNames: cycle,
+        eligibleNames: cycle,
+        cursor: first.nextCursor,
+    });
+    if (second.instanceName !== "walkup-5401" || second.nextCursor !== 2) {
+        throw new Error(`proxy-brasil rule failed: rr-second ${second.instanceName}`);
+    }
+    const skip5401 = pickNextEligibleCampaignInstance({
+        selectedNames: cycle,
+        eligibleNames: ["2477", "drax", "9224"],
+        cursor: 1,
+    });
+    if (skip5401.instanceName !== "drax" || skip5401.nextCursor !== 3) {
+        throw new Error(`proxy-brasil rule failed: rr-skip ${skip5401.instanceName}`);
+    }
+    const wrap = pickNextEligibleCampaignInstance({
+        selectedNames: cycle,
+        eligibleNames: cycle,
+        cursor: 3,
+    });
+    if (wrap.instanceName !== "9224" || wrap.nextCursor !== 0) {
+        throw new Error(`proxy-brasil rule failed: rr-wrap ${wrap.instanceName}`);
     }
 }

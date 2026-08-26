@@ -257,6 +257,7 @@ import {
   classifyProxyBrasilConnection,
   heldProxyBrasilInstanceNames,
   instanceMaySendWithProxyBrasil,
+  pickNextEligibleCampaignInstance,
 } from "./proxy/proxy-brasil-campaign.rules";
 import { WABA_DEPLOY_MARKER } from "./deploy-marker";
 import {
@@ -3030,6 +3031,8 @@ type DisparosCampaignLead = {
   failureKind?: LeadFailureKind;
   /** sendMedia já aceito neste lead — não reenviar imagem se o botão falhar. */
   mediaMessageId?: string;
+  /** Instância que enviou a imagem; o botão precisa ir no mesmo chip. */
+  mediaInstanceName?: string;
   createdAt: string;
   sentAt: string | null;
 };
@@ -3190,6 +3193,7 @@ function queuePersistDisparosLocalState(): void {
           shortUrl: l.shortUrl,
           failureKind: l.failureKind,
           mediaMessageId: l.mediaMessageId,
+          mediaInstanceName: l.mediaInstanceName,
           createdAt: l.createdAt,
           sentAt: l.sentAt,
         })),
@@ -3250,6 +3254,7 @@ async function loadDisparosLocalState(): Promise<void> {
         shortUrl: typeof l?.shortUrl === "string" ? l.shortUrl : undefined,
         failureKind,
         mediaMessageId: typeof l?.mediaMessageId === "string" ? l.mediaMessageId : undefined,
+        mediaInstanceName: typeof l?.mediaInstanceName === "string" ? l.mediaInstanceName : undefined,
         createdAt: String(l?.createdAt || new Date().toISOString()),
         sentAt: l?.sentAt ? String(l.sentAt) : null,
       });
@@ -13156,7 +13161,7 @@ async function syncDisparosCampaignsFromDbOnStartup(): Promise<void> {
 
 async function pickDisparadorInstanceForConfig(
   config: DisparosConfig,
-  opts?: { skipHumanPaused?: boolean },
+  opts?: { skipHumanPaused?: boolean; campaignId?: string; preferInstanceName?: string },
 ): Promise<{ instancia: string; numero: string } | null> {
   const selectedList =
     Array.isArray(config.selectedDisparadorInstances)
@@ -13244,12 +13249,21 @@ async function pickDisparadorInstanceForConfig(
     (item) => getInstanceDailySendCount(item.instancia, dateKey) < maxPerDay
   );
   if (!pool.length) return null;
-  const key = "__global_rr__";
-  const cur = campaignDisparadorRoundRobin.get(key) ?? disparosRoundRobinCounter;
-  const idx = cur % pool.length;
-  campaignDisparadorRoundRobin.set(key, cur + 1);
-  disparosRoundRobinCounter = cur + 1;
-  return pool[idx];
+  const prefer = String(opts?.preferInstanceName || "").trim().toLowerCase();
+  if (prefer) {
+    return pool.find((item) => item.instancia.toLowerCase() === prefer) || null;
+  }
+  const campaignKey = String(opts?.campaignId || "").trim() || "__global_rr__";
+  const picked = pickNextEligibleCampaignInstance({
+    selectedNames: selectedList,
+    eligibleNames: pool.map((item) => item.instancia),
+    cursor: campaignDisparadorRoundRobin.get(campaignKey) ?? 0,
+  });
+  if (!picked.instanceName) return null;
+  campaignDisparadorRoundRobin.set(campaignKey, picked.nextCursor);
+  return (
+    pool.find((item) => item.instancia.toLowerCase() === picked.instanceName!.toLowerCase()) || null
+  );
 }
 
 const EVO_SAVE_CONTACT_TIMEOUT_MS = 2000;
@@ -13862,6 +13876,8 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
 
     const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
       skipHumanPaused: isAlternativaMotor,
+      campaignId: campaign.id,
+      preferInstanceName: lead.mediaMessageId ? lead.mediaInstanceName : undefined,
     });
     if (!instancePick) {
       console.error(
@@ -13967,6 +13983,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           return;
         }
         lead.mediaMessageId = mediaMessageId;
+        lead.mediaInstanceName = instancePick.instancia;
         queuePersistDisparosLocalState();
       }
       const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
@@ -13984,6 +14001,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
           lead.phone,
         );
         lead.mediaMessageId = undefined;
+        lead.mediaInstanceName = undefined;
         await persistLeadFailed(lead, "send_error");
         scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
         return;
@@ -14141,6 +14159,7 @@ async function processOneCampaignDispatch(campaignId: string): Promise<void> {
     const sentIso = new Date().toISOString();
     lead.status = "sent";
     lead.mediaMessageId = undefined;
+    lead.mediaInstanceName = undefined;
     lead.messageText = usedUrlButton
       ? `${deliveredText}\n[Botão: ${buttonLabel}]`
       : deliveredText;
@@ -14209,7 +14228,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
-    await reconcileProxyBrasilForLiveCampaign(c, undefined, false);
+    await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) {
       c.status = "paused";
@@ -14251,7 +14270,7 @@ async function runCampaignDispatchTick(): Promise<void> {
       await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
       liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
     }
-    await reconcileProxyBrasilForLiveCampaign(c, undefined, false);
+    await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
     const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
     if (health.needsMoreInstancesForMinimum) continue;
     console.warn(

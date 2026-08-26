@@ -2479,6 +2479,7 @@ function queuePersistDisparosLocalState() {
                     shortUrl: l.shortUrl,
                     failureKind: l.failureKind,
                     mediaMessageId: l.mediaMessageId,
+                    mediaInstanceName: l.mediaInstanceName,
                     createdAt: l.createdAt,
                     sentAt: l.sentAt,
                 })),
@@ -2538,6 +2539,7 @@ async function loadDisparosLocalState() {
                 shortUrl: typeof l?.shortUrl === "string" ? l.shortUrl : undefined,
                 failureKind,
                 mediaMessageId: typeof l?.mediaMessageId === "string" ? l.mediaMessageId : undefined,
+                mediaInstanceName: typeof l?.mediaInstanceName === "string" ? l.mediaInstanceName : undefined,
                 createdAt: String(l?.createdAt || new Date().toISOString()),
                 sentAt: l?.sentAt ? String(l.sentAt) : null,
             });
@@ -11348,12 +11350,20 @@ async function pickDisparadorInstanceForConfig(config, opts) {
     const pool = eligible.filter((item) => getInstanceDailySendCount(item.instancia, dateKey) < maxPerDay);
     if (!pool.length)
         return null;
-    const key = "__global_rr__";
-    const cur = campaignDisparadorRoundRobin.get(key) ?? disparosRoundRobinCounter;
-    const idx = cur % pool.length;
-    campaignDisparadorRoundRobin.set(key, cur + 1);
-    disparosRoundRobinCounter = cur + 1;
-    return pool[idx];
+    const prefer = String(opts?.preferInstanceName || "").trim().toLowerCase();
+    if (prefer) {
+        return pool.find((item) => item.instancia.toLowerCase() === prefer) || null;
+    }
+    const campaignKey = String(opts?.campaignId || "").trim() || "__global_rr__";
+    const picked = (0, proxy_brasil_campaign_rules_1.pickNextEligibleCampaignInstance)({
+        selectedNames: selectedList,
+        eligibleNames: pool.map((item) => item.instancia),
+        cursor: campaignDisparadorRoundRobin.get(campaignKey) ?? 0,
+    });
+    if (!picked.instanceName)
+        return null;
+    campaignDisparadorRoundRobin.set(campaignKey, picked.nextCursor);
+    return (pool.find((item) => item.instancia.toLowerCase() === picked.instanceName.toLowerCase()) || null);
 }
 const EVO_SAVE_CONTACT_TIMEOUT_MS = 2000;
 const EVO_CONTACT_FIRST_NAMES = [
@@ -11862,6 +11872,8 @@ async function processOneCampaignDispatch(campaignId) {
         }
         const instancePick = await pickDisparadorInstanceForConfig(campaign.configSnapshot, {
             skipHumanPaused: isAlternativaMotor,
+            campaignId: campaign.id,
+            preferInstanceName: lead.mediaMessageId ? lead.mediaInstanceName : undefined,
         });
         if (!instancePick) {
             console.error(isAlternativaMotor
@@ -11934,6 +11946,7 @@ async function processOneCampaignDispatch(campaignId) {
                     return;
                 }
                 lead.mediaMessageId = mediaMessageId;
+                lead.mediaInstanceName = instancePick.instancia;
                 queuePersistDisparosLocalState();
             }
             const mediaAck = await probeCampaignMessageAckStatus(instancePick.instancia, mediaMessageId, {
@@ -11945,6 +11958,7 @@ async function processOneCampaignDispatch(campaignId) {
             if ((0, delivery_verify_helpers_1.isEvoAckFailure)(mediaAck.status)) {
                 console.error("[Campanha] ACK da imagem = ERROR — texto não enviado:", mediaAck.status, lead.phone);
                 lead.mediaMessageId = undefined;
+                lead.mediaInstanceName = undefined;
                 await persistLeadFailed(lead, "send_error");
                 scheduleNextCampaignDispatchDelay(campaignId, campaign.configSnapshot);
                 return;
@@ -12062,6 +12076,7 @@ async function processOneCampaignDispatch(campaignId) {
         const sentIso = new Date().toISOString();
         lead.status = "sent";
         lead.mediaMessageId = undefined;
+        lead.mediaInstanceName = undefined;
         lead.messageText = usedUrlButton
             ? `${deliveredText}\n[Botão: ${buttonLabel}]`
             : deliveredText;
@@ -12123,7 +12138,7 @@ async function runCampaignDispatchTick() {
             await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
-        await reconcileProxyBrasilForLiveCampaign(c, undefined, false);
+        await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum) {
             c.status = "paused";
@@ -12166,7 +12181,7 @@ async function runCampaignDispatchTick() {
             await tryAutoSwapDisconnectedCampaignInstances(c, liveRows);
             liveRows = await enrichSelectedCampaignInstancesLive(c.configSnapshot, evoRows);
         }
-        await reconcileProxyBrasilForLiveCampaign(c, undefined, false);
+        await reconcileProxyBrasilForLiveCampaign(c, undefined, true);
         const health = getCampaignInstanceHealth(c.configSnapshot, liveRows);
         if (health.needsMoreInstancesForMinimum)
             continue;

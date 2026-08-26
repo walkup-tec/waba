@@ -1,5 +1,11 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-26 20:07 — Campanha: 1 envio por chip + Proxy em todos
+- Rodízio por campanha na ordem selecionada (1 mensagem / número ativo)
+- Tick liga Proxy Brasil em selecionada `open` sem `/proxy/find` (ex.: walkup-5401)
+- Marker `DEPLOY-2026-08-26-campanha-rr-1-por-chip`
+- LOG: `doc/LOG-2026-08-26__200700__campanha-rr-1-por-chip.md`
+
 ## 2026-08-26 17:49 — Campanha: imagem única + ACK + pausa humana pós-QR
 - `sendMedia`/`sendButtons` sem retry; timeout não duplica imagem via URL
 - Botão só após `DELIVERY_ACK`; `mediaMessageId` evita segundo `sendMedia`
