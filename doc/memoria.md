@@ -1,5 +1,10 @@
 Registro permanente do celular virtual: **`doc/DEVICE-CLOUD.md`**.
 
+## 2026-08-26 20:12 — Números disponíveis só fora de campanha aberta
+- Picker omite chips em campanha `running`/`paused` até finalizar
+- Marker `DEPLOY-2026-08-26-numeros-disponiveis-livres`
+- LOG: `doc/LOG-2026-08-26__201200__numeros-disponiveis-livres.md`
+
 ## 2026-08-26 20:07 — Campanha: 1 envio por chip + Proxy em todos
 - Rodízio por campanha na ordem selecionada (1 mensagem / número ativo)
 - Tick liga Proxy Brasil em selecionada `open` sem `/proxy/find` (ex.: walkup-5401)

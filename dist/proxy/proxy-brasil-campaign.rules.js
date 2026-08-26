@@ -12,6 +12,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.campaignStatusHoldsProxyBrasil = campaignStatusHoldsProxyBrasil;
 exports.normalizeProxyBrasilInstanceNames = normalizeProxyBrasilInstanceNames;
 exports.heldProxyBrasilInstanceNames = heldProxyBrasilInstanceNames;
+exports.namesHeldByUnfinishedCampaigns = namesHeldByUnfinishedCampaigns;
+exports.instanceNameConflictsWithHeld = instanceNameConflictsWithHeld;
 exports.classifyProxyBrasilConnection = classifyProxyBrasilConnection;
 exports.instanceMaySendWithProxyBrasil = instanceMaySendWithProxyBrasil;
 exports.desiredProxyBrasilEnabled = desiredProxyBrasilEnabled;
@@ -36,6 +38,22 @@ function heldProxyBrasilInstanceNames(campaigns) {
         held.push(...normalizeProxyBrasilInstanceNames(campaign.selectedInstanceNames));
     }
     return normalizeProxyBrasilInstanceNames(held);
+}
+/** Números em campanha running/paused, opcionalmente excluindo uma campanha (ex.: a que está sendo editada). */
+function namesHeldByUnfinishedCampaigns(campaigns, exceptCampaignId) {
+    const except = String(exceptCampaignId || "").trim();
+    return heldProxyBrasilInstanceNames(campaigns
+        .filter((c) => !except || String(c.id || "") !== except)
+        .map((c) => ({
+        status: c.status,
+        selectedInstanceNames: c.selectedInstanceNames,
+    })));
+}
+function instanceNameConflictsWithHeld(name, heldNames) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key)
+        return false;
+    return normalizeProxyBrasilInstanceNames(heldNames).some((n) => n.toLowerCase() === key);
 }
 function classifyProxyBrasilConnection(state) {
     const s = String(state || "").trim().toLowerCase();
@@ -197,6 +215,17 @@ function runProxyBrasilCampaignRulesSelfCheck() {
     ]);
     if (held.sort().join(",") !== "2477,9224,drax") {
         throw new Error(`proxy-brasil rule failed: held-set ${held.join(",")}`);
+    }
+    const heldExcept = namesHeldByUnfinishedCampaigns([
+        { id: "a", status: "running", selectedInstanceNames: ["drax"] },
+        { id: "b", status: "paused", selectedInstanceNames: ["2477"] },
+        { id: "c", status: "finished", selectedInstanceNames: ["9224"] },
+    ], "a");
+    if (heldExcept.join(",") !== "2477") {
+        throw new Error(`proxy-brasil rule failed: held-except ${heldExcept.join(",")}`);
+    }
+    if (!instanceNameConflictsWithHeld("DRAX", ["drax", "9224"])) {
+        throw new Error("proxy-brasil rule failed: conflict-case");
     }
     const released = instanceNamesToReleaseAfterCampaignEnd(["drax", "9224"], ["9224", "2477"]);
     if (released.join(",") !== "drax") {

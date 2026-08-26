@@ -5933,7 +5933,7 @@ async function tryAutoSwapDisconnectedCampaignInstances(campaign, evoRows) {
     }
     const toAdd = Math.max(computeCampaignInstancesToAdd(health), health.disconnectedCount);
     const auth = campaignOwnerAuth(campaign.ownerEmail);
-    const incoming = await resolveAutoInstancesForCampaign(auth, campaign.configSnapshot, evoRows, toAdd);
+    const incoming = await resolveAutoInstancesForCampaign(auth, campaign.configSnapshot, evoRows, toAdd, campaign.id);
     if (!incoming.length) {
         return { swapped: false, spareCount: 0 };
     }
@@ -6003,12 +6003,13 @@ async function filterDisparadorInstancesReadyForAuth(auth, names) {
     const allowed = await waba_fazenda_pool_service_1.wabaFazendaPoolService.filterDisparadorInstancesForAuth(auth, names);
     return (0, aquecedor_instance_lifecycle_service_1.filterInstancesLifecycleReady)(allowed);
 }
-async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd) {
+async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd, exceptCampaignId) {
     if (maxToAdd <= 0)
         return [];
     const prevSelected = new Set((Array.isArray(config?.selectedDisparadorInstances) ? config.selectedDisparadorInstances : [])
         .map((n) => String(n || "").trim().toLowerCase())
         .filter(Boolean));
+    const heldOther = new Set(heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId).map((n) => n.toLowerCase()));
     const connectedByKey = new Map();
     for (const row of evoRows) {
         const key = String(row.instanceKey || "").trim().toLowerCase();
@@ -6026,7 +6027,7 @@ async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd) 
     for (const row of activations) {
         const name = String(row.instanceName || "").trim();
         const key = name.toLowerCase();
-        if (!name || prevSelected.has(key) || !connectedByKey.has(key))
+        if (!name || prevSelected.has(key) || heldOther.has(key) || !connectedByKey.has(key))
             continue;
         const usage = resolveUsageFromMap(usageMap, name);
         if (usage?.useDisparador === false)
@@ -6036,7 +6037,7 @@ async function resolveAutoInstancesForCampaign(auth, config, evoRows, maxToAdd) 
     const ownedCandidates = await waba_instance_ownership_service_1.wabaInstanceOwnershipService.filterInstanceNamesForAuth(auth, Array.from(connectedByKey.values()).map((row) => row.instanceKey));
     for (const name of ownedCandidates) {
         const key = String(name || "").trim().toLowerCase();
-        if (!key || prevSelected.has(key) || activationKeys.has(key))
+        if (!key || prevSelected.has(key) || heldOther.has(key) || activationKeys.has(key))
             continue;
         const usage = resolveUsageFromMap(usageMap, name);
         if (usage?.useDisparador === false)
@@ -11617,11 +11618,12 @@ function selectedInstanceNamesFromCampaign(campaign) {
     const raw = campaign?.configSnapshot?.selectedDisparadorInstances;
     return Array.isArray(raw) ? raw.map((n) => String(n || "").trim()).filter(Boolean) : [];
 }
-function heldProxyBrasilNamesFromLiveCampaigns() {
-    return (0, proxy_brasil_campaign_rules_1.heldProxyBrasilInstanceNames)(disparosCampaignsMemory.map((c) => ({
+function heldProxyBrasilNamesFromLiveCampaigns(exceptCampaignId) {
+    return (0, proxy_brasil_campaign_rules_1.namesHeldByUnfinishedCampaigns)(disparosCampaignsMemory.map((c) => ({
+        id: c.id,
         status: c.status,
         selectedInstanceNames: selectedInstanceNamesFromCampaign(c),
-    })));
+    })), exceptCampaignId);
 }
 async function reconcileProxyBrasilForLiveCampaign(campaign, extraReleaseInstanceNames, allowEnable = true) {
     if (!(0, proxy_brasil_config_1.loadProxyBrasilConfig)()?.enabled)
@@ -12398,6 +12400,16 @@ app.post("/disparos/campanhas", (req, res, next) => {
                 error: "Selecione ao menos uma instância na lista «Números utilizados no disparador» (Seção 1) antes de criar a campanha. Só essas instâncias poderão enviar as mensagens.",
             });
         }
+        const heldByOtherCampaigns = heldProxyBrasilNamesFromLiveCampaigns();
+        const occupied = campaignInstances.filter((n) => (0, proxy_brasil_campaign_rules_1.instanceNameConflictsWithHeld)(n, heldByOtherCampaigns));
+        if (occupied.length) {
+            return res.status(409).json({
+                error: "Há número(s) já em campanha não finalizada: " +
+                    occupied.join(", ") +
+                    ". Use só números disponíveis ou finalize a campanha anterior.",
+                occupiedInstanceNames: occupied,
+            });
+        }
         const previousSelectedForProxy = (await loadDisparosConfigFromDb()).selectedDisparadorInstances || [];
         const previousLower = new Set(previousSelectedForProxy.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
         const selectedLower = new Set(campaignInstances.map((n) => n.toLowerCase()));
@@ -12675,7 +12687,7 @@ app.get("/disparos/campanhas", async (req, res) => {
             const probeHealth = getCampaignInstanceHealth(configForTags, liveRows);
             if (probeHealth.disconnectedCount > 0 || probeHealth.needsMoreInstancesForMinimum) {
                 try {
-                    spareByCampaignId.set(item.id, (await resolveAutoInstancesForCampaign(auth, configForTags, liveRows, 20)).length);
+                    spareByCampaignId.set(item.id, (await resolveAutoInstancesForCampaign(auth, configForTags, liveRows, 20, item.id)).length);
                 }
                 catch {
                     spareByCampaignId.set(item.id, 0);
@@ -12725,6 +12737,7 @@ app.get("/disparos/campanhas", async (req, res) => {
                 (0, evo_instance_proxy_service_1.areAllInstanceNamesProxyConfirmedEnabled)(connectedEvoKeys);
             return {
                 ...item,
+                selectedInstanceNames: selectedDisparadorNamesFromConfig(configByCampaignId.get(item.id)),
                 disparadorInstances: tags,
                 disparadorInstancesFromGlobalFallback: Boolean(useGlobal && tags.length > 0),
                 instanceHealth: healthWithSpare,
@@ -12748,7 +12761,10 @@ app.get("/disparos/campanhas", async (req, res) => {
             }
             (0, evo_instance_proxy_service_1.queueConfirmProxyFindForInstanceNames)(uniqueKeys, callEvoAction, EVO_API_BASE);
         }
-        return res.json({ items });
+        return res.json({
+            items,
+            instancesHeldByUnfinishedCampaigns: heldProxyBrasilNamesFromLiveCampaigns(),
+        });
     }
     catch {
         return res.status(500).json({ error: "Erro ao listar campanhas do Disparador." });
@@ -13249,7 +13265,7 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
                     instanceHealth: healthBefore,
                 });
             }
-            incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, instancesToAdd);
+            incoming = await resolveAutoInstancesForCampaign(auth, prev, evoRows, instancesToAdd, campaign.id);
             if (!incoming.length) {
                 return res.status(409).json({
                     error: disconnectedNames.length
@@ -13266,6 +13282,13 @@ app.post("/disparos/campanhas/:id/instancias", async (req, res) => {
             incoming = await filterDisparadorInstancesReadyForAuth(auth, raw.map((n) => String(n || "").trim()).filter(Boolean));
             if (!incoming.length) {
                 return res.status(400).json({ error: "Informe ao menos uma instância válida para adicionar." });
+            }
+            const heldOther = heldProxyBrasilNamesFromLiveCampaigns(campaign.id);
+            incoming = incoming.filter((n) => !(0, proxy_brasil_campaign_rules_1.instanceNameConflictsWithHeld)(n, heldOther));
+            if (!incoming.length) {
+                return res.status(409).json({
+                    error: "Os números informados já estão em outra campanha não finalizada. Finalize a campanha anterior antes de reutilizá-los.",
+                });
             }
         }
         const swapped = await applyCampaignDisconnectedSwap(campaign, incoming, evoRows);

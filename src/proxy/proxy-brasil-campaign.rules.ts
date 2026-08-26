@@ -33,6 +33,28 @@ export function heldProxyBrasilInstanceNames(
   return normalizeProxyBrasilInstanceNames(held);
 }
 
+/** Números em campanha running/paused, opcionalmente excluindo uma campanha (ex.: a que está sendo editada). */
+export function namesHeldByUnfinishedCampaigns(
+  campaigns: Array<{ id?: string; status?: string; selectedInstanceNames?: unknown }>,
+  exceptCampaignId?: string,
+): string[] {
+  const except = String(exceptCampaignId || "").trim();
+  return heldProxyBrasilInstanceNames(
+    campaigns
+      .filter((c) => !except || String(c.id || "") !== except)
+      .map((c) => ({
+        status: c.status,
+        selectedInstanceNames: c.selectedInstanceNames,
+      })),
+  );
+}
+
+export function instanceNameConflictsWithHeld(name: string, heldNames: string[]): boolean {
+  const key = String(name || "").trim().toLowerCase();
+  if (!key) return false;
+  return normalizeProxyBrasilInstanceNames(heldNames).some((n) => n.toLowerCase() === key);
+}
+
 export function classifyProxyBrasilConnection(state: string): ProxyBrasilConnectionKind {
   const s = String(state || "").trim().toLowerCase();
   if (!s) return "unknown";
@@ -233,6 +255,20 @@ export function runProxyBrasilCampaignRulesSelfCheck(): void {
   ]);
   if (held.sort().join(",") !== "2477,9224,drax") {
     throw new Error(`proxy-brasil rule failed: held-set ${held.join(",")}`);
+  }
+  const heldExcept = namesHeldByUnfinishedCampaigns(
+    [
+      { id: "a", status: "running", selectedInstanceNames: ["drax"] },
+      { id: "b", status: "paused", selectedInstanceNames: ["2477"] },
+      { id: "c", status: "finished", selectedInstanceNames: ["9224"] },
+    ],
+    "a",
+  );
+  if (heldExcept.join(",") !== "2477") {
+    throw new Error(`proxy-brasil rule failed: held-except ${heldExcept.join(",")}`);
+  }
+  if (!instanceNameConflictsWithHeld("DRAX", ["drax", "9224"])) {
+    throw new Error("proxy-brasil rule failed: conflict-case");
   }
   const released = instanceNamesToReleaseAfterCampaignEnd(["drax", "9224"], ["9224", "2477"]);
   if (released.join(",") !== "drax") {

@@ -47854,7 +47854,45 @@
         }
       }
 
+      let disparosHeldInstanceKeysCache = [];
+
+      function collectUnfinishedCampaignHeldInstanceKeys() {
+        const keys = new Set();
+        const addKey = (raw) => {
+          const v = String(raw || "").trim().toLowerCase();
+          if (v) keys.add(v);
+        };
+        (Array.isArray(disparosHeldInstanceKeysCache) ? disparosHeldInstanceKeysCache : []).forEach(addKey);
+        const altItems = getDisparosCampaignScopeCache(DISPAROS_CAMPAIGN_LIST_SCOPE.ALTERNATIVA).items || [];
+        const ofcItems = getDisparosCampaignScopeCache(DISPAROS_CAMPAIGN_LIST_SCOPE.OFICIAL).items || [];
+        [...altItems, ...ofcItems].forEach((item) => {
+          const st = String(item?.status || "").trim().toLowerCase();
+          if (st !== "running" && st !== "paused") return;
+          const selected = Array.isArray(item?.selectedInstanceNames) ? item.selectedInstanceNames : [];
+          selected.forEach(addKey);
+          const tags = Array.isArray(item?.disparadorInstances) ? item.disparadorInstances : [];
+          tags.forEach((t) => addKey(t?.instanceName));
+        });
+        const items = Array.isArray(instancesData?.items) ? instancesData.items : [];
+        items.forEach((inst) => {
+          const name = String(inst?.name || inst?.instanceName || "").trim().toLowerCase();
+          const alias = String(inst?.instanceAlias || inst?.instanceLabel || "").trim().toLowerCase();
+          if ((name && keys.has(name)) || (alias && keys.has(alias))) {
+            if (name) keys.add(name);
+            if (alias) keys.add(alias);
+          }
+        });
+        return keys;
+      }
+
+      function instanceRowHeldByUnfinishedCampaign(row, heldKeys) {
+        const name = String(row?.name || "").trim().toLowerCase();
+        const label = String(row?.label || "").trim().toLowerCase();
+        return (name && heldKeys.has(name)) || (label && heldKeys.has(label));
+      }
+
       function syncDisparadorNumberPicker() {
+        const heldKeys = collectUnfinishedCampaignHeldInstanceKeys();
         const syncOnePicker = (availableId, selectedId, filterFn, externalCandidates = null) => {
           const availableEl = document.getElementById(availableId);
           const selectedEl = document.getElementById(selectedId);
@@ -47889,7 +47927,13 @@
           );
 
           const selected = candidates.filter((row) => currentSelected.has(row.name));
-          let available = candidates.filter((row) => !currentSelected.has(row.name));
+          let available = candidates.filter((row) => {
+            if (currentSelected.has(row.name)) return false;
+            if (availableId === "dis-available-instances" && instanceRowHeldByUnfinishedCampaign(row, heldKeys)) {
+              return false;
+            }
+            return true;
+          });
 
           if (availableId === "dis-available-instances" && disPickerWarmthFilterLevel > 0) {
             available = available.filter((row) => {
@@ -49505,6 +49549,7 @@
           renderEvoItems(
             Array.isArray(options.items) ? options.items : getDisparosCampaignScopeCache(scope).items
           );
+          syncDisparadorNumberPicker();
           return;
         }
 
@@ -49531,6 +49576,9 @@
           if (loadSeq !== disparosCampaignsLoadSeq) return;
           if (resolveDisparosCampaignListScope() !== scope) return;
           const items = Array.isArray(data?.items) ? data.items : [];
+          disparosHeldInstanceKeysCache = Array.isArray(data?.instancesHeldByUnfinishedCampaigns)
+            ? data.instancesHeldByUnfinishedCampaigns
+            : [];
           const prevById = new Map(
             getDisparosCampaignScopeCache(scope).items.map((item) => [String(item?.id || ""), item])
           );
@@ -49552,6 +49600,7 @@
           disparosEnviadosTotalCache = enviadosTotal;
           disparosHasRunningCampaign = runningCount > 0;
           syncDisparosResumoSide(items);
+          syncDisparadorNumberPicker();
           if (activeTab === "disparo-evo" || isBaselineUi()) {
             restartDisparosCampaignsPolling(items);
           }
